@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { clearPickedUser, type PickedUser } from "@/lib/crm/userContext";
+import type { SessionUser } from "@/lib/crm/userContext";
 
 const LINKS = [
   { href: "/crm", label: "Dashboard" },
@@ -18,7 +18,7 @@ const LINKS = [
   { href: "/crm/settings", label: "Settings" },
 ];
 
-export function Nav({ user }: { user: PickedUser }) {
+export function Nav({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -27,8 +27,8 @@ export function Nav({ user }: { user: PickedUser }) {
     return pathname?.startsWith(href);
   }
 
-  function switchUser() {
-    clearPickedUser();
+  async function signOut() {
+    await fetch("/api/crm/gate", { method: "DELETE" });
     window.location.reload();
   }
 
@@ -133,11 +133,26 @@ export function Nav({ user }: { user: PickedUser }) {
             borderRadius: 999,
             fontSize: 13,
             cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
           }}
           aria-haspopup="true"
           aria-expanded={open}
         >
-          {user.name}
+          <span>{user.name}</span>
+          {user.is_admin && (
+            <span
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--gold)",
+              }}
+            >
+              Admin
+            </span>
+          )}
         </button>
         {open && (
           <div
@@ -154,22 +169,6 @@ export function Nav({ user }: { user: PickedUser }) {
               minWidth: 180,
             }}
           >
-            <button
-              onClick={switchUser}
-              style={{
-                width: "100%",
-                textAlign: "left",
-                background: "transparent",
-                border: "none",
-                color: "var(--text-on-dark)",
-                padding: "8px 10px",
-                fontSize: 13,
-                cursor: "pointer",
-                borderRadius: 6,
-              }}
-            >
-              Switch user
-            </button>
             <Link
               href="/crm/settings"
               style={{
@@ -184,6 +183,22 @@ export function Nav({ user }: { user: PickedUser }) {
             >
               Settings
             </Link>
+            <button
+              onClick={signOut}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                background: "transparent",
+                border: "none",
+                color: "var(--text-on-dark)",
+                padding: "8px 10px",
+                fontSize: 13,
+                cursor: "pointer",
+                borderRadius: 6,
+              }}
+            >
+              Sign out
+            </button>
           </div>
         )}
       </div>

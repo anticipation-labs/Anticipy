@@ -1,10 +1,13 @@
 /**
- * Server-side helper to read the acting user from the x-crm-user-* request
- * headers. The picker on the client populates these on every fetch via
- * crmFetch. Trusted only because the gate cookie has already been verified
- * upstream of the route handler.
+ * Server-side helper to read the acting user from the signed session cookie.
+ * The cookie binds {user_id, is_admin}, so the route handler does not need to
+ * trust client-provided headers for attribution.
+ *
+ * Falls back to the legacy x-crm-user-* headers only if the cookie is missing
+ * a user_id (older sessions); after the next login the cookie is authoritative.
  */
 import { crmDb } from "./db";
+import { readCrmSessionFromRequest } from "./gate";
 
 export interface ActingUser {
   id: string | null;
@@ -12,6 +15,10 @@ export interface ActingUser {
 }
 
 export function readActingUser(req: Request): ActingUser {
+  const session = readCrmSessionFromRequest(req);
+  if (session?.user_id) {
+    return { id: session.user_id, name: null };
+  }
   const id = req.headers.get("x-crm-user-id");
   const name = req.headers.get("x-crm-user-name");
   return {
@@ -21,6 +28,8 @@ export function readActingUser(req: Request): ActingUser {
 }
 
 export async function resolveActingUserId(req: Request): Promise<string | null> {
+  const session = readCrmSessionFromRequest(req);
+  if (session?.user_id) return session.user_id;
   const { id, name } = readActingUser(req);
   if (id) return id;
   if (!name) return null;

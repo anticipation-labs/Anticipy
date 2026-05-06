@@ -1,15 +1,22 @@
 /**
- * Server-side helpers for the /crm password gate.
+ * Server-side helpers for the /crm session cookie.
  *
- * Same construction as src/lib/gate-cookie.ts but a different cookie name and
- * longer TTL so the CRM only asks for the password once per device per month.
- * Mirroring the existing engine gate pattern keeps verification consistent.
+ * The cookie carries an authenticated user identity (id + admin flag) and is
+ * HMAC-signed with a secret derived from the service role key. Anyone with
+ * a valid cookie has both passed the password check and is acting as a
+ * specific user, which the API routes use for attribution and access control.
  */
 import { createHmac, timingSafeEqual } from "crypto";
 
 export const CRM_GATE_COOKIE = "anticipy_crm_gate";
 export const CRM_GATE_TTL_SECONDS = 60 * 60 * 24 * 30;
 export const CRM_PATH_PREFIX = "/crm";
+
+export type CrmSession = {
+  user_id: string;
+  is_admin: boolean;
+  exp: number;
+};
 
 function secret(): string {
   const s =
@@ -21,43 +28,63 @@ function secret(): string {
       "Neither GATE_COOKIE_SECRET nor SUPABASE_SERVICE_ROLE_KEY is set"
     );
   }
-  return s + ":crm";
+  return s + ":crm-v2";
 }
 
-export function getExpectedPassword(): string {
-  return process.env.CRM_PASSWORD || "123";
+function encodePayload(s: { u: string; a: 0 | 1; e: number }): string {
+  return Buffer.from(JSON.stringify(s), "utf8").toString("base64url");
 }
 
-export function signCrmGate(expirySeconds: number): string {
-  const sig = createHmac("sha256", secret())
-    .update(String(expirySeconds))
-    .digest("hex");
-  return `${expirySeconds}.${sig}`;
+function sign(b64: string): string {
+  return createHmac("sha256", secret()).update(b64).digest("hex");
 }
 
-export function verifyCrmGate(value: string | undefined | null): boolean {
-  if (!value || typeof value !== "string") return false;
-  const [expStr, sig] = value.split(".");
-  if (!expStr || !sig) return false;
-  const exp = Number(expStr);
-  if (!Number.isFinite(exp)) return false;
-  if (exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = createHmac("sha256", secret())
-    .update(String(exp))
-    .digest("hex");
+export function signCrmSession(session: CrmSession): string {
+  const b64 = encodePayload({
+    u: session.user_id,
+    a: session.is_admin ? 1 : 0,
+    e: session.exp,
+  });
+  return `${b64}.${sign(b64)}`;
+}
+
+export function verifyCrmGate(value: string | undefined | null): CrmSession | null {
+  if (!value || typeof value !== "string") return null;
+  const dot = value.lastIndexOf(".");
+  if (dot < 0) return null;
+  const b64 = value.slice(0, dot);
+  const sig = value.slice(dot + 1);
+  if (!b64 || !sig) return null;
+  let a: Buffer;
+  let b: Buffer;
   try {
-    const a = Buffer.from(sig, "hex");
-    const b = Buffer.from(expected, "hex");
-    if (a.length !== b.length) return false;
-    return timingSafeEqual(a, b);
+    a = Buffer.from(sig, "hex");
+    b = Buffer.from(sign(b64), "hex");
   } catch {
-    return false;
+    return null;
   }
+  if (a.length !== b.length) return null;
+  if (!timingSafeEqual(a, b)) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(b64, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const p = parsed as { u?: unknown; a?: unknown; e?: unknown };
+  if (typeof p.u !== "string" || typeof p.e !== "number") return null;
+  if (p.e < Math.floor(Date.now() / 1000)) return null;
+  return {
+    user_id: p.u,
+    is_admin: p.a === 1,
+    exp: p.e,
+  };
 }
 
-export function buildSetCrmGateHeader(): string {
+export function buildSetCrmGateHeader(session: { user_id: string; is_admin: boolean }): string {
   const exp = Math.floor(Date.now() / 1000) + CRM_GATE_TTL_SECONDS;
-  const value = signCrmGate(exp);
+  const value = signCrmSession({ ...session, exp });
   const isProd = process.env.NODE_ENV === "production";
   return [
     `${CRM_GATE_COOKIE}=${value}`,
@@ -79,4 +106,14 @@ export function buildClearCrmGateHeader(): string {
     "HttpOnly",
     "SameSite=Lax",
   ].join("; ");
+}
+
+export function readCrmSessionFromRequest(req: Request): CrmSession | null {
+  const c = req.headers
+    .get("cookie")
+    ?.split(";")
+    .find((s) => s.trim().startsWith(`${CRM_GATE_COOKIE}=`))
+    ?.split("=")[1]
+    ?.trim();
+  return verifyCrmGate(c);
 }

@@ -7,6 +7,8 @@ export type CrmUser = {
   id: string;
   name: string;
   email: string | null;
+  is_admin?: boolean;
+  has_password?: boolean;
   created_at: string;
 };
 
