@@ -22,17 +22,37 @@ export default function ContactsPage() {
   }
   useEffect(() => { load(); }, [search, source]);
 
+  async function connectGoogle() {
+    const r = await crmFetch("/api/crm/google/start");
+    const j = await r.json();
+    if (j.url) {
+      window.open(j.url, "_blank", "noopener,noreferrer");
+      setImportStatus("Opened Google. Authorize in the new tab, then click Import from Gmail.");
+    } else {
+      setImportStatus(j.error || "Could not start Google OAuth.");
+    }
+  }
   async function importGmail() {
     setImportStatus("Importing from Gmail.");
     const r = await crmFetch("/api/crm/contacts/import/gmail", { method: "POST" });
     const j = await r.json();
-    setImportStatus(j.error ? `Gmail import: ${j.error}` : "Gmail import done.");
+    if (!r.ok) {
+      setImportStatus(`Gmail import: ${j.error || "failed"}`);
+    } else {
+      setImportStatus(`Gmail import: ${j.inserted} new, ${j.updated} updated, ${j.skipped} skipped from ${j.total} contacts.`);
+      load();
+    }
   }
   async function importOutreach() {
     setImportStatus("Importing from outreach.");
     const r = await crmFetch("/api/crm/contacts/import/outreach", { method: "POST" });
     const j = await r.json();
-    setImportStatus(j.error ? `Outreach import: ${j.error}` : "Outreach import done.");
+    if (!r.ok) {
+      setImportStatus(`Outreach import: ${j.error || "failed"}`);
+    } else {
+      setImportStatus(`Outreach import: ${j.inserted} new, ${j.skipped} skipped from ${j.unique} unique recipients.`);
+      load();
+    }
   }
 
   return (
@@ -48,6 +68,7 @@ export default function ContactsPage() {
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: 220 }}
             />
+            <Button variant="secondary" onClick={connectGoogle}>Connect Google</Button>
             <Button variant="secondary" onClick={importGmail}>Import from Gmail</Button>
             <Button variant="secondary" onClick={importOutreach}>Import from outreach</Button>
             <Button onClick={() => setShowAdd(true)}>+ New contact</Button>
