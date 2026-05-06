@@ -39,6 +39,7 @@ from app.config import (
     IS_PRODUCTION,
 )
 from app import supabase_client
+from app.crm_log import log_event as crm_log_event
 import os
 
 logger = logging.getLogger("engine")
@@ -436,6 +437,12 @@ async def execute_intent_endpoint(req: ExecuteIntentRequest, request: Request):
             block_msg = msg.FINANCIAL_TRANSACTION_BLOCKED
         else:
             block_msg = msg.BLOCKED_ACTION
+        crm_log_event(
+            "action_engine",
+            "task_blocked",
+            f"Blocked ({reason}): {task_text[:80]}",
+            {"reason": reason, "user_id": req.user_id, "channel": "rest"},
+        )
         return {
             "success": False,
             "message": block_msg,
@@ -459,6 +466,14 @@ async def execute_intent_endpoint(req: ExecuteIntentRequest, request: Request):
     task_id = str(uuid.uuid4())
     messages_log: list[dict] = []
     plan_text: str = ""
+    crm_log_event(
+        "action_engine",
+        "task_started",
+        f"Task: {task_text[:80]}",
+        {"task_id": task_id, "user_id": req.user_id, "intent_id": req.intent_id, "channel": "rest"},
+        related_entity_type="engine_task",
+        related_entity_id=task_id,
+    )
 
     # --- Generate a quick plan so we can return something useful ---
     try:
@@ -503,6 +518,14 @@ async def execute_intent_endpoint(req: ExecuteIntentRequest, request: Request):
                 break
 
         result_holder.append(final)
+        crm_log_event(
+            "action_engine",
+            "task_completed" if final["success"] else "task_failed",
+            f"{'Done' if final['success'] else 'Failed'}: {task_text[:80]}",
+            {"task_id": task_id, "user_id": req.user_id, "result": final.get("message", "")[:200]},
+            related_entity_type="engine_task",
+            related_entity_id=task_id,
+        )
 
         # Persist to engine_tasks
         try:
@@ -709,6 +732,12 @@ async def ws_task(websocket: WebSocket):
                         block_msg = msg.FINANCIAL_TRANSACTION_BLOCKED
                     else:
                         block_msg = msg.BLOCKED_ACTION
+                    crm_log_event(
+                        "action_engine",
+                        "task_blocked",
+                        f"Blocked ({reason}): {text[:80]}",
+                        {"reason": reason, "user_id": user_id, "channel": "ws"},
+                    )
                     await send_msg({"type": "complete", "message": block_msg})
                     continue
 
@@ -759,6 +788,12 @@ async def ws_task(websocket: WebSocket):
 
                 _record_task(rate_user)
                 _total_tasks += 1
+                crm_log_event(
+                    "action_engine",
+                    "task_started",
+                    f"Task: {text[:80]}",
+                    {"channel": "ws", "user_id": user_id},
+                )
 
                 # Run the agent in the background
                 task_running = True
