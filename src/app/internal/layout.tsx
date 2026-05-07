@@ -22,8 +22,8 @@ function PasswordGate({ children }: { children: React.ReactNode }) {
         <p style={{ color: "#8A8A8A", fontSize: 14, marginBottom: 32 }}>Internal — Enter access code</p>
         <form onSubmit={(e) => {
           e.preventDefault();
-          const expected = process.env.NEXT_PUBLIC_INTERNAL_CODE;
-          if (expected && input === expected) {
+          const cleaned = input.replace(/\s+/g, "").toLowerCase();
+          if (cleaned === "123" || cleaned === "onetwothree") {
             sessionStorage.setItem("anticipy_internal", "1");
             setUnlocked(true);
           } else {
@@ -32,10 +32,15 @@ function PasswordGate({ children }: { children: React.ReactNode }) {
           }
         }}>
           <input
-            type="password"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             value={input}
             onChange={(e) => { setInput(e.target.value); setError(false); }}
-            placeholder="Access code"
+            placeholder="Access code (123)"
             autoFocus
             style={{
               background: "#1A1A1A", border: error ? "1px solid #ff4444" : "1px solid #333",
