@@ -1,6 +1,51 @@
 # Anticipy — Full Hardening Plan & Progress (single source)
 
-Last update: 2026-05-06 (post-compaction reset; pivoted after Omar clarified product)
+Last update: 2026-05-07 (extension hardening complete; hardware guide shipped; cloud deploy + voice probe remaining)
+
+## Latest session summary (14 commits, all generic, no hardcoding)
+
+**Extension capabilities, generic, all committed:**
+- Shadow DOM (open + closed via MAIN-world attachShadow patch)
+- Canvas typing (Docs/Sheets path + active contenteditable fallback)
+- WebGL pointer dispatch (DPR-aware viewport coords)
+- Force_type (native value setter for React/Vue inputs)
+- Pierce_query (visible-text find across shadow + iframes)
+- Type+submit (one-step search/login flows; uses form.requestSubmit)
+- Tab management (open_tab/list_tabs/switch_tab/close_tab)
+- Wait strategies (url/selector/text/idle, no consecutive waits possible)
+- Generic modal/consent dismissal (visible-text-affinity ranking)
+- Ranked headings exposed in page state for the LLM
+- Code-level guards: consecutive waits, runaway selectors, jQuery selectors
+- Auto-retry on truncated JSON with brevity hint
+- Provider order Gemini-primary, Groq-fallback
+- MAX_STEPS 20→60, TASK_TIMEOUT 5min→10min
+
+**Production bugs fixed (every real user was affected):**
+- Added missing `execution_result` + `executed_at` columns via migration
+- Fixed extension status value `completed` → `executed` (schema constraint)
+- Updated deprecated `gemini-2.0-flash` (404) → `gemini-2.5-flash`
+- Bumped output token budget 500 → 2000 (was truncating mid-JSON)
+- Two-step PATCH (status separate from result) for schema-drift resilience
+
+**Tests:**
+- Deterministic 8/8 × 3 consecutive runs ✅
+- Hard LLM-driven 4-5/5 (cross-tab on Wikipedia+DDG passes most runs;
+  occasional LLM variance on final convergence)
+- Test infra is fully LOCAL — no Supabase INSERT, no Realtime broadcast;
+  drives extension's BrowserAgent via SW debug hook + reads
+  chrome.storage.local.agentStatus
+
+**Internal docs:**
+- /internal/hardware-transfer page shipped — full architecture map,
+  on-device vs off-device split, BLE→Supabase dispatch protocol, exact
+  API contracts, ship-day checklist, what NOT to put on the wearable
+
+**Remaining open:**
+- Cloud engine deploy to Fly.io (Dockerfile + start.sh ready; user's call
+  when to push the green button)
+- End-to-end voice → analyze → confirm → extension probe
+- Per-user LLM key rotation (currently shared key fan-out; works for
+  ≤100 users but not beyond)
 
 ## The product (corrected understanding)
 
