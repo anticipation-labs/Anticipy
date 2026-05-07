@@ -118,7 +118,7 @@ NEVER LOOP ON WAIT — wait_for and wait must NEVER appear back-to-back in your 
 
 CSS SELECTOR RULES — selectors are pure CSS, NOT jQuery. \`:contains("text")\` does NOT work. \`:has-text\` does NOT work. To find an element by visible text, use action \`pierce_query\` (which pierces shadow DOM and same-origin iframes), or use the click action's \`text\` fallback. Stick to standard CSS: tag, #id, .class, [attr=value], descendant, child, :nth-child(n). KEEP SELECTORS SHORT — never exceed 100 characters. Long selectors with chained \`:not(...):not(...):not(...)\` clauses are wrong — if you can't write a SHORT selector that targets the element, use pierce_query with the visible text instead.
 
-READ VISIBLE TEXT DIRECTLY — values that already appear in the VISIBLE TEXT block of your page state context do not need an extract action. Just read them from the context and include them in your final \`done\` message. Use \`extract\` only when you need a specific element's text that isn't already shown to you (e.g. an attribute, or text inside a deeply-nested element that VISIBLE TEXT clipped).
+READ VISIBLE TEXT DIRECTLY — values that already appear in the VISIBLE TEXT block of your page state context do not need an extract action. Just read them from the context and include them in your final \`done\` message. Use \`extract\` only when you need a specific element's text that isn't already shown to you (e.g. an attribute, or text inside a deeply-nested element that VISIBLE TEXT clipped). For Wikipedia / news / blog pages, the answer is almost always in VISIBLE TEXT — extract is rarely needed; just read and \`done\`.
 
 MULTI-TAB / MULTI-STEP / RESEARCH TASKS — for tasks like "compare flight prices on Google Flights AND Kayak", "find the cheapest mouse on Amazon AND Best Buy", "draft an email referencing the article on TechCrunch": use \`open_tab\` to spawn a new tab, do work in it, use \`switch_tab\` to come back, and accumulate findings in extracted_data so you can reason across them at the end. \`list_tabs\` shows you all open tabs by id.
 
@@ -257,16 +257,17 @@ export class BrowserAgent {
       if (typeof action.selector === "string") {
         const sel = action.selector;
         const tooLong = sel.length > 200;
-        const hasFancy = /:has\(|:contains\(|:has-text\(/i.test(sel);
-        const tooManyAlts = (sel.match(/,/g) || []).length >= 3;
-        if (tooLong || hasFancy || tooManyAlts) {
-          console.warn(`[Anticipy Agent] bad selector (len=${sel.length} fancy=${hasFancy} alts=${tooManyAlts}) — overriding`);
+        const jqueryFake = /:contains\(|:has-text\(/i.test(sel);  // jQuery, NOT CSS
+        const tooManyAlts = (sel.match(/,/g) || []).length >= 2;   // multi-alt = truncation risk
+        if (tooLong || jqueryFake || tooManyAlts) {
+          console.warn(`[Anticipy Agent] bad selector (len=${sel.length} fake=${jqueryFake} alts=${tooManyAlts}) — overriding`);
           if (action.text || action.label) {
             action.action = "pierce_query";
             action.text = action.text || action.label;
             delete action.selector;
           } else {
             action.action = "getPageState";
+            delete action.selector;  // clear so the next iteration doesn't re-trigger override
           }
         }
       }
