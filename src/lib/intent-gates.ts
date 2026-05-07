@@ -73,11 +73,12 @@ to do? Answer FALSE when the wearer is delegating it to a named third party in t
 Answer TRUE when the wearer is the one acting, even if they're responding to someone else's \
 request ("Yeah I'll grab the milk on the way home").
 
-2. is_concrete_commitment: Is this a CONCRETE commitment with at least one specific slot \
-(named person, specific time, place, item, amount, deliverable)? Answer FALSE for future-tense \
-pleasantries with no concrete commitment ("we should grab coffee sometime", "let's catch up \
-soon", "you should come hiking next time", "we should look into that later"). Answer TRUE when \
-there is a specific recipient AND a concrete time/deliverable/topic.
+2. is_concrete_commitment: Does the candidate include AT LEAST ONE specific slot — a named \
+person, a specific time, a place, an item, an amount, OR a deliverable? Answer TRUE if ANY of \
+those is present. Answer FALSE only for pure floating pleasantries with NO slots at all ("we \
+should grab coffee sometime", "let's catch up soon", "we should look into that later"). \
+Errand-style items like "pick up dry cleaning", "buy bread", "renew the dentist appointment" \
+ARE concrete (item + implied deliverable) — answer TRUE. When in doubt, answer TRUE.
 
 3. was_retracted_later: Reading the FULL transcript end to end, did the wearer LATER retract, \
 contradict, supersede, or pivot away from this intent? Look for "actually never mind", "scratch \
@@ -204,12 +205,18 @@ export async function runIntentGate(input: GateInput): Promise<GateVerdict> {
   const reasoning =
     typeof parsed.reasoning === "string" ? parsed.reasoning.slice(0, 240) : "";
 
-  // Drop rules: any of (wearer=false), (concrete=false), or (retracted=true) → drop.
-  const admit = isWearer && isConcrete && !wasRetracted;
+  // Drop rules: ONLY (wearer=false) or (retracted=true) drop the intent.
+  // is_concrete_commitment is now an IMPORTANCE signal — soft pleasantries
+  // get demoted, not dropped. This keeps recall high; precision is enforced
+  // by the wearer + retracted checks plus the upstream extraction prompt.
+  const admit = isWearer && !wasRetracted;
+  // Soft demotion: non-concrete admitted intents get perfectMoment=false so
+  // they queue silently without email/SMS spam.
+  const perfectMoment = isWaiting && isConcrete;
 
   return {
     admit,
-    perfectMoment: isWaiting,
+    perfectMoment,
     reasoning,
     raw: {
       isWearersResponsibility: isWearer,
