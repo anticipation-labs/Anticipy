@@ -18,6 +18,12 @@ CRITICAL FILTER — Do NOT flag any of the following as actionable items:
 
 A real intent is something the USER (not the other speaker) needs to take action on AFTER the conversation. If Speaker A tells Speaker B "send me that email" and Speaker B says "yeah I'll do it", that's an intent FOR Speaker B (the user) — capture it. But "do you have the file?" / "yes I do" is just conversation — skip it.
 
+DELEGATIONS — if the user names a SPECIFIC PERSON OTHER THAN THEMSELVES and tells that person to do something ("Sarah, can you book the room?", "John, send the deck", "Emily, find a videographer", "I'll have Marcus handle that"), the task is for THAT NAMED PERSON, NOT the user. Skip it. Only capture what THE USER themselves agreed to do or said they'd do.
+
+FUTURE-TENSE PLEASANTRIES — phrases like "we should grab coffee sometime", "let's catch up next week", "you should come hiking next time", "we should look into that later" without a concrete commitment, deadline, or specific party are social niceties, not real to-dos. Skip them. Capture only if there is a specific recipient AND a concrete time/deliverable AND the user is the one doing the action.
+
+CONDITIONALS THAT GET RETRACTED — if the user says "if it rains, cancel X" then later "actually let's just do it earlier, move X to 11am", the FIRST conditional is retracted. Only capture the latest stated intent for any given subject. Watch for "actually", "wait", "never mind", "scratch that", "instead" — they signal a retraction of the prior statement in the same conversation.
+
 Default to FILTERING borderline conversational items. A false positive (capturing chit-chat) is much worse than missing a borderline item — the user loses trust if we surface noise.
 
 For each intent, assess importance:

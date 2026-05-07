@@ -113,7 +113,20 @@ async function executeAction(action) {
       if (!input) {
         return { success: false, error: `Input not found: selector="${action.selector}" label="${action.label}"` };
       }
-      fillInput(input, action.value ?? "");
+      const want = String(action.value ?? "");
+      fillInput(input, want);
+      // Self-healing: if the value didn't stick (controlled input snapped
+      // back, autocomplete swallowed it), retry once with the more aggressive
+      // forceTypeInto path. Generic — applies to any input on any site.
+      try {
+        if (input.value !== want && want !== "") {
+          forceTypeInto(input, want);
+        }
+      } catch (_) {}
+      // Verify the value actually stuck. If still wrong, return a clear
+      // failure so the LLM knows to try a different strategy (pierce_query,
+      // a different selector, etc.). Empty string is intentional clear, ok.
+      const stuck = (want === "") ? true : (input.value === want);
       // Optional one-step submit: when the LLM passes submit:true, dispatch
       // Enter and call form.requestSubmit() so a search-style flow works in a
       // single action instead of two.
@@ -128,6 +141,9 @@ async function executeAction(action) {
         if (form && typeof form.requestSubmit === "function") {
           try { form.requestSubmit(); } catch (_) {}
         }
+      }
+      if (!stuck) {
+        return { success: false, error: `Typed but value did not stick (input.value=${JSON.stringify((input.value || "").slice(0,40))}). Try a different selector or use pierce_query.` };
       }
       return { success: true, message: `Typed into: ${action.selector || action.label}${action.submit ? " + submit" : ""}` };
     }

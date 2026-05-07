@@ -110,6 +110,8 @@ LOGIN-WALL HANDLING — if the page text says "sign in", "log in to continue", o
 
 SUBMIT FORMS THE RIGHT WAY — when the user's task is "search X for Y" or "look up Y on X" or any flow that needs typing then submitting, ALWAYS prefer \`{"action":"type","selector":"<input>","text":"<value>","submit":true}\` over typing + clicking a separate Search/Submit button. Search buttons frequently have generic class names (cdx-button, mui-button) that match multiple elements, and clicking the wrong one is the #1 cause of agent stalls. type+submit also dispatches Enter keydown/keypress/keyup and calls form.requestSubmit() so the page's own form-submit handler fires regardless of framework.
 
+SEARCH-BOX FALLBACK — if a search input keeps rejecting typing (you see "Typed but value did not stick" or two consecutive type failures on the same selector), STOP TYPING. Most search engines accept the query directly in the URL: Google = https://www.google.com/search?q=ENCODED, Bing = https://www.bing.com/search?q=ENCODED, DuckDuckGo = https://duckduckgo.com/?q=ENCODED, YouTube = https://www.youtube.com/results?search_query=ENCODED, Wikipedia = https://en.wikipedia.org/w/index.php?search=ENCODED, Amazon = https://www.amazon.com/s?k=ENCODED. Use the navigate action with the URL — same outcome, more reliable.
+
 CONSENT BANNERS / COOKIE POPUPS — many sites (YouTube, news sites, EU-region sites) hide the real UI behind a consent dialog. If after navigating you see "Accept all", "I agree", "Got it", or a cookie-related modal, your FIRST action should be \`{"action":"dismiss_modal"}\`. Then re-getPageState and proceed. dismiss_modal is generic — it scores candidates by visible text affinity for confirm/dismiss verbs and by z-index, no per-site list.
 
 WAIT INTELLIGENTLY — fixed \`wait\` sleeps are for unknown latency. When you know what you're waiting for, use \`wait_for\` (URL change, selector appears, text appears, or idle:true for network quiet). Saves time on fast pages and prevents stalls on slow ones.
@@ -247,6 +249,51 @@ export class BrowserAgent {
       if (waitVerbs.has(action.action) && waitVerbs.has(lastVerb)) {
         console.warn("[Anticipy Agent] consecutive wait detected — overriding to getPageState");
         action.action = "getPageState";
+      }
+
+      // Hard guard against repeated failed types on the same selector —
+      // a controlled input that rejects type but accepts force_type. After
+      // 2 failed types on the same selector, override the next type to
+      // force_type. Generic; applies to any site.
+      if (action.action === "type" && action.selector && this.steps.length >= 2) {
+        const recent = this.steps.slice(-3);
+        const sameSelectorFails = recent.filter(s =>
+          (s.action?.action === "type" || s.action?.action === "fill") &&
+          s.action?.selector === action.selector &&
+          !s.result?.success
+        ).length;
+        if (sameSelectorFails >= 2) {
+          console.warn("[Anticipy Agent] type repeatedly failed on", action.selector, "— overriding to force_type");
+          action.action = "force_type";
+        }
+      }
+
+      // Bigger fallback: if force_type ALSO fails on the same input, the
+      // input is hostile. Pivot to navigate-to-search-URL using the current
+      // tab's domain. Generic — works for every search engine that accepts
+      // query params in the URL (Google/Bing/DDG/YouTube/Wikipedia/Amazon/etc.).
+      if ((action.action === "type" || action.action === "force_type") &&
+          action.selector && this.steps.length >= 3) {
+        const last3 = this.steps.slice(-3);
+        const allTypeFailsOnSameSelector =
+          last3.length >= 3 &&
+          last3.every(s =>
+            (s.action?.action === "type" || s.action?.action === "force_type" || s.action?.action === "fill") &&
+            s.action?.selector === action.selector &&
+            !s.result?.success
+          );
+        if (allTypeFailsOnSameSelector) {
+          const query = String(action.text ?? action.value ?? "").trim();
+          const tab = await this._getActiveTab();
+          const host = (tab?.url ? new URL(tab.url).hostname : "").toLowerCase();
+          const url = this._searchUrlForHost(host, query);
+          if (url && query) {
+            console.warn(`[Anticipy Agent] typing keeps failing — pivoting to URL navigation: ${url}`);
+            action.action = "navigate";
+            action.url = url;
+            delete action.selector;
+          }
+        }
       }
 
       // Hard guard against runaway CSS selectors — Gemini occasionally emits
@@ -495,6 +542,22 @@ export class BrowserAgent {
     const domAction = this._toDomAction(action);
     if (!domAction) return { success: false, error: `Unknown action type: ${action.action}` };
     return this._sendToContent(tab.id, domAction);
+  }
+
+  /** Construct a search URL for the current host. Returns "" if unknown. */
+  _searchUrlForHost(host, query) {
+    const q = encodeURIComponent(query);
+    if (!q) return "";
+    if (host.endsWith("google.com")) return `https://www.google.com/search?q=${q}`;
+    if (host.endsWith("bing.com")) return `https://www.bing.com/search?q=${q}`;
+    if (host.endsWith("duckduckgo.com")) return `https://duckduckgo.com/?q=${q}`;
+    if (host.endsWith("youtube.com")) return `https://www.youtube.com/results?search_query=${q}`;
+    if (host.includes("wikipedia.org")) return `https://en.wikipedia.org/w/index.php?search=${q}`;
+    if (host.endsWith("amazon.com")) return `https://www.amazon.com/s?k=${q}`;
+    if (host.endsWith("ebay.com")) return `https://www.ebay.com/sch/i.html?_nkw=${q}`;
+    if (host.endsWith("reddit.com")) return `https://www.reddit.com/search/?q=${q}`;
+    if (host.endsWith("github.com")) return `https://github.com/search?q=${q}`;
+    return "";
   }
 
   /** Send a message to the SW (background) and await its response. */
