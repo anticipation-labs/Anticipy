@@ -192,13 +192,15 @@ async function executeAction(action) {
     case "getPageState": {
       const visibleText = getVisibleText();
       const elements = getInteractiveElements();
+      const headings = getRankedHeadings();
       return {
         success: true,
         data: {
           url: window.location.href,
           title: document.title,
           visibleText,
-          elements
+          elements,
+          headings,  // ranked h1/h2/h3 (top-of-page first), helps the LLM pick a "top headline"
         }
       };
     }
@@ -590,6 +592,26 @@ function waitForSelector(selector, timeout) {
 }
 
 // ─── Page state extraction ────────────────────────────────────────────────────
+
+// Ranked headlines (h1 → h2 → h3) in document order, deduped, visible only.
+// Pierces shadow + same-origin iframes. Generic; helps the LLM pick a "top
+// headline" / "top story" / similar without per-site code.
+function getRankedHeadings() {
+  const out = [];
+  const seen = new Set();
+  for (const tag of ["h1", "h2", "h3"]) {
+    for (const el of pierceQueryAll(tag)) {
+      if (!isVisible(el)) continue;
+      const txt = (el.innerText || el.textContent || "").trim();
+      if (!txt || txt.length > 200) continue;
+      if (seen.has(txt)) continue;
+      seen.add(txt);
+      out.push({ level: tag, text: txt });
+      if (out.length >= 30) return out;
+    }
+  }
+  return out;
+}
 
 function getVisibleText() {
   // Walk the DOM and collect visible text, skipping script/style/hidden nodes
