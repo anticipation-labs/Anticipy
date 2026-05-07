@@ -116,7 +116,7 @@ WAIT INTELLIGENTLY — fixed \`wait\` sleeps are for unknown latency. When you k
 
 NEVER LOOP ON WAIT — wait_for and wait must NEVER appear back-to-back in your step history. After ONE wait that succeeded, your next action MUST be extract / click / scroll / canvas_pointer / pierce_query / done. If wait_for failed and you can already see useful content in VISIBLE TEXT, skip waiting and extract directly. If you're tempted to wait again because content "isn't loaded yet", instead try extract — most sites render the headline / first result early even when peripheral chrome is still loading.
 
-CSS SELECTOR RULES — selectors are pure CSS, NOT jQuery. \`:contains("text")\` does NOT work. \`:has-text\` does NOT work. To find an element by visible text, use action \`pierce_query\` (which pierces shadow DOM and same-origin iframes), or use the click action's \`text\` fallback. Stick to standard CSS: tag, #id, .class, [attr=value], descendant, child, :nth-child(n).
+CSS SELECTOR RULES — selectors are pure CSS, NOT jQuery. \`:contains("text")\` does NOT work. \`:has-text\` does NOT work. To find an element by visible text, use action \`pierce_query\` (which pierces shadow DOM and same-origin iframes), or use the click action's \`text\` fallback. Stick to standard CSS: tag, #id, .class, [attr=value], descendant, child, :nth-child(n). KEEP SELECTORS SHORT — never exceed 100 characters. Long selectors with chained \`:not(...):not(...):not(...)\` clauses are wrong — if you can't write a SHORT selector that targets the element, use pierce_query with the visible text instead.
 
 READ VISIBLE TEXT DIRECTLY — values that already appear in the VISIBLE TEXT block of your page state context do not need an extract action. Just read them from the context and include them in your final \`done\` message. Use \`extract\` only when you need a specific element's text that isn't already shown to you (e.g. an attribute, or text inside a deeply-nested element that VISIBLE TEXT clipped).
 
@@ -228,6 +228,21 @@ export class BrowserAgent {
       if (waitVerbs.has(action.action) && waitVerbs.has(lastVerb)) {
         console.warn("[Anticipy Agent] consecutive wait detected — overriding to getPageState");
         action.action = "getPageState";
+      }
+
+      // Hard guard against runaway CSS selectors — Gemini occasionally emits
+      // 1000-char :not() chains that just truncate at the token budget.
+      // Cap at 200 chars; if exceeded, fall back to pierce_query if there's
+      // searchable text, otherwise re-observe with getPageState. Generic.
+      if (typeof action.selector === "string" && action.selector.length > 200) {
+        console.warn(`[Anticipy Agent] runaway selector (${action.selector.length} chars) — overriding`);
+        if (action.text || action.label) {
+          action.action = "pierce_query";
+          action.text = action.text || action.label;
+          delete action.selector;
+        } else {
+          action.action = "getPageState";
+        }
       }
 
       console.log(`[Anticipy Agent] step ${step + 1}: ${action.action}`, this._actionPreview(action));
