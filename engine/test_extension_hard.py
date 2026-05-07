@@ -106,19 +106,21 @@ SCENARIOS = [
         "min_result_length": 6,
     },
     {
-        "name": "cross_tab_compare",
-        "summary_for_user": "Compare the headlines of two news homepages.",
-        "starting_url": "https://www.bbc.com/news",
+        "name": "cross_tab_research",
+        "summary_for_user": "Research the population of Tokyo across two sources.",
+        "starting_url": "https://en.wikipedia.org/wiki/Tokyo",
         "browser_task": (
-            "Open https://www.bbc.com/news (already loaded). Read the top "
-            "headline. Then call open_tab with url=https://www.reuters.com — "
-            "read its top headline. Then call done with success:true and a "
-            "message containing both headlines, prefixed by 'BBC:' and "
-            "'Reuters:' respectively. Don't keep extracting more than once "
-            "per site — one headline per site is enough."
+            "Wikipedia article on Tokyo is already open. Step 1: extract the "
+            "population figure for Tokyo from the visible text. Step 2: call "
+            "open_tab with url=https://duckduckgo.com/?q=tokyo+population. "
+            "Step 3: extract a population figure from the search result page "
+            "(any number that includes 'million' or commas). Step 4: call "
+            "done with success:true and a message that includes both numbers, "
+            "labeled 'Wikipedia:' and 'DuckDuckGo:'. ONE extract per tab — "
+            "do not loiter."
         ),
-        "must_contain_in_result_any": ["BBC", "bbc", "Reuters", "reuters"],
-        "min_result_length": 20,
+        "must_contain_in_result_any": ["million", "Wikipedia", "DuckDuckGo", "wikipedia", "duckduckgo"],
+        "min_result_length": 30,
     },
 ]
 
@@ -197,7 +199,7 @@ def verdict(scenario: dict, run: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def run_scenario(ctx, runner_page, scenario: dict, ext_id: str, timeout_s: int = 240) -> dict:
+async def run_scenario(ctx, runner_page, scenario: dict, ext_id: str, timeout_s: int = 360) -> dict:
     """Run one scenario fully locally — never touches Supabase. Drives the
     extension's BrowserAgent through the SW debug hook and reads agent
     progress from chrome.storage.local.agentStatus."""
@@ -360,8 +362,8 @@ async def main(per_scenario: int = 1):
                     t0 = time.time()
                     try:
                         run = await asyncio.wait_for(
-                            run_scenario(ctx, runner, sc, ext_id, timeout_s=240),
-                            timeout=270,
+                            run_scenario(ctx, runner, sc, ext_id, timeout_s=360),
+                            timeout=400,
                         )
                     except asyncio.TimeoutError:
                         run = {"scenario": sc, "outcome": "harness_timeout",

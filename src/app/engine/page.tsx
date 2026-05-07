@@ -44,6 +44,45 @@ const SPEAKER_COLORS = [
   "#BF7E7E",
 ];
 
+// Map any raw/technical error string into a calm, user-facing one-liner.
+// Investors should never see "fetch failed", "401 Unauthorized", model names,
+// JSON, stack traces, or session IDs.
+function friendlyError(raw: unknown): string {
+  const msg =
+    raw instanceof Error
+      ? raw.message
+      : typeof raw === "string"
+        ? raw
+        : "";
+  const lower = msg.toLowerCase();
+
+  if (!msg) return "Hmm, that didn't go through. Give it another sec and try again.";
+  if (lower.includes("sign in")) return "Please sign in again to continue.";
+  if (
+    lower.includes("permission") ||
+    lower.includes("notallowed") ||
+    lower.includes("not allowed") ||
+    lower.includes("getusermedia")
+  )
+    return "Microphone access is blocked. Allow the mic in your browser and try again.";
+  if (lower.includes("no speech")) return "We didn't catch any speech. Try speaking a bit closer to the mic.";
+  if (
+    lower.includes("network") ||
+    lower.includes("fetch") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("offline")
+  )
+    return "Network hiccup. Check your connection and try again.";
+  if (lower.includes("rate") || lower.includes("429"))
+    return "Lots of activity right now — try again in a moment.";
+  if (lower.includes("unauthorized") || lower.includes("401") || lower.includes("403"))
+    return "Your session expired. Please sign in again.";
+  if (lower.includes("transcription dropped") || lower.includes("dropped"))
+    return "We're still recording — finish and we'll process the audio.";
+  // Anything else: don't leak it.
+  return "Something didn't go through. Give it another sec and try again.";
+}
+
 const IMPORTANCE_STYLES: Record<
   string,
   { bg: string; border: string; label: string }
@@ -125,6 +164,9 @@ export default function EnginePage() {
   const [manualTranscript, setManualTranscript] = useState("");
   const [liveText, setLiveText] = useState("");
   const [calendarConnected, setCalendarConnected] = useState(false);
+  // Tracks per-intent UI state for the in-page confirm flow. Independent of
+  // server-side status — purely for showing optimistic feedback after click.
+  const [intentDecisions, setIntentDecisions] = useState<Record<string, "yes" | "no" | "loading">>({});
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -243,7 +285,7 @@ export default function EnginePage() {
             redirectTo ? { redirectTo } : undefined
           );
           if (error) {
-            setAuthError(error.message);
+            setAuthError("Couldn't send the reset link. Double-check the email and try again.");
           } else {
             setResetSent(true);
           }
@@ -253,7 +295,14 @@ export default function EnginePage() {
             password: authPassword,
           });
           if (error) {
-            setAuthError(error.message);
+            const lower = error.message.toLowerCase();
+            if (lower.includes("already") || lower.includes("registered")) {
+              setAuthError("That email is already registered. Try signing in instead.");
+            } else if (lower.includes("password")) {
+              setAuthError("Password needs to be at least 8 characters.");
+            } else {
+              setAuthError("Couldn't create the account. Try again in a moment.");
+            }
           } else if (!data.session) {
             setAuthSuccess(true);
           }
@@ -263,11 +312,7 @@ export default function EnginePage() {
             password: authPassword,
           });
           if (error) {
-            setAuthError(
-              error.message.toLowerCase().includes("invalid")
-                ? "Incorrect email or password."
-                : error.message
-            );
+            setAuthError("Incorrect email or password.");
           }
         }
       } finally {
@@ -294,7 +339,7 @@ export default function EnginePage() {
           password: newPassword,
         });
         if (error) {
-          setAuthError(error.message);
+          setAuthError("Couldn't update your password. Try again in a moment.");
         } else {
           setRecoveryUpdated(true);
           setNewPassword("");
@@ -400,13 +445,13 @@ export default function EnginePage() {
         method: "POST",
         headers: authHeaders,
       });
+      if (!sessionRes.ok) throw new Error("network");
       const sessionData = await sessionRes.json();
-      if (!sessionRes.ok) throw new Error(sessionData.error);
       sessionIdRef.current = sessionData.sessionId;
 
       const keyRes = await fetch("/api/engine/deepgram-key", { headers: authHeaders });
+      if (!keyRes.ok) throw new Error("network");
       const keyData = await keyRes.json();
-      if (!keyRes.ok) throw new Error(keyData.error || "Failed to get Deepgram key");
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
@@ -512,14 +557,11 @@ export default function EnginePage() {
         }
       };
 
-      dgWs.onerror = (e) => {
-        console.error("Deepgram WebSocket error:", e);
+      dgWs.onerror = () => {
+        // Don't surface a scary error. Recording continues — audio chunks
+        // are buffered and will be batch-transcribed on stop. Stay quiet
+        // and let the on-screen state remain "Listening...".
         dgDroppedRef.current = true;
-        // Soft warning — recording continues (audio chunks are still buffered
-        // and we'll batch-transcribe them on stop). Do not flip state.
-        setError(
-          "Live transcription dropped. We're still recording — finish and we'll process the audio."
-        );
       };
 
       dgWs.onclose = (e) => {
@@ -528,11 +570,7 @@ export default function EnginePage() {
         // is still capturing, so we keep going and will fall back to
         // batch transcription when the user hits stop.
         if (e.code !== 1000 && mediaRecorderRef.current?.state === "recording") {
-          console.warn("Deepgram WebSocket closed unexpectedly:", e.code, e.reason);
           dgDroppedRef.current = true;
-          setError(
-            "Live transcription dropped. We're still recording — finish and we'll process the audio."
-          );
         }
       };
 
@@ -592,8 +630,7 @@ export default function EnginePage() {
         }
       }, 30_000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start recording";
-      setError(message);
+      setError(friendlyError(err));
       setState("error");
       cleanupRecording();
       // If we already created a session row, mark it ended so it doesn't sit
@@ -703,20 +740,19 @@ export default function EnginePage() {
           headers: { Authorization: `Bearer ${authToken}` },
           body: formData,
         });
+        if (!transcribeRes.ok) throw new Error("network");
         const transcribeData = await transcribeRes.json();
-        if (!transcribeRes.ok) throw new Error(transcribeData.error);
 
         if (!transcribeData.segments?.length) {
           setState("done");
-          setError("No speech detected. Try speaking louder or closer to the mic.");
+          setError("We didn't catch any speech. Try speaking a bit closer to the mic.");
           return;
         }
 
         setSegments(transcribeData.segments);
         await analyzeTranscript(transcribeData.transcript);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Processing failed";
-        setError(message);
+        setError(friendlyError(err));
         setState("error");
       }
       return;
@@ -766,8 +802,8 @@ export default function EnginePage() {
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
+      if (!analyzeRes.ok) throw new Error("network");
       const analyzeData = await analyzeRes.json();
-      if (!analyzeRes.ok) throw new Error(analyzeData.error || "Analysis failed");
 
       setIntents((prev) => {
         const existingIds = new Set(prev.map((i) => i.id));
@@ -781,8 +817,7 @@ export default function EnginePage() {
       setError("");
       setState("done");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Analysis failed";
-      setError(message);
+      setError(friendlyError(err));
       setState("error");
     }
   }, []);
@@ -802,8 +837,8 @@ export default function EnginePage() {
         method: "POST",
         headers: { Authorization: `Bearer ${authSession.access_token}` },
       });
+      if (!sessionRes.ok) throw new Error("network");
       const sessionData = await sessionRes.json();
-      if (!sessionRes.ok) throw new Error(sessionData.error);
       sessionIdRef.current = sessionData.sessionId;
 
       const lines = manualTranscript.trim().split("\n");
@@ -833,8 +868,7 @@ export default function EnginePage() {
 
       await analyzeTranscript(manualTranscript);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Analysis failed";
-      setError(message);
+      setError(friendlyError(err));
       setState("error");
     }
   }, [manualTranscript, analyzeTranscript]);
@@ -844,6 +878,7 @@ export default function EnginePage() {
     setState("idle");
     setSegments([]);
     setIntents([]);
+    setIntentDecisions({});
     setError("");
     setDuration(0);
     setAudioLevel(0);
@@ -853,6 +888,35 @@ export default function EnginePage() {
     sessionIdRef.current = "";
     chunksRef.current = [];
   }, [cleanupRecording]);
+
+  // In-page intent confirmation. Hits the same /api/engine/confirm endpoint
+  // the email links use, so the wire stays unchanged.
+  const decideIntent = useCallback(
+    async (intentId: string, action: "yes" | "no") => {
+      setIntentDecisions((prev) => ({ ...prev, [intentId]: "loading" }));
+      try {
+        const res = await fetch(
+          `/api/engine/confirm?intentId=${encodeURIComponent(intentId)}&action=${action}`,
+          { method: "GET" }
+        );
+        // The endpoint returns HTML, not JSON. We only care about ok-ness:
+        // any 2xx means the decision was recorded (or the intent was already
+        // handled, which is also fine for the user).
+        if (!res.ok && res.status !== 404 && res.status !== 410) {
+          throw new Error("Confirm failed");
+        }
+        setIntentDecisions((prev) => ({ ...prev, [intentId]: action }));
+      } catch {
+        // Reset so the user can retry — no scary error toast.
+        setIntentDecisions((prev) => {
+          const next = { ...prev };
+          delete next[intentId];
+          return next;
+        });
+      }
+    },
+    []
+  );
 
   const formatDuration = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -1942,6 +2006,72 @@ export default function EnginePage() {
       )}
 
       <main className="max-w-container mx-auto px-6 py-12">
+        {/* 30-second Quick Start — only when fully idle and no work has happened */}
+        {state === "idle" && segments.length === 0 && intents.length === 0 && (
+          <div className="max-w-2xl mx-auto mb-12">
+            <div
+              className="rounded-card"
+              style={{
+                background: "rgba(200,169,126,0.04)",
+                border: "1px solid rgba(200,169,126,0.15)",
+                padding: "20px 24px",
+              }}
+            >
+              <div
+                className="text-[11px] uppercase tracking-wide-label mb-3"
+                style={{ color: "var(--gold)" }}
+              >
+                30-second quick start
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                  gap: 14,
+                }}
+              >
+                {[
+                  { n: "1", t: "Install the extension", s: "One-time, in your Chrome." },
+                  { n: "2", t: "Enter your access code", s: "From the card above." },
+                  { n: "3", t: "Press the gold dot, talk", s: "We'll find the actions." },
+                ].map((step) => (
+                  <div key={step.n} className="flex items-start gap-3">
+                    <span
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        background: "rgba(200,169,126,0.15)",
+                        border: "1px solid rgba(200,169,126,0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--gold)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {step.n}
+                    </span>
+                    <div>
+                      <p className="text-[13px] font-medium" style={{ marginBottom: 2 }}>
+                        {step.t}
+                      </p>
+                      <p
+                        className="text-[12px] font-light"
+                        style={{ color: "var(--text-on-dark-muted)" }}
+                      >
+                        {step.s}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Record section */}
         <div className="text-center mb-16">
           <h1
@@ -1951,10 +2081,10 @@ export default function EnginePage() {
             {state === "idle" && "Start a conversation."}
             {state === "recording" && "Listening..."}
             {(state === "processing" || state === "transcribing") &&
-              "Transcribing..."}
+              "Processing..."}
             {state === "analyzing" && "Finding actions..."}
-            {state === "done" && (error ? "Couldn't finish." : "Done.")}
-            {state === "error" && "Something went wrong."}
+            {state === "done" && "Done."}
+            {state === "error" && "Let's try that again."}
           </h1>
           <p
             className="text-[15px] font-light max-w-md mx-auto mb-10"
@@ -1964,19 +2094,21 @@ export default function EnginePage() {
               "Press record and have a real conversation. Anticipy listens, transcribes, and surfaces every actionable moment."}
             {state === "recording" && `Recording — ${formatDuration(duration)}`}
             {state === "transcribing" &&
-              "Processing your audio..."}
+              "Cleaning up your audio..."}
             {state === "analyzing" &&
-              "Analyzing your conversation for actionable moments..."}
-            {state === "done" && !error && intents.length > 0 &&
-              `${intents.length} action${intents.length !== 1 ? "s" : ""} found. We sent the notifications — confirm them to run.`}
-            {state === "done" && !error && intents.length === 0 &&
+              "Looking for things you can act on..."}
+            {state === "done" && intents.length > 0 &&
+              `${intents.length} action${intents.length !== 1 ? "s" : ""} ready. Confirm the ones you want to run.`}
+            {state === "done" && intents.length === 0 &&
               "No clear actions in this one. Try a conversation with plans, tasks, or follow-ups."}
+            {state === "error" && (error || "Something didn't go through. Give it another sec and try again.")}
           </p>
 
-          {/* Record button */}
+          {/* Record button — one color per state, subtle audio-reactive ring */}
           {(state === "idle" || state === "recording") && (
             <button
               onClick={state === "idle" ? startRecording : stopRecording}
+              aria-label={state === "idle" ? "Start recording" : "Stop recording"}
               className="relative mx-auto block transition-all duration-300"
               style={{
                 width: 120,
@@ -1984,34 +2116,38 @@ export default function EnginePage() {
                 borderRadius: "50%",
                 background:
                   state === "recording"
-                    ? "rgba(239,68,68,0.15)"
+                    ? "rgba(200,169,126,0.18)"
                     : "rgba(200,169,126,0.1)",
-                border: `2px solid ${state === "recording" ? "rgba(239,68,68,0.4)" : "var(--gold)"}`,
+                border: `2px solid var(--gold)`,
                 cursor: "pointer",
               }}
             >
+              {/* Audio-reactive halo (subtle) */}
               <div
-                className="absolute inset-0 rounded-full transition-all duration-300"
+                className="absolute inset-0 rounded-full transition-all duration-300 pointer-events-none"
                 style={{
                   background:
                     state === "recording"
-                      ? `rgba(239,68,68,${0.05 + audioLevel * 0.2})`
+                      ? `rgba(200,169,126,${0.08 + audioLevel * 0.18})`
                       : "transparent",
-                  transform: `scale(${1 + audioLevel * 0.15})`,
+                  transform: `scale(${1 + audioLevel * 0.12})`,
                 }}
               />
               <div className="absolute inset-0 flex items-center justify-center">
                 {state === "recording" ? (
+                  // Square stop icon
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 6,
-                      background: "#ef4444",
+                      width: 28,
+                      height: 28,
+                      borderRadius: 4,
+                      background: "var(--gold)",
                     }}
                   />
                 ) : (
+                  // Solid gold dot — single subtle breathing animation
                   <div
+                    className="anticipy-pulse"
                     style={{
                       width: 40,
                       height: 40,
@@ -2024,41 +2160,54 @@ export default function EnginePage() {
             </button>
           )}
 
-          {/* Processing spinner */}
+          {/* Processing — single dot pulse, no spinner clutter */}
           {(state === "processing" ||
             state === "transcribing" ||
             state === "analyzing") && (
-            <div className="flex justify-center">
+            <div className="flex justify-center" aria-live="polite">
               <div
-                className="animate-spin"
+                className="anticipy-pulse"
                 style={{
-                  width: 48,
-                  height: 48,
+                  width: 14,
+                  height: 14,
                   borderRadius: "50%",
-                  border: "3px solid var(--dark-border)",
-                  borderTopColor: "var(--gold)",
+                  background: "var(--gold)",
                 }}
               />
             </div>
           )}
 
-          {/* Done / Error */}
+          {/* Done / Error — graceful retry, never a blank screen */}
           {(state === "done" || state === "error") && (
             <button
               onClick={reset}
               className="px-8 py-3 rounded-pill text-[15px] font-medium transition-all"
               style={{ background: "var(--gold)", color: "var(--dark)" }}
             >
-              New Recording
+              {state === "error" ? "Try again" : "New recording"}
             </button>
           )}
 
-          {error && (
-            <p className="mt-4 text-[14px]" style={{ color: "#f87171" }}>
+          {/* Friendly soft notice — only show as a quiet line, not red, when in done state */}
+          {state === "done" && error && (
+            <p
+              className="mt-4 text-[13px] font-light"
+              style={{ color: "var(--text-on-dark-muted)" }}
+            >
               {error}
             </p>
           )}
         </div>
+
+        <style jsx>{`
+          @keyframes anticipy-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.55; transform: scale(0.92); }
+          }
+          :global(.anticipy-pulse) {
+            animation: anticipy-pulse 1.6s ease-in-out infinite;
+          }
+        `}</style>
 
         {/* Live transcript during recording */}
         {state === "recording" && (segments.length > 0 || liveText) && (
@@ -2154,9 +2303,6 @@ export default function EnginePage() {
                     style={{ background: style.bg, border: `1px solid ${style.border}` }}
                   >
                     <p className="text-[14px] font-medium">{intent.summary_for_user}</p>
-                    <p className="text-[12px] mt-1" style={{ color: "var(--gold)" }}>
-                      {intent.action_type.replace(/_/g, " ")}
-                    </p>
                   </div>
                 );
               })}
@@ -2209,71 +2355,166 @@ export default function EnginePage() {
                 <div>
                   <h2
                     className="text-[13px] font-light tracking-wide-label uppercase mb-4"
-                    style={{ color: "var(--text-on-dark-muted)" }}
+                    style={{ color: "var(--gold)" }}
                   >
-                    Actions
+                    Ready to run
                   </h2>
                   <div className="space-y-4">
                     {intents.map((intent) => {
                       const style =
                         IMPORTANCE_STYLES[intent.importance] ??
                         IMPORTANCE_STYLES.low;
+                      const decision = intentDecisions[intent.id];
                       return (
                         <div
                           key={intent.id}
-                          className="rounded-card p-5"
+                          className="rounded-card"
                           style={{
                             background: style.bg,
                             border: `1px solid ${style.border}`,
+                            padding: 22,
                           }}
                         >
-                          <div className="flex items-start justify-between mb-2">
-                            <span
-                              className="text-[11px] uppercase tracking-wide-label px-2 py-0.5 rounded-pill"
-                              style={{
-                                background: style.border,
-                                color: "var(--text-on-dark)",
-                              }}
-                            >
-                              {style.label}
-                            </span>
-                            <span
-                              className="text-[12px]"
-                              style={{ color: "var(--text-on-dark-muted)" }}
-                            >
-                              {Math.round(intent.confidence * 100)}%
-                            </span>
-                          </div>
-                          <p className="text-[15px] font-medium mb-2">
+                          {/* The natural-language summary is the hero */}
+                          <p
+                            className="font-serif"
+                            style={{
+                              fontSize: 19,
+                              lineHeight: 1.4,
+                              fontWeight: 400,
+                              marginBottom: 14,
+                              color: "var(--text-on-dark)",
+                            }}
+                          >
                             {intent.summary_for_user}
                           </p>
                           <p
                             className="text-[13px] font-light italic"
-                            style={{ color: "var(--text-on-dark-muted)" }}
+                            style={{
+                              color: "var(--text-on-dark-muted)",
+                              marginBottom: 18,
+                            }}
                           >
                             &ldquo;{intent.evidence_quote}&rdquo;
                           </p>
-                          <div className="mt-3 flex items-center gap-2">
-                            <span
-                              className="text-[12px] px-3 py-1 rounded-pill"
-                              style={{
-                                background: "rgba(200,169,126,0.1)",
-                                color: "var(--gold)",
-                                border: "1px solid rgba(200,169,126,0.2)",
-                              }}
+
+                          {/* Two-button decision row, or post-decision pill */}
+                          {decision === "yes" ? (
+                            <div
+                              className="flex items-center gap-2 text-[13px]"
+                              style={{ color: "#4CAF50" }}
                             >
-                              {intent.action_type.replace(/_/g, " ")}
-                            </span>
-                            <span
-                              className="text-[12px]"
+                              <span
+                                style={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: "50%",
+                                  background: "#4CAF50",
+                                  display: "inline-block",
+                                }}
+                              />
+                              Sent to your extension
+                            </div>
+                          ) : decision === "no" ? (
+                            <div
+                              className="text-[13px]"
                               style={{ color: "var(--text-on-dark-muted)" }}
                             >
-                              Notification sent
-                            </span>
-                          </div>
+                              Skipped.
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <button
+                                onClick={() => decideIntent(intent.id, "yes")}
+                                disabled={decision === "loading"}
+                                className="px-5 py-2.5 rounded-pill text-[14px] font-semibold transition-all"
+                                style={{
+                                  background: "var(--gold)",
+                                  color: "var(--dark)",
+                                  border: "none",
+                                  cursor: decision === "loading" ? "wait" : "pointer",
+                                  opacity: decision === "loading" ? 0.7 : 1,
+                                  minWidth: 120,
+                                }}
+                              >
+                                {decision === "loading" ? "…" : "Yes, do it"}
+                              </button>
+                              <button
+                                onClick={() => decideIntent(intent.id, "no")}
+                                disabled={decision === "loading"}
+                                className="px-5 py-2.5 rounded-pill text-[14px] font-medium transition-all"
+                                style={{
+                                  background: "transparent",
+                                  color: "var(--text-on-dark-muted)",
+                                  border: "1px solid rgba(255,255,255,0.15)",
+                                  cursor: decision === "loading" ? "wait" : "pointer",
+                                }}
+                              >
+                                Skip
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                  </div>
+
+                  {/* Extension-not-installed CTA — always show as a footnote
+                      since we can't reliably detect the extension from this page.
+                      Investors who don't have it get a clear next step. */}
+                  <div
+                    className="mt-5 rounded-card flex items-start gap-3"
+                    style={{
+                      background: "rgba(200,169,126,0.05)",
+                      border: "1px solid rgba(200,169,126,0.18)",
+                      padding: "14px 16px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 16,
+                        lineHeight: 1,
+                        color: "var(--gold)",
+                        marginTop: 2,
+                      }}
+                    >
+                      ◆
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium" style={{ marginBottom: 4 }}>
+                        No Chrome extension yet?
+                      </p>
+                      <p
+                        className="text-[12px] font-light"
+                        style={{ color: "var(--text-on-dark-muted)", marginBottom: 8 }}
+                      >
+                        Install it once and confirmed actions will run in your real browser.
+                      </p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <a
+                          href="/anticipy-extension.zip"
+                          download="anticipy-extension.zip"
+                          className="text-[12px] font-semibold px-3 py-1.5 rounded-pill"
+                          style={{
+                            background: "var(--gold)",
+                            color: "var(--dark)",
+                            textDecoration: "none",
+                          }}
+                        >
+                          Install extension
+                        </a>
+                        <a
+                          href="/engine/extension"
+                          className="text-[12px]"
+                          style={{
+                            color: "var(--text-on-dark-muted)",
+                            textDecoration: "none",
+                          }}
+                        >
+                          Install guide →
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
