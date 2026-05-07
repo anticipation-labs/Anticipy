@@ -13,6 +13,11 @@ import {
   isDuplicateOfExisting,
   RawIntent,
 } from "@/lib/dedup";
+import {
+  runIntentGate,
+  applyPerfectMomentThrottle,
+  NOTIFY_RATE_WINDOW_MS,
+} from "@/lib/intent-gates";
 
 export const dynamic = "force-dynamic";
 
@@ -100,33 +105,43 @@ export async function POST(req: Request) {
       .map((i) => i.summary_for_user || "")
       .filter(Boolean);
 
-    // Cross-session memory: fetch intents from user's other sessions in past 24h
+    // Cross-session memory: last 5 confirmed/executed intents from this user in the
+    // past 72h, across ALL their sessions (not just this one). Tells the LLM
+    // "the user already did X yesterday" so it stops re-emitting the same task
+    // each time the wearer mentions it again. Mirrors the Python cascade's
+    // long-horizon memory window.
     let crossSessionContext: string[] = [];
     try {
-      const twentyFourHoursAgo = new Date(
-        Date.now() - 24 * 60 * 60 * 1000
+      const seventyTwoHoursAgo = new Date(
+        Date.now() - 72 * 60 * 60 * 1000
       ).toISOString();
 
       const { data: userSessions } = await supabaseAdmin
         .from("anticipy_sessions")
         .select("id")
         .eq("user_id", authedUser.id)
-        .neq("id", sessionId)
-        .gte("started_at", twentyFourHoursAgo)
+        .gte("started_at", seventyTwoHoursAgo)
         .order("started_at", { ascending: false })
-        .limit(10);
+        .limit(50);
 
       if (userSessions && userSessions.length > 0) {
-        const otherSessionIds = userSessions.map((s) => s.id);
+        const allSessionIds = userSessions.map((s) => s.id);
         const { data: crossIntents } = await supabaseAdmin
           .from("anticipy_intents")
-          .select("summary_for_user, action_type, created_at")
-          .in("session_id", otherSessionIds)
+          .select("summary_for_user, action_type, status, created_at")
+          .in("session_id", allSessionIds)
+          .in("status", ["confirmed", "executed"])
           .order("created_at", { ascending: false })
-          .limit(10);
+          .limit(5);
 
         crossSessionContext = (crossIntents ?? []).map(
-          (i) => "[" + i.action_type + "] " + i.summary_for_user
+          (i) =>
+            "[" +
+            (i.status || "done") +
+            ":" +
+            i.action_type +
+            "] " +
+            i.summary_for_user
         );
       }
     } catch (err) {
@@ -203,9 +218,37 @@ export async function POST(req: Request) {
     // Track intents already stored in this same request so a single batch can't introduce dupes
     const insertedThisCall: ExistingIntent[] = [];
 
+    // Per-user perfect-moment throttle: count notifications already dispatched
+    // to this user in the last 60 minutes. If >5, demote new non-critical
+    // intents to "low" so we don't inbox-bomb the wearer. Mirrors the spirit
+    // of the proactive cascade's L6 dispatcher rate-limit.
+    let recentUserNotificationCount = 0;
+    try {
+      const oneHourAgo = new Date(
+        Date.now() - NOTIFY_RATE_WINDOW_MS
+      ).toISOString();
+      const { data: userSessionsForThrottle } = await supabaseAdmin
+        .from("anticipy_sessions")
+        .select("id")
+        .eq("user_id", authedUser.id)
+        .gte("started_at", oneHourAgo);
+      const sessionIds = (userSessionsForThrottle ?? []).map((s) => s.id);
+      if (sessionIds.length > 0) {
+        const { count } = await supabaseAdmin
+          .from("anticipy_intents")
+          .select("id", { count: "exact", head: true })
+          .in("session_id", sessionIds)
+          .gte("created_at", oneHourAgo);
+        recentUserNotificationCount = count ?? 0;
+      }
+    } catch (err) {
+      console.warn("Perfect-moment throttle query failed:", err);
+    }
+
     // Store intents in Supabase and dispatch notifications
     const storedIntents = [];
     let skippedDuplicates = 0;
+    let skippedByGate = 0;
     for (const { candidate, raw } of candidatesWithRaw) {
       // Server-side fuzzy dedup against intents already in this session (and this batch).
       // Periodic auto-analysis re-processes the growing transcript, so the LLM frequently
@@ -216,10 +259,51 @@ export async function POST(req: Request) {
         continue;
       }
 
+      // Second-pass validation gate (ports the Python cascade's L1/L2/L5 logic
+      // into a single LLM call). Drops delegations, future-tense pleasantries,
+      // and intents the user retracted later in the same conversation.
+      const gateVerdict = await runIntentGate({
+        summary: candidate.summary_for_user,
+        actionType: candidate.action_type,
+        evidenceQuote: candidate.evidence_quote,
+        transcript: safeTranscript,
+        crossSessionContext,
+      });
+      if (!gateVerdict.admit) {
+        skippedByGate += 1;
+        console.log(
+          "[intent-gate] dropped:",
+          candidate.action_type,
+          "—",
+          gateVerdict.reasoning,
+          JSON.stringify(gateVerdict.raw)
+        );
+        continue;
+      }
+
       const importanceRaw = String(raw.importance ?? "standard").toLowerCase();
-      const importance = ["critical", "important", "standard", "low"].includes(importanceRaw)
+      const importanceFromLlm = ["critical", "important", "standard", "low"].includes(importanceRaw)
         ? importanceRaw
         : "standard";
+
+      // Apply the perfect-moment gate verdict + per-user notify rate throttle
+      // to potentially demote importance. Critical intents always pass.
+      const importance = applyPerfectMomentThrottle(
+        importanceFromLlm,
+        recentUserNotificationCount,
+        gateVerdict.perfectMoment
+      );
+      if (importance !== importanceFromLlm) {
+        console.log(
+          "[intent-gate] importance demoted:",
+          candidate.action_type,
+          importanceFromLlm,
+          "→",
+          importance,
+          "(perfect_moment=" + gateVerdict.perfectMoment +
+            ", recent_notifications=" + recentUserNotificationCount + ")"
+        );
+      }
 
       const { data, error } = await supabaseAdmin
         .from("anticipy_intents")
@@ -258,6 +342,10 @@ export async function POST(req: Request) {
         summary_for_user: candidate.summary_for_user,
         evidence_quote: candidate.evidence_quote,
       });
+      // Each new intent counts toward the per-user notify rate. Lets the
+      // throttle ratchet up across the candidates in THIS same batch, not
+      // just across batches.
+      recentUserNotificationCount += 1;
 
       // Broadcast to extension via Supabase Realtime (bypasses RLS — works with anon key)
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -380,6 +468,7 @@ export async function POST(req: Request) {
       totalInferred: intents.length,
       totalValid: validIntents.length,
       totalSkippedDuplicates: skippedDuplicates,
+      totalSkippedByGate: skippedByGate,
     });
   } catch (err) {
     console.error("Analyze error:", err);
