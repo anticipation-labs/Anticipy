@@ -288,6 +288,21 @@ export async function POST(req: Request) {
         }).catch((e) => console.warn("[broadcast] failed:", e.message));
       }
 
+      // Skip all notifications (email + SMS + voice) for known test users so
+      // automated E2E runs don't inbox-bomb the admin. Detected by email
+      // domain — anticipy-test.local / .test / e2e-test-* are test-only.
+      const isTestUser =
+        !!user_email && (
+          user_email.endsWith(".test") ||
+          user_email.endsWith("@anticipy-test.local") ||
+          user_email.startsWith("e2e-test-")
+        );
+      if (isTestUser) {
+        // The intent row + Realtime broadcast still happen above; we just
+        // suppress fan-out to email/SMS/voice for test users.
+        continue;
+      }
+
       // Importance-based notification dispatch:
       // critical → voice + SMS + email
       // important/standard → SMS + email
