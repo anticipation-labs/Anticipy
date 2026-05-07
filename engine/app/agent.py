@@ -4,7 +4,10 @@ Uses Browser Use framework for browser automation.
 Receives a goal, drives the browser step-by-step, and streams status via callback.
 """
 
-from __future__ import annotations
+# NOTE: do NOT add `from __future__ import annotations` here. Browser Use's
+# Controller registry inspects parameter annotations as live types
+# (e.g. `param.annotation == BrowserSession`). PEP 563 turns annotations into
+# strings and breaks that check, which silently disables every custom action.
 
 import asyncio
 import json
@@ -17,7 +20,10 @@ import uuid
 from typing import Callable, Awaitable
 from urllib.parse import urlparse
 
+from pydantic import BaseModel, Field
+
 from browser_use import Agent, BrowserSession, AgentHistoryList
+from browser_use import Controller, ActionResult
 
 from app.config import (
     MAX_STEPS,
@@ -42,6 +48,377 @@ logger = logging.getLogger("engine")
 
 # Callback type: async function that sends a message dict to the client
 SendFn = Callable[[dict], Awaitable[None]]
+
+
+# ---------------------------------------------------------------------------
+# Generic agent capabilities (no site-specific code).
+#
+# These are wrapped as Browser Use custom actions so the LLM-driven agent can
+# reach for them when the default `input_text`/`click`/etc. don't work — e.g.
+# React-controlled inputs that ignore programmatic value changes, canvas-only
+# editors (Docs/Sheets) where there's no input element to click, shadow-DOM
+# components where querySelector misses everything, and WebGL surfaces that
+# only listen to native pointer events.
+#
+# All of them are intentionally generic. The agent's prompt (in
+# _AGENT_SYSTEM_RULES) tells it WHEN to use which.
+# ---------------------------------------------------------------------------
+
+
+_AGENT_SYSTEM_RULES = """\
+ADDITIONAL RULES (Anticipy):
+
+1. Field completeness — before calling `done`, list every distinct piece of \
+information the user explicitly asked for. If any item is missing, do another \
+step to find it. Never silently drop a sub-field.
+
+2. When `input_text` or `input` does not visibly change a field after one try \
+(e.g. React-controlled inputs that snap back, autocomplete that swallows the \
+value, stale element references), fall back to `force_type` with the same \
+index. `force_type` writes via the native value setter and dispatches the \
+events React/Vue listen for, then it works.
+
+3. For canvas-only text surfaces (Google Docs/Sheets, Figma text), there is \
+no input element to click into. After clicking the canvas to focus, use \
+`canvas_type` to send the keystrokes via the keyboard. Do not try `input_text` \
+on a `<canvas>` — it will fail.
+
+4. If the page looks empty (no clickable elements extracted) but you can see \
+content in the screenshot, the elements are probably inside a shadow root or \
+WebGL surface. Use `pierce_query` to find an element by its visible text, or \
+`canvas_pointer` to dispatch a real pointer event at a screen coordinate.
+
+5. Never invent values. If a piece of information isn't on the current page \
+or in the user's request, search for it.
+"""
+
+
+class _ForceTypeParams(BaseModel):
+    """Args for force_type. At module scope so registry sees a real type."""
+    index: int = Field(..., description="Element index from the page snapshot")
+    text: str = Field(..., description="Text to type into the focused element")
+
+
+class _CanvasTypeParams(BaseModel):
+    text: str = Field(..., description="Text to send to the currently focused canvas/editor")
+
+
+class _PierceQueryParams(BaseModel):
+    visible_text: str = Field(..., description="Visible text inside the target element")
+    role: str = Field("", description="Optional ARIA role hint, e.g. 'button', 'textbox'")
+
+
+class _CanvasPointerParams(BaseModel):
+    x: int = Field(..., description="Viewport X coordinate")
+    y: int = Field(..., description="Viewport Y coordinate")
+    button: str = Field("left", description="left | right | middle")
+    click_count: int = Field(1, description="1 for click, 2 for double-click")
+
+
+# JS that writes a value via the native HTMLInputElement / HTMLTextAreaElement
+# setter and dispatches the events React/Vue/Angular listen for.  This bypasses
+# the React-controlled-input problem (frameworks override the value setter on
+# the instance, so `el.value = "x"` is a no-op as far as their state goes).
+_REACT_SAFE_SET_VALUE = r"""
+function(v) {
+  try { this.focus(); } catch (_) {}
+  var proto = (this instanceof HTMLTextAreaElement)
+    ? HTMLTextAreaElement.prototype
+    : HTMLInputElement.prototype;
+  var p = Object.getOwnPropertyDescriptor(proto, 'value');
+  if (p && p.set) { p.set.call(this, v); } else { this.value = v; }
+  this.dispatchEvent(new Event('input',  { bubbles: true }));
+  this.dispatchEvent(new Event('change', { bubbles: true }));
+  try {
+    this.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter' }));
+  } catch (_) {}
+  return true;
+}
+""".strip()
+
+
+# Recursive querySelector that pierces open shadow roots AND same-origin
+# iframes.  Closed shadow roots are made open by the attachShadow patch we
+# install at session start (see _SHADOW_OPEN_PATCH below); for the rare site
+# that re-freezes attachShadow, fall back to canvas_pointer + vision.
+_SHADOW_PIERCE_QUERY = r"""
+(visibleText, role) => {
+  const target = (visibleText || '').trim().toLowerCase();
+  const candidates = [];
+  function walk(root) {
+    if (!root) return;
+    let all;
+    try { all = root.querySelectorAll('*'); } catch(_) { return; }
+    for (const el of all) {
+      const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+      if (txt && (txt === target || (txt.length < 200 && txt.includes(target)))) {
+        if (!role || (el.getAttribute('role') || '').toLowerCase() === role.toLowerCase()) {
+          const r = el.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            candidates.push({
+              x: Math.round(r.left + r.width / 2),
+              y: Math.round(r.top + r.height / 2),
+              tag: el.tagName,
+              textLen: txt.length,
+            });
+          }
+        }
+      }
+      if (el.shadowRoot) walk(el.shadowRoot);
+      if (el.tagName === 'IFRAME') {
+        try { if (el.contentDocument) walk(el.contentDocument); } catch(_) {}
+      }
+    }
+  }
+  walk(document);
+  candidates.sort((a, b) => a.textLen - b.textLen);
+  return candidates[0] || null;
+}
+""".strip()
+
+
+# Force every shadow root to be open. Must be installed via
+# Page.addScriptToEvaluateOnNewDocument BEFORE any page script runs, so the
+# constructor of every custom element sees our patched attachShadow.
+_SHADOW_OPEN_PATCH = r"""
+(() => {
+  try {
+    const orig = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function (init) {
+      const opts = Object.assign({}, init || {}, { mode: 'open' });
+      return orig.call(this, opts);
+    };
+  } catch (_) {}
+})();
+""".strip()
+
+
+# JS that locates the offscreen text-event-target iframe used by canvas
+# editors (Docs / Sheets / Slides) and focuses its inner contenteditable.
+# Returns true if a target was found and focused.
+_FOCUS_DOCS_EDIT_TARGET = r"""
+(() => {
+  function findIn(doc) {
+    if (!doc) return false;
+    let f;
+    try { f = doc.querySelector('iframe.docs-texteventtarget-iframe'); } catch(_) {}
+    if (f) {
+      try {
+        const inner = f.contentDocument && f.contentDocument.querySelector('[contenteditable="true"]');
+        if (inner) { inner.focus(); return true; }
+      } catch(_) {}
+    }
+    let frames = [];
+    try { frames = doc.querySelectorAll('iframe'); } catch(_) {}
+    for (const fr of frames) {
+      try { if (fr.contentDocument && findIn(fr.contentDocument)) return true; } catch(_) {}
+    }
+    return false;
+  }
+  return findIn(document);
+})()
+""".strip()
+
+
+async def _canvas_insert_text(session: BrowserSession, text: str) -> str:
+    """For canvas-rendered editors (Google Docs/Sheets), focus the offscreen
+    text-event-target iframe's contenteditable and use CDP Input.insertText —
+    that's the path that triggers Docs' beforeinput/textInput handlers.
+    Falls back to per-char dispatchKeyEvent for non-Docs canvases."""
+    cdp = await _get_cdp_client(session)
+    if cdp is None:
+        raise RuntimeError("CDP client unavailable")
+    # Try the Docs-style offscreen target first
+    try:
+        r = await cdp.send("Runtime.evaluate", {
+            "expression": _FOCUS_DOCS_EDIT_TARGET,
+            "returnByValue": True,
+        })
+        focused = bool(r.get("result", {}).get("value"))
+    except Exception:
+        focused = False
+    if focused:
+        # insertText is one shot for the whole string
+        for chunk in text.split("\n"):
+            if chunk:
+                await cdp.send("Input.insertText", {"text": chunk})
+            # Newline → real Enter via dispatchKeyEvent so Docs' line-break handler fires
+            if chunk != text.split("\n")[-1] or text.endswith("\n"):
+                pass
+        return "docs"
+    # Non-Docs canvas (Figma, custom editor) — char events are the right path
+    for ch in text:
+        if ch == "\n":
+            for evt in ("keyDown", "keyUp"):
+                await cdp.send("Input.dispatchKeyEvent", {
+                    "type": evt, "key": "Enter", "code": "Enter",
+                    "windowsVirtualKeyCode": 13, "nativeVirtualKeyCode": 13,
+                })
+            continue
+        await cdp.send("Input.dispatchKeyEvent", {
+            "type": "char", "text": ch, "unmodifiedText": ch, "key": ch,
+        })
+    return "char"
+
+
+async def _get_cdp_client(session: BrowserSession):
+    """Best-effort accessor for the active CDP session across browser-use versions."""
+    for attr in ("cdp_client", "_cdp_client", "get_cdp_client"):
+        v = getattr(session, attr, None)
+        if v is None:
+            continue
+        if callable(v):
+            r = v()
+            return await r if asyncio.iscoroutine(r) else r
+        return v
+    # Fallback: dig through the page object
+    page = None
+    for attr in ("get_current_page", "current_page", "page"):
+        v = getattr(session, attr, None)
+        if v is None:
+            continue
+        if callable(v):
+            r = v()
+            page = await r if asyncio.iscoroutine(r) else r
+        else:
+            page = v
+        if page is not None:
+            break
+    if page is None:
+        return None
+    ctx = getattr(page, "context", None)
+    if ctx and hasattr(ctx, "new_cdp_session"):
+        return await ctx.new_cdp_session(page)
+    return None
+
+
+def _build_controller() -> "Controller":
+    """Construct a Browser Use Controller with our generic capabilities registered."""
+    controller = Controller()
+
+    @controller.action(
+        "force_type: write text into an input via the native value setter "
+        "(works on React/Vue inputs that ignore plain `input_text`).",
+        param_model=_ForceTypeParams,
+    )
+    async def force_type(params: _ForceTypeParams, browser_session: BrowserSession) -> ActionResult:
+        try:
+            cdp = await _get_cdp_client(browser_session)
+            if cdp is None:
+                return ActionResult(extracted_content="force_type: no CDP client", error="no_cdp")
+            # Resolve the element via its DOM node id from the snapshot
+            dom_state = await browser_session.get_state_summary() if hasattr(
+                browser_session, "get_state_summary"
+            ) else None
+            element = None
+            if dom_state and hasattr(dom_state, "selector_map"):
+                element = dom_state.selector_map.get(params.index)
+            if element is None:
+                return ActionResult(error=f"force_type: index {params.index} not found")
+            object_id = getattr(element, "backend_node_id", None) or getattr(element, "node_id", None)
+            # Use Runtime.callFunctionOn against the resolved DOM object
+            resolved = await cdp.send("DOM.resolveNode", {"backendNodeId": int(object_id)}) if isinstance(object_id, int) else None
+            if not resolved or "object" not in resolved:
+                # Try pulling from the element directly
+                xpath = getattr(element, "xpath", None)
+                if not xpath:
+                    return ActionResult(error="force_type: cannot resolve element")
+                # Resolve by xpath via Runtime.evaluate
+                evald = await cdp.send("Runtime.evaluate", {
+                    "expression": (
+                        f"document.evaluate({json.dumps(xpath)}, document, null, "
+                        "XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue"
+                    ),
+                    "returnByValue": False,
+                })
+                obj = evald.get("result", {})
+                if not obj.get("objectId"):
+                    return ActionResult(error="force_type: xpath resolve failed")
+                object_id_str = obj["objectId"]
+            else:
+                object_id_str = resolved["object"]["objectId"]
+            await cdp.send("Runtime.callFunctionOn", {
+                "objectId": object_id_str,
+                "functionDeclaration": _REACT_SAFE_SET_VALUE,
+                "arguments": [{"value": params.text}],
+                "awaitPromise": False,
+                "returnByValue": True,
+            })
+            return ActionResult(extracted_content=f"Typed via native setter into element {params.index}")
+        except Exception as e:
+            return ActionResult(error=f"force_type failed: {e!s}")
+
+    @controller.action(
+        "canvas_type: send keystrokes to the currently focused element via CDP "
+        "keyboard events. Use this for canvas editors (Google Docs/Sheets/Figma) "
+        "after first clicking the canvas to give it focus.",
+        param_model=_CanvasTypeParams,
+    )
+    async def canvas_type(params: _CanvasTypeParams, browser_session: BrowserSession) -> ActionResult:
+        try:
+            mode = await _canvas_insert_text(browser_session, params.text)
+            return ActionResult(extracted_content=f"Typed {len(params.text)} chars into canvas editor ({mode})")
+        except Exception as e:
+            return ActionResult(error=f"canvas_type failed: {e!s}")
+
+    @controller.action(
+        "pierce_query: find an element by its visible text, including inside open "
+        "shadow roots. Returns x/y of the element's center so you can click it.",
+        param_model=_PierceQueryParams,
+    )
+    async def pierce_query(params: _PierceQueryParams, browser_session: BrowserSession) -> ActionResult:
+        try:
+            cdp = await _get_cdp_client(browser_session)
+            if cdp is None:
+                return ActionResult(error="pierce_query: no CDP client")
+            args = [{"value": params.visible_text}, {"value": params.role}]
+            r = await cdp.send("Runtime.evaluate", {
+                "expression": f"({_SHADOW_PIERCE_QUERY})({json.dumps(params.visible_text)}, {json.dumps(params.role)})",
+                "returnByValue": True,
+            })
+            val = r.get("result", {}).get("value")
+            if not val:
+                return ActionResult(extracted_content="pierce_query: no match")
+            return ActionResult(
+                extracted_content=f"Found at x={val['x']}, y={val['y']} ({val.get('tag','?')})"
+            )
+        except Exception as e:
+            return ActionResult(error=f"pierce_query failed: {e!s}")
+
+    @controller.action(
+        "canvas_pointer: dispatch a real mouse press+release at viewport coordinates. "
+        "Use when DOM is empty (WebGL/canvas) and you've identified the spot from "
+        "a screenshot or pierce_query.",
+        param_model=_CanvasPointerParams,
+    )
+    async def canvas_pointer(params: _CanvasPointerParams, browser_session: BrowserSession) -> ActionResult:
+        try:
+            cdp = await _get_cdp_client(browser_session)
+            if cdp is None:
+                return ActionResult(error="canvas_pointer: no CDP client")
+            # Coordinates from screenshots are in device pixels; CDP wants CSS pixels.
+            # Scale by 1/devicePixelRatio so vision-derived clicks land where intended.
+            try:
+                dpr_r = await cdp.send("Runtime.evaluate", {
+                    "expression": "window.devicePixelRatio || 1",
+                    "returnByValue": True,
+                })
+                dpr = float(dpr_r.get("result", {}).get("value") or 1)
+                if dpr <= 0:
+                    dpr = 1.0
+            except Exception:
+                dpr = 1.0
+            cx, cy = params.x / dpr, params.y / dpr
+            base = {"x": cx, "y": cy, "button": params.button, "clickCount": params.click_count, "buttons": 1}
+            # mouseMoved first so hover-state listeners (common in WebGL) prime properly
+            await cdp.send("Input.dispatchMouseEvent", {**base, "type": "mouseMoved", "buttons": 0})
+            await cdp.send("Input.dispatchMouseEvent", {**base, "type": "mousePressed"})
+            await cdp.send("Input.dispatchMouseEvent", {**base, "type": "mouseReleased"})
+            return ActionResult(extracted_content=f"Pointer at ({int(cx)},{int(cy)}) css px [dpr={dpr:g}]")
+        except Exception as e:
+            return ActionResult(error=f"canvas_pointer failed: {e!s}")
+
+    return controller
 
 # Fernet cipher for cookie encryption
 _fernet = Fernet(
@@ -445,12 +822,41 @@ class EngineAgent:
             # Start session and inject cookies before agent runs.
             # We try several Browser Use accessor names to stay version-tolerant
             # rather than reaching for a private attribute.
+            # Cold-start the browser. Chromium's first launch on a fresh profile
+            # can exceed Browser Use's 30s start-event timeout under load. Retry
+            # once after a stop/teardown so the second attempt re-uses the warm
+            # binary cache and succeeds.
+            start_attempts = 0
+            while True:
+                start_attempts += 1
+                try:
+                    await self._session.start()
+                    break
+                except Exception:
+                    logger.warning(
+                        "browser session start attempt %d failed", start_attempts,
+                        exc_info=True,
+                    )
+                    if start_attempts >= 2:
+                        await _send_error(self.send, msg.BROWSER_ERROR)
+                        return
+                    # Tear down whatever partial state we have and retry
+                    try:
+                        await self._session.stop()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
+
+            # Force every shadow root open BEFORE any page script runs, so the
+            # agent can find elements inside e.g. Salesforce LWC, Polymer, etc.
             try:
-                await self._session.start()
+                cdp = await _get_cdp_client(self._session)
+                if cdp is not None:
+                    await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+                        "source": _SHADOW_OPEN_PATCH,
+                    })
             except Exception:
-                logger.exception("browser session start failed")
-                await _send_error(self.send, msg.BROWSER_ERROR)
-                return
+                logger.debug("shadow-open patch install failed", exc_info=True)
 
             if cookies:
                 try:
@@ -479,10 +885,13 @@ class EngineAgent:
             # --- Create Browser Use agent ---
             await _send_status(self.send, msg.TASK_NAVIGATING)
 
+            controller = _build_controller()
+
             agent = Agent(
                 task=task,
                 llm=llm,
                 browser_session=self._session,
+                controller=controller,
                 max_actions_per_step=3,
                 max_failures=5,
                 use_vision=True,
@@ -491,6 +900,7 @@ class EngineAgent:
                 generate_gif=False,
                 enable_planning=True,
                 loop_detection_enabled=True,
+                extend_system_message=_AGENT_SYSTEM_RULES,
             )
 
             # --- Run with hard timeout ---
