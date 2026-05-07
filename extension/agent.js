@@ -214,7 +214,26 @@ export class BrowserAgent {
       });
 
       const pageState = await this._getPageState();
-      const action = await this._getNextAction(pageState);
+      let action;
+      try {
+        action = await this._getNextAction(pageState);
+      } catch (e) {
+        // LLM response was unparseable (most often truncated CSS selector).
+        // Retry once with an explicit hint to use pierce_query instead.
+        if (/not valid JSON|truncated/i.test(e.message || "")) {
+          console.warn("[Anticipy Agent] truncated JSON — retrying with brevity hint");
+          try {
+            action = await this._getNextAction({
+              ...pageState,
+              __hint: "Your previous response was truncated. Avoid long CSS selectors. Use pierce_query with visible text instead, or read the value directly from VISIBLE TEXT.",
+            });
+          } catch (e2) {
+            throw e2;
+          }
+        } else {
+          throw e;
+        }
+      }
 
       if (!action) {
         return { success: false, message: "LLM did not return a valid action" };
@@ -231,17 +250,24 @@ export class BrowserAgent {
       }
 
       // Hard guard against runaway CSS selectors — Gemini occasionally emits
-      // 1000-char :not() chains that just truncate at the token budget.
-      // Cap at 200 chars; if exceeded, fall back to pierce_query if there's
-      // searchable text, otherwise re-observe with getPageState. Generic.
-      if (typeof action.selector === "string" && action.selector.length > 200) {
-        console.warn(`[Anticipy Agent] runaway selector (${action.selector.length} chars) — overriding`);
-        if (action.text || action.label) {
-          action.action = "pierce_query";
-          action.text = action.text || action.label;
-          delete action.selector;
-        } else {
-          action.action = "getPageState";
+      // 1000-char :not() chains that just truncate at the token budget, OR
+      // multi-selector lists with :has()/:contains() that aren't real CSS.
+      // Detect: length > 200, OR :has(, OR :contains(, OR multiple commas.
+      // Override → pierce_query if there's searchable text, else getPageState.
+      if (typeof action.selector === "string") {
+        const sel = action.selector;
+        const tooLong = sel.length > 200;
+        const hasFancy = /:has\(|:contains\(|:has-text\(/i.test(sel);
+        const tooManyAlts = (sel.match(/,/g) || []).length >= 3;
+        if (tooLong || hasFancy || tooManyAlts) {
+          console.warn(`[Anticipy Agent] bad selector (len=${sel.length} fancy=${hasFancy} alts=${tooManyAlts}) — overriding`);
+          if (action.text || action.label) {
+            action.action = "pierce_query";
+            action.text = action.text || action.label;
+            delete action.selector;
+          } else {
+            action.action = "getPageState";
+          }
         }
       }
 
@@ -317,6 +343,7 @@ export class BrowserAgent {
       `INTERACTIVE ELEMENTS:`,
       JSON.stringify(pageState.elements || [], null, 2).substring(0, 2500),
       "",
+      ...(pageState.__hint ? [`HINT: ${pageState.__hint}`, ""] : []),
       `What is the single next action? Respond with JSON only.`
     ].join("\n");
 
