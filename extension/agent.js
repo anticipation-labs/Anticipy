@@ -24,6 +24,21 @@ Click an element (use the first matching strategy that works):
 Type text into an input or textarea:
 {"action":"type","selector":"#id or input[name=x]","text":"text to type","label":"input label text (fallback)"}
 
+Type AND submit in one step (use this for search boxes, login forms, anywhere typing+Enter completes the task — much more reliable than typing then clicking a separate submit/search button):
+{"action":"type","selector":"#id or input[name=x]","text":"text to type","submit":true}
+
+If \`type\` did not visibly update the field (React/Vue input snapped back, autocomplete swallowed it), retry with force_type:
+{"action":"force_type","selector":"#id","text":"text","label":"label fallback"}
+
+Type into a CANVAS-RENDERED editor (Google Docs/Sheets/Slides, Figma text, custom rich editors). Click the canvas first to give it focus, then:
+{"action":"canvas_type","text":"text to insert"}
+
+Click at viewport coordinates (use ONLY when the page has zero usable interactive elements — pure WebGL/3D/map surface — and you've identified the spot from the screenshot or pierce_query):
+{"action":"canvas_pointer","x":640,"y":380,"button":"left","clickCount":1}
+
+Find an element by visible text (pierces shadow DOM and same-origin iframes; returns the element's center coordinates so you can canvas_pointer-click it):
+{"action":"pierce_query","text":"visible text on the element","role":"optional ARIA role like button"}
+
 Press a keyboard key (optionally focus a selector first):
 {"action":"keypress","key":"Enter","selector":"optional selector to focus"}
 
@@ -56,12 +71,23 @@ SELECTOR PRIORITY (try in order):
 5. Aria:     [aria-label="Submit"]
 
 RULES:
-- One action per response, valid JSON only, no surrounding text
-- After navigate: always wait 1-2s or use waitForElement before interacting
-- If a click/type fails: try a different selector strategy or getPageState to see current state
-- If the page looks wrong: use getPageState to reorient before proceeding
-- Declare done only when the task is clearly complete or definitely blocked
-- Never delete accounts, send money, make purchases, or take irreversible destructive actions unless the task explicitly requires it`;
+- One action per response, valid JSON only, no surrounding text.
+- After navigate: always wait 1-2s or use waitForElement before interacting.
+- If a click/type fails: try a different selector strategy or getPageState to see current state.
+- If the page looks wrong: use getPageState to reorient before proceeding.
+- Declare done only when the task is clearly complete or definitely blocked.
+- Never delete accounts, send money, make purchases, or take irreversible destructive actions unless the task explicitly requires it.
+
+FIELD COMPLETENESS — before calling \`done\` with success:true, mentally list every distinct piece of information the user explicitly asked for. If any item is missing from your extracted data or the on-page state, do another step to find it. Never silently drop a sub-field. If a value isn't on the page, search for it — never invent.
+
+CANVAS / WEBGL FALLBACK — if INTERACTIVE ELEMENTS is empty or one item with isCanvas:true, the page is canvas-rendered. Use:
+  • canvas_type for text input (Docs/Sheets/Slides),
+  • pierce_query to find clickable spots by visible label,
+  • canvas_pointer to click at coordinates from a screenshot or pierce_query.
+
+LOGIN-WALL HANDLING — if the page text says "sign in", "log in to continue", or you see a password field on a path you can't bypass, end with done success:false explaining the wall. Don't loop.
+
+SUBMIT FORMS THE RIGHT WAY — when the user's task is "search X for Y" or "look up Y on X" or any flow that needs typing then submitting, ALWAYS prefer \`{"action":"type","selector":"<input>","text":"<value>","submit":true}\` over typing + clicking a separate Search/Submit button. Search buttons frequently have generic class names (cdx-button, mui-button) that match multiple elements, and clicking the wrong one is the #1 cause of agent stalls. type+submit also dispatches Enter keydown/keypress/keyup and calls form.requestSubmit() so the page's own form-submit handler fires regardless of framework.`;
 
 export class BrowserAgent {
   /**
@@ -333,7 +359,15 @@ export class BrowserAgent {
       case "click":
         return { type: "click", selector: action.selector, text: action.text, aria: action.aria };
       case "type":
-        return { type: "type", selector: action.selector, value: action.text, label: action.label };
+        return { type: "type", selector: action.selector, value: action.text, label: action.label, submit: action.submit === true };
+      case "force_type":
+        return { type: "force_type", selector: action.selector, value: action.text, label: action.label };
+      case "canvas_type":
+        return { type: "canvas_type", text: action.text };
+      case "canvas_pointer":
+        return { type: "canvas_pointer", x: action.x, y: action.y, button: action.button, clickCount: action.clickCount };
+      case "pierce_query":
+        return { type: "pierce_query", text: action.text, role: action.role };
       case "extract":
         return { type: "read_text", selector: action.selector };
       case "scroll":

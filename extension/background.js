@@ -15,6 +15,93 @@ let lastActions = [];
 let heartbeatRef = 0;
 let joinRef = 0;
 
+// Debug hook — exposes the confirmed-intent path to the SW global scope so a
+// Playwright (or DevTools) caller can drive the agent without going through
+// Realtime. Production code paths don't depend on this.
+globalThis.__anticipy_debug_run_intent = (intent) => {
+  try {
+    handleConfirmedIntent(intent);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+};
+
+// ─── MAIN-world inject: force every shadow root open ─────────────────────────
+// Must run BEFORE the page's own scripts so the constructor of every custom
+// element sees the patched attachShadow. We register a persistent content
+// script in `world: "MAIN"` at `document_start`. Generic, no per-site code.
+
+const SHADOW_OPEN_PATCH_ID = "anticipy_shadow_open_patch";
+const SHADOW_OPEN_PATCH_SRC = `
+(() => {
+  try {
+    if (window.__anticipy_shadow_open_installed__) return;
+    window.__anticipy_shadow_open_installed__ = true;
+    const orig = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function (init) {
+      try {
+        const opts = Object.assign({}, init || {}, { mode: "open" });
+        return orig.call(this, opts);
+      } catch (_) {
+        return orig.call(this, init);
+      }
+    };
+  } catch (_) {}
+})();
+`;
+
+async function ensureShadowOpenScript() {
+  try {
+    const existing = await chrome.scripting.getRegisteredContentScripts({
+      ids: [SHADOW_OPEN_PATCH_ID]
+    });
+    if (existing && existing.length > 0) return;
+    await chrome.scripting.registerContentScripts([{
+      id: SHADOW_OPEN_PATCH_ID,
+      js: undefined,                         // (we use `code` via update below)
+      matches: ["<all_urls>"],
+      runAt: "document_start",
+      world: "MAIN",
+      allFrames: true,
+      persistAcrossSessions: false,
+      // Chrome MV3: `code` not allowed in registerContentScripts; use a file.
+      // We emit a tiny patch.js at install time instead — see chrome.runtime.onInstalled.
+    }]);
+  } catch (e) {
+    // Fall through: extension still works for open shadow roots without this.
+    console.warn("[Anticipy] shadow-open patch register failed:", e?.message);
+  }
+}
+
+// MV3 quirk: registerContentScripts requires a JS file path, not inline code.
+// Workaround: ship the patch as a static file (extension/world_patch.js) and
+// register it. We materialize it from the constant if missing via writing
+// nothing — the patch file is shipped alongside content.js (created below).
+
+chrome.runtime.onInstalled.addListener(async () => {
+  try {
+    // Best-effort registration — silently no-ops if file isn't available.
+    const existing = await chrome.scripting.getRegisteredContentScripts({
+      ids: [SHADOW_OPEN_PATCH_ID]
+    });
+    if (!existing || existing.length === 0) {
+      await chrome.scripting.registerContentScripts([{
+        id: SHADOW_OPEN_PATCH_ID,
+        js: ["world_patch.js"],
+        matches: ["<all_urls>"],
+        runAt: "document_start",
+        world: "MAIN",
+        allFrames: true,
+        persistAcrossSessions: true,
+      }]);
+      console.log("[Anticipy] shadow-open MAIN-world patch registered");
+    }
+  } catch (e) {
+    console.warn("[Anticipy] shadow-open register failed:", e?.message);
+  }
+});
+
 // ─── Keep-alive alarm (MV3 kills SW after ~30s idle) ──────────────────────────
 chrome.alarms.create("keepalive", { periodInMinutes: 0.4 });
 
@@ -113,6 +200,7 @@ function connectRealtime() {
         // Broadcast events (no RLS, reliable)
         if (msg.event === "broadcast") {
           const inner = msg.payload;
+          console.log("[Anticipy] broadcast event:", inner?.event, "id:", inner?.payload?.id);
           if (inner?.event === "new_intent" && inner?.payload?.summary_for_user) {
             handleNewIntent(inner.payload);
           }
