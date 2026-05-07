@@ -247,6 +247,37 @@ async function executeAction(action) {
       return { success: true, message: `Pointer at (${x},${y})` };
     }
 
+    // ── wait_for: page-level wait. Resolves when ANY supplied condition met ───
+    case "wait_for": {
+      const t0 = Date.now();
+      const deadline = t0 + (action.timeout || 15000);
+      while (Date.now() < deadline) {
+        let matched = null;
+        if (action.url && location.href.includes(action.url)) matched = "url";
+        else if (action.selector && pierceQuery(action.selector)) matched = "selector";
+        else if (action.text && findByVisibleText(action.text, "")) matched = "text";
+        else if (action.idle === true) {
+          // Cheap idle proxy: no in-flight fetch/XHR for the next 500ms
+          await sleep(500);
+          // If the document.readyState is complete and no <img> is still loading
+          if (document.readyState === "complete") matched = "idle";
+        }
+        if (matched) return { success: true, message: `wait_for: ${matched} after ${Date.now()-t0}ms` };
+        await sleep(250);
+      }
+      return { success: false, error: `wait_for timeout after ${Date.now()-t0}ms` };
+    }
+
+    // ── dismiss_modal: best-effort generic consent / cookie / overlay close ───
+    // No per-site keywords; ranks candidates by visible-text affinity for
+    // common confirm/dismiss verbs, which generalize across most modal UI.
+    case "dismiss_modal": {
+      const dismissed = dismissAnyModal();
+      return dismissed
+        ? { success: true, message: `Dismissed: ${dismissed}` }
+        : { success: false, error: "No dismissable modal found" };
+    }
+
     // ── pierce_query: find an element by visible text across shadow + iframes ─
     case "pierce_query": {
       const hit = findByVisibleText(action.text || "", action.role || "");
@@ -314,6 +345,54 @@ function findElement(selector, text, aria) {
   }
 
   return null;
+}
+
+// Best-effort generic modal dismissal. Walks all visible interactive
+// elements (pierces shadow + iframes), scores them by how likely they are a
+// "confirm/dismiss/close" affordance using common verbs that generalize
+// across cookie banners, GDPR consent, paywalls, intro modals, and so on.
+// Returns the matched label string (truthy) on click, "" on no match.
+//
+// Generic: this function uses common UI verbs as relevance hints, NOT a
+// per-site whitelist. The agent prompt explicitly tells the LLM to fall
+// back to clicking specific text via the `click` action when this returns
+// no match.
+function dismissAnyModal() {
+  const VERBS = [
+    "accept all", "accept cookies", "accept", "agree", "i agree", "i accept",
+    "got it", "ok", "okay", "continue", "confirm", "allow",
+    "dismiss", "close", "no thanks", "not now", "skip", "later", "maybe later",
+  ];
+  const interactable = "button, a, [role='button'], input[type='button'], input[type='submit']";
+  const candidates = [];
+  for (const el of pierceQueryAll(interactable)) {
+    if (!isVisible(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) continue;
+    const txt = ((el.innerText || el.value || el.getAttribute("aria-label") || "")
+                  .trim().toLowerCase());
+    if (!txt || txt.length > 60) continue;
+    let score = 0;
+    for (const v of VERBS) {
+      if (txt === v) { score = 100; break; }
+      if (txt.includes(v)) { score = Math.max(score, 50); }
+    }
+    // Higher z-index → more likely a modal overlay
+    const z = parseInt(window.getComputedStyle(el).zIndex || "0", 10) || 0;
+    if (z > 100) score += 5;
+    // Aria-label / role hints
+    if ((el.getAttribute("aria-label") || "").toLowerCase().includes("close")) score += 30;
+    if ((el.getAttribute("role") || "") === "button") score += 5;
+    if (score > 0) candidates.push({ el, score, txt });
+  }
+  if (candidates.length === 0) return "";
+  candidates.sort((a, b) => b.score - a.score);
+  const winner = candidates[0];
+  try {
+    winner.el.scrollIntoView({ block: "center" });
+    winner.el.click();
+  } catch (_) {}
+  return winner.txt || "(unlabeled)";
 }
 
 // Find any element by visible text (for the LLM's pierce_query action).

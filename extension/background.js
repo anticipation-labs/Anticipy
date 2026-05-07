@@ -391,6 +391,49 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  // ─── Tab management routed through SW (chrome.tabs lives here, not in
+  //     content scripts). Generic capabilities — the LLM agent decides when
+  //     to use them. ──────────────────────────────────────────────────────
+  if (message.type === "TABS_OPEN") {
+    chrome.tabs.create({ url: message.url, active: message.active !== false }, (tab) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ success: true, tabId: tab.id, url: tab.url });
+      }
+    });
+    return true;
+  }
+  if (message.type === "TABS_LIST") {
+    chrome.tabs.query({}, (tabs) => {
+      sendResponse({
+        success: true,
+        tabs: tabs.map(t => ({ id: t.id, url: t.url, title: t.title, active: t.active })),
+      });
+    });
+    return true;
+  }
+  if (message.type === "TABS_SWITCH") {
+    chrome.tabs.update(message.tabId, { active: true }, (tab) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ success: true, tabId: tab?.id });
+      }
+    });
+    return true;
+  }
+  if (message.type === "TABS_CLOSE") {
+    chrome.tabs.remove(message.tabId, () => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+      } else {
+        sendResponse({ success: true });
+      }
+    });
+    return true;
+  }
+
   // Backstop: content script asks for a MAIN-world inject of the shadow-open
   // patch into its own tab. Useful when the persistent registerContentScripts
   // hadn't applied yet at first navigation.

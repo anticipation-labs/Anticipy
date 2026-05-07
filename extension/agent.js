@@ -5,8 +5,8 @@
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
-const MAX_STEPS = 20;
-const TASK_TIMEOUT_MS = 300_000; // 5 minutes hard limit
+const MAX_STEPS = 60;
+const TASK_TIMEOUT_MS = 600_000; // 10 minutes hard limit (multi-step flows)
 
 const AGENT_SYSTEM_PROMPT = `You are a browser automation agent built into the Anticipy Chrome extension.
 Your job: complete a web task by deciding ONE browser action at a time.
@@ -45,11 +45,29 @@ Press a keyboard key (optionally focus a selector first):
 Scroll the page:
 {"action":"scroll","direction":"down","amount":500}
 
-Wait for the page to settle:
+Wait for the page to settle (fixed sleep):
 {"action":"wait","seconds":2}
 
 Wait for an element to appear (useful after navigation/click):
 {"action":"waitForElement","selector":"CSS_SELECTOR","timeout":8000}
+
+Wait for ANY of: a URL substring, a selector, visible text, or network-idle:
+{"action":"wait_for","url":"/results","selector":".item","text":"Loading complete","idle":true,"timeout":15000}
+
+Dismiss a consent banner / cookie popup / "subscribe" intro modal generically:
+{"action":"dismiss_modal"}
+
+Open a new tab and navigate (use this when you need to compare/research across multiple sites):
+{"action":"open_tab","url":"https://...","active":true}
+
+List all currently open tabs (returns id, url, title, active):
+{"action":"list_tabs"}
+
+Switch focus to a different tab by id:
+{"action":"switch_tab","tabId":42}
+
+Close a tab by id:
+{"action":"close_tab","tabId":42}
 
 Extract text from an element and store it:
 {"action":"extract","selector":"CSS_SELECTOR","field":"variable_name_for_result"}
@@ -87,7 +105,17 @@ CANVAS / WEBGL FALLBACK — if INTERACTIVE ELEMENTS is empty or one item with is
 
 LOGIN-WALL HANDLING — if the page text says "sign in", "log in to continue", or you see a password field on a path you can't bypass, end with done success:false explaining the wall. Don't loop.
 
-SUBMIT FORMS THE RIGHT WAY — when the user's task is "search X for Y" or "look up Y on X" or any flow that needs typing then submitting, ALWAYS prefer \`{"action":"type","selector":"<input>","text":"<value>","submit":true}\` over typing + clicking a separate Search/Submit button. Search buttons frequently have generic class names (cdx-button, mui-button) that match multiple elements, and clicking the wrong one is the #1 cause of agent stalls. type+submit also dispatches Enter keydown/keypress/keyup and calls form.requestSubmit() so the page's own form-submit handler fires regardless of framework.`;
+SUBMIT FORMS THE RIGHT WAY — when the user's task is "search X for Y" or "look up Y on X" or any flow that needs typing then submitting, ALWAYS prefer \`{"action":"type","selector":"<input>","text":"<value>","submit":true}\` over typing + clicking a separate Search/Submit button. Search buttons frequently have generic class names (cdx-button, mui-button) that match multiple elements, and clicking the wrong one is the #1 cause of agent stalls. type+submit also dispatches Enter keydown/keypress/keyup and calls form.requestSubmit() so the page's own form-submit handler fires regardless of framework.
+
+CONSENT BANNERS / COOKIE POPUPS — many sites (YouTube, news sites, EU-region sites) hide the real UI behind a consent dialog. If after navigating you see "Accept all", "I agree", "Got it", or a cookie-related modal, your FIRST action should be \`{"action":"dismiss_modal"}\`. Then re-getPageState and proceed. dismiss_modal is generic — it scores candidates by visible text affinity for confirm/dismiss verbs and by z-index, no per-site list.
+
+WAIT INTELLIGENTLY — fixed \`wait\` sleeps are for unknown latency. When you know what you're waiting for, use \`wait_for\` (URL change, selector appears, text appears, or idle:true for network quiet). Saves time on fast pages and prevents stalls on slow ones.
+
+MULTI-TAB / MULTI-STEP / RESEARCH TASKS — for tasks like "compare flight prices on Google Flights AND Kayak", "find the cheapest mouse on Amazon AND Best Buy", "draft an email referencing the article on TechCrunch": use \`open_tab\` to spawn a new tab, do work in it, use \`switch_tab\` to come back, and accumulate findings in extracted_data so you can reason across them at the end. \`list_tabs\` shows you all open tabs by id.
+
+LONG-RUNNING TASKS — you have up to 60 steps and 10 minutes per intent. For multi-step flights/booking/research flows that take a while, don't rush to declare done. After each step, check whether you've actually achieved the user's full request or just one piece of it. If you've only done part: keep going.
+
+FOLLOW-UP HANDLING — the user may ask follow-up questions ("what about the other one?", "compare with X"). You'll receive these as new intents but with relevant context in PARAMETERS. Use list_tabs + switch_tab to revisit work you did earlier rather than starting from scratch.`;
 
 export class BrowserAgent {
   /**
@@ -333,6 +361,27 @@ export class BrowserAgent {
   // ─── Action execution ─────────────────────────────────────────────────────────
 
   async _executeAction(action) {
+    // Tab-level actions don't need a current active tab
+    if (action.action === "open_tab") {
+      const r = await this._bgCall({ type: "TABS_OPEN", url: action.url, active: action.active !== false });
+      if (r?.success) {
+        this.activeTabId = r.tabId;
+        await this._waitForTabLoad(r.tabId);
+      }
+      return r;
+    }
+    if (action.action === "list_tabs") {
+      return await this._bgCall({ type: "TABS_LIST" });
+    }
+    if (action.action === "switch_tab") {
+      const r = await this._bgCall({ type: "TABS_SWITCH", tabId: action.tabId });
+      if (r?.success) this.activeTabId = action.tabId;
+      return r;
+    }
+    if (action.action === "close_tab") {
+      return await this._bgCall({ type: "TABS_CLOSE", tabId: action.tabId });
+    }
+
     const tab = await this._getActiveTab();
     if (!tab) return { success: false, error: "No active tab found" };
 
@@ -359,6 +408,19 @@ export class BrowserAgent {
     return this._sendToContent(tab.id, domAction);
   }
 
+  /** Send a message to the SW (background) and await its response. */
+  _bgCall(msg) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(msg, (resp) => {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          resolve(resp || { success: false, error: "Empty response" });
+        }
+      });
+    });
+  }
+
   /** Map agent action names to the content script DOM_ACTION format */
   _toDomAction(action) {
     switch (action.action) {
@@ -382,6 +444,10 @@ export class BrowserAgent {
         return { type: "waitForElement", selector: action.selector, timeout: action.timeout || 8000 };
       case "keypress":
         return { type: "keypress", key: action.key, selector: action.selector };
+      case "wait_for":
+        return { type: "wait_for", url: action.url, text: action.text, selector: action.selector, idle: action.idle, timeout: action.timeout || 15000 };
+      case "dismiss_modal":
+        return { type: "dismiss_modal" };
       default:
         return null;
     }
