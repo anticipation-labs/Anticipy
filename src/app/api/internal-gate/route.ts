@@ -16,11 +16,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const expected = "123";
-  const provided = (body.passcode || "").trim();
+  // Accept "123" no matter what whitespace, formatting, or case wraps it.
+  // Also accepts "one two three" / "onetwothree".
+  const raw = (body.passcode || "").toString();
+  const stripped = raw.replace(/\s+/g, "").toLowerCase();
+  const ok = stripped === "123" || stripped === "onetwothree";
 
-  if (provided !== expected) {
-    // Uniform error — don't leak whether env override is set.
+  if (!ok) {
     return NextResponse.json({ error: "Wrong code" }, { status: 401 });
   }
 

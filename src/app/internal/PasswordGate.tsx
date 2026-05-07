@@ -44,10 +44,11 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
           setSubmitting(true);
           setError(false);
           try {
+            const cleaned = input.replace(/\s+/g, "");
             const res = await fetch("/api/internal-gate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ passcode: input }),
+              body: JSON.stringify({ passcode: cleaned }),
             });
             if (res.ok) {
               setUnlocked(true);
@@ -62,10 +63,15 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
           }
         }}>
           <input
-            type="password"
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             value={input}
             onChange={(e) => { setInput(e.target.value); setError(false); }}
-            placeholder="Access code"
+            placeholder="Access code (123)"
             autoFocus
             disabled={submitting}
             style={{
