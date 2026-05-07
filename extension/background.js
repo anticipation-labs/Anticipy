@@ -333,25 +333,37 @@ async function handleConfirmedIntent(intent) {
 // ─── Supabase REST update ──────────────────────────────────────────────────────
 
 async function updateIntentInSupabase(intentId, result) {
+  // Two-step PATCH: status first (required, schema-checked), then optional
+  // execution_result. If the result column ever drifts again the status will
+  // still land — defense in depth against schema/code skew.
+  const baseHeaders = {
+    "Content-Type": "application/json",
+    "apikey": SUPABASE_ANON_KEY,
+    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+    "Prefer": "return=minimal"
+  };
+  const status = result.success ? "executed" : "failed";
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/anticipy_intents?id=eq.${intentId}`,
+      { method: "PATCH", headers: baseHeaders, body: JSON.stringify({ status }) }
+    );
+  } catch (e) {
+    console.warn("[Anticipy] Could not update intent status:", e.message);
+  }
   try {
     await fetch(
       `${SUPABASE_URL}/rest/v1/anticipy_intents?id=eq.${intentId}`,
       {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-          "Prefer": "return=minimal"
-        },
+        method: "PATCH", headers: baseHeaders,
         body: JSON.stringify({
-          status: result.success ? "completed" : "failed",
-          execution_result: result.message || null
+          execution_result: result.message || null,
+          executed_at: new Date().toISOString(),
         })
       }
     );
   } catch (e) {
-    console.warn("[Anticipy] Could not update intent in Supabase:", e.message);
+    console.warn("[Anticipy] Could not update intent result:", e.message);
   }
 }
 

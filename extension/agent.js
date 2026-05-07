@@ -3,7 +3,10 @@
 // No localhost server required — runs entirely in the extension using the user's real browser.
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+// gemini-2.5-flash is the current generally-available flash model with the
+// free-tier daily quota the extension uses. The previous gemini-2.0-flash
+// returns 404 ("no longer available to new users") as of 2026-Q1.
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 const MAX_STEPS = 60;
 const TASK_TIMEOUT_MS = 600_000; // 10 minutes hard limit (multi-step flows)
@@ -113,6 +116,8 @@ WAIT INTELLIGENTLY — fixed \`wait\` sleeps are for unknown latency. When you k
 
 MULTI-TAB / MULTI-STEP / RESEARCH TASKS — for tasks like "compare flight prices on Google Flights AND Kayak", "find the cheapest mouse on Amazon AND Best Buy", "draft an email referencing the article on TechCrunch": use \`open_tab\` to spawn a new tab, do work in it, use \`switch_tab\` to come back, and accumulate findings in extracted_data so you can reason across them at the end. \`list_tabs\` shows you all open tabs by id.
 
+PIVOT EARLY ON MULTI-SITE TASKS — if the user's task names two or more distinct sites/services to compare or aggregate, your action sequence MUST be: (1) one extract from site A → (2) open_tab for site B IMMEDIATELY → (3) one extract from site B → (4) done. Do NOT loiter on site A re-extracting variations of the same content. The first useful extract from site A is enough — if the headline/price/title is in extracted_data, MOVE ON. Step budget is shared across sites, so wasting 20 steps on site A leaves nothing for site B.
+
 LONG-RUNNING TASKS — you have up to 60 steps and 10 minutes per intent. For multi-step flights/booking/research flows that take a while, don't rush to declare done. After each step, check whether you've actually achieved the user's full request or just one piece of it. If you've only done part: keep going.
 
 FOLLOW-UP HANDLING — the user may ask follow-up questions ("what about the other one?", "compare with X"). You'll receive these as new intents but with relevant context in PARAMETERS. Use list_tabs + switch_tab to revisit work you did earlier rather than starting from scratch.`;
@@ -149,6 +154,26 @@ export class BrowserAgent {
       result = await this._loop();
     } catch (err) {
       result = { success: false, message: err.message || "Unexpected error" };
+    }
+    // On failure, append a compact debug suffix so the user (and tests) can
+    // see what the agent actually did before giving up. Generic — just the
+    // last few action verbs and any extracted data.
+    if (!result.success) {
+      try {
+        const lastSteps = this.steps.slice(-5).map(s => {
+          const a = s.action || {};
+          const ok = s.result?.success ? "✓" : "✗";
+          const tail = a.url ? a.url.substring(0, 40)
+                       : a.selector ? `sel=${a.selector}`
+                       : a.text ? `text=${String(a.text).substring(0,30)}`
+                       : a.tabId !== undefined ? `tab=${a.tabId}` : "";
+          return `${ok}${a.action}${tail ? `(${tail})` : ""}`;
+        }).join(" → ");
+        const ext = Object.keys(this.extractedData || {}).length
+          ? ` | data:${JSON.stringify(this.extractedData).substring(0, 200)}`
+          : "";
+        result.message = `${result.message} | last:${lastSteps}${ext}`;
+      } catch (_) {}
     }
 
     await chrome.storage.local.set({
@@ -265,21 +290,23 @@ export class BrowserAgent {
   }
 
   async _callLLM(userMessage) {
+    // Gemini primary (higher free-tier daily quota than Groq's per-org limits),
+    // Groq fallback (very fast when not rate-limited).
     const errors = [];
-    if (this.apiConfig?.groqApiKey) {
-      try {
-        return await this._callGroq(userMessage);
-      } catch (e) {
-        errors.push(`Groq: ${e.message || e}`);
-        console.warn("[Anticipy Agent] Groq failed, trying Gemini:", e.message);
-      }
-    }
     if (this.apiConfig?.geminiApiKey) {
       try {
         return await this._callGemini(userMessage);
       } catch (e) {
         errors.push(`Gemini: ${e.message || e}`);
-        console.warn("[Anticipy Agent] Gemini failed:", e.message);
+        console.warn("[Anticipy Agent] Gemini failed, trying Groq:", e.message);
+      }
+    }
+    if (this.apiConfig?.groqApiKey) {
+      try {
+        return await this._callGroq(userMessage);
+      } catch (e) {
+        errors.push(`Groq: ${e.message || e}`);
+        console.warn("[Anticipy Agent] Groq failed:", e.message);
       }
     }
     if (errors.length === 0) {
@@ -302,7 +329,7 @@ export class BrowserAgent {
           { role: "user", content: userMessage }
         ],
         temperature: 0.1,
-        max_tokens: 500,
+        max_tokens: 2000,
         response_format: { type: "json_object" }
       })
     });
@@ -328,7 +355,7 @@ export class BrowserAgent {
           contents: [{ parts: [{ text: `${AGENT_SYSTEM_PROMPT}\n\n${userMessage}` }] }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 500,
+            maxOutputTokens: 2000,
             responseMimeType: "application/json"
           }
         })
