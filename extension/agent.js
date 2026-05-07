@@ -216,6 +216,16 @@ export class BrowserAgent {
         return { success: false, message: "LLM did not return a valid action" };
       }
 
+      // Hard guard against consecutive wait/wait_for actions — the LLM has
+      // a tendency to chain waits when content seems missing, which burns
+      // step budget without making progress. Generic; no site-specific code.
+      const lastVerb = this.steps.length ? this.steps[this.steps.length - 1].action?.action : null;
+      const waitVerbs = new Set(["wait", "wait_for", "waitForElement"]);
+      if (waitVerbs.has(action.action) && waitVerbs.has(lastVerb)) {
+        console.warn("[Anticipy Agent] consecutive wait detected — overriding to getPageState");
+        action.action = "getPageState";
+      }
+
       console.log(`[Anticipy Agent] step ${step + 1}: ${action.action}`, this._actionPreview(action));
 
       // Terminal action
