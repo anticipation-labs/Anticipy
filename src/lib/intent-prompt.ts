@@ -42,10 +42,19 @@ Return JSON:
       "importance": "critical|important|standard|low",
       "summary_for_user": "One clear sentence: what to do and why it matters",
       "evidence_quote": "The exact quote that triggered this",
-      "parameters": {}
+      "parameters": {},
+      "required_slots": ["slot1","slot2"],
+      "missing_slots": ["slot1"],
+      "clarification_question": "Short polite question to ask the user IF missing_slots is non-empty, otherwise empty string"
     }
   ]
 }
+
+REQUIRED SLOTS — for each intent, infer the concrete fields a human assistant would need to ACTUALLY do this task end to end (not just kick it off). Think: if I were carrying out this task for the wearer, what's the smallest set of facts I'd need to not have to ask back? List those as snake_case strings. Derive them from the task itself — do NOT use a fixed catalog.
+
+MISSING SLOTS — of the required_slots, which ones did the wearer NOT supply in the transcript? Empty array means everything needed is present.
+
+CLARIFICATION QUESTION — when missing_slots is non-empty, ONE short, friendly sentence asking the wearer for exactly those missing pieces. The agent surfaces this instead of acting blindly. Empty string when nothing is missing.
 
 Use confidence honestly: 0.9+ only when the action is unambiguous and clearly the user's to do. Anything conversational, hypothetical, or unclear gets <0.65 and will be filtered out.
 
