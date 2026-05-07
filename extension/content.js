@@ -615,9 +615,14 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Announce readiness to background
+// Announce readiness + ask background to inject the MAIN-world shadow-open
+// patch into this tab. Backstop in case persistent registerContentScripts
+// didn't beat the page's own scripts to it.
 try {
   chrome.runtime.sendMessage({ type: "CONTENT_SCRIPT_READY", url: window.location.href });
 } catch {
   // Extension context may be invalidated — ignore
 }
+try {
+  chrome.runtime.sendMessage({ type: "INJECT_SHADOW_PATCH" });
+} catch {}

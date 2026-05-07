@@ -79,9 +79,8 @@ async function ensureShadowOpenScript() {
 // register it. We materialize it from the constant if missing via writing
 // nothing — the patch file is shipped alongside content.js (created below).
 
-chrome.runtime.onInstalled.addListener(async () => {
+async function ensureShadowOpenRegistered() {
   try {
-    // Best-effort registration — silently no-ops if file isn't available.
     const existing = await chrome.scripting.getRegisteredContentScripts({
       ids: [SHADOW_OPEN_PATCH_ID]
     });
@@ -100,7 +99,13 @@ chrome.runtime.onInstalled.addListener(async () => {
   } catch (e) {
     console.warn("[Anticipy] shadow-open register failed:", e?.message);
   }
-});
+}
+
+// Register on every SW boot path: install, startup, and module-load (covers
+// Playwright fresh-profile loads where neither install nor startup fire reliably).
+chrome.runtime.onInstalled.addListener(ensureShadowOpenRegistered);
+chrome.runtime.onStartup.addListener(ensureShadowOpenRegistered);
+ensureShadowOpenRegistered();
 
 // ─── Keep-alive alarm (MV3 kills SW after ~30s idle) ──────────────────────────
 chrome.alarms.create("keepalive", { periodInMinutes: 0.4 });
@@ -382,6 +387,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     lastActions = [];
     chrome.storage.local.set({ lastActions: [] });
     chrome.action.setBadgeText({ text: "" });
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  // Backstop: content script asks for a MAIN-world inject of the shadow-open
+  // patch into its own tab. Useful when the persistent registerContentScripts
+  // hadn't applied yet at first navigation.
+  if (message.type === "INJECT_SHADOW_PATCH" && _sender?.tab?.id) {
+    chrome.scripting.executeScript({
+      target: { tabId: _sender.tab.id, allFrames: true },
+      world: "MAIN",
+      files: ["world_patch.js"],
+    }).catch((e) => console.warn("[Anticipy] inject shadow patch failed:", e?.message));
     sendResponse({ ok: true });
     return true;
   }

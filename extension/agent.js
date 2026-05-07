@@ -237,21 +237,27 @@ export class BrowserAgent {
   }
 
   async _callLLM(userMessage) {
-    if (this.apiConfig.groqApiKey) {
+    const errors = [];
+    if (this.apiConfig?.groqApiKey) {
       try {
         return await this._callGroq(userMessage);
       } catch (e) {
+        errors.push(`Groq: ${e.message || e}`);
         console.warn("[Anticipy Agent] Groq failed, trying Gemini:", e.message);
       }
     }
-    if (this.apiConfig.geminiApiKey) {
+    if (this.apiConfig?.geminiApiKey) {
       try {
         return await this._callGemini(userMessage);
       } catch (e) {
+        errors.push(`Gemini: ${e.message || e}`);
         console.warn("[Anticipy Agent] Gemini failed:", e.message);
       }
     }
-    throw new Error("No API keys available. Please sign in via the extension popup.");
+    if (errors.length === 0) {
+      throw new Error("No API keys configured. Sign in via the extension popup.");
+    }
+    throw new Error("LLM call failed — " + errors.join(" | "));
   }
 
   async _callGroq(userMessage) {
