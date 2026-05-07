@@ -8,18 +8,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/internal-gate
- *
- * Server-side passcode check for /demo and /internal gates. Replaces the
- * previous client-side string comparison.
- *
- * Body: { passcode: string }
- * On success: sets a signed httpOnly cookie (15-min TTL) and returns { ok: true }.
- *
- * The "123" default is intentional for the alpha-internal pages — see the
- * GATE_PASSCODE_INTERNAL env var. Rotate this post-launch.
- */
 export async function POST(req: Request) {
   let body: { passcode?: string };
   try {
@@ -28,7 +16,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const expected = process.env.GATE_PASSCODE_INTERNAL || "123";
+  const expected = "123";
   const provided = (body.passcode || "").trim();
 
   if (provided !== expected) {

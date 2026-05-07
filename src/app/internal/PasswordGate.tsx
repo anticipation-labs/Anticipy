@@ -3,11 +3,8 @@
 import { useState, useEffect } from "react";
 
 /**
- * Server-backed gate. Posts the passcode to /api/internal-gate which
- * compares against the GATE_PASSCODE_INTERNAL env var (default "123") and
- * sets a signed httpOnly cookie. Refresh re-checks via GET /api/internal-gate.
- *
- * The "123" default is intentional for the alpha — rotate post-launch.
+ * Posts the passcode to /api/internal-gate, which compares it server-side
+ * and sets a signed httpOnly cookie. The expected code is the literal "123".
  */
 export default function PasswordGate({ children }: { children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState(false);
