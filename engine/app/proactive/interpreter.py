@@ -432,6 +432,23 @@ definite answer, or vague self-improvement with no concrete slot ("I should be m
 Quoted / self-talk filters: do NOT extract from movie lines, lyrics, recitations, or pure \
 venting without a commit.
 
+  ASPIRATION vs COMMITMENT (CRITICAL — read carefully): bare "I should X" / \
+"I need to X" / "I gotta X" / "I really ought to X" with ONLY a vague future time \
+("tonight", "today", "tomorrow", "this week", "soon") and NO additional commitment signal \
+is ASPIRATION, not commitment. Return zero intents for these. Examples that should \
+NOT extract: \
+"I should book a flight tonight", "I need to call my mom this week", "I really ought \
+to clean my room", "I gotta do that thing tomorrow", "I should look into therapy". \
+Compare to phrases that DO extract because they pair the aspiration with a commitment \
+signal in the same chunk: "I should book a flight tonight — pull up United Airlines", \
+"I need to call my mom this week, remind me Tuesday at 5", "Book the 7pm flight to \
+Boston for Friday". The commitment signal is one of: explicit imperative to the agent \
+("book", "remind", "send", "schedule"), a SPECIFIC slot beyond the time ("the 7pm flight", \
+"the dentist appointment", "Sarah Chen", "via United"), or an explicit URL / app / vendor. \
+A bare "should-do-X-someday" with only a vague time is the user thinking out loud about \
+their week — DO NOT fire. The wearer thinking out loud about their week is the most \
+common exploration FP cluster.
+
 Emotional / harsh-content state:
   Set parameters["emotional_state"] when ANY of:
     - the user's tone in the recent context shows anger, exhaustion, panic, jealousy, grief, \
