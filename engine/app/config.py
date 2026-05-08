@@ -31,6 +31,7 @@ SUPABASE_ANON_KEY: str = os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
 DEEPSEEK_API_KEY: str = os.environ.get("DEEPSEEK_API_KEY", "")
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "")
+KIMI_API_KEY: str = os.environ.get("KIMI_API_KEY", "")
 
 # --- CAPTCHA solving ---
 CAPSOLVER_API_KEY: str = os.environ.get("CAPSOLVER_API_KEY", "")
@@ -136,7 +137,12 @@ def _build_model_chain() -> list[dict]:
     limit. 0 means "no spacing" — the throttle is a no-op for that provider.
     """
     chain: list[dict] = []
-    # Gemini first — better at structured JSON output and multi-step reasoning
+    # 4-tier provider redundancy. Order is by historical reliability,
+    # NOT capability — every plan uses that provider's best-available
+    # model at the same instruction-following tier (70B-class) so a
+    # fallover doesn't degrade quality.
+    #
+    # Plan A — Gemini 2.5 Flash. Primary speed/cost. 1M ctx.
     if GOOGLE_API_KEY:
         chain.append(
             {
@@ -149,6 +155,7 @@ def _build_model_chain() -> list[dict]:
                 "min_interval_seconds": 0.0,
             }
         )
+    # Plan B — Groq llama-3.3-70b-versatile. 128k ctx, very fast.
     if GROQ_API_KEY:
         chain.append(
             {
@@ -161,6 +168,25 @@ def _build_model_chain() -> list[dict]:
                 "min_interval_seconds": 0.0,
             }
         )
+    # Plan C — Kimi (Moonshot) moonshot-v1-128k. 128k ctx, accepts
+    # temperature ≠ 1 (kimi-k2.x requires temp=1.0 which is non-
+    # deterministic — bad for cascade gates that need stable verdicts).
+    if KIMI_API_KEY:
+        chain.append(
+            {
+                "name": "kimi",
+                "base_url": "https://api.moonshot.ai/v1",
+                "api_key": KIMI_API_KEY,
+                "model": "moonshot-v1-128k",
+                "cost_input": 0.0006,
+                "cost_output": 0.0024,
+                "min_interval_seconds": 0.0,
+            }
+        )
+    # Plan D — DeepSeek. OpenAI-compat API. 128k ctx. Positioned last
+    # because the team's account has been credit-exhausted for stretches
+    # — promotes to higher position when credits return (no code change
+    # needed; just changes the order of the appends).
     if DEEPSEEK_API_KEY:
         chain.append(
             {
