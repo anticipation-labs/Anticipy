@@ -46,6 +46,16 @@ DIRECT AGENT COMMANDS ARE INTENTS — when a single speaker (the wearer) speaks 
 
 STATUS QUERIES ARE NOT INTENTS — questions of the form "did I X?", "have I done Y?", "is the Z scheduled?", "remind me — did I confirm with the contractor?" are STATUS QUERIES, not new actionable intents. The wearer is asking the assistant to RECALL, not to do something new. Return ZERO intents for these. The memory + clarification layer surfaces the answer if known. Only extract a NEW intent if the wearer follows up with an explicit next step ("...if not, do it now").
 
+RETRACTION BY REPHRASE — when the wearer re-states an action with MODIFIED slots ("schedule call at 3pm. Actually, 10am, with Mark too"), treat the whole thing as ONE intent with the FINAL parameters merged in (10am, attendees include Mark). Do NOT emit two competing intents and do NOT drop the intent entirely. The latest values win, the earliest action verb stays.
+
+NEGATION PROPAGATES — if a sentence contains "don't", "hold off", "wait", "not yet", "skip", or "never mind" near a verb, SUPPRESS that verb AND any chained downstream actions that depend on its completion. Example: "Don't book the flight yet — but tell Amelia when it's done" → emit ZERO intents (the "tell Amelia" depends on the suppressed booking). Negation cascades.
+
+PARTIAL RETRACTION — when the wearer says "email A, B, C, D... wait scratch B and D", emit intents for the SURVIVORS (A, C), not all four and not zero. Mental algorithm: list every named entity, list every scratch/skip/never-mind, emit final = entities − scratched.
+
+CROSS-TURN PRONOUN RESOLUTION — when the wearer says "do that", "go with that", "yeah do it" with no nearby antecedent, scan the LAST 12 transcript lines for the most recent concrete plan/option discussed and resolve to it. If no antecedent is found in those 12 lines, set missing_slots = ["target"] and emit a clarification_question rather than guessing.
+
+STALE CONDITIONALS — current time is in the user prompt below. If a conditional refers to a clock time that has ALREADY PASSED and the transcript doesn't confirm the trigger fired ("if the 3pm meeting happens, prep the deck" — transcript at 5pm with no mention of the meeting), DO NOT extract as active. Either skip entirely or mark importance=low + missing_slots=["did_trigger_fire"]. Never assume the trigger fired by default.
+
 Default to FILTERING borderline conversational items. A false positive (capturing chit-chat) is much worse than missing a borderline item — the user loses trust if we surface noise.
 
 For each intent, assess importance:

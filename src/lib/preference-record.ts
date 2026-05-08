@@ -33,13 +33,16 @@ Rules:
 - Be specific to THIS intent and the signal. Cite the action and the user-visible reason that fits.
 - Do NOT invent reasons not in the data. If the only signal is a yes/no with no extra context, write something neutral and minimal.
 - Use third-person ("user prefers...", "user dislikes...", "user usually accepts..."). Never use first person or address the user.
-- Output PLAIN TEXT only. No JSON, no quotes, no preamble.
 - Generic phrasing — do not enumerate fixed categories. Examples (NOT a fixed list): "user dislikes morning meetings", "user usually confirms shopping intents", "user rejects subscription sign-ups", "user accepts reminder follow-ups for family".
 
 If the signal is reject, lean toward "user dislikes / avoids / rejects ...". \
 If accept, lean toward "user accepts / confirms / wants ...". \
 If auto_proceed, lean toward "user did not respond; system auto-confirmed/declined ...". \
-If edit, lean toward "user kept the intent but adjusted ...".`;
+If edit, lean toward "user kept the intent but adjusted ...".
+
+Output STRICT JSON only, with this exact shape:
+{ "reasoning": "<one short sentence>" }
+No markdown, no preamble, nothing else outside the JSON.`;
 
 async function summarizeReasoning(
   signal: PreferenceSignal,
@@ -67,34 +70,35 @@ async function summarizeReasoning(
         { role: "system", content: REASONING_SYSTEM_PROMPT },
         { role: "user", content: userMsg },
       ],
-      { temperature: 0.0, max_tokens: 120 }
+      // Gemini Flash sometimes emits an internal "thought" before the JSON.
+      // 1024 is plenty of headroom for the actual {"reasoning":"..."} payload.
+      { temperature: 0.0, max_tokens: 1024 }
     );
-    // Gemini returns JSON-formatted output by default in this codebase
-    // (responseMimeType: application/json). Strip wrapping quotes/braces
-    // defensively. We asked for plain text, but be tolerant.
     const trimmed = (raw || "").trim();
     if (!trimmed) return "";
-    // If the model wrapped the line in JSON, peel one layer.
-    if (
-      (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-      (trimmed.startsWith("[") && trimmed.endsWith("]"))
-    ) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed === "string") return parsed.trim().slice(0, 240);
-        if (parsed && typeof parsed === "object") {
-          // Common shapes: {reasoning: "..."} / {text: "..."} / first string value.
-          for (const v of Object.values(parsed as Record<string, unknown>)) {
-            if (typeof v === "string" && v.trim()) {
-              return v.trim().slice(0, 240);
-            }
+    // Expected shape: {"reasoning":"..."}. Be tolerant of bare strings or
+    // objects with the value under a different key.
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "string") {
+        return parsed.trim().replace(/^["']|["']$/g, "").slice(0, 240);
+      }
+      if (parsed && typeof parsed === "object") {
+        const obj = parsed as Record<string, unknown>;
+        if (typeof obj.reasoning === "string" && obj.reasoning.trim()) {
+          return obj.reasoning.trim().slice(0, 240);
+        }
+        // Fallback: first non-empty string value.
+        for (const v of Object.values(obj)) {
+          if (typeof v === "string" && v.trim()) {
+            return v.trim().slice(0, 240);
           }
         }
-      } catch {
-        // fall through and use the raw line
       }
+    } catch {
+      // Fell through to raw text path below.
     }
-    // Strip leading quotes ("..." or '...') the model sometimes emits.
+    // Strip leading/trailing quotes the model sometimes emits.
     const stripped = trimmed.replace(/^["']|["']$/g, "").trim();
     return stripped.slice(0, 240);
   } catch (err) {
