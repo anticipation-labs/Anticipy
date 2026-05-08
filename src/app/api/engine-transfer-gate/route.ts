@@ -6,11 +6,26 @@ import {
   getExpectedPasscode,
   signGateCookie,
 } from "@/lib/engine-transfer-gate";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  // Brute-force defense: 10 attempts per IP per minute.
+  // The legitimate flow is one POST per session; a real user typing the
+  // wrong code 2-3 times still has plenty of headroom. An attacker
+  // probing the passcode space gets cut off well before they can iterate
+  // any meaningful fraction of the keyspace.
+  const ip = clientIp(req);
+  const limit = rateLimit(`engine-gate:${ip}`, 10, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { ok: false, error: "Too many attempts. Wait a minute and try again." },
+      { status: 429 }
+    );
+  }
+
   let body: { passcode?: unknown };
   try {
     body = await req.json();
