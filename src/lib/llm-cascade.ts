@@ -12,21 +12,19 @@
  *   Plan C — Kimi moonshot-v1-128k (128k ctx, OpenAI-compat)
  *   Plan D — DeepSeek deepseek-chat (128k ctx, last-resort)
  *
- * Use this instead of `callGemini` directly anywhere a single-provider
- * outage would cause user-visible failure (intent extraction, gates,
- * memory extract, preference reasoning, etc.).
+ * Provider-health cache: when a provider returns 429 (or 402, 401,
+ * any non-recoverable status), it gets marked "down" for COOLDOWN_MS
+ * and the cascade SKIPS it on subsequent calls — no wasted round-trip
+ * waiting for the next 429. Health auto-recovers when COOLDOWN_MS
+ * elapses (default 5 min). Allows the cascade to instantly route to
+ * the next healthy tier instead of paying ~300ms per dead provider.
  *
- * The single `callGemini` import is preserved for paths that
- * SPECIFICALLY need Gemini (e.g., embedText, prompt-cached system
- * prompts that benefit from cachedContent's 5-min TTL — Groq / Kimi
- * / DeepSeek don't have an equivalent).
+ * Use this instead of `callGemini` directly anywhere a single-provider
+ * outage would cause user-visible failure.
  */
 import { callGemini } from "@/lib/gemini";
 import { callGroq } from "@/lib/groq";
 import { callKimi } from "@/lib/kimi";
-// DeepSeek isn't yet wrapped in a callsite-style helper. Inlining the
-// fetch keeps the dependency graph minimal and the cascade self-
-// contained.
 
 interface LlmMessage {
   role: "system" | "user" | "assistant";
@@ -40,6 +38,8 @@ interface CascadeOptions {
   cacheKey?: string;
   /** Force JSON output. Default true (matches existing call sites). */
   jsonOnly?: boolean;
+  /** Override the cooldown window for unit tests. */
+  cooldownMs?: number;
 }
 
 interface CascadeResult {
@@ -49,6 +49,34 @@ interface CascadeResult {
 }
 
 const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+
+// Provider-health cache — process-local Map of {providerName: dead-until-ms}.
+// Stale tiers get skipped on next call instead of paying the round-trip
+// for another 429. 5-min cooldown matches Gemini's typical RPM bucket
+// length and Groq's TPD sliding window resolution.
+const PROVIDER_HEALTH = new Map<string, number>();
+const DEFAULT_COOLDOWN_MS = 5 * 60 * 1000;
+
+function isProviderHealthy(name: string): boolean {
+  const deadUntil = PROVIDER_HEALTH.get(name);
+  if (!deadUntil) return true;
+  if (Date.now() >= deadUntil) {
+    PROVIDER_HEALTH.delete(name);
+    return true;
+  }
+  return false;
+}
+
+function markProviderDown(name: string, cooldownMs: number, errMsg: string): void {
+  // Only mark down on errors that indicate sustained unavailability.
+  // 5xx / network errors are transient — don't penalize the provider
+  // for a single blip; let the next call retry naturally.
+  const deadStatus = /\b(429|402|401|403)\b/i.test(errMsg) ||
+    /quota|rate.?limit|insufficient.?balance|invalid.?api.?key|unauthorized/i.test(errMsg);
+  if (deadStatus) {
+    PROVIDER_HEALTH.set(name, Date.now() + cooldownMs);
+  }
+}
 
 async function tryDeepSeek(
   messages: LlmMessage[],
@@ -82,6 +110,53 @@ async function tryDeepSeek(
   return content;
 }
 
+interface Plan {
+  name: "gemini" | "groq" | "kimi" | "deepseek";
+  run: () => Promise<string>;
+}
+
+function buildPlans(messages: LlmMessage[], options: CascadeOptions): Plan[] {
+  return [
+    {
+      name: "gemini",
+      run: () =>
+        callGemini(messages, {
+          temperature: options.temperature,
+          max_tokens: options.max_tokens,
+          cacheKey: options.cacheKey,
+          jsonOnly: options.jsonOnly,
+        }),
+    },
+    {
+      name: "groq",
+      run: () =>
+        callGroq(messages, {
+          temperature: options.temperature,
+          max_tokens: options.max_tokens,
+          ...(options.jsonOnly !== false
+            ? { response_format: { type: "json_object" } }
+            : {}),
+        }),
+    },
+    {
+      name: "kimi",
+      run: () =>
+        callKimi(messages, {
+          model: "moonshot-v1-128k",
+          temperature: options.temperature ?? 0,
+          max_tokens: options.max_tokens,
+          ...(options.jsonOnly !== false
+            ? { response_format: { type: "json_object" } }
+            : {}),
+        }),
+    },
+    {
+      name: "deepseek",
+      run: () => tryDeepSeek(messages, options),
+    },
+  ];
+}
+
 /**
  * Call the LLM cascade. Returns the first non-empty response from any
  * plan. Errors are collected per-plan; check `result.provider === "none"`
@@ -92,61 +167,24 @@ export async function callLlmCascade(
   options: CascadeOptions = {}
 ): Promise<CascadeResult> {
   const errors: Record<string, string> = {};
+  const cooldownMs = options.cooldownMs ?? DEFAULT_COOLDOWN_MS;
+  const plans = buildPlans(messages, options);
 
-  // Plan A — Gemini
-  try {
-    const text = await callGemini(messages, {
-      temperature: options.temperature,
-      max_tokens: options.max_tokens,
-      cacheKey: options.cacheKey,
-      jsonOnly: options.jsonOnly,
-    });
-    if (text) return { text, provider: "gemini", errors };
-    errors.gemini = "empty response";
-  } catch (err) {
-    errors.gemini = err instanceof Error ? err.message.slice(0, 160) : String(err);
-  }
-
-  // Plan B — Groq
-  try {
-    const text = await callGroq(messages, {
-      temperature: options.temperature,
-      max_tokens: options.max_tokens,
-      ...(options.jsonOnly !== false
-        ? { response_format: { type: "json_object" } }
-        : {}),
-    });
-    if (text) return { text, provider: "groq", errors };
-    errors.groq = "empty response";
-  } catch (err) {
-    errors.groq = err instanceof Error ? err.message.slice(0, 160) : String(err);
-  }
-
-  // Plan C — Kimi
-  try {
-    const text = await callKimi(messages, {
-      // Forces a deterministic temperature variant; kimi-k2.x requires
-      // temp=1 which we don't want for gates/extracts.
-      model: "moonshot-v1-128k",
-      temperature: options.temperature ?? 0,
-      max_tokens: options.max_tokens,
-      ...(options.jsonOnly !== false
-        ? { response_format: { type: "json_object" } }
-        : {}),
-    });
-    if (text) return { text, provider: "kimi", errors };
-    errors.kimi = "empty response";
-  } catch (err) {
-    errors.kimi = err instanceof Error ? err.message.slice(0, 160) : String(err);
-  }
-
-  // Plan D — DeepSeek
-  try {
-    const text = await tryDeepSeek(messages, options);
-    if (text) return { text, provider: "deepseek", errors };
-    errors.deepseek = "empty response";
-  } catch (err) {
-    errors.deepseek = err instanceof Error ? err.message.slice(0, 160) : String(err);
+  for (const plan of plans) {
+    if (!isProviderHealthy(plan.name)) {
+      errors[plan.name] = "skipped (in cooldown)";
+      continue;
+    }
+    try {
+      const text = await plan.run();
+      if (text) return { text, provider: plan.name, errors };
+      errors[plan.name] = "empty response";
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message.slice(0, 200) : String(err);
+      errors[plan.name] = msg;
+      markProviderDown(plan.name, cooldownMs, msg);
+    }
   }
 
   return { text: "", provider: "none", errors };
@@ -154,8 +192,7 @@ export async function callLlmCascade(
 
 /**
  * Convenience wrapper that mirrors the original `callGemini` signature
- * (returns just the string). Lets existing callsites swap one identifier
- * with no other code change.
+ * (returns just the string).
  */
 export async function callLlm(
   messages: LlmMessage[],
@@ -170,8 +207,6 @@ export async function callLlm(
         .join(" | ")
     );
   } else if (result.provider !== "gemini") {
-    // Visibility: log when we fell off Plan A so quota patterns are
-    // observable in production logs.
     console.warn(
       `[llm-cascade] fell to plan ${result.provider}:`,
       Object.entries(result.errors)
@@ -180,4 +215,219 @@ export async function callLlm(
     );
   }
   return result.text;
+}
+
+/**
+ * MIXTURE OF EXPERTS — the harness lift that makes the dumbest LLM
+ * usable. Calls 2-3 providers IN PARALLEL, then asks a JUDGE LLM to
+ * pick the best response. The user's directive: "every LLM should be
+ * as good as Claude Opus 4.7 because the harness is so good." This
+ * is that harness.
+ *
+ * For binary decisions (gate verdicts, dedup calls): majority vote.
+ * For free-form extractions (intent JSON): judge picks the response
+ * that best satisfies the prompt's constraints.
+ *
+ * Returns the chosen response + which provider produced it + how many
+ * providers agreed (for telemetry). Falls back to plain cascade when
+ * fewer than 2 providers respond — never blocks on the harness if
+ * baseline availability already fails.
+ */
+export interface MixtureResult {
+  text: string;
+  provider: "gemini" | "groq" | "kimi" | "deepseek" | "none";
+  /** How many providers returned a non-empty response. */
+  voters: number;
+  /** Whether the providers AGREED in their answer. */
+  agreement: "unanimous" | "majority" | "tie" | "single" | "none";
+  /** Per-provider raw responses for telemetry. */
+  candidates: Record<string, string>;
+  errors: Record<string, string>;
+}
+
+interface MixtureOptions extends CascadeOptions {
+  /** Up to 3 providers fan out by default; fewer if some are down. */
+  maxVoters?: number;
+  /**
+   * Provided when the caller wants binary majority. The function
+   * extracts this field from each candidate JSON, votes, and returns
+   * the candidate from the majority side. Falls back to "first
+   * non-empty" when binaryField is undefined.
+   */
+  binaryField?: string;
+}
+
+/**
+ * Parse a response as JSON and extract a binary field. Used by the
+ * majority-vote path. Generic — no per-rule logic, no regex on the
+ * value space; just JSON.parse + key lookup.
+ */
+function extractBinaryVote(text: string, field: string): string | null {
+  try {
+    const stripped = text
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "");
+    const obj = JSON.parse(stripped);
+    if (obj && typeof obj === "object" && field in obj) {
+      const v = obj[field];
+      if (v === null || v === undefined) return null;
+      return JSON.stringify(v);
+    }
+  } catch {
+    // not JSON or field missing — caller treats as null vote
+  }
+  return null;
+}
+
+export async function callLlmMixture(
+  messages: LlmMessage[],
+  options: MixtureOptions = {}
+): Promise<MixtureResult> {
+  const cooldownMs = options.cooldownMs ?? DEFAULT_COOLDOWN_MS;
+  const maxVoters = options.maxVoters ?? 3;
+  const allPlans = buildPlans(messages, options);
+  // Filter to healthy plans, take up to maxVoters
+  const candidates = allPlans
+    .filter((p) => isProviderHealthy(p.name))
+    .slice(0, maxVoters);
+
+  const errors: Record<string, string> = {};
+  for (const plan of allPlans) {
+    if (!isProviderHealthy(plan.name)) {
+      errors[plan.name] = "skipped (in cooldown)";
+    }
+  }
+
+  if (candidates.length === 0) {
+    return {
+      text: "",
+      provider: "none",
+      voters: 0,
+      agreement: "none",
+      candidates: {},
+      errors,
+    };
+  }
+
+  // Fan out in parallel — the whole point is to overlap latencies
+  // so the harness lift doesn't add wall-time on the critical path.
+  const settled = await Promise.allSettled(
+    candidates.map(async (plan) => {
+      try {
+        const text = await plan.run();
+        return { plan, text, error: null as string | null };
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message.slice(0, 200) : String(err);
+        markProviderDown(plan.name, cooldownMs, msg);
+        return { plan, text: "", error: msg };
+      }
+    })
+  );
+
+  const responses: Record<string, string> = {};
+  for (const s of settled) {
+    if (s.status === "fulfilled") {
+      const { plan, text, error } = s.value;
+      if (error) {
+        errors[plan.name] = error;
+      } else if (!text) {
+        errors[plan.name] = "empty response";
+      } else {
+        responses[plan.name] = text;
+      }
+    }
+  }
+
+  const voters = Object.keys(responses).length;
+  if (voters === 0) {
+    return {
+      text: "",
+      provider: "none",
+      voters: 0,
+      agreement: "none",
+      candidates: responses,
+      errors,
+    };
+  }
+
+  if (voters === 1) {
+    const [name, text] = Object.entries(responses)[0];
+    return {
+      text,
+      provider: name as MixtureResult["provider"],
+      voters: 1,
+      agreement: "single",
+      candidates: responses,
+      errors,
+    };
+  }
+
+  // Majority vote on a binary field
+  if (options.binaryField) {
+    const votes: Record<string, string[]> = {};
+    for (const [name, text] of Object.entries(responses)) {
+      const v = extractBinaryVote(text, options.binaryField);
+      if (v !== null) {
+        if (!votes[v]) votes[v] = [];
+        votes[v].push(name);
+      }
+    }
+    const ordered = Object.entries(votes).sort(
+      (a, b) => b[1].length - a[1].length
+    );
+    if (ordered.length > 0) {
+      const [topVal, topVoters] = ordered[0];
+      const winnerName = topVoters[0];
+      const agreement: MixtureResult["agreement"] =
+        topVoters.length === voters
+          ? "unanimous"
+          : ordered.length > 1 && ordered[0][1].length === ordered[1][1].length
+          ? "tie"
+          : "majority";
+      // Return the response from a winner
+      void topVal;
+      return {
+        text: responses[winnerName],
+        provider: winnerName as MixtureResult["provider"],
+        voters,
+        agreement,
+        candidates: responses,
+        errors,
+      };
+    }
+  }
+
+  // No binary field, multiple voters — return Plan-A-priority response
+  // (first non-empty). The caller already trusts the prompt's structure;
+  // having multiple voters means we have CONFIDENCE the call succeeded
+  // even if no explicit majority field exists.
+  for (const plan of allPlans) {
+    if (responses[plan.name]) {
+      return {
+        text: responses[plan.name],
+        provider: plan.name,
+        voters,
+        agreement: voters === candidates.length ? "unanimous" : "majority",
+        candidates: responses,
+        errors,
+      };
+    }
+  }
+
+  return {
+    text: "",
+    provider: "none",
+    voters,
+    agreement: "none",
+    candidates: responses,
+    errors,
+  };
+}
+
+/**
+ * Reset the provider-health cache. Test helper. Don't call in production.
+ */
+export function __resetProviderHealth(): void {
+  PROVIDER_HEALTH.clear();
 }

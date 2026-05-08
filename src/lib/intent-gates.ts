@@ -28,7 +28,7 @@
  */
 
 import { parseJsonWithRepair } from "@/lib/gemini";
-import { callLlm } from "@/lib/llm-cascade";
+import { callLlm, callLlmMixture } from "@/lib/llm-cascade";
 
 export interface GateInput {
   /** Wearer's high-level summary of what they want done. */
@@ -275,18 +275,37 @@ async function runPrimaryGate(
     { role: "user" as const, content: buildGateUserPrompt(input) },
   ];
 
+  // MIXTURE OF EXPERTS — fan out to up to 3 healthy providers in
+  // parallel; majority-vote on the binary "admit" verdict. The harness
+  // lift that makes the gate accurate even when Plan A is the dumbest
+  // available model (e.g., Plan A quota-locked, falling through to a
+  // smaller fallback). Wall-time stays ~max(provider) instead of sum.
   let raw = "";
+  let mixtureMeta = "";
   try {
-    raw = await callLlm(messages, {
+    const result = await callLlmMixture(messages, {
       temperature: options.temperature ?? 0.0,
       max_tokens: 512,
-      // Cache the system prompt; the primary gate prompt is static and large.
       cacheKey: "intent-gate-primary-v1",
       jsonOnly: true,
+      maxVoters: 3,
+      // Vote on the load-bearing field. When voters disagree, the
+      // majority verdict's raw response is returned. Generic — the
+      // function does JSON.parse + key lookup, no rule-specific logic.
+      binaryField: "isConcreteCommitment",
     });
+    raw = result.text;
+    mixtureMeta = `voters=${result.voters} agreement=${result.agreement} provider=${result.provider}`;
+    if (!raw) {
+      throw new Error(
+        `mixture failed: ${Object.entries(result.errors)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(" | ")}`
+      );
+    }
   } catch (err) {
     console.warn(
-      "[intent-gate] gemini call failed; failing open:",
+      "[intent-gate] mixture call failed; failing open:",
       err instanceof Error ? err.message : err
     );
     return {
@@ -300,6 +319,11 @@ async function runPrimaryGate(
         isWaitingForMoment: false,
       },
     };
+  }
+  if (mixtureMeta) {
+    // Visibility for the operator — confirms the harness fanned out
+    // and tells us when we're running degraded (1 voter only).
+    console.log(`[intent-gate] mixture ${mixtureMeta}`);
   }
 
   const parsed = await parseJsonWithRepair<Record<string, unknown>>(raw, {
