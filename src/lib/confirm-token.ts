@@ -137,16 +137,28 @@ export function isLegacyPlainUuid(token: string): boolean {
   return UUID_RE.test(token.trim());
 }
 
+// Module-load timestamp. Per-process, so a lambda cold-start resets the
+// 24h window — but that's strictly safer than the previous "forever"
+// behavior, and lambdas typically stay warm long enough for legitimate
+// email links to still work without operator action.
+const PROCESS_START_MS = Date.now();
+const DEFAULT_GRACE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export function legacyGraceActive(now: number = Date.now()): boolean {
+  // Killswitch — explicit revoke wins over everything else.
+  if (process.env.CONFIRM_LEGACY_DISABLED === "true") return false;
+
+  // Operator-set explicit deadline takes priority. Allows extending grace
+  // beyond the default if a known set of old links must keep working.
   const raw = process.env.CONFIRM_LEGACY_GRACE_UNTIL_MS;
   if (raw) {
     const parsed = Number(raw);
-    return Number.isFinite(parsed) && now < parsed;
+    if (Number.isFinite(parsed)) return now < parsed;
   }
-  // Fall back to 24h after the build's "now" via a baseline embedded in
-  // the deploy. Without an explicit env override, accept legacy tokens
-  // unconditionally — extending forever — unless CONFIRM_LEGACY_DISABLED
-  // is set. This preserves old links until the operator explicitly turns
-  // them off, which is the safest default for a live deploy.
-  return process.env.CONFIRM_LEGACY_DISABLED !== "true";
+
+  // Fall back to a real time-bounded window: 24h after this process
+  // started. Previously this branch returned `true` unconditionally,
+  // making bare UUID tokens accepted forever — letting anyone who
+  // learned an intent UUID confirm/reject it without a HMAC.
+  return now < PROCESS_START_MS + DEFAULT_GRACE_WINDOW_MS;
 }

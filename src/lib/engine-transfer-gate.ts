@@ -38,5 +38,25 @@ export function verifyGateCookie(token: string | undefined): boolean {
 }
 
 export function getExpectedPasscode(): string {
-  return process.env.GATE_PASSCODE_TRANSFER || "123";
+  const env = process.env.GATE_PASSCODE_TRANSFER;
+  // In production, refuse to fall through to the dev default — a 3-char
+  // numeric passcode is brute-forceable on attempt one even with the
+  // 10/min/IP limit. The deployment must explicitly set the env var.
+  // The dev default stays for local work and CI where convenience wins.
+  if (!env || env.length === 0) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "GATE_PASSCODE_TRANSFER must be set in production (refusing to use the dev default)"
+      );
+    }
+    return "123";
+  }
+  // Length sanity for any environment: a passcode shorter than 6 chars
+  // is brute-forceable in seconds even with a generous rate limit.
+  if (env.length < 6 && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "GATE_PASSCODE_TRANSFER must be at least 6 characters in production"
+    );
+  }
+  return env;
 }
