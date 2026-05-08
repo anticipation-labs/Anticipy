@@ -273,6 +273,20 @@ export class BrowserAgent {
     // Escalation budget — set by heuristics, decremented in _callLLM.
     this.proCallsRemaining = 0;      // when > 0, the next call goes to Pro
     this.lastForcedRecoveryAtStep = -1;
+
+    // Tier-2 escalation: when two CONSECUTIVE Gemini Pro calls return
+    // junk (parse failures, empty bodies, or ended in a step that still
+    // failed downstream), we route the next call through Claude Sonnet
+    // via /api/extension/llm-proxy. Claude can't be hit directly from
+    // the extension origin (Anthropic doesn't return the CORS headers
+    // browser-extension contexts need), so the request is relayed by
+    // anticipy.ai. proxyBaseUrl is taken from the apiConfig the popup
+    // already plumbs through; falls back to anticipy.ai in case the
+    // popup didn't set it.
+    this.proFailureStreak = 0;
+    this.claudeProxyBudget = 3;       // max Claude proxy calls per task
+    this.proxyBaseUrl = (apiConfig && apiConfig.proxyBaseUrl) || "https://www.anticipy.ai";
+    this.accessCode = (apiConfig && apiConfig.accessCode) || "";
   }
 
   /** Entry point — run the full agent loop and return { success, message } */
@@ -802,7 +816,36 @@ export class BrowserAgent {
     // Gemini primary (higher free-tier daily quota than Groq's per-org limits),
     // Groq fallback (very fast when not rate-limited). When this.proCallsRemaining
     // > 0 we route to Gemini Pro for the next call (decremented in _callGemini).
+    //
+    // TIER-2 ESCALATION: when two consecutive Pro calls have failed (network
+    // error, parse error, empty body), the next attempt routes through Claude
+    // Sonnet via /api/extension/llm-proxy. Claude reasons better than Pro on
+    // concealed-delegation, sarcasm, and pronoun-chain pages; we save it for
+    // the genuinely-stuck step rather than burning it on every call.
     const errors = [];
+
+    const claudeShouldFire =
+      this.accessCode &&
+      this.proFailureStreak >= 2 &&
+      this.claudeProxyBudget > 0;
+
+    if (claudeShouldFire) {
+      this.claudeProxyBudget--;
+      console.warn(
+        `[Anticipy Agent] 2 consecutive Pro failures — escalating to Claude (proxy budget: ${this.claudeProxyBudget})`
+      );
+      try {
+        const result = await this._callClaudeProxy(userMessage);
+        // Successful Claude call resets the streak so we don't keep burning
+        // Claude on every step indefinitely.
+        this.proFailureStreak = 0;
+        return result;
+      } catch (e) {
+        errors.push(`Claude proxy: ${e.message || e}`);
+        console.warn("[Anticipy Agent] Claude proxy failed, falling through:", e.message);
+      }
+    }
+
     if (this.apiConfig?.geminiApiKey) {
       try {
         const usePro = this.proCallsRemaining > 0;
@@ -811,9 +854,21 @@ export class BrowserAgent {
           this.proCallsRemaining--;
           console.log(`[Anticipy Agent] using Gemini Pro for this step (budget left: ${this.proCallsRemaining})`);
         }
-        return await this._callGemini(userMessage, { url, system: AGENT_SYSTEM_PROMPT });
+        const out = await this._callGemini(userMessage, { url, system: AGENT_SYSTEM_PROMPT });
+        // Reset Pro failure streak only when a Pro call succeeded; Flash
+        // successes don't tell us whether Pro is still wedged.
+        if (usePro) this.proFailureStreak = 0;
+        return out;
       } catch (e) {
         errors.push(`Gemini: ${e.message || e}`);
+        // Track CONSECUTIVE Pro failures only — Flash failures are common
+        // (rate limits) and don't warrant the heavier Claude tier.
+        if (this.proCallsRemaining >= 0 && /pro/i.test(GEMINI_PRO_URL) && /pro/i.test(e.message || "")) {
+          this.proFailureStreak += 1;
+        } else if (this.proCallsRemaining > 0) {
+          // We were ABOUT to use Pro this call — count it.
+          this.proFailureStreak += 1;
+        }
         console.warn("[Anticipy Agent] Gemini failed, trying Groq:", e.message);
       }
     }
@@ -829,6 +884,38 @@ export class BrowserAgent {
       throw new Error("No API keys configured. Sign in via the extension popup.");
     }
     throw new Error("LLM call failed — " + errors.join(" | "));
+  }
+
+  /**
+   * Tier-2 escalation: route the current step through Claude Sonnet via
+   * /api/extension/llm-proxy. The proxy is strictly server-side; the
+   * extension never holds an Anthropic key. Returns the parsed JSON
+   * action or throws on parse/transport failure.
+   */
+  async _callClaudeProxy(userMessage) {
+    const url = `${this.proxyBaseUrl.replace(/\/$/, "")}/api/extension/llm-proxy`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: this.accessCode,
+        systemPrompt: AGENT_SYSTEM_PROMPT,
+        userMessage,
+        model: "claude-sonnet-4-5",
+        maxTokens: 2000,
+        temperature: 0.0,
+        jsonOnly: true,
+      }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => String(resp.status));
+      throw new Error(`Claude proxy ${resp.status}: ${body.substring(0, 200)}`);
+    }
+    const data = await resp.json();
+    if (!data.ok || typeof data.text !== "string") {
+      throw new Error("Claude proxy returned malformed payload");
+    }
+    return this._parseJSON(data.text);
   }
 
   async _callGroq(userMessage) {

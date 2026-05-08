@@ -95,7 +95,12 @@ document.addEventListener("DOMContentLoaded", () => {
       await chrome.storage.local.set({
         apiConfig: {
           groqApiKey: data.groqApiKey || null,
-          geminiApiKey: data.geminiApiKey || null
+          geminiApiKey: data.geminiApiKey || null,
+          // Stored so the BrowserAgent can call /api/extension/llm-proxy
+          // for tier-2 Claude escalation without re-prompting the user.
+          // The code is the same one already used to sign in.
+          accessCode: code,
+          proxyBaseUrl: "https://www.anticipy.ai"
         }
       });
 

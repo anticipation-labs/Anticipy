@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { callKimi } from "@/lib/kimi";
 import { callGroq } from "@/lib/groq";
 import { callGemini } from "@/lib/gemini";
+import { callClaude, claudeAvailable } from "@/lib/claude";
 import { buildIntentPrompt, type PriorIntentContext } from "@/lib/intent-prompt";
 import { sendIntentEmail } from "@/lib/resend-notify";
 import { sendTwilioNotification } from "@/lib/twilio-notify";
@@ -313,6 +314,13 @@ export async function POST(req: Request) {
       );
     }
 
+    // Optional learned-from-data few-shot block. Off by default. Operator
+    // sets ANTICIPY_FEW_SHOT_BLOCK to the block text (e.g. piped from
+    // engine/data/few_shot_block.txt produced by build_few_shot_block.py)
+    // when running calibration experiments. Production traffic stays on the
+    // current prompt.
+    const fewShotBlock = process.env.ANTICIPY_FEW_SHOT_BLOCK || "";
+
     // Build the prompt
     const { system, user } = buildIntentPrompt(
       safeTranscript,
@@ -322,7 +330,8 @@ export async function POST(req: Request) {
       crossSessionContext,
       priorIntentContext,
       memoryContext,
-      preferenceContext
+      preferenceContext,
+      { fewShotBlock }
     );
 
     const llmMessages = [
@@ -332,18 +341,75 @@ export async function POST(req: Request) {
 
     let response: string = "";
 
-    // Gemini Flash first (GOOGLE_API_KEY confirmed on Vercel), Groq second, Kimi third
-    const models = [
-      { name: "gemini", fn: () => callGemini(llmMessages, { temperature: 0.0, max_tokens: 8192 }) },
-      { name: "groq", fn: () => callGroq(llmMessages, { temperature: 0.0, response_format: { type: "json_object" }, max_tokens: 8192 }) },
-      { name: "kimi", fn: () => callKimi(llmMessages, { response_format: { type: "json_object" }, temperature: 0.0, max_tokens: 8192 }) },
-    ];
+    // ─── ROUTING POLICY ──────────────────────────────────────────────────
+    // Tier 1 (default): Gemini Flash. Cheap, fast, ~$0.0001/call. Handles
+    //   the long tail of easy-to-medium scenarios.
+    // Tier 1.5 (escalation): Claude Sonnet 4.5. Fires PRIMARY when the
+    //   transcript is long (>2000 chars) — long context is where Flash's
+    //   pronoun-chain / retraction / sarcasm gates leak the most. Otherwise
+    //   Sonnet fires as a SECOND PASS when Flash returned 0 intents but a
+    //   tiny Gemini heuristic says "this transcript clearly had actions".
+    //   Claude is generic — no per-action keyword tables. Skipped silently
+    //   if ANTHROPIC_API_KEY is unset.
+    // Tier 2/3 (fallback): Groq, Kimi. Same as today.
+    //
+    // Cost delta per task at typical sizes (~3KB system + ~1KB transcript):
+    //   Gemini Flash: ~$0.0001
+    //   Claude Sonnet 4.5: ~$0.003 first call, ~$0.0006 with cache hit
+    // We expect Claude to fire on ~10-15% of calls (long transcripts +
+    // empty-result rescues), so blended cost rises by ~$0.0004/task. Worth
+    // it for the recall lift on the brutal-tier scenarios.
+    const TRANSCRIPT_ESCALATION_CHARS = 2000;
+    const claudeEnabled = claudeAvailable();
+    const longTranscript = safeTranscript.length > TRANSCRIPT_ESCALATION_CHARS;
+    const useClaudePrimary = claudeEnabled && longTranscript;
 
+    const models: Array<{ name: string; fn: () => Promise<string> }> = [];
+    if (useClaudePrimary) {
+      // Long transcript → Claude as PRIMARY. Flash drops to backup so we
+      // still have a fallback if Claude rate-limits or times out.
+      models.push({
+        name: "claude-sonnet",
+        fn: () =>
+          callClaude(llmMessages, {
+            model: "claude-sonnet-4-5",
+            temperature: 0.0,
+            max_tokens: 8192,
+            jsonOnly: true,
+          }),
+      });
+    }
+    models.push({
+      name: "gemini",
+      fn: () =>
+        callGemini(llmMessages, { temperature: 0.0, max_tokens: 8192 }),
+    });
+    models.push({
+      name: "groq",
+      fn: () =>
+        callGroq(llmMessages, {
+          temperature: 0.0,
+          response_format: { type: "json_object" },
+          max_tokens: 8192,
+        }),
+    });
+    models.push({
+      name: "kimi",
+      fn: () =>
+        callKimi(llmMessages, {
+          response_format: { type: "json_object" },
+          temperature: 0.0,
+          max_tokens: 8192,
+        }),
+    });
+
+    let primaryName = "";
     for (const model of models) {
       try {
         response = await model.fn();
         if (!response || response.trim().length === 0) throw new Error(`${model.name} empty`);
         JSON.parse(response);
+        primaryName = model.name;
         break;
       } catch (err) {
         console.warn(`${model.name} failed:`, err instanceof Error ? err.message : err);
@@ -353,6 +419,78 @@ export async function POST(req: Request) {
             await supabaseAdmin.from("anticipy_sessions").update({ status: "ended" }).eq("id", sessionId);
           }
           return NextResponse.json({ intents: [], totalInferred: 0, totalValid: 0 });
+        }
+      }
+    }
+
+    // ─── EMPTY-RESULT RESCUE ─────────────────────────────────────────────
+    // If the primary returned 0 intents AND it wasn't already Claude, ask
+    // a tiny Gemini heuristic "did this transcript clearly have actions?".
+    // If yes, re-run with Claude Sonnet. Generic — no keyword tables; the
+    // heuristic LLM judges the transcript on its own merits.
+    //
+    // The heuristic is one Flash call (~$0.00005) so it's effectively free
+    // even when it returns "no". Only when it returns "yes" do we burn a
+    // Claude call.
+    const isClaudeAlready = primaryName === "claude-sonnet";
+    if (
+      claudeEnabled &&
+      !isClaudeAlready &&
+      response.trim().length > 0
+    ) {
+      let parsedPreview: { intents?: unknown[] } = {};
+      try {
+        parsedPreview = JSON.parse(response);
+      } catch {
+        /* fall through — handled below */
+      }
+      const zeroIntents =
+        Array.isArray(parsedPreview.intents) && parsedPreview.intents.length === 0;
+      if (zeroIntents) {
+        let hasActions = false;
+        try {
+          const heuristicRaw = await callGemini(
+            [
+              {
+                role: "system" as const,
+                content:
+                  "You are a precision binary classifier. Read the transcript and decide whether the WEARER personally committed to do at least one concrete future action AFTER the conversation ends — a real task with a verb + a specific subject (book X, call Y, buy Z, schedule W). Skip pleasantries, delegations to named third parties, hypotheticals, and retracted statements. Return STRICT JSON: {\"has_actions\": <true|false>, \"reasoning\": \"<one short sentence>\"}",
+              },
+              { role: "user" as const, content: safeTranscript },
+            ],
+            { temperature: 0.0, max_tokens: 256 }
+          );
+          const heuristic = JSON.parse(heuristicRaw || "{}") as {
+            has_actions?: boolean;
+          };
+          hasActions = Boolean(heuristic.has_actions);
+        } catch (err) {
+          console.warn(
+            "[analyze] empty-result heuristic failed:",
+            err instanceof Error ? err.message : err
+          );
+        }
+        if (hasActions) {
+          console.log(
+            "[analyze] Flash returned 0 intents but heuristic says transcript has actions — escalating to Claude"
+          );
+          try {
+            const claudeResponse = await callClaude(llmMessages, {
+              model: "claude-sonnet-4-5",
+              temperature: 0.0,
+              max_tokens: 8192,
+              jsonOnly: true,
+            });
+            // Validate shape before swapping in.
+            JSON.parse(claudeResponse);
+            response = claudeResponse;
+            primaryName = "claude-sonnet-rescue";
+          } catch (err) {
+            console.warn(
+              "[analyze] Claude rescue failed; keeping Flash empty result:",
+              err instanceof Error ? err.message : err
+            );
+          }
         }
       }
     }
@@ -649,6 +787,10 @@ export async function POST(req: Request) {
         evidenceQuote: candidate.evidence_quote,
         importance,
         actionType: candidate.action_type,
+        // Bind the email's signed confirm token to the wearer so a leaked
+        // link can't be replayed by someone else's user_id (defense in
+        // depth on top of the HMAC).
+        userId: authedUser.id,
       };
 
       // Email channel policy — importance-driven, opt-in only:
