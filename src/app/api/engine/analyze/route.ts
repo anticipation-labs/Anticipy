@@ -303,55 +303,59 @@ export async function POST(req: Request) {
       }
     }
 
-    // Long-term memory recall: pull top-N memorable items the wearer has
-    // mentioned across sessions (preferences, relationships, references,
-    // ongoing context). Lets the intent LLM disambiguate pronouns,
-    // recognize follow-ups, and avoid duplicate intents.
-    let memoryContext: string[] = [];
-    try {
-      memoryContext = await recallRelevantMemory(
-        authedUser.id,
-        safeTranscript,
-        10
-      );
-    } catch (err) {
+    // Parallel context fan-out: four independent recalls (memory, preferences,
+    // episode RAG, user profile) had been chained sequentially, blocking the
+    // critical path on ~1.5-2s of cumulative latency. They share no inputs
+    // beyond user_id + transcript, so Promise.allSettled runs them concurrently
+    // and reduces wall-time to max-of-the-four (~0.5-0.7s). Each branch is
+    // already fail-open internally, but allSettled means a thrown rejection on
+    // one doesn't cancel the others.
+    //
+    // - memory: top-N memorable items the wearer has mentioned across sessions
+    //   (preferences, relationships, references, ongoing context). Lets the
+    //   intent LLM disambiguate pronouns and avoid duplicate intents.
+    // - preferences: prior accept/reject/edit/auto_proceed signals as one-
+    //   line reasons.
+    // - episodes: vector-similarity recall over PAST terminal-status intents.
+    //   Returns top-3 closest episodes (transcript + action + outcome).
+    // - profile: distilled per-user style summary. Returns "" when
+    //   signal_count<3 so early-stage users get the unbiased baseline.
+    const [memoryRes, prefRes, episodeRes, profileRes] = await Promise.allSettled([
+      recallRelevantMemory(authedUser.id, safeTranscript, 10),
+      recallUserPreferences(authedUser.id, 15),
+      recallSimilarEpisodes(authedUser.id, safeTranscript, 3),
+      recallUserProfile(authedUser.id),
+    ]);
+    const memoryContext: string[] =
+      memoryRes.status === "fulfilled" ? memoryRes.value : [];
+    if (memoryRes.status === "rejected") {
       console.warn(
         "[memory-recall] failed; continuing without memory context:",
-        err instanceof Error ? err.message : err
+        memoryRes.reason instanceof Error ? memoryRes.reason.message : memoryRes.reason
       );
     }
-
-    // Personalized preferences: prior accept/reject/edit/auto_proceed signals
-    // surface as one-line reasons the LLM uses to pre-filter new intents.
-    // Fail-open — analyze still works if the table is empty or query errors.
-    let preferenceContext: string[] = [];
-    try {
-      preferenceContext = await recallUserPreferences(authedUser.id, 15);
-    } catch (err) {
+    const preferenceContext: string[] =
+      prefRes.status === "fulfilled" ? prefRes.value : [];
+    if (prefRes.status === "rejected") {
       console.warn(
         "[preference-recall] failed; continuing without preference context:",
-        err instanceof Error ? err.message : err
+        prefRes.reason instanceof Error ? prefRes.reason.message : prefRes.reason
       );
     }
-
-    // Episode-level RAG: vector-similarity recall over the user's PAST
-    // terminal-status intents. Returns the top-3 closest episodes
-    // (transcript snippet + action + outcome + recorded reasoning) so
-    // the intent LLM can pattern-match a fresh dictation against prior
-    // decisions ("user said something like this last week, accepted it,
-    // so emit a similar intent" or "user rejected this exact pattern,
-    // skip it"). Fail-open — analyze runs un-augmented on any error.
-    let episodeContext: string[] = [];
-    try {
-      episodeContext = await recallSimilarEpisodes(
-        authedUser.id,
-        safeTranscript,
-        3
-      );
-    } catch (err) {
+    const episodeContext: string[] =
+      episodeRes.status === "fulfilled" ? episodeRes.value : [];
+    if (episodeRes.status === "rejected") {
       console.warn(
         "[episode-recall] failed; continuing without episode context:",
-        err instanceof Error ? err.message : err
+        episodeRes.reason instanceof Error ? episodeRes.reason.message : episodeRes.reason
+      );
+    }
+    const userProfileBlock: string =
+      profileRes.status === "fulfilled" ? profileRes.value : "";
+    if (profileRes.status === "rejected") {
+      console.warn(
+        "[meta-monitor] recall failed; continuing without profile:",
+        profileRes.reason instanceof Error ? profileRes.reason.message : profileRes.reason
       );
     }
 
@@ -362,19 +366,6 @@ export async function POST(req: Request) {
     // current prompt.
     const fewShotBlock = process.env.ANTICIPY_FEW_SHOT_BLOCK || "";
 
-    // Meta-monitor "second brain" — distilled per-user style profile.
-    // Asynchronously rebuilt by buildUserProfile() after each preference
-    // signal. Empty string when the user has fewer than 3 signals
-    // (early-stage users get the unbiased baseline). Fail-open.
-    let userProfileBlock = "";
-    try {
-      userProfileBlock = await recallUserProfile(authedUser.id);
-    } catch (err) {
-      console.warn(
-        "[meta-monitor] recall failed; continuing without profile:",
-        err instanceof Error ? err.message : err
-      );
-    }
     const fewShotPlusProfile =
       [fewShotBlock, userProfileBlock].filter(Boolean).join("\n\n");
 
