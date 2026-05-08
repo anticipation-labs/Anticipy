@@ -1,0 +1,48 @@
+===== test_auth =====
+...............                                                          [100%]
+15 passed in 9.50s
+
+===== test_router =====
+test_router.py:24: in <module>
+    from app.models import CostTracker, DegradedResponse  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'DegradedResponse' from 'app.models' (/workspaces/Anticipy/engine/app/models.py)
+=========================== short test summary info ============================
+ERROR test_router.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.49s
+
+===== test_safety =====
+test_safety.py:24: in <module>
+    from app.models import CostTracker, DegradedResponse  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'DegradedResponse' from 'app.models' (/workspaces/Anticipy/engine/app/models.py)
+=========================== short test summary info ============================
+ERROR test_safety.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 1.01s
+
+===== test_main_security =====
+FAILED test_main_security.py::test_confirmation_token_rejects_expired - Attri...
+FAILED test_main_security.py::test_confirmation_token_rejects_wrong_purpose
+FAILED test_main_security.py::test_confirmation_token_rejects_invalid_signature
+FAILED test_main_security.py::test_bearer_user_rejects_missing_header - Attri...
+FAILED test_main_security.py::test_bearer_user_rejects_non_bearer_scheme - At...
+FAILED test_main_security.py::test_bearer_user_rejects_invalid_token - Attrib...
+FAILED test_main_security.py::test_bearer_user_accepts_valid_token - Attribut...
+17 failed, 2 passed, 1 warning in 11.18s
+
+===== test_models =====
+test_models.py:40: in <module>
+    from app.models import effective_layer_timeout_seconds, provider_slot  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ImportError: cannot import name 'effective_layer_timeout_seconds' from 'app.models' (/workspaces/Anticipy/engine/app/models.py)
+=========================== short test summary info ============================
+ERROR test_models.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 1.55s
+
+===== test_code_sandbox =====
+........................                                                 [100%]
+24 passed in 12.12s
+
