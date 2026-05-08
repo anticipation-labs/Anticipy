@@ -15,6 +15,31 @@ let lastActions = [];
 let heartbeatRef = 0;
 let joinRef = 0;
 
+// In-memory dedup sets — survive only the lifetime of the SW. Combined
+// with chrome.storage.local (durable across SW restarts) they close the
+// TOCTOU race where two near-simultaneous Realtime events for the SAME
+// intent (postgres_changes UPDATE + broadcast event) both pass a
+// chrome.storage.local.get() check before either has called .set().
+//
+// First event into the SW wins via Set.add(), all subsequent events for
+// the same id no-op without an async hop. Generic — any future handler
+// that needs single-flight semantics on intent.id can reuse this.
+const seenNewIntentIds = new Set();
+const seenConfirmedIntentIds = new Set();
+// Cap each Set so a long-lived SW doesn't grow unbounded.
+const SEEN_SET_MAX = 500;
+function trackSeen(set, id) {
+  if (!id) return false;
+  if (set.has(id)) return true;
+  set.add(id);
+  if (set.size > SEEN_SET_MAX) {
+    // Drop the oldest entry — Set preserves insertion order.
+    const first = set.values().next().value;
+    if (first !== undefined) set.delete(first);
+  }
+  return false;
+}
+
 // Debug hook — exposes the confirmed-intent path to the SW global scope so a
 // Playwright (or DevTools) caller can drive the agent without going through
 // Realtime. Production code paths don't depend on this.
@@ -249,6 +274,14 @@ function connectRealtime() {
 // ─── Intent handlers ─────────────────────────────────────────────────────────
 
 function handleNewIntent(intent) {
+  // Guard against fan-out: the SW joins both postgres_changes and broadcast
+  // channels, and an INSERT typically arrives via both within a few ms. The
+  // synchronous Set.add() races nothing — first event wins, second no-ops.
+  if (trackSeen(seenNewIntentIds, intent.id)) {
+    console.log("[Anticipy] handleNewIntent: duplicate event for", intent.id, "— skipping");
+    return;
+  }
+
   lastActions.unshift({
     id: intent.id,
     summary: intent.summary_for_user,
@@ -285,7 +318,18 @@ function handleNewIntent(intent) {
 async function handleConfirmedIntent(intent) {
   if (!intent?.id) return;
 
-  // Deduplicate: never execute the same intent twice in one session
+  // Synchronous in-memory guard — wins the race against the second
+  // Realtime event (postgres_changes UPDATE vs broadcast confirmed_intent
+  // for the same row arriving within a few ms). Without this, both events
+  // pass the chrome.storage.local.get() check below before either's
+  // .set() lands, and we run TWO BrowserAgents on the same task.
+  if (trackSeen(seenConfirmedIntentIds, intent.id)) {
+    console.log("[Anticipy] handleConfirmedIntent: duplicate event for", intent.id, "— skipping");
+    return;
+  }
+
+  // Cross-restart guard — covers SW termination + reconnect replays.
+  // The in-memory Set above is the fast path; this is the durable backup.
   const dedupKey = `executed_${intent.id}`;
   const stored = await chrome.storage.local.get(dedupKey);
   if (stored[dedupKey]) {
@@ -308,7 +352,8 @@ async function handleConfirmedIntent(intent) {
       priority: 1,
       requireInteraction: true
     });
-    // Remove dedup so user can retry after signing in
+    // Remove BOTH dedup layers so user can retry after signing in.
+    seenConfirmedIntentIds.delete(intent.id);
     await chrome.storage.local.remove(dedupKey);
     return;
   }

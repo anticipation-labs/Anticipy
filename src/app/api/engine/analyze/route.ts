@@ -93,6 +93,86 @@ export async function POST(req: Request) {
       );
     }
 
+    // Single-flight per session_id. Two concurrent /analyze calls (most
+    // commonly: a periodic mid-recording call and the final-on-stop call)
+    // would each fuzzy-dedup against pre-call DB state, both insert, both
+    // fan out emails. The original bug. The dedupe_key generated column
+    // catches *identical* rewrites only — the LLM rewords the same intent
+    // every tick, so identical-text dedup misses it. The reliable fix is
+    // to serialize concurrent /analyze on the same session_id at the route
+    // boundary so the second call sees the first's intents in the existing-
+    // intents fetch and skips them via the existing fuzzy dedup.
+    //
+    // We use an INSERT into anticipy_inflight_locks with PRIMARY KEY
+    // (session_id, kind). The second caller's INSERT fails with 23505
+    // and we 429 immediately — the client retries on its next tick if it
+    // still wants to. Stale locks (>5 min) get reaped before the attempt.
+    const lockKind = "analyze";
+    const STALE_LOCK_MS = 5 * 60 * 1000;
+    const requestId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    // Reap stale locks for THIS (session, kind) so a crashed prior call
+    // never permanently blocks the session. Targeted delete keeps it cheap.
+    await supabaseAdmin
+      .from("anticipy_inflight_locks")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("kind", lockKind)
+      .lt(
+        "acquired_at",
+        new Date(Date.now() - STALE_LOCK_MS).toISOString()
+      );
+    const { error: lockErr } = await supabaseAdmin
+      .from("anticipy_inflight_locks")
+      .insert({
+        session_id: sessionId,
+        kind: lockKind,
+        request_id: requestId,
+      });
+    if (lockErr && (lockErr as { code?: string }).code === "23505") {
+      // Another /analyze for this session is in flight. Return 409 with an
+      // empty result so the client treats this as a no-op (next tick will
+      // pick up the previous call's intents via Realtime).
+      return NextResponse.json(
+        {
+          intents: [],
+          totalInferred: 0,
+          totalValid: 0,
+          skippedReason: "concurrent_analyze_in_flight",
+        },
+        { status: 409 }
+      );
+    }
+    if (lockErr) {
+      // Anything other than 23505 — log and continue without the lock.
+      // We'd rather over-fire than silently drop the analysis.
+      console.warn("[analyze] inflight-lock insert failed:", lockErr.message);
+    }
+
+    // Wrap the rest of the route so the lock is ALWAYS released, even on
+    // throws further down. The outer try/catch already catches; we add a
+    // finally below and re-throw to preserve the response shape.
+    let releaseLock = async () => {
+      try {
+        await supabaseAdmin
+          .from("anticipy_inflight_locks")
+          .delete()
+          .eq("session_id", sessionId)
+          .eq("kind", lockKind)
+          .eq("request_id", requestId);
+      } catch (err) {
+        console.warn(
+          "[analyze] inflight-lock release failed:",
+          err instanceof Error ? err.message : err
+        );
+      }
+    };
+    if (lockErr) releaseLock = async () => {}; // never acquired — nothing to release.
+
+    try {
+
     // Resolve local time — guard against invalid timezone strings from client
     let localTime: string;
     try {
@@ -300,14 +380,27 @@ export async function POST(req: Request) {
           evidence_quote: it.evidence_quote,
           confidence: it.confidence,
         }));
+        // Upsert on (user_id, lower(kind), lower(key)). The lowercased
+        // generated columns are enforced by the unique index added in
+        // migration deep_bug_hunt_idempotency_constraints. Without
+        // ignoreDuplicates the second periodic /analyze tick within the
+        // same session would write the same fact 30+ times for a long
+        // recording — confirmed bloat in production before the fix.
         const { error: memErr } = await supabaseAdmin
           .from("anticipy_memory")
-          .insert(rows);
+          .upsert(rows, {
+            onConflict: "user_id,kind,key",
+            ignoreDuplicates: true,
+          });
         if (memErr) {
-          console.warn(
-            "[memory-extract] insert failed:",
-            memErr.message
-          );
+          // 23505 here means the lowercased uniqueness fired — ignored
+          // intentionally. Anything else is a real error.
+          if ((memErr as { code?: string }).code !== "23505") {
+            console.warn(
+              "[memory-extract] insert failed:",
+              memErr.message
+            );
+          }
         }
       } catch (err) {
         console.warn(
@@ -618,6 +711,7 @@ export async function POST(req: Request) {
         .eq("id", sessionId);
     }
 
+    await releaseLock();
     return NextResponse.json({
       intents: storedIntents,
       totalInferred: intents.length,
@@ -625,6 +719,10 @@ export async function POST(req: Request) {
       totalSkippedDuplicates: skippedDuplicates,
       totalSkippedByGate: skippedByGate,
     });
+    } finally {
+      // Inner finally: release the per-session lock no matter what.
+      await releaseLock();
+    }
   } catch (err) {
     console.error("Analyze error:", err);
     return NextResponse.json(
