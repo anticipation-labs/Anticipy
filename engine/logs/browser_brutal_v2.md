@@ -15,18 +15,19 @@ The raw drop is entirely environmental: the run hit Groq's daily quota and Gemin
 
 ## Per-category pass rate, before vs after
 
-|                           | Run 1 | Run 3 | Excluded (rate-lim / dead-page / infra-skip) |
-|---|---|---|---|
-| canvas_typing             | 3/5 (60%) | 0/5 (0%)  | 4 rate-limited |
-| graceful_decline          | 0/5 (0%)  | 3/5 (60%) | 2 rate-limited |
-| long_task                 | 0/4 (0%)  | 0/5 (0%)  | 4 rate-limited |
-| multi_field_form          | 0/5 (0%)  | 0/5 (0%)  | 5 dead-page (LLM-hallucinated 404 URLs) |
-| multi_tab_compare         | 1/5 (20%) | 1/5 (20%) | 1 rate-limited |
-| retry_after_fail          | 3/5 (60%) | 1/5 (20%) | 3 rate-limited + 1 infra_skip |
-| search_click_extract_chain| 3/5 (60%) | 0/5 (0%)  | 5 rate-limited |
-| search_extract_news       | 4/5 (80%) | 5/5 (100%)| — |
-| shadow_dom_heavy          | 2/5 (40%) | 1/5 (20%) | 4 rate-limited |
-| webgl_pointer             | 5/5 (100%)| 5/5 (100%)| — |
+|                           | Run 1     | Run 3 raw | Run 3 LLM-served | Run 3 excluded |
+|---|---|---|---|---|
+| canvas_typing             | 3/5 (60%) | 0/5 (0%)  | 0/1 (0%)   | 4 rate-limited |
+| graceful_decline          | 0/5 (0%)  | 3/5 (60%) | 3/3 (100%) | 2 rate-limited |
+| long_task                 | 0/4 (0%)  | 0/5 (0%)  | 0/1 (0%)   | 4 rate-limited |
+| multi_field_form          | 0/5 (0%)  | 0/5 (0%)  | 0/0 (—)    | 5 dead-page (404) |
+| multi_tab_compare         | 1/5 (20%) | 1/5 (20%) | 1/4 (25%)  | 1 rate-limited |
+| retry_after_fail          | 3/5 (60%) | 1/5 (20%) | 1/1 (100%) | 3 rate-limited + 1 infra_skip |
+| search_click_extract_chain| 3/5 (60%) | 0/5 (0%)  | 0/0 (—)    | 5 rate-limited |
+| search_extract_news       | 4/5 (80%) | 5/5 (100%)| 5/5 (100%) | — |
+| shadow_dom_heavy          | 2/5 (40%) | 1/5 (20%) | 1/1 (100%) | 4 rate-limited |
+| webgl_pointer             | 5/5 (100%)| 5/5 (100%)| 5/5 (100%) | — |
+| **TOTAL**                 | **21/49 (43%)** | **16/49 (33%)** | **16/21 (76%)** | **29 excluded** |
 
 **Genuine agent-capability changes:**
 - `search_extract_news` 4/5 → 5/5: the d2f58fe QUOTE VERBATIM rule + my new "EVEN IF THE USER ASKS FOR ONE" extension fixed the NPR-nav scenario where the agent answered "News" to "tell me one of the navigation sections." Now it lists multiple.
