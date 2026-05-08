@@ -82,13 +82,9 @@ Apply each of these checks. For every candidate intent, ask:
     question empty)?
   - Is this a duplicate of another candidate in the list (same task framed twice)?
 
-Then ask: did the extractor MISS any concrete commitments the wearer made? List them ONLY \
-when ALL of these are true: (a) the wearer used a concrete commit verb in their OWN voice, \
-(b) at least one specific slot is bound (time, recipient, deliverable, amount), (c) the \
-commitment was NOT later retracted, (d) it is not a duplicate of an existing candidate. \
-If you would have to "interpret" the wearer's intent or "infer" something they didn't say, \
-DO NOT add it as missed. Adding speculative missed intents is the worst failure mode here — \
-err strongly toward leaving the candidate list alone unless the miss is undeniable.
+DO NOT add new intents. The route has a separate empty-rescue layer for that. \
+Your ONLY job is to flag flaws in the EXISTING candidates. Set missed_intents to []. \
+If you find no flaws in the existing candidates, set is_clean = true.
 
 Return STRICT JSON only — no markdown, no preamble:
 {
@@ -99,13 +95,7 @@ Return STRICT JSON only — no markdown, no preamble:
       "explanation": "<one short sentence>"
     }
   ],
-  "missed_intents": [
-    {
-      "summary": "<short sentence describing the missed commitment>",
-      "evidence_quote": "<verbatim quote from transcript>",
-      "explanation": "<why this should have been extracted>"
-    }
-  ],
+  "missed_intents": [],
   "is_clean": <true|false>
 }
 
@@ -126,8 +116,10 @@ You are given:
   3. A structured CRITIQUE flagging false positives, missed items, and slot/clarification issues.
 
 Your job: produce the FINAL intent list. Apply every critique point: drop flagged false \
-positives, add missed intents, fix slot/clarification coherence, demote/promote importance \
-where flagged. Preserve every candidate not flagged in the critique.
+positives, fix slot/clarification coherence, demote/promote importance where flagged. \
+Preserve every candidate not flagged in the critique. \
+DO NOT add new intents (the route handles missed intents in a separate layer); only \
+modify or drop the existing candidates.
 
 Output the SAME JSON shape the upstream extractor uses:
 {
@@ -148,10 +140,6 @@ Output the SAME JSON shape the upstream extractor uses:
 }
 
 Rules:
-  - When the critique adds a missed intent, fill in slot/parameter/importance fields the \
-    same way the extractor would: importance reasonable for urgency, required_slots derived \
-    from the task, missing_slots = required_slots not present in the transcript, \
-    clarification_question only when missing_slots is non-empty.
   - When dropping a candidate, do NOT include it in the final list at all.
   - When the critique flags importance miscalibration, set importance to the level the \
     critique recommends.
