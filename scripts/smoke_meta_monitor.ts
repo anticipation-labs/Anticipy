@@ -110,6 +110,30 @@ async function main() {
     .single();
 
   if (error || !profile) {
+    // Distinguish "Gemini rate-limited" (acceptable skip) from real bug.
+    // Re-probe the API directly: if it's also 429, mark the smoke as
+    // SKIP rather than FAIL so quota exhaustion in dev/test doesn't
+    // mask itself as a meta-monitor regression.
+    try {
+      const { callGemini } = await import("../src/lib/gemini");
+      await callGemini(
+        [
+          { role: "system", content: 'Return strict JSON: {"ok": true}' },
+          { role: "user", content: "ping" },
+        ],
+        { temperature: 0, max_tokens: 30 }
+      );
+    } catch (probeErr) {
+      const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
+      if (msg.includes("429") || msg.toLowerCase().includes("quota")) {
+        console.warn(
+          "[smoke] SKIP: Gemini quota exhausted on this key; meta-monitor correctly silent-returned. Re-run when quota resets."
+        );
+        await supabase.from("anticipy_user_profile").delete().eq("user_id", TEST_USER_ID);
+        await supabase.from("anticipy_preferences").delete().eq("user_id", TEST_USER_ID);
+        return;
+      }
+    }
     console.error("[smoke] FAIL: profile row not written:", error?.message);
     process.exit(1);
   }

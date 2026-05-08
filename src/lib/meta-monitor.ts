@@ -288,10 +288,20 @@ async function buildUserProfileInner(userId: string): Promise<void> {
         ],
         { temperature: 0.2, max_tokens: 1500, cacheKey: "meta-monitor-v1" }
       );
-    } catch {
-      return; // upstream unavailable / quota exhausted — leave profile alone
+    } catch (err) {
+      // Upstream unavailable / quota exhausted. Log so 429 spikes are
+      // visible in prod logs, then leave the profile alone — never block
+      // a user-facing flow on the second-brain rebuild.
+      console.warn(
+        "[meta-monitor] Gemini call failed; skipping rebuild:",
+        err instanceof Error ? err.message.slice(0, 160) : err
+      );
+      return;
     }
-    if (!llmText) return;
+    if (!llmText) {
+      console.warn("[meta-monitor] Gemini returned empty; skipping rebuild");
+      return;
+    }
 
     let parsed: {
       style_summary?: string;
