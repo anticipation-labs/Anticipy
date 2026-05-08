@@ -20,6 +20,7 @@ import {
 } from "@/lib/intent-gates";
 import { extractMemoryItems } from "@/lib/memory-extract";
 import { recallRelevantMemory } from "@/lib/memory-recall";
+import { recallUserPreferences } from "@/lib/preference-recall";
 
 export const dynamic = "force-dynamic";
 
@@ -219,6 +220,19 @@ export async function POST(req: Request) {
       );
     }
 
+    // Personalized preferences: prior accept/reject/edit/auto_proceed signals
+    // surface as one-line reasons the LLM uses to pre-filter new intents.
+    // Fail-open — analyze still works if the table is empty or query errors.
+    let preferenceContext: string[] = [];
+    try {
+      preferenceContext = await recallUserPreferences(authedUser.id, 15);
+    } catch (err) {
+      console.warn(
+        "[preference-recall] failed; continuing without preference context:",
+        err instanceof Error ? err.message : err
+      );
+    }
+
     // Build the prompt
     const { system, user } = buildIntentPrompt(
       safeTranscript,
@@ -227,7 +241,8 @@ export async function POST(req: Request) {
       recentActions,
       crossSessionContext,
       priorIntentContext,
-      memoryContext
+      memoryContext,
+      preferenceContext
     );
 
     const llmMessages = [

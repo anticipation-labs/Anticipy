@@ -18,7 +18,8 @@ export function buildIntentPrompt(
   recentActions: string[] = [],
   crossSessionContext: string[] = [],
   priorIntent: PriorIntentContext | null = null,
-  memoryContext: string[] = []
+  memoryContext: string[] = [],
+  preferenceContext: string[] = []
 ): { system: string; user: string } {
   const system = `You are an ambient intelligence assistant that listens to real conversations and extracts ONLY genuinely actionable items the user needs to do LATER.
 
@@ -97,6 +98,17 @@ If the conversation is purely casual or contains no real future actions: { "reas
         memoryContext.map((m, i) => `  ${i + 1}. ${m}`).join("\n")
       : "";
 
+  // Personal preferences — patterns from prior accept/reject/edit/auto_proceed
+  // signals on this wearer's intents. Used to PRE-FILTER: if the wearer has
+  // consistently rejected a class of intent ("user dislikes meetings before
+  // 9am"), don't surface a new one that matches. Accepts are HINTS only —
+  // never auto-confirm without the wearer.
+  const preferenceBlock =
+    preferenceContext.length > 0
+      ? "\nPersonal preferences (use to pre-filter — do NOT extract intents matching prior 'reject' patterns; treat 'accept' as hints, never auto-confirm):\n" +
+        preferenceContext.map((p, i) => `  ${i + 1}. ${p}`).join("\n")
+      : "";
+
   // Clarification-loop context: the wearer is replying to a follow-up question
   // the agent raised on a prior intent. Pass everything we already knew so the
   // LLM merges the new answer with prior slots and re-emits a single COMPLETE
@@ -109,7 +121,7 @@ If the conversation is purely casual or contains no real future actions: { "reas
 
 ---
 Current local time: ${localTime} (${timezone})
-Recent actions: ${recentActionsBlock}${crossSessionBlock}${memoryBlock}${priorIntentBlock}
+Recent actions: ${recentActionsBlock}${crossSessionBlock}${memoryBlock}${preferenceBlock}${priorIntentBlock}
 
 Extract ONLY genuine future actions the user needs to take. Skip conversational back-and-forth. Reason briefly, then output JSON.`;
 

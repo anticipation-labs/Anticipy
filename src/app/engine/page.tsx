@@ -23,6 +23,24 @@ interface Intent {
   parameters: Record<string, unknown>;
 }
 
+// Check-in data — the proactive engine sets status='awaiting_user' and
+// puts a yes/no question in execution_result when it's about to do
+// something it wants the wearer to confirm. default_after_timeout (yes/no)
+// tells us what to do if the wearer doesn't respond inside CHECKIN_WINDOW_MS.
+interface CheckIn {
+  intentId: string;
+  question: string;
+  defaultAfterTimeout: "yes" | "no";
+  // Wall-clock ms when this check-in was first surfaced — used to drive the
+  // countdown ring without re-rendering the whole page each tick.
+  startedAt: number;
+  // True once the user clicked yes/no/auto-resolved. Keeps the card visible
+  // briefly with a confirmation state instead of yanking it from the DOM.
+  resolved: null | "accept" | "reject" | "auto_proceed";
+}
+
+const CHECKIN_WINDOW_MS = 30_000;
+
 type EngineState =
   | "idle"
   | "recording"
@@ -188,6 +206,20 @@ export default function EnginePage() {
   // Tracks intent IDs we've already created a follow-up for, so we don't
   // double-render if Realtime fires repeatedly on the same row.
   const seenFollowUpsRef = useRef<Set<string>>(new Set());
+
+  // Check-in cards: surfaced when an intent flips to status='awaiting_user'.
+  // Each card runs a 30s countdown and auto-resolves to defaultAfterTimeout.
+  const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  // Force a re-render once per second so the countdown ring updates. We
+  // intentionally don't re-derive from setCheckIns — the timer is just for
+  // visual progress, not data.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    if (checkIns.length === 0) return;
+    const t = setInterval(() => setNowTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [checkIns.length]);
+  const seenCheckInsRef = useRef<Set<string>>(new Set());
 
   // Browser / extension capability flags. Computed once on mount.
   // unsupportedReason !== null → render a clean "open this on your laptop
@@ -370,6 +402,56 @@ export default function EnginePage() {
       )
       .subscribe();
 
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
+
+  // Realtime: surface check-in cards when an intent flips to
+  // status='awaiting_user'. The proactive engine writes the yes/no question
+  // into execution_result and the safe default ('yes'/'no') into
+  // default_after_timeout. We only act on intents we KNOW about (originated
+  // from this tab) to avoid leaking other users' rows.
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("anticipy_intents_checkins")
+      .on(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        "postgres_changes" as any,
+        { event: "UPDATE", schema: "public", table: "anticipy_intents" },
+        (payload: { new: Record<string, unknown> }) => {
+          const row = payload.new ?? {};
+          const id = String(row.id ?? "");
+          const status = String(row.status ?? "");
+          const execResult = String(row.execution_result ?? "").trim();
+          const dft = String(row.default_after_timeout ?? "").trim().toLowerCase();
+          if (!id || status !== "awaiting_user" || !execResult) return;
+          if (seenCheckInsRef.current.has(id)) return;
+          // Only surface check-ins for intents we originated from this tab.
+          setIntents((prevIntents) => {
+            const match = prevIntents.find((i) => i.id === id);
+            if (!match) return prevIntents;
+            seenCheckInsRef.current.add(id);
+            setCheckIns((prev) =>
+              prev.some((c) => c.intentId === id)
+                ? prev
+                : [
+                    ...prev,
+                    {
+                      intentId: id,
+                      question: execResult,
+                      defaultAfterTimeout: dft === "yes" ? "yes" : "no",
+                      startedAt: Date.now(),
+                      resolved: null,
+                    },
+                  ]
+            );
+            return prevIntents;
+          });
+        }
+      )
+      .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
@@ -1295,6 +1377,74 @@ export default function EnginePage() {
     },
     [followUps]
   );
+
+  // Resolve a check-in: 'yes' / 'no' from the wearer, or 'auto' when the
+  // 30s countdown elapses. 'yes' / 'no' route through /api/engine/confirm
+  // (same path as the standard confirm flow — keeps preference recording
+  // and execution unified). 'auto' POSTs /api/engine/auto-proceed which
+  // flips the row to auto_proceeded and obeys default_after_timeout.
+  const resolveCheckIn = useCallback(
+    async (intentId: string, action: "yes" | "no" | "auto") => {
+      let alreadyResolved = false;
+      setCheckIns((prev) => {
+        const cur = prev.find((c) => c.intentId === intentId);
+        if (!cur || cur.resolved) {
+          alreadyResolved = true;
+          return prev;
+        }
+        const resolved =
+          action === "yes" ? "accept" : action === "no" ? "reject" : "auto_proceed";
+        return prev.map((c) =>
+          c.intentId === intentId ? { ...c, resolved } : c
+        );
+      });
+      if (alreadyResolved) return;
+
+      try {
+        if (action === "yes" || action === "no") {
+          const res = await fetch(
+            `/api/engine/confirm?intentId=${encodeURIComponent(intentId)}&action=${action}`,
+            { method: "GET" }
+          );
+          if (!res.ok && res.status !== 404 && res.status !== 410) {
+            throw new Error("confirm failed");
+          }
+        } else {
+          const { data: { session: authSession } } = await supabase.auth.getSession();
+          if (!authSession) throw new Error("Sign in required");
+          await fetch("/api/engine/auto-proceed", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${authSession.access_token}`,
+            },
+            body: JSON.stringify({ intentId }),
+          });
+        }
+      } catch (err) {
+        console.warn("Check-in resolve failed:", err);
+        showToast("Couldn't update that check-in. Try again.", "warn", 5000);
+      }
+    },
+    [showToast]
+  );
+
+  // Auto-resolve check-ins whose 30s window elapsed without the wearer
+  // clicking yes/no. We keep this in a separate effect (not the tick
+  // re-render effect above) so the call only fires once per check-in.
+  useEffect(() => {
+    if (checkIns.length === 0) return;
+    const t = setInterval(() => {
+      const now = Date.now();
+      checkIns
+        .filter(
+          (c) =>
+            c.resolved === null && now - c.startedAt >= CHECKIN_WINDOW_MS
+        )
+        .forEach((c) => resolveCheckIn(c.intentId, "auto"));
+    }, 500);
+    return () => clearInterval(t);
+  }, [checkIns, resolveCheckIn]);
 
   const formatDuration = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -2882,6 +3032,9 @@ export default function EnginePage() {
                       const followUp = followUps.find(
                         (f) => f.intentId === intent.id
                       );
+                      const checkIn = checkIns.find(
+                        (c) => c.intentId === intent.id
+                      );
                       const progress = intentProgress[intent.id];
                       const confPct =
                         typeof intent.confidence === "number"
@@ -2951,6 +3104,153 @@ export default function EnginePage() {
                           >
                             &ldquo;{intent.evidence_quote}&rdquo;
                           </p>
+
+                          {/* Check-in card: rendered when the agent flips
+                              status='awaiting_user' on this intent. Yes/No +
+                              30s countdown ring; on timeout we POST
+                              /api/engine/auto-proceed which honors
+                              default_after_timeout. */}
+                          {checkIn && (() => {
+                            const elapsed = Date.now() - checkIn.startedAt;
+                            const remainingMs = Math.max(
+                              0,
+                              CHECKIN_WINDOW_MS - elapsed
+                            );
+                            const remainingSec = Math.ceil(remainingMs / 1000);
+                            const fraction = Math.max(
+                              0,
+                              Math.min(1, remainingMs / CHECKIN_WINDOW_MS)
+                            );
+                            // SVG ring: r=14, circumference 2*pi*14 ~= 87.96
+                            const C = 2 * Math.PI * 14;
+                            const dash = (1 - fraction) * C;
+                            const fallbackLabel =
+                              checkIn.defaultAfterTimeout === "yes"
+                                ? "We'll go ahead if you don't reply."
+                                : "We'll skip it if you don't reply.";
+                            return (
+                              <div
+                                data-testid={`checkin-${intent.id}`}
+                                className="rounded-card"
+                                style={{
+                                  background: "rgba(200,169,126,0.07)",
+                                  border: "1px solid rgba(200,169,126,0.32)",
+                                  padding: 16,
+                                  marginBottom: 14,
+                                }}
+                              >
+                                <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
+                                  <div
+                                    className="text-[11px] uppercase tracking-wide-label"
+                                    style={{ color: "var(--gold)" }}
+                                  >
+                                    Check in · {remainingSec}s
+                                  </div>
+                                  {checkIn.resolved === null && (
+                                    <svg
+                                      width={32}
+                                      height={32}
+                                      aria-hidden="true"
+                                    >
+                                      <circle
+                                        cx={16}
+                                        cy={16}
+                                        r={14}
+                                        fill="none"
+                                        stroke="rgba(200,169,126,0.2)"
+                                        strokeWidth={2}
+                                      />
+                                      <circle
+                                        cx={16}
+                                        cy={16}
+                                        r={14}
+                                        fill="none"
+                                        stroke="var(--gold)"
+                                        strokeWidth={2}
+                                        strokeLinecap="round"
+                                        strokeDasharray={C}
+                                        strokeDashoffset={dash}
+                                        transform="rotate(-90 16 16)"
+                                        style={{
+                                          transition:
+                                            "stroke-dashoffset 1s linear",
+                                        }}
+                                      />
+                                    </svg>
+                                  )}
+                                </div>
+                                <p
+                                  className="text-[14px]"
+                                  style={{
+                                    color: "var(--text-on-dark)",
+                                    marginBottom: 6,
+                                    lineHeight: 1.45,
+                                  }}
+                                >
+                                  {checkIn.question}
+                                </p>
+                                <p
+                                  className="text-[12px] font-light"
+                                  style={{
+                                    color: "var(--text-on-dark-muted)",
+                                    marginBottom: 12,
+                                  }}
+                                >
+                                  {fallbackLabel}
+                                </p>
+                                {checkIn.resolved === null ? (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        resolveCheckIn(intent.id, "yes")
+                                      }
+                                      className="rounded-pill text-[13px] font-semibold px-4 py-2"
+                                      style={{
+                                        background: "var(--gold)",
+                                        color: "var(--dark)",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        minWidth: 80,
+                                      }}
+                                    >
+                                      Yes
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        resolveCheckIn(intent.id, "no")
+                                      }
+                                      className="rounded-pill text-[13px] font-medium px-4 py-2"
+                                      style={{
+                                        background: "transparent",
+                                        color: "var(--text-on-dark-muted)",
+                                        border:
+                                          "1px solid rgba(255,255,255,0.18)",
+                                        cursor: "pointer",
+                                        minWidth: 80,
+                                      }}
+                                    >
+                                      No
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="text-[13px]"
+                                    style={{
+                                      color: "var(--text-on-dark-muted)",
+                                    }}
+                                  >
+                                    {checkIn.resolved === "accept"
+                                      ? "Confirmed."
+                                      : checkIn.resolved === "reject"
+                                        ? "Skipped."
+                                        : "Time's up — using default."}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Follow-up question rendered inline when the
                               extension's agent reported it needs more info. */}

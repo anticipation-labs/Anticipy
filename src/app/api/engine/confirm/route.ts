@@ -1,6 +1,10 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { executeAction } from "@/lib/execute-action";
 import { escapeHtml } from "@/lib/escape";
+import {
+  recordPreferenceSignal,
+  type PreferenceSignal,
+} from "@/lib/preference-record";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +71,49 @@ export async function GET(req: Request) {
 
   let executionMessage = "";
 
-  if (newStatus === "confirmed") {
-    const { data: intent } = await supabaseAdmin
-      .from("anticipy_intents")
-      .select("*")
-      .eq("id", intentId)
+  // Always pull the intent (for both yes and no) so we can record a
+  // preference signal. Re-using the same fetch on the confirmed branch.
+  const { data: intentRow } = await supabaseAdmin
+    .from("anticipy_intents")
+    .select("*")
+    .eq("id", intentId)
+    .single();
+
+  // Resolve the wearer's user_id via session_id so recorded preferences
+  // are scoped to the right user. Fail-open if the session row is gone.
+  let prefUserId: string | null = null;
+  if (intentRow?.session_id) {
+    const { data: sess } = await supabaseAdmin
+      .from("anticipy_sessions")
+      .select("user_id")
+      .eq("id", intentRow.session_id)
       .single();
+    prefUserId =
+      sess && typeof sess.user_id === "string" && sess.user_id.length > 0
+        ? sess.user_id
+        : null;
+  }
+
+  // Fire-and-forget preference recording: a small Gemini call summarizes
+  // WHY this signal landed (one sentence) and writes a row to
+  // anticipy_preferences. The reasoning is read back into future intent
+  // extraction prompts via recallUserPreferences. Failures are logged.
+  if (prefUserId && intentRow) {
+    const signal: PreferenceSignal =
+      newStatus === "confirmed" ? "accept" : "reject";
+    void recordPreferenceSignal(
+      prefUserId,
+      {
+        action_type: intentRow.action_type ?? null,
+        summary_for_user: intentRow.summary_for_user ?? null,
+        evidence_quote: intentRow.evidence_quote ?? null,
+      },
+      signal
+    );
+  }
+
+  if (newStatus === "confirmed") {
+    const intent = intentRow;
 
     if (intent) {
       const result = await executeAction(intent);
