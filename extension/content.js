@@ -491,7 +491,15 @@ function forceTypeInto(input, value) {
 //     execCommand isn't supported.
 async function canvasInsertText(text) {
   const target = locateDocsEditTarget(document) || activeContenteditable();
-  if (!target) return false;
+  // No contenteditable at all — try the keystroke-burst fallback for
+  // pure-canvas editors (Excalidraw, TLDraw, jspaint) that capture
+  // KeyboardEvents at document level rather than via DOM input. The
+  // user must have already clicked the canvas to give it focus and
+  // entered text-tool mode (Excalidraw 'T' key); this just sends the
+  // characters as the next interaction.
+  if (!target) {
+    return canvasKeystrokeBurst(text);
+  }
   try { target.element.focus(); } catch (_) {}
   const doc = target.doc || document;
   // Use execCommand inside the same document the contenteditable lives in
@@ -515,7 +523,69 @@ async function canvasInsertText(text) {
       ok = false;
     }
   }
+  // Last-ditch: if the contenteditable insertion didn't take (some pure-
+  // canvas editors expose a fake contenteditable that swallows our writes
+  // but has its own KeyboardEvent listeners on the canvas), fall back to
+  // the keystroke burst on the active element.
+  if (!ok) {
+    return canvasKeystrokeBurst(text);
+  }
   return ok;
+}
+
+// Generic keystroke burst — dispatches keydown/keypress/input/keyup for each
+// character to whatever element is currently focused (or document.body if
+// nothing is). Exists for canvas-rendered editors that listen for
+// KeyboardEvents directly rather than through any DOM input element. Does
+// NOT verify success per character (no readback possible on pure canvas);
+// returns true if the burst completed without throwing. Caller should
+// observe page state (URL, on-screen text via OCR-like pierce) to confirm.
+function canvasKeystrokeBurst(text) {
+  if (!text) return false;
+  let target = document.activeElement;
+  if (!target || target === document.body) {
+    // Pick a sensible default: the canvas with the most pixels in viewport
+    // (the actual drawing surface, not toolbar canvases).
+    let best = null, bestArea = 0;
+    for (const c of document.querySelectorAll("canvas")) {
+      const r = c.getBoundingClientRect();
+      const area = r.width * r.height;
+      if (area > bestArea) { best = c; bestArea = area; }
+    }
+    if (best) {
+      try { best.focus(); } catch (_) {}
+      target = best;
+    } else {
+      target = document.body;
+    }
+  }
+  try {
+    for (const ch of text) {
+      const init = {
+        key: ch,
+        code: ch === " " ? "Space" : `Key${ch.toUpperCase()}`,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      };
+      target.dispatchEvent(new KeyboardEvent("keydown", init));
+      target.dispatchEvent(new KeyboardEvent("keypress", init));
+      // Some canvas editors listen for `input` with data; emit it too.
+      try {
+        target.dispatchEvent(new InputEvent("input", {
+          inputType: "insertText",
+          data: ch,
+          bubbles: true,
+          cancelable: false,
+          composed: true,
+        }));
+      } catch (_) {}
+      target.dispatchEvent(new KeyboardEvent("keyup", init));
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function locateDocsEditTarget(doc) {
