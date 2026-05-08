@@ -123,12 +123,58 @@ async def _gemini_json(system: str, user: str, max_tokens: int = 4096) -> dict:
                         return json.loads(txt)
                     last_status = r.status_code
                     last_body = r.text[:200]
+                except json.JSONDecodeError as e:
+                    last_status = "groq_json_decode"
+                    last_body = str(e)[:200]
                 except Exception:
                     pass
                 if attempt < 1:
                     await asyncio.sleep(2)
 
-    raise RuntimeError(f"all providers failed (last gemini/groq {last_status}: {last_body})")
+    # ── Kimi (Moonshot) tertiary fallback ──
+    # When both Gemini AND Groq exhaust their daily token budget, the
+    # harness used to die. Kimi is on a separate quota / org so it survives
+    # those simultaneous walls. Use `moonshot-v1-32k` because `kimi-k2.6`
+    # requires `temperature=1.0` (returns 400 at temp 0) and we need
+    # deterministic verdicts here.
+    kimi_key = os.environ.get("KIMI_API_KEY")
+    if kimi_key:
+        kimi_url = "https://api.moonshot.ai/v1/chat/completions"
+        kimi_body = {
+            "model": "moonshot-v1-32k",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.0,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+        }
+        async with httpx.AsyncClient(timeout=120) as client:
+            for attempt in range(2):
+                try:
+                    r = await client.post(
+                        kimi_url,
+                        json=kimi_body,
+                        headers={"Authorization": f"Bearer {kimi_key}"},
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        txt = data["choices"][0]["message"]["content"]
+                        return json.loads(txt)
+                    last_status = r.status_code
+                    last_body = r.text[:200]
+                except json.JSONDecodeError as e:
+                    last_status = "kimi_json_decode"
+                    last_body = str(e)[:200]
+                except Exception:
+                    pass
+                if attempt < 1:
+                    await asyncio.sleep(2)
+
+    raise RuntimeError(
+        f"all providers failed (last gemini/groq/kimi {last_status}: {last_body})"
+    )
 
 
 # ---------------------------------------------------------------------------

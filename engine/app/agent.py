@@ -30,8 +30,14 @@ from pydantic import BaseModel, Field
 # at import time via `_get_timeout(env_var, default)`. Tests / deployments
 # can override by setting the env var explicitly before this module loads.
 for _ev, _default in (
-    ("TIMEOUT_BrowserStartEvent", "90"),
-    ("TIMEOUT_BrowserLaunchEvent", "90"),
+    # On loaded codespaces (load-avg > 5, available RAM ≪ 1GB) Chromium's
+    # first-launch + CDP-port bind exceeds 90s deterministically. Setting a
+    # generous 180s here means a single failed launch wastes 3 min instead
+    # of 90s, but our retry-budget is bounded (3 attempts) so worst case is
+    # ~9 min per scenario before we declare a hard fail. In return we get
+    # actual scenario verdicts on tier-3 instead of a wall of TimeoutError.
+    ("TIMEOUT_BrowserStartEvent", "180"),
+    ("TIMEOUT_BrowserLaunchEvent", "180"),
     ("TIMEOUT_BrowserKillEvent", "60"),
 ):
     os.environ.setdefault(_ev, _default)
@@ -868,7 +874,10 @@ class EngineAgent:
             # the no-exception-but-broken case (sometimes start() returns OK
             # with a None cdp_client) is also caught.
             start_attempts = 0
-            max_start_attempts = 3
+            # 3 attempts × 180s timeout = 9-min worst case per scenario; cut
+            # to 2 to bound the harness run length while still tolerating
+            # one transient failure (slow disk + load avg > 5 case).
+            max_start_attempts = 2
             while True:
                 start_attempts += 1
                 start_failure_reason: str | None = None
