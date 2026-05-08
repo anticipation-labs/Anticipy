@@ -461,6 +461,16 @@ export async function POST(req: Request) {
         .select("id")
         .single();
 
+      // 23505 = unique_violation. Race-safe: two concurrent /analyze calls
+      // can both pass the in-memory dedup, but the DB-level
+      // (session_id, dedupe_key) unique constraint catches the second one.
+      // Treat as "already inserted by sibling call" — skip silently and DO
+      // NOT fan out email/SMS, otherwise users get duplicate notifications.
+      if (error && (error as { code?: string }).code === "23505") {
+        skippedDuplicates += 1;
+        continue;
+      }
+
       if (error) {
         console.error("Insert intent error:", error);
         continue;
