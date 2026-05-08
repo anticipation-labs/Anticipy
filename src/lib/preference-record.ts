@@ -11,7 +11,7 @@
  * Always fire-and-forget at the call site: failures are logged and
  * never block the user-facing path.
  */
-import { callGemini } from "@/lib/gemini";
+import { callLlm } from "@/lib/llm-cascade";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export type PreferenceSignal =
@@ -65,7 +65,7 @@ async function summarizeReasoning(
     `Write the one-sentence reasoning now.`;
 
   try {
-    const raw = await callGemini(
+    const raw = await callLlm(
       [
         { role: "system", content: REASONING_SYSTEM_PROMPT },
         { role: "user", content: userMsg },

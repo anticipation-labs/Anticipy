@@ -35,7 +35,8 @@
  *   { reasoning, intents: [...] } shape it parses today.
  */
 
-import { callGemini, parseJsonWithRepair } from "@/lib/gemini";
+import { parseJsonWithRepair } from "@/lib/gemini";
+import { callLlm } from "@/lib/llm-cascade";
 
 export interface ExtractCallContext {
   /** System prompt as built by buildIntentPrompt — passed through unchanged. */
@@ -167,7 +168,7 @@ export async function extractIntentsWithVerification(
   const maxAttempts = ctx.maxAttempts ?? 1;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      pass1Raw = await callGemini(messages, {
+      pass1Raw = await callLlm(messages, {
         temperature: 0.0,
         max_tokens: 8192,
         cacheKey: ctx.cacheKey,
@@ -229,7 +230,7 @@ export async function extractIntentsWithVerification(
 
   let critiqueRaw = "";
   try {
-    critiqueRaw = await callGemini(
+    critiqueRaw = await callLlm(
       [
         { role: "system" as const, content: CRITIQUE_SYSTEM },
         { role: "user" as const, content: critiquePayload },
@@ -297,7 +298,7 @@ Preserve every candidate not flagged.`;
 
   let refineRaw = "";
   try {
-    refineRaw = await callGemini(
+    refineRaw = await callLlm(
       [
         { role: "system" as const, content: REFINE_SYSTEM },
         { role: "user" as const, content: refineUser },

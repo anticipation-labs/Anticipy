@@ -27,7 +27,8 @@
  * the intent — we'd rather over-notify than silently drop a real task.
  */
 
-import { callGemini, parseJsonWithRepair } from "@/lib/gemini";
+import { parseJsonWithRepair } from "@/lib/gemini";
+import { callLlm } from "@/lib/llm-cascade";
 
 export interface GateInput {
   /** Wearer's high-level summary of what they want done. */
@@ -276,7 +277,7 @@ async function runPrimaryGate(
 
   let raw = "";
   try {
-    raw = await callGemini(messages, {
+    raw = await callLlm(messages, {
       temperature: options.temperature ?? 0.0,
       max_tokens: 512,
       // Cache the system prompt; the primary gate prompt is static and large.
@@ -364,7 +365,7 @@ async function runAdversarialGate(
 ): Promise<AdversarialResult | null> {
   let raw = "";
   try {
-    raw = await callGemini(
+    raw = await callLlm(
       [
         { role: "system" as const, content: ADVERSARIAL_GATE_SYSTEM_PROMPT },
         { role: "user" as const, content: buildAdversarialUserPrompt(input) },

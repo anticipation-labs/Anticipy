@@ -24,7 +24,8 @@
  *     high-signal.
  */
 
-import { callGemini, parseJsonWithRepair } from "@/lib/gemini";
+import { parseJsonWithRepair } from "@/lib/gemini";
+import { callLlm } from "@/lib/llm-cascade";
 
 export interface MemoryItem {
   /** Generic bucket label the LLM picks (preference / fact / relationship / reference / context / etc). */
@@ -104,7 +105,7 @@ export async function extractMemoryItems(
 
   let raw = "";
   try {
-    raw = await callGemini(messages, {
+    raw = await callLlm(messages, {
       temperature: 0.0,
       max_tokens: 2048,
       // Cache the static memory-extract system prompt — this call runs on
