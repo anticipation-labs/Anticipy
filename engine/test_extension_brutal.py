@@ -246,9 +246,10 @@ async def generate_scenario(category: str, desc: str, idx: int, total: int) -> d
 # ─── Programmatic verifier ───────────────────────────────────────────────────
 
 LOGIN_HINTS = (
-    "sign in", "log in", "login", "log-in", "signin", "sign-in",
-    "authenticate", "authentication", "credentials", "account",
-    "session", "wall", "blocked", "auth ", "auth.", "auth-",
+    "sign in", "signed in", "sign up", "log in", "logged in", "login",
+    "log-in", "signin", "sign-in", "authenticate", "authentication",
+    "credentials", "account", "session", "wall", "blocked", "auth ",
+    "auth.", "auth-", "your real session", "open it once", "in this browser",
 )
 
 
@@ -516,6 +517,34 @@ async def run_scenario(scenario: dict, ctx, sw) -> dict:
             final_status = None
         final_status = final_status or {"status": "timeout", "message": last_step_msg}
 
+    # Best-effort: abort the still-running agent JS so it doesn't spill into
+    # the next scenario. The agent's JS task can outlive our Python deadline
+    # (runs MAX_STEPS=60 / 10min on its own clock); if we don't tell it to
+    # stop, it'll keep opening tabs and hammering LLM APIs while the harness
+    # has moved on. We poison the in-storage status so any pending poll sees
+    # a terminal value, then close any non-extension tabs the prior task
+    # spawned. This is harness hygiene, not agent code.
+    if timed_out or (final_status and final_status.get("status") in ("timeout",)):
+        try:
+            await sw.evaluate(
+                "() => new Promise((r) => { chrome.storage.local.set({"
+                "  agentStatus: { intentId: 'aborted', status: 'failed', "
+                "  message: 'aborted by harness', finishedAt: Date.now() } "
+                "}, () => r(true)); })"
+            )
+        except Exception:
+            pass
+        # Close extra tabs (keep one) so the next scenario starts clean.
+        try:
+            pages = ctx.pages
+            for pg in pages[1:]:
+                try:
+                    await pg.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     # Final URL and last steps trace via SW (where the BrowserAgent stored steps).
     # The agent doesn't expose step trace via storage, but agentStatus is enough.
     try:
@@ -605,6 +634,41 @@ async def main(per_category: int = 5, only_categories: list[str] | None = None,
                 cat = sc.get("category", "?")
                 summary = (sc.get("summary_for_user") or "")[:90]
                 print(f"\n=== {i}/{len(scenarios)} [{cat}] {summary} ===", flush=True)
+
+                # Browser context recovery: a prior scenario timeout can leave
+                # the chromium context in a dead state ("BrowserContext.new_page:
+                # Target page, context or browser has been closed"). Probe
+                # before each scenario and relaunch if the context is gone.
+                # Without this, a single bad scenario can wipe out the rest of
+                # the run by short-circuiting every subsequent run_scenario()
+                # call. Generic; no per-scenario logic.
+                ctx_alive = True
+                try:
+                    _ = ctx.pages
+                    if not ctx.service_workers:
+                        ctx_alive = False
+                except Exception:
+                    ctx_alive = False
+                if not ctx_alive:
+                    print("   [harness] browser context dead — relaunching", flush=True)
+                    try:
+                        await ctx.close()
+                    except Exception:
+                        pass
+                    if profile_dir and os.path.isdir(profile_dir):
+                        import shutil
+                        shutil.rmtree(profile_dir, ignore_errors=True)
+                    # Also kill any straggler chromium processes that didn't
+                    # exit cleanly when the context closed (Playwright doesn't
+                    # always reap zombies after a hard timeout).
+                    try:
+                        import subprocess
+                        subprocess.run(["pkill", "-9", "-f", "chromium"], check=False, timeout=5)
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2)
+                    ctx, sw, ext_id, profile_dir = await launch_extension(p)
+
                 t0 = time.time()
                 try:
                     run = await asyncio.wait_for(

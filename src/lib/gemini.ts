@@ -24,11 +24,36 @@
  * API failure we fall through to the uncached path.
  */
 
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY ?? "";
+// Read process.env at CALL time, not module-load time. Module-load
+// capture is fine in serverless (env vars are set before load) but a
+// silent footgun for any ad-hoc Node script that loads .env.local
+// after import statements have already hoisted. Getters make the
+// behavior identical in both worlds.
+function getGoogleApiKey(): string {
+  return process.env.GOOGLE_API_KEY ?? "";
+}
 const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_BASE = `https://generativelanguage.googleapis.com/v1beta`;
-const GEMINI_GENERATE_URL = `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${GOOGLE_API_KEY}`;
-const GEMINI_CACHE_URL = `${GEMINI_BASE}/cachedContents?key=${GOOGLE_API_KEY}`;
+function geminiGenerateUrl(): string {
+  return `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${getGoogleApiKey()}`;
+}
+function geminiCacheUrl(): string {
+  return `${GEMINI_BASE}/cachedContents?key=${getGoogleApiKey()}`;
+}
+
+// Embedding model. gemini-embedding-001 is the current free-tier offering;
+// it natively returns 3072-d but supports Matryoshka truncation via
+// outputDimensionality, so we ask for 768 to match the vector(768) column
+// declared in the 20260508_episode_recall_embedding migration. Free tier
+// ~1500 RPM / ~1M tokens-per-minute as of writing — well above any
+// analyze workload. Pricing target: <$0.0001/intent (the model is free
+// on AI Studio's developer tier; the only real "cost" is the latency of
+// one extra HTTPS round-trip per terminal-status flip).
+const GEMINI_EMBED_MODEL = "gemini-embedding-001";
+const GEMINI_EMBED_DIM = 768;
+function geminiEmbedUrl(): string {
+  return `${GEMINI_BASE}/models/${GEMINI_EMBED_MODEL}:embedContent?key=${getGoogleApiKey()}`;
+}
 
 // Minimum content size Gemini will cache (varies by model; conservative floor).
 // Below this we skip caching — the API rejects tiny payloads with 400.
@@ -72,7 +97,7 @@ async function ensureCachedSystemPrompt(
   }
 
   try {
-    const res = await fetch(GEMINI_CACHE_URL, {
+    const res = await fetch(geminiCacheUrl(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -167,7 +192,7 @@ export async function callGemini(
     body.system_instruction = { parts: [{ text: systemMsg }] };
   }
 
-  const res = await fetch(GEMINI_GENERATE_URL, {
+  const res = await fetch(geminiGenerateUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -186,6 +211,70 @@ export async function callGemini(
   const data = await res.json();
   lastUsageMetadata = (data && data.usageMetadata) || null;
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}
+
+/**
+ * Generate a Gemini embedding for the supplied text.
+ *
+ * Returns the 768-d vector on success, or `null` on any failure (missing
+ * API key, network error, malformed response, empty input). All callers
+ * MUST treat null as "skip the write" — embedding is purely additive
+ * context for episode recall and should never block the user-facing path.
+ *
+ * Cost note: text-embedding-004 is free-tier on Google AI Studio. We pin
+ * `taskType=RETRIEVAL_DOCUMENT` for stored intents and pass
+ * `RETRIEVAL_QUERY` from the recall path so the model produces the
+ * asymmetric variants Google recommends for vector search.
+ */
+export async function embedText(
+  text: string,
+  options: { taskType?: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY" } = {}
+): Promise<number[] | null> {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  if (!getGoogleApiKey()) {
+    console.warn("[gemini-embed] GOOGLE_API_KEY missing; returning null");
+    return null;
+  }
+  // Embedding inputs are billed per token; cap conservatively. Gemini
+  // accepts up to 2048 tokens per request, but real intents + transcripts
+  // never approach that — slicing at 8000 chars (~2000 tokens) costs us
+  // nothing in fidelity.
+  const safeText = trimmed.slice(0, 8000);
+  const taskType = options.taskType ?? "RETRIEVAL_DOCUMENT";
+  try {
+    const res = await fetch(geminiEmbedUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: `models/${GEMINI_EMBED_MODEL}`,
+        content: { parts: [{ text: safeText }] },
+        taskType,
+        // Matryoshka truncation. gemini-embedding-001 natively returns
+        // 3072 dims; we ask for 768 to match the pgvector column.
+        outputDimensionality: GEMINI_EMBED_DIM,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(
+        `[gemini-embed] ${res.status}: ${body.substring(0, 200)}`
+      );
+      return null;
+    }
+    const data = (await res.json()) as {
+      embedding?: { values?: number[] };
+    };
+    const values = data.embedding?.values;
+    if (!Array.isArray(values) || values.length === 0) return null;
+    return values;
+  } catch (err) {
+    console.warn(
+      "[gemini-embed] threw; returning null:",
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
 }
 
 /**
