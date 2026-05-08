@@ -96,6 +96,12 @@ document.addEventListener("DOMContentLoaded", () => {
         apiConfig: {
           groqApiKey: data.groqApiKey || null,
           geminiApiKey: data.geminiApiKey || null,
+          // userId required so the SW can filter Realtime broadcasts and
+          // never act on another user's intent. anticipy-intents is an
+          // anon-readable topic — every connected extension gets every
+          // broadcast — and without this we'd cross-fire on shared infra.
+          userId: data.userId || null,
+          username: data.username || null,
           // Stored so the BrowserAgent can call /api/extension/llm-proxy
           // for tier-2 Claude escalation without re-prompting the user.
           // The code is the same one already used to sign in.

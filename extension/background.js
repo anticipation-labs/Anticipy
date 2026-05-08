@@ -273,7 +273,32 @@ function connectRealtime() {
 
 // ─── Intent handlers ─────────────────────────────────────────────────────────
 
-function handleNewIntent(intent) {
+async function intentBelongsToUs(intent) {
+  // The anticipy-intents broadcast topic is anon-readable — every connected
+  // extension worldwide receives every broadcast. Without this filter, user
+  // A's extension would fire a notification + run an agent task on user B's
+  // intent. /api/engine/analyze and /api/engine/confirm both stamp the
+  // payload with `user_id`; we compare against the userId the popup stored
+  // at login time.
+  //
+  // Fail-CLOSED: if either side of the comparison is missing or doesn't
+  // match, drop the event. The cost of dropping a legit event for an
+  // unauthenticated extension is one missed notification (the user can
+  // re-open the engine page); the cost of accepting a foreign event is
+  // every Anticipy user's tasks running on every other user's machine.
+  if (!intent || typeof intent !== "object") return false;
+  const incomingUserId = intent.user_id;
+  if (!incomingUserId) return false;
+  const { apiConfig } = await chrome.storage.local.get("apiConfig");
+  const ourUserId = apiConfig?.userId;
+  if (!ourUserId) return false;
+  return incomingUserId === ourUserId;
+}
+
+async function handleNewIntent(intent) {
+  if (!(await intentBelongsToUs(intent))) {
+    return;
+  }
   // Guard against fan-out: the SW joins both postgres_changes and broadcast
   // channels, and an INSERT typically arrives via both within a few ms. The
   // synchronous Set.add() races nothing — first event wins, second no-ops.
@@ -317,6 +342,10 @@ function handleNewIntent(intent) {
 
 async function handleConfirmedIntent(intent) {
   if (!intent?.id) return;
+  if (!(await intentBelongsToUs(intent))) {
+    // Cross-user broadcast — drop. See intentBelongsToUs() docstring.
+    return;
+  }
 
   // Synchronous in-memory guard — wins the race against the second
   // Realtime event (postgres_changes UPDATE vs broadcast confirmed_intent

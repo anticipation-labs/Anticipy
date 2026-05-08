@@ -295,6 +295,12 @@ export async function GET(req: Request) {
                 payload: {
                   ...intent,
                   status: "confirmed",
+                  // user_id required so the extension can filter cross-user
+                  // broadcasts and never act on another user's confirm.
+                  // anticipy_intents itself doesn't carry user_id (it's
+                  // session-scoped); we resolved it from the session row
+                  // earlier in this handler as prefUserId.
+                  user_id: prefUserId,
                   parameters: {
                     ...(intent.parameters as Record<string, unknown>),
                     browser_task: result.data.task,
