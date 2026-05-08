@@ -189,6 +189,38 @@ export default function EnginePage() {
   // double-render if Realtime fires repeatedly on the same row.
   const seenFollowUpsRef = useRef<Set<string>>(new Set());
 
+  // Browser / extension capability flags. Computed once on mount.
+  // unsupportedReason !== null → render a clean "open this on your laptop
+  // with Chrome" full-page block instead of the broken record/extension flow.
+  const [unsupportedReason, setUnsupportedReason] = useState<null | "mobile" | "browser">(null);
+  // Set true as soon as the content script pings us — used to know whether
+  // to show the "looks like the extension isn't running" toast on confirm.
+  const [extensionDetected, setExtensionDetected] = useState(false);
+  // Subtle inline toast (ephemeral, never blocks). Single source of truth so
+  // we never stack technical errors on top of each other.
+  const [toast, setToast] = useState<{ kind: "info" | "warn"; text: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const showToast = useCallback(
+    (text: string, kind: "info" | "warn" = "info", ms = 5000) => {
+      setToast({ kind, text });
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setToast(null), ms);
+    },
+    []
+  );
+
+  // Per-intent agent progress, updated from anticipy_intents Realtime UPDATE
+  // events. Surfaces "Anticipy is working on this..." with the latest hint
+  // (current step / execution_result) so the page never goes silent during
+  // the 10-90s agent run.
+  type IntentStatus = "running" | "done" | "failed";
+  interface IntentProgress {
+    status: IntentStatus;
+    message: string;
+    updatedAt: number;
+  }
+  const [intentProgress, setIntentProgress] = useState<Record<string, IntentProgress>>({});
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordedMimeRef = useRef<string>("");
@@ -349,6 +381,7 @@ export default function EnginePage() {
       if (timerRef.current) clearInterval(timerRef.current);
       if (autoAnalyzeTimerRef.current) clearInterval(autoAnalyzeTimerRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
@@ -356,6 +389,103 @@ export default function EnginePage() {
       if (audioCtxRef.current) audioCtxRef.current.close();
     };
   }, []);
+
+  // One-time capability check: refuse the broken flow on mobile / Safari /
+  // Firefox so the investor isn't pushed into a record-then-fail trap. Pure
+  // detection, no logic side-effects.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = navigator.userAgent || "";
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+    // Chromium-based desktop browsers expose chrome.runtime when extensions
+    // can run. We check mime support too — Firefox doesn't expose chrome.* and
+    // Safari doesn't support audio/webm.
+    const hasChromeRuntime =
+      typeof (window as unknown as { chrome?: { runtime?: unknown } }).chrome !==
+        "undefined" &&
+      !!(window as unknown as { chrome?: { runtime?: unknown } }).chrome?.runtime;
+    const supportsRecorder =
+      typeof MediaRecorder !== "undefined" &&
+      (MediaRecorder.isTypeSupported("audio/webm") ||
+        MediaRecorder.isTypeSupported("audio/mp4"));
+    if (isMobile) {
+      setUnsupportedReason("mobile");
+    } else if (!hasChromeRuntime || !supportsRecorder) {
+      setUnsupportedReason("browser");
+    }
+  }, []);
+
+  // Listen for the extension's content-script handshake. The content script
+  // posts {source:"anticipy_ext", type:"present"} after install. If we get
+  // it within a couple seconds of an intent we KNOW we sent, we mark the
+  // extension as detected — used to suppress the install CTA and to power
+  // the "extension isn't running" toast on confirm.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data;
+      if (d && typeof d === "object" && d.source === "anticipy_ext") {
+        setExtensionDetected(true);
+      }
+    };
+    window.addEventListener("message", onMsg);
+    // Fallback: a globals-set tag may already be in place from the content
+    // script that ran on first paint.
+    try {
+      const g = window as unknown as { __anticipy_ext_installed__?: boolean };
+      if (g.__anticipy_ext_installed__) setExtensionDetected(true);
+    } catch { /* ignore */ }
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  // Realtime: surface live agent progress for intents we originated this
+  // session. Same channel as the follow-up listener, but a separate
+  // postgres_changes filter so we keep the two concerns clean.
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("anticipy_intents_progress")
+      .on(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        "postgres_changes" as any,
+        { event: "UPDATE", schema: "public", table: "anticipy_intents" },
+        (payload: { new: Record<string, unknown> }) => {
+          const row = payload.new ?? {};
+          const id = String(row.id ?? "");
+          const status = String(row.status ?? "");
+          const execResult = String(row.execution_result ?? "").trim();
+          if (!id) return;
+          // Only track intents we know about — never act on someone else's row.
+          let known = false;
+          setIntents((prev) => {
+            known = prev.some((i) => i.id === id);
+            return prev;
+          });
+          if (!known) return;
+          let mapped: IntentStatus | null = null;
+          let msg = "";
+          if (status === "executed") {
+            mapped = "done";
+            msg = execResult || "Done.";
+          } else if (status === "failed") {
+            mapped = "failed";
+            msg = execResult || "I couldn't finish that one.";
+          } else if (status === "confirmed" || status === "running") {
+            mapped = "running";
+            msg = execResult || "Working on it...";
+          }
+          if (!mapped) return;
+          setIntentProgress((prev) => ({
+            ...prev,
+            [id]: { status: mapped!, message: msg, updatedAt: Date.now() },
+          }));
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
 
   // ── Auth handlers ───────────────────────────────────────────────────────────
 
@@ -681,6 +811,9 @@ export default function EnginePage() {
       const recorder = new MediaRecorder(stream, {
         mimeType: supportedMime || undefined,
       });
+      // Remember it so the batch-transcribe upload uses the right Content-Type
+      // and filename. Hardcoding audio/webm here breaks Safari uploads.
+      recordedMimeRef.current = supportedMime || recorder.mimeType || "audio/webm";
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -832,9 +965,13 @@ export default function EnginePage() {
       setState("transcribing");
       try {
         if (!authToken) throw new Error("Sign in required");
-        const audioBlob = new Blob(chunksRef.current, { type: "audio/webm" });
+        // Use the actual recorded MIME so Safari (mp4) doesn't get re-tagged
+        // as webm — that breaks server-side decode.
+        const recordedMime = recordedMimeRef.current || "audio/webm";
+        const audioBlob = new Blob(chunksRef.current, { type: recordedMime });
+        const ext = recordedMime.includes("mp4") ? "mp4" : "webm";
         const formData = new FormData();
-        formData.append("audio", audioBlob, "recording.webm");
+        formData.append("audio", audioBlob, `recording.${ext}`);
         formData.append("sessionId", sessionIdRef.current);
 
         const transcribeRes = await fetch("/api/engine/transcribe", {
@@ -995,7 +1132,31 @@ export default function EnginePage() {
   // the email links use, so the wire stays unchanged.
   const decideIntent = useCallback(
     async (intentId: string, action: "yes" | "no") => {
-      setIntentDecisions((prev) => ({ ...prev, [intentId]: "loading" }));
+      // Synchronously gate against double-clicks before any await so a
+      // racy second tap can't slip past the React-state flip.
+      let alreadyLoading = false;
+      setIntentDecisions((prev) => {
+        if (prev[intentId] === "loading") {
+          alreadyLoading = true;
+          return prev;
+        }
+        return { ...prev, [intentId]: "loading" };
+      });
+      if (alreadyLoading) return;
+
+      // Optimistically seed the progress card so the page never goes silent
+      // between "Yes, do it" and the first Realtime UPDATE from the agent.
+      if (action === "yes") {
+        setIntentProgress((prev) => ({
+          ...prev,
+          [intentId]: {
+            status: "running",
+            message: "Sending to your extension...",
+            updatedAt: Date.now(),
+          },
+        }));
+      }
+
       try {
         const res = await fetch(
           `/api/engine/confirm?intentId=${encodeURIComponent(intentId)}&action=${action}`,
@@ -1008,16 +1169,43 @@ export default function EnginePage() {
           throw new Error("Confirm failed");
         }
         setIntentDecisions((prev) => ({ ...prev, [intentId]: action }));
+
+        // If we never heard from the extension, give it ~6 seconds and then
+        // surface a friendly toast instead of letting the page sit silent.
+        if (action === "yes" && !extensionDetected) {
+          window.setTimeout(() => {
+            setIntentProgress((prev) => {
+              const cur = prev[intentId];
+              // Only show toast if we're still in the optimistic placeholder
+              // (no real agent UPDATE has arrived).
+              if (cur && cur.message === "Sending to your extension...") {
+                showToast(
+                  "Looks like the extension isn't running. Install or open Chrome and try again.",
+                  "warn",
+                  6500
+                );
+              }
+              return prev;
+            });
+          }, 6000);
+        }
       } catch {
-        // Reset so the user can retry — no scary error toast.
+        // Reset so the user can retry — no scary error toast, but a friendly
+        // inline retry hint.
         setIntentDecisions((prev) => {
           const next = { ...prev };
           delete next[intentId];
           return next;
         });
+        setIntentProgress((prev) => {
+          const next = { ...prev };
+          delete next[intentId];
+          return next;
+        });
+        showToast("That didn't go through. Tap to try again.", "warn", 5000);
       }
     },
-    []
+    [extensionDetected, showToast]
   );
 
   // Clarification loop: wearer typed an answer to the agent's follow-up
@@ -1137,6 +1325,114 @@ export default function EnginePage() {
             borderTopColor: "var(--gold)",
           }}
         />
+      </div>
+    );
+  }
+
+  // ── Unsupported environment ─────────────────────────────────────────────────
+  // Mobile + Safari/Firefox can't run the extension or (in Safari's case) the
+  // mic recorder. Show a clean full-page note instead of the broken flow.
+
+  if (unsupportedReason) {
+    const isMobile = unsupportedReason === "mobile";
+    return (
+      <div
+        style={{
+          background: "var(--dark)",
+          minHeight: "100vh",
+          color: "var(--text-on-dark)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "48px 24px",
+        }}
+      >
+        <a
+          href="/"
+          className="font-serif"
+          style={{
+            fontSize: 26,
+            color: "var(--text-on-dark)",
+            textDecoration: "none",
+            marginBottom: 32,
+          }}
+        >
+          Anticipy
+        </a>
+        <div
+          style={{
+            maxWidth: 460,
+            width: "100%",
+            background: "var(--dark-elevated)",
+            border: "1px solid var(--dark-border)",
+            borderRadius: 16,
+            padding: 32,
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "rgba(200,169,126,0.12)",
+              border: "1px solid rgba(200,169,126,0.3)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 20px",
+              color: "var(--gold)",
+            }}
+            aria-hidden
+          >
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="3" y="4" width="16" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M8 19h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </div>
+          <h1
+            className="font-serif"
+            style={{ fontSize: 22, fontWeight: 400, marginBottom: 12, lineHeight: 1.35 }}
+          >
+            {isMobile
+              ? "Open this on your laptop with Chrome."
+              : "Anticipy needs Google Chrome."}
+          </h1>
+          <p
+            style={{
+              fontSize: 14,
+              color: "var(--text-on-dark-muted)",
+              fontWeight: 300,
+              lineHeight: 1.65,
+              marginBottom: 20,
+            }}
+          >
+            {isMobile
+              ? "The agent runs inside a Chrome extension on your real desktop browser. Pop this link open on your Mac or PC to take the demo."
+              : "The agent runs inside a Chrome extension. Open this page in Chrome on desktop to record, see actions, and let Anticipy run them for you."}
+          </p>
+          <a
+            href="https://www.google.com/chrome/"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-block",
+              padding: "10px 24px",
+              background: "var(--gold)",
+              color: "var(--dark)",
+              borderRadius: 100,
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: "none",
+            }}
+          >
+            Get Chrome
+          </a>
+        </div>
+        <p style={{ marginTop: 32, fontSize: 12, color: "rgba(255,255,255,0.2)" }}>
+          &copy; 2026 Anticipy
+        </p>
       </div>
     );
   }
@@ -2399,8 +2695,10 @@ export default function EnginePage() {
           }
         `}</style>
 
-        {/* Live transcript during recording */}
-        {state === "recording" && (segments.length > 0 || liveText) && (
+        {/* Live transcript during recording — always rendered so the page
+            never looks broken in the 1-3s before Deepgram returns its first
+            segment. Empty state shows a reassuring placeholder. */}
+        {state === "recording" && (
           <div className="max-w-2xl mx-auto mb-8">
             <h2
               className="text-[13px] font-light tracking-wide-label uppercase mb-4"
@@ -2415,23 +2713,46 @@ export default function EnginePage() {
                 border: "1px solid var(--dark-border)",
               }}
             >
-              {segments.map((seg, i) => (
-                <div key={i}>
+              {segments.length === 0 && !liveText ? (
+                <div className="flex items-center gap-3" style={{ opacity: 0.7 }}>
                   <span
-                    className="text-[12px] font-medium mr-2"
+                    className="anticipy-pulse"
                     style={{
-                      color: SPEAKER_COLORS[seg.speaker_id % SPEAKER_COLORS.length],
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "var(--gold)",
+                      flexShrink: 0,
                     }}
+                  />
+                  <span
+                    className="text-[14px] font-light"
+                    style={{ color: "var(--text-on-dark-muted)" }}
                   >
-                    Speaker {seg.speaker_id}
+                    Listening for speech...
                   </span>
-                  <span className="text-[15px] font-light">{seg.text}</span>
                 </div>
-              ))}
-              {liveText && (
-                <div style={{ opacity: 0.5 }}>
-                  <span className="text-[15px] font-light italic">{liveText}</span>
-                </div>
+              ) : (
+                <>
+                  {segments.map((seg, i) => (
+                    <div key={i}>
+                      <span
+                        className="text-[12px] font-medium mr-2"
+                        style={{
+                          color: SPEAKER_COLORS[seg.speaker_id % SPEAKER_COLORS.length],
+                        }}
+                      >
+                        {seg.speaker_id === 0 ? "You" : `Speaker ${seg.speaker_id + 1}`}
+                      </span>
+                      <span className="text-[15px] font-light">{seg.text}</span>
+                    </div>
+                  ))}
+                  {liveText && (
+                    <div style={{ opacity: 0.5 }}>
+                      <span className="text-[15px] font-light italic">{liveText}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -2530,7 +2851,7 @@ export default function EnginePage() {
                               ],
                           }}
                         >
-                          Speaker {seg.speaker_id}
+                          {seg.speaker_id === 0 ? "You" : `Speaker ${seg.speaker_id + 1}`}
                         </span>
                         <span className="text-[15px] font-light">
                           {seg.text}
@@ -2558,6 +2879,11 @@ export default function EnginePage() {
                       const followUp = followUps.find(
                         (f) => f.intentId === intent.id
                       );
+                      const progress = intentProgress[intent.id];
+                      const confPct =
+                        typeof intent.confidence === "number"
+                          ? Math.round(intent.confidence * 100)
+                          : null;
                       return (
                         <div
                           key={intent.id}
@@ -2568,7 +2894,37 @@ export default function EnginePage() {
                             padding: 22,
                           }}
                         >
-                          {/* The natural-language summary is the hero */}
+                          {/* Subtle importance label tag — investor sees WHY
+                              the card is tinted instead of just the color. */}
+                          <div
+                            className="flex items-center gap-2"
+                            style={{ marginBottom: 12 }}
+                          >
+                            <span
+                              className="text-[10px] uppercase tracking-wide-label font-semibold px-2 py-0.5 rounded-pill"
+                              style={{
+                                color: style.border.replace(/0\.\d+\)$/, "0.95)"),
+                                background: style.bg,
+                                border: `1px solid ${style.border}`,
+                                letterSpacing: "0.08em",
+                              }}
+                            >
+                              {style.label}
+                            </span>
+                            {confPct !== null && (
+                              <span
+                                className="text-[10px] uppercase tracking-wide-label"
+                                style={{
+                                  color: "var(--text-on-dark-muted)",
+                                  letterSpacing: "0.08em",
+                                }}
+                              >
+                                via voice · {confPct}%
+                              </span>
+                            )}
+                          </div>
+                          {/* The natural-language summary is the hero — single
+                              clean line, no ellipsis truncation. */}
                           <p
                             className="font-serif"
                             style={{
@@ -2577,6 +2933,7 @@ export default function EnginePage() {
                               fontWeight: 400,
                               marginBottom: 14,
                               color: "var(--text-on-dark)",
+                              wordBreak: "break-word",
                             }}
                           >
                             {intent.summary_for_user}
@@ -2586,6 +2943,7 @@ export default function EnginePage() {
                             style={{
                               color: "var(--text-on-dark-muted)",
                               marginBottom: 18,
+                              wordBreak: "break-word",
                             }}
                           >
                             &ldquo;{intent.evidence_quote}&rdquo;
@@ -2701,23 +3059,67 @@ export default function EnginePage() {
                             </div>
                           )}
 
-                          {/* Two-button decision row, or post-decision pill */}
+                          {/* Two-button decision row, or post-decision state */}
                           {decision === "yes" ? (
-                            <div
-                              className="flex items-center gap-2 text-[13px]"
-                              style={{ color: "#4CAF50" }}
-                            >
-                              <span
-                                style={{
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: "50%",
-                                  background: "#4CAF50",
-                                  display: "inline-block",
-                                }}
-                              />
-                              Sent to your extension
-                            </div>
+                            (() => {
+                              const status = progress?.status ?? "running";
+                              const dotColor =
+                                status === "done"
+                                  ? "#4CAF50"
+                                  : status === "failed"
+                                    ? "#ef4444"
+                                    : "var(--gold)";
+                              const headline =
+                                status === "done"
+                                  ? "Done."
+                                  : status === "failed"
+                                    ? "Couldn't finish that one."
+                                    : "Anticipy is working on this...";
+                              return (
+                                <div
+                                  className="rounded-card"
+                                  style={{
+                                    background: "rgba(0,0,0,0.18)",
+                                    border: "1px solid rgba(255,255,255,0.07)",
+                                    padding: "14px 16px",
+                                  }}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span
+                                      className={status === "running" ? "anticipy-pulse" : ""}
+                                      style={{
+                                        width: 10,
+                                        height: 10,
+                                        borderRadius: "50%",
+                                        background: dotColor,
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                    <p
+                                      className="text-[13px]"
+                                      style={{ color: "var(--text-on-dark)", fontWeight: 500 }}
+                                    >
+                                      {headline}
+                                    </p>
+                                  </div>
+                                  {progress?.message &&
+                                    progress.message !== "Sending to your extension..." && (
+                                      <p
+                                        className="text-[12px] font-light"
+                                        style={{
+                                          color: "var(--text-on-dark-muted)",
+                                          marginTop: 6,
+                                          paddingLeft: 22,
+                                          lineHeight: 1.45,
+                                          wordBreak: "break-word",
+                                        }}
+                                      >
+                                        {progress.message}
+                                      </p>
+                                    )}
+                                </div>
+                              );
+                            })()
                           ) : decision === "no" ? (
                             <div
                               className="text-[13px]"
@@ -2730,14 +3132,25 @@ export default function EnginePage() {
                               <button
                                 onClick={() => decideIntent(intent.id, "yes")}
                                 disabled={decision === "loading"}
-                                className="px-5 py-2.5 rounded-pill text-[14px] font-semibold transition-all"
+                                className="rounded-pill transition-all"
                                 style={{
+                                  padding: "12px 28px",
                                   background: "var(--gold)",
                                   color: "var(--dark)",
                                   border: "none",
+                                  fontSize: 15,
+                                  fontWeight: 600,
+                                  letterSpacing: "0.01em",
                                   cursor: decision === "loading" ? "wait" : "pointer",
                                   opacity: decision === "loading" ? 0.7 : 1,
-                                  minWidth: 120,
+                                  minWidth: 140,
+                                  boxShadow: "0 1px 0 rgba(255,255,255,0.06) inset",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.filter = "brightness(1.08)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.filter = "";
                                 }}
                               >
                                 {decision === "loading" ? "…" : "Yes, do it"}
@@ -2745,12 +3158,24 @@ export default function EnginePage() {
                               <button
                                 onClick={() => decideIntent(intent.id, "no")}
                                 disabled={decision === "loading"}
-                                className="px-5 py-2.5 rounded-pill text-[14px] font-medium transition-all"
+                                className="rounded-pill transition-all"
                                 style={{
+                                  padding: "12px 24px",
                                   background: "transparent",
                                   color: "var(--text-on-dark-muted)",
-                                  border: "1px solid rgba(255,255,255,0.15)",
+                                  border: "1px solid rgba(255,255,255,0.18)",
+                                  fontSize: 15,
+                                  fontWeight: 500,
                                   cursor: decision === "loading" ? "wait" : "pointer",
+                                  minWidth: 100,
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                                  e.currentTarget.style.color = "var(--text-on-dark)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "transparent";
+                                  e.currentTarget.style.color = "var(--text-on-dark-muted)";
                                 }}
                               >
                                 Skip
@@ -2762,63 +3187,65 @@ export default function EnginePage() {
                     })}
                   </div>
 
-                  {/* Extension-not-installed CTA — always show as a footnote
-                      since we can't reliably detect the extension from this page.
-                      Investors who don't have it get a clear next step. */}
-                  <div
-                    className="mt-5 rounded-card flex items-start gap-3"
-                    style={{
-                      background: "rgba(200,169,126,0.05)",
-                      border: "1px solid rgba(200,169,126,0.18)",
-                      padding: "14px 16px",
-                    }}
-                  >
-                    <span
+                  {/* Extension-not-installed CTA — only when we haven't
+                      heard from the content script. If the extension IS
+                      installed, this whole block is gone — clean. */}
+                  {!extensionDetected && (
+                    <div
+                      className="mt-5 rounded-card flex items-start gap-3"
                       style={{
-                        fontSize: 16,
-                        lineHeight: 1,
-                        color: "var(--gold)",
-                        marginTop: 2,
+                        background: "rgba(200,169,126,0.05)",
+                        border: "1px solid rgba(200,169,126,0.18)",
+                        padding: "14px 16px",
                       }}
                     >
-                      ◆
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium" style={{ marginBottom: 4 }}>
-                        No Chrome extension yet?
-                      </p>
-                      <p
-                        className="text-[12px] font-light"
-                        style={{ color: "var(--text-on-dark-muted)", marginBottom: 8 }}
+                      <span
+                        style={{
+                          fontSize: 16,
+                          lineHeight: 1,
+                          color: "var(--gold)",
+                          marginTop: 2,
+                        }}
                       >
-                        Install it once and confirmed actions will run in your real browser.
-                      </p>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <a
-                          href="/anticipy-extension.zip"
-                          download="anticipy-extension.zip"
-                          className="text-[12px] font-semibold px-3 py-1.5 rounded-pill"
-                          style={{
-                            background: "var(--gold)",
-                            color: "var(--dark)",
-                            textDecoration: "none",
-                          }}
+                        ◆
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium" style={{ marginBottom: 4 }}>
+                          No Chrome extension yet?
+                        </p>
+                        <p
+                          className="text-[12px] font-light"
+                          style={{ color: "var(--text-on-dark-muted)", marginBottom: 8 }}
                         >
-                          Install extension
-                        </a>
-                        <a
-                          href="/engine/extension"
-                          className="text-[12px]"
-                          style={{
-                            color: "var(--text-on-dark-muted)",
-                            textDecoration: "none",
-                          }}
-                        >
-                          Install guide →
-                        </a>
+                          Install it once and confirmed actions will run in your real browser.
+                        </p>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <a
+                            href="/anticipy-extension.zip"
+                            download="anticipy-extension.zip"
+                            className="text-[12px] font-semibold px-3 py-1.5 rounded-pill"
+                            style={{
+                              background: "var(--gold)",
+                              color: "var(--dark)",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Install extension
+                          </a>
+                          <a
+                            href="/engine/extension"
+                            className="text-[12px]"
+                            style={{
+                              color: "var(--text-on-dark-muted)",
+                              textDecoration: "none",
+                            }}
+                          >
+                            Install guide →
+                          </a>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2854,6 +3281,66 @@ export default function EnginePage() {
           </div>
         </div>
       </footer>
+
+      {/* Toast — single source of polite, ephemeral feedback. Never shows
+          raw error strings; copy is curated upstream via showToast. */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 28,
+            transform: "translateX(-50%)",
+            zIndex: 60,
+            maxWidth: "min(560px, calc(100vw - 32px))",
+            background: "rgba(20,20,20,0.96)",
+            border: `1px solid ${
+              toast.kind === "warn"
+                ? "rgba(200,169,126,0.45)"
+                : "rgba(255,255,255,0.12)"
+            }`,
+            color: "var(--text-on-dark)",
+            borderRadius: 14,
+            padding: "12px 18px",
+            fontSize: 13,
+            lineHeight: 1.5,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.55)",
+            backdropFilter: "blur(20px)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background:
+                toast.kind === "warn" ? "var(--gold)" : "rgba(255,255,255,0.5)",
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ flex: 1 }}>{toast.text}</span>
+          <button
+            onClick={() => setToast(null)}
+            aria-label="Dismiss"
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--text-on-dark-muted)",
+              cursor: "pointer",
+              fontSize: 16,
+              padding: "0 4px",
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

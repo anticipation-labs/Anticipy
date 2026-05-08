@@ -18,6 +18,18 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.anticipy.ai/engine*",
+        "https://anticipy.ai/engine*",
+        "http://localhost:3000/engine*"
+      ],
+      "js": ["engine_handshake.js"],
+      "run_at": "document_idle",
+      "world": "ISOLATED"
+    }
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

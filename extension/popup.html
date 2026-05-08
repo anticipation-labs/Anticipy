@@ -29,9 +29,10 @@
     }
     .status-dot {
       width: 7px; height: 7px; border-radius: 50%;
-      background: #FF5252; transition: background 0.3s;
+      background: #5A5A5A; transition: background 0.3s;
     }
     .status-dot.connected { background: #4CAF50; }
+    .status-dot.disconnected { background: #FF5252; }
     .reconnect-btn {
       background: none; border: 1px solid rgba(200,169,126,0.3);
       color: #C8A97E; font-size: 10px; padding: 2px 7px;
@@ -182,14 +183,6 @@
       text-align: center;
     }
     .open-engine:hover { opacity: 0.88; }
-
-    /* ── Install note ─────────────────────────────────────────── */
-    .install-note {
-      padding: 10px 18px;
-      border-top: 1px solid rgba(255,255,255,0.04);
-      font-size: 10px; color: #3A3A3A; text-align: center;
-      line-height: 1.5;
-    }
   </style>
 </head>
 <body>
@@ -201,7 +194,7 @@
       <button class="reconnect-btn" id="reconnectBtn">Reconnect</button>
       <div class="status">
         <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Connecting…</span>
+        <span id="statusText">Ready</span>
       </div>
     </div>
   </div>
@@ -254,10 +247,6 @@
   <!-- Footer -->
   <div class="footer">
     <button class="open-engine" id="openEngine">Open Engine</button>
-  </div>
-
-  <div class="install-note">
-    Load unpacked from <code style="color:#5A5A5A">chrome://extensions</code> · Developer mode on
   </div>
 
   <script src="popup.js"></script>

@@ -71,12 +71,24 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await resp.json().catch(() => ({}));
 
       if (!resp.ok) {
-        showAuthError(data.error || `Error ${resp.status}`);
+        // Map any HTTP error to friendly copy. Investors should never see
+        // "Error 401" or other raw HTTP statuses in the popup.
+        let msg;
+        if (resp.status === 401 || /invalid/i.test(data.error || "")) {
+          msg = "That code didn't match. Double-check it on anticipy.ai/engine.";
+        } else if (resp.status >= 500) {
+          msg = "Anticipy is having a moment. Try again in a sec.";
+        } else if (resp.status === 429) {
+          msg = "Too many tries — wait a moment and try again.";
+        } else {
+          msg = "Couldn't connect. Check your access code and try again.";
+        }
+        showAuthError(msg);
         return;
       }
 
       if (!data.groqApiKey && !data.geminiApiKey) {
-        showAuthError("Server returned no API keys. Contact support.");
+        showAuthError("Couldn't connect. Try again in a moment.");
         return;
       }
 
@@ -118,8 +130,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // ─── Connection status ────────────────────────────────────────────────────
 
   function updateStatus(isConnected) {
-    statusDot.className = "status-dot" + (isConnected ? " connected" : "");
-    statusText.textContent = isConnected ? "Connected" : "Disconnected";
+    statusDot.className = "status-dot " + (isConnected ? "connected" : "disconnected");
+    statusText.textContent = isConnected ? "Connected" : "Reconnecting";
     reconnectBtn.className = "reconnect-btn" + (isConnected ? "" : " show");
   }
 
