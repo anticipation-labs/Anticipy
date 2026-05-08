@@ -6,6 +6,7 @@ import {
   type PreferenceSignal,
 } from "@/lib/preference-record";
 import { buildUserProfile } from "@/lib/meta-monitor";
+import { embedAndStoreIntent } from "@/lib/episode-recall";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import {
   isLegacyPlainUuid,
@@ -221,6 +222,22 @@ export async function GET(req: Request) {
       } catch (err) {
         console.warn(
           "[confirm] buildUserProfile failed (non-fatal):",
+          err instanceof Error ? err.message : err
+        );
+      }
+
+      // Episode embedding: persist a 768-d Gemini vector over this
+      // intent's surface text so future /analyze calls can vector-recall
+      // it as a similar past episode. Awaited (Vercel kills the lambda
+      // on response — same reason recordPreferenceSignal is awaited).
+      // Internal status check makes it a no-op for non-terminal rows;
+      // an existing embedding short-circuits the embed call so duplicate
+      // signal arrivals don't re-bill the API.
+      try {
+        await embedAndStoreIntent(intentId);
+      } catch (err) {
+        console.warn(
+          "[confirm] embedAndStoreIntent failed (non-fatal):",
           err instanceof Error ? err.message : err
         );
       }

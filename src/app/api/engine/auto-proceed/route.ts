@@ -18,6 +18,7 @@ import { executeAction } from "@/lib/execute-action";
 import { requireSupabaseUser } from "@/lib/require-auth";
 import { recordPreferenceSignal } from "@/lib/preference-record";
 import { buildUserProfile } from "@/lib/meta-monitor";
+import { embedAndStoreIntent } from "@/lib/episode-recall";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +143,19 @@ export async function POST(req: Request) {
     } catch (err) {
       console.warn(
         "[auto-proceed] buildUserProfile failed (non-fatal):",
+        err instanceof Error ? err.message : err
+      );
+    }
+    // Episode embedding (same as /confirm): persist a Gemini vector over
+    // the now-terminal intent so future /analyze calls can vector-recall
+    // it. The status flip above this block already moved the row to
+    // 'auto_proceeded', which is one of the terminal statuses
+    // embedAndStoreIntent expects.
+    try {
+      await embedAndStoreIntent(intentId);
+    } catch (err) {
+      console.warn(
+        "[auto-proceed] embedAndStoreIntent failed (non-fatal):",
         err instanceof Error ? err.message : err
       );
     }

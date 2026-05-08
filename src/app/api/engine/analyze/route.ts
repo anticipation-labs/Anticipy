@@ -24,6 +24,7 @@ import { extractMemoryItems } from "@/lib/memory-extract";
 import { recallRelevantMemory } from "@/lib/memory-recall";
 import { recallUserPreferences } from "@/lib/preference-recall";
 import { recallUserProfile } from "@/lib/meta-monitor";
+import { recallSimilarEpisodes } from "@/lib/episode-recall";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -333,6 +334,27 @@ export async function POST(req: Request) {
       );
     }
 
+    // Episode-level RAG: vector-similarity recall over the user's PAST
+    // terminal-status intents. Returns the top-3 closest episodes
+    // (transcript snippet + action + outcome + recorded reasoning) so
+    // the intent LLM can pattern-match a fresh dictation against prior
+    // decisions ("user said something like this last week, accepted it,
+    // so emit a similar intent" or "user rejected this exact pattern,
+    // skip it"). Fail-open — analyze runs un-augmented on any error.
+    let episodeContext: string[] = [];
+    try {
+      episodeContext = await recallSimilarEpisodes(
+        authedUser.id,
+        safeTranscript,
+        3
+      );
+    } catch (err) {
+      console.warn(
+        "[episode-recall] failed; continuing without episode context:",
+        err instanceof Error ? err.message : err
+      );
+    }
+
     // Optional learned-from-data few-shot block. Off by default. Operator
     // sets ANTICIPY_FEW_SHOT_BLOCK to the block text (e.g. piped from
     // engine/data/few_shot_block.txt produced by build_few_shot_block.py)
@@ -366,7 +388,8 @@ export async function POST(req: Request) {
       priorIntentContext,
       memoryContext,
       preferenceContext,
-      { fewShotBlock: fewShotPlusProfile }
+      { fewShotBlock: fewShotPlusProfile },
+      episodeContext
     );
 
     const llmMessages = [

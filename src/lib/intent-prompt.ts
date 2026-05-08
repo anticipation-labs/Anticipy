@@ -30,7 +30,8 @@ export function buildIntentPrompt(
   priorIntent: PriorIntentContext | null = null,
   memoryContext: string[] = [],
   preferenceContext: string[] = [],
-  options: BuildIntentPromptOptions = {}
+  options: BuildIntentPromptOptions = {},
+  episodeContext: string[] = []
 ): { system: string; user: string } {
   const system = `You are an ambient intelligence assistant that listens to real conversations and extracts ONLY genuinely actionable items the user needs to do LATER.
 
@@ -148,6 +149,19 @@ If the conversation is purely casual or contains no real future actions: { "reas
         preferenceContext.map((p, i) => `  ${i + 1}. ${p}`).join("\n")
       : "";
 
+  // Episode-level RAG: vector-similar prior intents (top-k by cosine
+  // similarity over the current transcript). Each entry is a snippet of
+  // the prior trigger + the action_type + the terminal status + the
+  // recorded preference reasoning. Used to pattern-match the current
+  // dictation against past decisions: "you've handled this before — here's
+  // how it landed". Distance is intentionally NOT thresholded; even a
+  // weak match informs the second-pass extractor without overriding it.
+  const episodeBlock =
+    episodeContext.length > 0
+      ? "\nSimilar past episodes (vector-recalled — outcomes are real prior decisions, not authoritative; bias toward prior pattern only when the parallel is clear):\n" +
+        episodeContext.map((e, i) => `  ${i + 1}. ${e}`).join("\n")
+      : "";
+
   // Clarification-loop context: the wearer is replying to a follow-up question
   // the agent raised on a prior intent. Pass everything we already knew so the
   // LLM merges the new answer with prior slots and re-emits a single COMPLETE
@@ -160,7 +174,7 @@ If the conversation is purely casual or contains no real future actions: { "reas
 
 ---
 Current local time: ${localTime} (${timezone})
-Recent actions: ${recentActionsBlock}${crossSessionBlock}${memoryBlock}${preferenceBlock}${priorIntentBlock}
+Recent actions: ${recentActionsBlock}${crossSessionBlock}${memoryBlock}${preferenceBlock}${episodeBlock}${priorIntentBlock}
 
 Extract ONLY genuine future actions the user needs to take. Skip conversational back-and-forth. Reason briefly, then output JSON.`;
 
