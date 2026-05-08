@@ -444,11 +444,16 @@ export async function executeAction(
         if (channel.toLowerCase() === "sms" && phone) {
           const body = (params.body as string) || "";
           const smsResult = await sendSMS(phone, body, intent.id as string);
+          // Don't leak raw provider errors (e.g. "Twilio: 21610 unsubscribed").
+          // Console-log keeps full diagnostic; user message stays calm.
+          if (!smsResult.success && smsResult.error) {
+            console.warn("[sms] Twilio failure:", smsResult.error);
+          }
           return {
             success: smsResult.success,
             message: smsResult.success
               ? `SMS sent to ${params.recipient_name || phone}`
-              : `Failed to send SMS: ${smsResult.error}`,
+              : "Couldn't send that message. Try again in a moment.",
             data: { sid: smsResult.sid, mock: smsResult.mock },
           };
         }

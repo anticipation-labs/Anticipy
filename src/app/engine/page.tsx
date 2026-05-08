@@ -2578,7 +2578,10 @@ export default function EnginePage() {
           >
             {state === "idle" &&
               "Press record and have a real conversation. Anticipy listens, transcribes, and surfaces every actionable moment."}
-            {state === "recording" && `Recording — ${formatDuration(duration)}`}
+            {state === "recording" &&
+              (intents.length === 0 && duration >= 30
+                ? `Recording — ${formatDuration(duration)} · listening for actions`
+                : `Recording — ${formatDuration(duration)}`)}
             {state === "transcribing" &&
               "Cleaning up your audio..."}
             {state === "analyzing" &&
