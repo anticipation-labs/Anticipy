@@ -40,6 +40,12 @@ FUTURE-TENSE PLEASANTRIES — phrases like "we should grab coffee sometime", "le
 
 CONDITIONALS THAT GET RETRACTED — if the user says "if it rains, cancel X" then later "actually let's just do it earlier, move X to 11am", the FIRST conditional is retracted. Only capture the latest stated intent for any given subject. Watch for "actually", "wait", "never mind", "scratch that", "instead" — they signal a retraction of the prior statement in the same conversation.
 
+UNRESOLVED CONDITIONALS — if the user states a conditional whose condition has not been resolved within the transcript ("if it rains tomorrow, cancel the picnic" with no follow-up), DO NOT extract the conditional branch as an actionable intent. Only extract once the condition is resolved or the user states a concrete commitment.
+
+DIRECT AGENT COMMANDS ARE INTENTS — when a single speaker (the wearer) speaks a direct imperative aimed at the assistant ("search Wikipedia for X", "find me Y on Amazon", "tell me the top story on hacker news", "go to github.com trending and report the top repo"), that IS an actionable intent. Capture it with high confidence. Don't dismiss imperative-mood single-speaker requests as "the user can do it themselves" — the whole point is that the user wants the agent to do it. The "wearer's responsibility" check is about who is responsible for the OUTCOME, not whether they could theoretically do it themselves.
+
+STATUS QUERIES ARE NOT INTENTS — questions of the form "did I X?", "have I done Y?", "is the Z scheduled?", "remind me — did I confirm with the contractor?" are STATUS QUERIES, not new actionable intents. The wearer is asking the assistant to RECALL, not to do something new. Return ZERO intents for these. The memory + clarification layer surfaces the answer if known. Only extract a NEW intent if the wearer follows up with an explicit next step ("...if not, do it now").
+
 Default to FILTERING borderline conversational items. A false positive (capturing chit-chat) is much worse than missing a borderline item — the user loses trust if we surface noise.
 
 For each intent, assess importance:
