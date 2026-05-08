@@ -22,6 +22,20 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
+# Browser Use's BrowserStartEvent / BrowserLaunchEvent default to 30s. On
+# resource-constrained codespaces, Chromium's first launch on a fresh
+# user-data-dir routinely exceeds that, leaving the session half-initialized
+# (CDP client is None, every action fails with "CDP client not initialized").
+# Set generous defaults BEFORE importing browser_use — the timeouts are read
+# at import time via `_get_timeout(env_var, default)`. Tests / deployments
+# can override by setting the env var explicitly before this module loads.
+for _ev, _default in (
+    ("TIMEOUT_BrowserStartEvent", "90"),
+    ("TIMEOUT_BrowserLaunchEvent", "90"),
+    ("TIMEOUT_BrowserKillEvent", "60"),
+):
+    os.environ.setdefault(_ev, _default)
+
 from browser_use import Agent, BrowserSession, AgentHistoryList
 from browser_use import Controller, ActionResult
 
@@ -516,6 +530,22 @@ def _sanitize_status(text: str) -> str:
     return text
 
 
+def _clean_chromium_lock_files(profile_dir: str) -> None:
+    """Remove SingletonLock / SingletonCookie / SingletonSocket files in a
+    Chromium user-data-dir. These are written when Chromium starts and
+    cleaned on graceful exit; a crash or hard kill leaves them behind and
+    blocks subsequent launches. Best-effort — never raises."""
+    if not profile_dir or not os.path.isdir(profile_dir):
+        return
+    for name in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+        p = os.path.join(profile_dir, name)
+        try:
+            if os.path.lexists(p):
+                os.remove(p)
+        except Exception:
+            pass
+
+
 def _get_domain(url: str) -> str:
     try:
         return urlparse(url).netloc
@@ -798,20 +828,23 @@ class EngineAgent:
                     f"--load-extension={nopecha_dir}",
                 ])
 
-            self._session = BrowserSession(
-                headless=False,
-                user_data_dir=profile_dir,
-                args=chrome_args,
-                no_viewport=True,
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                wait_between_actions=0.5,
-                minimum_wait_page_load_time=0.5,
-                wait_for_network_idle_page_load_time=3.0,
-            )
+            def _make_session() -> BrowserSession:
+                return BrowserSession(
+                    headless=False,
+                    user_data_dir=profile_dir,
+                    args=chrome_args,
+                    no_viewport=True,
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                    wait_between_actions=0.5,
+                    minimum_wait_page_load_time=0.5,
+                    wait_for_network_idle_page_load_time=3.0,
+                )
+
+            self._session = _make_session()
 
             # --- Load saved cookies ---
             domain = _get_domain(start_url)
@@ -819,33 +852,86 @@ class EngineAgent:
             if self.user_id and domain:
                 cookies = await _load_cookies(self.user_id, domain)
 
-            # Start session and inject cookies before agent runs.
-            # We try several Browser Use accessor names to stay version-tolerant
-            # rather than reaching for a private attribute.
             # Cold-start the browser. Chromium's first launch on a fresh profile
             # can exceed Browser Use's 30s start-event timeout under load. Retry
-            # once after a stop/teardown so the second attempt re-uses the warm
-            # binary cache and succeeds.
+            # after a stop/teardown so a second attempt re-uses the warm binary
+            # cache and succeeds.
+            #
+            # Browser Use 0.11.13's `BrowserSession.start()` raises a TimeoutError
+            # when the internal `BrowserStartEvent` exceeds 30s, BUT a half-
+            # initialized session is left behind whose `cdp_client` accessor
+            # raises AssertionError on subsequent reads. Calling `stop()` and
+            # `start()` again on the same session does not recover — the
+            # underlying Chromium process is gone but the bubus event-bus
+            # state is sticky. We must construct a NEW BrowserSession object
+            # on each retry. We also probe `_get_cdp_client()` after start() so
+            # the no-exception-but-broken case (sometimes start() returns OK
+            # with a None cdp_client) is also caught.
             start_attempts = 0
+            max_start_attempts = 3
             while True:
                 start_attempts += 1
+                start_failure_reason: str | None = None
                 try:
                     await self._session.start()
-                    break
-                except Exception:
+                except Exception as e:
+                    start_failure_reason = f"start() raised: {type(e).__name__}"
                     logger.warning(
-                        "browser session start attempt %d failed", start_attempts,
+                        "browser session start attempt %d raised", start_attempts,
                         exc_info=True,
                     )
-                    if start_attempts >= 2:
-                        await _send_error(self.send, msg.BROWSER_ERROR)
-                        return
-                    # Tear down whatever partial state we have and retry
+                else:
+                    # Probe CDP client. If still None after start(), Browser Use
+                    # internally timed out and reset — we cannot proceed.
                     try:
-                        await self._session.stop()
-                    except Exception:
-                        pass
-                    await asyncio.sleep(2)
+                        _probe_cdp = await asyncio.wait_for(
+                            _get_cdp_client(self._session), timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        start_failure_reason = "cdp probe timeout"
+                    except Exception as e:
+                        start_failure_reason = f"cdp probe error: {type(e).__name__}"
+                    else:
+                        if _probe_cdp is None:
+                            start_failure_reason = "cdp client None after start"
+
+                if start_failure_reason is None:
+                    break
+
+                logger.warning(
+                    "browser start attempt %d failed: %s",
+                    start_attempts, start_failure_reason,
+                )
+                if start_attempts >= max_start_attempts:
+                    await _send_error(self.send, msg.BROWSER_ERROR)
+                    return
+                # Tear down whatever partial state we have. The old session is
+                # NOT reusable — its event-bus state is corrupted after a
+                # BrowserStartEvent timeout. Stop the old one (best-effort).
+                try:
+                    await self._session.stop()
+                except Exception:
+                    logger.debug("session stop() during retry teardown failed",
+                                 exc_info=True)
+                # The user-data-dir may be corrupted (SingletonLock, half-written
+                # state) from the failed launch. For a stable per-user profile
+                # we cannot just delete the dir (that would lose cookies), but
+                # we can clean the lock files which are the most common
+                # blockers. For the retry's session, fall back to an ephemeral
+                # dir so we know the launch path is clean — cookies will
+                # re-inject below.
+                _clean_chromium_lock_files(profile_dir)
+                if not self._ephemeral_profile_dir:
+                    # Stable profile: use an ephemeral dir for the retry so
+                    # the launch can succeed even if the stable dir is locked.
+                    self._ephemeral_profile_dir = tempfile.mkdtemp(
+                        prefix=f"engine_retry_{uuid.uuid4().hex[:8]}_"
+                    )
+                    profile_dir = self._ephemeral_profile_dir
+                # Back off so a slow Chromium first-launch on this codespace
+                # has a chance to finish before we ask again.
+                await asyncio.sleep(2 * start_attempts)
+                self._session = _make_session()
 
             # Force every shadow root open BEFORE any page script runs, so the
             # agent can find elements inside e.g. Salesforce LWC, Polymer, etc.

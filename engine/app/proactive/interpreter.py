@@ -326,6 +326,12 @@ fragment.
 4. evidence_chunk_ids reference the chunk_ids in the transcript that support this intent.
 5. The "text" field should be self-contained: someone reading just the text should know exactly \
 what the user wants, with all the specific details.
+6. NEVER emit an intent whose parameters dict is EMPTY or whose text is generic ("user wants \
+to Google something", "user wants to look something up", "do the thing"). If you cannot fill \
+at least one concrete slot (named person, item, place, time, amount, source, recipient, \
+subject, body, or named target) from the recent transcript, the chunk is too vague to act \
+on — return zero intents. Vague candidates with empty params are the spammy failure mode; \
+silence is correct here.
 
 THE RESOLUTION TEST — apply before extracting any intent:
   Has the user actually RESOLVED on this action by the end of the recent transcript?
@@ -388,6 +394,25 @@ with a specific item list. That's actionable for the assistant — save the list
 doesn't have to remember it. Don't dismiss it as "they're talking to a friend, not me". The \
 wearable's job is to retain commitments the user makes, regardless of the conversational \
 counterparty.
+
+  META-INTENT SUPPRESSION (CRITICAL — read this carefully): when the user is RECITING or \
+REVIEWING tasks they have already been talking about earlier in the recent transcript — i.e. \
+mentally rehearsing their own to-do list out loud ("OK, so I need to call the dentist, send \
+Mark the project update, order cat food, and pick up the recipe — that's a lot today") — \
+do NOT extract a "remember_to_do_list", "prioritize_tasks", "save_to_do_list", \
+"organize_my_day", "track_my_tasks", or any other meta-intent whose ITEMS are themselves \
+intents the user has already individually expressed elsewhere in the recent transcript. \
+The cascade has already extracted (or will extract) those individual intents on their own \
+chunks; firing a separate meta-intent on top is duplicate noise to the user. Return zero \
+intents for the meta-recital. This rule applies whenever the listed items would each be \
+extractable as their own intent — distinct people / errands / appointments / messages / \
+information-lookups the user already mentioned. It does NOT suppress a fresh errand item \
+list (organic milk + eggs + apples) where the items are slot-fills of a single errand, \
+not separate intents.
+
+  An errand item list is one shopping trip with multiple physical items. A meta-intent \
+recital is a list of separate tasks across separate domains (call X, email Y, order Z, find W) \
+that the user is just summarizing aloud. Extract the errand list. Suppress the meta recital.
 
 What counts as actionable, given resolution:
   EXPLICIT REQUEST — direct command or question to the agent, or present-tense commitment.
