@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,18 @@ export async function POST(req: Request) {
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  // Per-IP rate limit before parsing body — defends against fast-spray attempts
+  // by attackers trying to fish for a valid code. 60 req/min per IP is plenty
+  // for legitimate extension reauths (which happen on install / token refresh).
+  const ip = clientIp(req);
+  const ipLimit = rateLimit(`ext-auth:ip:${ip}`, 60, 60_000);
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: corsHeaders }
+    );
+  }
+
   let body: { code?: string };
   try {
     body = await req.json();
@@ -35,6 +48,18 @@ export async function POST(req: Request) {
   }
 
   const trimmedCode = code.trim();
+
+  // Per-code daily ceiling. If a code leaks, the attacker can't infinitely
+  // burn the team's shared LLM-key quota — they get cut off at 200/day.
+  // Legitimate extensions reauth on install + token refresh and never
+  // approach this. Shared bucket spans all IPs that present the code.
+  const codeLimit = rateLimit(`ext-auth:code:${trimmedCode}`, 200, 24 * 60 * 60_000);
+  if (!codeLimit.allowed) {
+    return NextResponse.json(
+      { error: "Daily auth quota exceeded for this code" },
+      { status: 429, headers: corsHeaders }
+    );
+  }
 
   // Look up the code in engine_users table
   const supabase = createClient(

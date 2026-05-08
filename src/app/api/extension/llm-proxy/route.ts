@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { callClaudeRaw, claudeAvailable } from "@/lib/claude";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,18 @@ interface ProxyBody {
 }
 
 export async function POST(req: Request) {
+  // Per-IP burst limit before any work. Each call burns Anthropic credits;
+  // 30/min per IP is well above any legitimate per-user agent loop and well
+  // below what a malicious caller could use to drain quota.
+  const ip = clientIp(req);
+  const ipLimit = rateLimit(`ext-llm:ip:${ip}`, 30, 60_000);
+  if (!ipLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: CORS_HEADERS }
+    );
+  }
+
   if (!claudeAvailable()) {
     return NextResponse.json(
       { error: "Claude not configured on this deployment" },
@@ -98,6 +111,18 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Invalid access code" },
       { status: 401, headers: CORS_HEADERS }
+    );
+  }
+
+  // Per-code daily ceiling. Each Claude call costs real money; a leaked
+  // access code can't burn unlimited credits. 1000/day is generous for a
+  // genuinely active user (agent loops average 10-30 calls/task) and
+  // bounded enough to be visible on a finance dashboard if hit.
+  const codeLimit = rateLimit(`ext-llm:code:${code}`, 1000, 24 * 60 * 60_000);
+  if (!codeLimit.allowed) {
+    return NextResponse.json(
+      { error: "Daily LLM quota exceeded for this code" },
+      { status: 429, headers: CORS_HEADERS }
     );
   }
 
