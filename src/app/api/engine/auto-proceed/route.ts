@@ -17,6 +17,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { executeAction } from "@/lib/execute-action";
 import { requireSupabaseUser } from "@/lib/require-auth";
 import { recordPreferenceSignal } from "@/lib/preference-record";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,17 @@ export async function POST(req: Request) {
   const authedUser = await requireSupabaseUser(req);
   if (!authedUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Per-user limit. Each call may execute an action (web side effects).
+  // 120/hr is generous: even a chatty user typically auto-proceeds at
+  // most a handful of intents per minute and the timeout itself is 30s.
+  const userLimit = rateLimit(`auto-proceed:user:${authedUser.id}`, 120, 60 * 60_000);
+  if (!userLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429 }
+    );
   }
 
   let body: unknown;

@@ -23,6 +23,7 @@ import {
 import { extractMemoryItems } from "@/lib/memory-extract";
 import { recallRelevantMemory } from "@/lib/memory-recall";
 import { recallUserPreferences } from "@/lib/preference-recall";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,22 @@ export async function POST(req: Request) {
   const authedUser = await requireSupabaseUser(req);
   if (!authedUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Per-user rate limit. analyze is the most expensive endpoint in the
+  // app: each call hits Gemini Flash up to 3x (extract → critique → refine)
+  // plus a gate pass plus memory + preference recalls. The inflight-lock
+  // pattern serializes concurrent calls for the same session, but a
+  // compromised JWT could spin many sessions in a tight loop. 600/hr
+  // sustained is ~10/min — far above any realistic dictation flow
+  // (isFinal=false tics on the client are debounced) and bounded enough
+  // to be visible on a Gemini billing dashboard before the bill matters.
+  const userLimit = rateLimit(`analyze:user:${authedUser.id}`, 600, 60 * 60_000);
+  if (!userLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429 }
+    );
   }
 
   try {
