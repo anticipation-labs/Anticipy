@@ -201,7 +201,51 @@ PIVOT EARLY ON MULTI-SITE TASKS — if the user's task names two or more distinc
 
 LONG-RUNNING TASKS — you have up to 60 steps and 10 minutes per intent. For multi-step flights/booking/research flows that take a while, don't rush to declare done. After each step, check whether you've actually achieved the user's full request or just one piece of it. If you've only done part: keep going.
 
-FOLLOW-UP HANDLING — the user may ask follow-up questions ("what about the other one?", "compare with X"). You'll receive these as new intents but with relevant context in PARAMETERS. Use list_tabs + switch_tab to revisit work you did earlier rather than starting from scratch.`;
+FOLLOW-UP HANDLING — the user may ask follow-up questions ("what about the other one?", "compare with X"). You'll receive these as new intents but with relevant context in PARAMETERS. Use list_tabs + switch_tab to revisit work you did earlier rather than starting from scratch.
+
+PLAN AWARENESS — at task start a strategic plan was generated for you (3-7 numbered steps). It appears in your context as PLAN. Use it as a north star: the current plan-step you're working on is shown, plus what's already done and what's still pending. If the page state contradicts the plan (the expected element isn't there, the URL went somewhere unexpected, the plan's next step depends on data you couldn't extract), ABANDON the plan for that step and pick the action that actually moves the task forward — the plan is guidance, not a script. If you've finished the plan but the user's task still isn't fully answered, keep going (the plan is a floor, not a ceiling).`;
+
+// Planner prompt — fired ONCE at task start with Gemini Pro to produce a
+// short, generic, JSON plan. The per-step LLM call sees this plan as
+// context. Keeping the planner output small (3-7 steps) avoids over-fitting
+// to one path while still giving the executor a north star.
+const PLANNER_SYSTEM_PROMPT = `You are the strategic planner for a browser-automation agent.
+Given a user task and the agent's starting page, produce a 3-7 step PLAN.
+
+The agent will execute the plan step-by-step using these primitive actions:
+navigate, click, type, force_type, canvas_type, canvas_pointer, pierce_query,
+keypress, scroll, wait, wait_for, waitForElement, dismiss_modal, open_tab,
+list_tabs, switch_tab, close_tab, extract, getPageState, done.
+
+PLANNING RULES:
+- Each step must be ONE concrete observable goal, not a primitive action.
+  GOOD: "Search Wikipedia for 'cats'", "Extract the article's first paragraph", "Open Best Buy in a new tab"
+  BAD:  "Type 'cats'", "Click the search button" — too granular; the executor decides clicks.
+- 3-7 steps total. Fewer is better. Don't pad.
+- If the task names multiple sites (compare X and Y), allocate at least one step per site.
+- If the task involves writing/composing into a canvas app (Docs, Sheets, Slides, Figma), include
+  a step "Open the compose surface and confirm canvas focus".
+- The LAST step must be "Verify task is complete and report results" — the executor will use this
+  step to self-evaluate before declaring done.
+- If the task is impossible from the current page (login wall, out-of-scope), respond with
+  {"plan":[{"step":1,"goal":"Decline with specific reason: <reason>"}],"required_fields":[],"unreachable":true}.
+
+OUTPUT — JSON only, no surrounding text:
+{
+  "plan": [
+    {"step": 1, "goal": "..."},
+    {"step": 2, "goal": "..."}
+  ],
+  "required_fields": ["..."],
+  "unreachable": false
+}
+
+required_fields is critical: list every distinct piece of info the user asked for. Examples:
+  Task "search Wikipedia for cats and tell me what they eat" → ["diet"]
+  Task "compare USB-C cable prices on Amazon and Best Buy"   → ["amazon_top_result", "bestbuy_top_result"]
+  Task "draft an email about the meeting"                    → ["draft_visible_in_compose"]
+Use snake_case names; keep the list short (1-5 entries usually). Empty array if the task is a pure
+side-effect with no information to report back.`;
 
 export class BrowserAgent {
   /**
@@ -214,6 +258,19 @@ export class BrowserAgent {
     this.steps = []; // { action, result, timestamp }
     this.extractedData = {};
     this.startTime = Date.now();
+
+    // Plan state — populated by the planner pass at step 0. Empty plan means
+    // either the planner failed (we still run, just without strategic context)
+    // or the model marked the task unreachable (we'll surface that immediately).
+    this.plan = [];                  // [{step, goal}]
+    this.requiredFields = [];        // [field_name, ...]
+    this.unreachable = false;
+    this.unreachableReason = "";
+    this.currentPlanStep = 1;        // 1-indexed; advances when a plan step is satisfied
+
+    // Escalation budget — set by heuristics, decremented in _callLLM.
+    this.proCallsRemaining = 0;      // when > 0, the next call goes to Pro
+    this.lastForcedRecoveryAtStep = -1;
   }
 
   /** Entry point — run the full agent loop and return { success, message } */
@@ -232,7 +289,28 @@ export class BrowserAgent {
 
     let result;
     try {
-      result = await this._loop();
+      // Planner pass — one Gemini Pro call before the executor loop. The
+      // planner reads the task + initial page state and returns a 3-7 step
+      // plan + a list of required_fields the user explicitly asked for.
+      // Failures here are non-fatal; the executor can still run plan-less.
+      try {
+        await this._planTask();
+      } catch (e) {
+        console.warn("[Anticipy Agent] planner failed (non-fatal):", e.message);
+      }
+      // If the planner declared the task unreachable, short-circuit with the
+      // declared reason so the user gets a clean explanation.
+      if (this.unreachable) {
+        result = { success: false, message: this.unreachableReason || "Task can't be completed from this page." };
+      } else {
+        result = await this._loop();
+      }
+      // Self-eval: if the executor declared success but required_fields are
+      // missing from extractedData (and not present in the success message),
+      // demote to a partial-success failure so the user knows the truth.
+      if (result.success) {
+        result = this._selfEvalDone(result);
+      }
     } catch (err) {
       result = { success: false, message: err.message || "Unexpected error" };
     }
@@ -310,24 +388,79 @@ export class BrowserAgent {
       });
 
       const pageState = await this._getPageState();
+
+      // ─── ESCALATION HEURISTICS ───────────────────────────────────────────
+      // Apply BEFORE _getNextAction so the next call uses Pro if appropriate.
+      // We only set proCallsRemaining; the actual model selection happens in
+      // _callLLM, which decrements the counter.
+      const consecutiveFails = this._consecutiveFailureCount();
+      const interactiveCount = (pageState?.elements || []).length;
+
+      if (consecutiveFails >= ESCALATION.CONSECUTIVE_FAILS && this.proCallsRemaining < 1) {
+        console.warn(`[Anticipy Agent] ${consecutiveFails} consecutive fails — escalating next call to Pro`);
+        this.proCallsRemaining = 1;
+      }
+      if (interactiveCount === 0 && this.proCallsRemaining < 1) {
+        // Canvas/WebGL pages have zero usable elements; Pro reasons about the
+        // visible-text + screenshot-implied affordances better than Flash.
+        console.warn("[Anticipy Agent] zero interactive elements — escalating to Pro");
+        this.proCallsRemaining = 1;
+      }
+      if (step >= ESCALATION.STUCK_STEP_THRESHOLD &&
+          step === ESCALATION.STUCK_STEP_THRESHOLD &&
+          this.proCallsRemaining < ESCALATION.STUCK_PRO_BUDGET) {
+        // Hit step 15 and still going — burn Pro on the next 5 calls. We
+        // gate this on `step === STUCK_STEP_THRESHOLD` so it triggers exactly
+        // once per task; subsequent steps consume the budget without re-arming.
+        console.warn(`[Anticipy Agent] step ${step} reached without done — burning ${ESCALATION.STUCK_PRO_BUDGET} Pro calls`);
+        this.proCallsRemaining = ESCALATION.STUCK_PRO_BUDGET;
+      }
+
+      // ─── FORCED RECOVERY ────────────────────────────────────────────────
+      // After 2 consecutive failures, force a getPageState + plan re-eval.
+      // We inject this BEFORE asking the LLM, so the LLM gets a fresh state
+      // snapshot rather than reasoning from a stale screenshot.
+      let forcedAction = null;
+      if (consecutiveFails >= ESCALATION.RECOVERY_FAILS &&
+          this.lastForcedRecoveryAtStep !== step - 1 &&
+          this.steps.length > 0 &&
+          this.steps[this.steps.length - 1].action?.action !== "getPageState") {
+        console.warn(`[Anticipy Agent] ${consecutiveFails} consecutive fails — forcing getPageState recovery`);
+        forcedAction = { action: "getPageState", __recovery: true };
+        this.lastForcedRecoveryAtStep = step;
+      }
+
+      // ─── HARD STOP ON RUNAWAY FAILURES ──────────────────────────────────
+      // After GIVEUP_FAILS (5) consecutive failures, we never recover by
+      // burning more steps. Summarize what went wrong and exit cleanly.
+      if (consecutiveFails >= ESCALATION.GIVEUP_FAILS) {
+        const summary = this._summarizeFailure();
+        console.warn(`[Anticipy Agent] giving up after ${consecutiveFails} consecutive fails`);
+        return { success: false, message: summary };
+      }
+
       let action;
-      try {
-        action = await this._getNextAction(pageState);
-      } catch (e) {
-        // LLM response was unparseable (most often truncated CSS selector).
-        // Retry once with an explicit hint to use pierce_query instead.
-        if (/not valid JSON|truncated/i.test(e.message || "")) {
-          console.warn("[Anticipy Agent] truncated JSON — retrying with brevity hint");
-          try {
-            action = await this._getNextAction({
-              ...pageState,
-              __hint: "Your previous response was truncated. Avoid long CSS selectors. Use pierce_query with visible text instead, or read the value directly from VISIBLE TEXT.",
-            });
-          } catch (e2) {
-            throw e2;
+      if (forcedAction) {
+        action = forcedAction;
+      } else {
+        try {
+          action = await this._getNextAction(pageState);
+        } catch (e) {
+          // LLM response was unparseable (most often truncated CSS selector).
+          // Retry once with an explicit hint to use pierce_query instead.
+          if (/not valid JSON|truncated/i.test(e.message || "")) {
+            console.warn("[Anticipy Agent] truncated JSON — retrying with brevity hint");
+            try {
+              action = await this._getNextAction({
+                ...pageState,
+                __hint: "Your previous response was truncated. Avoid long CSS selectors. Use pierce_query with visible text instead, or read the value directly from VISIBLE TEXT.",
+              });
+            } catch (e2) {
+              throw e2;
+            }
+          } else {
+            throw e;
           }
-        } else {
-          throw e;
         }
       }
 
@@ -427,7 +560,47 @@ export class BrowserAgent {
         continue;
       }
 
-      const result = await this._executeAction(action);
+      // Advance plan progress proportionally — generic and monotonic. We
+      // pace currentPlanStep to track step / MAX_PLAN_STEPS_RATIO so by the
+      // time the executor has burned ~half its steps, the plan tracker is
+      // halfway through. The LLM uses this as a "are we on schedule?" cue.
+      if (this.plan && this.plan.length > 0) {
+        const expected = Math.min(
+          this.plan.length,
+          1 + Math.floor((this.steps.length / Math.max(1, MAX_STEPS / 2)) * this.plan.length)
+        );
+        if (expected > this.currentPlanStep) this.currentPlanStep = expected;
+      }
+
+      let result = await this._executeAction(action);
+
+      // ─── AUTO-RETRY ON SELECTOR MISS ────────────────────────────────────
+      // content.js returns "Element not found" when findElement(selector,
+      // text, aria) all came back empty. If the original action carried a
+      // visible text/label/aria hint, the model already gave us the
+      // semantic anchor we need — fall back to pierce_query, which walks
+      // shadow DOM and same-origin iframes by visible text. Generic; fires
+      // on ANY action that takes a selector and has a fallback hint.
+      const selectorMissed = !result?.success &&
+        typeof result?.error === "string" &&
+        /element not found/i.test(result.error);
+      const semanticHint = action.text || action.label || action.aria;
+      const SELECTOR_BEARING = new Set(["click", "type", "force_type", "extract", "waitForElement"]);
+      if (selectorMissed && semanticHint && SELECTOR_BEARING.has(action.action)) {
+        console.warn(`[Anticipy Agent] selector miss on "${action.selector}" — auto-retry with pierce_query("${semanticHint}")`);
+        // Record the original failure so the LLM can see it in step history.
+        this.steps.push({ action, result, timestamp: Date.now() });
+        const retryAction = { action: "pierce_query", text: semanticHint, role: action.role };
+        const retryResult = await this._executeAction(retryAction);
+        // If pierce_query found the element, surface its coordinates as a
+        // hint that the LLM's NEXT step can use directly (e.g.
+        // canvas_pointer at those coordinates, or a click-by-text on the
+        // same string). We don't auto-click here because the original
+        // intent might have been "type into this input" not "click".
+        action = retryAction;
+        result = retryResult;
+      }
+
       this.steps.push({ action, result, timestamp: Date.now() });
 
       if (action.action === "extract" && result.success && action.field) {
@@ -441,6 +614,64 @@ export class BrowserAgent {
     }
 
     return { success: false, message: `Reached max ${MAX_STEPS} steps without completing task` };
+  }
+
+  // ─── Failure tracking helpers ────────────────────────────────────────────────
+
+  /** Count consecutive failed steps at the tail of this.steps. */
+  _consecutiveFailureCount() {
+    let n = 0;
+    for (let i = this.steps.length - 1; i >= 0; i--) {
+      if (this.steps[i]?.result?.success) break;
+      n++;
+    }
+    return n;
+  }
+
+  /** Build a clean human-readable failure summary (no JSON, no selectors). */
+  _summarizeFailure() {
+    const recent = this.steps.slice(-5);
+    const verbs = recent.map(s => s.action?.action || "?").join(", ");
+    const lastErr = recent.length ? (recent[recent.length - 1].result?.error || "") : "";
+    const cleanErr = String(lastErr).replace(/[`'"]/g, "").substring(0, 120);
+    const dataKeys = Object.keys(this.extractedData || {});
+    const got = dataKeys.length ? ` (got: ${dataKeys.join(", ")})` : "";
+    if (cleanErr) {
+      return `I couldn't finish — ${verbs} kept failing. Last error: ${cleanErr}${got}.`;
+    }
+    return `I tried ${recent.length} actions in a row (${verbs}) without progress${got}. Stopping before I burn more time.`;
+  }
+
+  /**
+   * Self-evaluate a done(success:true) before returning it. If the planner
+   * declared required_fields and any of them is missing from extractedData
+   * AND not present in the success message, demote to done(success:false).
+   * Generic — uses planner output, NOT a hardcoded field list.
+   */
+  _selfEvalDone(result) {
+    if (!result?.success) return result;
+    const required = (this.requiredFields || []).filter(Boolean);
+    if (required.length === 0) return result;
+    const haveKeys = new Set(Object.keys(this.extractedData || {}).map(k => String(k).toLowerCase()));
+    const msgLower = String(result.message || "").toLowerCase();
+    const missing = [];
+    for (const field of required) {
+      const f = String(field).toLowerCase();
+      // Field is satisfied if the key (or a close variant) appears in
+      // extractedData, OR if a hint of the field name appears in the
+      // success message itself. We tolerate snake/camel/space variants.
+      const fParts = f.split(/[_\s\-]+/).filter(p => p.length >= 3);
+      const inData = haveKeys.has(f) ||
+        Array.from(haveKeys).some(k => fParts.every(p => k.includes(p)));
+      const inMsg = fParts.length > 0 && fParts.every(p => msgLower.includes(p));
+      if (!inData && !inMsg) missing.push(field);
+    }
+    if (missing.length === 0) return result;
+    console.warn(`[Anticipy Agent] self-eval: missing required fields ${missing.join(", ")} — demoting to partial`);
+    return {
+      success: false,
+      message: `${result.message} (I think I'm done but couldn't confirm: ${missing.join(", ")}.)`
+    };
   }
 
   // ─── LLM interaction ─────────────────────────────────────────────────────────
@@ -461,11 +692,29 @@ export class BrowserAgent {
       ? JSON.stringify(this.extractedData, null, 2)
       : "(none)";
 
+    // Plan section — surfaced as context for the executor. Empty when the
+    // planner failed; that's fine, the per-step LLM still has the task.
+    const planLines = [];
+    if (this.plan && this.plan.length) {
+      planLines.push(`PLAN (current step: ${this.currentPlanStep}/${this.plan.length}):`);
+      for (const p of this.plan) {
+        const marker = p.step < this.currentPlanStep ? "✓" :
+                       p.step === this.currentPlanStep ? "→" : " ";
+        planLines.push(`  ${marker} ${p.step}. ${p.goal}`);
+      }
+      if (this.requiredFields.length) {
+        planLines.push("");
+        planLines.push(`REQUIRED FIELDS (must be reported before done(success:true)): ${this.requiredFields.join(", ")}`);
+      }
+      planLines.push("");
+    }
+
     const userMessage = [
       `TASK: ${this.intent.summary_for_user}`,
       `ACTION TYPE: ${this.intent.action_type || "browser_action"}`,
       `INTENT PARAMETERS: ${JSON.stringify(this.intent.parameters || {}, null, 2)}`,
       "",
+      ...planLines,
       `STEPS TAKEN (${this.steps.length}/${MAX_STEPS}):`,
       recentSteps || "  (none — this is the first step)",
       "",
@@ -492,13 +741,75 @@ export class BrowserAgent {
     return await this._callLLM(userMessage);
   }
 
+  /**
+   * Planner pass — single Gemini Pro call at task start. Reads the task +
+   * initial page state, returns a plan + required_fields. Non-fatal on
+   * failure; the executor still runs without a plan.
+   */
+  async _planTask() {
+    if (!this.apiConfig?.geminiApiKey) {
+      // No Gemini key → Groq fallback handles execution but skip planning.
+      // Plan-less is the worst case but the executor still runs.
+      return;
+    }
+    let initialState = {};
+    try {
+      initialState = await this._getPageState();
+    } catch (_) {}
+
+    const userMessage = [
+      `TASK: ${this.intent.summary_for_user}`,
+      `ACTION TYPE: ${this.intent.action_type || "browser_action"}`,
+      `INTENT PARAMETERS: ${JSON.stringify(this.intent.parameters || {}, null, 2)}`,
+      "",
+      `STARTING PAGE:`,
+      `URL: ${initialState.url || "(unknown — agent has not navigated yet)"}`,
+      `TITLE: ${initialState.title || "(unknown)"}`,
+      `INTERACTIVE ELEMENTS COUNT: ${(initialState.elements || []).length}`,
+      "",
+      `Produce the plan as JSON.`
+    ].join("\n");
+
+    let raw;
+    try {
+      raw = await this._callGemini(userMessage, { url: GEMINI_PRO_URL, system: PLANNER_SYSTEM_PROMPT });
+    } catch (e) {
+      // Pro can be slow / over quota — fall back to Flash for the planner
+      // call. Worse plan > no plan.
+      console.warn("[Anticipy Agent] Pro planner failed, falling back to Flash:", e.message);
+      raw = await this._callGemini(userMessage, { url: GEMINI_FLASH_URL, system: PLANNER_SYSTEM_PROMPT });
+    }
+
+    if (raw && Array.isArray(raw.plan)) {
+      this.plan = raw.plan
+        .filter(p => p && typeof p.goal === "string" && p.goal.trim())
+        .map((p, i) => ({ step: typeof p.step === "number" ? p.step : i + 1, goal: p.goal.trim() }));
+    }
+    if (raw && Array.isArray(raw.required_fields)) {
+      this.requiredFields = raw.required_fields.filter(f => typeof f === "string" && f.trim());
+    }
+    if (raw && raw.unreachable === true) {
+      this.unreachable = true;
+      this.unreachableReason = (this.plan[0]?.goal || "Task can't be completed from this page.")
+        .replace(/^decline with specific reason:\s*/i, "");
+    }
+    console.log(`[Anticipy Agent] plan: ${this.plan.length} steps, required_fields=${JSON.stringify(this.requiredFields)}, unreachable=${this.unreachable}`);
+  }
+
   async _callLLM(userMessage) {
     // Gemini primary (higher free-tier daily quota than Groq's per-org limits),
-    // Groq fallback (very fast when not rate-limited).
+    // Groq fallback (very fast when not rate-limited). When this.proCallsRemaining
+    // > 0 we route to Gemini Pro for the next call (decremented in _callGemini).
     const errors = [];
     if (this.apiConfig?.geminiApiKey) {
       try {
-        return await this._callGemini(userMessage);
+        const usePro = this.proCallsRemaining > 0;
+        const url = usePro ? GEMINI_PRO_URL : GEMINI_FLASH_URL;
+        if (usePro) {
+          this.proCallsRemaining--;
+          console.log(`[Anticipy Agent] using Gemini Pro for this step (budget left: ${this.proCallsRemaining})`);
+        }
+        return await this._callGemini(userMessage, { url, system: AGENT_SYSTEM_PROMPT });
       } catch (e) {
         errors.push(`Gemini: ${e.message || e}`);
         console.warn("[Anticipy Agent] Gemini failed, trying Groq:", e.message);
@@ -548,14 +859,16 @@ export class BrowserAgent {
     return this._parseJSON(content);
   }
 
-  async _callGemini(userMessage) {
+  async _callGemini(userMessage, opts = {}) {
+    const url = opts.url || GEMINI_FLASH_URL;
+    const system = opts.system || AGENT_SYSTEM_PROMPT;
     const resp = await fetch(
-      `${GEMINI_API_URL}?key=${this.apiConfig.geminiApiKey}`,
+      `${url}?key=${this.apiConfig.geminiApiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `${AGENT_SYSTEM_PROMPT}\n\n${userMessage}` }] }],
+          contents: [{ parts: [{ text: `${system}\n\n${userMessage}` }] }],
           generationConfig: {
             temperature: 0.1,
             maxOutputTokens: 2000,
