@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { callKimi } from "@/lib/kimi";
 import { callGroq } from "@/lib/groq";
 import { callGemini } from "@/lib/gemini";
-import { buildIntentPrompt } from "@/lib/intent-prompt";
+import { buildIntentPrompt, type PriorIntentContext } from "@/lib/intent-prompt";
 import { sendIntentEmail } from "@/lib/resend-notify";
 import { sendTwilioNotification } from "@/lib/twilio-notify";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -18,6 +18,8 @@ import {
   applyPerfectMomentThrottle,
   NOTIFY_RATE_WINDOW_MS,
 } from "@/lib/intent-gates";
+import { extractMemoryItems } from "@/lib/memory-extract";
+import { recallRelevantMemory } from "@/lib/memory-recall";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,15 @@ export async function POST(req: Request) {
         ? body.timezone
         : "America/Vancouver";
     const isFinal = body.isFinal === undefined ? true : Boolean(body.isFinal);
+    // Clarification-loop hook: when the wearer answers a follow-up question
+    // raised by a prior intent (extension's done(success:false)), the client
+    // sends `answers_intent_id`. We pull the prior intent's slots so the LLM
+    // can merge the answer with what was already known and re-emit the intent
+    // with the previously-missing fields filled in.
+    const answersIntentId =
+      typeof body.answers_intent_id === "string" && body.answers_intent_id.length > 0
+        ? body.answers_intent_id
+        : "";
 
     // Email recipient is the authenticated user — never trust a client-supplied address.
     const user_email = authedUser.email;
@@ -148,13 +159,75 @@ export async function POST(req: Request) {
       console.warn("Cross-session memory query failed:", err);
     }
 
+    // Clarification loop: when answers_intent_id is supplied, load the prior
+    // intent so the LLM has the partial parameters + question to merge against
+    // the wearer's answer. We verify the prior intent belongs to a session
+    // owned by the authed user — never trust a client-supplied id blindly.
+    let priorIntentContext: PriorIntentContext | null = null;
+    if (answersIntentId) {
+      try {
+        const { data: priorRow } = await supabaseAdmin
+          .from("anticipy_intents")
+          .select(
+            "id, action_type, summary_for_user, evidence_quote, parameters, execution_result, session_id"
+          )
+          .eq("id", answersIntentId)
+          .single();
+        if (priorRow) {
+          // Ownership check — prior intent's session must belong to this user.
+          const { data: priorSession } = await supabaseAdmin
+            .from("anticipy_sessions")
+            .select("user_id")
+            .eq("id", priorRow.session_id)
+            .single();
+          if (
+            priorSession &&
+            (!priorSession.user_id || priorSession.user_id === authedUser.id)
+          ) {
+            priorIntentContext = {
+              actionType: String(priorRow.action_type ?? ""),
+              summary: String(priorRow.summary_for_user ?? ""),
+              evidenceQuote: String(priorRow.evidence_quote ?? ""),
+              parameters:
+                priorRow.parameters && typeof priorRow.parameters === "object"
+                  ? (priorRow.parameters as Record<string, unknown>)
+                  : {},
+              question: String(priorRow.execution_result ?? ""),
+            };
+          }
+        }
+      } catch (err) {
+        console.warn("Prior-intent fetch failed:", err);
+      }
+    }
+
+    // Long-term memory recall: pull top-N memorable items the wearer has
+    // mentioned across sessions (preferences, relationships, references,
+    // ongoing context). Lets the intent LLM disambiguate pronouns,
+    // recognize follow-ups, and avoid duplicate intents.
+    let memoryContext: string[] = [];
+    try {
+      memoryContext = await recallRelevantMemory(
+        authedUser.id,
+        safeTranscript,
+        10
+      );
+    } catch (err) {
+      console.warn(
+        "[memory-recall] failed; continuing without memory context:",
+        err instanceof Error ? err.message : err
+      );
+    }
+
     // Build the prompt
     const { system, user } = buildIntentPrompt(
       safeTranscript,
       localTime,
       timezone,
       recentActions,
-      crossSessionContext
+      crossSessionContext,
+      priorIntentContext,
+      memoryContext
     );
 
     const llmMessages = [
@@ -188,6 +261,46 @@ export async function POST(req: Request) {
         }
       }
     }
+
+    // Fire-and-forget memory extraction: a separate Gemini pass over the
+    // SAME transcript pulls preferences, relationships, references, and
+    // ongoing contexts the wearer would benefit from us remembering. Runs
+    // in parallel with intent storage; failures are logged and ignored.
+    // This is the layer that gives future analyze calls richer context
+    // without polluting the actionable-intents pipeline.
+    void (async () => {
+      try {
+        const items = await extractMemoryItems(
+          safeTranscript,
+          localTime,
+          timezone
+        );
+        if (items.length === 0) return;
+        const rows = items.map((it) => ({
+          user_id: authedUser.id,
+          session_id: sessionId,
+          kind: it.kind,
+          key: it.key,
+          value: it.value,
+          evidence_quote: it.evidence_quote,
+          confidence: it.confidence,
+        }));
+        const { error: memErr } = await supabaseAdmin
+          .from("anticipy_memory")
+          .insert(rows);
+        if (memErr) {
+          console.warn(
+            "[memory-extract] insert failed:",
+            memErr.message
+          );
+        }
+      } catch (err) {
+        console.warn(
+          "[memory-extract] background pass failed:",
+          err instanceof Error ? err.message : err
+        );
+      }
+    })();
 
     let parsed: { reasoning?: string; intents: Array<Record<string, unknown>> };
     try {
@@ -250,35 +363,45 @@ export async function POST(req: Request) {
     let skippedDuplicates = 0;
     let skippedByGate = 0;
     for (const { candidate, raw } of candidatesWithRaw) {
-      // Server-side fuzzy dedup against intents already in this session (and this batch).
-      // Periodic auto-analysis re-processes the growing transcript, so the LLM frequently
-      // re-emits the same intent — block it before it ever reaches the DB or notifications.
-      const allExisting = [...sessionExistingIntents, ...insertedThisCall];
-      if (isDuplicateOfExisting(candidate, allExisting)) {
-        skippedDuplicates += 1;
-        continue;
-      }
+      // Follow-up answers bypass dedup (the new intent will look very similar
+      // to the prior failed one — that's the whole point) and the second-pass
+      // gate (a short slot-fill reply like "NYC to LA Friday" looks like
+      // conversational fragment to the gate but is exactly what we want).
+      // Default to "perfect moment = true" in the follow-up case so the
+      // throttle doesn't demote a fresh slot-filled intent.
+      let perfectMoment = true;
+      if (!priorIntentContext) {
+        // Server-side fuzzy dedup against intents already in this session (and this batch).
+        // Periodic auto-analysis re-processes the growing transcript, so the LLM frequently
+        // re-emits the same intent — block it before it ever reaches the DB or notifications.
+        const allExisting = [...sessionExistingIntents, ...insertedThisCall];
+        if (isDuplicateOfExisting(candidate, allExisting)) {
+          skippedDuplicates += 1;
+          continue;
+        }
 
-      // Second-pass validation gate (ports the Python cascade's L1/L2/L5 logic
-      // into a single LLM call). Drops delegations, future-tense pleasantries,
-      // and intents the user retracted later in the same conversation.
-      const gateVerdict = await runIntentGate({
-        summary: candidate.summary_for_user,
-        actionType: candidate.action_type,
-        evidenceQuote: candidate.evidence_quote,
-        transcript: safeTranscript,
-        crossSessionContext,
-      });
-      if (!gateVerdict.admit) {
-        skippedByGate += 1;
-        console.log(
-          "[intent-gate] dropped:",
-          candidate.action_type,
-          "—",
-          gateVerdict.reasoning,
-          JSON.stringify(gateVerdict.raw)
-        );
-        continue;
+        // Second-pass validation gate (ports the Python cascade's L1/L2/L5 logic
+        // into a single LLM call). Drops delegations, future-tense pleasantries,
+        // and intents the user retracted later in the same conversation.
+        const gateVerdict = await runIntentGate({
+          summary: candidate.summary_for_user,
+          actionType: candidate.action_type,
+          evidenceQuote: candidate.evidence_quote,
+          transcript: safeTranscript,
+          crossSessionContext,
+        });
+        if (!gateVerdict.admit) {
+          skippedByGate += 1;
+          console.log(
+            "[intent-gate] dropped:",
+            candidate.action_type,
+            "—",
+            gateVerdict.reasoning,
+            JSON.stringify(gateVerdict.raw)
+          );
+          continue;
+        }
+        perfectMoment = gateVerdict.perfectMoment;
       }
 
       const importanceRaw = String(raw.importance ?? "standard").toLowerCase();
@@ -291,7 +414,7 @@ export async function POST(req: Request) {
       const importance = applyPerfectMomentThrottle(
         importanceFromLlm,
         recentUserNotificationCount,
-        gateVerdict.perfectMoment
+        perfectMoment
       );
       if (importance !== importanceFromLlm) {
         console.log(
@@ -300,7 +423,7 @@ export async function POST(req: Request) {
           importanceFromLlm,
           "→",
           importance,
-          "(perfect_moment=" + gateVerdict.perfectMoment +
+          "(perfect_moment=" + perfectMoment +
             ", recent_notifications=" + recentUserNotificationCount + ")"
         );
       }

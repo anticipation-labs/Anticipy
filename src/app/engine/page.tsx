@@ -168,8 +168,30 @@ export default function EnginePage() {
   // server-side status — purely for showing optimistic feedback after click.
   const [intentDecisions, setIntentDecisions] = useState<Record<string, "yes" | "no" | "loading">>({});
 
+  // Clarification loop: when the agent runs an intent and ends with a
+  // success:false done() that includes a question (e.g. "where are you flying
+  // from / to?"), the extension PATCHes execution_result to that question and
+  // status to "failed". A Realtime subscription below fires on that update and
+  // pushes a {intentId, question, parameters} entry into followUps so the UI
+  // can render a chat-style question + answer input under the original action.
+  interface FollowUp {
+    intentId: string;
+    actionType: string;
+    summary: string;
+    question: string;
+    parameters: Record<string, unknown>;
+    answer: string;
+    submitting: boolean;
+    answered: boolean;
+  }
+  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
+  // Tracks intent IDs we've already created a follow-up for, so we don't
+  // double-render if Realtime fires repeatedly on the same row.
+  const seenFollowUpsRef = useRef<Set<string>>(new Set());
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recordedMimeRef = useRef<string>("");
   const sessionIdRef = useRef<string>("");
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const autoAnalyzeTimerRef = useRef<ReturnType<typeof setInterval>>();
@@ -250,6 +272,75 @@ export default function EnginePage() {
       .then((r) => r.json())
       .then((d) => setCalendarConnected(!!d.connected))
       .catch(() => setCalendarConnected(false));
+  }, [session]);
+
+  // Realtime: listen for intent rows flipping to status='failed' with a
+  // question-shaped execution_result. That's how the extension/agent signals
+  // "I need more info to do this task" — surface the question to the wearer
+  // and let them answer in-line.
+  //
+  // We subscribe to ALL UPDATEs on anticipy_intents, then filter client-side
+  // to rows belonging to intents we KNOW about (the user just generated them
+  // in this tab — id is in the `intents` state). That avoids leaking other
+  // users' rows even though there's currently no RLS on the table — we never
+  // act on a row we didn't originate from this session.
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel("anticipy_intents_followups")
+      .on(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        "postgres_changes" as any,
+        { event: "UPDATE", schema: "public", table: "anticipy_intents" },
+        (payload: { new: Record<string, unknown> }) => {
+          const row = payload.new ?? {};
+          const id = String(row.id ?? "");
+          const status = String(row.status ?? "");
+          const execResult = String(row.execution_result ?? "").trim();
+          if (!id || status !== "failed" || !execResult) return;
+          // A question is the only kind of failure we want to prompt on. We
+          // detect it heuristically: contains "?" OR starts with a wh-word.
+          // The LLM produces these naturally; this just filters out
+          // bare-fail strings like "Could not log in".
+          const looksLikeQuestion =
+            execResult.includes("?") ||
+            /^(what|where|when|which|who|how|do|does|did|is|are|can|could|should|would)\b/i.test(
+              execResult
+            );
+          if (!looksLikeQuestion) return;
+          if (seenFollowUpsRef.current.has(id)) return;
+          // Only surface follow-ups for intents we originated from this tab.
+          // If the intent is in our local list, it's ours.
+          setIntents((prevIntents) => {
+            const match = prevIntents.find((i) => i.id === id);
+            if (!match) return prevIntents;
+            seenFollowUpsRef.current.add(id);
+            setFollowUps((prev) =>
+              prev.some((f) => f.intentId === id)
+                ? prev
+                : [
+                    ...prev,
+                    {
+                      intentId: id,
+                      actionType: match.action_type,
+                      summary: match.summary_for_user,
+                      question: execResult,
+                      parameters: match.parameters || {},
+                      answer: "",
+                      submitting: false,
+                      answered: false,
+                    },
+                  ]
+            );
+            return prevIntents;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [session]);
 
   // Cleanup on unmount
@@ -458,7 +549,14 @@ export default function EnginePage() {
       });
       streamRef.current = stream;
 
-      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      // Older Safari rejects non-default sample rates; fall back to the
+      // browser default and let the streaming endpoint resample.
+      let audioCtx: AudioContext;
+      try {
+        audioCtx = new AudioContext({ sampleRate: 16000 });
+      } catch {
+        audioCtx = new AudioContext();
+      }
       audioCtxRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -574,10 +672,14 @@ export default function EnginePage() {
         }
       };
 
+      // Pick the first MIME type the browser actually supports. Chrome / Edge
+      // do webm/opus. Safari refuses webm entirely and only does mp4.
+      const supportedMime = (
+        ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4"]
+          .find((m) => MediaRecorder.isTypeSupported(m))
+      ) || "";
       const recorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm",
+        mimeType: supportedMime || undefined,
       });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
@@ -916,6 +1018,94 @@ export default function EnginePage() {
       }
     },
     []
+  );
+
+  // Clarification loop: wearer typed an answer to the agent's follow-up
+  // question. POST it to /api/engine/analyze with `answers_intent_id` set to
+  // the prior failed intent — the server merges the prior parameters with the
+  // new answer, re-extracts, and emits a fresh intent with missing_slots
+  // empty. The extension picks it up via Realtime and re-runs the task.
+  const submitFollowUp = useCallback(
+    async (intentId: string) => {
+      const fu = followUps.find((f) => f.intentId === intentId);
+      if (!fu || !fu.answer.trim() || fu.submitting || fu.answered) return;
+
+      setFollowUps((prev) =>
+        prev.map((f) =>
+          f.intentId === intentId ? { ...f, submitting: true } : f
+        )
+      );
+
+      try {
+        const { data: { session: authSession } } = await supabase.auth.getSession();
+        if (!authSession) throw new Error("Sign in required");
+        const authHeaders = {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authSession.access_token}`,
+        };
+
+        // Spin up a fresh session for the follow-up — the original one is
+        // typically already "ended" since it produced a final analysis.
+        const sessionRes = await fetch("/api/engine/session", {
+          method: "POST",
+          headers: authHeaders,
+        });
+        if (!sessionRes.ok) throw new Error("network");
+        const sessionData = await sessionRes.json();
+        const followUpSessionId = sessionData.sessionId;
+
+        // Frame the wearer's reply as an explicit answer to the prior
+        // question. Including the question in the transcript gives the LLM
+        // unambiguous context even if it ignores priorIntent block.
+        const transcriptStr =
+          `[Anticipy asked the wearer: "${fu.question}"]\n` +
+          `[Wearer answers: "${fu.answer.trim()}"]`;
+
+        const analyzeRes = await fetch("/api/engine/analyze", {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            sessionId: followUpSessionId,
+            transcript: transcriptStr,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            answers_intent_id: fu.intentId,
+          }),
+        });
+        if (!analyzeRes.ok) throw new Error("network");
+        const analyzeData = await analyzeRes.json();
+
+        // Pick up the newly emitted intent so the wearer sees the merged task
+        // appear in the "Ready to run" list (extension also picks it up via
+        // Realtime broadcast, independently).
+        const newOnes: Intent[] = analyzeData.intents ?? [];
+        if (newOnes.length > 0) {
+          setIntents((prev) => {
+            const existingIds = new Set(prev.map((i) => i.id));
+            const filtered = newOnes.filter((i) => !existingIds.has(i.id));
+            return filtered.length > 0 ? [...prev, ...filtered] : prev;
+          });
+        }
+
+        setFollowUps((prev) =>
+          prev.map((f) =>
+            f.intentId === intentId
+              ? { ...f, submitting: false, answered: true }
+              : f
+          )
+        );
+      } catch (err) {
+        // Keep the input usable so the wearer can retry — never surface raw
+        // network or model errors.
+        console.warn("Follow-up submit failed:", err);
+        setFollowUps((prev) =>
+          prev.map((f) =>
+            f.intentId === intentId ? { ...f, submitting: false } : f
+          )
+        );
+        setError(friendlyError(err));
+      }
+    },
+    [followUps]
   );
 
   const formatDuration = (secs: number) => {
@@ -2365,6 +2555,9 @@ export default function EnginePage() {
                         IMPORTANCE_STYLES[intent.importance] ??
                         IMPORTANCE_STYLES.low;
                       const decision = intentDecisions[intent.id];
+                      const followUp = followUps.find(
+                        (f) => f.intentId === intent.id
+                      );
                       return (
                         <div
                           key={intent.id}
@@ -2397,6 +2590,116 @@ export default function EnginePage() {
                           >
                             &ldquo;{intent.evidence_quote}&rdquo;
                           </p>
+
+                          {/* Follow-up question rendered inline when the
+                              extension's agent reported it needs more info. */}
+                          {followUp && !followUp.answered && (
+                            <div
+                              data-testid={`followup-${intent.id}`}
+                              className="rounded-card"
+                              style={{
+                                background: "rgba(200,169,126,0.07)",
+                                border: "1px solid rgba(200,169,126,0.28)",
+                                padding: 16,
+                                marginBottom: 14,
+                              }}
+                            >
+                              <div
+                                className="text-[11px] uppercase tracking-wide-label mb-2"
+                                style={{ color: "var(--gold)" }}
+                              >
+                                Anticipy
+                              </div>
+                              <p
+                                className="text-[14px]"
+                                style={{
+                                  color: "var(--text-on-dark)",
+                                  marginBottom: 12,
+                                  lineHeight: 1.45,
+                                }}
+                              >
+                                {followUp.question}
+                              </p>
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  submitFollowUp(intent.id);
+                                }}
+                              >
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <input
+                                    type="text"
+                                    value={followUp.answer}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setFollowUps((prev) =>
+                                        prev.map((f) =>
+                                          f.intentId === intent.id
+                                            ? { ...f, answer: v }
+                                            : f
+                                        )
+                                      );
+                                    }}
+                                    placeholder="Type your answer…"
+                                    disabled={followUp.submitting}
+                                    autoFocus
+                                    style={{
+                                      flex: 1,
+                                      minWidth: 0,
+                                      padding: "10px 12px",
+                                      background: "rgba(0,0,0,0.25)",
+                                      border: "1px solid rgba(255,255,255,0.12)",
+                                      borderRadius: 8,
+                                      color: "var(--text-on-dark)",
+                                      fontSize: 14,
+                                      outline: "none",
+                                    }}
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={
+                                      followUp.submitting ||
+                                      !followUp.answer.trim()
+                                    }
+                                    className="px-4 py-2 rounded-pill text-[13px] font-semibold"
+                                    style={{
+                                      background: "var(--gold)",
+                                      color: "var(--dark)",
+                                      border: "none",
+                                      cursor:
+                                        followUp.submitting ||
+                                        !followUp.answer.trim()
+                                          ? "not-allowed"
+                                          : "pointer",
+                                      opacity:
+                                        followUp.submitting ||
+                                        !followUp.answer.trim()
+                                          ? 0.6
+                                          : 1,
+                                      minWidth: 70,
+                                    }}
+                                  >
+                                    {followUp.submitting ? "…" : "Send"}
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
+                          )}
+
+                          {followUp && followUp.answered && (
+                            <div
+                              className="rounded-card text-[13px]"
+                              style={{
+                                background: "rgba(76,175,80,0.08)",
+                                border: "1px solid rgba(76,175,80,0.22)",
+                                padding: "10px 14px",
+                                marginBottom: 14,
+                                color: "#9DD49F",
+                              }}
+                            >
+                              Got it — I&rsquo;ll try again with that.
+                            </div>
+                          )}
 
                           {/* Two-button decision row, or post-decision pill */}
                           {decision === "yes" ? (

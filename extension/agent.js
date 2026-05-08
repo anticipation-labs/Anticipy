@@ -6,10 +6,77 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 // gemini-2.5-flash is the current generally-available flash model with the
 // free-tier daily quota the extension uses. The previous gemini-2.0-flash
 // returns 404 ("no longer available to new users") as of 2026-Q1.
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const GEMINI_FLASH_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+// gemini-2.5-pro is the smarter (slower, costlier) sibling. We escalate to
+// it for: (a) the planner pass at step 0, (b) recovery from runs of failures,
+// (c) interactive-element-empty pages (canvas/WebGL), (d) long-running tasks
+// past step 15 that still haven't finished. This is a small fraction of the
+// total LLM budget but lifts the hard-step success rate substantially.
+const GEMINI_PRO_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent";
+// Retain the flash URL as the legacy export name in case other extension
+// modules grep for it. New code should use the named constants above.
+const GEMINI_API_URL = GEMINI_FLASH_URL;
 
 const MAX_STEPS = 60;
 const TASK_TIMEOUT_MS = 600_000; // 10 minutes hard limit (multi-step flows)
+
+// Map raw agent failure modes to calm, user-facing copy. Investors should
+// never see "Reached max 60 steps", "LLM did not return a valid action",
+// "Task timed out after 5 minutes", or any unhandled exception verbatim.
+// If the message already looks like a clarification question (ends with ?
+// or starts with a wh-word), it's left alone — that's the REQUIRED-SLOT
+// path and we want the wearer to see the actual question.
+function friendlyAgentMessage(raw) {
+  const msg = (raw || "").toString().trim();
+  if (!msg) return "I couldn't finish that one. Try a simpler version of the task and I'll have another go.";
+  const lower = msg.toLowerCase();
+  // Preserve LLM-authored questions verbatim (the REQUIRED-SLOT path).
+  if (msg.endsWith("?") ||
+      /^(what|where|when|which|who|how|do|does|did|is|are|can|could|should|would)\b/i.test(msg)) {
+    return msg;
+  }
+  if (lower.includes("reached max") || lower.includes("max steps") || lower.includes("max 60")) {
+    return "I got stuck on the page — let me try a different approach next time.";
+  }
+  if (lower.includes("timed out") || lower.includes("timeout")) {
+    return "That took longer than expected — try a simpler ask.";
+  }
+  if (lower.includes("did not return a valid") || lower.includes("not valid json") || lower.includes("unparseable")) {
+    return "Hit a hiccup mid-task. Mind trying that again?";
+  }
+  if (lower.includes("sign in") || lower.includes("log in") || lower.includes("login") ||
+      lower.includes("password field")) {
+    return "That site wants you signed in. Open it once in this browser, then ask me again.";
+  }
+  if (lower.includes("captcha") || lower.includes("verify you are human") ||
+      lower.includes("are you a robot")) {
+    return "The site asked for a human check. Open it once and clear it, then I'll pick it up.";
+  }
+  if (lower.includes("blocked") || lower.includes("access denied") ||
+      lower.includes("403") || lower.includes("forbidden")) {
+    return "That site is blocking automated access right now. Try again in a bit.";
+  }
+  if (lower.includes("network") || lower.includes("fetch failed") ||
+      lower.includes("offline")) {
+    return "Network hiccup mid-task. Try again in a moment.";
+  }
+  if (lower.includes("unexpected error")) {
+    return "Something didn't go through. Try that again.";
+  }
+  // Anything else — keep the message but trim "internal-y" prefixes.
+  return msg.replace(/^Error:\s*/i, "").replace(/^\[.*?\]\s*/, "");
+}
+
+// Escalation heuristics — keep these named/centralised so anyone reading the
+// agent can reason about when Pro fires. All thresholds are conservative;
+// the goal is "Pro fires on the genuinely hard step", not "Pro on every step".
+const ESCALATION = Object.freeze({
+  CONSECUTIVE_FAILS: 3,        // 3 fails in a row → next call goes to Pro
+  STUCK_STEP_THRESHOLD: 15,    // past step 15 with no `done` → enter stuck mode
+  STUCK_PRO_BUDGET: 5,         // burn 5 Pro calls trying to unstick
+  RECOVERY_FAILS: 2,           // 2 fails → force getPageState + plan re-eval
+  GIVEUP_FAILS: 5,             // 5 fails → graceful done(false), don't hit MAX_STEPS
+});
 
 const AGENT_SYSTEM_PROMPT = `You are a browser automation agent built into the Anticipy Chrome extension.
 Your job: complete a web task by deciding ONE browser action at a time.
@@ -169,9 +236,13 @@ export class BrowserAgent {
     } catch (err) {
       result = { success: false, message: err.message || "Unexpected error" };
     }
-    // On failure, append a compact debug suffix so the user (and tests) can
-    // see what the agent actually did before giving up. Generic — just the
-    // last few action verbs and any extracted data.
+
+    // On failure, build a compact debug suffix for the CONSOLE ONLY so we
+    // can see what the agent actually did before giving up. The user-visible
+    // message (result.message) is left clean — investors should never see
+    // "| last:✗click(sel=...) | data:{...}" tails. Enable the suffix on the
+    // user-visible message only behind localStorage.anticipy_debug.
+    let debugTail = "";
     if (!result.success) {
       try {
         const lastSteps = this.steps.slice(-5).map(s => {
@@ -186,7 +257,19 @@ export class BrowserAgent {
         const ext = Object.keys(this.extractedData || {}).length
           ? ` | data:${JSON.stringify(this.extractedData).substring(0, 200)}`
           : "";
-        result.message = `${result.message} | last:${lastSteps}${ext}`;
+        debugTail = ` | last:${lastSteps}${ext}`;
+      } catch (_) {}
+
+      // Friendly-up well-known agent failure modes so the wearer doesn't see
+      // "Reached max 60 steps" / "LLM did not return a valid action" / etc.
+      result.message = friendlyAgentMessage(result.message);
+
+      // Opt-in: power users can enable the debug tail in the user-visible
+      // message via `localStorage.setItem("anticipy_debug", "1")`.
+      try {
+        if (typeof localStorage !== "undefined" && localStorage.getItem("anticipy_debug") === "1") {
+          result.message = `${result.message}${debugTail}`;
+        }
       } catch (_) {}
     }
 
@@ -199,7 +282,12 @@ export class BrowserAgent {
       }
     });
 
-    console.log("[Anticipy Agent] finished:", result.success ? "✓" : "✗", result.message);
+    // Console always gets the full diagnostic — separate from user-visible message.
+    console.log(
+      "[Anticipy Agent] finished:",
+      result.success ? "✓" : "✗",
+      result.message + (debugTail || "")
+    );
     return result;
   }
 

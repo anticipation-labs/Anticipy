@@ -1,9 +1,24 @@
+export interface PriorIntentContext {
+  /** The prior intent's action_type — gives the LLM the task family. */
+  actionType: string;
+  /** What the agent originally understood the user wanted. */
+  summary: string;
+  /** The exact quote the prior extraction was based on. */
+  evidenceQuote: string;
+  /** The structured slots the prior extraction filled in (may be partial). */
+  parameters: Record<string, unknown>;
+  /** The question the agent asked the wearer (from execution_result). */
+  question: string;
+}
+
 export function buildIntentPrompt(
   transcript: string,
   localTime: string,
   timezone: string,
   recentActions: string[] = [],
-  crossSessionContext: string[] = []
+  crossSessionContext: string[] = [],
+  priorIntent: PriorIntentContext | null = null,
+  memoryContext: string[] = []
 ): { system: string; user: string } {
   const system = `You are an ambient intelligence assistant that listens to real conversations and extracts ONLY genuinely actionable items the user needs to do LATER.
 
@@ -70,11 +85,31 @@ If the conversation is purely casual or contains no real future actions: { "reas
       ? "\nFrom earlier conversations today:\n" + crossSessionContext.map((a, i) => `  ${i + 1}. ${a}`).join("\n") + "\nUse this context to detect follow-ups, avoid duplicates, and understand ongoing threads."
       : "";
 
+  // Long-term memory context: random facts, preferences, relationships,
+  // and references the wearer has mentioned in prior sessions. The intent
+  // LLM uses these to disambiguate pronouns ("call her back" → who is
+  // "her"), catch follow-ups ("did I order those Gucci shoes yet"),
+  // avoid re-emitting intents already captured/done, and personalize
+  // ("the coffee place I usually go" → resolve to their saved favorite).
+  const memoryBlock =
+    memoryContext.length > 0
+      ? "\nLong-term memory about this wearer (use to disambiguate pronouns, resolve references, avoid re-emitting already-captured items):\n" +
+        memoryContext.map((m, i) => `  ${i + 1}. ${m}`).join("\n")
+      : "";
+
+  // Clarification-loop context: the wearer is replying to a follow-up question
+  // the agent raised on a prior intent. Pass everything we already knew so the
+  // LLM merges the new answer with prior slots and re-emits a single COMPLETE
+  // intent (missing_slots empty), instead of starting from scratch.
+  const priorIntentBlock = priorIntent
+    ? `\n\nFOLLOW-UP CONTEXT — the wearer is now answering a question we raised earlier on this task. Re-emit ONE intent that merges the prior known fields with the wearer's new answer. The merged intent's missing_slots MUST be empty (we now have the missing pieces). Do NOT re-ask the same question. Do NOT emit unrelated new intents from this short reply.\n  Prior action_type: ${priorIntent.actionType}\n  Prior summary: ${priorIntent.summary}\n  Prior evidence: "${priorIntent.evidenceQuote}"\n  Prior parameters (already filled in): ${JSON.stringify(priorIntent.parameters)}\n  Question we asked the wearer: ${priorIntent.question}\n  The transcript above contains ONLY the wearer's answer to that question. Treat it as the missing pieces, merge into the prior parameters, and output the completed intent.`
+    : "";
+
   const user = `${transcript}
 
 ---
 Current local time: ${localTime} (${timezone})
-Recent actions: ${recentActionsBlock}${crossSessionBlock}
+Recent actions: ${recentActionsBlock}${crossSessionBlock}${memoryBlock}${priorIntentBlock}
 
 Extract ONLY genuine future actions the user needs to take. Skip conversational back-and-forth. Reason briefly, then output JSON.`;
 
