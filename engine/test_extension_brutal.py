@@ -429,7 +429,8 @@ async def run_scenario(scenario: dict, ctx, sw) -> dict:
             "trace": [],
         }
 
-    # Poll until done or timeout
+    # Poll until done or timeout. CRITICAL: filter on intentId so we don't
+    # read stale status from a previous scenario whose agent is still alive.
     deadline = t0 + TASK_TIMEOUT_S
     final_status = None
     last_step_msg = ""
@@ -447,8 +448,11 @@ async def run_scenario(scenario: dict, ctx, sw) -> dict:
             status = None
         if not status:
             continue
+        # Ignore stale status updates from a previous scenario (e.g., when a
+        # prior agent timed out at the runner level but kept running JS-side).
+        if status.get("intentId") != intent["id"]:
+            continue
         msg = status.get("message", "")
-        # Track latest step number from running messages like "Step 12/60..."
         m = re.search(r"step\s+(\d+)\s*/", msg.lower())
         if m:
             new_count = int(m.group(1))
@@ -459,9 +463,6 @@ async def run_scenario(scenario: dict, ctx, sw) -> dict:
             final_status = status
             break
         last_step_msg = msg
-        # Liveness watchdog — if step counter hasn't budged for 90s, the
-        # agent's likely stuck on a hung page-load. Abort early to free up
-        # the runner for the next scenario.
         if step_count > 0 and (time.time() - last_progress_ts) > LIVE_PROGRESS_TIMEOUT:
             final_status = {
                 "status": "failed",

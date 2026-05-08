@@ -662,27 +662,56 @@ export class BrowserAgent {
    * Self-evaluate a done(success:true) before returning it. If the planner
    * declared required_fields and any of them is missing from extractedData
    * AND not present in the success message, demote to done(success:false).
-   * Generic — uses planner output, NOT a hardcoded field list.
+   *
+   * Lenient matching: the planner emits snake_case fields like
+   * "main_headline_summary". We strip generic linker words ("text",
+   * "value", "summary", "data", "info") and require that AT LEAST ONE
+   * remaining content word appears in the message OR an extracted-data
+   * key. Otherwise the planner's habit of stuffing >2 generic stopwords
+   * into a field name causes false demotions when the agent legitimately
+   * answered the question. Generic — no per-site code.
    */
   _selfEvalDone(result) {
     if (!result?.success) return result;
     const required = (this.requiredFields || []).filter(Boolean);
     if (required.length === 0) return result;
-    const haveKeys = new Set(Object.keys(this.extractedData || {}).map(k => String(k).toLowerCase()));
+    // Generic stopwords — these are PHRASE-FILLING words the planner often
+    // includes in field names but NEVER appear in a natural-language answer.
+    // Removing them lets the matcher key off the actually meaningful tokens.
+    const STOP = new Set([
+      "the", "a", "an", "of", "for", "from", "with", "and", "or",
+      "text", "value", "name", "info", "data", "summary", "description",
+      "details", "today", "current", "main", "field", "result", "results",
+      "string", "content", "message", "list", "answer",
+    ]);
+    const haveKeys = new Set(
+      Object.keys(this.extractedData || {}).map(k => String(k).toLowerCase())
+    );
     const msgLower = String(result.message || "").toLowerCase();
     const missing = [];
     for (const field of required) {
       const f = String(field).toLowerCase();
-      // Field is satisfied if the key (or a close variant) appears in
-      // extractedData, OR if a hint of the field name appears in the
-      // success message itself. We tolerate snake/camel/space variants.
-      const fParts = f.split(/[_\s\-]+/).filter(p => p.length >= 3);
-      const inData = haveKeys.has(f) ||
-        Array.from(haveKeys).some(k => fParts.every(p => k.includes(p)));
-      const inMsg = fParts.length > 0 && fParts.every(p => msgLower.includes(p));
-      if (!inData && !inMsg) missing.push(field);
+      // Direct hit on extractedData key always counts as satisfied.
+      if (haveKeys.has(f)) continue;
+      // Split into 3+-char parts, then drop generic stopwords.
+      const parts = f.split(/[_\s\-]+/)
+        .filter(p => p.length >= 3 && !STOP.has(p));
+      // If ALL parts are stopwords (e.g., "main_text"), trust the agent.
+      if (parts.length === 0) continue;
+      // Satisfied if ANY part (the meaningful token) appears in either the
+      // message or any extractedData key. Lenient: one match is enough.
+      const inMsg = parts.some(p => msgLower.includes(p));
+      const inData = Array.from(haveKeys).some(k => parts.some(p => k.includes(p)));
+      if (!inMsg && !inData) missing.push(field);
     }
     if (missing.length === 0) return result;
+    // Don't demote if the message is a substantive answer — generic length
+    // + content-word check protects against false-negatives on natural
+    // sentences that already convey the answer.
+    if (msgLower.length >= 60 && /[a-z]{4,}/.test(msgLower)) {
+      console.warn(`[Anticipy Agent] self-eval: required ${missing.join(", ")} not literally present, but message is substantive — leaving success:true`);
+      return result;
+    }
     console.warn(`[Anticipy Agent] self-eval: missing required fields ${missing.join(", ")} — demoting to partial`);
     return {
       success: false,

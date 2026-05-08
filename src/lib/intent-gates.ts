@@ -27,7 +27,7 @@
  * the intent — we'd rather over-notify than silently drop a real task.
  */
 
-import { callGemini } from "@/lib/gemini";
+import { callGemini, parseJsonWithRepair } from "@/lib/gemini";
 
 export interface GateInput {
   /** Wearer's high-level summary of what they want done. */

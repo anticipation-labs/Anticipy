@@ -317,6 +317,20 @@ def _ws_connection_release(user_id: str | None, ip: str) -> None:
     _ws_connections_by_ip[ip] = max(0, cur_ip - 1)
 
 
+def _ws_user_attach(user_id: str) -> str | None:
+    """After an already-admitted anonymous WS authenticates, bump the
+    per-user counter and check the per-user cap. Returns None on success,
+    refusal string when the cap would be exceeded. The per-IP count is
+    NOT touched (the connection was already accepted)."""
+    if _ws_connections_by_user.get(user_id, 0) >= MAX_WS_CONCURRENT_PER_USER:
+        return (
+            "Too many concurrent connections for this user. "
+            "Close another tab or wait a moment."
+        )
+    _ws_connections_by_user[user_id] = _ws_connections_by_user.get(user_id, 0) + 1
+    return None
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Confirmation tokens (signed, expiring) for /execute-intent
 # A token attests that THIS specific task hash was approved by THIS user.
@@ -740,6 +754,21 @@ async def ws_task(websocket: WebSocket):
 
     client_ip = _ws_client_ip(websocket)
 
+    # Per-IP connection cap applies even before auth so a single attacker
+    # cannot exhaust file descriptors. The per-user cap kicks in after
+    # the auth token is validated below. We admit anonymously here and
+    # may upgrade once we know the user.
+    refusal = _ws_connection_admit(None, client_ip)
+    if refusal is not None:
+        try:
+            await websocket.send_json({"type": "error", "message": refusal})
+            await websocket.close(code=4429)
+        except Exception:
+            pass
+        return
+    admitted_user_id: str | None = None
+    admitted_ip: str = client_ip
+
     # Confirmation channel: agent blocks on this when it needs user input
     confirm_event = asyncio.Event()
     confirm_value: list[str] = [""]
@@ -773,8 +802,19 @@ async def ws_task(websocket: WebSocket):
         if payload:
             user_id = payload["user_id"]
             username = payload.get("username")
+            user_refusal = _ws_user_attach(user_id)
+            if user_refusal:
+                _ws_connection_release(None, admitted_ip)
+                try:
+                    await send_msg({"type": "error", "message": user_refusal})
+                    await websocket.close(code=4429)
+                except Exception:
+                    pass
+                return
+            admitted_user_id = user_id
 
     if WS_REQUIRE_AUTH and not user_id:
+        _ws_connection_release(admitted_user_id, admitted_ip)
         await send_msg({"type": "error", "message": msg.AUTH_REQUIRED})
         try:
             await websocket.close(code=4401)
@@ -816,6 +856,15 @@ async def ws_task(websocket: WebSocket):
                     if payload:
                         user_id = payload["user_id"]
                         username = payload.get("username")
+                        user_refusal = _ws_user_attach(user_id)
+                        if user_refusal:
+                            await send_msg({"type": "error", "message": user_refusal})
+                            try:
+                                await websocket.close(code=4429)
+                            except Exception:
+                                pass
+                            return
+                        admitted_user_id = user_id
 
             # --- Start task ---
             if msg_type == "start":
@@ -986,3 +1035,7 @@ async def ws_task(websocket: WebSocket):
                 await bg_task
             except (asyncio.CancelledError, Exception):
                 pass
+        # Always release the connection counters — even if the browser task
+        # is still cancelling. Otherwise a panic-disconnect leaks a slot
+        # forever and the cap pins to "Too many connections" for that user.
+        _ws_connection_release(admitted_user_id, admitted_ip)
