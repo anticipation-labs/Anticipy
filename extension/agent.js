@@ -60,6 +60,12 @@ function friendlyAgentMessage(raw) {
       lower.includes("offline")) {
     return "Network hiccup mid-task. Try again in a moment.";
   }
+  if (lower.includes("ai_unavailable") || lower.includes("llm call failed") ||
+      lower.includes("rate limit") || lower.includes("429") ||
+      lower.includes("all providers") || lower.includes("empty response from") ||
+      lower.includes("groq:") || lower.includes("gemini:") || lower.includes("claude proxy")) {
+    return "Hit my AI rate limit. Give me a minute and try again.";
+  }
   if (lower.includes("unexpected error")) {
     return "Something didn't go through. Try that again.";
   }
@@ -926,7 +932,12 @@ export class BrowserAgent {
     if (errors.length === 0) {
       throw new Error("No API keys configured. Sign in via the extension popup.");
     }
-    throw new Error("LLM call failed — " + errors.join(" | "));
+    // Internal-only details for the console; user-facing message is the
+    // first sentence. friendlyAgentMessage in the surrounding flow will
+    // catch this string and surface a calm fallback if it leaks. Detail
+    // is appended for debug grepping but kept brief.
+    console.warn("[anticipy-agent] all providers failed:", errors.join(" | "));
+    throw new Error("ai_unavailable");
   }
 
   /**
