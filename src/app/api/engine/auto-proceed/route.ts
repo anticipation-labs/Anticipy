@@ -17,6 +17,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { executeAction } from "@/lib/execute-action";
 import { requireSupabaseUser } from "@/lib/require-auth";
 import { recordPreferenceSignal } from "@/lib/preference-record";
+import { buildUserProfile } from "@/lib/meta-monitor";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -134,6 +135,16 @@ export async function POST(req: Request) {
       },
       "auto_proceed"
     );
+    // Meta-monitor profile rebuild — auto_proceed is a real signal too
+    // (the user could have stepped in to skip and chose not to).
+    try {
+      await buildUserProfile(authedUser.id);
+    } catch (err) {
+      console.warn(
+        "[auto-proceed] buildUserProfile failed (non-fatal):",
+        err instanceof Error ? err.message : err
+      );
+    }
   } catch (err) {
     console.warn(
       "[auto-proceed] recordPreferenceSignal threw unexpectedly:",

@@ -5,6 +5,7 @@ import {
   recordPreferenceSignal,
   type PreferenceSignal,
 } from "@/lib/preference-record";
+import { buildUserProfile } from "@/lib/meta-monitor";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import {
   isLegacyPlainUuid,
@@ -209,6 +210,20 @@ export async function GET(req: Request) {
         },
         signal
       );
+      // Meta-monitor: rebuild the user's style profile from their last
+      // 30 signals. Awaited so the next /analyze call sees an up-to-
+      // date profile (no race where the user clicks Yes and immediately
+      // dictates again with stale style context). Internal throttle
+      // skips the rebuild when too few new signals have arrived since
+      // the last one. Cost: at most one Gemini Flash call (~$0.0001).
+      try {
+        await buildUserProfile(prefUserId);
+      } catch (err) {
+        console.warn(
+          "[confirm] buildUserProfile failed (non-fatal):",
+          err instanceof Error ? err.message : err
+        );
+      }
     } catch (err) {
       // Defensive — recordPreferenceSignal already swallows everything,
       // but never let the user-facing path die over a learning row.

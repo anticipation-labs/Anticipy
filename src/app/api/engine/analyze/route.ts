@@ -23,6 +23,7 @@ import {
 import { extractMemoryItems } from "@/lib/memory-extract";
 import { recallRelevantMemory } from "@/lib/memory-recall";
 import { recallUserPreferences } from "@/lib/preference-recall";
+import { recallUserProfile } from "@/lib/meta-monitor";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -339,6 +340,22 @@ export async function POST(req: Request) {
     // current prompt.
     const fewShotBlock = process.env.ANTICIPY_FEW_SHOT_BLOCK || "";
 
+    // Meta-monitor "second brain" — distilled per-user style profile.
+    // Asynchronously rebuilt by buildUserProfile() after each preference
+    // signal. Empty string when the user has fewer than 3 signals
+    // (early-stage users get the unbiased baseline). Fail-open.
+    let userProfileBlock = "";
+    try {
+      userProfileBlock = await recallUserProfile(authedUser.id);
+    } catch (err) {
+      console.warn(
+        "[meta-monitor] recall failed; continuing without profile:",
+        err instanceof Error ? err.message : err
+      );
+    }
+    const fewShotPlusProfile =
+      [fewShotBlock, userProfileBlock].filter(Boolean).join("\n\n");
+
     // Build the prompt
     const { system, user } = buildIntentPrompt(
       safeTranscript,
@@ -349,7 +366,7 @@ export async function POST(req: Request) {
       priorIntentContext,
       memoryContext,
       preferenceContext,
-      { fewShotBlock }
+      { fewShotBlock: fewShotPlusProfile }
     );
 
     const llmMessages = [
