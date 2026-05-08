@@ -164,8 +164,9 @@ async def run_intent_test(
 
     try:
         tracker = CostTracker()
-        category = await asyncio.wait_for(classify(task_text, tracker), timeout=30)
-        print(f"  [classify] → {category}", flush=True)
+        classification = await asyncio.wait_for(classify(task_text, tracker), timeout=30)
+        category = classification.category if hasattr(classification, "category") else str(classification)
+        print(f"  [classify] → {category} (degraded={getattr(classification,'degraded',False)})", flush=True)
 
         if category == "chat":
             response = await asyncio.wait_for(handle_chat(task_text, tracker), timeout=30)

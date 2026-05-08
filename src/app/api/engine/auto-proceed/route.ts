@@ -109,16 +109,25 @@ export async function POST(req: Request) {
   }
 
   // Record the auto-proceed signal so future intent extraction can learn
-  // which kinds of actions the wearer leaves untouched.
-  void recordPreferenceSignal(
-    authedUser.id,
-    {
-      action_type: intent.action_type ?? null,
-      summary_for_user: intent.summary_for_user ?? null,
-      evidence_quote: intent.evidence_quote ?? null,
-    },
-    "auto_proceed"
-  );
+  // which kinds of actions the wearer leaves untouched. Awaited because
+  // Vercel kills the lambda the moment we return the response — a
+  // fire-and-forget here loses the row.
+  try {
+    await recordPreferenceSignal(
+      authedUser.id,
+      {
+        action_type: intent.action_type ?? null,
+        summary_for_user: intent.summary_for_user ?? null,
+        evidence_quote: intent.evidence_quote ?? null,
+      },
+      "auto_proceed"
+    );
+  } catch (err) {
+    console.warn(
+      "[auto-proceed] recordPreferenceSignal threw unexpectedly:",
+      err instanceof Error ? err.message : err
+    );
+  }
 
   // If the default is "yes" (reversible/low-stakes), run the action like
   // the confirm endpoint would. If "no", we stop here — auto_proceeded

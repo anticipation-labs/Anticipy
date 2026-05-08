@@ -128,7 +128,13 @@ MODEL_CHAIN: list[dict] = []
 
 
 def _build_model_chain() -> list[dict]:
-    """Build the ordered fallback chain from available keys."""
+    """Build the ordered fallback chain from available keys.
+
+    `min_interval_seconds` is the minimum spacing between requests to that
+    provider. The shared throttle in app.models honors it on every call so
+    fan-out (asyncio.gather) does not exceed the provider's free-tier rate
+    limit. 0 means "no spacing" — the throttle is a no-op for that provider.
+    """
     chain: list[dict] = []
     # Gemini first — better at structured JSON output and multi-step reasoning
     if GOOGLE_API_KEY:
@@ -140,6 +146,7 @@ def _build_model_chain() -> list[dict]:
                 "model": "gemini-2.5-flash",
                 "cost_input": 0.0001,
                 "cost_output": 0.0004,
+                "min_interval_seconds": 0.0,
             }
         )
     if GROQ_API_KEY:
@@ -151,6 +158,7 @@ def _build_model_chain() -> list[dict]:
                 "model": "llama-3.3-70b-versatile",
                 "cost_input": 0.00059,
                 "cost_output": 0.00079,
+                "min_interval_seconds": 0.0,
             }
         )
     if DEEPSEEK_API_KEY:
@@ -162,6 +170,7 @@ def _build_model_chain() -> list[dict]:
                 "model": "deepseek-chat",
                 "cost_input": 0.00014,
                 "cost_output": 0.00028,
+                "min_interval_seconds": 0.0,
             }
         )
     return chain

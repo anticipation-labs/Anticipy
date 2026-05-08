@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { escapeHtml, sanitizeHeader } from "./escape";
+import { signConfirmToken } from "./confirm-token";
 
 const resend = new Resend(process.env.RESEND_API_KEY ?? "re_placeholder");
 const FROM_EMAIL = "Anticipy <notifications@aevoy.com>";
@@ -10,6 +11,10 @@ interface IntentNotification {
   evidenceQuote: string;
   importance: string;
   actionType: string;
+  // Owning user id — when present, baked into the HMAC signature so the
+  // resulting token can only confirm the matching intent. Optional for
+  // backwards compatibility with callers that don't yet pass it.
+  userId?: string;
 }
 
 type Importance = "critical" | "important" | "standard" | "low";
@@ -33,9 +38,16 @@ export async function sendIntentEmail(
   baseUrl: string,
   subjectPrefix?: string
 ): Promise<{ id: string } | null> {
-  const safeIntentId = encodeURIComponent(intent.intentId);
-  const confirmUrl = `${baseUrl}/api/engine/confirm?intentId=${safeIntentId}&action=yes`;
-  const rejectUrl = `${baseUrl}/api/engine/confirm?intentId=${safeIntentId}&action=no`;
+  // Issue a signed token bound to (intentId, userId, expiresAt). The
+  // confirm route validates the signature + expiry, and accepts old plain
+  // intentId links for a 24h grace window via the legacy fallback path.
+  const token = signConfirmToken({
+    intentId: intent.intentId,
+    userId: intent.userId ?? "",
+  });
+  const safeToken = encodeURIComponent(token);
+  const confirmUrl = `${baseUrl}/api/engine/confirm?token=${safeToken}&action=yes`;
+  const rejectUrl = `${baseUrl}/api/engine/confirm?token=${safeToken}&action=no`;
 
   const { label: importanceText, color: importanceColor } = importanceLabel(
     intent.importance

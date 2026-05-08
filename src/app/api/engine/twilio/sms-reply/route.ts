@@ -47,33 +47,85 @@ export async function POST(req: Request) {
     );
   }
 
-  // Find the most recent pending intent that was notified to this phone
-  const { data: notification } = await supabaseAdmin
+  // Resolve which intent the wearer is replying to. Older code picked the
+  // most-recent SMS for this phone — but if two intents are pending and
+  // the user replies "yes" to the first one (still in their phone), we
+  // would silently confirm the SECOND, more-recent one. Now: when more
+  // than one pending intent exists, we either accept an explicit ID
+  // prefix in the reply ("yes ab12") or ask for one. Generic — no
+  // hardcoded action types or per-user logic.
+  const { data: pendingNotifications } = await supabaseAdmin
     .from("anticipy_notifications")
-    .select("intent_id")
+    .select("intent_id, sent_at")
     .eq("recipient", from)
     .eq("channel", "sms")
     .order("sent_at", { ascending: false })
-    .limit(1)
-    .single();
+    .limit(20);
 
-  if (!notification) {
+  const candidateIntentIds = Array.from(
+    new Set((pendingNotifications ?? []).map((n) => n.intent_id).filter(Boolean))
+  ) as string[];
+
+  if (candidateIntentIds.length === 0) {
     return twimlResponse("Anticipy: No pending actions found.");
   }
 
-  const intentId = notification.intent_id;
-
-  // Check intent is still pending (prevents double-execution across channels)
-  const { data: intent } = await supabaseAdmin
+  // Filter to actually-pending intents — anything already executed/skipped
+  // is no longer a candidate for this reply.
+  const { data: pendingIntents } = await supabaseAdmin
     .from("anticipy_intents")
-    .select("*")
-    .eq("id", intentId)
-    .in("status", ["pending"])
-    .single();
+    .select("id, summary_for_user, status")
+    .in("id", candidateIntentIds)
+    .eq("status", "pending");
+
+  const stillPending = pendingIntents ?? [];
+  if (stillPending.length === 0) {
+    return twimlResponse("Anticipy: That action has already been handled.");
+  }
+
+  // Detect a 4-12 char alphanumeric ID prefix in the body, e.g. "yes ab12cd".
+  // Match against the start of the intent UUID — short, generic, no schemas.
+  const idTokenMatch = body.match(/\b([0-9a-f]{4,12})\b/i);
+  const idPrefix = idTokenMatch ? idTokenMatch[1].toLowerCase() : null;
+
+  let intent: typeof stillPending[number] | null = null;
+  if (stillPending.length === 1) {
+    intent = stillPending[0];
+  } else if (idPrefix) {
+    const matches = stillPending.filter((row) =>
+      String(row.id).toLowerCase().startsWith(idPrefix)
+    );
+    if (matches.length === 1) {
+      intent = matches[0];
+    } else if (matches.length > 1) {
+      return twimlResponse(
+        "Anticipy: That ID prefix matches multiple actions. Reply with more characters."
+      );
+    } else {
+      return twimlResponse(
+        "Anticipy: I couldn't find an action matching that ID. Open Anticipy for the list."
+      );
+    }
+  } else {
+    // Multiple pending — ask which one. Show first 4 chars of each id and
+    // a short summary so the wearer knows which to disambiguate.
+    const lines = stillPending
+      .slice(0, 4)
+      .map((row) => {
+        const id4 = String(row.id).slice(0, 4);
+        const sum = String(row.summary_for_user || "(no summary)").slice(0, 60);
+        return `${id4}: ${sum}`;
+      })
+      .join("\n");
+    return twimlResponse(
+      `Anticipy: ${stillPending.length} actions pending. Reply YES <id> with one of:\n${lines}`
+    );
+  }
 
   if (!intent) {
     return twimlResponse("Anticipy: That action has already been handled.");
   }
+  const intentId = intent.id;
 
   const newStatus = isConfirm ? "confirmed" : "rejected";
 
@@ -104,7 +156,19 @@ export async function POST(req: Request) {
     .eq("channel", "sms");
 
   if (isConfirm) {
-    const result = await executeAction(intent);
+    // Fetch the FULL intent row before executing — the disambiguation
+    // SELECT only pulled (id, summary, status) above.
+    const { data: fullIntent } = await supabaseAdmin
+      .from("anticipy_intents")
+      .select("*")
+      .eq("id", intentId)
+      .single();
+
+    if (!fullIntent) {
+      return twimlResponse("Anticipy: That action has already been handled.");
+    }
+
+    const result = await executeAction(fullIntent);
 
     await supabaseAdmin
       .from("anticipy_intents")

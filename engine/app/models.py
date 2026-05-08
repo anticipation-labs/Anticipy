@@ -1,16 +1,22 @@
 """
 LLM API wrapper with automatic retry, fallback chain, 5-strategy JSON extraction,
 and cumulative cost tracking. Uses raw httpx — no SDK imports.
+
+Per-provider throttling and slot serialization live here so that fan-out
+(asyncio.gather) over the same provider does not exceed its rate limit and
+different providers run independently.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import re
 import time
 from dataclasses import dataclass, field
+from typing import AsyncIterator
 
 import httpx
 
@@ -18,6 +24,23 @@ from app.config import MODEL_CHAIN, MAX_COST_USD
 
 
 logger = logging.getLogger("engine")
+
+
+class DegradedResponse:
+    """
+    Sentinel returned by the LLM cascade when every provider in MODEL_CHAIN
+    failed (network / 4xx / unparseable). Falsy and not a dict, so existing
+    callers using `if result and isinstance(result, dict)` keep working —
+    new callers can `isinstance(x, DegradedResponse)` to fail closed.
+    """
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:  # noqa: D401
+        return False
+
+    def __repr__(self) -> str:
+        return "<DegradedResponse>"
 
 
 @dataclass
@@ -33,6 +56,97 @@ class CostTracker:
     @property
     def exceeded(self) -> bool:
         return self.total_usd >= MAX_COST_USD
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-provider throttle + slot
+#
+# Many free / low-tier providers cap ~1 request per ~1.2s. Without spacing,
+# 3-way asyncio.gather → 429s; with spacing the slowest queue still finishes
+# inside the layer timeout if `effective_layer_timeout_seconds` pads.
+#
+# State is *module-global* on purpose: every component that calls a provider
+# shares the same lock so cross-feature fan-out (proactive + intent extract
+# in the same task) cooperates.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_throttle_locks: dict[str, asyncio.Lock] = {}
+_throttle_last_call: dict[str, float] = {}
+_provider_semaphores: dict[str, asyncio.Semaphore] = {}
+
+
+def _get_lock(provider: str) -> asyncio.Lock:
+    lock = _throttle_locks.get(provider)
+    if lock is None:
+        lock = asyncio.Lock()
+        _throttle_locks[provider] = lock
+    return lock
+
+
+def _get_semaphore(provider: str) -> asyncio.Semaphore:
+    sem = _provider_semaphores.get(provider)
+    if sem is None:
+        sem = asyncio.Semaphore(1)
+        _provider_semaphores[provider] = sem
+    return sem
+
+
+async def _await_throttle(provider: str, min_interval: float) -> None:
+    """
+    Block until at least `min_interval` seconds have passed since the last
+    call to `provider`. min_interval <= 0 is a no-op. Safe to call from
+    many concurrent coroutines on the same provider — they serialize.
+    """
+    if min_interval <= 0:
+        return
+    lock = _get_lock(provider)
+    async with lock:
+        last = _throttle_last_call.get(provider, 0.0)
+        now = time.monotonic()
+        wait = (last + min_interval) - now
+        if wait > 0:
+            await asyncio.sleep(wait)
+            now = time.monotonic()
+        _throttle_last_call[provider] = now
+
+
+@contextlib.asynccontextmanager
+async def provider_slot(
+    provider: str, min_interval: float
+) -> AsyncIterator[None]:
+    """
+    Async context manager that combines a per-provider Semaphore(1) with the
+    throttle so that:
+      - only one coroutine is *inside* the call to `provider` at a time
+      - the throttle still applies on entry
+      - different providers run in parallel (independent semaphores)
+    """
+    sem = _get_semaphore(provider)
+    async with sem:
+        await _await_throttle(provider, min_interval)
+        yield
+
+
+def effective_layer_timeout_seconds(
+    base: float, expected_concurrent_calls: int = 1
+) -> float:
+    """
+    Pad a layer's `asyncio.wait_for` budget so that fan-out across
+    `expected_concurrent_calls` coroutines on the *same* provider has time to
+    drain through the throttle.
+
+    Formula: base + (N - 1) * MODEL_CHAIN[0].min_interval_seconds. If the
+    primary provider has no throttle (or MODEL_CHAIN is empty), returns base.
+    """
+    if expected_concurrent_calls <= 1:
+        return base
+    if not MODEL_CHAIN:
+        return base
+    primary = MODEL_CHAIN[0]
+    interval = float(primary.get("min_interval_seconds", 0.0) or 0.0)
+    if interval <= 0:
+        return base
+    return base + (expected_concurrent_calls - 1) * interval
 
 
 def _strip_json(text: str) -> str:
@@ -186,6 +300,7 @@ async def _call_openai_compatible(
     messages: list[dict],
     temperature: float = 0.0,
     max_tokens: int = 256,
+    json_mode: bool = False,
 ) -> tuple[str, int, int]:
     """Call an OpenAI-compatible chat completions endpoint. Returns (text, input_tokens, output_tokens)."""
     url = f"{base_url}/chat/completions"
@@ -193,12 +308,14 @@ async def _call_openai_compatible(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    body = {
+    body: dict = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(url, headers=headers, json=body)
         resp.raise_for_status()
@@ -221,6 +338,7 @@ async def _call_gemini(
     messages: list[dict],
     temperature: float = 0.0,
     max_tokens: int = 256,
+    json_mode: bool = False,
 ) -> tuple[str, int, int]:
     """Call Google Gemini REST API. Returns (text, input_tokens, output_tokens)."""
     # The API key is passed via header rather than the URL so it doesn't leak
@@ -252,13 +370,16 @@ async def _call_gemini(
         first = contents[0]
         first["parts"][0]["text"] = system_text + "\n\n" + first["parts"][0]["text"]
 
+    gen_cfg: dict = {
+        "temperature": temperature,
+        "maxOutputTokens": max_tokens,
+        "thinkingConfig": {"thinkingBudget": 0},
+    }
+    if json_mode:
+        gen_cfg["responseMimeType"] = "application/json"
     body = {
         "contents": contents,
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-            "thinkingConfig": {"thinkingBudget": 0},
-        },
+        "generationConfig": gen_cfg,
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -285,25 +406,33 @@ async def _call_model(
     messages: list[dict],
     temperature: float = 0.0,
     max_tokens: int = 256,
+    json_mode: bool = False,
 ) -> tuple[str, int, int]:
-    """Dispatch to the correct backend based on model name."""
-    if model_cfg["name"] == "gemini":
-        return await _call_gemini(
+    """Dispatch to the correct backend based on model name. Honors the
+    per-provider throttle via `provider_slot`. When `json_mode=True`,
+    asks the provider for native JSON output (Gemini responseMimeType,
+    OpenAI-compat response_format)."""
+    interval = float(model_cfg.get("min_interval_seconds", 0.0) or 0.0)
+    async with provider_slot(model_cfg["name"], interval):
+        if model_cfg["name"] == "gemini":
+            return await _call_gemini(
+                model_cfg["base_url"],
+                model_cfg["api_key"],
+                model_cfg["model"],
+                messages,
+                temperature,
+                max_tokens,
+                json_mode=json_mode,
+            )
+        return await _call_openai_compatible(
             model_cfg["base_url"],
             model_cfg["api_key"],
             model_cfg["model"],
             messages,
             temperature,
             max_tokens,
+            json_mode=json_mode,
         )
-    return await _call_openai_compatible(
-        model_cfg["base_url"],
-        model_cfg["api_key"],
-        model_cfg["model"],
-        messages,
-        temperature,
-        max_tokens,
-    )
 
 
 async def llm_call(
@@ -313,28 +442,32 @@ async def llm_call(
     max_tokens: int = 256,
     require_json: bool = False,
     retries_per_model: int = 2,
-) -> str | dict | None:
+    json_mode: bool = False,
+) -> str | dict | DegradedResponse:
     """
-    Call LLMs with retry and fallback.
-    If require_json=True, uses 5-strategy JSON parsing, returning a dict.
-    Otherwise returns raw text.
-    Returns None only if every model in the chain fails.
+    Call LLMs with retry and fallback. Returns:
+      - dict, when require_json=True and parsing succeeds on any provider
+      - str, when require_json=False and any provider returns text
+      - DegradedResponse(), when every provider in MODEL_CHAIN failed (or
+        the chain is empty / the cost cap is exceeded). The sentinel is
+        falsy so existing `if result and ...` callers work unchanged.
 
     Errors never propagate — they're logged at debug level and we move to the
     next model so callers don't see backend-specific stack traces.
     """
     if tracker.exceeded:
-        return None
+        return DegradedResponse()
     if not MODEL_CHAIN:
-        return None
+        return DegradedResponse()
 
     for model_cfg in MODEL_CHAIN:
         for attempt in range(retries_per_model):
             if tracker.exceeded:
-                return None
+                return DegradedResponse()
             try:
                 text, in_tok, out_tok = await _call_model(
-                    model_cfg, messages, temperature, max_tokens
+                    model_cfg, messages, temperature, max_tokens,
+                    json_mode=json_mode or require_json,
                 )
                 tracker.add(
                     in_tok,
@@ -378,7 +511,7 @@ async def llm_call(
                     continue
                 break  # move to next model
 
-    return None
+    return DegradedResponse()
 
 
 async def llm_call_text(
@@ -386,12 +519,13 @@ async def llm_call_text(
     tracker: CostTracker,
     temperature: float = 0.0,
     max_tokens: int = 256,
-) -> str:
-    """Convenience: call LLM and always return a string (empty on failure)."""
+) -> str | DegradedResponse:
+    """Call LLM and return text. Returns DegradedResponse() on full cascade
+    failure so callers can `isinstance(x, DegradedResponse)` to fail closed."""
     result = await llm_call(messages, tracker, temperature, max_tokens, require_json=False)
-    if result is None:
-        return ""
-    return str(result)
+    if isinstance(result, DegradedResponse):
+        return result
+    return str(result) if result is not None else ""
 
 
 async def llm_call_json(
@@ -399,9 +533,65 @@ async def llm_call_json(
     tracker: CostTracker,
     temperature: float = 0.0,
     max_tokens: int = 256,
-) -> dict | None:
-    """Convenience: call LLM and return parsed JSON dict or None."""
+) -> dict | DegradedResponse:
+    """Call LLM and return parsed JSON dict, or DegradedResponse on full
+    cascade failure. Callers should `isinstance(x, dict)` before consuming."""
     result = await llm_call(messages, tracker, temperature, max_tokens, require_json=True)
     if isinstance(result, dict):
         return result
-    return None
+    return DegradedResponse()
+
+
+async def llm_call_json_str(
+    messages: list[dict],
+    tracker: CostTracker,
+    temperature: float = 0.0,
+    max_tokens: int = 256,
+) -> str:
+    """Provider-native JSON mode. Returns a clean JSON *string* (parseable
+    by `json.loads` with no fence stripping or regex recovery), or "" when
+    every provider failed. Used by the proactive cascade adapter."""
+    if tracker.exceeded or not MODEL_CHAIN:
+        return ""
+
+    for model_cfg in MODEL_CHAIN:
+        for attempt in range(2):
+            if tracker.exceeded:
+                return ""
+            try:
+                text, in_tok, out_tok = await _call_model(
+                    model_cfg, messages, temperature, max_tokens, json_mode=True,
+                )
+                tracker.add(
+                    in_tok, out_tok,
+                    model_cfg["cost_input"], model_cfg["cost_output"],
+                )
+                if not text:
+                    continue
+                stripped = _strip_json(text)
+                # Validate it parses; otherwise treat as a soft failure.
+                try:
+                    json.loads(stripped)
+                    return stripped
+                except (json.JSONDecodeError, ValueError):
+                    if attempt < 1:
+                        await asyncio.sleep(0.5)
+                        continue
+                    break
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code if e.response is not None else 0
+                logger.debug("LLM %s HTTP %s (json_str)", model_cfg.get("name"), status)
+                if status == 429 and attempt < 1:
+                    await asyncio.sleep(2.0)
+                    continue
+                break
+            except (httpx.TimeoutException, httpx.NetworkError):
+                if attempt < 1:
+                    await asyncio.sleep(1.0)
+                    continue
+                break
+            except Exception:
+                logger.debug("LLM %s json_str call failed", model_cfg.get("name"), exc_info=True)
+                break
+
+    return ""

@@ -1,10 +1,32 @@
 """
-Deterministic safety rules and input sanitization. The LLM cannot override these.
+Two-layer safety:
+
+  1. **AI verdict** (`safety_check`) — an LLM decides if the action is
+     blocked, requires confirmation, or is free to run. Empty input
+     short-circuits without an LLM call. If the cascade fails entirely,
+     we **fail closed** (blocked=True, degraded=True). This is the
+     primary surface called from the websocket and `/execute-intent` paths.
+
+  2. **Deterministic floor** (`check_blocked`, `block_reason`,
+     `check_needs_confirmation`, `is_auto_dismiss`) — keyword tables for
+     the highest-confidence categories (account destruction, password
+     entry, financial transfer, dox / harassment). Defense-in-depth so a
+     single LLM regression cannot allow a clear "delete my account"
+     through. Input *sanitization* (`sanitize_input`) also lives here
+     and is regex-driven.
+
+The LLM verdict can override "free" → "confirm" / "blocked", and the
+floor can independently block. The composition order is up to the caller
+(typical: sanitize → floor.check_blocked → safety_check).
 """
 
 from __future__ import annotations
 
+import asyncio
 import re
+from dataclasses import dataclass
+
+from app.models import CostTracker, DegradedResponse, llm_call_json
 
 # Actions that are ALWAYS blocked — agent refuses outright.
 # Categories: account destruction, credentials, money movement, data exfil,
@@ -287,3 +309,109 @@ def check_page_for_auto_dismiss(elements: list[dict]) -> dict | None:
         if is_auto_dismiss(name):
             return elem
     return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI safety verdict
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class Verdict:
+    """LLM verdict for a user action.
+
+    blocked: True if the action should be refused outright.
+    requires_confirmation: True if the action needs explicit user OK first.
+        Mutually exclusive with blocked — when blocked, confirmation is moot.
+    reason: human-readable rationale, never shown raw to the user.
+    degraded: True when the LLM cascade failed; we fail closed (blocked=True).
+    """
+
+    blocked: bool
+    requires_confirmation: bool
+    reason: str
+    degraded: bool
+
+
+_SAFETY_SYSTEM = (
+    "You are the safety classifier for a personal assistant that can take "
+    "actions on the user's behalf in their browser. Decide if the user's "
+    "request should be:\n"
+    "- blocked (irreversible harm, account destruction, credential theft, "
+    "money movement without explicit per-transaction confirmation, mass "
+    "delete, doxxing, harassment),\n"
+    "- requires_confirmation (any commerce, cancellation, posting publicly, "
+    "sending external messages, signups, bookings — anything visible or "
+    "irreversible enough that the user should approve the specific instance), "
+    "or\n"
+    "- free (read-only lookups, navigation, search, summary, fact-finding).\n\n"
+    "Output ONLY this JSON shape:\n"
+    "{\"blocked\": bool, \"requires_confirmation\": bool, \"reason\": \"...\"}\n\n"
+    "If unsure, prefer requires_confirmation over free. Never output anything "
+    "outside the JSON object."
+)
+
+
+_MAX_SAFETY_INPUT = 1500
+
+
+async def safety_check(text: str, tracker: CostTracker) -> Verdict:
+    """LLM-driven safety verdict.
+
+    Empty / whitespace-only input → blocked=False, no LLM call.
+    DegradedResponse or non-dict response → blocked=True, degraded=True
+    (fail closed: a regression in the cascade must not silently allow).
+    Inputs over `_MAX_SAFETY_INPUT` chars are truncated before being sent.
+    A blocked+confirmation pair is normalized to blocked-only — confirmation
+    is moot under refusal.
+    """
+    if not text or not text.strip():
+        return Verdict(
+            blocked=False,
+            requires_confirmation=False,
+            reason="empty input",
+            degraded=False,
+        )
+
+    truncated = text[:_MAX_SAFETY_INPUT]
+
+    messages = [
+        {"role": "system", "content": _SAFETY_SYSTEM},
+        {"role": "user", "content": truncated},
+    ]
+
+    try:
+        result = await llm_call_json(messages, tracker, temperature=0.0, max_tokens=120)
+    except Exception:
+        result = DegradedResponse()
+
+    if isinstance(result, DegradedResponse):
+        return Verdict(
+            blocked=True,
+            requires_confirmation=False,
+            reason="safety classifier unavailable",
+            degraded=True,
+        )
+
+    if not isinstance(result, dict):
+        return Verdict(
+            blocked=True,
+            requires_confirmation=False,
+            reason="safety classifier returned an unexpected shape",
+            degraded=True,
+        )
+
+    blocked = bool(result.get("blocked", False))
+    confirm = bool(result.get("requires_confirmation", False))
+    reason = str(result.get("reason", ""))[:300]
+
+    # Normalize: blocked wins over confirmation (the action will not run).
+    if blocked:
+        confirm = False
+
+    return Verdict(
+        blocked=blocked,
+        requires_confirmation=confirm,
+        reason=reason,
+        degraded=False,
+    )

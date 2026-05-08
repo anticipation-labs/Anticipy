@@ -5,6 +5,12 @@ import {
   recordPreferenceSignal,
   type PreferenceSignal,
 } from "@/lib/preference-record";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
+import {
+  isLegacyPlainUuid,
+  legacyGraceActive,
+  verifyConfirmToken,
+} from "@/lib/confirm-token";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +20,83 @@ const HTML_HEADERS = {
   "X-Robots-Tag": "noindex, nofollow",
 } as const;
 
+// Per-IP rate limit on the confirm GET endpoint. The endpoint runs an
+// LLM call (preference reasoning) per request, so even with the atomic
+// status-flip guard a flooded URL can still drive Gemini cost. 30/hr per
+// IP comfortably covers a real user (a handful of clicks / refreshes per
+// session); anything above that is bot traffic.
+const CONFIRM_RATE_LIMIT = 30;
+const CONFIRM_RATE_WINDOW_MS = 60 * 60 * 1000;
+
 export async function GET(req: Request) {
+  // 1) Rate-limit by client IP first — cheapest possible gate. The bucket
+  //    namespace pins this limiter to /confirm so other routes don't share
+  //    the same bucket.
+  const ip = clientIp(req);
+  const limit = rateLimit(
+    `engine-confirm:${ip}`,
+    CONFIRM_RATE_LIMIT,
+    CONFIRM_RATE_WINDOW_MS
+  );
+  if (!limit.allowed) {
+    const retryAfter = Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000));
+    return new Response(
+      renderPage(
+        "error",
+        "Too many requests. Try again in a minute."
+      ),
+      {
+        headers: { ...HTML_HEADERS, "Retry-After": String(retryAfter) },
+        status: 429,
+      }
+    );
+  }
+
   const url = new URL(req.url);
-  const intentId = url.searchParams.get("intentId");
+  // Two ways to pass the intent: signed `token` (preferred, new) or bare
+  // `intentId` (legacy, accepted during the grace window).
+  const tokenParam = url.searchParams.get("token");
+  const intentIdParam = url.searchParams.get("intentId");
   const action = url.searchParams.get("action");
+
+  // Resolve intentId from whichever parameter is present.
+  let intentId: string | null = null;
+  if (tokenParam) {
+    const verified = verifyConfirmToken(tokenParam);
+    if (!verified.ok) {
+      // Distinguish expired vs forged for the user message but never leak
+      // whether a token's intentId existed.
+      const reason = verified.reason;
+      const detail =
+        reason === "expired"
+          ? "This link has expired. Open Anticipy to see your latest actions."
+          : "This link is invalid. Open Anticipy to see your latest actions.";
+      return new Response(renderPage("error", detail), {
+        headers: HTML_HEADERS,
+        status: 400,
+      });
+    }
+    intentId = verified.intentId;
+  } else if (intentIdParam) {
+    // Legacy bare-UUID fallback — only honoured for a grace period and only
+    // when the value really looks like a UUID. Anything else is rejected.
+    if (!isLegacyPlainUuid(intentIdParam)) {
+      return new Response(
+        renderPage("error", "This link is invalid. Open Anticipy to see your latest actions."),
+        { headers: HTML_HEADERS, status: 400 }
+      );
+    }
+    if (!legacyGraceActive()) {
+      return new Response(
+        renderPage(
+          "error",
+          "This link has expired. Open Anticipy to see your latest actions."
+        ),
+        { headers: HTML_HEADERS, status: 400 }
+      );
+    }
+    intentId = intentIdParam;
+  }
 
   if (!intentId || !action || (action !== "yes" && action !== "no")) {
     return new Response(
@@ -94,22 +173,33 @@ export async function GET(req: Request) {
         : null;
   }
 
-  // Fire-and-forget preference recording: a small Gemini call summarizes
-  // WHY this signal landed (one sentence) and writes a row to
-  // anticipy_preferences. The reasoning is read back into future intent
-  // extraction prompts via recallUserPreferences. Failures are logged.
+  // Awaited preference recording. We used to fire-and-forget here, but
+  // Vercel terminates lambdas the moment the response is sent — so the
+  // background insert was getting silently killed. Awaiting adds ~600ms
+  // (one Gemini call + one row insert) which is acceptable for a confirm
+  // click that only fires once. Failures inside recordPreferenceSignal
+  // are already swallowed and logged, so this never blocks the user.
   if (prefUserId && intentRow) {
     const signal: PreferenceSignal =
       newStatus === "confirmed" ? "accept" : "reject";
-    void recordPreferenceSignal(
-      prefUserId,
-      {
-        action_type: intentRow.action_type ?? null,
-        summary_for_user: intentRow.summary_for_user ?? null,
-        evidence_quote: intentRow.evidence_quote ?? null,
-      },
-      signal
-    );
+    try {
+      await recordPreferenceSignal(
+        prefUserId,
+        {
+          action_type: intentRow.action_type ?? null,
+          summary_for_user: intentRow.summary_for_user ?? null,
+          evidence_quote: intentRow.evidence_quote ?? null,
+        },
+        signal
+      );
+    } catch (err) {
+      // Defensive — recordPreferenceSignal already swallows everything,
+      // but never let the user-facing path die over a learning row.
+      console.warn(
+        "[confirm] recordPreferenceSignal threw unexpectedly:",
+        err instanceof Error ? err.message : err
+      );
+    }
   }
 
   if (newStatus === "confirmed") {

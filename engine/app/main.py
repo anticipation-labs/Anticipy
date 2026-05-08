@@ -256,17 +256,137 @@ async def get_current_user(token: str) -> dict:
 
 
 def _get_client_ip(request: Request) -> str:
-    """Extract client IP from request, trusting x-forwarded-for only behind a proxy."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        # Take the left-most (original client) and strip whitespace.
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
+    """
+    Extract client IP. Honors `x-forwarded-for` ONLY when env
+    `TRUST_FORWARDED_FOR=1`. Without that opt-in the direct connection IP
+    is used so users can't spoof their own IP via a header.
+    """
+    if os.environ.get("TRUST_FORWARDED_FOR", "").lower() in {"1", "true", "yes", "on"}:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            # Take the left-most (original client) and strip whitespace.
+            first = forwarded.split(",")[0].strip()
+            if first:
+                return first
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip.strip()
     return request.client.host if request.client else "unknown"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# WebSocket connection caps (per-user + per-IP)
+# ──────────────────────────────────────────────────────────────────────────
+
+MAX_WS_CONCURRENT_PER_USER: int = 3
+MAX_WS_CONCURRENT_PER_IP: int = 10
+
+_ws_connections_by_user: dict[str, int] = defaultdict(int)
+_ws_connections_by_ip: dict[str, int] = defaultdict(int)
+
+
+def _ws_connection_admit(user_id: str | None, ip: str) -> str | None:
+    """Admit a new WS connection. Returns None on success, an error string
+    when the user-cap or IP-cap would be exceeded. Anonymous user_id (None)
+    only checks the IP gate."""
+    # Per-user cap (skipped for anonymous pre-auth phases)
+    if user_id is not None:
+        if _ws_connections_by_user.get(user_id, 0) >= MAX_WS_CONCURRENT_PER_USER:
+            return (
+                "Too many concurrent connections for this user. "
+                "Close another tab or wait a moment."
+            )
+    # Per-IP cap (always)
+    if _ws_connections_by_ip.get(ip, 0) >= MAX_WS_CONCURRENT_PER_IP:
+        return (
+            "Too many concurrent connections from your network. "
+            "Close another tab or wait a moment."
+        )
+    if user_id is not None:
+        _ws_connections_by_user[user_id] = _ws_connections_by_user.get(user_id, 0) + 1
+    _ws_connections_by_ip[ip] = _ws_connections_by_ip.get(ip, 0) + 1
+    return None
+
+
+def _ws_connection_release(user_id: str | None, ip: str) -> None:
+    """Decrement counters; clamps to 0 so spurious releases never go negative."""
+    if user_id is not None:
+        cur = _ws_connections_by_user.get(user_id, 0)
+        _ws_connections_by_user[user_id] = max(0, cur - 1)
+    cur_ip = _ws_connections_by_ip.get(ip, 0)
+    _ws_connections_by_ip[ip] = max(0, cur_ip - 1)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Confirmation tokens (signed, expiring) for /execute-intent
+# A token attests that THIS specific task hash was approved by THIS user.
+# Bound to a single purpose so a token issued for one flow cannot be reused
+# in another. Verified server-side; never trusts the client to be honest
+# about which task is "actually" being run.
+# ──────────────────────────────────────────────────────────────────────────
+
+import hashlib  # noqa: E402
+
+import jwt  # noqa: E402
+
+from app.config import JWT_ALGORITHM, JWT_SECRET  # noqa: E402
+
+_CONFIRMATION_PURPOSE = "execute_intent"
+_CONFIRMATION_EXPIRY_SECONDS = 600  # 10 minutes
+
+
+def _hash_task(task: str) -> str:
+    """Stable lower-cased SHA-256 of the task string for token binding."""
+    if not isinstance(task, str):
+        task = str(task)
+    return hashlib.sha256(task.strip().encode("utf-8")).hexdigest()
+
+
+def _issue_confirmation_token(task: str, user_id: str) -> str:
+    """Issue a short-lived JWT that authorizes running THIS task for THIS
+    user. Token is bound to a SHA-256 hash of the task and the user_id, plus
+    a `purpose` field, plus an expiry."""
+    now = int(time.time())
+    payload = {
+        "task_hash": _hash_task(task),
+        "user_id": user_id,
+        "iat": now,
+        "exp": now + _CONFIRMATION_EXPIRY_SECONDS,
+        "purpose": _CONFIRMATION_PURPOSE,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def _verify_confirmation_token(token: str, task: str, user_id: str) -> bool:
+    """True iff the token was issued for the same task hash + user, has the
+    correct purpose, and has not expired. Any decode failure → False."""
+    if not token or not isinstance(token, str):
+        return False
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        return False
+    if payload.get("purpose") != _CONFIRMATION_PURPOSE:
+        return False
+    if payload.get("user_id") != user_id:
+        return False
+    if payload.get("task_hash") != _hash_task(task):
+        return False
+    return True
+
+
+def _bearer_user(authorization: str | None) -> dict:
+    """Validate an `Authorization: Bearer <jwt>` header and return the JWT
+    payload. Raises HTTPException(401) on missing / wrong-scheme / invalid."""
+    if not authorization or not isinstance(authorization, str):
+        raise HTTPException(status_code=401, detail="missing authorization")
+    parts = authorization.split(None, 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="invalid authorization scheme")
+    payload = auth_module.verify_token(parts[1].strip())
+    if not payload:
+        raise HTTPException(status_code=401, detail="invalid token")
+    return payload
 
 
 # --- REST endpoints ---
@@ -751,10 +871,13 @@ async def ws_task(websocket: WebSocket):
                 # Classify intent
                 tracker = CostTracker()
                 try:
-                    category = await classify(text, tracker)
+                    classification = await classify(text, tracker)
                 except Exception:
                     logger.exception("classify error")
-                    category = "ambiguous"
+                    from app.router import Classification as _C
+                    classification = _C(category="ambiguous", degraded=True)
+
+                category = classification.category
 
                 if category == "chat":
                     try:
@@ -775,7 +898,14 @@ async def ws_task(websocket: WebSocket):
                     continue
 
                 if category == "ambiguous":
-                    await send_msg({"type": "complete", "message": msg.AMBIGUOUS_REQUEST})
+                    # If the cascade failed entirely we should tell the user
+                    # so they understand the lack of action.
+                    out = (
+                        msg.CONNECTION_ERROR
+                        if classification.degraded
+                        else msg.AMBIGUOUS_REQUEST
+                    )
+                    await send_msg({"type": "complete", "message": out})
                     continue
 
                 # category == "action"
