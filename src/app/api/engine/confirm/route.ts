@@ -158,20 +158,37 @@ export async function GET(req: Request) {
     .eq("id", intentId)
     .single();
 
-  // Resolve the wearer's user_id via session_id so recorded preferences
-  // are scoped to the right user. Fail-open if the session row is gone.
+  // Resolve the wearer's user_id and user_email via session_id. user_id
+  // scopes the preference signal; user_email gates the test-user broadcast
+  // skip below so confirmed test intents never fan out to production
+  // extensions. Fail-open on missing session — preference recording and
+  // broadcast each handle null safely.
   let prefUserId: string | null = null;
+  let sessionEmail: string | null = null;
   if (intentRow?.session_id) {
     const { data: sess } = await supabaseAdmin
       .from("anticipy_sessions")
-      .select("user_id")
+      .select("user_id, user_email")
       .eq("id", intentRow.session_id)
       .single();
     prefUserId =
       sess && typeof sess.user_id === "string" && sess.user_id.length > 0
         ? sess.user_id
         : null;
+    sessionEmail =
+      sess && typeof sess.user_email === "string" && sess.user_email.length > 0
+        ? sess.user_email
+        : null;
   }
+  // Same test-user predicate as analyze/route.ts. Keep the conditions in
+  // sync with that file — divergence would let test confirms bypass the
+  // gate while test analyzes were silenced.
+  const isTestUser =
+    !!sessionEmail && (
+      sessionEmail.endsWith(".test") ||
+      sessionEmail.endsWith("@anticipy-test.local") ||
+      sessionEmail.startsWith("e2e-test-")
+    );
 
   // Awaited preference recording. We used to fire-and-forget here, but
   // Vercel terminates lambdas the moment the response is sent — so the
@@ -225,7 +242,10 @@ export async function GET(req: Request) {
 
       // For browser-routed actions, also broadcast to the Chrome extension as an
       // additional best-effort execution path (note fallback already saved above).
-      if (result.data?.routing === "browser") {
+      // Test users are SOURCE-gated here so a test confirm cannot fan out into
+      // any real user's extension (the broadcast topic is anon-readable, so
+      // every connected extension would otherwise pick it up and execute).
+      if (result.data?.routing === "browser" && !isTestUser) {
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (supabaseUrl && serviceKey) {
