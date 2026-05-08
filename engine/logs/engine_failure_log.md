@@ -181,6 +181,178 @@ session has been pushing the voice→intent benchmark from 57% → 73%;
 density is the next gap. **Not blocking my own thread to attack it
 since the parallel session is closer to the source.**
 
+### TBR-3 (infra, RATE-LIMIT CEILING): both providers exhausted
+
+After bumping judge max_tokens (TBR-2.A fix), tb1f produced 2/9 PASS.
+Re-running with judge cascade fallback → Groq, ALL 9 scenario generations
+failed with:
+
+```
+generation failed: all providers failed (last gemini/groq 429:
+"Rate limit reached for model `llama-3.3-70b-versatile` in organization
+... service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 99941")
+```
+
+Both Gemini (free-tier daily quota) and Groq (100k TPD) are exhausted on
+this account. The torture_browser harness alone consumes ~10-20k tokens
+per scenario across (1) scenario generation (2) the agent's per-step
+LLM calls (3) the post-run judge.
+
+**Decision:** stop hammering. Quotas reset daily. Pause torture_browser
+on this thread until tomorrow.
+
+**For tomorrow:**
+- Try torture_browser at N=1 once quotas reset.
+- If still tight, switch the test harness to use `kimi` as a tertiary
+  fallback (KIMI_API_KEY is set per .env.local; memory says it works as
+  of 2026-05-01).
+- If still tight, drop scenario generation in favor of a fixed scenario
+  set hard-checked into the repo (loses adversarial diversity but is
+  deterministic and quota-cheap).
+
+### TBR-2 (skill-level, recurring): browser-agent task accuracy
+
+After F-TBR-1 (CDP probe + ephemeral profile), torture_browser at N=1 ran
+to completion. Strict pass: 1/9 = 11.1%. Breakdown:
+
+| Category | Verdict | Failure mode |
+|---|---|---|
+| canvas_editor | PASS | Graceful sign-in decline |
+| webgl_or_map | FAIL | Wrong distance: agent reported 1033km, expected 800-860km |
+| shadow_dom | FAIL | judge error (Gemini JSON truncated mid-string) |
+| multi_field_form | FAIL | Timeout submitting EPA contact form |
+| autocomplete | FAIL | Timeout, no URL with correct route |
+| lazy_load | FAIL | Wrong description extracted for GitHub topic |
+| login_wall | FAIL | judge error (Gemini JSON truncated) |
+| multi_step | FAIL | Incomplete Stanford address + wrong President |
+| ambiguous_goal | FAIL | judge error (Gemini JSON truncated) |
+
+**TBR-2.A: judge JSON truncation cluster** — 3/9 failures are LLM-judge
+JSON truncation (`max_tokens=512` cuts mid-string in the verbose
+`reason` field). Fixed by bumping judge `max_tokens` to 1024.
+
+**TBR-2.B: skill-level failures** — 5/9 are real agent-skill failures:
+- map distance accuracy (1033 vs 800-860 km)
+- form submission timeouts
+- search-flow timeouts
+- factual extraction (wrong Stanford President)
+- lazy-load result extraction
+
+These are the kinds of failures the parallel session's voice→intent
+benchmark targets at the L2 layer, but the action-engine path has its
+own L1-equivalent prompts in agent.py / browser-use Agent. **Density
+fixes from the parallel session won't transfer here directly.**
+
+### TP-3: torture_proactive 3-pass run (n=3, mixed scenario sizes)
+
+| Pass | utts | real | hit | miss | extra | dup | density | P | R | elapsed |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 29 | 5 | 5 | 0 | 0 | 0 | 2.24 | 100% | 100% | 233.9s |
+| 2 | 25 | 5 | 5 | 0 | 1 | 0 | 3.10 | 83% | 100% | 193.5s |
+| 3 | 25 | 5 | 3 | 2 | 1 | 0 | 2.06 | 75% | 60% | 179.9s |
+| **avg** | – | – | – | – | – | – | **2.47** | **86%** | **87%** | – |
+
+**TP-3 cluster: precision/recall vary substantially across scenarios** —
+the cascade is solid on 29-utt scenarios but the 25-utt scenarios surface
+both kinds of failure: the "book_flight tonight" exploration false-positive
+(in passes 2 and 3 — same fail mode), and a missed-intents pattern in
+pass 3 where the cascade dropped 2/5 real intents while extracting 1
+false positive.
+
+**The "book_flight tonight" exploration false-positive is now confirmed
+a chronic pattern, not sample noise** (3 occurrences across 5 total
+torture passes). The L1 salience prompt or L2 extract prompt isn't
+distinguishing "I should book a flight tonight" (resolved commitment)
+from "I might / I'm thinking of booking a flight" (exploration).
+
+### TBR-1 (chronic, BLOCKER): browser-use 0.11.13 BrowserStartEvent 30s timeout
+
+Repro: `python test_torture_browser.py 1` on a fresh run. Every scenario:
+
+```
+Traceback ...
+ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 34539)
+TimeoutError: Event handler browser_use.browser.watchdog_base.BrowserSession.
+on_BrowserStartEvent#7232(?▶ BrowserStartEvent#9a29 🏃) timed out after 30.0s
+
+INFO     [BrowserSession] ✅ Browser session reset complete
+... agent proceeds anyway ...
+INFO     [Agent]   ▶️   navigate: url: https://...
+ERROR    [tools] Action 'navigate' failed with error: Error executing action
+  navigate: CDP client not initialized - browser may not be connected yet
+WARNING  [Agent] ❌ Result failed 1/6 times: ...
+ERROR    [Agent] ❌ Stopping due to 5 consecutive failures
+[complete] I couldn't find a way forward on that one. Want to try a different approach?
+```
+
+Root cause: in browser-use 0.11.13, `BrowserStartEvent` has a 30s internal
+timeout. When Chromium's first launch on a fresh profile (random
+`/tmp/wire_diag_profile_*`) takes > 30s under codespace load, the event
+times out, the BrowserSession does an internal `reset()`, and `start()`
+returns NORMALLY (no exception) — but the CDP client is None. The agent
+then fires its first `navigate` action, which hits "CDP client not
+initialized" 5 times and gives up.
+
+`agent.py` already has a retry-on-`start()`-exception loop, but Browser
+Use swallows the timeout internally so the loop never fires.
+
+`requirements.txt` declares `browser-use>=0.12.6` but the installed
+version is 0.11.13 (warning printed by the agent itself: "📦 Newer
+version available: 0.12.6 (current: 0.11.13)"). The version drift
+predates this session.
+
+**Fix candidates:**
+- F-TBR-1.A (preferred, surgical): after `_session.start()`, **probe** the
+  CDP client. If `None` or unresponsive, force a retry through the
+  existing retry path. Generic — does not depend on browser-use version
+  semantics.
+- F-TBR-1.B (broad): `pip install -U "browser-use>=0.12.6"`. Aligns
+  installed with declared. Risk: API drift in 0.12.x may break our
+  Controller registry / Custom action registration. Touches a stack
+  component, but only as installed-version drift correction (declared
+  is already 0.12.6), so this is **not** a stack swap — it's compliance.
+
+Going with F-TBR-1.A first (lowest risk). If still failing, consider
+F-TBR-1.B but only after a clean unit-test regression check.
+
+### MSD-1: multi_speaker_diagnostic (single 31-utterance pass)
+
+| Metric | Value | Bar | Status |
+|---|---|---|---|
+| utterances | 31 | n/a | |
+| wearer truth chunks | 16 | n/a | |
+| other-speaker chunks | 15 | n/a | |
+| L0 wearer recall | 16/16 = 100% | 100% | PASS |
+| L0 other precision | 15/15 = 100% | 100% | PASS |
+| false drops (wearer→other) | 0 | 0 | PASS |
+| leaks (other→wearer) | 0 | 0 | PASS |
+| user-facing dispatches | 4 | n/a | |
+| real wearer intents | 4 | n/a | |
+| recall on wearer intents | 4/4 = 100% | 100% | PASS |
+| extra dispatches | 0 | 0 | PASS |
+| elapsed | 241.7s | | |
+
+**L0 layer is solid.** 31-utterance multi-speaker conversation, no
+mis-classifications either direction. The wearable's "don't act on
+overheard speech" guarantee holds on this scenario.
+
+### TP-2: torture_proactive 2-pass run (n=2, 29 utterances each)
+
+| Metric | Pass 1 | Pass 2 | Avg |
+|---|---|---|---|
+| precision | 100% | 100% | 100% |
+| recall | 100% | 100% | 100% |
+| density (per-min talk) | 2.24 | 2.24 | 2.24 |
+| extra dispatches | 0 | 0 | – |
+| duplicates | 0 | 0 | – |
+| elapsed | 272.9s | 310.7s | – |
+
+**The single 25-utterance pass at TP-1 had 1 false positive** (book-flight
+exploration mention asked rather than ignored). Two new 29-utterance passes
+hit P=R=100%. **TP-1.A is intermittent, not chronic; sample noise on n=1.**
+TP-1.B (density above 1.5/min) reproduced consistently — 2.24/min in both
+n=2 passes. Density is the cluster to chase.
+
 ### TP-1: torture_proactive 1× pass (n=1 scenario)
 
 | Metric | Value | Bar | Status |

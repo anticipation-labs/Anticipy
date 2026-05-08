@@ -52,8 +52,14 @@ GEMINI_URL = (
 
 
 async def _gemini_json(system: str, user: str, max_tokens: int = 4096) -> dict:
-    """Direct Gemini JSON call — no proactive adapter dependency."""
-    payload = {
+    """JSON call with Gemini → Groq cascade. Direct API (no proactive
+    adapter) so this file can run before the engine app is fully wired.
+
+    Retries Gemini 3x then falls back to Groq's `llama-3.3-70b-versatile`
+    (OpenAI-compatible endpoint) so 429s don't take down the harness."""
+
+    # ── Gemini ──
+    gemini_payload = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "generationConfig": {
@@ -62,26 +68,67 @@ async def _gemini_json(system: str, user: str, max_tokens: int = 4096) -> dict:
             "responseMimeType": "application/json",
         },
     }
+    last_status = None
+    last_body = ""
     async with httpx.AsyncClient(timeout=120) as client:
         for attempt in range(3):
             r = await client.post(
                 f"{GEMINI_URL}?key={GEMINI_KEY}",
-                json=payload,
+                json=gemini_payload,
             )
+            last_status = r.status_code
+            last_body = r.text[:200]
             if r.status_code == 200:
                 data = r.json()
                 try:
                     txt = data["candidates"][0]["content"]["parts"][0]["text"]
                     return json.loads(txt)
-                except Exception as e:
+                except Exception:
                     if attempt == 2:
-                        raise
+                        break
                     await asyncio.sleep(2)
+            elif r.status_code == 429:
+                # Don't burn extra Gemini calls when we're already rate-limited
+                break
             else:
                 if attempt == 2:
-                    raise RuntimeError(f"gemini {r.status_code}: {r.text[:200]}")
+                    break
                 await asyncio.sleep(2)
-    raise RuntimeError("gemini exhausted retries")
+
+    # ── Groq fallback ──
+    groq_key = os.environ.get("GROQ_API_KEY")
+    if groq_key:
+        groq_url = "https://api.groq.com/openai/v1/chat/completions"
+        groq_body = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.0,
+            "max_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+        }
+        async with httpx.AsyncClient(timeout=120) as client:
+            for attempt in range(2):
+                try:
+                    r = await client.post(
+                        groq_url,
+                        json=groq_body,
+                        headers={"Authorization": f"Bearer {groq_key}"},
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        txt = data["choices"][0]["message"]["content"]
+                        return json.loads(txt)
+                    last_status = r.status_code
+                    last_body = r.text[:200]
+                except Exception:
+                    pass
+                if attempt < 1:
+                    await asyncio.sleep(2)
+
+    raise RuntimeError(f"all providers failed (last gemini/groq {last_status}: {last_body})")
 
 
 # ---------------------------------------------------------------------------
@@ -171,9 +218,13 @@ async def _run_scenario(scenario: dict, timeout: int = 240) -> dict:
         return "yes"
 
     start = time.time()
+    # Use user_id=None so each scenario gets a fresh ephemeral profile dir.
+    # Sharing one stable dir across scenarios leaves SingletonLock and other
+    # Chromium first-launch state behind — a previously-failed launch can
+    # corrupt the next scenario's start.
     try:
         await asyncio.wait_for(
-            execute_task(scenario["goal"], send, recv, user_id="torture_browser"),
+            execute_task(scenario["goal"], send, recv, user_id=None),
             timeout=timeout + 30,
         )
     except asyncio.TimeoutError:
@@ -246,7 +297,12 @@ async def _judge(run: dict) -> dict:
         "agent_outcome": run["outcome"],
         "agent_final_text": run["final_text"][:2000],
     }, indent=2)
-    return await _gemini_json(JUDGE_SYSTEM, user, max_tokens=512)
+    # 512 tokens was getting truncated mid-string on verbose agent outputs
+    # (cluster: "judge error: Unterminated string starting at..."). Pump it up
+    # so the judge can finish a long `reason` field. Keeps the output schema
+    # the same (verdict / reason / missing) and matches the rest of the
+    # benchmark harness which uses 1024+.
+    return await _gemini_json(JUDGE_SYSTEM, user, max_tokens=1024)
 
 
 # ---------------------------------------------------------------------------
