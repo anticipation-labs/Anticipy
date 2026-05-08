@@ -38,6 +38,7 @@
  */
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { callGemini } from "@/lib/gemini";
+import { callGroq } from "@/lib/groq";
 
 const PROFILE_REBUILD_PROMPT = `You are a meta-monitor for an AI assistant. The user has just \
 accepted or rejected an extracted intent. Your job is to update the user's \
@@ -280,6 +281,7 @@ async function buildUserProfileInner(userId: string): Promise<void> {
     });
 
     let llmText = "";
+    let usedProvider = "gemini";
     try {
       llmText = await callGemini(
         [
@@ -289,17 +291,39 @@ async function buildUserProfileInner(userId: string): Promise<void> {
         { temperature: 0.2, max_tokens: 1500, cacheKey: "meta-monitor-v1" }
       );
     } catch (err) {
-      // Upstream unavailable / quota exhausted. Log so 429 spikes are
-      // visible in prod logs, then leave the profile alone — never block
-      // a user-facing flow on the second-brain rebuild.
+      const msg = err instanceof Error ? err.message : String(err);
       console.warn(
-        "[meta-monitor] Gemini call failed; skipping rebuild:",
-        err instanceof Error ? err.message.slice(0, 160) : err
+        "[meta-monitor] Gemini call failed; trying Groq fallback:",
+        msg.slice(0, 160)
       );
-      return;
+      // Groq fallback. The second brain shouldn't go dark just because one
+      // provider hit a quota wall — the user's signals would accumulate
+      // unobserved. Llama-3.3 70B handles the prompt at comparable quality.
+      try {
+        llmText = await callGroq(
+          [
+            { role: "system", content: PROFILE_REBUILD_PROMPT },
+            { role: "user", content: userMessage },
+          ],
+          {
+            temperature: 0.2,
+            max_tokens: 1500,
+            response_format: { type: "json_object" },
+          }
+        );
+        usedProvider = "groq";
+      } catch (groqErr) {
+        console.warn(
+          "[meta-monitor] Both Gemini and Groq failed; skipping rebuild:",
+          groqErr instanceof Error ? groqErr.message.slice(0, 160) : groqErr
+        );
+        return;
+      }
     }
     if (!llmText) {
-      console.warn("[meta-monitor] Gemini returned empty; skipping rebuild");
+      console.warn(
+        `[meta-monitor] ${usedProvider} returned empty; skipping rebuild`
+      );
       return;
     }
 
