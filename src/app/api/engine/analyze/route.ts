@@ -130,6 +130,24 @@ export async function POST(req: Request) {
     // still wants to. Stale locks (>5 min) get reaped before the attempt.
     const lockKind = "analyze";
     const STALE_LOCK_MS = 5 * 60 * 1000;
+
+    // Reap stale-OWN-USER sessions: any 'recording'/'processing' row older
+    // than 24h is the artifact of a tab close or crashed lambda — flip it
+    // to 'ended' so the training corpus and dedup paths see a closed
+    // state. Scoped to the auth'd user so we never touch another user's
+    // session. Targeted partial index keeps this O(log n).
+    const STALE_SESSION_HOURS = 24;
+    await supabaseAdmin
+      .from("anticipy_sessions")
+      .update({ status: "ended", ended_at: new Date().toISOString() })
+      .eq("user_id", authedUser.id)
+      .in("status", ["recording", "processing"])
+      .lt(
+        "started_at",
+        new Date(Date.now() - STALE_SESSION_HOURS * 60 * 60 * 1000).toISOString()
+      )
+      .neq("id", sessionId); // never auto-end the session we're working on
+
     const requestId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
