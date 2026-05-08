@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { callKimi } from "@/lib/kimi";
 import { callGroq } from "@/lib/groq";
-import { callGemini } from "@/lib/gemini";
+import { callGemini, lastGeminiUsage } from "@/lib/gemini";
 import { callClaude, claudeAvailable } from "@/lib/claude";
+import { extractIntentsWithVerification } from "@/lib/intent-extract";
 import { buildIntentPrompt, type PriorIntentContext } from "@/lib/intent-prompt";
 import { sendIntentEmail } from "@/lib/resend-notify";
 import { sendTwilioNotification } from "@/lib/twilio-notify";
@@ -379,10 +380,35 @@ export async function POST(req: Request) {
           }),
       });
     }
+    // Gemini path now runs the THREE-PASS self-verification loop:
+    //   pass 1 = extract (the existing prompt), pass 2 = critique (find flaws),
+    //   pass 3 = refine (only when critique is non-clean). The system prompts
+    //   are cached server-side via Gemini's cachedContents API, so cache hits
+    //   on subsequent calls within the 5-min TTL window pay ~10% of input
+    //   tokens. Worst-case cost ≈ 3x baseline; clean-critique short-circuit
+    //   keeps the steady-state cost much closer to 2x. See
+    //   /workspaces/Anticipy/src/lib/intent-extract.ts for the cost model.
     models.push({
       name: "gemini",
-      fn: () =>
-        callGemini(llmMessages, { temperature: 0.0, max_tokens: 8192 }),
+      fn: async () => {
+        const result = await extractIntentsWithVerification({
+          system: llmMessages[0].content,
+          user: llmMessages[1].content,
+          cacheKey: "intent-system-v3",
+        });
+        // Log cache-hit signal when present — useful in production logs
+        // for verifying the cache path is actually engaged.
+        const usage = lastGeminiUsage();
+        const cachedTok =
+          usage && typeof (usage as Record<string, unknown>).cachedContentTokenCount === "number"
+            ? ((usage as Record<string, unknown>).cachedContentTokenCount as number)
+            : null;
+        console.log(
+          `[analyze] gemini self-verify passes=${result.passesUsed} refined=${result.refined}` +
+            (cachedTok !== null ? ` cached_input_tokens=${cachedTok}` : "")
+        );
+        return JSON.stringify(result.payload);
+      },
     });
     models.push({
       name: "groq",
@@ -458,7 +484,7 @@ export async function POST(req: Request) {
               },
               { role: "user" as const, content: safeTranscript },
             ],
-            { temperature: 0.0, max_tokens: 256 }
+            { temperature: 0.0, max_tokens: 256, cacheKey: "empty-rescue-heuristic-v1", jsonOnly: true }
           );
           const heuristic = JSON.parse(heuristicRaw || "{}") as {
             has_actions?: boolean;
@@ -726,10 +752,23 @@ export async function POST(req: Request) {
       // just across batches.
       recentUserNotificationCount += 1;
 
-      // Broadcast to extension via Supabase Realtime (bypasses RLS — works with anon key)
+      // Test-domain users (e2e-test-*, .test, @anticipy-test.local) get
+      // FULLY isolated: no Realtime broadcast, no email, no SMS, no voice.
+      // Without the broadcast skip, every benchmark run would fan out to
+      // every connected production extension (the broadcast topic is anon-
+      // accessible by design so the extension can subscribe). Real users
+      // would see ghost test intents firing in their browsers.
+      const isTestUser =
+        !!user_email && (
+          user_email.endsWith(".test") ||
+          user_email.endsWith("@anticipy-test.local") ||
+          user_email.startsWith("e2e-test-")
+        );
+
+      // Broadcast to extension via Supabase Realtime — production users only.
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (supabaseUrl && serviceKey) {
+      if (!isTestUser && supabaseUrl && serviceKey) {
         fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
           method: "POST",
           headers: {
@@ -749,24 +788,16 @@ export async function POST(req: Request) {
                 summary_for_user: candidate.summary_for_user,
                 evidence_quote: candidate.evidence_quote,
                 status: "pending",
+                user_id: authedUser.id,
               },
             }],
           }),
         }).catch((e) => console.warn("[broadcast] failed:", e.message));
       }
 
-      // Skip all notifications (email + SMS + voice) for known test users so
-      // automated E2E runs don't inbox-bomb the admin. Detected by email
-      // domain — anticipy-test.local / .test / e2e-test-* are test-only.
-      const isTestUser =
-        !!user_email && (
-          user_email.endsWith(".test") ||
-          user_email.endsWith("@anticipy-test.local") ||
-          user_email.startsWith("e2e-test-")
-        );
       if (isTestUser) {
-        // The intent row + Realtime broadcast still happen above; we just
-        // suppress fan-out to email/SMS/voice for test users.
+        // Skip all fan-out for test users — intent row exists in DB for the
+        // test harness's polling, but no notifications fire to anyone.
         continue;
       }
 
