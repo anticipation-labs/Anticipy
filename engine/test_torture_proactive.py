@@ -165,15 +165,39 @@ class TortureResult:
 
 
 async def _generate_scenario() -> TortureScenario:
+    """Generate ONE torture scenario. Tolerates partial cascade failure
+    (empty string on full cascade exhaustion) by retrying once with the
+    next provider, and surfaces a clear error when every provider is
+    actually down so the harness fails loudly instead of with a cryptic
+    JSONDecodeError."""
     call = make_json_llm_call(max_tokens=8192)
-    raw = await asyncio.wait_for(call(GEN_SYSTEM, GEN_USER), timeout=180.0)
-    data = json.loads(raw)
-    return TortureScenario(
-        summary=data.get("summary", "").strip(),
-        real_intents=data.get("real_intents", []),
-        noise_mentions=data.get("noise_mentions", []),
-        utterances=data.get("utterances", []),
-        raw_json=data,
+    last_err: str | None = None
+    for attempt in range(3):
+        try:
+            raw = await asyncio.wait_for(call(GEN_SYSTEM, GEN_USER), timeout=180.0)
+        except (asyncio.TimeoutError, Exception) as e:
+            last_err = f"{type(e).__name__}: {str(e)[:160]}"
+            await asyncio.sleep(2)
+            continue
+        if not raw or not raw.strip():
+            last_err = "cascade returned empty (every provider down or rate-limited)"
+            await asyncio.sleep(2)
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            last_err = f"malformed JSON: {str(e)[:120]} | head={raw[:120]!r}"
+            await asyncio.sleep(2)
+            continue
+        return TortureScenario(
+            summary=data.get("summary", "").strip(),
+            real_intents=data.get("real_intents", []),
+            noise_mentions=data.get("noise_mentions", []),
+            utterances=data.get("utterances", []),
+            raw_json=data,
+        )
+    raise RuntimeError(
+        f"_generate_scenario: all {3} attempts failed across the cascade. last_err={last_err}"
     )
 
 
