@@ -168,6 +168,8 @@ RULES:
 
 FIELD COMPLETENESS — before calling \`done\` with success:true, mentally list every distinct piece of information the user explicitly asked for. If any item is missing from your extracted data or the on-page state, do another step to find it. Never silently drop a sub-field. If a value isn't on the page, search for it — never invent.
 
+ACTUALLY TAKE ACTION — for any task that is "send / post / submit / book / buy / schedule / reply / message / order / confirm / publish", \`done(success:true)\` is ONLY valid AFTER you have actually clicked the send/submit/post/confirm button and observed the page state CHANGE (URL changed, confirmation banner appeared, the form cleared, the message appeared in the thread). Drafting / composing / generating text is NOT done. Telling me what you would have written is NOT done. If you wrote something into a compose box but never hit Send, you are NOT done — you must press Send and verify it went through. If a confirm dialog appears, you must explicitly accept it. If the action requires login you don't have, decline gracefully — do not pretend success.
+
 CANVAS / WEBGL — when the page is canvas-rendered (Google Docs/Sheets/Slides, Figma, Canva, paint tools, WebGL maps, 3D viewers), TRY THESE before giving up:
   • canvas_type to insert text — automatically targets the offscreen iframe Docs/Sheets/Slides use, plus the active contenteditable for any other rich editor. Click into the canvas first to give it focus.
   • pierce_query for clickable spots by visible label — works inside shadow DOM and same-origin iframes.
