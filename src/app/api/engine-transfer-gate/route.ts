@@ -7,9 +7,19 @@ import {
   signGateCookie,
 } from "@/lib/engine-transfer-gate";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+function safeEqual(a: string, b: string): boolean {
+  // Constant-time compare so the response time can't leak whether the
+  // wrong attempt was a near-miss or wholly off. Length check first
+  // (timingSafeEqual throws on mismatched length), but length itself
+  // doesn't carry useful entropy at our keyspace.
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+}
 
 export async function POST(req: Request) {
   // Brute-force defense: 10 attempts per IP per minute.
@@ -35,7 +45,7 @@ export async function POST(req: Request) {
 
   const passcode = typeof body.passcode === "string" ? body.passcode : "";
 
-  if (passcode !== getExpectedPasscode()) {
+  if (!safeEqual(passcode, getExpectedPasscode())) {
     return NextResponse.json({ ok: false, error: "Wrong passcode" }, { status: 401 });
   }
 
