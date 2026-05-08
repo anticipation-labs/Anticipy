@@ -1,0 +1,168 @@
+[
+  {
+    "category": "search_extract_news",
+    "summary": "What is the main headline on the BBC News homepage today?",
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "headline",
+        "main",
+        "story"
+      ],
+      "min_steps": 0,
+      "min_message_len": 30
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The main headline on the BBC News homepage is: \"Trump says US-Iran ceasefire still in place after exchange of fire in Strait of Hormuz\"",
+    "final_url": "https://www.bbc.com/news",
+    "step_count": 1,
+    "elapsed_s": 15.8,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success"
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "What is the main headline of the top story on the NPR.org homepage today?",
+    "starting_url": "https://www.npr.org/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "headline",
+        "story",
+        "npr"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The main headline of the top story on NPR.org is: Is hantavirus the next COVID? Is the U.S. response on point? An outbreak update",
+    "final_url": "https://www.npr.org/",
+    "step_count": 1,
+    "elapsed_s": 28.2,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success"
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "What is the main section or category of the top news story displayed on the BBC News homepage?",
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "news",
+        "section",
+        "category",
+        "headline",
+        "story"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The main section or category of the top news story is 'World'.",
+    "final_url": "https://www.bbc.com/news",
+    "step_count": 1,
+    "elapsed_s": 10.8,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success"
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "Go to npr.org and tell me one of the main navigation section names visible on the homepage (e.g., Politics, Business, Health, etc.).",
+    "starting_url": "https://www.npr.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "politics",
+        "business",
+        "health",
+        "science",
+        "culture",
+        "world",
+        "us news"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "One of the main navigation section names visible on the NPR homepage is 'News'.",
+    "final_url": "https://www.npr.org/",
+    "step_count": 1,
+    "elapsed_s": 13.9,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing all patterns ['politics', 'business', 'health', 'science', 'culture', 'world', 'us news']: one of the main navigation section names visible on the npr homepage is 'news'."
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "What is the section or category of the lead story on the BBC News homepage?",
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "section",
+        "category",
+        "world",
+        "politics",
+        "business",
+        "technology",
+        "science",
+        "health",
+        "sport"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The section or category of the lead story is 'World'.",
+    "final_url": "https://www.bbc.com/news",
+    "step_count": 1,
+    "elapsed_s": 13.8,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success"
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary": "Find the current population of Tokyo from both Wikipedia and World Population Review, and report both figures along with their respective sources.",
+    "starting_url": "https://en.wikipedia.org/wiki/Tokyo",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "wikipedia",
+        "tokyo",
+        "13 million",
+        "14 million",
+        "13.9 million",
+        "14.1 million"
+      ],
+      "patterns_b": [
+        "world population review",
+        "37 million",
+        "38 million",
+        "37.2 million",
+        "38.5 million"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "multi_tab",
+    "agent_success": false,
+    "agent_message": "LLM call failed \u2014 Gemini: Empty response from Gemini | Groq: Groq 429: {\"error\":{\"message\":\"Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kg3q7xhbf8atm3s059zkqbkf` service tier `on_demand` on tokens per minute (TPM): Limit 12000, Used 6790",
+    "final_url": "https://worldpopulationreview.com/cities/japan/tokyo",
+    "step_count": 20,
+    "elapsed_s": 175.8,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing first set ['wikipedia', 'tokyo', '13 million', '14 million', '13.9 million', '14.1 million']"
+  }
+]

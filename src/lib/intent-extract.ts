@@ -82,7 +82,13 @@ Apply each of these checks. For every candidate intent, ask:
     question empty)?
   - Is this a duplicate of another candidate in the list (same task framed twice)?
 
-Then ask: did the extractor MISS any concrete commitments the wearer made? List them.
+Then ask: did the extractor MISS any concrete commitments the wearer made? List them ONLY \
+when ALL of these are true: (a) the wearer used a concrete commit verb in their OWN voice, \
+(b) at least one specific slot is bound (time, recipient, deliverable, amount), (c) the \
+commitment was NOT later retracted, (d) it is not a duplicate of an existing candidate. \
+If you would have to "interpret" the wearer's intent or "infer" something they didn't say, \
+DO NOT add it as missed. Adding speculative missed intents is the worst failure mode here — \
+err strongly toward leaving the candidate list alone unless the miss is undeniable.
 
 Return STRICT JSON only — no markdown, no preamble:
 {

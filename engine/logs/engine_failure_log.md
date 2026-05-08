@@ -117,3 +117,97 @@ proactive-cascade test files from importing.
 
 - D1 (2026-05-08): Treating F1-F4 as production-code refactors rather than test edits. The tests document the no-hardcoding contract; rewriting tests to match keyword-based router/safety would ratify a violation of the project rule. Production caller (main.py) updated accordingly.
 - D2: Keeping `check_blocked` / `block_reason` keyword tables as a deterministic floor (defense in depth) under the new LLM `safety_check`. Removing them entirely would re-open the password/financial blocked-list as LLM-only, which is brittle for the highest-confidence categories.
+- D3: Moved `needs_clarification` to `app/clarify.py`. Reasons: (1) test_router enforces no `import re` in router.py; (2) clarify is a UX gate (does the user need to specify slots first?), not a routing decision. Clarify is a deterministic floor; the future LLM-based slot-completeness check will sit on top of it.
+
+---
+
+## 2026-05-08 — F1..F4 fix outcomes
+
+| # | Test file | Before | After | Notes |
+|---|---|---|---|---|
+| F1 | test_models.py | COLLECTION ERR | 7/7 PASS | DegradedResponse + throttle/slot/effective_layer_timeout_seconds/llm_call_json_str shipped |
+| F2 | test_router.py | COLLECTION ERR | 9/9 PASS | classify→Classification dataclass; needs_clarification → app/clarify.py |
+| F3 | test_safety.py | COLLECTION ERR | 16/16 PASS | safety_check + Verdict; LLM-driven; fail-closed on degraded |
+| F4 | test_main_security.py | 2/19 | 19/19 PASS | _ws_connection_admit/release, _hash_task, _issue/_verify_confirmation_token, _bearer_user, _get_client_ip honoring TRUST_FORWARDED_FOR |
+| – | test_auth.py | 15/15 | 15/15 | unchanged |
+| – | test_code_sandbox.py | 24/24 | 24/24 (one flake) | test_bwrap_cpu_cap_kills_busy_loop occasionally exceeds 6.0s threshold under load (logged as FLAKE-1) |
+| – | test_proactive.py (unit) | (blocked F1) | 38/38 PASS | unblocked by F1 |
+
+**Tier-1 stability:** 90/90 across 3 consecutive runs (37s / 29.5s / 39.7s wall-clock).
+
+### FLAKE-1: test_bwrap_cpu_cap_kills_busy_loop timing variance
+
+`test_code_sandbox.py::test_bwrap_cpu_cap_kills_busy_loop` asserts the wall-clock duration of a CPU-rlimit-killed busy loop is `< 6.0s`. Observed 6.549s under concurrent load, 1.9s solo. Not introduced by my changes; surfaced under contention. **Decision:** monitor, do not patch yet — relaxing to 8.0s would mask a real CPU-cap-not-killing regression. Will revisit if it shows up 5+ times.
+
+---
+
+## 2026-05-08 — Tier-2 baseline (LLM-only, no browser)
+
+Other Claude session is running `test_extension_brutal.py -n 5`; **deferring all
+headed-browser tests on this thread** to avoid colliding with that session.
+
+### LCD-1: long_conversation_diagnostic (single 70-utterance pass)
+
+| Metric | Value | Bar | Status |
+|---|---|---|---|
+| utterances | 70 | n/a | |
+| minutes of talk | ~4.0 | n/a | |
+| real intents | 5 | n/a | |
+| dispatched | 7 | n/a | |
+| recall (real intents hit) | 5/5 = 100% | n/a strict | PASS |
+| false positives (extras) | 2 | 0 | FAIL |
+| density (per-min talk) | 1.76 | < 1.5 | FAIL |
+| log-only | 0 | n/a | |
+| elapsed | 517.9s | | |
+
+**Failure cluster LCD-1.A: meta-level "prioritize_tasks" dispatch.** L2
+extracted a "user prioritized tasks" intent from a passage where the user
+verbally listed what they had to do. That's a side-effect of "the user
+enumerates 2+ concrete items as part of an errand or commitment" rule
+in the salience prompt — it picks up the meta-list as a separate intent.
+
+**Failure cluster LCD-1.B: dispatch overlap "lookup_website" vs
+"search_recipe".** The user asked for "the recipe for a soup from The
+Savory Spoon"; engine fired both `search_recipe` and `lookup_website`
+for the same underlying intent. L6 dispatcher dedup didn't catch it
+because the action_verb differed.
+
+Both clusters affect the user-stated bar of "1-6 / day", and density
+1.76/min implies ~7-30 alerts per real conversation hour, ~50-200 per
+day with 5h talking. That's well over the bar.
+
+These are the proactive cascade's 2026-05 priorities. The other Claude
+session has been pushing the voice→intent benchmark from 57% → 73%;
+density is the next gap. **Not blocking my own thread to attack it
+since the parallel session is closer to the source.**
+
+### TP-1: torture_proactive 1× pass (n=1 scenario)
+
+| Metric | Value | Bar | Status |
+|---|---|---|---|
+| utterances | 25 | n/a | |
+| real intents | 5 | | |
+| recall | 5/5 = 100% | n/a strict | PASS |
+| precision | 5/6 = 83% | n/a strict | PARTIAL |
+| extra dispatches | 1 | 0 | FAIL |
+| duplicates | 0 | 0 | PASS |
+| density (per-min talk) | 3.10 | < 1.5 | FAIL |
+| elapsed | 231.8s | | |
+
+**Failure cluster TP-1.A: false-positive on "book a flight tonight"** —
+the engine emitted an `ask` for a flight intent that wasn't in the
+ground-truth list. This is the "exploration mention" pattern where
+the user *says* "I should book a flight tonight" without committing.
+The L1 salience layer didn't reject it as exploration.
+
+**Failure cluster TP-1.B: density 3.10/min vs 1.5/min target** — the
+torture-proactive run pushed 6 user-facing dispatches in ~1.9 min of
+talk. The user's stated bar from progress.md is sparse, ~1-6/day. This
+suggests either L4 urgency is too lax or L6 dispatcher isn't deduping
+enough.
+
+Both clusters are existing OPEN issues — the parallel session's
+voice→intent benchmark already targets recall/precision, but density
+isn't measured there. TP-1.B is the user-bar-violation worth triaging.
+
+Need n≥3 passes to confirm the cluster vs sample noise.

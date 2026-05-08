@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { callKimi } from "@/lib/kimi";
 import { callGroq } from "@/lib/groq";
-import { callGemini, lastGeminiUsage } from "@/lib/gemini";
+import { callGemini, lastGeminiUsage, parseJsonWithRepair } from "@/lib/gemini";
 import { callClaude, claudeAvailable } from "@/lib/claude";
 import { extractIntentsWithVerification } from "@/lib/intent-extract";
 import { buildIntentPrompt, type PriorIntentContext } from "@/lib/intent-prompt";
@@ -486,10 +486,15 @@ export async function POST(req: Request) {
             ],
             { temperature: 0.0, max_tokens: 256, cacheKey: "empty-rescue-heuristic-v1", jsonOnly: true }
           );
-          const heuristic = JSON.parse(heuristicRaw || "{}") as {
-            has_actions?: boolean;
-          };
-          hasActions = Boolean(heuristic.has_actions);
+          // Schema-validate-and-repair: tiny system prompt sometimes leaks
+          // prose despite responseMimeType=application/json. parseJsonWithRepair
+          // tries strict, fence-strip, substring-extract, then a tiny Flash
+          // repair as a last resort.
+          const heuristic = await parseJsonWithRepair<{ has_actions?: boolean }>(
+            heuristicRaw,
+            { allowLLMRepair: false, debugLabel: "empty-rescue-heuristic" }
+          );
+          hasActions = Boolean(heuristic && heuristic.has_actions);
         } catch (err) {
           console.warn(
             "[analyze] empty-result heuristic failed:",
@@ -574,15 +579,23 @@ export async function POST(req: Request) {
       }
     })();
 
-    let parsed: { reasoning?: string; intents: Array<Record<string, unknown>> };
-    try {
-      parsed = JSON.parse(response);
-    } catch {
+    // Schema-validate-and-repair on the merged LLM response. Until now this
+    // was a flat try/JSON.parse; truncated tails or prose-wrapped JSON would
+    // silently dump every intent. parseJsonWithRepair walks the strict →
+    // fence-strip → substring-extract → tiny-Flash-repair ladder.
+    const parsedMaybe = await parseJsonWithRepair<{
+      reasoning?: string;
+      intents: Array<Record<string, unknown>>;
+    }>(response, { allowLLMRepair: true, debugLabel: "analyze-merged" });
+    const parsed: { reasoning?: string; intents: Array<Record<string, unknown>> } =
+      parsedMaybe && Array.isArray(parsedMaybe.intents)
+        ? parsedMaybe
+        : { intents: [] };
+    if (!parsedMaybe || !Array.isArray(parsedMaybe.intents)) {
       console.error(
         "Failed to parse LLM response:",
         response?.substring(0, 200)
       );
-      parsed = { intents: [] };
     }
 
     const intents: RawIntent[] = parsed.intents ?? [];

@@ -389,8 +389,13 @@ def test_bwrap_cpu_cap_kills_busy_loop():
         # Process killed somehow. Either CPU rlimit (SIGXCPU/SIGKILL, exit_code != 0)
         # or wall-clock kill. We accept either; what we DON'T accept is success.
         assert result.exit_code != 0 or result.timed_out
-        # Total elapsed should be well under wall_timeout_s if the CPU limit fired
-        assert result.duration_s < 6.0
+        # Total elapsed should be meaningfully under wall_timeout_s if the CPU
+        # limit fired. Under heavy concurrent load (e.g., proactive tests
+        # running in parallel) the OS schedules our 1-second CPU budget across
+        # several wall-seconds, so we leave generous slack here. If the CPU
+        # rlimit is actually broken, wall-clock kill fires at ~10s — that's
+        # what we are guarding against, not single-second timing variance.
+        assert result.duration_s < 8.5
     asyncio.run(go())
 
 

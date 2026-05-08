@@ -205,7 +205,15 @@ LONG-RUNNING TASKS — you have up to 60 steps and 10 minutes per intent. For mu
 
 FOLLOW-UP HANDLING — the user may ask follow-up questions ("what about the other one?", "compare with X"). You'll receive these as new intents but with relevant context in PARAMETERS. Use list_tabs + switch_tab to revisit work you did earlier rather than starting from scratch.
 
-PLAN AWARENESS — at task start a strategic plan was generated for you (3-7 numbered steps). It appears in your context as PLAN. Use it as a north star: the current plan-step you're working on is shown, plus what's already done and what's still pending. If the page state contradicts the plan (the expected element isn't there, the URL went somewhere unexpected, the plan's next step depends on data you couldn't extract), ABANDON the plan for that step and pick the action that actually moves the task forward — the plan is guidance, not a script. If you've finished the plan but the user's task still isn't fully answered, keep going (the plan is a floor, not a ceiling).`;
+PLAN AWARENESS — at task start a strategic plan was generated for you (3-7 numbered steps). It appears in your context as PLAN. Use it as a north star: the current plan-step you're working on is shown, plus what's already done and what's still pending. If the page state contradicts the plan (the expected element isn't there, the URL went somewhere unexpected, the plan's next step depends on data you couldn't extract), ABANDON the plan for that step and pick the action that actually moves the task forward — the plan is guidance, not a script. If you've finished the plan but the user's task still isn't fully answered, keep going (the plan is a floor, not a ceiling).
+
+OUTPUT FORMAT — chain of thought + action.
+You may EITHER return the bare action object (the legacy shape, still accepted), OR — preferred — wrap it in a thought-and-action envelope that forces a brief reasoning step BEFORE you commit to the action:
+{
+  "thought": "<one short sentence — what you're trying to accomplish on this step and why this action moves the task forward>",
+  "action": { ...one of the action shapes above... }
+}
+The "thought" is for your reasoning only; it never reaches the user. Keep it under 240 characters; just a single sentence about the goal of this step. The "action" object MUST match one of the action shapes specified above (navigate, click, type, force_type, etc.) — do NOT invent new fields. When in doubt, return the bare action shape — it still works.`;
 
 // Planner prompt — fired ONCE at task start with Gemini Pro to produce a
 // short, generic, JSON plan. The per-step LLM call sees this plan as
@@ -961,7 +969,9 @@ export class BrowserAgent {
           { role: "user", content: userMessage }
         ],
         temperature: 0.1,
-        max_tokens: 2000,
+        // 2400 tokens leaves headroom for the thought field added by CoT
+        // envelope output (the action object alone fits comfortably in 2000).
+        max_tokens: 2400,
         response_format: { type: "json_object" }
       })
     });
@@ -989,7 +999,9 @@ export class BrowserAgent {
           contents: [{ parts: [{ text: `${system}\n\n${userMessage}` }] }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 2000,
+            // 2400 tokens leaves headroom for the thought field added by CoT
+            // envelope output (the bare action fits comfortably in 2000).
+            maxOutputTokens: 2400,
             responseMimeType: "application/json"
           }
         })
@@ -1009,14 +1021,36 @@ export class BrowserAgent {
 
   _parseJSON(text) {
     const clean = text.trim().replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+    let parsed;
     try {
-      return JSON.parse(clean);
+      parsed = JSON.parse(clean);
     } catch {
       // Attempt to extract JSON object from surrounding prose
       const match = clean.match(/\{[\s\S]*\}/);
-      if (match) return JSON.parse(match[0]);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          parsed = null;
+        }
+      }
+    }
+    if (!parsed) {
       throw new Error("LLM response is not valid JSON: " + clean.substring(0, 200));
     }
+    // Chain-of-thought envelope: when the model returned { thought, action }
+    // (the preferred shape), unwrap to the raw action so the rest of the
+    // executor pipeline doesn't need to change. The thought is logged to
+    // the console for debugging — never surfaced to the user.
+    if (parsed && typeof parsed === "object" && parsed.action && typeof parsed.action === "object" && !parsed.action.action && parsed.thought) {
+      // shape: { thought, action: {...} } where inner action lacks .action — odd, fall through
+    }
+    if (parsed && typeof parsed === "object" && typeof parsed.thought === "string" && parsed.action && typeof parsed.action === "object" && typeof parsed.action.action === "string") {
+      const t = parsed.thought.toString().slice(0, 240);
+      if (t) console.log("[Anticipy Agent] thought:", t);
+      return parsed.action;
+    }
+    return parsed;
   }
 
   // ─── Action execution ─────────────────────────────────────────────────────────

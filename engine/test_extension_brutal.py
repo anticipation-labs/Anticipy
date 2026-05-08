@@ -55,6 +55,7 @@ LOG_DIR = Path(__file__).resolve().parent / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 REPORT_MD = LOG_DIR / "browser_brutal.md"
 REPORT_JSON = LOG_DIR / "browser_brutal.json"
+SCENARIOS_CACHE = LOG_DIR / "browser_brutal_scenarios.json"
 
 if ENV_FILE.exists():
     for line in ENV_FILE.read_text().splitlines():
@@ -527,18 +528,40 @@ async def main(per_category: int = 5, only_categories: list[str] | None = None,
     else:
         cats = [(c, d) for c, d in CATEGORIES if not only_categories or c in only_categories]
         scenarios: list[dict] = []
-        print(f"Generating {per_category * len(cats)} scenarios via Gemini...", flush=True)
+        # Resume from cache if it exists and contains the right number of scenarios.
+        cached = []
+        if SCENARIOS_CACHE.exists():
+            try:
+                cached = json.loads(SCENARIOS_CACHE.read_text())
+            except Exception:
+                cached = []
+        per_cat_have: dict[str, int] = {}
+        for s in cached:
+            per_cat_have[s.get("category", "")] = per_cat_have.get(s.get("category", ""), 0) + 1
+        print(f"Generating {per_category * len(cats)} scenarios via Gemini "
+              f"(cached: {len(cached)})...", flush=True)
+        scenarios.extend(cached)
         for cat, desc in cats:
-            print(f"  -> {cat}", flush=True)
-            for i in range(per_category):
-                try:
-                    s = await generate_scenario(cat, desc, i + 1, per_category)
-                    scenarios.append(s)
-                    print(f"     [{i+1}] {s.get('summary_for_user','')[:80]}", flush=True)
-                except Exception as e:
-                    print(f"     [{i+1}] generation failed: {e}", flush=True)
-                # Small jitter between calls to spread quota
-                await asyncio.sleep(0.5)
+            need = per_category - per_cat_have.get(cat, 0)
+            if need <= 0:
+                print(f"  -> {cat} ({per_cat_have[cat]} cached, skipping)", flush=True)
+                continue
+            print(f"  -> {cat} ({need} new)", flush=True)
+            for i in range(need):
+                for retry in range(3):
+                    try:
+                        s = await generate_scenario(cat, desc, i + 1, per_category)
+                        scenarios.append(s)
+                        print(f"     [{i+1}] {s.get('summary_for_user','')[:80]}", flush=True)
+                        # Persist after each scenario so we can resume on crash.
+                        SCENARIOS_CACHE.write_text(json.dumps(scenarios, indent=2))
+                        break
+                    except Exception as e:
+                        print(f"     [{i+1}] generation attempt {retry+1} failed: {e}", flush=True)
+                        if retry == 2:
+                            print(f"     [{i+1}] giving up on this slot", flush=True)
+                        await asyncio.sleep(3 + retry * 2)
+                await asyncio.sleep(0.7)
 
     print(f"\nLaunching Chrome with extension loaded (Xvfb :99)...\n", flush=True)
     runs: list[dict] = []
@@ -584,6 +607,27 @@ async def main(per_category: int = 5, only_categories: list[str] | None = None,
                 pf = " [pre-flight failed]" if run.get("pre_flight_failed") else ""
                 print(f"   {ok}  ({run['elapsed_s']}s, {run['step_count']} steps){pf}: "
                       f"{verdict['reason'][:140]}", flush=True)
+                # Persist running results so a crash doesn't lose data.
+                try:
+                    REPORT_JSON.write_text(json.dumps([
+                        {
+                            "category": r["scenario"].get("category"),
+                            "summary": r["scenario"].get("summary_for_user"),
+                            "starting_url": r["scenario"].get("starting_url"),
+                            "verifier": r["scenario"].get("verifier"),
+                            "expected_capability": r["scenario"].get("expected_capability"),
+                            "agent_success": r["run"]["agent_success"],
+                            "agent_message": r["run"]["agent_message"][:500],
+                            "final_url": r["run"]["final_url"],
+                            "step_count": r["run"]["step_count"],
+                            "elapsed_s": r["run"]["elapsed_s"],
+                            "timed_out": r["run"].get("timed_out", False),
+                            "verdict_pass": r["verdict"]["pass"],
+                            "verdict_reason": r["verdict"]["reason"],
+                        } for r in runs
+                    ], indent=2))
+                except Exception:
+                    pass
                 # Reset to a neutral page between scenarios so the next scenario
                 # starts from a known-good state and not the previous task's tab.
                 try:

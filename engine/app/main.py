@@ -734,15 +734,21 @@ async def execute_intent_endpoint(req: ExecuteIntentRequest, request: Request):
 
 # --- WebSocket helpers ---
 def _ws_client_ip(websocket: WebSocket) -> str:
-    """Extract caller IP from a WebSocket, preferring x-forwarded-for."""
-    forwarded = websocket.headers.get("x-forwarded-for")
-    if forwarded:
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first
-    real = websocket.headers.get("x-real-ip")
-    if real:
-        return real.strip()
+    """Extract caller IP from a WebSocket. Mirrors `_get_client_ip` for
+    HTTP requests: x-forwarded-for is honored ONLY when the
+    `TRUST_FORWARDED_FOR=1` env is set (i.e., we know we're behind a
+    trusted proxy). Without that opt-in a client can't pretend to be on
+    a different network just by sending a header — important so a single
+    attacker can't bypass per-IP connection caps."""
+    if os.environ.get("TRUST_FORWARDED_FOR", "").lower() in {"1", "true", "yes", "on"}:
+        forwarded = websocket.headers.get("x-forwarded-for")
+        if forwarded:
+            first = forwarded.split(",")[0].strip()
+            if first:
+                return first
+        real = websocket.headers.get("x-real-ip")
+        if real:
+            return real.strip()
     return websocket.client.host if websocket.client else "unknown"
 
 

@@ -24,7 +24,7 @@
  *     high-signal.
  */
 
-import { callGemini } from "@/lib/gemini";
+import { callGemini, parseJsonWithRepair } from "@/lib/gemini";
 
 export interface MemoryItem {
   /** Generic bucket label the LLM picks (preference / fact / relationship / reference / context / etc). */
@@ -104,7 +104,14 @@ export async function extractMemoryItems(
 
   let raw = "";
   try {
-    raw = await callGemini(messages, { temperature: 0.0, max_tokens: 2048 });
+    raw = await callGemini(messages, {
+      temperature: 0.0,
+      max_tokens: 2048,
+      // Cache the static memory-extract system prompt — this call runs on
+      // every analyze tick, so cache hits at ~5min TTL save measurable cost.
+      cacheKey: "memory-extract-v1",
+      jsonOnly: true,
+    });
   } catch (err) {
     console.warn(
       "[memory-extract] gemini call failed; returning []:",
@@ -113,19 +120,15 @@ export async function extractMemoryItems(
     return [];
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse((raw || "").trim());
-  } catch {
-    console.warn(
-      "[memory-extract] unparseable response; returning []:",
-      (raw || "").slice(0, 200)
-    );
-    return [];
-  }
-
+  // Schema-validate-and-repair: parseJsonWithRepair tries strict, fence-strip,
+  // substring-extract, then falls back to a tiny Flash repair call. Repair
+  // budget is gated by allowLLMRepair=true so it only fires when needed.
+  const parsed = await parseJsonWithRepair<{ items?: unknown }>(raw, {
+    allowLLMRepair: true,
+    debugLabel: "memory-extract",
+  });
   if (!parsed || typeof parsed !== "object") return [];
-  const items = (parsed as { items?: unknown }).items;
+  const items = parsed.items;
   if (!Array.isArray(items)) return [];
 
   const out: MemoryItem[] = [];
