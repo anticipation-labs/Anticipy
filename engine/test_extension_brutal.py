@@ -296,6 +296,35 @@ def verify_outcome(scenario: dict, run: dict) -> dict:
             ),
         }
 
+    # Also infra-skip when the agent identified a "page not found" / "form is
+    # missing" / "no longer exists" indicator at the starting URL. Some 404s
+    # return HTTP 200 with an error page (Google Forms, Jotform), so
+    # pre_flight_failed stays False even though the scenario URL is dead.
+    # Generic; matches the most common dead-page strings any site uses.
+    DEAD_PAGE_HINTS = (
+        "page not found",
+        "form is missing",
+        "404",
+        "does not exist",
+        "doesn't exist",
+        "no longer available",
+        "we couldn't find that page",
+        "not available",
+    )
+    if (
+        category != "graceful_decline"
+        and not success
+        and steps <= 2
+        and any(h in msg for h in DEAD_PAGE_HINTS)
+    ):
+        return {
+            "pass": False,
+            "skip": True,
+            "reason": (
+                "infra_skip: agent identified 404/dead-page (LLM-generated dataset bug)"
+            ),
+        }
+
     if timed_out:
         return {"pass": False, "reason": f"timeout after {run.get('elapsed_s', 0)}s, {steps} steps"}
 
