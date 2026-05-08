@@ -558,10 +558,17 @@ export async function POST(req: Request) {
         actionType: candidate.action_type,
       };
 
-      // Always email the admin so we can see what users are doing in the demo.
-      // If the authed user has an email (Supabase auth requires one, so this
-      // is virtually always true), notify them too.
-      if (user_email && user_email !== adminEmail) {
+      // Email channel policy — importance-driven, opt-in only:
+      //   - Wearer: email ONLY for `critical` (someone is waiting NOW or
+      //     money/trust is at stake within hours). Everything else surfaces
+      //     silently on /engine + the extension popup. (Future: per-user
+      //     notification preference in settings widens this.)
+      //   - Admin: NO email by default. Set ADMIN_EMAIL_NOTIFICATIONS=true
+      //     env var on Vercel when you actually want a feed of user activity.
+      const adminWantsEmail = process.env.ADMIN_EMAIL_NOTIFICATIONS === "true";
+      const wearerWantsEmail = importance === "critical";
+
+      if (wearerWantsEmail && user_email && user_email !== adminEmail) {
         const userEmailResult = await sendIntentEmail(user_email, intentPayload, baseUrl);
         if (userEmailResult) {
           await supabaseAdmin.from("anticipy_notifications").insert({
@@ -573,22 +580,22 @@ export async function POST(req: Request) {
         }
       }
 
-      const adminLabel = user_email
-        ? `[Admin] User (${user_email}):`
-        : "[Admin]";
-      const adminEmailResult = await sendIntentEmail(
-        adminEmail,
-        intentPayload,
-        baseUrl,
-        adminLabel
-      );
-      if (adminEmailResult) {
-        await supabaseAdmin.from("anticipy_notifications").insert({
-          intent_id: data.id,
-          channel: "email",
-          recipient: adminEmail,
-          status: "sent",
-        });
+      if (adminWantsEmail) {
+        const adminLabel = user_email ? `[Admin] User (${user_email}):` : "[Admin]";
+        const adminEmailResult = await sendIntentEmail(
+          adminEmail,
+          intentPayload,
+          baseUrl,
+          adminLabel
+        );
+        if (adminEmailResult) {
+          await supabaseAdmin.from("anticipy_notifications").insert({
+            intent_id: data.id,
+            channel: "email",
+            recipient: adminEmail,
+            status: "sent",
+          });
+        }
       }
 
       // SMS + Voice for non-low importance levels
