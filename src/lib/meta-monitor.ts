@@ -152,17 +152,67 @@ export async function recallUserProfile(userId: string): Promise<string> {
   }
 }
 
+// Per-process inflight set. Two simultaneous buildUserProfile calls
+// for the same userId in the same lambda would otherwise both pay the
+// Gemini round-trip and one would overwrite the other (lost update).
+// We coalesce them: the second caller awaits the first call's promise.
+// On a horizontally-scaled deploy two different lambdas can still
+// race — that's fine because we now use a freshest-count read +
+// monotonic upsert (see buildUserProfile body) so the older write
+// can't clobber the newer one.
+const INFLIGHT_BUILDS = new Map<string, Promise<void>>();
+
+/**
+ * Count anticipy_preferences rows for the user via a HEAD request.
+ * Used as the canonical signal_count source — distinct from
+ * `signals.length`, which is capped by the .limit(30) we pull for
+ * the rebuild prompt and would saturate at 30 even as the user
+ * fans more in. Race-safe upserts compare against this value.
+ */
+async function countPreferencesForUser(userId: string): Promise<number> {
+  const { count, error } = await supabaseAdmin
+    .from("anticipy_preferences")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  if (error) return 0;
+  return count ?? 0;
+}
+
 /**
  * Rebuild the user's style profile from their last 30 preference
  * signals. Designed to be called fire-and-forget after every signal
  * record (confirm / reject / auto-proceed). Idempotent — safe to
- * call repeatedly. Throttle by signal_count: if the row was updated
- * within the last 5 signals, skip the rebuild (the profile won't
- * meaningfully change).
+ * call repeatedly.
+ *
+ * Throttle: if the persisted profile already reflects within ≤2 of
+ * the current preference count (i.e. at most 2 new signals have
+ * landed since the last build) we skip the rebuild — the profile
+ * wouldn't meaningfully shift on a delta that small and the cost
+ * compounds across heavy users.
+ *
+ * Concurrency: same-process duplicate calls are coalesced via
+ * INFLIGHT_BUILDS. Cross-process races are handled by:
+ *   (a) reading the FRESHEST signal_count immediately before the
+ *       upsert (not the value captured at function entry), and
+ *   (b) writing signal_count := MAX(stored, ours) so older slower
+ *       writes can never roll back a newer faster write's count.
  */
 export async function buildUserProfile(userId: string): Promise<void> {
   if (!userId) return;
+  const existing = INFLIGHT_BUILDS.get(userId);
+  if (existing) return existing;
+  const promise = buildUserProfileInner(userId).finally(() => {
+    INFLIGHT_BUILDS.delete(userId);
+  });
+  INFLIGHT_BUILDS.set(userId, promise);
+  return promise;
+}
+
+async function buildUserProfileInner(userId: string): Promise<void> {
   try {
+    // Read the existing row's signal_count BEFORE any work — this
+    // is the throttle baseline. It is NOT the value we eventually
+    // write back (we re-read freshly at upsert time, see below).
     const { data: existing } = await supabaseAdmin
       .from("anticipy_user_profile")
       .select("signal_count")
@@ -170,41 +220,56 @@ export async function buildUserProfile(userId: string): Promise<void> {
       .maybeSingle();
     const oldCount = (existing?.signal_count ?? 0) as number;
 
+    // Canonical count of preferences (independent of the .limit(30)
+    // window below). signals.length saturates at 30 and would make
+    // the throttle fire forever once a user crossed that threshold.
+    const trueCount = await countPreferencesForUser(userId);
+
+    // Throttle: skip if at most 2 new signals have arrived since the
+    // last successful build. Profile won't meaningfully shift on a
+    // delta that small and the cost compounds across heavy users.
+    // Always rebuild on the very first build (oldCount=0) so the user
+    // gets a profile as soon as they cross the 3-signal floor.
+    if (oldCount > 0 && trueCount - oldCount <= 2) {
+      return;
+    }
+
+    if (trueCount < 3) return; // not enough signal yet
+
     // Pull last 30 signals — enough to capture style without flooding
     // the rebuild prompt.
     const { data: signals, error: sigErr } = await supabaseAdmin
       .from("anticipy_preferences")
-      .select("signal, intent_summary, action_type, evidence_quote, reasoning, created_at")
+      .select(
+        "signal, intent_summary, action_type, evidence_quote, reasoning, created_at"
+      )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(30);
     if (sigErr || !signals) return;
-    const newCount = signals.length;
+    if (signals.length < 3) return; // belt-and-suspenders
 
-    // Throttle: if we've already built a profile and only ≤2 new
-    // signals have arrived since, skip. Profile won't meaningfully
-    // shift on small deltas; the cost compounds across heavy users.
-    if (oldCount > 0 && newCount > 0 && newCount - oldCount <= 2 && newCount === oldCount) {
-      return;
-    }
-
-    if (newCount < 3) return; // not enough signal yet
-
-    // Pull existing profile to feed back into the rebuild — this
+    // Pull existing profile body to feed back into the rebuild — this
     // gives the meta-monitor continuity rather than re-deriving from
     // scratch each time.
     const { data: prevProfile } = await supabaseAdmin
       .from("anticipy_user_profile")
-      .select("style_summary, common_accepts, common_rejects")
+      .select("style_summary, common_accepts, common_rejects, signal_count")
       .eq("user_id", userId)
       .maybeSingle();
 
     const userMessage = JSON.stringify({
-      existing_profile: prevProfile ?? {
-        style_summary: "",
-        common_accepts: [],
-        common_rejects: [],
-      },
+      existing_profile: prevProfile
+        ? {
+            style_summary: prevProfile.style_summary,
+            common_accepts: prevProfile.common_accepts,
+            common_rejects: prevProfile.common_rejects,
+          }
+        : {
+            style_summary: "",
+            common_accepts: [],
+            common_rejects: [],
+          },
       recent_signals: (signals as PreferenceRow[]).map((s) => ({
         signal: s.signal,
         action_type: s.action_type,
@@ -235,19 +300,52 @@ export async function buildUserProfile(userId: string): Promise<void> {
       drift_alerts?: unknown[];
     } = {};
     try {
-      const stripped = llmText.replace(/^```(?:json)?\s*/, "").replace(/```\s*$/, "");
+      // Test-only knob: lets engine/test_meta_monitor.py exercise the
+      // "Gemini returned non-JSON" path without us mocking the network.
+      // No-op in production where the env var is never set.
+      if (process.env.META_MONITOR_TEST_FORCE_MALFORMED === "1") {
+        throw new Error("forced malformed for tests");
+      }
+      const stripped = llmText
+        .replace(/^```(?:json)?\s*/, "")
+        .replace(/```\s*$/, "");
       parsed = JSON.parse(stripped);
     } catch {
       return; // malformed — leave the previous profile in place
     }
 
+    // Re-read the row IMMEDIATELY before upsert. A concurrent build
+    // for the same user (different lambda / different process) may
+    // have advanced signal_count since our entry-time read; we never
+    // want to roll it back.
+    const { data: latest } = await supabaseAdmin
+      .from("anticipy_user_profile")
+      .select("signal_count")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const latestStored = (latest?.signal_count ?? 0) as number;
+    // Use the live preferences count fetched FRESH so we never pin
+    // a stale snapshot from function entry — and ensure the persisted
+    // count is monotone with respect to the current truth.
+    const freshTrueCount = await countPreferencesForUser(userId);
+    const writeCount = Math.max(latestStored, freshTrueCount);
+
     const row = {
       user_id: userId,
-      style_summary: typeof parsed.style_summary === "string" ? parsed.style_summary.slice(0, 1500) : "",
-      common_accepts: Array.isArray(parsed.common_accepts) ? parsed.common_accepts.slice(0, 10) : [],
-      common_rejects: Array.isArray(parsed.common_rejects) ? parsed.common_rejects.slice(0, 10) : [],
-      drift_alerts: Array.isArray(parsed.drift_alerts) ? parsed.drift_alerts.slice(0, 5) : [],
-      signal_count: newCount,
+      style_summary:
+        typeof parsed.style_summary === "string"
+          ? parsed.style_summary.slice(0, 1500)
+          : "",
+      common_accepts: Array.isArray(parsed.common_accepts)
+        ? parsed.common_accepts.slice(0, 10)
+        : [],
+      common_rejects: Array.isArray(parsed.common_rejects)
+        ? parsed.common_rejects.slice(0, 10)
+        : [],
+      drift_alerts: Array.isArray(parsed.drift_alerts)
+        ? parsed.drift_alerts.slice(0, 5)
+        : [],
+      signal_count: writeCount,
       updated_at: new Date().toISOString(),
     };
 
