@@ -5,10 +5,53 @@ import {
   buildSetCookieHeader,
   verifyGateCookie,
 } from "@/lib/gate-cookie";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
+function expectedPasscode(): string {
+  const env = process.env.GATE_PASSCODE_INTERNAL;
+  if (!env || env.length === 0) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "GATE_PASSCODE_INTERNAL must be set in production (refusing to use the dev default)"
+      );
+    }
+    return "123";
+  }
+  if (env.length < 6 && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "GATE_PASSCODE_INTERNAL must be at least 6 characters in production"
+    );
+  }
+  return env;
+}
+
+function safeEqual(a: string, b: string): boolean {
+  // Constant-time compare so the response time doesn't leak whether
+  // the wrong attempt was a near-miss or wholly off. Pad to the
+  // longer of the two so timingSafeEqual doesn't throw on length
+  // mismatch — the .length === .length pre-check handles correctness.
+  if (a.length !== b.length) return false;
+  const ab = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  return crypto.timingSafeEqual(ab, bb);
+}
+
 export async function POST(req: Request) {
+  // Brute-force defense: 10 attempts per IP per minute. Same posture
+  // as engine-transfer-gate (84c603d). Real users typing the wrong
+  // code 2-3 times still have headroom.
+  const ip = clientIp(req);
+  const limit = rateLimit(`internal-gate:${ip}`, 10, 60_000);
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: "Too many attempts. Wait a minute and try again." },
+      { status: 429 }
+    );
+  }
+
   let body: { passcode?: string };
   try {
     body = await req.json();
@@ -16,13 +59,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Accept "123" no matter what whitespace, formatting, or case wraps it.
-  // Also accepts "one two three" / "onetwothree".
+  // Strip whitespace + lowercase for input forgiveness, but keep the
+  // exact compare to avoid encoding edge cases.
   const raw = (body.passcode || "").toString();
   const stripped = raw.replace(/\s+/g, "").toLowerCase();
-  const ok = stripped === "123" || stripped === "onetwothree";
-
-  if (!ok) {
+  const expected = expectedPasscode().toLowerCase();
+  if (!safeEqual(stripped, expected)) {
     return NextResponse.json({ error: "Wrong code" }, { status: 401 });
   }
 

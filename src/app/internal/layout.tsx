@@ -40,7 +40,7 @@ function PasswordGate({ children }: { children: React.ReactNode }) {
             spellCheck={false}
             value={input}
             onChange={(e) => { setInput(e.target.value); setError(false); }}
-            placeholder="Access code (123)"
+            placeholder="Access code"
             autoFocus
             style={{
               background: "#1A1A1A", border: error ? "1px solid #ff4444" : "1px solid #333",
