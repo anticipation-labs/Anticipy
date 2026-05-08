@@ -43,6 +43,11 @@ __pycache__/
 engine/logs/test_results.json
 engine/browser-data/
 
+# training corpus contains real user transcripts — NEVER commit
+engine/data/training_corpus.jsonl
+engine/data/training_corpus.*.jsonl
+engine/data/few_shot_block.txt
+
 # vercel
 .vercel
 
