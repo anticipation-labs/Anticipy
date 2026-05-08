@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 
 # ─── Env loader ──────────────────────────────────────────────────────────────
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env.local"
@@ -48,6 +49,16 @@ if ENV_FILE.exists():
             continue
         k, _, v = line.partition("=")
         os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+# Skip ALL tests in this module under pytest unless ENGINE_INTEGRATION=1
+# is set. These tests require a running Next.js dev server on
+# ANTICIPY_BASE_URL and a populated Supabase. The default tier-1 unit
+# suite shouldn't run them. The __main__ harness at the bottom of the
+# file (`python test_meta_monitor.py`) is the canonical way to run.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("ENGINE_INTEGRATION") != "1",
+    reason="set ENGINE_INTEGRATION=1 + run dev server to enable",
+)
 
 SUPABASE_URL = os.environ["NEXT_PUBLIC_SUPABASE_URL"].rstrip("/")
 SERVICE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
