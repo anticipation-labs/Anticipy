@@ -253,7 +253,13 @@ LOGIN_HINTS = (
 
 
 def verify_outcome(scenario: dict, run: dict) -> dict:
-    """Programmatic verifier — returns {pass: bool, reason: str}."""
+    """Programmatic verifier — returns {pass: bool, reason: str, skip?: bool}.
+
+    `skip: True` is reserved for infra failures the agent had no way to
+    recover from (e.g., the LLM-generated starting_url 404s). These should
+    be excluded from the pass-rate denominator rather than counted as
+    agent failures.
+    """
     verifier = scenario.get("verifier", {}) or {}
     vtype = verifier.get("type", "agent_success")
     patterns = [str(p).lower() for p in (verifier.get("patterns") or []) if p]
@@ -266,6 +272,28 @@ def verify_outcome(scenario: dict, run: dict) -> dict:
     success = bool(run.get("agent_success"))
     steps = int(run.get("step_count", 0))
     timed_out = bool(run.get("timed_out"))
+    pre_flight_failed = bool(run.get("pre_flight_failed"))
+    category = (scenario.get("category") or "").lower()
+
+    # Infra skip: if the LLM-generated starting_url 404s AND the scenario
+    # isn't a graceful_decline (where landing on a refuse page is the
+    # intended setup) AND the agent correctly identified it (declined
+    # after few steps), this is a dataset bug, not an agent failure. Mark
+    # for exclusion from pass-rate. The agent did the right thing by
+    # refusing to fabricate success on a dead URL.
+    if (
+        pre_flight_failed
+        and category != "graceful_decline"
+        and not success
+        and steps <= 1
+    ):
+        return {
+            "pass": False,
+            "skip": True,
+            "reason": (
+                "infra_skip: starting_url did not load (LLM-generated dataset bug)"
+            ),
+        }
 
     if timed_out:
         return {"pass": False, "reason": f"timeout after {run.get('elapsed_s', 0)}s, {steps} steps"}
@@ -274,12 +302,16 @@ def verify_outcome(scenario: dict, run: dict) -> dict:
         if not pats:
             return True
         for p in pats:
+            # Plain substring match first — handles patterns with regex
+            # special chars like + that the LLM frequently uses literally.
+            if p in text:
+                return True
+            # Then try as regex for patterns that intend it.
             try:
                 if re.search(p, text):
                     return True
             except re.error:
-                if p in text:
-                    return True
+                pass
         return False
 
     if min_len and len(msg) < min_len:
@@ -650,7 +682,9 @@ async def main(per_category: int = 5, only_categories: list[str] | None = None,
     for r in runs:
         c = r["scenario"].get("category", "?")
         d = by_cat.setdefault(c, {"pass": 0, "fail": 0, "total": 0, "items": []})
-        if r["verdict"]["pass"]:
+        if r["verdict"].get("skip"):
+            d["skip"] = d.get("skip", 0) + 1
+        elif r["verdict"]["pass"]:
             d["pass"] += 1
         else:
             d["fail"] += 1
@@ -660,15 +694,25 @@ async def main(per_category: int = 5, only_categories: list[str] | None = None,
     total = len(runs)
     total_pass = sum(d["pass"] for d in by_cat.values())
     total_fail = sum(d["fail"] for d in by_cat.values())
+    total_skip = sum(d.get("skip", 0) for d in by_cat.values())
+    # Pass rate excludes infra skips so dataset bugs don't drag down the
+    # agent score.
+    eligible = total - total_skip
 
     print("\n" + "=" * 72)
     print("BROWSER BRUTAL — RESULTS BY CATEGORY")
     print("=" * 72)
     for c in sorted(by_cat):
         d = by_cat[c]
-        print(f"  {c:30s}  pass={d['pass']:>2}/{d['total']:<2}  fail={d['fail']:>2}")
+        skip_str = f"  skip={d.get('skip', 0)}" if d.get("skip") else ""
+        print(f"  {c:30s}  pass={d['pass']:>2}/{d['total']:<2}  fail={d['fail']:>2}{skip_str}")
     print("-" * 72)
-    print(f"  TOTAL: pass={total_pass}/{total}  fail={total_fail}  ({100.0*total_pass/total if total else 0:.1f}%)")
+    pct = 100.0 * total_pass / eligible if eligible else 0
+    skip_note = f"  ({total_skip} infra-skip excluded)" if total_skip else ""
+    print(
+        f"  TOTAL: pass={total_pass}/{eligible}  fail={total_fail}  "
+        f"({pct:.1f}%){skip_note}"
+    )
 
     # JSON dump
     REPORT_JSON.write_text(json.dumps([
