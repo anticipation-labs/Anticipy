@@ -94,8 +94,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
       await chrome.storage.local.set({
         apiConfig: {
+          // 4-tier provider redundancy: A → B → C → D. Plan A is Gemini
+          // 2.5 Flash, Plan B Groq llama-3.3-70b, Plan C Kimi
+          // moonshot-v1-128k, Plan D DeepSeek deepseek-chat. The agent
+          // cycles through them; quality matched at the OpenAI-compat
+          // 70B-class tier so any plan failing over is not a degrade.
           groqApiKey: data.groqApiKey || null,
           geminiApiKey: data.geminiApiKey || null,
+          kimiApiKey: data.kimiApiKey || null,
+          deepseekApiKey: data.deepseekApiKey || null,
           // userId required so the SW can filter Realtime broadcasts and
           // never act on another user's intent. anticipy-intents is an
           // anon-readable topic — every connected extension gets every

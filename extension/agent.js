@@ -3,6 +3,8 @@
 // No localhost server required — runs entirely in the extension using the user's real browser.
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions";
+const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
 // gemini-2.5-flash is the current generally-available flash model with the
 // free-tier daily quota the extension uses. The previous gemini-2.0-flash
 // returns 404 ("no longer available to new users") as of 2026-Q1.
@@ -932,7 +934,27 @@ export class BrowserAgent {
         return await this._callGroq(userMessage);
       } catch (e) {
         errors.push(`Groq: ${e.message || e}`);
-        console.warn("[Anticipy Agent] Groq failed:", e.message);
+        console.warn("[Anticipy Agent] Groq failed, trying Kimi:", e.message);
+      }
+    }
+    // Plan C: Kimi (Moonshot). Independent quota org so simultaneous
+    // Gemini+Groq daily-quota walls don't kill the agent.
+    if (this.apiConfig?.kimiApiKey) {
+      try {
+        return await this._callKimi(userMessage);
+      } catch (e) {
+        errors.push(`Kimi: ${e.message || e}`);
+        console.warn("[Anticipy Agent] Kimi failed, trying DeepSeek:", e.message);
+      }
+    }
+    // Plan D: DeepSeek. Last-resort tier — different infrastructure
+    // entirely. May be out of credits but tries anyway.
+    if (this.apiConfig?.deepseekApiKey) {
+      try {
+        return await this._callDeepSeek(userMessage);
+      } catch (e) {
+        errors.push(`DeepSeek: ${e.message || e}`);
+        console.warn("[Anticipy Agent] DeepSeek failed, all providers exhausted:", e.message);
       }
     }
     if (errors.length === 0) {
@@ -1007,6 +1029,71 @@ export class BrowserAgent {
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty response from Groq");
+    return this._parseJSON(content);
+  }
+
+  // Plan C — Kimi (Moonshot). moonshot-v1-128k is the largest-context Kimi
+  // model and supports JSON-object response_format + temp=0 (kimi-k2.x
+  // requires temp=1.0 which is non-deterministic, no good for an agent).
+  // 128k window matches our entire system prompt + observation budget.
+  // Fully OpenAI-compatible API surface — same shape as Groq.
+  async _callKimi(userMessage) {
+    const resp = await fetch(KIMI_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apiConfig.kimiApiKey}`
+      },
+      body: JSON.stringify({
+        model: "moonshot-v1-128k",
+        messages: [
+          { role: "system", content: AGENT_SYSTEM_PROMPT },
+          { role: "user", content: userMessage }
+        ],
+        temperature: 0.1,
+        max_tokens: 2400,
+        response_format: { type: "json_object" }
+      })
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => String(resp.status));
+      throw new Error(`Kimi ${resp.status}: ${body.substring(0, 200)}`);
+    }
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Empty response from Kimi");
+    return this._parseJSON(content);
+  }
+
+  // Plan D — DeepSeek. deepseek-chat is OpenAI-compatible, supports
+  // JSON mode + temp=0.1, comparable instruction-following to Groq's
+  // llama-3.3-70b. May be out of credits at any time but the cascade
+  // tries it before declaring full unavailability.
+  async _callDeepSeek(userMessage) {
+    const resp = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apiConfig.deepseekApiKey}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: AGENT_SYSTEM_PROMPT },
+          { role: "user", content: userMessage }
+        ],
+        temperature: 0.1,
+        max_tokens: 2400,
+        response_format: { type: "json_object" }
+      })
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => String(resp.status));
+      throw new Error(`DeepSeek ${resp.status}: ${body.substring(0, 200)}`);
+    }
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Empty response from DeepSeek");
     return this._parseJSON(content);
   }
 

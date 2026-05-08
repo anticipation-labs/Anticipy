@@ -77,16 +77,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid access code" }, { status: 401, headers: corsHeaders });
   }
 
+  // Provider redundancy chain: A=Gemini, B=Groq, C=Kimi (Moonshot),
+  // D=DeepSeek. The extension cycles through them on each call so a
+  // single-provider 429 doesn't break the agent. Each tier uses that
+  // provider's best-available model — we don't degrade quality across
+  // tiers, just provider identity.
   const groqApiKey = process.env.GROQ_API_KEY || null;
   const geminiApiKey = process.env.GOOGLE_API_KEY || null;
+  const kimiApiKey = process.env.KIMI_API_KEY || null;
+  const deepseekApiKey = process.env.DEEPSEEK_API_KEY || null;
 
-  if (!groqApiKey && !geminiApiKey) {
-    console.error("[extension/auth] Neither GROQ_API_KEY nor GOOGLE_API_KEY is set");
+  if (!groqApiKey && !geminiApiKey && !kimiApiKey && !deepseekApiKey) {
+    console.error("[extension/auth] No LLM API keys set (need any of GROQ/GOOGLE/KIMI/DEEPSEEK)");
     return NextResponse.json({ error: "No LLM API keys configured on server" }, { status: 500, headers: corsHeaders });
   }
 
   return NextResponse.json(
-    { groqApiKey, geminiApiKey, userId: user.id, username: user.username },
+    {
+      groqApiKey,
+      geminiApiKey,
+      kimiApiKey,
+      deepseekApiKey,
+      userId: user.id,
+      username: user.username,
+    },
     { headers: corsHeaders }
   );
 }
