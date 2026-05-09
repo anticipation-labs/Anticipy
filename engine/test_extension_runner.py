@@ -193,17 +193,18 @@ SCENARIOS: list[dict[str, Any]] = [
     # user would reasonably ask. Failure here is informative — not a bug
     # in the harness, but a real gap to fix.
 
-    # Multi-tab research (compare across two sites)
+    # Multi-tab research (compare across two sites). Verifier goes
+    # through the LLM judge — checks both BBC and CNN are referenced and
+    # the message contains real headlines, not a generic failure.
     {
         "name": "compare_news_headlines",
         "task": "Open BBC News (bbc.com/news) AND CNN (cnn.com), and tell me one headline from each. Quote them verbatim.",
-        # Pass if the message names BOTH sources, has substantive content,
-        # and is NOT a friendly-error template.
-        "verify": lambda r: (
-            not _is_agent_failure_message((r or {}).get("message", ""))
-            and "bbc" in (r or {}).get("message", "").lower()
-            and "cnn" in (r or {}).get("message", "").lower()
-            and len((r or {}).get("message", "")) > 60
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent name BOTH BBC News AND CNN, and quote a real "
+                "headline from each (not just a navigation report)?"
+            ),
+            expected_facts=["bbc", "cnn"],
         ),
     },
 
@@ -482,7 +483,15 @@ async def main() -> int:
 
         results: list[dict] = []
         async with httpx.AsyncClient() as client:
-            for scenario in SCENARIOS:
+            for scenario_idx, scenario in enumerate(SCENARIOS):
+                # Inter-task cooldown — give Kimi rate-limit windows time
+                # to recover between scenarios. Without this, the run
+                # cascades into 429s by ~task 13 and every subsequent
+                # task fails immediately. 12s/scenario × 25 = +5min total
+                # — small price for stable measurement.
+                if scenario_idx > 0:
+                    print(f"  (cooldown 12s before next scenario)", flush=True)
+                    await asyncio.sleep(12.0)
                 print(f"\n== scenario: {scenario['name']}", flush=True)
                 print(f"  task: {scenario['task']}", flush=True)
                 t0 = time.time()
