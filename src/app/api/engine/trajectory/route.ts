@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { embedText, voyageAvailable, padVectorTo, vectorToPg } from "@/lib/voyage";
 
 export const dynamic = "force-dynamic";
 
@@ -135,9 +136,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // Insert the trajectory. We deliberately don't include task_embedding —
-  // that's a future RAG concern and adds Gemini-embedding latency we don't
-  // need on this hot path. The embedding job runs out-of-band on a cron.
+  // Insert the trajectory FIRST (with no embedding). Then, only for
+  // successful trajectories, embed the task_summary via Voyage and update
+  // the row in-place. Successful traces are the only ones the Planner
+  // retrieves as RAG examples; embedding failed/aborted traces would be
+  // wasted compute and risk poisoning future plans.
   const { data: row, error: insertErr } = await supabase
     .from("engine_trajectories")
     .insert({
@@ -161,6 +164,24 @@ export async function POST(req: Request) {
       { error: "Failed to persist trajectory" },
       { status: 503, headers: corsHeaders }
     );
+  }
+
+  // RAG corpus enrichment. Only embed `success` rows (others would mislead
+  // the planner). Best-effort — if Voyage hiccups, the row exists without
+  // an embedding and just doesn't get picked up by retrieval. Doesn't fail
+  // the request.
+  if (outcome === "success" && voyageAvailable()) {
+    try {
+      const { vector } = await embedText(task_summary.substring(0, 2000));
+      const padded = padVectorTo(vector, 768);
+      const pgVec = vectorToPg(padded);
+      await supabase
+        .from("engine_trajectories")
+        .update({ task_embedding: pgVec })
+        .eq("id", row.id);
+    } catch (e: any) {
+      console.warn(`[engine/trajectory] embedding skipped (non-fatal): ${e?.message || e}`);
+    }
   }
 
   return NextResponse.json({ id: row.id }, { headers: corsHeaders });
