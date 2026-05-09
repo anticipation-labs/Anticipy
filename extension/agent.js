@@ -764,9 +764,18 @@ export class BrowserAgent {
       let signalDiff = "";
       let signalsAfterCaptured = null;
       if (captureDiff && signalsBefore) {
-        // Tiny settle delay so SPA route changes / DOM updates have a
-        // chance to fire before we read.
-        await this._sleep(120);
+        // Settle the page before reading signals. ABP's Online-Mind2Web
+        // win came from determinism: race conditions where the agent
+        // reads DOM mid-render produce false stalls. Three layers:
+        //   1. Network idle wait via the content script (capped at 1500ms)
+        //   2. requestAnimationFrame settle so pending reflows complete
+        //   3. 400ms hard floor (was 120ms — too short for SPA renders)
+        try {
+          await this._waitForSettle(action);
+        } catch (_) {
+          // Best-effort; don't let a settle failure abort the step
+        }
+        await this._sleep(400);
         signalsAfterCaptured = await this._capturePageSignals();
         signalDiff = this._diffSignals(signalsBefore, signalsAfterCaptured);
       }
@@ -1511,6 +1520,36 @@ export class BrowserAgent {
       if (result?.success && result.data) return result.data;
     } catch (_) {}
     return null;
+  }
+
+  /**
+   * Wait for the page to settle after an action — kills race conditions
+   * where the agent reads DOM mid-render and the verifier wrongly
+   * decides "no observable effect." ABP's Online-Mind2Web win is mostly
+   * this. Three layers:
+   *
+   *   1. Navigate actions: tab.onUpdated 'complete' or 1500ms cap
+   *   2. Other actions: ask content script to await two
+   *      requestAnimationFrame ticks (lets pending reflows finish)
+   *   3. Hard cap so a busy page doesn't hang the run
+   *
+   * Best-effort. Failures are swallowed by the caller.
+   */
+  async _waitForSettle(action) {
+    const tab = await this._getActiveTab();
+    if (!tab) return;
+    if (action?.action === "navigate" || action?.action === "open_tab") {
+      // Wait for navigation to actually complete (or 1500ms cap)
+      await this._waitForTabLoad(tab.id, 1500);
+      return;
+    }
+    // For DOM-mutating actions: ask content script to settle render
+    try {
+      await Promise.race([
+        this._sendToContent(tab.id, { type: "settle" }),
+        new Promise(r => setTimeout(r, 1200)),
+      ]);
+    } catch (_) {}
   }
 
   // Pure function — fed before/after signal payloads, returns a short

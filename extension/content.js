@@ -299,6 +299,19 @@ async function executeAction(action) {
       };
     }
 
+    // settle: lets the agent wait for pending paint + microtasks to flush
+    // after a DOM-mutating action. Two requestAnimationFrame ticks are
+    // enough to catch most pending reflows without burning real time on
+    // animation-heavy pages. Caller-side caps wall time independently.
+    case "settle": {
+      try {
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+        // Also yield once more to flush microtask-pending state changes
+        await new Promise(r => setTimeout(r, 0));
+      } catch (_) {}
+      return { success: true };
+    }
+
     // (legacy add_todo removed — the LLM agent is expected to compose generic
     //  click + type actions to add a todo on any site, with no per-site keyword
     //  hints. Hardcoded placeholder substrings are a violation of the project
