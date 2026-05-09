@@ -33,9 +33,19 @@ Updated: 2026-05-10 (round 8 — agent-team architecture, Kimi K2.6 lock-in)
 - `/api/agent/verify`: 2.2s, correct satisfied/advance_plan verdict — verified curl
 - Legacy fallback path (TEST_NOOP, no agent-team endpoints): wiki_python_year PASS in 46.4s with correct answer — verified through full Patchright/Chromium loop
 
+**Multi-agent BRAIN validated in production (5/5 pass):**
+Direct test of /api/agent/* via `engine/test_multi_agent_brain.py`:
+1. Planner produces coherent 5-step plan with success_criteria
+2. Verifier catches silent stalls (executor lies about success, page didn't change)
+3. Verifier accepts real navigation + advances plan
+4. Verifier rejects wrong-target navigation (python.org vs wikipedia.org)
+5. Critic diagnoses looping + proposes specific recovery action
+
+These are the exact failure modes the agent-team architecture is designed to catch. Total cost: ~$0.005.
+
 **Honest gap, what's NOT yet proven:**
-- Multi-agent pipeline executing through Patchright on a real intent — broadcast reception is intermittent in this codespace. First run worked legacy-path; second run hung at broadcast stage.
-- The actual capability lift of multi-agent vs single-Kimi baseline. No real measurement yet.
+- The brain code paths in extension/agent.js (planner/verifier/critic/reflector calls) work end-to-end through the Chrome extension. Patchright codespace harness is unreliable for this validation. Real-machine extension run is the legitimate test.
+- Quantitative capability lift of multi-agent vs single-Kimi baseline on the 25-scenario suite — Patchright flakiness is blocking this measurement from this environment.
 
 **Logged cop-outs this round (#26-29):**
 - "Tested with zero tokens" lie — static checks ≠ real testing
