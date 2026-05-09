@@ -159,8 +159,8 @@ export async function POST(req: Request) {
     parsed = await callKimiJson({
       system: CRITIC_SYSTEM,
       messages: [{ role: "user", content: ctx }],
-      temperature: 1.0,  // K2.5 requires temp=1
-      maxTokens: 1200,
+      temperature: 0.1,
+      maxTokens: 800,
     });
   } catch (e: any) {
     return NextResponse.json(

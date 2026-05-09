@@ -191,10 +191,7 @@ export async function POST(req: Request) {
     parsed = await callKimiJson<VerifyLLMResponse>({
       system: VERIFIER_SYSTEM,
       messages: [{ role: "user", content: ctx }],
-      // Verifier fires up to 60 times per task. Use the fast non-reasoning
-      // Moonshot variant (~1s latency vs ~20s for K2.5) and a deterministic
-      // temperature so the verdict is stable.
-      model: "moonshot-v1-128k",
+      // moonshot-v1-128k is the default — fires up to 60×/task.
       temperature: 0.1,
       maxTokens: 400,
 

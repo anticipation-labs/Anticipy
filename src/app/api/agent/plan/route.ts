@@ -203,10 +203,10 @@ ${stepsPreview}
     parsed = await callKimiJson<PlanLLMResponse>({
       system: PLANNER_SYSTEM,
       messages: [{ role: "user", content: ctx }],
-      // K2.5 reasoning model requires temp=1. Defaults in @/lib/kimi
-      // already do this; explicit here to make the intent obvious.
-      temperature: 1.0,
-      maxTokens: 2400,
+      // moonshot-v1-128k (no reasoning overhead) — defaults in @/lib/kimi
+      // already select this. Deterministic temp for stable plans.
+      temperature: 0.1,
+      maxTokens: 1500,
     });
     // We don't currently surface usage from callKimiJson. callKimiRich
     // would; future improvement is to plumb it through. For now, leave

@@ -19,11 +19,14 @@
 
 const KIMI_API_KEY = process.env.KIMI_API_KEY!;
 const KIMI_URL = "https://api.moonshot.ai/v1/chat/completions";
-// K2.5 is the right engineering pick: same instruction-following as K2.6
-// but with shorter reasoning_content output → ~40% fewer output tokens
-// per call → ~16 tasks/$1 vs ~10 tasks/$1 on K2.6. Both require temp=1.
-const KIMI_DEFAULT_MODEL = "kimi-k2.5";
-const KIMI_DEFAULT_TEMPERATURE = 1.0;  // both K2.5 and K2.6 require temp=1
+// moonshot-v1-128k is the production default: 1-2s latency (vs K2.5's
+// 20-40s reasoning overhead), allows temperature<1 (deterministic JSON),
+// fits comfortably inside Vercel's 60s function timeout. Same Moonshot
+// org and key as K2.x. Reasoning quality is sufficient for our 3-7 step
+// plans + per-step verification — no measurable drop on the agent-team
+// pipeline once we have RAG examples in the planner prompt.
+const KIMI_DEFAULT_MODEL = "moonshot-v1-128k";
+const KIMI_DEFAULT_TEMPERATURE = 0.1;
 
 interface KimiMessage {
   role: "system" | "user" | "assistant";
@@ -127,17 +130,18 @@ export async function callKimiRich(opts: KimiCallOptions): Promise<KimiCallResul
     model: opts.model ?? KIMI_DEFAULT_MODEL,
     messages,
     temperature: opts.temperature ?? KIMI_DEFAULT_TEMPERATURE,
-    // K2.x is a reasoning model — it burns output tokens on
-    // reasoning_content BEFORE writing actual content. Be generous with
-    // max_tokens or you'll get empty content with finish_reason=length.
-    // Caller can override; default 1200 leaves room for ~400 reasoning + ~800 content.
+    // moonshot-v1-128k has no reasoning_content overhead — output goes
+    // straight to .content. 1200 leaves headroom for verbose JSON plans
+    // / verifier evidence / critic diagnoses without burning tokens.
     max_tokens: opts.maxTokens ?? 1200,
   };
   if (opts.jsonMode) body.response_format = { type: "json_object" };
 
-  // 60s timeout — agent-team calls are short (planner/verifier are quick)
+  // 50s upstream timeout — leaves 10s of headroom under Vercel's 60s
+  // function deadline so the route can return a proper 502 instead of
+  // being killed mid-flight by the platform.
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
+  const timeout = setTimeout(() => controller.abort(), 50_000);
 
   let resp: Response;
   try {
