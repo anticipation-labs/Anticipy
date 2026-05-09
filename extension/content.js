@@ -221,6 +221,76 @@ async function executeAction(action) {
       };
     }
 
+    // ── getSignals: lightweight page-state snapshot for effect-of-action diffs ──
+    // Captured before AND after every non-terminal action by the agent so it
+    // can observe what actually changed on the page. Designed to be cheap
+    // (~5-15 ms) — counts only, no full text walk, no element list. The agent
+    // diffs `before` vs `after` and surfaces the result to the LLM as
+    // "OBSERVED EFFECT FROM LAST ACTION", so the LLM gets direct evidence
+    // whether its click/type advanced the task or silently did nothing.
+    case "getSignals": {
+      let bodyTextLen = 0;
+      try { bodyTextLen = (document.body?.innerText || "").length; } catch (_) {}
+
+      let topHeading = "";
+      try {
+        const h1 = pierceQuery("h1");
+        if (h1 && isVisible(h1)) {
+          topHeading = (h1.innerText || h1.textContent || "").trim().substring(0, 160);
+        }
+      } catch (_) {}
+
+      let buttonCount = 0, inputCount = 0, linkCount = 0, formCount = 0;
+      try {
+        buttonCount = pierceQueryAll('button, [role="button"]').length;
+        inputCount  = pierceQueryAll('input:not([type="hidden"]), textarea').length;
+        linkCount   = pierceQueryAll('a[href]').length;
+        formCount   = pierceQueryAll('form').length;
+      } catch (_) {}
+
+      let hasModal = false;
+      try {
+        const modalSelectors = [
+          '[role="dialog"]:not([aria-hidden="true"])',
+          '[aria-modal="true"]',
+          'dialog[open]',
+        ];
+        for (const sel of modalSelectors) {
+          const el = pierceQuery(sel);
+          if (el && isVisible(el)) { hasModal = true; break; }
+        }
+      } catch (_) {}
+
+      // Cheap fingerprint of the first chunk of body text — lets the agent
+      // detect SPA route changes (URL same, content swapped) without sending
+      // the full innerText each time.
+      let bodyFingerprint = "0";
+      try {
+        const sample = (document.body?.innerText || "").substring(0, 1200);
+        let h = 0;
+        for (let i = 0; i < sample.length; i++) {
+          h = ((h << 5) - h + sample.charCodeAt(i)) | 0;
+        }
+        bodyFingerprint = h.toString(36);
+      } catch (_) {}
+
+      return {
+        success: true,
+        data: {
+          url: window.location.href,
+          title: document.title,
+          bodyTextLen,
+          topHeading,
+          buttonCount,
+          inputCount,
+          linkCount,
+          formCount,
+          hasModal,
+          bodyFingerprint,
+        }
+      };
+    }
+
     // ── Legacy: get_page_info (kept for backwards compat) ─────────────────────
     case "get_page_info": {
       return {

@@ -225,6 +225,20 @@ LONG-RUNNING TASKS — you have up to 60 steps and 10 minutes per intent. For mu
 
 FOLLOW-UP HANDLING — the user may ask follow-up questions ("what about the other one?", "compare with X"). You'll receive these as new intents but with relevant context in PARAMETERS. Use list_tabs + switch_tab to revisit work you did earlier rather than starting from scratch.
 
+EFFECT-OF-ACTION FEEDBACK — after each non-terminal action you take, the step \
+history now shows a "→ effect:" line summarizing what actually changed on the \
+page (URL, title, top heading, body content size, element count deltas, modal \
+appeared/closed). Read this every step. Two important cases:\n\
+  • "→ effect: NONE — page didn't visibly change" means your last action had \
+ZERO observable effect — your click landed but fired no real handler, or the \
+input rejected your text, or the navigation was a no-op. DO NOT repeat the \
+exact same action; pick a different element / selector / strategy.\n\
+  • A non-empty effect (URL changed, +N buttons, modal appeared) is direct \
+evidence that the action moved the task forward. Use it to decide whether \
+the current plan step is now satisfied.\n\
+This is the single most reliable signal you have for whether you're making \
+real progress vs. silently stalling. Trust it over the action's own \
+success/failure return value (a click can return success while doing nothing).\n\n\
 PLAN AWARENESS — at task start a strategic plan was generated for you (3-7 numbered steps). It appears in your context as PLAN. Use it as a north star: the current plan-step you're working on is shown, plus what's already done and what's still pending. If the page state contradicts the plan (the expected element isn't there, the URL went somewhere unexpected, the plan's next step depends on data you couldn't extract), ABANDON the plan for that step and pick the action that actually moves the task forward — the plan is guidance, not a script. If you've finished the plan but the user's task still isn't fully answered, keep going (the plan is a floor, not a ceiling).
 
 OUTPUT FORMAT — chain of thought + action.
@@ -410,7 +424,74 @@ export class BrowserAgent {
       result.success ? "✓" : "✗",
       result.message + (debugTail || "")
     );
+
+    // Persist the trajectory for future learning. Non-fatal on failure —
+    // the user has already been told the outcome; losing one trace doesn't
+    // change anything they see. The /api/engine/trajectory route is a
+    // best-effort write that degrades cleanly when Supabase is hiccuping.
+    try {
+      await this._persistTrajectory(result);
+    } catch (e) {
+      console.warn("[Anticipy Agent] trajectory persist failed (non-fatal):", e?.message || e);
+    }
+
     return result;
+  }
+
+  // ─── Trajectory persistence ───────────────────────────────────────────────────
+  // POSTs the full step trace to /api/engine/trajectory at end of every
+  // task. The backend writes to the engine_trajectories Supabase table.
+  // This is the foundation for the synthetic-data flywheel — once we have
+  // N tasks per domain stored, the planner can retrieve similar past
+  // traces and learn from real outcomes without any fine-tuning.
+  // No-op when the extension isn't authenticated (no access code yet).
+  async _persistTrajectory(result) {
+    if (!this.accessCode) return;
+
+    let domain = "";
+    try {
+      const tab = await this._getActiveTab();
+      if (tab?.url) {
+        domain = new URL(tab.url).hostname || "";
+      }
+    } catch (_) {}
+    if (!domain) {
+      // No domain → no point in persisting (per-domain analytics don't apply).
+      // We still POST so future summaries see the run, but tag as 'unknown'.
+      domain = "unknown";
+    }
+
+    const outcome = result.success ? "success" : "fail";
+    const payload = {
+      intent_id: this.intent?.id ?? null,
+      domain,
+      task_summary: (this.intent?.summary_for_user || "").substring(0, 2000),
+      steps: this.steps.map((s) => ({
+        action: s.action,
+        result: { success: !!s.result?.success, error: s.result?.error || null },
+        signalDiff: s.signalDiff || "",
+        timestamp: s.timestamp,
+      })),
+      outcome,
+      outcome_message: (result.message || "").substring(0, 2000),
+      total_steps: this.steps.length,
+      duration_ms: Date.now() - this.startTime,
+    };
+
+    const url = `${this.proxyBaseUrl}/api/engine/trajectory`;
+    try {
+      await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Anticipy-Code": this.accessCode,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      // Network error — log to console but don't surface to the user.
+      console.warn("[Anticipy Agent] trajectory POST failed:", e?.message || e);
+    }
   }
 
   // ─── Main loop ───────────────────────────────────────────────────────────────
@@ -604,6 +685,19 @@ export class BrowserAgent {
         continue;
       }
 
+      // ─── Action-effect verification: capture page signals BEFORE action ──
+      // For actions that can observably change the page, capture a cheap
+      // signal snapshot so we can diff before/after. SKIP_DIFF actions are
+      // ones where a diff makes no sense (pure queries, tab management,
+      // long-blocking waits — these don't have a "did my click work?"
+      // shape).
+      const SKIP_DIFF = new Set([
+        "getPageState", "getSignals", "wait_for", "waitForElement",
+        "list_tabs", "extract", "pierce_query",
+      ]);
+      const captureDiff = !SKIP_DIFF.has(action.action);
+      const signalsBefore = captureDiff ? await this._capturePageSignals() : null;
+
       // Advance plan progress proportionally — generic and monotonic. We
       // pace currentPlanStep to track step / MAX_PLAN_STEPS_RATIO so by the
       // time the executor has burned ~half its steps, the plan tracker is
@@ -645,13 +739,31 @@ export class BrowserAgent {
         result = retryResult;
       }
 
-      this.steps.push({ action, result, timestamp: Date.now() });
+      // ─── Action-effect verification: capture page signals AFTER action ──
+      // Only if we captured a `before`. The diff is empty-string when the
+      // action had no observable effect on the page, which is itself a
+      // useful signal — the agent sees that and re-strategizes instead of
+      // claiming progress.
+      let signalDiff = "";
+      if (captureDiff && signalsBefore) {
+        // Tiny settle delay so SPA route changes / DOM updates have a
+        // chance to fire before we read.
+        await this._sleep(120);
+        const signalsAfter = await this._capturePageSignals();
+        signalDiff = this._diffSignals(signalsBefore, signalsAfter);
+      }
+
+      this.steps.push({ action, result, signalDiff, timestamp: Date.now() });
 
       if (action.action === "extract" && result.success && action.field) {
         this.extractedData[action.field] = result.text || "";
       }
 
-      console.log(`  →`, result.success ? "ok" : `FAILED: ${result.error}`);
+      console.log(
+        `  →`,
+        result.success ? "ok" : `FAILED: ${result.error}`,
+        signalDiff ? `[effect: ${signalDiff.substring(0, 100)}]` : ""
+      );
 
       // Human-like inter-action delay
       await this._sleep(700);
@@ -758,7 +870,22 @@ export class BrowserAgent {
       if (a.text) parts.push(`text="${String(a.text).substring(0, 40)}"`);
       if (a.field) parts.push(`→${a.field}`);
       const status = s.result.success ? "✓" : `✗ ${s.result.error || "failed"}`;
-      return `  ${i + 1}. ${parts.join(" ")} ${status}`;
+      const main = `  ${i + 1}. ${parts.join(" ")} ${status}`;
+      // Surface the effect-of-action diff (URL change, title change, element
+      // count delta, modal appeared/closed). When the diff is empty it means
+      // the action had NO observable page effect — the agent should treat
+      // that as a "my last move did nothing" signal and pick a different
+      // strategy on this step.
+      if (typeof s.signalDiff === "string") {
+        if (s.signalDiff) {
+          return `${main}\n     → effect: ${s.signalDiff.substring(0, 220)}`;
+        }
+        // Captured but empty: tell the LLM nothing changed.
+        if (s.result?.success && !["wait", "done"].includes(a.action)) {
+          return `${main}\n     → effect: NONE — page didn't visibly change. Try a different element or strategy.`;
+        }
+      }
+      return main;
     }).join("\n");
 
     const extractedStr = Object.keys(this.extractedData).length > 0
@@ -1286,6 +1413,88 @@ export class BrowserAgent {
     } catch {}
 
     return { url: tab.url || "unknown", title: tab.title || "unknown", visibleText: "", elements: [] };
+  }
+
+  // ─── Effect-of-action verification ────────────────────────────────────────────
+  // Capture a lightweight page-signal snapshot before AND after every action
+  // that could have observable effect (most everything except `done`, `wait`,
+  // pure-query actions). Diff the two and surface the diff to the LLM as
+  // "OBSERVED EFFECT FROM LAST ACTION" so the agent sees direct evidence
+  // its action moved the task — not just whether the DOM call returned ok.
+  // This catches the silent-stall failure mode: click lands cleanly, fires
+  // no real handler, agent thinks it's progressing while the page hasn't
+  // actually changed. Cost: one extra round-trip to content.js per action,
+  // ~5-15 ms each, ~bounded total <2 s on a 60-step task.
+
+  async _capturePageSignals() {
+    const tab = await this._getActiveTab();
+    if (!tab) return null;
+    try {
+      const result = await this._sendToContent(tab.id, { type: "getSignals" });
+      if (result?.success && result.data) return result.data;
+    } catch (_) {}
+    return null;
+  }
+
+  // Pure function — fed before/after signal payloads, returns a short
+  // human-readable diff string the LLM can reason on. Empty string means
+  // "no observable effect" — itself a signal the agent should re-strategize.
+  // Static to allow easy unit testing without instantiating a BrowserAgent.
+  static diffSignals(before, after) {
+    if (!before || !after) return "";
+    const lines = [];
+
+    if (before.url !== after.url) {
+      const oldU = (before.url || "").replace(/^https?:\/\//, "");
+      const newU = (after.url || "").replace(/^https?:\/\//, "");
+      lines.push(`URL: ${oldU.substring(0, 60)} → ${newU.substring(0, 60)}`);
+    }
+
+    if (before.title !== after.title) {
+      const oldT = (before.title || "").substring(0, 50);
+      const newT = (after.title || "").substring(0, 50);
+      lines.push(`Title: "${oldT}" → "${newT}"`);
+    }
+
+    if (before.topHeading !== after.topHeading &&
+        (before.topHeading || after.topHeading)) {
+      const oldH = (before.topHeading || "(none)").substring(0, 50);
+      const newH = (after.topHeading || "(none)").substring(0, 50);
+      lines.push(`Top heading: "${oldH}" → "${newH}"`);
+    }
+
+    const bodyDelta = (after.bodyTextLen || 0) - (before.bodyTextLen || 0);
+    if (Math.abs(bodyDelta) >= 100) {
+      lines.push(`Body content: ${bodyDelta > 0 ? "+" : ""}${bodyDelta} chars`);
+    } else if (before.url === after.url &&
+               before.bodyFingerprint !== after.bodyFingerprint) {
+      // Same URL, content fingerprint changed → SPA route or partial update.
+      lines.push("Body content changed (SPA route or partial update)");
+    }
+
+    const counts = [
+      ["buttons", "buttonCount"],
+      ["inputs",  "inputCount"],
+      ["links",   "linkCount"],
+      ["forms",   "formCount"],
+    ];
+    const deltas = [];
+    for (const [name, key] of counts) {
+      const d = (after[key] || 0) - (before[key] || 0);
+      if (d !== 0) deltas.push(`${d > 0 ? "+" : ""}${d} ${name}`);
+    }
+    if (deltas.length) lines.push(`Elements: ${deltas.join(", ")}`);
+
+    if (before.hasModal !== after.hasModal) {
+      lines.push(after.hasModal ? "A modal/dialog appeared" : "Modal/dialog closed");
+    }
+
+    return lines.join("; ");
+  }
+
+  // Instance wrapper so existing callers stay clean.
+  _diffSignals(before, after) {
+    return BrowserAgent.diffSignals(before, after);
   }
 
   // ─── Content script bridge ────────────────────────────────────────────────────
