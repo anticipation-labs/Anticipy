@@ -2,77 +2,48 @@
 // Takes a confirmed intent and executes it step-by-step using LLM decisions + DOM actions
 // No localhost server required — runs entirely in the extension using the user's real browser.
 
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+// Single backbone for the Executor: Kimi K2.6 (Moonshot AI). Agent-tuned
+// for long-horizon coordination, native multimodal, $0.60/$0.95 per 1M.
+// Verifier / Critic / Reflector run server-side at anticipy.ai/api/agent/*
+// and share the same upstream Kimi key + budget.
 const KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions";
-const DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions";
-// gemini-2.5-flash is the current generally-available flash model with the
-// free-tier daily quota the extension uses. The previous gemini-2.0-flash
-// returns 404 ("no longer available to new users") as of 2026-Q1.
-const GEMINI_FLASH_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-// gemini-2.5-pro is the smarter (slower, costlier) sibling. We escalate to
-// it for: (a) the planner pass at step 0, (b) recovery from runs of failures,
-// (c) interactive-element-empty pages (canvas/WebGL), (d) long-running tasks
-// past step 15 that still haven't finished. This is a small fraction of the
-// total LLM budget but lifts the hard-step success rate substantially.
-const GEMINI_PRO_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent";
-// Retain the flash URL as the legacy export name in case other extension
-// modules grep for it. New code should use the named constants above.
-const GEMINI_API_URL = GEMINI_FLASH_URL;
 
 const MAX_STEPS = 60;
 const TASK_TIMEOUT_MS = 600_000; // 10 minutes hard limit (multi-step flows)
 
-// Map raw agent failure modes to calm, user-facing copy. Investors should
-// never see "Reached max 60 steps", "LLM did not return a valid action",
-// "Task timed out after 5 minutes", or any unhandled exception verbatim.
-// If the message already looks like a clarification question (ends with ?
-// or starts with a wh-word), it's left alone — that's the REQUIRED-SLOT
-// path and we want the wearer to see the actual question.
-function friendlyAgentMessage(raw) {
+// Convert a raw agent failure message into something a non-technical
+// wearer can read. NO HARDCODED STRING-MATCH RULES — we route the raw
+// text through the cheapest available LLM and ask it to rewrite as a
+// single calm sentence. If every provider is unavailable we fall back
+// to ONE generic line. That's the entire policy.
+//
+// Two passthroughs we keep:
+//   - empty input → generic line (cheap-out)
+//   - LLM-authored clarification questions (the REQUIRED-SLOT path) —
+//     they end with "?" or start with a wh-word; the wearer needs to
+//     SEE the actual question, not a paraphrase. This is grammatical
+//     pattern-recognition, not content rule-matching.
+async function friendlyAgentMessage(raw, agentInstance) {
   const msg = (raw || "").toString().trim();
-  if (!msg) return "I couldn't finish that one. Try a simpler version of the task and I'll have another go.";
-  const lower = msg.toLowerCase();
-  // Preserve LLM-authored questions verbatim (the REQUIRED-SLOT path).
+  if (!msg) {
+    return "I couldn't finish that one. Want to try again?";
+  }
+  // Preserve LLM-authored questions verbatim (REQUIRED-SLOT path).
   if (msg.endsWith("?") ||
       /^(what|where|when|which|who|how|do|does|did|is|are|can|could|should|would)\b/i.test(msg)) {
     return msg;
   }
-  if (lower.includes("reached max") || lower.includes("max steps") || lower.includes("max 60")) {
-    return "I got stuck on the page — let me try a different approach next time.";
+  // Try an LLM rewrite via whatever provider has quota.
+  if (agentInstance && typeof agentInstance._rewriteForUser === "function") {
+    try {
+      const rewritten = await agentInstance._rewriteForUser(msg);
+      if (rewritten && rewritten.length >= 4 && rewritten.length <= 240) {
+        return rewritten;
+      }
+    } catch (_) { /* fall through to generic fallback */ }
   }
-  if (lower.includes("timed out") || lower.includes("timeout")) {
-    return "That took longer than expected — try a simpler ask.";
-  }
-  if (lower.includes("did not return a valid") || lower.includes("not valid json") || lower.includes("unparseable")) {
-    return "Hit a hiccup mid-task. Mind trying that again?";
-  }
-  if (lower.includes("sign in") || lower.includes("log in") || lower.includes("login") ||
-      lower.includes("password field")) {
-    return "That site wants you signed in. Open it once in this browser, then ask me again.";
-  }
-  if (lower.includes("captcha") || lower.includes("verify you are human") ||
-      lower.includes("are you a robot")) {
-    return "The site asked for a human check. Open it once and clear it, then I'll pick it up.";
-  }
-  if (lower.includes("blocked") || lower.includes("access denied") ||
-      lower.includes("403") || lower.includes("forbidden")) {
-    return "That site is blocking automated access right now. Try again in a bit.";
-  }
-  if (lower.includes("network") || lower.includes("fetch failed") ||
-      lower.includes("offline")) {
-    return "Network hiccup mid-task. Try again in a moment.";
-  }
-  if (lower.includes("ai_unavailable") || lower.includes("llm call failed") ||
-      lower.includes("rate limit") || lower.includes("429") ||
-      lower.includes("all providers") || lower.includes("empty response from") ||
-      lower.includes("groq:") || lower.includes("gemini:") || lower.includes("claude proxy")) {
-    return "Hit my AI rate limit. Give me a minute and try again.";
-  }
-  if (lower.includes("unexpected error")) {
-    return "Something didn't go through. Try that again.";
-  }
-  // Anything else — keep the message but trim "internal-y" prefixes.
-  return msg.replace(/^Error:\s*/i, "").replace(/^\[.*?\]\s*/, "");
+  // Single generic line. NO pattern-match rules.
+  return "I couldn't finish that one. Want to try again?";
 }
 
 // Escalation heuristics — keep these named/centralised so anyone reading the
@@ -197,7 +168,7 @@ CANVAS / WEBGL — when the page is canvas-rendered (Google Docs/Sheets/Slides, 
 
 DO NOT decline a task just because the page is canvas-rendered or the DOM looks sparse. Try canvas_type / canvas_pointer / pierce_query first. The extension's content script handles all the heavy lifting (offscreen iframe targeting, shadow DOM piercing, native value setters). Only decline as a LAST RESORT when you've genuinely exhausted these tools.
 
-ATTEMPT BEFORE DECLINING — for any task involving "compose / draft / edit / write / type", do not refuse. The user's Chrome runs in their real session — Gmail, Notion, Google Docs, etc. are usually already authenticated. Navigate to the relevant compose URL (mail.google.com/mail/u/0/#inbox?compose=new for Gmail, docs.google.com/document/u/0/create for a new Doc, etc.), give the canvas focus, and use canvas_type. If after 3+ attempts the surface genuinely won't accept input (no auth, hard captcha, etc.), only then decline with a specific reason.
+ATTEMPT BEFORE DECLINING — for any task involving "compose / draft / edit / write / type", do not refuse. The user's Chrome runs in their real session — most authenticated apps will accept actions in the existing tab. Navigate to whatever URL on the target service starts a fresh compose/create flow, give the canvas focus, and use canvas_type. If after 3+ attempts the surface genuinely won't accept input (no auth, hard captcha, etc.), only then decline with a specific reason.
 
 LOGIN-WALL HANDLING — if the page text says "sign in", "log in to continue", or you see a password field on a path you can't bypass, end with done success:false explaining the wall. Don't loop.
 
@@ -205,7 +176,7 @@ REQUIRED-SLOT CHECK — BEFORE navigating or acting, ask yourself: if I had to a
 
 SUBMIT FORMS THE RIGHT WAY — when the user's task is "search X for Y" or "look up Y on X" or any flow that needs typing then submitting, ALWAYS prefer \`{"action":"type","selector":"<input>","text":"<value>","submit":true}\` over typing + clicking a separate Search/Submit button. Search buttons frequently have generic class names (cdx-button, mui-button) that match multiple elements, and clicking the wrong one is the #1 cause of agent stalls. type+submit also dispatches Enter keydown/keypress/keyup and calls form.requestSubmit() so the page's own form-submit handler fires regardless of framework.
 
-SEARCH-BOX FALLBACK — if a search input keeps rejecting typing (you see "Typed but value did not stick" or two consecutive type failures on the same selector), STOP TYPING. Most search engines accept the query directly in the URL: Google = https://www.google.com/search?q=ENCODED, Bing = https://www.bing.com/search?q=ENCODED, DuckDuckGo = https://duckduckgo.com/?q=ENCODED, YouTube = https://www.youtube.com/results?search_query=ENCODED, Wikipedia = https://en.wikipedia.org/w/index.php?search=ENCODED, Amazon = https://www.amazon.com/s?k=ENCODED. Use the navigate action with the URL — same outcome, more reliable.
+SEARCH-BOX FALLBACK — if a search input keeps rejecting typing (you see "Typed but value did not stick" or two consecutive type failures on the same selector), STOP TYPING. Most search engines and content sites accept the query directly via a URL parameter — figure out the pattern from the current page (look at the URL after a real search, or use general knowledge of how that site's search URL is structured) and \`navigate\` to it. Same outcome as typing + submit, but more reliable when an input keeps swallowing keystrokes.
 
 CONSENT BANNERS / COOKIE POPUPS — many sites (YouTube, news sites, EU-region sites) hide the real UI behind a consent dialog. If after navigating you see "Accept all", "I agree", "Got it", or a cookie-related modal, your FIRST action should be \`{"action":"dismiss_modal"}\`. Then re-getPageState and proceed. dismiss_modal is generic — it scores candidates by visible text affinity for confirm/dismiss verbs and by z-index, no per-site list.
 
@@ -329,6 +300,47 @@ export class BrowserAgent {
     this.claudeProxyBudget = 3;       // max Claude proxy calls per task
     this.proxyBaseUrl = (apiConfig && apiConfig.proxyBaseUrl) || "https://www.anticipy.ai";
     this.accessCode = (apiConfig && apiConfig.accessCode) || "";
+
+    // Per-provider quota cooldown. Mirrors engine/app/models.py — when a
+    // provider 429s we mark a cooldown that grows exponentially on
+    // repeats (5s → 10s → 20s → 40s → 60s cap). The _callLLM loop SKIPS
+    // any provider whose unblock time is in the future. When ALL
+    // providers are blocked, _callLLM sleeps until the earliest unblock.
+    // No hardcoded provider names beyond the keys we read from apiConfig
+    // (gemini/groq/kimi/deepseek). Whichever has quota next is what we
+    // use — that's the "cheapest available" policy.
+    this._providerUnblockAt = {};     // { providerName: epochMs }
+    this._providerFailCount = {};     // { providerName: consecutive429s }
+    this._QUOTA_BASE_COOLDOWN_MS = 5000;
+    this._QUOTA_MAX_COOLDOWN_MS = 60000;
+  }
+
+  // ── Per-provider quota helpers ─────────────────────────────────────
+  // Same shape as engine/app/models.py. The agent calls _isProviderBlocked
+  // before every attempt and _markProvider429/_markProviderOk after each.
+  _isProviderBlocked(name) {
+    const until = this._providerUnblockAt[name] || 0;
+    return Date.now() < until;
+  }
+  _markProvider429(name) {
+    const fails = (this._providerFailCount[name] || 0) + 1;
+    this._providerFailCount[name] = fails;
+    const cooldown = Math.min(
+      this._QUOTA_BASE_COOLDOWN_MS * Math.pow(2, fails - 1),
+      this._QUOTA_MAX_COOLDOWN_MS
+    );
+    this._providerUnblockAt[name] = Date.now() + cooldown;
+    console.warn(
+      `[Anticipy Agent] provider ${name} quota-blocked for ${cooldown/1000}s (consecutive 429 #${fails})`
+    );
+  }
+  _markProviderOk(name) {
+    if (this._providerFailCount[name]) this._providerFailCount[name] = 0;
+    delete this._providerUnblockAt[name];
+  }
+  _earliestUnblockMs() {
+    const futures = Object.values(this._providerUnblockAt).filter(t => t > Date.now());
+    return futures.length ? Math.min(...futures) : null;
   }
 
   /** Entry point — run the full agent loop and return { success, message } */
@@ -396,9 +408,14 @@ export class BrowserAgent {
         debugTail = ` | last:${lastSteps}${ext}`;
       } catch (_) {}
 
-      // Friendly-up well-known agent failure modes so the wearer doesn't see
-      // "Reached max 60 steps" / "LLM did not return a valid action" / etc.
-      result.message = friendlyAgentMessage(result.message);
+      // LLM-rewrite the raw failure message into a single calm user-
+      // facing sentence. NO hardcoded pattern-match rules — see the
+      // friendlyAgentMessage definition for the policy.
+      try {
+        result.message = await friendlyAgentMessage(result.message, this);
+      } catch (_) {
+        result.message = "I couldn't finish that one. Want to try again?";
+      }
 
       // Opt-in: power users can enable the debug tail in the user-visible
       // message via `localStorage.setItem("anticipy_debug", "1")`.
@@ -745,24 +762,121 @@ export class BrowserAgent {
       // useful signal — the agent sees that and re-strategizes instead of
       // claiming progress.
       let signalDiff = "";
+      let signalsAfterCaptured = null;
       if (captureDiff && signalsBefore) {
         // Tiny settle delay so SPA route changes / DOM updates have a
         // chance to fire before we read.
         await this._sleep(120);
-        const signalsAfter = await this._capturePageSignals();
-        signalDiff = this._diffSignals(signalsBefore, signalsAfter);
+        signalsAfterCaptured = await this._capturePageSignals();
+        signalDiff = this._diffSignals(signalsBefore, signalsAfterCaptured);
       }
 
-      this.steps.push({ action, result, signalDiff, timestamp: Date.now() });
+      // ─── Verifier agent call (server-side at /api/agent/verify) ───────
+      // Independent agent — same Kimi K2.6, fresh context, no Executor
+      // bias. Catches the silent-stall failure mode where the Executor
+      // thinks it succeeded but the page didn't actually move. Fires only
+      // on observable actions (those with a signalDiff captured) and only
+      // when we have an active plan step to verify against. Best-effort:
+      // if the route 502s we just continue without a verdict.
+      let verifierVerdict = null;
+      if (captureDiff && signalsBefore && this.accessCode && this.plan.length > 0) {
+        try {
+          verifierVerdict = await this._callVerifier({
+            action,
+            signalsBefore,
+            signalsAfter: signalsAfterCaptured,
+            lastStepSuccess: Boolean(result.success),
+          });
+        } catch (e) {
+          // Verifier failure is non-fatal — the loop continues.
+          console.warn(`[Anticipy Agent] verifier call failed: ${e?.message || e}`);
+        }
+      }
+
+      this.steps.push({
+        action,
+        result,
+        signalDiff,
+        verifier: verifierVerdict,
+        timestamp: Date.now(),
+      });
 
       if (action.action === "extract" && result.success && action.field) {
         this.extractedData[action.field] = result.text || "";
       }
 
+      // Track consecutive verifier "not satisfied" verdicts. Two in a row
+      // → call the Critic. Critic-not-progressing twice → Reflector.
+      if (verifierVerdict) {
+        if (!verifierVerdict.satisfied) {
+          this._verifierMissStreak = (this._verifierMissStreak || 0) + 1;
+        } else {
+          this._verifierMissStreak = 0;
+          // If verifier said advance_plan, bump the plan tracker.
+          if (verifierVerdict.advance_plan && this.plan.length > 0) {
+            this.currentPlanStep = Math.min(this.currentPlanStep + 1, this.plan.length);
+          }
+        }
+      }
+
+      // ─── Critic invocation: 2 verifier-misses in a row ───────────────
+      if (this._verifierMissStreak >= 2 && this.accessCode) {
+        try {
+          const critic = await this._callCritic({
+            verifierEvidence: verifierVerdict?.evidence || "",
+          });
+          if (critic) {
+            console.warn(`[Anticipy Agent] critic: ${critic.diagnosis?.substring(0, 120)}`);
+            this._verifierMissStreak = 0;
+            this._criticMissStreak = (this._criticMissStreak || 0) + 1;
+            if (critic.abort) {
+              return { success: false, message: critic.abort_reason || "Task can't be completed from this state." };
+            }
+            if (typeof critic.replan_step_index === "number" && critic.replan_step_index > 0) {
+              this.currentPlanStep = Math.max(1, Math.min(critic.replan_step_index, this.plan.length));
+            }
+            this._lastCriticDiagnoses = (this._lastCriticDiagnoses || []).concat([critic.diagnosis || ""]).slice(-2);
+            this._lastCriticNewApproach = critic.new_approach || "";
+          }
+        } catch (e) {
+          console.warn(`[Anticipy Agent] critic call failed: ${e?.message || e}`);
+        }
+      }
+
+      // ─── Reflector invocation: 2 critic invocations with no progress ──
+      if ((this._criticMissStreak || 0) >= 2 && this.accessCode) {
+        try {
+          const reflect = await this._callReflector({
+            twoCriticDiagnoses: this._lastCriticDiagnoses || [],
+          });
+          if (reflect) {
+            this._criticMissStreak = 0;
+            this._lastCriticDiagnoses = [];
+            console.warn(`[Anticipy Agent] reflector: ${reflect.decision} — ${reflect.reasoning?.substring(0, 120)}`);
+            if (reflect.decision === "abort") {
+              return { success: false, message: reflect.abort_message || "I couldn't reach the answer this run." };
+            }
+            if (reflect.decision === "pivot" && Array.isArray(reflect.new_plan) && reflect.new_plan.length > 0) {
+              this.plan = reflect.new_plan
+                .filter(p => p && typeof p.goal === "string" && p.goal.trim())
+                .map((p, i) => ({
+                  step: typeof p.step === "number" ? p.step : i + 1,
+                  goal: p.goal.trim(),
+                  success_criteria: typeof p.success_criteria === "string" ? p.success_criteria.trim() : "",
+                }));
+              this.currentPlanStep = 1;
+            }
+          }
+        } catch (e) {
+          console.warn(`[Anticipy Agent] reflector call failed: ${e?.message || e}`);
+        }
+      }
+
       console.log(
         `  →`,
         result.success ? "ok" : `FAILED: ${result.error}`,
-        signalDiff ? `[effect: ${signalDiff.substring(0, 100)}]` : ""
+        signalDiff ? `[effect: ${signalDiff.substring(0, 100)}]` : "",
+        verifierVerdict ? `[verify:${verifierVerdict.satisfied ? "✓" : "✗"} ${verifierVerdict.confidence}]` : ""
       );
 
       // Human-like inter-action delay
@@ -770,6 +884,92 @@ export class BrowserAgent {
     }
 
     return { success: false, message: `Reached max ${MAX_STEPS} steps without completing task` };
+  }
+
+  // ─── Agent-team HTTP helpers ─────────────────────────────────────────
+  // These call /api/agent/{verify,critic,reflect} on anticipy.ai. Same
+  // upstream Kimi K2.6 budget. Failures are non-fatal — the run continues
+  // with reduced verification.
+
+  async _callVerifier({ action, signalsBefore, signalsAfter, lastStepSuccess }) {
+    const url = `${this.proxyBaseUrl.replace(/\/$/, "")}/api/agent/verify`;
+    const planStep = this.plan[Math.max(0, this.currentPlanStep - 1)] || {};
+    let visibleText = "";
+    try {
+      const state = await this._getPageState();
+      visibleText = state?.visibleText || "";
+    } catch (_) {}
+    const body = {
+      task: this.intent.summary_for_user,
+      plan_step: planStep,
+      action,
+      before_signals: signalsBefore,
+      after_signals: signalsAfter,
+      last_step_success: lastStepSuccess,
+      extracted_data: this.extractedData,
+      visible_text_excerpt: visibleText.substring(0, 1500),
+    };
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Anticipy-Code": this.accessCode },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`verify ${resp.status}`);
+    return await resp.json();
+  }
+
+  async _callCritic({ verifierEvidence }) {
+    const url = `${this.proxyBaseUrl.replace(/\/$/, "")}/api/agent/critic`;
+    let domain = "";
+    try {
+      const tab = await this._getActiveTab();
+      domain = tab?.url ? new URL(tab.url).hostname : "";
+    } catch (_) {}
+    const body = {
+      task: this.intent.summary_for_user,
+      plan: this.plan,
+      current_step_index: this.currentPlanStep,
+      history: this.steps.slice(-10).map(s => ({
+        action: s.action,
+        result: { success: !!s.result?.success, error: s.result?.error || null },
+        signalDiff: s.signalDiff || "",
+      })),
+      verifier_evidence: verifierEvidence,
+      domain,
+    };
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Anticipy-Code": this.accessCode },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`critic ${resp.status}`);
+    return await resp.json();
+  }
+
+  async _callReflector({ twoCriticDiagnoses }) {
+    const url = `${this.proxyBaseUrl.replace(/\/$/, "")}/api/agent/reflect`;
+    let domain = "";
+    try {
+      const tab = await this._getActiveTab();
+      domain = tab?.url ? new URL(tab.url).hostname : "";
+    } catch (_) {}
+    const body = {
+      task: this.intent.summary_for_user,
+      plan: this.plan,
+      history: this.steps.slice(-12).map(s => ({
+        action: s.action,
+        result: { success: !!s.result?.success, error: s.result?.error || null },
+      })),
+      two_critic_diagnoses: twoCriticDiagnoses,
+      domain,
+    };
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Anticipy-Code": this.accessCode },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) throw new Error(`reflect ${resp.status}`);
+    return await resp.json();
   }
 
   // ─── Failure tracking helpers ────────────────────────────────────────────────
@@ -947,223 +1147,174 @@ export class BrowserAgent {
    * failure; the executor still runs without a plan.
    */
   async _planTask() {
-    if (!this.apiConfig?.geminiApiKey) {
-      // No Gemini key → Groq fallback handles execution but skip planning.
-      // Plan-less is the worst case but the executor still runs.
+    // Calls the Planner agent at /api/agent/plan. The route does:
+    //   1. Voyage embedding of the task
+    //   2. pgvector top-3 retrieval of past successful trajectories
+    //   3. ONE Kimi K2.6 call with the task + retrieved examples
+    //   4. Returns plan + required_facts + examples_used
+    //
+    // Best-effort: if the route fails (network, 502, etc.) we run plan-less.
+    // The Executor still runs. Plan-less is degraded but functional.
+    if (!this.accessCode) {
+      // No access code → no auth → can't call the planner endpoint.
       return;
     }
     let initialState = {};
     try {
       initialState = await this._getPageState();
     } catch (_) {}
+    let domain = "";
+    try {
+      domain = initialState.url ? new URL(initialState.url).hostname : "";
+    } catch (_) {}
 
-    const userMessage = [
-      `TASK: ${this.intent.summary_for_user}`,
-      `ACTION TYPE: ${this.intent.action_type || "browser_action"}`,
-      `INTENT PARAMETERS: ${JSON.stringify(this.intent.parameters || {}, null, 2)}`,
-      "",
-      `STARTING PAGE:`,
-      `URL: ${initialState.url || "(unknown — agent has not navigated yet)"}`,
-      `TITLE: ${initialState.title || "(unknown)"}`,
-      `INTERACTIVE ELEMENTS COUNT: ${(initialState.elements || []).length}`,
-      "",
-      `Produce the plan as JSON.`
-    ].join("\n");
-
+    const planUrl = `${this.proxyBaseUrl.replace(/\/$/, "")}/api/agent/plan`;
     let raw;
     try {
-      raw = await this._callGemini(userMessage, { url: GEMINI_PRO_URL, system: PLANNER_SYSTEM_PROMPT });
+      const resp = await fetch(planUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Anticipy-Code": this.accessCode,
+        },
+        body: JSON.stringify({
+          task: this.intent.summary_for_user,
+          current_url: initialState.url || "",
+          current_title: initialState.title || "",
+          domain,
+        }),
+      });
+      if (!resp.ok) {
+        console.warn(`[Anticipy Agent] planner endpoint ${resp.status}; running plan-less`);
+        return;
+      }
+      raw = await resp.json();
     } catch (e) {
-      // Pro can be slow / over quota — fall back to Flash for the planner
-      // call. Worse plan > no plan.
-      console.warn("[Anticipy Agent] Pro planner failed, falling back to Flash:", e.message);
-      raw = await this._callGemini(userMessage, { url: GEMINI_FLASH_URL, system: PLANNER_SYSTEM_PROMPT });
+      console.warn(`[Anticipy Agent] planner endpoint failed: ${e?.message || e}; running plan-less`);
+      return;
     }
 
     if (raw && Array.isArray(raw.plan)) {
       this.plan = raw.plan
         .filter(p => p && typeof p.goal === "string" && p.goal.trim())
-        .map((p, i) => ({ step: typeof p.step === "number" ? p.step : i + 1, goal: p.goal.trim() }));
+        .map((p, i) => ({
+          step: typeof p.step === "number" ? p.step : i + 1,
+          goal: p.goal.trim(),
+          success_criteria: typeof p.success_criteria === "string" ? p.success_criteria.trim() : "",
+        }));
     }
-    if (raw && Array.isArray(raw.required_fields)) {
+    if (raw && Array.isArray(raw.required_facts)) {
+      this.requiredFields = raw.required_facts.filter(f => typeof f === "string" && f.trim());
+    } else if (raw && Array.isArray(raw.required_fields)) {
+      // Legacy alias accepted for compatibility.
       this.requiredFields = raw.required_fields.filter(f => typeof f === "string" && f.trim());
     }
     if (raw && raw.unreachable === true) {
       this.unreachable = true;
-      this.unreachableReason = (this.plan[0]?.goal || "Task can't be completed from this page.")
-        .replace(/^decline with specific reason:\s*/i, "");
+      this.unreachableReason = String(raw.unreachable_reason || this.plan[0]?.goal || "Task can't be completed from this page.");
+    }
+    if (Array.isArray(raw?.examples_used) && raw.examples_used.length > 0) {
+      console.log(`[Anticipy Agent] planner used ${raw.examples_used.length} RAG example(s)`);
     }
     console.log(`[Anticipy Agent] plan: ${this.plan.length} steps, required_fields=${JSON.stringify(this.requiredFields)}, unreachable=${this.unreachable}`);
   }
 
   async _callLLM(userMessage) {
-    // Gemini primary (higher free-tier daily quota than Groq's per-org limits),
-    // Groq fallback (very fast when not rate-limited). When this.proCallsRemaining
-    // > 0 we route to Gemini Pro for the next call (decremented in _callGemini).
+    // Single-model Executor path. Kimi K2.6 (Moonshot AI) is the agent
+    // backbone — agent-tuned for long-horizon coordination, native
+    // multimodal, $0.60/$0.95 per 1M tokens. NO multi-provider cascade.
     //
-    // TIER-2 ESCALATION: when two consecutive Pro calls have failed (network
-    // error, parse error, empty body), the next attempt routes through Claude
-    // Sonnet via /api/extension/llm-proxy. Claude reasons better than Pro on
-    // concealed-delegation, sarcasm, and pronoun-chain pages; we save it for
-    // the genuinely-stuck step rather than burning it on every call.
-    const errors = [];
-
-    const claudeShouldFire =
-      this.accessCode &&
-      this.proFailureStreak >= 2 &&
-      this.claudeProxyBudget > 0;
-
-    if (claudeShouldFire) {
-      this.claudeProxyBudget--;
-      console.warn(
-        `[Anticipy Agent] 2 consecutive Pro failures — escalating to Claude (proxy budget: ${this.claudeProxyBudget})`
+    // On a 429 we wait per the exponential-backoff cooldown stored in
+    // _providerUnblockAt["kimi"], then try once more. If still 429, we
+    // surface ai_unavailable so the run loop can stop. The agent-team
+    // verifier/critic/reflector endpoints (called over HTTPS to anticipy.ai)
+    // share the SAME upstream Kimi quota — they're throttled centrally.
+    if (!this.apiConfig?.kimiApiKey) {
+      throw new Error("KIMI_API_KEY not configured. Sign in via the extension popup.");
+    }
+    if (this._isProviderBlocked("kimi")) {
+      const wait = Math.min(
+        Math.max(0, (this._providerUnblockAt["kimi"] || 0) - Date.now()),
+        this._QUOTA_MAX_COOLDOWN_MS
       );
-      try {
-        const result = await this._callClaudeProxy(userMessage);
-        // Successful Claude call resets the streak so we don't keep burning
-        // Claude on every step indefinitely.
-        this.proFailureStreak = 0;
-        return result;
-      } catch (e) {
-        errors.push(`Claude proxy: ${e.message || e}`);
-        console.warn("[Anticipy Agent] Claude proxy failed, falling through:", e.message);
+      if (wait > 50) {
+        console.log(`[Anticipy Agent] Kimi cooldown — sleeping ${wait/1000}s`);
+        await new Promise(r => setTimeout(r, wait));
       }
     }
-
-    if (this.apiConfig?.geminiApiKey) {
-      try {
-        const usePro = this.proCallsRemaining > 0;
-        const url = usePro ? GEMINI_PRO_URL : GEMINI_FLASH_URL;
-        if (usePro) {
-          this.proCallsRemaining--;
-          console.log(`[Anticipy Agent] using Gemini Pro for this step (budget left: ${this.proCallsRemaining})`);
-        }
-        const out = await this._callGemini(userMessage, { url, system: AGENT_SYSTEM_PROMPT });
-        // Reset Pro failure streak only when a Pro call succeeded; Flash
-        // successes don't tell us whether Pro is still wedged.
-        if (usePro) this.proFailureStreak = 0;
-        return out;
-      } catch (e) {
-        errors.push(`Gemini: ${e.message || e}`);
-        // Track CONSECUTIVE Pro failures only — Flash failures are common
-        // (rate limits) and don't warrant the heavier Claude tier.
-        if (this.proCallsRemaining >= 0 && /pro/i.test(GEMINI_PRO_URL) && /pro/i.test(e.message || "")) {
-          this.proFailureStreak += 1;
-        } else if (this.proCallsRemaining > 0) {
-          // We were ABOUT to use Pro this call — count it.
-          this.proFailureStreak += 1;
-        }
-        console.warn("[Anticipy Agent] Gemini failed, trying Groq:", e.message);
+    try {
+      const out = await this._callKimi(userMessage);
+      this._markProviderOk("kimi");
+      return out;
+    } catch (e) {
+      const msg = String(e?.message || e);
+      console.warn(`[Anticipy Agent] Kimi failed: ${msg}`);
+      if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
+        this._markProvider429("kimi");
       }
+      throw new Error("ai_unavailable");
     }
-    if (this.apiConfig?.groqApiKey) {
-      try {
-        return await this._callGroq(userMessage);
-      } catch (e) {
-        errors.push(`Groq: ${e.message || e}`);
-        console.warn("[Anticipy Agent] Groq failed, trying Kimi:", e.message);
-      }
-    }
-    // Plan C: Kimi (Moonshot). Independent quota org so simultaneous
-    // Gemini+Groq daily-quota walls don't kill the agent.
-    if (this.apiConfig?.kimiApiKey) {
-      try {
-        return await this._callKimi(userMessage);
-      } catch (e) {
-        errors.push(`Kimi: ${e.message || e}`);
-        console.warn("[Anticipy Agent] Kimi failed, trying DeepSeek:", e.message);
-      }
-    }
-    // Plan D: DeepSeek. Last-resort tier — different infrastructure
-    // entirely. May be out of credits but tries anyway.
-    if (this.apiConfig?.deepseekApiKey) {
-      try {
-        return await this._callDeepSeek(userMessage);
-      } catch (e) {
-        errors.push(`DeepSeek: ${e.message || e}`);
-        console.warn("[Anticipy Agent] DeepSeek failed, all providers exhausted:", e.message);
-      }
-    }
-    if (errors.length === 0) {
-      throw new Error("No API keys configured. Sign in via the extension popup.");
-    }
-    // Internal-only details for the console; user-facing message is the
-    // first sentence. friendlyAgentMessage in the surrounding flow will
-    // catch this string and surface a calm fallback if it leaks. Detail
-    // is appended for debug grepping but kept brief.
-    console.warn("[anticipy-agent] all providers failed:", errors.join(" | "));
-    throw new Error("ai_unavailable");
   }
 
   /**
-   * Tier-2 escalation: route the current step through Claude Sonnet via
-   * /api/extension/llm-proxy. The proxy is strictly server-side; the
-   * extension never holds an Anthropic key. Returns the parsed JSON
-   * action or throws on parse/transport failure.
+   * Single-model rewrite of a raw error/failure into one calm user-
+   * facing sentence. Goes through Kimi K2.6 (the same backbone the
+   * Executor uses). If Kimi is in cooldown / unavailable, returns null
+   * and the surrounding caller falls back to the single generic line.
    */
-  async _callClaudeProxy(userMessage) {
-    const url = `${this.proxyBaseUrl.replace(/\/$/, "")}/api/extension/llm-proxy`;
-    const resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code: this.accessCode,
-        systemPrompt: AGENT_SYSTEM_PROMPT,
-        userMessage,
-        model: "claude-sonnet-4-5",
-        maxTokens: 2000,
-        temperature: 0.0,
-        jsonOnly: true,
-      }),
-    });
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => String(resp.status));
-      throw new Error(`Claude proxy ${resp.status}: ${body.substring(0, 200)}`);
+  async _rewriteForUser(rawMessage) {
+    const text = (rawMessage || "").toString().trim();
+    if (!text) return null;
+    if (!this.apiConfig?.kimiApiKey || this._isProviderBlocked("kimi")) {
+      return null;
     }
-    const data = await resp.json();
-    if (!data.ok || typeof data.text !== "string") {
-      throw new Error("Claude proxy returned malformed payload");
+    try {
+      const resp = await fetch(KIMI_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.apiConfig.kimiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "moonshot-v1-128k",
+          messages: [{
+            role: "user",
+            content:
+              `Rewrite this internal browser-agent error as ONE calm ` +
+              `sentence (<= 22 words) for a non-technical user. No ` +
+              `apologies, no jargon, no model names.\n\nINTERNAL: ${text}`,
+          }],
+          temperature: 0.2,
+          max_tokens: 100,
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => String(resp.status));
+        const msg = `Kimi ${resp.status}: ${body.substring(0, 200)}`;
+        if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
+          this._markProvider429("kimi");
+        }
+        return null;
+      }
+      const data = await resp.json();
+      const rewritten = (data.choices?.[0]?.message?.content || "").toString().trim();
+      if (rewritten.length >= 4 && rewritten.length <= 240) {
+        this._markProviderOk("kimi");
+        return rewritten.replace(/^["']|["']$/g, "");
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
-    return this._parseJSON(data.text);
   }
 
-  async _callGroq(userMessage) {
-    const resp = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apiConfig.groqApiKey}`
-      },
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: AGENT_SYSTEM_PROMPT },
-          { role: "user", content: userMessage }
-        ],
-        temperature: 0.1,
-        // 2400 tokens leaves headroom for the thought field added by CoT
-        // envelope output (the action object alone fits comfortably in 2000).
-        max_tokens: 2400,
-        response_format: { type: "json_object" }
-      })
-    });
-
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => String(resp.status));
-      throw new Error(`Groq ${resp.status}: ${body.substring(0, 200)}`);
-    }
-
-    const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Empty response from Groq");
-    return this._parseJSON(content);
-  }
-
-  // Plan C — Kimi (Moonshot). moonshot-v1-128k is the largest-context Kimi
-  // model and supports JSON-object response_format + temp=0 (kimi-k2.x
-  // requires temp=1.0 which is non-deterministic, no good for an agent).
-  // 128k window matches our entire system prompt + observation budget.
-  // Fully OpenAI-compatible API surface — same shape as Groq.
+  // moonshot-v1-128k — Executor backbone. Non-reasoning Moonshot model:
+  //   - Latency ~1.1s vs ~20s for K2.5 (18x faster) — critical when the
+  //     Executor makes 60 calls per task
+  //   - Accepts temperature=0.1 (deterministic JSON) where K2.x require 1
+  //   - Same Moonshot org, same key, same upstream budget
+  // The strategic agents (Planner / Critic / Reflector) at /api/agent/*
+  // use K2.5 for its reasoning quality on planning + diagnosis steps.
   async _callKimi(userMessage) {
     const resp = await fetch(KIMI_API_URL, {
       method: "POST",
@@ -1177,6 +1328,7 @@ export class BrowserAgent {
           { role: "system", content: AGENT_SYSTEM_PROMPT },
           { role: "user", content: userMessage }
         ],
+        // Deterministic: same prompt → same action. v1-128k allows it.
         temperature: 0.1,
         max_tokens: 2400,
         response_format: { type: "json_object" }
@@ -1189,70 +1341,6 @@ export class BrowserAgent {
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty response from Kimi");
-    return this._parseJSON(content);
-  }
-
-  // Plan D — DeepSeek. deepseek-chat is OpenAI-compatible, supports
-  // JSON mode + temp=0.1, comparable instruction-following to Groq's
-  // llama-3.3-70b. May be out of credits at any time but the cascade
-  // tries it before declaring full unavailability.
-  async _callDeepSeek(userMessage) {
-    const resp = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apiConfig.deepseekApiKey}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: AGENT_SYSTEM_PROMPT },
-          { role: "user", content: userMessage }
-        ],
-        temperature: 0.1,
-        max_tokens: 2400,
-        response_format: { type: "json_object" }
-      })
-    });
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => String(resp.status));
-      throw new Error(`DeepSeek ${resp.status}: ${body.substring(0, 200)}`);
-    }
-    const data = await resp.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Empty response from DeepSeek");
-    return this._parseJSON(content);
-  }
-
-  async _callGemini(userMessage, opts = {}) {
-    const url = opts.url || GEMINI_FLASH_URL;
-    const system = opts.system || AGENT_SYSTEM_PROMPT;
-    const resp = await fetch(
-      `${url}?key=${this.apiConfig.geminiApiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${system}\n\n${userMessage}` }] }],
-          generationConfig: {
-            temperature: 0.1,
-            // 2400 tokens leaves headroom for the thought field added by CoT
-            // envelope output (the bare action fits comfortably in 2000).
-            maxOutputTokens: 2400,
-            responseMimeType: "application/json"
-          }
-        })
-      }
-    );
-
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => String(resp.status));
-      throw new Error(`Gemini ${resp.status}: ${body.substring(0, 200)}`);
-    }
-
-    const data = await resp.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!content) throw new Error("Empty response from Gemini");
     return this._parseJSON(content);
   }
 
@@ -1338,22 +1426,6 @@ export class BrowserAgent {
     const domAction = this._toDomAction(action);
     if (!domAction) return { success: false, error: `Unknown action type: ${action.action}` };
     return this._sendToContent(tab.id, domAction);
-  }
-
-  /** Construct a search URL for the current host. Returns "" if unknown. */
-  _searchUrlForHost(host, query) {
-    const q = encodeURIComponent(query);
-    if (!q) return "";
-    if (host.endsWith("google.com")) return `https://www.google.com/search?q=${q}`;
-    if (host.endsWith("bing.com")) return `https://www.bing.com/search?q=${q}`;
-    if (host.endsWith("duckduckgo.com")) return `https://duckduckgo.com/?q=${q}`;
-    if (host.endsWith("youtube.com")) return `https://www.youtube.com/results?search_query=${q}`;
-    if (host.includes("wikipedia.org")) return `https://en.wikipedia.org/w/index.php?search=${q}`;
-    if (host.endsWith("amazon.com")) return `https://www.amazon.com/s?k=${q}`;
-    if (host.endsWith("ebay.com")) return `https://www.ebay.com/sch/i.html?_nkw=${q}`;
-    if (host.endsWith("reddit.com")) return `https://www.reddit.com/search/?q=${q}`;
-    if (host.endsWith("github.com")) return `https://github.com/search?q=${q}`;
-    return "";
   }
 
   /** Send a message to the SW (background) and await its response. */
