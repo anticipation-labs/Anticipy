@@ -452,7 +452,105 @@ export class BrowserAgent {
       console.warn("[Anticipy Agent] trajectory persist failed (non-fatal):", e?.message || e);
     }
 
+    // Reflexion: distill a 1-line GENERALIZED lesson from this run and
+    // append it to chrome.storage.local.lessons. The lesson is prepended
+    // to the system prompt on subsequent tasks, accumulating across runs
+    // within a Chrome session. Best-effort — never blocks the result.
+    try {
+      await this._distillAndStoreLesson(result);
+    } catch (e) {
+      console.warn("[Anticipy Agent] lesson distill failed (non-fatal):", e?.message || e);
+    }
+
     return result;
+  }
+
+  // ─── Reflexion: lesson distillation + persistence ────────────────────
+  // Inline so we don't need a new HTTP endpoint. One Kimi call per task
+  // end (success OR failure). Cost: ~$0.001 per task. Lessons stored in
+  // chrome.storage.local.lessons (cap 5, FIFO). Loaded into the system
+  // prompt by _getNextAction. NEVER site-specific — the Kimi prompt
+  // demands a generalized rule that would apply across many sites.
+  async _distillAndStoreLesson(result) {
+    if (!this.apiConfig?.kimiApiKey || this._isProviderBlocked("kimi")) return;
+    if (this.steps.length === 0) return;
+    const recent = this.steps.slice(-8).map((s, i) => {
+      const a = s.action || {};
+      const ok = s.result?.success ? "OK" : "FAIL";
+      const tail = a.url ? a.url.substring(0, 60)
+                 : a.selector ? `sel="${a.selector}"`
+                 : a.text ? `text="${String(a.text).substring(0, 40)}"`
+                 : "";
+      const eff = s.signalDiff ? ` | effect: ${String(s.signalDiff).substring(0, 80)}` : "";
+      return `  ${i + 1} ${ok} ${a.action || "?"}${tail ? ` (${tail})` : ""}${eff}`;
+    }).join("\n");
+    const prompt =
+      `You're distilling one GENERALIZED lesson from a browser-agent run.\n\n` +
+      `TASK: ${(this.intent.summary_for_user || "").substring(0, 240)}\n` +
+      `OUTCOME: ${result.success ? "SUCCESS" : "FAILURE"}\n` +
+      `FINAL MESSAGE: ${(result.message || "").substring(0, 200)}\n\n` +
+      `LAST ACTIONS:\n${recent}\n\n` +
+      `Output one short lesson (<= 22 words) that would help a browser ` +
+      `agent on ANY similar future task. Rules:\n` +
+      `- The lesson MUST be GENERALIZED — never name a specific site or URL.\n` +
+      `- Talk about CATEGORIES of pages: encyclopedias, news sites, e-commerce, social, search engines, forms, video sites.\n` +
+      `- The lesson must be ACTIONABLE: name a behavior to repeat (success) or avoid (failure).\n` +
+      `- If nothing useful was learned, output the literal string: SKIP.\n\n` +
+      `JSON only: {"lesson": "<the lesson, or 'SKIP'>"}`;
+    try {
+      const resp = await fetch(KIMI_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.apiConfig.kimiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "moonshot-v1-128k",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2,
+          max_tokens: 120,
+          response_format: { type: "json_object" },
+        }),
+      });
+      if (!resp.ok) {
+        if (/\b429\b|\b402\b/.test(`${resp.status}`)) this._markProvider429("kimi");
+        return;
+      }
+      const data = await resp.json();
+      const content = (data?.choices?.[0]?.message?.content || "").trim();
+      let lesson = "";
+      try { lesson = (JSON.parse(content)?.lesson || "").toString().trim(); } catch (_) {}
+      if (!lesson || lesson === "SKIP") return;
+      // Cap to 200 chars; store FIFO with 5-entry max
+      lesson = lesson.substring(0, 200);
+      const stored = await chrome.storage.local.get("lessons");
+      const lessons = Array.isArray(stored?.lessons) ? stored.lessons : [];
+      lessons.push({
+        lesson,
+        outcome: result.success ? "success" : "failure",
+        addedAt: Date.now(),
+        domain: this._currentDomainOrEmpty(),
+      });
+      while (lessons.length > 5) lessons.shift();
+      await chrome.storage.local.set({ lessons });
+      console.log(`[Anticipy Agent] lesson stored (${lessons.length}/5): ${lesson}`);
+    } catch (_) {}
+  }
+
+  _currentDomainOrEmpty() {
+    try {
+      const url = (this.steps?.findLast?.(s => s.action?.url)?.action?.url) || "";
+      return url ? new URL(url).hostname : "";
+    } catch (_) { return ""; }
+  }
+
+  async _loadLessons() {
+    try {
+      const stored = await chrome.storage.local.get("lessons");
+      const arr = Array.isArray(stored?.lessons) ? stored.lessons : [];
+      // Newest first, capped, with the "outcome" tag preserved
+      return arr.slice(-5);
+    } catch (_) { return []; }
   }
 
   // ─── Trajectory persistence ───────────────────────────────────────────────────
@@ -1330,6 +1428,22 @@ export class BrowserAgent {
   // The strategic agents (Planner / Critic / Reflector) at /api/agent/*
   // use K2.5 for its reasoning quality on planning + diagnosis steps.
   async _callKimi(userMessage) {
+    // Build the system prompt with any accumulated Reflexion lessons
+    // prepended. Lessons persist in chrome.storage.local.lessons across
+    // runs in a Chrome session — they accumulate task-after-task and
+    // help the model avoid past mistakes. Cap at 5; FIFO. The LESSONS
+    // block is stripped of any site-specific content by the distillation
+    // prompt, so this stays no-hardcoding.
+    const lessons = await this._loadLessons();
+    let system = AGENT_SYSTEM_PROMPT;
+    if (lessons.length > 0) {
+      const lessonBlock = lessons
+        .map((l, i) => `  ${i + 1}. ${l.lesson}${l.outcome === "failure" ? " (avoid)" : " (repeat)"}`)
+        .join("\n");
+      system =
+        `LESSONS FROM RECENT TASKS (read these first; ignore lessons that don't apply to the current task):\n${lessonBlock}\n\n` +
+        AGENT_SYSTEM_PROMPT;
+    }
     const resp = await fetch(KIMI_API_URL, {
       method: "POST",
       headers: {
@@ -1339,7 +1453,7 @@ export class BrowserAgent {
       body: JSON.stringify({
         model: "moonshot-v1-128k",
         messages: [
-          { role: "system", content: AGENT_SYSTEM_PROMPT },
+          { role: "system", content: system },
           { role: "user", content: userMessage }
         ],
         // Deterministic: same prompt → same action. v1-128k allows it.
