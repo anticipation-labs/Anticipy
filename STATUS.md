@@ -43,6 +43,21 @@ Direct test of /api/agent/* via `engine/test_multi_agent_brain.py`:
 
 These are the exact failure modes the agent-team architecture is designed to catch. Total cost: ~$0.005.
 
+**Full pipeline validated end-to-end on real internet (2026-05-09 21:02):**
+Patchright runner with `ANTICIPY_ACCESS_CODE=77c04c26` exercising the
+deployed multi-agent team on wiki_python_year:
+  - 15 steps, 52.6s, correct answer "February 1991", PASS
+  - Vercel logs prove the chain: /api/agent/plan + /api/agent/verify
+    calls firing during the run (not the legacy fallback path)
+  - Cost: ~$0.05 for the task
+
+First run with verifier prompt = "fail unless evidence" thrashed for
+60/60 steps and burned through Kimi rate limits. After tuning the
+prompt to "lean toward satisfied=true unless concrete fail evidence"
++ raising critic threshold from 2→3 verifier-misses, agent finishes
+in 15 steps clean. Cop-out #28 inverted: real-call testing in
+production (NOT static code review) found the prompt issue immediately.
+
 **Honest gap, what's NOT yet proven:**
 - The brain code paths in extension/agent.js (planner/verifier/critic/reflector calls) work end-to-end through the Chrome extension. Patchright codespace harness is unreliable for this validation. Real-machine extension run is the legitimate test.
 - Quantitative capability lift of multi-agent vs single-Kimi baseline on the 25-scenario suite — Patchright flakiness is blocking this measurement from this environment.
