@@ -819,8 +819,13 @@ export class BrowserAgent {
         }
       }
 
-      // ─── Critic invocation: 2 verifier-misses in a row ───────────────
-      if (this._verifierMissStreak >= 2 && this.accessCode) {
+      // ─── Critic invocation: 3 verifier-misses in a row ───────────────
+      // Bumped from 2 → 3 after production observation: the verifier
+      // sometimes rejects on transient signal flutter (SPA mid-render,
+      // body fingerprint changes from a single ad reload). 3 consecutive
+      // rejections is a stronger stall signal and prevents the critic
+      // from firing on every other step.
+      if (this._verifierMissStreak >= 3 && this.accessCode) {
         try {
           const critic = await this._callCritic({
             verifierEvidence: verifierVerdict?.evidence || "",

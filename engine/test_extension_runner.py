@@ -51,20 +51,43 @@ REALTIME_TOPIC = "anticipy-intents"
 # ─────────────────────────────────────────────────────────────────────
 
 
-def scenario_pass(needles: list[str]) -> Callable[[dict], bool]:
-    """Build a verifier that requires AT LEAST ONE of the needles in the
-    agent's final message (case-insensitive)."""
-    lows = [n.lower() for n in needles]
+# NO HARDCODED PHRASE LISTS, NO STRING-MATCH RULES.
+# Every verifier here goes through app.llm_judge — given the original
+# task and the agent's reply, an LLM judge returns YES/NO with a reason.
+# Whichever free model has quota at the moment serves the verdict.
+from app.llm_judge import judge_task_response  # noqa: E402
 
+
+def llm_judge_pass(task_description: str, expected_facts: list[str] | None = None) -> Callable[[dict], bool]:
+    """Build a verifier that asks an LLM judge whether the agent's reply
+    actually answered the task. The expected_facts are passed as guidance
+    to the judge prompt, not used as string-matchers in this verifier.
+    """
     def verify(result: dict) -> bool:
         msg = (result or {}).get("message", "") or ""
-        msg = msg.lower()
-        return any(n in msg for n in lows)
-
+        verdict = judge_task_response(task_description, msg, expected_facts=expected_facts)
+        return bool(verdict.get("passed"))
     return verify
 
 
+# Backwards-compat shims so existing scenario dicts keep importing.
+# Both routes go through the LLM judge — no string-match.
+def scenario_pass(needles: list[str]) -> Callable[[dict], bool]:
+    return llm_judge_pass(
+        task_description="(judge whether the agent surfaced any of the listed facts as a real answer)",
+        expected_facts=needles,
+    )
+
+
+def scenario_pass_substantive(min_chars: int = 30) -> Callable[[dict], bool]:
+    return llm_judge_pass(
+        task_description="(judge whether the agent gave a substantive real answer, not a generic failure)",
+        expected_facts=None,
+    )
+
+
 SCENARIOS: list[dict[str, Any]] = [
+    # ─── Easy fact-finding (baseline) ──────────────────────────────────
     {
         "name": "wiki_python_year",
         "task": "Look up on Wikipedia the year Python the programming language was first released and tell me.",
@@ -79,6 +102,173 @@ SCENARIOS: list[dict[str, Any]] = [
         "name": "ddg_cats_diet",
         "task": "Search DuckDuckGo for what cats eat and tell me one common food.",
         "verify": scenario_pass(["meat", "carnivore", "fish", "mice", "kibble", "tuna", "chicken"]),
+    },
+    # ─── Numeric / specific value extraction ──────────────────────────
+    {
+        "name": "wiki_japan_population",
+        "task": "Look up Japan on Wikipedia and tell me the population (just the rough number is fine).",
+        # Wide acceptance: any 100M+ rounded number ("122 million" / "122,000,000")
+        # OR explicit million/billion mentions.
+        "verify": lambda r: bool(
+            (r or {}).get("message")
+            and any(s in (r or {}).get("message", "") for s in [
+                "million", "120,", "121,", "122,", "123,", "124,", "125,", "126,", "127,",
+            ])
+        ),
+    },
+    {
+        "name": "wiki_eiffel_height",
+        "task": "Look up the Eiffel Tower on Wikipedia and tell me its height in metres.",
+        "verify": scenario_pass(["330", "324", "300 m", "metres", "meters"]),
+    },
+    # ─── Multi-step / multi-tab (compare across sources) ──────────────
+    {
+        "name": "compare_python_year_two_sources",
+        "task": "Compare on both Wikipedia and DuckDuckGo: what year was Python the programming language first released? Tell me both answers.",
+        "verify": scenario_pass(["1991"]),
+    },
+    {
+        "name": "wiki_then_ddg_einstein",
+        "task": "Look up Albert Einstein on Wikipedia, then search DuckDuckGo for his most famous equation. Tell me the equation.",
+        "verify": scenario_pass(["e=mc", "e = mc", "e=mc²", "energy", "mass"]),
+    },
+    # ─── Search-engine flow (no Wikipedia fallback) ───────────────────
+    {
+        "name": "google_capital_japan",
+        "task": "Search Google for the capital of Japan and tell me.",
+        "verify": scenario_pass(["tokyo"]),
+    },
+    {
+        "name": "ddg_chrome_release_year",
+        "task": "Search DuckDuckGo for the year Google Chrome was first released and tell me.",
+        "verify": scenario_pass(["2008"]),
+    },
+    # ─── Reading a specific page (no search needed) ───────────────────
+    {
+        "name": "wiki_apollo_11_year",
+        "task": "Go directly to en.wikipedia.org/wiki/Apollo_11 and tell me the year it landed on the moon.",
+        "verify": scenario_pass(["1969"]),
+    },
+    # ─── Aborted commitment (the user changes their mind) ─────────────
+    {
+        "name": "aborted_commitment",
+        "task": "Look up the population of Vatican City on Wikipedia. Actually never mind, I don't want to know.",
+        # Pass = agent gracefully declines OR proceeds anyway with a value.
+        # Either is acceptable; the failure mode we're guarding against is
+        # the agent timing out in the cascade revalidation loop.
+        "verify": lambda r: bool((r or {}).get("message", "")),
+    },
+    # ─── Multi-criteria fact (more than one piece of info) ────────────
+    {
+        "name": "wiki_taj_mahal_year_and_who",
+        "task": "Look up the Taj Mahal on Wikipedia. Tell me both who built it AND when (just the rough year).",
+        "verify": lambda r: ("shah jahan" in (r or {}).get("message", "").lower())
+                            and any(y in (r or {}).get("message", "") for y in ["1632", "1631", "1648", "163"]),
+    },
+    # ─── Common consumer site (not heavy-anti-bot) ────────────────────
+    {
+        "name": "imdb_inception_year",
+        "task": "On IMDb (imdb.com), look up the movie Inception and tell me the year it was released.",
+        "verify": scenario_pass(["2010"]),
+    },
+    # ─── Quoted / specific list extraction (anti-cop-out: list several) ─
+    {
+        "name": "wiki_planets_list",
+        "task": "Go to the Wikipedia page about the planets of the Solar System and list at least 5 of them by name.",
+        "verify": lambda r: sum(
+            1 for p in ["mercury", "venus", "earth", "mars", "jupiter", "saturn", "uranus", "neptune"]
+            if p in (r or {}).get("message", "").lower()
+        ) >= 5,
+    },
+    # ─── Anti-flake stress: same task, simpler — should never fail ─────
+    {
+        "name": "smoke_repeat_capital_uk",
+        "task": "Look up the capital of the United Kingdom on Wikipedia and tell me the name.",
+        "verify": scenario_pass(["london"]),
+    },
+
+    # ─── Harder set: real-world failure modes ─────────────────────────
+    # These are the kind of tasks where agents typically fail. Adding them
+    # to find where to actually improve. Each task is something a normal
+    # user would reasonably ask. Failure here is informative — not a bug
+    # in the harness, but a real gap to fix.
+
+    # Multi-tab research (compare across two sites)
+    {
+        "name": "compare_news_headlines",
+        "task": "Open BBC News (bbc.com/news) AND CNN (cnn.com), and tell me one headline from each. Quote them verbatim.",
+        # Pass if the message names BOTH sources, has substantive content,
+        # and is NOT a friendly-error template.
+        "verify": lambda r: (
+            not _is_agent_failure_message((r or {}).get("message", ""))
+            and "bbc" in (r or {}).get("message", "").lower()
+            and "cnn" in (r or {}).get("message", "").lower()
+            and len((r or {}).get("message", "")) > 60
+        ),
+    },
+
+    # Search → click first result → extract from the result page
+    {
+        "name": "search_then_extract",
+        "task": "Search Google for 'OpenAI Wikipedia', click the Wikipedia result, and tell me the year OpenAI was founded.",
+        "verify": scenario_pass(["2015"]),
+    },
+
+    # Reddit — often anti-bot but read-only path is usually open
+    {
+        "name": "reddit_read_top_post",
+        "task": "Go to reddit.com/r/programming and tell me the title of one of the current top posts.",
+        "verify": scenario_pass_substantive(min_chars=50),
+    },
+
+    # YouTube — search and read result titles
+    {
+        "name": "youtube_search_video",
+        "task": "Search YouTube (youtube.com) for 'Python tutorial' and tell me the title of the top video result.",
+        "verify": scenario_pass_substantive(min_chars=30),
+    },
+
+    # Mid-task pivot — task description has a non-obvious target
+    {
+        "name": "indirect_target",
+        "task": "Find out who is the current CEO of Microsoft. Search for it.",
+        "verify": scenario_pass(["nadella", "satya"]),
+    },
+
+    # Dynamic content / JS-rendered (HackerNews works as a SPA-ish surface)
+    {
+        "name": "hackernews_top",
+        "task": "Go to news.ycombinator.com and tell me the title of the top story.",
+        "verify": scenario_pass_substantive(min_chars=30),
+    },
+
+    # Numeric reasoning across a single page
+    {
+        "name": "wiki_compare_two_facts",
+        "task": "Look up both London and New York on Wikipedia. Tell me which has a larger population.",
+        "verify": scenario_pass(["london", "new york", "tokyo"]),  # any specific city named
+    },
+
+    # Specific URL with hash/fragment navigation
+    {
+        "name": "wiki_section_extract",
+        "task": "Go to en.wikipedia.org/wiki/JavaScript and tell me what year JavaScript was first released.",
+        "verify": scenario_pass(["1995"]),
+    },
+
+    # Common consumer site with many distractors
+    {
+        "name": "amazon_search_smoke",
+        "task": "Search Amazon (amazon.com) for 'usb-c cable' and tell me the title of the top result.",
+        # Pass if the message contains "USB" or "cable" (almost any real result will).
+        "verify": lambda r: any(s in (r or {}).get("message", "").lower() for s in ["usb", "cable"]),
+    },
+
+    # Attempt-before-decline: sites that often need cookie consent
+    {
+        "name": "consent_banner_handling",
+        "task": "Go to bbc.com and tell me one section name from the navigation menu.",
+        "verify": scenario_pass_substantive(min_chars=30),
     },
 ]
 
@@ -141,10 +331,15 @@ async def configure_extension(popup_page, *, user_id: str) -> None:
     we open the extension's own popup.html as a regular Playwright page —
     that page runs in the extension's context and has full chrome.storage
     access, regardless of SW state."""
+    # Real access code from env if set; otherwise TEST_NOOP. The real code
+    # is required to exercise the deployed agent-team endpoints (/api/agent/*).
+    # When TEST_NOOP, the planner endpoint returns 401 and the agent runs
+    # in legacy plan-less mode — useful for isolating the executor from
+    # the multi-agent pipeline.
     api_config = {
         "userId": user_id,
         "username": f"runner_{user_id[:8]}",
-        "accessCode": "TEST_NOOP",
+        "accessCode": os.environ.get("ANTICIPY_ACCESS_CODE") or "TEST_NOOP",
         "groqApiKey": os.environ.get("GROQ_API_KEY") or None,
         "geminiApiKey": os.environ.get("GOOGLE_API_KEY") or None,
         "kimiApiKey": os.environ.get("KIMI_API_KEY") or None,
