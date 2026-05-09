@@ -132,13 +132,7 @@ const IMPORTANCE_STYLES: Record<
 export default function EnginePage() {
   // ── Auth state ──────────────────────────────────────────────────────────────
   const [session, setSession] = useState<Session | null>(null);
-  // authLoading starts FALSE so the page paints the sign-in shell immediately
-  // on first mount — no Supabase dependency to render. The session check runs
-  // in the background and swaps to the signed-in UI when (and only if) it
-  // resolves with an existing session. A Supabase outage no longer blocks
-  // first paint; sign-in clicks would still fail with a friendly message,
-  // but the page itself always loads.
-  const [authLoading, setAuthLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -286,31 +280,34 @@ export default function EnginePage() {
   const [authBackendDown, setAuthBackendDown] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    let resolved = false;
 
-    // Background session check. The page is already painted (sign-in shell)
-    // before this finishes. If a session exists, we swap to the signed-in
-    // UI when it arrives. If Supabase is hung, the swap simply never
-    // happens — the page stays on the sign-in form, which is the right
-    // behavior. We also set `authBackendDown=true` after 8s so the sign-in
-    // form can render a small "Anticipy is having a moment" hint above
-    // the email/password fields, instead of pretending everything's fine.
-    const banner_timer = setTimeout(() => {
-      if (!cancelled) setAuthBackendDown(true);
-    }, 8000);
+    // Race the Supabase session check against a 6s timeout. If Supabase is
+    // unreachable (region outage, network blip, cold-start storm) we still
+    // render the page in unauthed mode with a "we're having trouble" banner
+    // instead of hanging forever on the loading spinner.
+    const timeoutId = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      setAuthBackendDown(true);
+      setAuthLoading(false);
+    }, 6000);
 
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
-        if (cancelled) return;
-        clearTimeout(banner_timer);
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
         setSession(session);
-        setAuthBackendDown(false);
+        setAuthLoading(false);
       })
       .catch(() => {
-        if (cancelled) return;
-        // Don't clear the banner timer — let it fire if it hasn't already.
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
         setAuthBackendDown(true);
+        setAuthLoading(false);
       });
 
     const {
@@ -318,8 +315,9 @@ export default function EnginePage() {
     } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       // A live session implies the backend is reachable again — clear the
-      // banner. A signed-out event leaves whatever banner state we have.
+      // banner and unblock the UI no matter what state we were in.
       if (session) {
+        setAuthLoading(false);
         setAuthBackendDown(false);
       }
       // Recovery sessions are signed-in sessions with a single privileged
@@ -332,8 +330,7 @@ export default function EnginePage() {
       }
     });
     return () => {
-      cancelled = true;
-      clearTimeout(banner_timer);
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
@@ -1497,11 +1494,117 @@ export default function EnginePage() {
 
   // ── Loading ─────────────────────────────────────────────────────────────────
 
-  // (We used to render a full-page spinner while `authLoading` was true,
-  // which meant a Supabase outage produced a forever-spinner. authLoading
-  // now starts false; the page always paints. If the session check is
-  // still in flight or the backend is down, the sign-in form renders with
-  // a small "Anticipy is having a moment" banner above it.)
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          background: "var(--dark)",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          className="animate-spin"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            border: "2px solid var(--dark-border)",
+            borderTopColor: "var(--gold)",
+          }}
+        />
+      </div>
+    );
+  }
+
+  // ── Backend unreachable (Supabase region outage / auth API hung) ──────────
+  // The session check raced against a 6s timeout and lost. Sign-in won't work
+  // either — the same backend is what verifies passwords. Render an honest,
+  // calm page instead of dumping the user onto a sign-in form that will hang.
+  if (authBackendDown && !session) {
+    return (
+      <div
+        style={{
+          background: "var(--dark)",
+          minHeight: "100vh",
+          color: "var(--text-on-dark)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "48px 24px",
+        }}
+      >
+        <a
+          href="/"
+          className="font-serif"
+          style={{
+            fontSize: 26,
+            color: "var(--text-on-dark)",
+            textDecoration: "none",
+            marginBottom: 32,
+          }}
+        >
+          Anticipy
+        </a>
+        <div
+          style={{
+            maxWidth: 460,
+            width: "100%",
+            background: "var(--dark-elevated)",
+            border: "1px solid var(--dark-border)",
+            borderRadius: 16,
+            padding: 32,
+            textAlign: "center",
+          }}
+        >
+          <h1
+            className="font-serif"
+            style={{ fontSize: 22, fontWeight: 400, marginBottom: 12, lineHeight: 1.35 }}
+          >
+            Anticipy is having a moment.
+          </h1>
+          <p
+            style={{
+              fontSize: 14,
+              color: "var(--text-on-dark-muted)",
+              fontWeight: 300,
+              lineHeight: 1.65,
+              marginBottom: 20,
+            }}
+          >
+            Our backend is taking longer than usual to respond. This is on our
+            side, not yours. Refresh in a couple of minutes and we'll be back.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthBackendDown(false);
+              setAuthLoading(true);
+              // Re-attempt the session check; on success we render normally,
+              // on timeout we land back here.
+              window.location.reload();
+            }}
+            style={{
+              display: "inline-block",
+              padding: "10px 24px",
+              background: "var(--gold)",
+              color: "var(--dark)",
+              borderRadius: 100,
+              border: "none",
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Unsupported environment ─────────────────────────────────────────────────
   // Mobile + Safari/Firefox can't run the extension or (in Safari's case) the
@@ -1893,30 +1996,6 @@ export default function EnginePage() {
               picks up, and connect the Chrome extension that runs them for you.
             </p>
           </div>
-
-          {/* Backend-degraded banner — only renders if the session check
-              didn't resolve quickly. Page is still fully interactive; the
-              sign-in attempt itself will surface the same "having a moment"
-              copy if it lands during a Supabase outage. */}
-          {authBackendDown && (
-            <div
-              role="status"
-              style={{
-                marginBottom: 20,
-                padding: "10px 14px",
-                background: "rgba(200,169,126,0.08)",
-                border: "1px solid rgba(200,169,126,0.25)",
-                borderRadius: 10,
-                color: "var(--text-on-dark-muted)",
-                fontSize: 13,
-                lineHeight: 1.5,
-                textAlign: "center",
-              }}
-            >
-              Anticipy is having a moment connecting to its backend.
-              Sign-in may be slower than usual.
-            </div>
-          )}
 
           {/* Auth card */}
           <div
