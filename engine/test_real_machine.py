@@ -49,12 +49,196 @@ import httpx
 # Re-use the scenarios + verifier helpers from the Patchright harness.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_extension_runner import (  # noqa: E402
-    SCENARIOS,
+    SCENARIOS as EASY_SCENARIOS,
     REALTIME_TOPIC,
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
+    llm_judge_pass,
+    scenario_pass,
     _service_headers,
 )
+
+
+# ─── HARD scenarios — actual capability tests, not "open a website" ──
+# Each is multi-step, action-on-page, and exercises a different facet
+# of the agent. Some need YOUR auth (Gmail, Amazon, Google Calendar, X);
+# those rely on your real Chrome session — that's the point.
+#
+# Verifiers go through the LLM judge (app.llm_judge). The judge sees the
+# original task and the agent's outcome message; it returns YES/NO based
+# on whether the message reflects a real attempt + meaningful answer.
+# No string-match.
+
+HARD_SCENARIOS: list[dict[str, Any]] = [
+    {
+        "name": "anticipy_waitlist_signup",
+        "task": (
+            "Go to anticipy.ai, find the waitlist sign-up form (probably on "
+            "the home page or /waitlist), and sign up with the email "
+            "test+browser-agent@anticipy.ai and the name 'Browser Agent Test'. "
+            "Tell me whether the signup confirmed."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent SUBMIT the Anticipy waitlist form and observe a "
+                "confirmation? It should report something like 'signed up' or "
+                "'thanks for joining' — NOT just 'I navigated to the page'."
+            ),
+            expected_facts=["signed up", "thanks", "confirmation", "joined", "added to waitlist"],
+        ),
+    },
+    {
+        "name": "gmail_draft_compose",
+        "task": (
+            "Open Gmail (mail.google.com), start composing a NEW email to "
+            "omarkebrahim@gmail.com, subject 'Anticipy agent test', body "
+            "'This was drafted by the browser agent.' Save it as a draft "
+            "(do NOT send). Tell me the draft was saved."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent OPEN a Gmail compose window, type the subject + "
+                "body, and SAVE the draft (or observe it auto-saved)? Required "
+                "evidence: the agent reports the draft was saved/created — not "
+                "just 'I navigated to Gmail'."
+            ),
+            expected_facts=["draft saved", "draft created", "saved as draft", "draft in"],
+        ),
+    },
+    {
+        "name": "amazon_monitor_search",
+        "task": (
+            "On Amazon, search for a 32-inch 4K monitor under $200 with at "
+            "least 4 stars. From the results, tell me the brand, current "
+            "price, and star rating of the top result that matches."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent return a SPECIFIC monitor — naming brand, price "
+                "(under $200), and star rating (>=4)? Generic 'I searched' "
+                "without product specifics is a fail."
+            ),
+            expected_facts=["LG", "Samsung", "Dell", "Acer", "AOC", "ASUS", "$", "stars", "rating"],
+        ),
+    },
+    {
+        "name": "compare_news_bbc_techcrunch",
+        "task": (
+            "Open BBC News (bbc.com/news) AND TechCrunch (techcrunch.com), "
+            "and tell me the lead headline from EACH site, quoted verbatim. "
+            "Both sites must be named in your answer."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent name BOTH BBC News and TechCrunch and quote a "
+                "headline from each? Multi-tab planning + extraction. "
+                "If only one site is covered, fail."
+            ),
+            expected_facts=["bbc", "techcrunch"],
+        ),
+    },
+    {
+        "name": "hn_top_comment_extract",
+        "task": (
+            "Go to news.ycombinator.com, find the top story (highest points), "
+            "click into its comments page, and tell me one of the top-level "
+            "comments verbatim. Include the commenter's username."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent navigate INTO the comments page (not just the "
+                "story title) and quote a real comment with username? Must "
+                "include actual comment text — username alone is not enough."
+            ),
+            expected_facts=["comment", "wrote", "said", "user", "@"],
+        ),
+    },
+    {
+        "name": "reddit_thread_3_comments",
+        "task": (
+            "Go to reddit.com/r/programming, find the current top post, click "
+            "into it, and tell me 3 of the top comments. Just the comment "
+            "text — not a summary."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent return 3 distinct comments from a Reddit thread, "
+                "verbatim? Summaries don't count — needs actual comment text. "
+                "If fewer than 3 or just summaries, fail."
+            ),
+            expected_facts=["comment", "1.", "2.", "3."],
+        ),
+    },
+    {
+        "name": "amazon_product_page_read",
+        "task": (
+            "On Amazon, find the product page for the 'Logitech MX Master 3S' "
+            "mouse and tell me the current price and the number of customer "
+            "reviews. (Don't add to cart — just report the info.)"
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent return Logitech MX Master 3S price and review "
+                "count? Must include $ amount AND review count number."
+            ),
+            expected_facts=["MX Master 3S", "$", "reviews", "ratings"],
+        ),
+    },
+    {
+        "name": "github_search_top_repo",
+        "task": (
+            "On github.com, search for 'browser agent' and tell me the top "
+            "repository's full name, star count, and the first paragraph of "
+            "its README."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent name a specific GitHub repo (org/name shape), "
+                "include a star count number, and quote a README paragraph? "
+                "Generic 'I searched GitHub' is a fail."
+            ),
+            expected_facts=["github.com/", "stars", "README", "/"],
+        ),
+    },
+    {
+        "name": "google_calendar_today_read",
+        "task": (
+            "Open Google Calendar (calendar.google.com) and tell me what "
+            "events I have on TODAY. Just read the schedule — don't add or "
+            "modify anything."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent read events from Google Calendar for today? "
+                "Either it lists specific events with names/times, or it "
+                "reports 'no events scheduled today'. Either is acceptable. "
+                "What's NOT acceptable: 'I navigated to Calendar but couldn't "
+                "see' — that's a failure."
+            ),
+            expected_facts=["meeting", "event", "scheduled", "no events", "free", "calendar"],
+        ),
+    },
+    {
+        "name": "x_public_search",
+        "task": (
+            "Open x.com (Twitter), search for 'browser agent', and tell me "
+            "the author handle (@username) and the like count of the top "
+            "tweet from the results."
+        ),
+        "verify": llm_judge_pass(
+            task_description=(
+                "Did the agent return a specific @handle and a like count "
+                "number from X/Twitter? Generic 'I searched' is a fail."
+            ),
+            expected_facts=["@", "likes", "like"],
+        ),
+    },
+]
+
+
+# Combined scenario list — easy first, hard second. By default we run
+# all 35; --hard-only runs just the 10 hard ones.
+SCENARIOS: list[dict[str, Any]] = list(EASY_SCENARIOS) + HARD_SCENARIOS
 
 
 # ─── Real-machine config ─────────────────────────────────────────────
@@ -316,8 +500,27 @@ async def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenario", help="Substring filter on scenario name "
-                        "(e.g. 'wiki', 'compare', 'youtube')")
+                        "(e.g. 'wiki', 'compare', 'gmail', 'amazon')")
+    parser.add_argument("--hard-only", action="store_true",
+                        help="Run only the 10 hard scenarios (real action, "
+                        "multi-step, some auth-walled)")
+    parser.add_argument("--easy-only", action="store_true",
+                        help="Run only the 25 easy scenarios (read-only "
+                        "fact-finding)")
     parser.add_argument("--timeout", type=float, default=360.0,
                         help="Per-task timeout seconds (default 360 = 6 min)")
     args = parser.parse_args()
+
+    if args.hard_only:
+        # Override the scenario filter to match only HARD scenarios by name.
+        hard_names = {s["name"] for s in HARD_SCENARIOS}
+        # Hack: stash the set on the module so main() can look it up via
+        # the existing filter mechanism. Simpler: scope via filter to a
+        # known unique substring per hard scenario — they all happen to
+        # not collide with easy names; just use a sentinel approach.
+        # Cleanest: rebind SCENARIOS module-global to HARD_SCENARIOS.
+        SCENARIOS = HARD_SCENARIOS  # noqa: F811 — rebind for main()'s view
+    elif args.easy_only:
+        SCENARIOS = EASY_SCENARIOS  # noqa: F811
+
     sys.exit(asyncio.run(main(args.scenario, args.timeout)))
