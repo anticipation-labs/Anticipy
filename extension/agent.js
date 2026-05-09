@@ -1332,40 +1332,52 @@ export class BrowserAgent {
   }
 
   async _callLLM(userMessage) {
-    // Single-model Executor path. Kimi K2.6 (Moonshot AI) is the agent
-    // backbone — agent-tuned for long-horizon coordination, native
-    // multimodal, $0.60/$0.95 per 1M tokens. NO multi-provider cascade.
-    //
-    // On a 429 we wait per the exponential-backoff cooldown stored in
-    // _providerUnblockAt["kimi"], then try once more. If still 429, we
-    // surface ai_unavailable so the run loop can stop. The agent-team
-    // verifier/critic/reflector endpoints (called over HTTPS to anticipy.ai)
-    // share the SAME upstream Kimi quota — they're throttled centrally.
+    // Single-model Executor path on Kimi (moonshot-v1-128k). Retry with
+    // exponential backoff on 429 — the previous "1 try, 1 fail, give up"
+    // logic caused 25-task benchmarks to cascade-fail at task ~13 once
+    // org-wide quota windows pinched. Now: up to 4 attempts with waits
+    // 0s → 8s → 24s → 60s. If all four fail we surface ai_unavailable
+    // to the run loop. Total worst-case sleep budget per call: ~92s.
     if (!this.apiConfig?.kimiApiKey) {
       throw new Error("KIMI_API_KEY not configured. Sign in via the extension popup.");
     }
-    if (this._isProviderBlocked("kimi")) {
-      const wait = Math.min(
-        Math.max(0, (this._providerUnblockAt["kimi"] || 0) - Date.now()),
-        this._QUOTA_MAX_COOLDOWN_MS
-      );
-      if (wait > 50) {
-        console.log(`[Anticipy Agent] Kimi cooldown — sleeping ${wait/1000}s`);
-        await new Promise(r => setTimeout(r, wait));
+    const MAX_ATTEMPTS = 4;
+    let lastErr = null;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      // Honor any cooldown set by previous calls / attempts
+      if (this._isProviderBlocked("kimi")) {
+        const wait = Math.min(
+          Math.max(0, (this._providerUnblockAt["kimi"] || 0) - Date.now()),
+          this._QUOTA_MAX_COOLDOWN_MS
+        );
+        if (wait > 50) {
+          console.log(`[Anticipy Agent] Kimi cooldown — sleeping ${wait/1000}s (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+          await new Promise(r => setTimeout(r, wait));
+        }
+      } else if (attempt > 0) {
+        // Previous attempt failed for a non-429 reason; light spacing
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+      }
+      try {
+        const out = await this._callKimi(userMessage);
+        this._markProviderOk("kimi");
+        return out;
+      } catch (e) {
+        lastErr = e;
+        const msg = String(e?.message || e);
+        if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
+          this._markProvider429("kimi");
+          // Loop continues; next iteration honors the cooldown
+        } else {
+          // Non-quota error — break out to avoid burning attempts on a
+          // permanent failure (auth, malformed request, etc.)
+          console.warn(`[Anticipy Agent] Kimi non-quota error: ${msg}`);
+          break;
+        }
       }
     }
-    try {
-      const out = await this._callKimi(userMessage);
-      this._markProviderOk("kimi");
-      return out;
-    } catch (e) {
-      const msg = String(e?.message || e);
-      console.warn(`[Anticipy Agent] Kimi failed: ${msg}`);
-      if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
-        this._markProvider429("kimi");
-      }
-      throw new Error("ai_unavailable");
-    }
+    console.warn(`[Anticipy Agent] Kimi exhausted ${MAX_ATTEMPTS} attempts: ${lastErr?.message || lastErr}`);
+    throw new Error("ai_unavailable");
   }
 
   /**
