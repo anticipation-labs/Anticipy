@@ -272,54 +272,17 @@ export default function EnginePage() {
 
   // ── Auth effects ────────────────────────────────────────────────────────────
 
-  // True when the initial session check failed/timed out. We surface a small
-  // banner so visitors know it's our backend that's hiccuping, not their
-  // browser. Without this, a Supabase regional outage leaves the page stuck
-  // on a spinner forever — exactly the "doesn't load" symptom the user has
-  // been hitting during the us-east-1-az4 incident.
-  const [authBackendDown, setAuthBackendDown] = useState(false);
-
   useEffect(() => {
-    let resolved = false;
-
-    // Race the Supabase session check against a 6s timeout. If Supabase is
-    // unreachable (region outage, network blip, cold-start storm) we still
-    // render the page in unauthed mode with a "we're having trouble" banner
-    // instead of hanging forever on the loading spinner.
-    const timeoutId = setTimeout(() => {
-      if (resolved) return;
-      resolved = true;
-      setAuthBackendDown(true);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
       setAuthLoading(false);
-    }, 6000);
-
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timeoutId);
-        setSession(session);
-        setAuthLoading(false);
-      })
-      .catch(() => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(timeoutId);
-        setAuthBackendDown(true);
-        setAuthLoading(false);
-      });
+    });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      // A live session implies the backend is reachable again — clear the
-      // banner and unblock the UI no matter what state we were in.
-      if (session) {
-        setAuthLoading(false);
-        setAuthBackendDown(false);
-      }
+      if (session) setAuthLoading(false);
       // Recovery sessions are signed-in sessions with a single privileged
       // operation: changing the password. Surface a "set new password" form
       // instead of dropping the user straight into the engine UI.
@@ -329,10 +292,7 @@ export default function EnginePage() {
         setAuthError("");
       }
     });
-    return () => {
-      clearTimeout(timeoutId);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   // Fetch access code once authenticated (also used by the retry button)
@@ -1515,93 +1475,6 @@ export default function EnginePage() {
             borderTopColor: "var(--gold)",
           }}
         />
-      </div>
-    );
-  }
-
-  // ── Backend unreachable (Supabase region outage / auth API hung) ──────────
-  // The session check raced against a 6s timeout and lost. Sign-in won't work
-  // either — the same backend is what verifies passwords. Render an honest,
-  // calm page instead of dumping the user onto a sign-in form that will hang.
-  if (authBackendDown && !session) {
-    return (
-      <div
-        style={{
-          background: "var(--dark)",
-          minHeight: "100vh",
-          color: "var(--text-on-dark)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "48px 24px",
-        }}
-      >
-        <a
-          href="/"
-          className="font-serif"
-          style={{
-            fontSize: 26,
-            color: "var(--text-on-dark)",
-            textDecoration: "none",
-            marginBottom: 32,
-          }}
-        >
-          Anticipy
-        </a>
-        <div
-          style={{
-            maxWidth: 460,
-            width: "100%",
-            background: "var(--dark-elevated)",
-            border: "1px solid var(--dark-border)",
-            borderRadius: 16,
-            padding: 32,
-            textAlign: "center",
-          }}
-        >
-          <h1
-            className="font-serif"
-            style={{ fontSize: 22, fontWeight: 400, marginBottom: 12, lineHeight: 1.35 }}
-          >
-            Anticipy is having a moment.
-          </h1>
-          <p
-            style={{
-              fontSize: 14,
-              color: "var(--text-on-dark-muted)",
-              fontWeight: 300,
-              lineHeight: 1.65,
-              marginBottom: 20,
-            }}
-          >
-            Our backend is taking longer than usual to respond. This is on our
-            side, not yours. Refresh in a couple of minutes and we'll be back.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setAuthBackendDown(false);
-              setAuthLoading(true);
-              // Re-attempt the session check; on success we render normally,
-              // on timeout we land back here.
-              window.location.reload();
-            }}
-            style={{
-              display: "inline-block",
-              padding: "10px 24px",
-              background: "var(--gold)",
-              color: "var(--dark)",
-              borderRadius: 100,
-              border: "none",
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
-          >
-            Try again
-          </button>
-        </div>
       </div>
     );
   }

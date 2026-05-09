@@ -67,41 +67,13 @@ export async function POST(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
   );
 
-  // Race the Supabase lookup against a 5s timeout. Vercel's serverless
-  // function timeout is 10s on Hobby; if Supabase hangs (regional outage,
-  // pool exhaustion, etc.) we'd burn the whole budget and 504. Failing fast
-  // here means the extension popup gets a friendly "having a moment" message
-  // in <5s instead of a 10s spinner-then-504-then-blank.
-  let user: { id: string; username: string } | null = null;
-  let lookupTimedOut = false;
-  try {
-    const lookupPromise = supabase
-      .from("engine_users")
-      .select("id, username")
-      .eq("access_code", trimmedCode)
-      .single();
-    const timeoutPromise = new Promise<"timeout">((resolve) =>
-      setTimeout(() => resolve("timeout"), 5_000)
-    );
-    const result = await Promise.race([lookupPromise, timeoutPromise]);
-    if (result === "timeout") {
-      lookupTimedOut = true;
-    } else {
-      // result is the Supabase response object
-      const r = result as { data: { id: string; username: string } | null; error: unknown };
-      user = r.error ? null : r.data;
-    }
-  } catch {
-    lookupTimedOut = true;
-  }
+  const { data: user, error } = await supabase
+    .from("engine_users")
+    .select("id, username")
+    .eq("access_code", trimmedCode)
+    .single();
 
-  if (lookupTimedOut) {
-    return NextResponse.json(
-      { error: "Anticipy is having a moment. Try again in a sec." },
-      { status: 503, headers: corsHeaders }
-    );
-  }
-  if (!user) {
+  if (error || !user) {
     return NextResponse.json({ error: "Invalid access code" }, { status: 401, headers: corsHeaders });
   }
 
