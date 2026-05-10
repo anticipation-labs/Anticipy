@@ -2,10 +2,14 @@
 // Takes a confirmed intent and executes it step-by-step using LLM decisions + DOM actions
 // No localhost server required — runs entirely in the extension using the user's real browser.
 
-// Single backbone for the Executor: Kimi K2.6 (Moonshot AI). Agent-tuned
-// for long-horizon coordination, native multimodal, $0.60/$0.95 per 1M.
-// Verifier / Critic / Reflector run server-side at anticipy.ai/api/agent/*
-// and share the same upstream Kimi key + budget.
+// Executor LLM endpoints. Primary: Cerebras Qwen3-235B (free 1M tokens/day,
+// 30 RPM, ~250ms latency, no JSON-mode parsing overhead). Fallback: Kimi
+// moonshot-v1-128k (paid Moonshot, when funded). The agent tries Cerebras
+// first; on any Cerebras error or 429 it falls through to Kimi. The
+// Verifier/Critic/Reflector at anticipy.ai/api/agent/* use the same
+// fallback chain via @/lib/agent-llm.
+const CEREBRAS_API_URL = "https://api.cerebras.ai/v1/chat/completions";
+const CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
 const KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions";
 
 const MAX_STEPS = 60;
@@ -1332,51 +1336,56 @@ export class BrowserAgent {
   }
 
   async _callLLM(userMessage) {
-    // Single-model Executor path on Kimi (moonshot-v1-128k). Retry with
-    // exponential backoff on 429 — the previous "1 try, 1 fail, give up"
-    // logic caused 25-task benchmarks to cascade-fail at task ~13 once
-    // org-wide quota windows pinched. Now: up to 4 attempts with waits
-    // 0s → 8s → 24s → 60s. If all four fail we surface ai_unavailable
-    // to the run loop. Total worst-case sleep budget per call: ~92s.
-    if (!this.apiConfig?.kimiApiKey) {
-      throw new Error("KIMI_API_KEY not configured. Sign in via the extension popup.");
+    // Two-tier Executor: Cerebras Qwen3-235B (free 1M/day, ~250ms) primary,
+    // Kimi moonshot-v1-128k paid fallback. Each tier uses up to 4 attempts
+    // with exponential backoff (0s→8s→24s→60s) on 429. If Cerebras fails
+    // for any non-quota reason, we fall through to Kimi immediately. If
+    // both exhaust, surface ai_unavailable.
+    const hasCerebras = !!this.apiConfig?.cerebrasApiKey;
+    const hasKimi = !!this.apiConfig?.kimiApiKey;
+    if (!hasCerebras && !hasKimi) {
+      throw new Error("No LLM keys configured (need CEREBRAS_API_KEY or KIMI_API_KEY).");
     }
+
+    const tiers = [];
+    if (hasCerebras) tiers.push({ name: "cerebras", fn: () => this._callCerebras(userMessage) });
+    if (hasKimi)     tiers.push({ name: "kimi",     fn: () => this._callKimi(userMessage) });
+
     const MAX_ATTEMPTS = 4;
     let lastErr = null;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      // Honor any cooldown set by previous calls / attempts
-      if (this._isProviderBlocked("kimi")) {
-        const wait = Math.min(
-          Math.max(0, (this._providerUnblockAt["kimi"] || 0) - Date.now()),
-          this._QUOTA_MAX_COOLDOWN_MS
-        );
-        if (wait > 50) {
-          console.log(`[Anticipy Agent] Kimi cooldown — sleeping ${wait/1000}s (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
-          await new Promise(r => setTimeout(r, wait));
+    for (const tier of tiers) {
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (this._isProviderBlocked(tier.name)) {
+          const wait = Math.min(
+            Math.max(0, (this._providerUnblockAt[tier.name] || 0) - Date.now()),
+            this._QUOTA_MAX_COOLDOWN_MS
+          );
+          if (wait > 50) {
+            console.log(`[Anticipy Agent] ${tier.name} cooldown — sleeping ${wait/1000}s (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
+            await new Promise(r => setTimeout(r, wait));
+          }
+        } else if (attempt > 0) {
+          await new Promise(r => setTimeout(r, 1500 * attempt));
         }
-      } else if (attempt > 0) {
-        // Previous attempt failed for a non-429 reason; light spacing
-        await new Promise(r => setTimeout(r, 1500 * attempt));
-      }
-      try {
-        const out = await this._callKimi(userMessage);
-        this._markProviderOk("kimi");
-        return out;
-      } catch (e) {
-        lastErr = e;
-        const msg = String(e?.message || e);
-        if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
-          this._markProvider429("kimi");
-          // Loop continues; next iteration honors the cooldown
-        } else {
-          // Non-quota error — break out to avoid burning attempts on a
-          // permanent failure (auth, malformed request, etc.)
-          console.warn(`[Anticipy Agent] Kimi non-quota error: ${msg}`);
-          break;
+        try {
+          const out = await tier.fn();
+          this._markProviderOk(tier.name);
+          return out;
+        } catch (e) {
+          lastErr = e;
+          const msg = String(e?.message || e);
+          if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
+            this._markProvider429(tier.name);
+            // Try next attempt on this tier (cooldown will gate it)
+          } else {
+            // Non-quota error — break out of this tier, try next tier
+            console.warn(`[Anticipy Agent] ${tier.name} non-quota error: ${msg}`);
+            break;
+          }
         }
       }
     }
-    console.warn(`[Anticipy Agent] Kimi exhausted ${MAX_ATTEMPTS} attempts: ${lastErr?.message || lastErr}`);
+    console.warn(`[Anticipy Agent] all tiers exhausted: ${lastErr?.message || lastErr}`);
     throw new Error("ai_unavailable");
   }
 
@@ -1432,30 +1441,63 @@ export class BrowserAgent {
     }
   }
 
-  // moonshot-v1-128k — Executor backbone. Non-reasoning Moonshot model:
-  //   - Latency ~1.1s vs ~20s for K2.5 (18x faster) — critical when the
-  //     Executor makes 60 calls per task
-  //   - Accepts temperature=0.1 (deterministic JSON) where K2.x require 1
-  //   - Same Moonshot org, same key, same upstream budget
-  // The strategic agents (Planner / Critic / Reflector) at /api/agent/*
-  // use K2.5 for its reasoning quality on planning + diagnosis steps.
-  async _callKimi(userMessage) {
-    // Build the system prompt with any accumulated Reflexion lessons
-    // prepended. Lessons persist in chrome.storage.local.lessons across
-    // runs in a Chrome session — they accumulate task-after-task and
-    // help the model avoid past mistakes. Cap at 5; FIFO. The LESSONS
-    // block is stripped of any site-specific content by the distillation
-    // prompt, so this stays no-hardcoding.
+  /**
+   * Build the system prompt with accumulated Reflexion lessons prepended.
+   * Used by both _callCerebras and _callKimi so we have a single source
+   * of truth for prompt assembly.
+   */
+  async _buildSystemPrompt() {
     const lessons = await this._loadLessons();
-    let system = AGENT_SYSTEM_PROMPT;
-    if (lessons.length > 0) {
-      const lessonBlock = lessons
-        .map((l, i) => `  ${i + 1}. ${l.lesson}${l.outcome === "failure" ? " (avoid)" : " (repeat)"}`)
-        .join("\n");
-      system =
-        `LESSONS FROM RECENT TASKS (read these first; ignore lessons that don't apply to the current task):\n${lessonBlock}\n\n` +
-        AGENT_SYSTEM_PROMPT;
+    if (lessons.length === 0) return AGENT_SYSTEM_PROMPT;
+    const lessonBlock = lessons
+      .map((l, i) => `  ${i + 1}. ${l.lesson}${l.outcome === "failure" ? " (avoid)" : " (repeat)"}`)
+      .join("\n");
+    return (
+      `LESSONS FROM RECENT TASKS (read these first; ignore lessons that don't apply to the current task):\n` +
+      `${lessonBlock}\n\n` +
+      AGENT_SYSTEM_PROMPT
+    );
+  }
+
+  /**
+   * Cerebras Qwen3-235B — Executor primary. Free 1M tokens/day, 30 RPM,
+   * ~250ms latency. JSON mode supported. No reasoning_content overhead.
+   * Throws on non-200 with the status code in the message so _callLLM's
+   * 429-detection regex catches throttling.
+   */
+  async _callCerebras(userMessage) {
+    const system = await this._buildSystemPrompt();
+    const resp = await fetch(CEREBRAS_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apiConfig.cerebrasApiKey}`,
+      },
+      body: JSON.stringify({
+        model: CEREBRAS_MODEL,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.1,
+        max_tokens: 2400,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => String(resp.status));
+      throw new Error(`Cerebras ${resp.status}: ${body.substring(0, 200)}`);
     }
+    const data = await resp.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Empty response from Cerebras");
+    return this._parseJSON(content);
+  }
+
+  // moonshot-v1-128k — Executor fallback. Used when Cerebras is down or
+  // out of free quota. Same JSON-only output contract.
+  async _callKimi(userMessage) {
+    const system = await this._buildSystemPrompt();
     const resp = await fetch(KIMI_API_URL, {
       method: "POST",
       headers: {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { callKimiJson, kimiAvailable } from "@/lib/kimi";
+import { callAgentJson, agentLLMAvailable } from "@/lib/agent-llm";
 
 export const dynamic = "force-dynamic";
 
@@ -97,9 +97,9 @@ export async function POST(req: Request) {
   if (!ipLimit.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: CORS });
   }
-  if (!kimiAvailable()) {
+  if (!agentLLMAvailable()) {
     return NextResponse.json(
-      { error: "Critic unavailable (KIMI_API_KEY missing)" },
+      { error: "Critic unavailable (no CEREBRAS or KIMI key)" },
       { status: 503, headers: CORS }
     );
   }
@@ -156,12 +156,13 @@ export async function POST(req: Request) {
 
   let parsed: any;
   try {
-    parsed = await callKimiJson({
+    const out = await callAgentJson({
       system: CRITIC_SYSTEM,
       messages: [{ role: "user", content: ctx }],
       temperature: 0.1,
       maxTokens: 800,
     });
+    parsed = out.data;
   } catch (e: any) {
     return NextResponse.json(
       { error: `critic LLM failed: ${e?.message || String(e)}` },

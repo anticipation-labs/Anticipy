@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { callKimiJson, kimiAvailable, kimiCostUsd } from "@/lib/kimi";
+import { kimiCostUsd } from "@/lib/kimi";
+import { callAgentJson, agentLLMAvailable } from "@/lib/agent-llm";
 import { embedQuery, voyageAvailable, padVectorTo, vectorToPg } from "@/lib/voyage";
 
 export const dynamic = "force-dynamic";
@@ -99,9 +100,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: CORS });
   }
 
-  if (!kimiAvailable()) {
+  if (!agentLLMAvailable()) {
     return NextResponse.json(
-      { error: "Agent backend not configured (KIMI_API_KEY missing)" },
+      { error: "Agent backend not configured (no CEREBRAS_API_KEY or KIMI_API_KEY)" },
       { status: 503, headers: CORS }
     );
   }
@@ -198,19 +199,17 @@ ${stepsPreview}
   ].filter(Boolean).join("\n\n");
 
   let parsed: PlanLLMResponse;
-  let usage: { prompt_tokens?: number; completion_tokens?: number } = {};
+  const usage: { prompt_tokens?: number; completion_tokens?: number } = {};
   try {
-    parsed = await callKimiJson<PlanLLMResponse>({
+    const out = await callAgentJson<PlanLLMResponse>({
       system: PLANNER_SYSTEM,
       messages: [{ role: "user", content: ctx }],
-      // moonshot-v1-128k (no reasoning overhead) — defaults in @/lib/kimi
-      // already select this. Deterministic temp for stable plans.
       temperature: 0.1,
       maxTokens: 1500,
     });
-    // We don't currently surface usage from callKimiJson. callKimiRich
-    // would; future improvement is to plumb it through. For now, leave
-    // usage empty — cost tracking happens via the trajectory write path.
+    parsed = out.data;
+    // out.provider tells us which backend served this — useful for
+    // future cost tracking but kept out of the response shape for now.
   } catch (e: any) {
     return NextResponse.json(
       { error: `planner LLM failed: ${e?.message || String(e)}` },

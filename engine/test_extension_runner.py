@@ -341,6 +341,7 @@ async def configure_extension(popup_page, *, user_id: str) -> None:
         "userId": user_id,
         "username": f"runner_{user_id[:8]}",
         "accessCode": os.environ.get("ANTICIPY_ACCESS_CODE") or "TEST_NOOP",
+        "cerebrasApiKey": os.environ.get("CEREBRAS_API_KEY") or None,
         "groqApiKey": os.environ.get("GROQ_API_KEY") or None,
         "geminiApiKey": os.environ.get("GOOGLE_API_KEY") or None,
         "kimiApiKey": os.environ.get("KIMI_API_KEY") or None,

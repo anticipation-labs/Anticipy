@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { callKimiJson, kimiAvailable } from "@/lib/kimi";
+import { callAgentJson, agentLLMAvailable } from "@/lib/agent-llm";
 
 export const dynamic = "force-dynamic";
 
@@ -146,9 +146,9 @@ export async function POST(req: Request) {
   if (!ipLimit.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: CORS });
   }
-  if (!kimiAvailable()) {
+  if (!agentLLMAvailable()) {
     return NextResponse.json(
-      { error: "Verifier unavailable (KIMI_API_KEY missing)" },
+      { error: "Verifier unavailable (no CEREBRAS or KIMI key)" },
       { status: 503, headers: CORS }
     );
   }
@@ -206,14 +206,15 @@ export async function POST(req: Request) {
 
   let parsed: VerifyLLMResponse;
   try {
-    parsed = await callKimiJson<VerifyLLMResponse>({
+    const out = await callAgentJson<VerifyLLMResponse>({
       system: VERIFIER_SYSTEM,
       messages: [{ role: "user", content: ctx }],
-      // moonshot-v1-128k is the default — fires up to 60×/task.
+      // Cerebras Qwen3-235B (free) primary; Kimi fallback. Verifier
+      // fires up to 60×/task — Cerebras's 30 RPM + 1M tok/day fits.
       temperature: 0.1,
       maxTokens: 400,
-
     });
+    parsed = out.data;
   } catch (e: any) {
     return NextResponse.json(
       { error: `verifier LLM failed: ${e?.message || String(e)}` },
