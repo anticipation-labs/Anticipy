@@ -62,22 +62,13 @@ import httpx
 # Kimi K2.6 (reasoning) teacher
 # ─────────────────────────────────────────────────────────────────────
 
-KIMI_URL = "https://api.moonshot.ai/v1/chat/completions"
-KIMI_MODEL = "kimi-k2.6"  # reasoning variant — REQUIRES temperature=1.0
-
-# Moonshot K2.6 reasoning rates as of 2026-05. We bill per the docs even
-# though billing happens server-side; carrying the per-1M rate locally lets
-# us print a cost estimate after each call so a 1000-task run stays inside
-# the $10 budget.
-KIMI_INPUT_USD_PER_1M = 0.60
-KIMI_OUTPUT_USD_PER_1M = 0.95
-
-# K2.6 burns reasoning_content tokens BEFORE writing message.content; both
-# count against `completion_tokens`. On rich prompts like ours, K2.6 spends
-# 2000-4000 tokens reasoning. 8000 leaves ample room for the 600-1200-token
-# visible JSON trajectory afterwards. Empirically 3000 truncates inside the
-# reasoning step and never emits content — finish_reason=length, content="".
-KIMI_MAX_TOKENS = 8000
+KIMI_URL = "https://api.cerebras.ai/v1/chat/completions"
+KIMI_MODEL = "qwen-3-235b-a22b-instruct-2507"  # Cerebras Qwen3-235B free
+# Cerebras free tier: 1M tokens/day, 30 RPM. $0 ongoing. No reasoning
+# overhead (Qwen3-235B-instruct, not the thinking variant).
+KIMI_INPUT_USD_PER_1M = 0.0
+KIMI_OUTPUT_USD_PER_1M = 0.0
+KIMI_MAX_TOKENS = 3000
 
 
 SYNTH_SYSTEM_PROMPT = """\
@@ -131,24 +122,25 @@ TRAJECTORY RULES — what an IDEAL real run looks like:
     `input[name="q"]`, `h1`, `.mw-search-result-heading`. Never
     `:contains()` or other invented pseudoselectors.
 
-STEP SHAPE — each entry in the `steps` array is exactly:
-  {
-    "action": <one of the action objects above>,
-    "result": {"success": true|false, "error": null|"..."},
-    "signalDiff": "<one-line description of what observably changed; e.g. 'URL changed; +14 buttons; +1 modal'>",
-    "timestamp": <integer ms epoch — start at 1700000000000 and increment ~800ms per step>
-  }
-
-OUTPUT — STRICT JSON, exactly this shape, NOTHING ELSE:
+OUTPUT — STRICT JSON, exactly this shape:
 {
-  "task_summary": "<echo the user's task verbatim>",
-  "domain": "<primary hostname; e.g. en.wikipedia.org or duckduckgo.com>",
-  "start_url": "<starting url as given>",
-  "steps": [<step shape above>, ...],
-  "outcome": "success" | "fail" | "aborted",
-  "outcome_message": "<final user-facing answer; same as last step's done.message>"
+  "task_summary": "<echo the user's task>",
+  "domain": "<primary hostname>",
+  "start_url": "<starting url>",
+  "steps": [
+    {"action":"getPageState"},
+    {"action":"navigate","url":"https://en.wikipedia.org/wiki/Python_(programming_language)"},
+    {"action":"extract","selector":".infobox tr","field":"release_year"},
+    {"action":"done","success":true,"message":"Python was released in 1991."}
+  ],
+  "outcome": "success",
+  "outcome_message": "Python was released in 1991."
 }
-No code fences. No "Here is" preamble. JSON only."""
+
+CRITICAL: `steps` is a flat array of ACTION OBJECTS only. Each element
+of steps is ONE of the action shapes from the list above — nothing else.
+No "result", no "signalDiff", no "timestamp" wrapper. Just the action.
+JSON only — no code fences, no preamble."""
 
 
 def estimate_cost_usd(usage: dict | None) -> float:
@@ -181,7 +173,7 @@ async def call_kimi_k26(
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "temperature": 1.0,  # MANDATORY for K2.6 reasoning
+        "temperature": 0.2,  # Cerebras Qwen3-235B works at any temp
         "max_tokens": KIMI_MAX_TOKENS,
         "response_format": {"type": "json_object"},
     }
@@ -232,15 +224,23 @@ def validate_trajectory(traj: dict, *, expected_facts: list[str] | None = None) 
     steps = traj.get("steps")
     if not isinstance(steps, list) or not steps:
         return False, "no steps"
+    # New flat-shape: each step IS an action object {action:"verb", ...}.
+    # Tolerant of legacy wrapper shape {"action":{action:"verb",...}, ...}.
     for i, s in enumerate(steps):
-        a = (s or {}).get("action") or {}
-        verb = a.get("action") if isinstance(a, dict) else None
+        if not isinstance(s, dict):
+            return False, f"step {i}: not an object ({type(s).__name__})"
+        if isinstance(s.get("action"), dict):
+            verb = s["action"].get("action")
+        else:
+            verb = s.get("action")
         if verb not in KNOWN_ACTIONS:
             return False, f"step {i}: unknown action verb {verb!r}"
-    last = steps[-1].get("action") or {}
-    if last.get("action") != "done":
-        return False, f"last step is {last.get('action')!r}, not 'done'"
-    msg = last.get("message", "") or ""
+    last = steps[-1]
+    last_action = last.get("action") if isinstance(last.get("action"), dict) else last
+    last_verb = last_action.get("action") if isinstance(last_action, dict) else None
+    if last_verb != "done":
+        return False, f"last step is {last_verb!r}, not 'done'"
+    msg = (last_action.get("message", "") if isinstance(last_action, dict) else "") or ""
     if not msg:
         return False, "done.message is empty"
     if expected_facts:
@@ -351,9 +351,9 @@ async def main() -> int:
                     help="If > 0, only process the first N tasks (for fast iteration)")
     args = ap.parse_args()
 
-    api_key = os.environ.get("KIMI_API_KEY")
+    api_key = os.environ.get("CEREBRAS_API_KEY") or os.environ.get("KIMI_API_KEY")
     if not api_key:
-        print("ERROR: KIMI_API_KEY not set. Source .env.local first.", file=sys.stderr)
+        print("ERROR: CEREBRAS_API_KEY not set. Source .env.local first.", file=sys.stderr)
         return 2
 
     tasks: list[str]
