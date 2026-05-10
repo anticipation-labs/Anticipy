@@ -97,97 +97,11 @@ export async function POST(req: Request) {
   if (!ipLimit.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: CORS });
   }
+  // Disabled — see note at top of file. Re-enable by restoring the
+  // full handler from git history (commit ddad238^).
   return NextResponse.json(
     { error: "Critic disabled — Executor only mode" },
     { status: 503, headers: CORS }
-  );
-
-  /* eslint-disable */
-  // @ts-ignore
-  if (!agentLLMAvailable()) {
-    return NextResponse.json(
-      { error: "Critic unavailable (no CEREBRAS or KIMI key)" },
-      { status: 503, headers: CORS }
-    );
-  }
-  const accessCode = (req.headers.get("X-Anticipy-Code") || "").trim();
-  if (!accessCode) {
-    return NextResponse.json({ error: "Missing X-Anticipy-Code" }, { status: 401, headers: CORS });
-  }
-
-  let body: CriticRequest;
-  try {
-    body = (await req.json()) as CriticRequest;
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400, headers: CORS });
-  }
-  const task = (body.task || "").trim();
-  if (!task) {
-    return NextResponse.json({ error: "task required" }, { status: 400, headers: CORS });
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
-  );
-  const { data: user } = await supabase
-    .from("engine_users")
-    .select("id")
-    .eq("access_code", accessCode)
-    .single();
-  if (!user) {
-    return NextResponse.json({ error: "Invalid access code" }, { status: 401, headers: CORS });
-  }
-
-  const history = Array.isArray(body.history) ? body.history.slice(-10) : [];
-  const histBlocks = history.map((h, i) => {
-    const a = h?.action || {};
-    const ok = h?.result?.success ? "OK" : "FAIL";
-    const sig = h?.signalDiff ? ` | effect: ${String(h.signalDiff).substring(0, 120)}` : "";
-    return `  step-${i + 1} ${ok}: ${a.action || "?"}${a.url ? ` ${a.url.substring(0, 60)}` : ""}${a.selector ? ` sel="${a.selector}"` : ""}${a.text ? ` text="${String(a.text).substring(0, 40)}"` : ""}${sig}`;
-  }).join("\n");
-
-  const planText = Array.isArray(body.plan) && body.plan.length > 0
-    ? body.plan.map((p: any) => `  step ${p.step}: ${p.goal}`).join("\n")
-    : "(no plan)";
-
-  const ctx = [
-    `<task>${task}</task>`,
-    body.domain ? `<domain>${body.domain}</domain>` : "",
-    `<plan>\n${planText}\n</plan>`,
-    `<current_step_index>${body.current_step_index ?? 0}</current_step_index>`,
-    `<recent_history>\n${histBlocks || "(empty)"}\n</recent_history>`,
-    `<verifier_latest_evidence>${(body.verifier_evidence || "").substring(0, 240)}</verifier_latest_evidence>`,
-    `Diagnose and propose next move. JSON only.`,
-  ].filter(Boolean).join("\n\n");
-
-  let parsed: any;
-  try {
-    const out = await callAgentJson({
-      system: CRITIC_SYSTEM,
-      messages: [{ role: "user", content: ctx }],
-      temperature: 0.1,
-      maxTokens: 800,
-    });
-    parsed = out.data;
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: `critic LLM failed: ${e?.message || String(e)}` },
-      { status: 502, headers: CORS }
-    );
-  }
-
-  return NextResponse.json(
-    {
-      diagnosis: String(parsed?.diagnosis || "").substring(0, 480),
-      new_approach: String(parsed?.new_approach || "").substring(0, 480),
-      abort: Boolean(parsed?.abort),
-      abort_reason: String(parsed?.abort_reason || "").substring(0, 240),
-      replan_step_index: typeof parsed?.replan_step_index === "number"
-        ? parsed.replan_step_index
-        : null,
-    },
-    { headers: CORS }
   );
 }
 
