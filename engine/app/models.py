@@ -20,10 +20,43 @@ from typing import AsyncIterator
 
 import httpx
 
-from app.config import MODEL_CHAIN, MAX_COST_USD
+from app.config import (
+    MODEL_CHAIN,
+    MAX_COST_USD,
+    ROLE_CHAINS,
+    COST_MONTHLY_CAP_USD,
+)
+from app.cost_watch import (
+    CostCapExceeded,
+    assert_under_cap,
+    log_paid_call,
+)
 
 
 logger = logging.getLogger("engine")
+
+
+def _chain_for_role(role: str | None) -> list[dict]:
+    """Return the model chain to try for ``role``.
+
+    ``role=None`` (default) ⇒ the legacy MODEL_CHAIN. Known role names use
+    their dedicated chain. An empty role chain (e.g. critic with neither
+    Mistral nor Gemini configured) gracefully falls back to MODEL_CHAIN so
+    the system stays responsive. Unknown role names are treated as None.
+    """
+    if not role:
+        return MODEL_CHAIN
+    chain = ROLE_CHAINS.get(role)
+    if chain is None:
+        return MODEL_CHAIN
+    if not chain:
+        # Role known but no providers configured for it ⇒ degrade rather
+        # than fail. The role-diversity invariant is best-effort.
+        logger.warning(
+            "role chain for %r is empty; falling back to MODEL_CHAIN", role,
+        )
+        return MODEL_CHAIN
+    return chain
 
 
 class DegradedResponse:
@@ -73,6 +106,71 @@ class CostTracker:
 _throttle_locks: dict[str, asyncio.Lock] = {}
 _throttle_last_call: dict[str, float] = {}
 _provider_semaphores: dict[str, asyncio.Semaphore] = {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-provider quota tracking. When a provider returns 429 the cascade marks
+# it blocked-until-X and skips it on subsequent calls until the cooldown
+# expires. Cooldown grows exponentially on repeat 429s (5s, 10s, 20s, …, 60s
+# cap). On a successful call the failure count resets.
+#
+# This kills the "all providers throttled simultaneously" failure mode that
+# corrupted the previous hostile-suite run — instead of hammering each
+# provider's retry budget linearly, the cascade routes around the blocked
+# ones and sleeps only when EVERY provider in MODEL_CHAIN is in cooldown.
+# Cop-out #18: provider exhaustion is not an excuse.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_provider_quota_until: dict[str, float] = {}
+_provider_failure_count: dict[str, int] = {}
+
+_QUOTA_BASE_COOLDOWN_S = 5.0
+_QUOTA_MAX_COOLDOWN_S = 60.0
+
+
+def _is_provider_quota_blocked(provider: str) -> tuple[bool, float]:
+    """Returns (blocked, unblock_at_ts).
+    blocked=True means callers should skip this provider for now."""
+    until = _provider_quota_until.get(provider, 0.0)
+    return (time.monotonic() < until, until)
+
+
+def _mark_provider_429(provider: str) -> None:
+    """Mark a provider as quota-blocked with exponential backoff cooldown.
+    First 429 → 5s, then 10s, 20s, 40s, capped at 60s."""
+    failures = _provider_failure_count.get(provider, 0) + 1
+    _provider_failure_count[provider] = failures
+    cooldown = min(
+        _QUOTA_BASE_COOLDOWN_S * (2 ** (failures - 1)),
+        _QUOTA_MAX_COOLDOWN_S,
+    )
+    _provider_quota_until[provider] = time.monotonic() + cooldown
+    logger.warning(
+        "provider quota-blocked: %s for %.1fs (consecutive 429 #%d)",
+        provider, cooldown, failures,
+    )
+
+
+def _mark_provider_ok(provider: str) -> None:
+    """Clear quota state on a successful call."""
+    if _provider_failure_count.get(provider, 0) > 0:
+        _provider_failure_count[provider] = 0
+    _provider_quota_until.pop(provider, None)
+
+
+def _earliest_unblock_time() -> float | None:
+    """Returns the earliest monotonic timestamp at which any currently-blocked
+    provider will unblock, or None if no provider is blocked."""
+    if not _provider_quota_until:
+        return None
+    now = time.monotonic()
+    upcoming = [t for t in _provider_quota_until.values() if t > now]
+    return min(upcoming) if upcoming else None
+
+
+def _reset_provider_quotas() -> None:
+    """Test helper. Production code should not call this."""
+    _provider_quota_until.clear()
+    _provider_failure_count.clear()
 
 
 def _get_lock(provider: str) -> asyncio.Lock:
@@ -316,7 +414,7 @@ async def _call_openai_compatible(
     }
     if json_mode:
         body["response_format"] = {"type": "json_object"}
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, headers=headers, json=body)
         resp.raise_for_status()
         data = resp.json()
@@ -382,7 +480,7 @@ async def _call_gemini(
         "generationConfig": gen_cfg,
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, headers=headers, json=body)
         resp.raise_for_status()
         data = resp.json()
@@ -443,73 +541,159 @@ async def llm_call(
     require_json: bool = False,
     retries_per_model: int = 2,
     json_mode: bool = False,
+    role: str | None = None,
+    task_id: str | None = None,
+    user_id: str | None = None,
 ) -> str | dict | DegradedResponse:
     """
     Call LLMs with retry and fallback. Returns:
       - dict, when require_json=True and parsing succeeds on any provider
       - str, when require_json=False and any provider returns text
-      - DegradedResponse(), when every provider in MODEL_CHAIN failed (or
-        the chain is empty / the cost cap is exceeded). The sentinel is
+      - DegradedResponse(), when every provider in the role chain failed
+        (or the chain is empty / the cost cap is exceeded). The sentinel is
         falsy so existing `if result and ...` callers work unchanged.
+
+    role: "planner" | "critic" | "reflector" | "executor" | None.
+      Selects a role-specific provider order from config.ROLE_CHAINS so
+      different roles use different models (multi-agent diversity).
+      None ⇒ legacy MODEL_CHAIN order (existing callers untouched).
+    task_id / user_id: forwarded to ``cost_watch.log_paid_call`` so the
+      audit log can be filtered. Both optional.
 
     Errors never propagate — they're logged at debug level and we move to the
     next model so callers don't see backend-specific stack traces.
     """
     if tracker.exceeded:
         return DegradedResponse()
-    if not MODEL_CHAIN:
+
+    # Hard month-to-date cap (cop-out #15). Failure to query ⇒ proceed; we'd
+    # rather log misses than block legitimate calls on an audit outage.
+    try:
+        await assert_under_cap(COST_MONTHLY_CAP_USD)
+    except CostCapExceeded as e:
+        logger.error("cost cap exceeded: %s", e)
+        return DegradedResponse()
+    except Exception:
+        logger.debug("cost cap check raised; proceeding", exc_info=True)
+
+    chain = _chain_for_role(role)
+    if not chain:
         return DegradedResponse()
 
-    for model_cfg in MODEL_CHAIN:
-        for attempt in range(retries_per_model):
-            if tracker.exceeded:
-                return DegradedResponse()
-            try:
-                text, in_tok, out_tok = await _call_model(
-                    model_cfg, messages, temperature, max_tokens,
-                    json_mode=json_mode or require_json,
-                )
-                tracker.add(
-                    in_tok,
-                    out_tok,
-                    model_cfg["cost_input"],
-                    model_cfg["cost_output"],
-                )
+    # Two passes: first pass skips quota-blocked providers entirely. If every
+    # provider was blocked, we sleep until the earliest unblock and try once
+    # more. This prevents hammering rate-limited providers with retry budget
+    # we know will fail (cop-out #18).
+    for outer_pass in range(2):
+        any_provider_attempted = False
 
-                if require_json:
-                    parsed = _parse_json_5_strategies(text)
-                    if parsed is not None:
-                        return parsed
-                    # JSON parse failed — retry
-                    if attempt < retries_per_model - 1:
-                        await asyncio.sleep(0.5 * (attempt + 1))
-                        continue
-                    # Last attempt on this model — try next model
+        for model_cfg in chain:
+            provider_name = model_cfg.get("name", "unknown")
+
+            blocked, _ = _is_provider_quota_blocked(provider_name)
+            if blocked:
+                logger.debug("skipping quota-blocked provider %s", provider_name)
+                continue
+
+            any_provider_attempted = True
+
+            for attempt in range(retries_per_model):
+                if tracker.exceeded:
+                    return DegradedResponse()
+                try:
+                    text, in_tok, out_tok = await _call_model(
+                        model_cfg, messages, temperature, max_tokens,
+                        json_mode=json_mode or require_json,
+                    )
+                    tracker.add(
+                        in_tok,
+                        out_tok,
+                        model_cfg["cost_input"],
+                        model_cfg["cost_output"],
+                    )
+                    _mark_provider_ok(provider_name)
+
+                    # Audit trail — every successful paid call. Free providers
+                    # log cost=0 (cop-out #14: don't filter, just record).
+                    cost_in = float(model_cfg.get("cost_input", 0.0) or 0.0)
+                    cost_out = float(model_cfg.get("cost_output", 0.0) or 0.0)
+                    cost_usd = (in_tok / 1000.0) * cost_in + (out_tok / 1000.0) * cost_out
+                    try:
+                        await log_paid_call(
+                            provider=provider_name,
+                            model=str(model_cfg.get("model", "")),
+                            input_tokens=in_tok,
+                            output_tokens=out_tok,
+                            cost_usd=cost_usd,
+                            role=role,
+                            task_id=task_id,
+                            user_id=user_id,
+                        )
+                    except Exception:
+                        logger.debug("cost_watch log raised; ignoring", exc_info=True)
+
+                    if require_json:
+                        parsed = _parse_json_5_strategies(text)
+                        if parsed is not None:
+                            return parsed
+                        # JSON parse failed — retry on same model
+                        if attempt < retries_per_model - 1:
+                            await asyncio.sleep(0.5 * (attempt + 1))
+                            continue
+                        # Last attempt on this model — try next model
+                        break
+                    else:
+                        return text.strip() if text else ""
+
+                except httpx.HTTPStatusError as e:
+                    status = e.response.status_code if e.response is not None else 0
+                    logger.debug("LLM %s HTTP %s", provider_name, status)
+                    if status == 429:
+                        # Mark provider blocked; skip remaining attempts on this provider.
+                        _mark_provider_429(provider_name)
+                        break
+                    if status == 402:
+                        # Payment required (e.g. DeepSeek out of credit) — block
+                        # for the maximum cooldown so we stop trying it within
+                        # this session.
+                        _provider_quota_until[provider_name] = (
+                            time.monotonic() + _QUOTA_MAX_COOLDOWN_S
+                        )
+                        break
+                    # Other 4xx — no retry on this model
                     break
-                else:
-                    return text.strip() if text else ""
-
-            except httpx.HTTPStatusError as e:
-                # 4xx (other than 429): client error, no point retrying this model.
-                status = e.response.status_code if e.response is not None else 0
-                logger.debug("LLM %s HTTP %s", model_cfg.get("name"), status)
-                if status == 429:
+                except (httpx.TimeoutException, httpx.NetworkError):
                     if attempt < retries_per_model - 1:
-                        await asyncio.sleep(2.0 * (attempt + 1))
+                        await asyncio.sleep(1.0 * (attempt + 1))
                         continue
-                # Move to next model
-                break
-            except (httpx.TimeoutException, httpx.NetworkError):
-                if attempt < retries_per_model - 1:
-                    await asyncio.sleep(1.0 * (attempt + 1))
-                    continue
-                break
-            except Exception:
-                logger.debug("LLM %s call failed", model_cfg.get("name"), exc_info=True)
-                if attempt < retries_per_model - 1:
-                    await asyncio.sleep(1.0 * (attempt + 1))
-                    continue
-                break  # move to next model
+                    break
+                except Exception:
+                    logger.debug("LLM %s call failed", provider_name, exc_info=True)
+                    if attempt < retries_per_model - 1:
+                        await asyncio.sleep(1.0 * (attempt + 1))
+                        continue
+                    break
+
+        # If at least one provider was attempted on this pass and we're here,
+        # then either we returned a result already (we wouldn't be here) or
+        # every attempted provider failed for non-quota reasons. No point in
+        # a second pass.
+        if any_provider_attempted:
+            break
+
+        # First pass had no providers to attempt — every one is quota-blocked.
+        # Sleep until the earliest unblock, then try again. Cap the wait so we
+        # don't hang the request indefinitely.
+        unblock_at = _earliest_unblock_time()
+        if unblock_at is None:
+            break
+        wait = min(max(0.0, unblock_at - time.monotonic()), _QUOTA_MAX_COOLDOWN_S)
+        if wait <= 0.05:
+            break
+        logger.info(
+            "all providers quota-blocked; sleeping %.1fs for first unblock", wait,
+        )
+        await asyncio.sleep(wait)
 
     return DegradedResponse()
 
@@ -519,10 +703,20 @@ async def llm_call_text(
     tracker: CostTracker,
     temperature: float = 0.0,
     max_tokens: int = 256,
+    role: str | None = None,
+    task_id: str | None = None,
+    user_id: str | None = None,
 ) -> str | DegradedResponse:
     """Call LLM and return text. Returns DegradedResponse() on full cascade
-    failure so callers can `isinstance(x, DegradedResponse)` to fail closed."""
-    result = await llm_call(messages, tracker, temperature, max_tokens, require_json=False)
+    failure so callers can `isinstance(x, DegradedResponse)` to fail closed.
+
+    ``role`` selects a role-specific provider chain (see ROLE_CHAINS).
+    """
+    result = await llm_call(
+        messages, tracker, temperature, max_tokens,
+        require_json=False,
+        role=role, task_id=task_id, user_id=user_id,
+    )
     if isinstance(result, DegradedResponse):
         return result
     return str(result) if result is not None else ""
@@ -533,10 +727,20 @@ async def llm_call_json(
     tracker: CostTracker,
     temperature: float = 0.0,
     max_tokens: int = 256,
+    role: str | None = None,
+    task_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict | DegradedResponse:
     """Call LLM and return parsed JSON dict, or DegradedResponse on full
-    cascade failure. Callers should `isinstance(x, dict)` before consuming."""
-    result = await llm_call(messages, tracker, temperature, max_tokens, require_json=True)
+    cascade failure. Callers should `isinstance(x, dict)` before consuming.
+
+    ``role`` selects a role-specific provider chain (see ROLE_CHAINS).
+    """
+    result = await llm_call(
+        messages, tracker, temperature, max_tokens,
+        require_json=True,
+        role=role, task_id=task_id, user_id=user_id,
+    )
     if isinstance(result, dict):
         return result
     return DegradedResponse()
@@ -547,14 +751,24 @@ async def llm_call_json_str(
     tracker: CostTracker,
     temperature: float = 0.0,
     max_tokens: int = 256,
+    role: str | None = None,
+    task_id: str | None = None,
+    user_id: str | None = None,
 ) -> str:
     """Provider-native JSON mode. Returns a clean JSON *string* (parseable
     by `json.loads` with no fence stripping or regex recovery), or "" when
-    every provider failed. Used by the proactive cascade adapter."""
-    if tracker.exceeded or not MODEL_CHAIN:
+    every provider failed. Used by the proactive cascade adapter.
+
+    ``role`` selects a role-specific provider chain (see ROLE_CHAINS).
+    """
+    if tracker.exceeded:
         return ""
 
-    for model_cfg in MODEL_CHAIN:
+    chain = _chain_for_role(role)
+    if not chain:
+        return ""
+
+    for model_cfg in chain:
         for attempt in range(2):
             if tracker.exceeded:
                 return ""
@@ -566,6 +780,25 @@ async def llm_call_json_str(
                     in_tok, out_tok,
                     model_cfg["cost_input"], model_cfg["cost_output"],
                 )
+
+                # Audit trail (cop-out #14).
+                cost_in = float(model_cfg.get("cost_input", 0.0) or 0.0)
+                cost_out = float(model_cfg.get("cost_output", 0.0) or 0.0)
+                cost_usd = (in_tok / 1000.0) * cost_in + (out_tok / 1000.0) * cost_out
+                try:
+                    await log_paid_call(
+                        provider=str(model_cfg.get("name", "unknown")),
+                        model=str(model_cfg.get("model", "")),
+                        input_tokens=in_tok,
+                        output_tokens=out_tok,
+                        cost_usd=cost_usd,
+                        role=role,
+                        task_id=task_id,
+                        user_id=user_id,
+                    )
+                except Exception:
+                    logger.debug("cost_watch log raised; ignoring", exc_info=True)
+
                 if not text:
                     continue
                 stripped = _strip_json(text)

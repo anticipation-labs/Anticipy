@@ -32,6 +32,14 @@ DEEPSEEK_API_KEY: str = os.environ.get("DEEPSEEK_API_KEY", "")
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "")
 KIMI_API_KEY: str = os.environ.get("KIMI_API_KEY", "")
+# Mistral La Plateforme — used for the Critic role (Pixtral 12B,
+# vision-capable). Different family from the planner/executor so role
+# diversity is preserved.
+MISTRAL_API_KEY: str = os.environ.get("MISTRAL_API_KEY", "")
+# Cerebras — used for the Executor role (very low-latency Llama hosted on
+# wafer-scale silicon). Different family from the planner/critic so role
+# diversity is preserved.
+CEREBRAS_API_KEY: str = os.environ.get("CEREBRAS_API_KEY", "")
 
 # --- CAPTCHA solving ---
 CAPSOLVER_API_KEY: str = os.environ.get("CAPSOLVER_API_KEY", "")
@@ -203,6 +211,148 @@ def _build_model_chain() -> list[dict]:
 
 
 MODEL_CHAIN = _build_model_chain()
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Role-based chains — multi-agent diversity.
+#
+# Quality research (Online-Mind2Web, WebArena SOTA) shows scaffolding > model
+# capability and that single-model self-critique degenerates: the same model
+# rationalizes the same errors. Different families per role break the
+# rationalization loop.
+#
+# Role assignments (each role's PRIMARY then FALLBACK):
+#   planner   : Gemini 2.5 Flash       → Cerebras Llama 3.3 70b → Groq Llama
+#   critic    : Pixtral 12B (Mistral)  → Gemini 2.5 Flash       → Groq Llama
+#   reflector : Gemini 2.5 Flash       → Cerebras Llama 3.3 70b → Kimi
+#   executor  : Cerebras Llama 3.3 70b → Pixtral 12B (Mistral)  → Groq Llama
+#
+# When the primary for a role is not configured (no key), we fall through
+# in role order to the next configured provider rather than collapsing to a
+# single chain — preserves diversity even with partial keys.
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def _provider_gemini() -> dict | None:
+    if not GOOGLE_API_KEY:
+        return None
+    return {
+        "name": "gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta",
+        "api_key": GOOGLE_API_KEY,
+        "model": "gemini-2.5-flash",
+        "cost_input": 0.0001,
+        "cost_output": 0.0004,
+        "min_interval_seconds": 0.0,
+    }
+
+
+def _provider_groq() -> dict | None:
+    if not GROQ_API_KEY:
+        return None
+    return {
+        "name": "groq",
+        "base_url": "https://api.groq.com/openai/v1",
+        "api_key": GROQ_API_KEY,
+        "model": "llama-3.3-70b-versatile",
+        "cost_input": 0.00059,
+        "cost_output": 0.00079,
+        "min_interval_seconds": 0.0,
+    }
+
+
+def _provider_kimi() -> dict | None:
+    if not KIMI_API_KEY:
+        return None
+    return {
+        "name": "kimi",
+        "base_url": "https://api.moonshot.ai/v1",
+        "api_key": KIMI_API_KEY,
+        "model": "moonshot-v1-128k",
+        "cost_input": 0.0006,
+        "cost_output": 0.0024,
+        "min_interval_seconds": 0.0,
+    }
+
+
+def _provider_mistral_pixtral() -> dict | None:
+    """Mistral La Plateforme — Pixtral 12B free tier. Vision-capable."""
+    if not MISTRAL_API_KEY:
+        return None
+    return {
+        "name": "mistral",
+        "base_url": "https://api.mistral.ai/v1",
+        "api_key": MISTRAL_API_KEY,
+        "model": "pixtral-12b-2409",
+        "cost_input": 0.0,    # free tier
+        "cost_output": 0.0,
+        "min_interval_seconds": 1.2,  # free tier ~1 req/sec
+    }
+
+
+def _provider_cerebras() -> dict | None:
+    """Cerebras inference — extremely low-latency Llama. OpenAI-compat."""
+    if not CEREBRAS_API_KEY:
+        return None
+    return {
+        "name": "cerebras",
+        "base_url": "https://api.cerebras.ai/v1",
+        "api_key": CEREBRAS_API_KEY,
+        "model": "llama-3.3-70b",
+        "cost_input": 0.0,    # free tier as of 2026-05
+        "cost_output": 0.0,
+        "min_interval_seconds": 0.0,
+    }
+
+
+def _filter_none(*entries: dict | None) -> list[dict]:
+    return [e for e in entries if e is not None]
+
+
+def _build_role_chains() -> dict[str, list[dict]]:
+    """Order each role chain so the primary is FIRST. Fallbacks follow.
+
+    A role chain that becomes empty (no providers configured at all)
+    falls back to ``MODEL_CHAIN`` at runtime via ``_chain_for_role``.
+    """
+    return {
+        "planner": _filter_none(
+            _provider_gemini(),
+            _provider_cerebras(),
+            _provider_groq(),
+            _provider_kimi(),
+        ),
+        "critic": _filter_none(
+            _provider_mistral_pixtral(),
+            _provider_gemini(),
+            _provider_groq(),
+            _provider_kimi(),
+        ),
+        "reflector": _filter_none(
+            _provider_gemini(),
+            _provider_cerebras(),
+            _provider_kimi(),
+            _provider_groq(),
+        ),
+        "executor": _filter_none(
+            _provider_cerebras(),
+            _provider_mistral_pixtral(),
+            _provider_groq(),
+            _provider_gemini(),
+        ),
+    }
+
+
+ROLE_CHAINS: dict[str, list[dict]] = _build_role_chains()
+
+
+# --- Cost watch (audit trail) ---
+# Hard cap on month-to-date paid LLM spend per process. Set to 0 to disable
+# the runtime check. The cost watch logs every paid call to Supabase regardless.
+COST_MONTHLY_CAP_USD: float = float(
+    os.environ.get("COST_MONTHLY_CAP_USD", "10.0") or "10.0"
+)
+
 
 # --- Required env vars for production ---
 REQUIRED_ENV_VARS: list[str] = [
