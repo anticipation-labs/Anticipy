@@ -648,6 +648,154 @@ async def _save_cookies(user_id: str, domain: str, cookies: list[dict]) -> None:
         pass
 
 
+def _format_retrieved_examples(trajectories: list[dict]) -> str:
+    """Compact, prompt-safe rendering of past trajectories for RAG.
+
+    One block per row, capped at 3 steps so a 25-step trajectory doesn't
+    blow up the system prompt. Steps that are dicts get a single-line
+    summary; non-dict entries are stringified and truncated. Nothing
+    here mentions a brand or site rule — the planner reads the domain
+    and the action verbs and decides for itself.
+    """
+    if not trajectories:
+        return ""
+    lines: list[str] = []
+    for i, t in enumerate(trajectories[:5], start=1):
+        domain = (t.get("domain") or "").strip() or "(unknown)"
+        summary = (t.get("task_summary") or "").strip()[:160]
+        outcome = (t.get("outcome") or "").strip() or "?"
+        sim = t.get("similarity")
+        sim_s = f"sim={sim:.2f}" if isinstance(sim, (int, float)) else ""
+        header = f"[{i}] domain={domain} {sim_s}".strip()
+        lines.append(header)
+        if summary:
+            lines.append(f"    task: {summary}")
+        steps = t.get("steps") or []
+        for j, s in enumerate(steps[:3], start=1):
+            if isinstance(s, dict):
+                # Action shape from synthetic generator: {"action": "verb", ...}
+                inner = s.get("action") if isinstance(s.get("action"), dict) else s
+                if isinstance(inner, dict):
+                    verb = inner.get("action") or "step"
+                    extra_keys = [k for k in ("url", "selector", "text", "field")
+                                   if inner.get(k)]
+                    extras = " ".join(
+                        f"{k}={str(inner.get(k))[:40]!r}"
+                        for k in extra_keys[:2]
+                    )
+                    lines.append(f"    {j}. {verb} {extras}".rstrip())
+                    continue
+            lines.append(f"    {j}. {str(s)[:80]}")
+        if outcome and outcome != "success":
+            lines.append(f"    outcome={outcome}")
+    return "\n".join(lines)
+
+
+def _format_wearer_memories(memories: list) -> str:
+    """Compact rendering of relevant Memory rows for the system prompt.
+
+    `memories` is a list of app.memory.Memory dataclasses (the dict-based
+    in-memory or hydrated SupabaseMemoryBackend output). We render kind +
+    key + the most useful value fields, capped at MEMORY_MAX_CHARS each.
+    """
+    if not memories:
+        return ""
+    lines: list[str] = []
+    for m in memories[:8]:
+        kind = getattr(m, "kind", "") or "?"
+        key = getattr(m, "key", "") or "?"
+        value = getattr(m, "value", {}) or {}
+        # Pick a stable subset of likely-useful fields, but don't enforce
+        # a schema — different kinds carry different shapes.
+        if isinstance(value, dict):
+            display_pairs = []
+            for k in ("name", "relation", "what", "with_whom", "when",
+                      "address", "value", "topic", "content", "notes",
+                      "status", "kind_of_place"):
+                v = value.get(k)
+                if v in (None, "", [], {}):
+                    continue
+                display_pairs.append(f"{k}={v}")
+                if len(display_pairs) >= 4:
+                    break
+            display = "; ".join(display_pairs) or str(value)
+        else:
+            display = str(value)
+        lines.append(f"- ({kind}) {key}: {display}"[:280])
+    return "\n".join(lines)
+
+
+async def _retrieve_context_for(
+    user_id: str | None, goal: str,
+) -> tuple[str, str]:
+    """Pull RAG examples + wearer memories for `goal`.
+
+    Returns a tuple of (examples_block, memories_block) — empty strings
+    if nothing relevant, so the caller can decide whether to inject.
+
+    Bounded by an 8s wall-clock so a slow embedding round-trip never
+    blocks task start. Embeddings + RPCs degrade silently to empty.
+    """
+    if not user_id or not goal:
+        return ("", "")
+    examples_block = ""
+    memories_block = ""
+
+    async def _fetch() -> tuple[str, str]:
+        # Local imports keep these as soft dependencies — the engine
+        # boots and runs even if these modules error at import time.
+        from app.trajectory_cache import get_few_shot_examples
+        from app.memory import make_memory_store
+
+        try:
+            examples = await get_few_shot_examples(user_id, goal, k=3)
+        except Exception:
+            logger.debug("few-shot retrieval failed", exc_info=True)
+            examples = []
+        try:
+            store = make_memory_store()
+            mems = await store.search(user_id, goal, k=5)
+        except Exception:
+            logger.debug("memory search failed", exc_info=True)
+            mems = []
+
+        return (
+            _format_retrieved_examples(examples),
+            _format_wearer_memories(mems),
+        )
+
+    try:
+        examples_block, memories_block = await asyncio.wait_for(_fetch(), timeout=8)
+    except asyncio.TimeoutError:
+        logger.debug("retrieval timed out at 8s; running without RAG context")
+    except Exception:
+        logger.debug("retrieval errored", exc_info=True)
+    return (examples_block, memories_block)
+
+
+def _build_system_rules_with_context(
+    examples_block: str, memories_block: str,
+) -> str:
+    """Compose the agent's system extension. Only injects blocks that
+    are non-empty so the prompt isn't polluted with empty headers."""
+    parts: list[str] = [_AGENT_SYSTEM_RULES]
+    if examples_block:
+        parts.append(
+            "<retrieved_examples>\n"
+            "Past tasks like this one (for shape only — adapt to the current request):\n"
+            f"{examples_block}\n"
+            "</retrieved_examples>"
+        )
+    if memories_block:
+        parts.append(
+            "<wearer_memories>\n"
+            "Things the wearer has told you about their world (use ONLY when relevant):\n"
+            f"{memories_block}\n"
+            "</wearer_memories>"
+        )
+    return "\n\n".join(parts)
+
+
 async def _send_status(send: SendFn, message: str) -> None:
     await send({"type": "status", "message": message})
 
@@ -977,6 +1125,19 @@ class EngineAgent:
             if start_url and not start_url.startswith("https://www.google.com/search"):
                 task = f"Go to {start_url} and {self.goal}"
 
+            # --- Retrieval-augmented system prompt (RAG) ---
+            # Pull semantically-similar past trajectories + wearer memories
+            # so the planner has shape-of-task examples and personal context.
+            # Only injected for authenticated users (user_id is required for
+            # both lookups). Bounded by an 8s wall-clock so retrieval never
+            # blocks task start; falls through to plain rules on any failure.
+            examples_block, memories_block = await _retrieve_context_for(
+                self.user_id, self.goal,
+            )
+            system_extension = _build_system_rules_with_context(
+                examples_block, memories_block,
+            )
+
             # --- Create Browser Use agent ---
             await _send_status(self.send, msg.TASK_NAVIGATING)
 
@@ -995,7 +1156,7 @@ class EngineAgent:
                 generate_gif=False,
                 enable_planning=True,
                 loop_detection_enabled=True,
-                extend_system_message=_AGENT_SYSTEM_RULES,
+                extend_system_message=system_extension,
             )
 
             # --- Run with hard timeout ---
