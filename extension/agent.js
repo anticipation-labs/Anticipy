@@ -2,14 +2,19 @@
 // Takes a confirmed intent and executes it step-by-step using LLM decisions + DOM actions
 // No localhost server required — runs entirely in the extension using the user's real browser.
 
-// Executor LLM endpoints. Primary: Cerebras Qwen3-235B (free 1M tokens/day,
-// 30 RPM, ~250ms latency, no JSON-mode parsing overhead). Fallback: Kimi
-// moonshot-v1-128k (paid Moonshot, when funded). The agent tries Cerebras
-// first; on any Cerebras error or 429 it falls through to Kimi. The
-// Verifier/Critic/Reflector at anticipy.ai/api/agent/* use the same
-// fallback chain via @/lib/agent-llm.
+// Executor LLM endpoints. Three free tiers + paid fallback:
+//   1. Cerebras Qwen3-235B  — 1M tok/day, 30 RPM, ~250ms latency
+//   2. Groq llama-3.3-70b   — 14400 RPD, 30 RPM (separate quota pool)
+//   3. Gemini 2.5 Flash     — 1500 RPD (when AI Studio cap allows; vision-capable)
+//   4. Kimi moonshot-v1-128k — paid Moonshot fallback
+// Each tier has its own per-minute quota. By rotating across tiers we
+// effectively get 90+ RPM combined, vs the 30 RPM of any single tier.
+// The agent tries them in order; on 429 of one tier, the next call goes
+// to the next tier with quota available.
 const CEREBRAS_API_URL = "https://api.cerebras.ai/v1/chat/completions";
 const CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 const KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions";
 
 const MAX_STEPS = 60;
@@ -1342,13 +1347,15 @@ export class BrowserAgent {
     // for any non-quota reason, we fall through to Kimi immediately. If
     // both exhaust, surface ai_unavailable.
     const hasCerebras = !!this.apiConfig?.cerebrasApiKey;
-    const hasKimi = !!this.apiConfig?.kimiApiKey;
-    if (!hasCerebras && !hasKimi) {
-      throw new Error("No LLM keys configured (need CEREBRAS_API_KEY or KIMI_API_KEY).");
+    const hasGroq     = !!this.apiConfig?.groqApiKey;
+    const hasKimi     = !!this.apiConfig?.kimiApiKey;
+    if (!hasCerebras && !hasGroq && !hasKimi) {
+      throw new Error("No LLM keys configured (need CEREBRAS, GROQ or KIMI).");
     }
 
     const tiers = [];
     if (hasCerebras) tiers.push({ name: "cerebras", fn: () => this._callCerebras(userMessage) });
+    if (hasGroq)     tiers.push({ name: "groq",     fn: () => this._callGroq(userMessage) });
     if (hasKimi)     tiers.push({ name: "kimi",     fn: () => this._callKimi(userMessage) });
 
     const MAX_ATTEMPTS = 4;
@@ -1494,8 +1501,42 @@ export class BrowserAgent {
     return this._parseJSON(content);
   }
 
-  // moonshot-v1-128k — Executor fallback. Used when Cerebras is down or
-  // out of free quota. Same JSON-only output contract.
+  /**
+   * Groq llama-3.3-70b-versatile — second free tier. 14400 RPD, 30 RPM,
+   * ~500ms latency. Separate quota pool from Cerebras. Used when
+   * Cerebras 429s. JSON mode supported.
+   */
+  async _callGroq(userMessage) {
+    const system = await this._buildSystemPrompt();
+    const resp = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${this.apiConfig.groqApiKey}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.1,
+        max_tokens: 2400,
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => String(resp.status));
+      throw new Error(`Groq ${resp.status}: ${body.substring(0, 200)}`);
+    }
+    const data = await resp.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Empty response from Groq");
+    return this._parseJSON(content);
+  }
+
+  // moonshot-v1-128k — Executor fallback. Used when Cerebras+Groq are
+  // exhausted. Same JSON-only output contract.
   async _callKimi(userMessage) {
     const system = await this._buildSystemPrompt();
     const resp = await fetch(KIMI_API_URL, {
