@@ -9,7 +9,7 @@
  * No LLM calls, no API keys. The server validates the code and holds keys.
  */
 const DEFAULT_AUTH_URL = "https://anticipy.ai/api/extension/auth";
-const DEFAULT_WS_URL = "wss://anticipy.ai/ws/agent";
+const DEFAULT_WS_URL = "wss://anticipy-production.up.railway.app/ws/agent";
 
 const $ = (id) => document.getElementById(id);
 

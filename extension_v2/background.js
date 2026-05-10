@@ -12,7 +12,7 @@
  *   4. Keepalive ping every 25s to defeat MV3 service-worker eviction.
  *   5. Reconnect with exponential backoff if the socket drops.
  */
-const DEFAULT_SERVER_URL = "wss://anticipy.ai/ws/agent";
+const DEFAULT_SERVER_URL = "wss://anticipy-production.up.railway.app/ws/agent";
 const KEEPALIVE_MS = 25_000;
 const MAX_BACKOFF_MS = 30_000;
 
