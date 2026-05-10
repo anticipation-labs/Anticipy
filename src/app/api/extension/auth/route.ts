@@ -47,7 +47,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing access code" }, { status: 400, headers: corsHeaders });
   }
 
-  const trimmedCode = code.trim();
+  // Codes are stored lowercase in engine_users.access_code. Normalize
+  // the incoming string so "77C04C26" and "77c04c26" both authenticate.
+  const trimmedCode = code.trim().toLowerCase();
 
   // Per-code daily ceiling. If a code leaks, the attacker can't infinitely
   // burn the team's shared LLM-key quota — they get cut off at 200/day.

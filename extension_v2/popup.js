@@ -96,18 +96,17 @@ async function refresh() {
 
 // ─── Wiring ──────────────────────────────────────────────────────────────
 $("auth-btn").addEventListener("click", async () => {
-  // Codes are stored lowercase in engine_users.access_code — normalize so
-  // "77C04C26" and "77c04c26" both work.
-  const code = $("code-input").value.trim().toLowerCase();
+  const code = $("code-input").value.trim();
+  const serverUrl = $("server-input").value.trim();
   const errEl = $("auth-error");
   errEl.hidden = true;
   if (!code) { errEl.textContent = "Enter your access code"; errEl.hidden = false; return; }
   $("auth-btn").disabled = true;
   try {
-    await authenticate(code, "");  // server URL is auto-set to the Railway default
+    await authenticate(code, serverUrl);
     await refresh();
   } catch (err) {
-    errEl.textContent = err.message || "Auth failed — try again";
+    errEl.textContent = err.message || "Auth failed";
     errEl.hidden = false;
   } finally {
     $("auth-btn").disabled = false;
