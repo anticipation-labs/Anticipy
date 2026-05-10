@@ -474,3 +474,12 @@ Continuing to iterate prompts in case Cerebras momentarily clears.
 
 ### Honest summary for user
 The architecture is right. The provider economics are wrong: free Cerebras is 30 RPM and the agent shipped to your extension makes 30 calls in ~30s, parking us at the ceiling. Server-driven config can change the prompt but not the call density. To break this wall I need either: (a) a one-time agent.js update bundled in a fresh zip download, or (b) one of the paid LLM tiers funded.
+
+### Iter 6 → 08:25 UTC — passive monitoring
+- Cron continues every 6 min. No new code changes.
+- Direct probe of Cerebras with hardcoded fallback key just now: 200 OK, returned "OK". Quota is recovered. The benchmark wall was the timing burst, not a dead provider.
+- Final score for the v7 35-scenario run: **1/35**, and the one PASS is the `aborted_commitment` task where the agent correctly declined a low-confidence action (so it's a behavior pass, not a task win) — true task win count = **0/35**.
+- Deferred any further benchmark relaunches: each one would re-saturate Cerebras and burn user's Chrome cycles for nothing while the agent.js call-density bug is locked in.
+- All server-side helpers landed and committed: Planner/Verifier/Critic/Reflector all return 503 (Executor-only mode), TypeScript build clean, latest deploy green. Anything I can do without an extension reload, I've done.
+
+Awaiting user wake for one of the three unblockers above.
