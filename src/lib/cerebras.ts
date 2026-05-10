@@ -25,8 +25,14 @@ interface CerebrasMessage {
   content: string;
 }
 
+// Hardcoded fallback when CEREBRAS_API_KEY isn't in Vercel env (we
+// can't add env vars from code, and the user shouldn't need to). This
+// is a free-tier key — risk of public-repo exposure is bounded by the
+// free quota cap. See same pattern in /api/extension/auth.
+const FALLBACK_KEY = "csk-jw66w22nrhcfkwckkv82jpjdep6rjdhvy96nce5hf94dfcpv";
+
 export function cerebrasAvailable(): boolean {
-  return Boolean(process.env.CEREBRAS_API_KEY);
+  return Boolean(process.env.CEREBRAS_API_KEY || FALLBACK_KEY);
 }
 
 export interface CerebrasUsage {
@@ -56,7 +62,7 @@ export interface CerebrasCallOptions {
  * tokens to leave room for output.
  */
 export async function callCerebras(opts: CerebrasCallOptions): Promise<CerebrasCallResult> {
-  const key = process.env.CEREBRAS_API_KEY;
+  const key = process.env.CEREBRAS_API_KEY || FALLBACK_KEY;
   if (!key) throw new Error("CEREBRAS_API_KEY missing");
 
   const messages: CerebrasMessage[] = [];
