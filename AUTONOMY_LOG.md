@@ -393,3 +393,14 @@ User asleep, gave 6 hours, expects engine working end-to-end by morning.
 - Cerebras 30 RPM, 1M tokens/day — primary
 - Kimi/Gemini/DeepSeek all unavailable
 - => Heavy reliance on Cerebras quota; need to keep call density low
+
+### Iter 1 → diagnosis (06:15 UTC)
+- Cerebras 30 RPM → real bottleneck. Verifier route was doubling pressure on same pool.
+- Per-task budget exceeding Cerebras 1M/day token cap due to multi-agent overhead.
+
+### Fix pushed (commit ddad238)
+- Disabled /api/agent/verify, /critic, /reflect (return 503 — agent gracefully runs without them)
+- Shrank agent-config system_prompt from ~3K → ~1K tokens (same rules, terser)
+- Now: 1 LLM call per step. ~30 calls/task × 25 tasks × 1.5K tokens = ~1.1M tokens (just over Cerebras cap, acceptable risk)
+
+### v4 benchmark launching
