@@ -99,6 +99,13 @@ export async function POST(req: Request) {
   if (!ipLimit.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: CORS });
   }
+  // Disabled — saves 1 Cerebras call per task. Extension's _planTask
+  // catches 503 and runs plan-less, which is fine on simple tasks.
+  // Re-enable when we have a separate quota pool for the planner.
+  return NextResponse.json(
+    { error: "Planner disabled — Executor only" },
+    { status: 503, headers: CORS }
+  );
 
   if (!agentLLMAvailable()) {
     return NextResponse.json(
