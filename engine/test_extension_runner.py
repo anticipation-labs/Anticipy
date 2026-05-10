@@ -491,8 +491,10 @@ async def main() -> int:
                 # task fails immediately. 12s/scenario × 25 = +5min total
                 # — small price for stable measurement.
                 if scenario_idx > 0:
-                    print(f"  (cooldown 75s before next scenario)", flush=True)
-                    await asyncio.sleep(75.0)
+                    # 90s ensures Cerebras's 30 RPM rolling window fully
+                    # clears before the next task starts its burst.
+                    print(f"  (cooldown 90s before next scenario)", flush=True)
+                    await asyncio.sleep(90.0)
                 print(f"\n== scenario: {scenario['name']}", flush=True)
                 print(f"  task: {scenario['task']}", flush=True)
                 t0 = time.time()
