@@ -293,6 +293,13 @@ MAX_WS_CONCURRENT_PER_IP: int = 10
 _ws_connections_by_user: dict[str, int] = defaultdict(int)
 _ws_connections_by_ip: dict[str, int] = defaultdict(int)
 
+# user_id -> WSBridge for currently-connected /ws/agent extensions. The
+# /admin/trigger-task HTTP endpoint uses this to inject tasks into a
+# user's extension without them typing into the popup. Registered on
+# successful auth, unregistered on disconnect.
+_active_agent_bridges: dict[str, "WSBridge"] = {}
+_active_orchestrator_runners: dict[str, callable] = {}
+
 
 def _ws_connection_admit(user_id: str | None, ip: str) -> str | None:
     """Admit a new WS connection. Returns None on success, an error string
@@ -497,6 +504,56 @@ async def me(token: str):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/admin/trigger-task")
+async def admin_trigger_task(req: Request):
+    """Inject a task into a connected /ws/agent extension without user
+    interaction. Used for autonomous benchmark runs from the codespace
+    to the user's actual Chrome.
+
+    Body JSON: {user_id: str, task: str, secret: str, task_id?: str}
+    The secret must match ADMIN_TRIGGER_SECRET (env var) — falls back to
+    JWT_SECRET so we never accept an unauthenticated trigger.
+
+    Returns 200 if the task was queued onto the user's bridge; 404 if no
+    extension is currently connected for that user_id.
+    """
+    try:
+        body = await req.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object")
+
+    secret = str(body.get("secret") or "")
+    expected = os.environ.get("ADMIN_TRIGGER_SECRET") or os.environ.get("JWT_SECRET") or ""
+    if not expected or secret != expected:
+        raise HTTPException(status_code=401, detail="Invalid admin secret")
+
+    user_id = str(body.get("user_id") or "").strip()
+    task = str(body.get("task") or "").strip()
+    if not user_id or not task:
+        raise HTTPException(status_code=400, detail="user_id and task required")
+
+    runner = _active_orchestrator_runners.get(user_id)
+    bridge = _active_agent_bridges.get(user_id)
+    if runner is None or bridge is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No connected extension for user_id={user_id}",
+        )
+
+    task_id = str(body.get("task_id") or uuid.uuid4())
+    # Notify the extension popup that a task is starting (mirrors the
+    # in-band task_start flow). The extension's popup ui watches for these.
+    try:
+        await bridge.stream_step(0, f"Starting: {task[:120]}")
+    except Exception:
+        pass
+    # Spawn the orchestrator on the user's bridge.
+    asyncio.create_task(runner(task, task_id))
+    return {"ok": True, "user_id": user_id, "task_id": task_id, "task": task}
 
 
 # --- Admin stats endpoint (V66) ---
@@ -1157,6 +1214,14 @@ async def ws_agent(websocket: WebSocket):
     bridge = WSBridge(websocket)
     bg_task: asyncio.Task | None = None
 
+    # Register this active bridge so the /admin/trigger-task endpoint can
+    # inject a task into the user's connected extension without the user
+    # typing into the popup. Used for autonomous benchmark runs.
+    _active_agent_bridges[user_id] = bridge
+    # Also register the runner function so the admin endpoint can spawn
+    # a task using the same code path as the in-band task_start flow.
+    # (The runner is defined just below; we re-register after definition.)
+
     async def _run_orchestrator(task_text: str, task_id: str) -> None:
         global _total_tasks, _total_errors
         try:
@@ -1187,6 +1252,9 @@ async def ws_agent(websocket: WebSocket):
                 )
             except Exception:
                 pass
+
+    # Now that _run_orchestrator is defined, register it for admin trigger.
+    _active_orchestrator_runners[user_id] = _run_orchestrator
 
     try:
         while True:
@@ -1341,4 +1409,8 @@ async def ws_agent(websocket: WebSocket):
                 await bg_task
             except (asyncio.CancelledError, Exception):
                 pass
+        # Unregister this bridge from the admin-trigger registry.
+        if admitted_user_id and _active_agent_bridges.get(admitted_user_id) is bridge:
+            _active_agent_bridges.pop(admitted_user_id, None)
+            _active_orchestrator_runners.pop(admitted_user_id, None)
         _ws_connection_release(admitted_user_id, admitted_ip)
