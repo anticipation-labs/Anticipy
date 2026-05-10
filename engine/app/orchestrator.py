@@ -626,6 +626,11 @@ async def run_task(
     pending_nudge: str | None = None
     last_done_payload: dict | None = None
     last_done_message: str = ""
+    # Hard-cap pivots. Reflector resetting consecutive_no_progress=0 each
+    # pivot can otherwise loop forever. After 2 pivots without success
+    # we abort hard.
+    reflector_pivots_used = 0
+    MAX_PIVOTS = 2
 
     step_idx = 0
     while True:
@@ -667,6 +672,15 @@ async def run_task(
                 await _stream(step_idx, decision.reason)
                 break
             if consecutive_no_progress >= 2:
+                if reflector_pivots_used >= MAX_PIVOTS:
+                    # Hard stop — keep going past 2 pivots = wasted LLM calls.
+                    return TaskOutcome(
+                        success=False,
+                        message="Couldn't make progress after 2 pivots. Stopping.",
+                        task_kind=task_kind,
+                        steps_taken=step_idx,
+                        aborted_reason="max_pivots",
+                    ).to_dict()
                 outcome = await _maybe_reflect(
                     task=task,
                     plan=plan,
@@ -686,6 +700,7 @@ async def run_task(
                             aborted_reason="reflector_abort",
                         ).to_dict()
                     consecutive_no_progress = 0
+                    reflector_pivots_used += 1
             continue
 
         verb = str(action.get("action") or "").lower()
@@ -772,6 +787,14 @@ async def run_task(
 
         # Reflection after 2 consecutive no_progress.
         if consecutive_no_progress >= 2:
+            if reflector_pivots_used >= MAX_PIVOTS:
+                return TaskOutcome(
+                    success=False,
+                    message="Couldn't make progress after 2 pivots. Stopping.",
+                    task_kind=task_kind,
+                    steps_taken=step_idx,
+                    aborted_reason="max_pivots",
+                ).to_dict()
             ref_outcome = await _maybe_reflect(
                 task=task,
                 plan=plan,
@@ -791,6 +814,7 @@ async def run_task(
                         aborted_reason="reflector_abort",
                     ).to_dict()
                 consecutive_no_progress = 0
+                reflector_pivots_used += 1
 
     # ── 4. End-state verification ──────────────────────────────────────
     try:

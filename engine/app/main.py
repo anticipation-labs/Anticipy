@@ -299,6 +299,10 @@ _ws_connections_by_ip: dict[str, int] = defaultdict(int)
 # successful auth, unregistered on disconnect.
 _active_agent_bridges: dict[str, "WSBridge"] = {}
 _active_orchestrator_runners: dict[str, callable] = {}
+# Tracks the running orchestrator asyncio.Task per user so the admin
+# /trigger-task endpoint can refuse concurrent triggers and avoid two
+# orchestrators racing on the same bridge.
+_active_bg_tasks: dict[str, asyncio.Task] = {}
 
 
 def _ws_connection_admit(user_id: str | None, ip: str) -> str | None:
@@ -544,6 +548,15 @@ async def admin_trigger_task(req: Request):
             detail=f"No connected extension for user_id={user_id}",
         )
 
+    # Reject if a task is already running for this user — two orchestrators
+    # on the same bridge would race on cmdId and confuse the extension.
+    active = _active_bg_tasks.get(user_id)
+    if active is not None and not active.done():
+        raise HTTPException(
+            status_code=409,
+            detail="A task is already running for this user. Cancel it first.",
+        )
+
     task_id = str(body.get("task_id") or uuid.uuid4())
     # Notify the extension popup that a task is starting (mirrors the
     # in-band task_start flow). The extension's popup ui watches for these.
@@ -551,8 +564,25 @@ async def admin_trigger_task(req: Request):
         await bridge.stream_step(0, f"Starting: {task[:120]}")
     except Exception:
         pass
-    # Spawn the orchestrator on the user's bridge.
-    asyncio.create_task(runner(task, task_id))
+    # Spawn the orchestrator on the user's bridge with a hard 240s wall-clock
+    # timeout. Even if the multi-agent loop gets stuck in reflector-pivot
+    # cycles, this guarantees we return + write a trajectory.
+    async def _wrapped():
+        try:
+            await asyncio.wait_for(runner(task, task_id), timeout=240)
+        except asyncio.TimeoutError:
+            logger.warning("admin trigger task %s hit 240s wall-clock cap", task_id)
+            try:
+                await bridge.emit_done(
+                    success=False,
+                    message="Task ran 4 minutes without finishing — likely stuck in a loop. Stopping.",
+                )
+            except Exception:
+                pass
+        finally:
+            _active_bg_tasks.pop(user_id, None)
+    bg = asyncio.create_task(_wrapped())
+    _active_bg_tasks[user_id] = bg
     return {"ok": True, "user_id": user_id, "task_id": task_id, "task": task}
 
 
