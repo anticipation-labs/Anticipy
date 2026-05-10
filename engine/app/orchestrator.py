@@ -210,7 +210,18 @@ Your ONE output is a JSON action. The bridge supports these primitives:
 
 Rules:
   - Output STRICT JSON only — no markdown, no commentary.
-  - Use real CSS selectors visible in the DOM snippet (avoid XPath).
+  - Selectors are PURE CSS only. Browser `querySelector` is the engine —
+    jQuery selectors will fail silently. Specifically:
+      * NO `:contains("text")` — that's jQuery, not CSS.
+      * NO `:has(... :contains(...))` chains.
+    For text-targeting, prefer extracting a LARGER container (e.g.
+    `.infobox` or `#mw-content-text`) and rely on the returned visible
+    text. The "extract" action returns ALL visible text inside the
+    selector — you can scan that text for the value you need before
+    emitting `done`.
+  - When you reach a page that has the answer, use a SINGLE broad
+    extract on a parent container, then go straight to `done` with the
+    answer pulled from the returned text.
   - When the task is fact-finding, your "done" payload MUST include the
     answer and any required_facts the planner declared.
   - When the task involves an effect (sending, posting, adding), your
