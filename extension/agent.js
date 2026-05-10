@@ -1498,21 +1498,64 @@ export class BrowserAgent {
   }
 
   /**
-   * Build the system prompt with accumulated Reflexion lessons prepended.
-   * Used by both _callCerebras and _callKimi so we have a single source
-   * of truth for prompt assembly.
+   * Build the system prompt. Fetches the LATEST AGENT_SYSTEM_PROMPT from
+   * /api/extension/agent-config (server-driven so we can iterate prompts
+   * without forcing extension reloads). Caches for 60s. Falls back to
+   * the bundled prompt if the endpoint is unreachable. Reflexion lessons
+   * prepend regardless.
    */
   async _buildSystemPrompt() {
+    const remote = await this._fetchAgentConfig();
+    const basePrompt = remote?.system_prompt || AGENT_SYSTEM_PROMPT;
     const lessons = await this._loadLessons();
-    if (lessons.length === 0) return AGENT_SYSTEM_PROMPT;
+    if (lessons.length === 0) return basePrompt;
     const lessonBlock = lessons
       .map((l, i) => `  ${i + 1}. ${l.lesson}${l.outcome === "failure" ? " (avoid)" : " (repeat)"}`)
       .join("\n");
     return (
       `LESSONS FROM RECENT TASKS (read these first; ignore lessons that don't apply to the current task):\n` +
       `${lessonBlock}\n\n` +
-      AGENT_SYSTEM_PROMPT
+      basePrompt
     );
+  }
+
+  /**
+   * Fetch the server-side runtime config (system prompt, tier order,
+   * spacing, feature flags). Cached for 60s on the instance. Best-effort
+   * — failures fall back to bundled defaults so the agent still runs.
+   */
+  async _fetchAgentConfig() {
+    if (this._cachedAgentConfig &&
+        (Date.now() - (this._cachedAgentConfigAt || 0)) < 60000) {
+      return this._cachedAgentConfig;
+    }
+    if (!this.accessCode) return null;
+    try {
+      const url = `${this.proxyBaseUrl.replace(/\/$/, "")}/api/extension/agent-config`;
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 8000);
+      let resp;
+      try {
+        resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Anticipy-Code": this.accessCode,
+          },
+          body: JSON.stringify({}),
+          signal: ctl.signal,
+        });
+      } finally {
+        clearTimeout(t);
+      }
+      if (!resp.ok) return this._cachedAgentConfig || null;
+      const data = await resp.json();
+      this._cachedAgentConfig = data;
+      this._cachedAgentConfigAt = Date.now();
+      return data;
+    } catch (_) {
+      return this._cachedAgentConfig || null;
+    }
   }
 
   /**
