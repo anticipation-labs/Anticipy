@@ -12,9 +12,14 @@
 // The agent tries them in order; on 429 of one tier, the next call goes
 // to the next tier with quota available.
 const CEREBRAS_API_URL = "https://api.cerebras.ai/v1/chat/completions";
-const CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";
+const CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507";  // text-only, fast
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// Llama-4-Scout 17B is Groq's vision-capable model on free tier — used
+// for canvas/WebGL/screenshot tasks. Llama-3.3-70B-versatile (text-only)
+// handles the rest. We pick by whether the user message references
+// vision-required action types.
+const GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
+const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions";
 
 const MAX_STEPS = 60;
@@ -1376,10 +1381,19 @@ export class BrowserAgent {
       throw new Error("No LLM keys configured (need CEREBRAS, GROQ or KIMI).");
     }
 
+    // If the task references vision-required action types, prefer Groq
+    // (Llama-4-Scout vision) — Cerebras Qwen3-235B is text-only and
+    // would waste a call.
+    const needsVision = /canvas_pointer|canvas_type|screenshot|VISION HINT/i.test(userMessage);
     const tiers = [];
-    if (hasCerebras) tiers.push({ name: "cerebras", fn: () => this._callCerebras(userMessage) });
-    if (hasGroq)     tiers.push({ name: "groq",     fn: () => this._callGroq(userMessage) });
-    if (hasKimi)     tiers.push({ name: "kimi",     fn: () => this._callKimi(userMessage) });
+    if (needsVision) {
+      if (hasGroq)     tiers.push({ name: "groq",     fn: () => this._callGroq(userMessage) });
+      if (hasCerebras) tiers.push({ name: "cerebras", fn: () => this._callCerebras(userMessage) });
+    } else {
+      if (hasCerebras) tiers.push({ name: "cerebras", fn: () => this._callCerebras(userMessage) });
+      if (hasGroq)     tiers.push({ name: "groq",     fn: () => this._callGroq(userMessage) });
+    }
+    if (hasKimi)       tiers.push({ name: "kimi",     fn: () => this._callKimi(userMessage) });
 
     const MAX_ATTEMPTS = 2;       // Per tier — short retry, then jump
     const MAX_TIER_WAIT_MS = 8000; // If cooldown > 8s, skip this tier
@@ -1418,8 +1432,17 @@ export class BrowserAgent {
         }
       }
     }
-    console.warn(`[Anticipy Agent] all tiers exhausted: ${lastErr?.message || lastErr}`);
-    throw new Error("ai_unavailable");
+    const errStr = String(lastErr?.message || lastErr || "no error captured");
+    console.warn(`[Anticipy Agent] all tiers exhausted: ${errStr}`);
+    // Surface the upstream error directly in chrome.storage as a top-
+    // level key so the test runner can read it. agentStatus gets
+    // rewritten by friendlyAgentMessage so we can't stash there.
+    try {
+      await chrome.storage.local.set({
+        lastUpstreamError: { at: Date.now(), err: errStr.substring(0, 400) },
+      });
+    } catch (_) {}
+    throw new Error(`ai_unavailable: ${errStr.substring(0, 200)}`);
   }
 
   /**
@@ -1493,10 +1516,13 @@ export class BrowserAgent {
   }
 
   /**
-   * Cerebras Qwen3-235B — Executor primary. Free 1M tokens/day, 30 RPM,
-   * ~250ms latency. JSON mode supported. No reasoning_content overhead.
-   * Throws on non-200 with the status code in the message so _callLLM's
-   * 429-detection regex catches throttling.
+   * Cerebras Qwen3-235B — Executor primary FOR TEXT-ONLY tasks.
+   * Free 1M tokens/day, 30 RPM, ~250ms latency. JSON mode supported.
+   *
+   * IMPORTANT: Cerebras has NO vision support. When the user message
+   * references vision-required action types (canvas_pointer, canvas_type,
+   * screenshot context), _callLLM falls through to Groq Llama-4-Scout
+   * (vision-capable) instead.
    */
   async _callCerebras(userMessage) {
     const system = await this._buildSystemPrompt();
@@ -1550,6 +1576,12 @@ export class BrowserAgent {
     const userWithJsonNudge = /\bjson\b/i.test(userMessage)
       ? userMessage
       : userMessage + "\n\n(Output JSON only.)";
+    // Pick the vision-capable Llama 4 Scout when the prompt references
+    // an action type that needs image understanding (canvas / pierce /
+    // explicit screenshot context). Text-only Llama 3.3-70B otherwise —
+    // it's faster and has its own quota window.
+    const needsVision = /canvas_pointer|canvas_type|screenshot|VISION HINT/i.test(userMessage);
+    const model = needsVision ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
     const ctl = new AbortController();
     const t = setTimeout(() => ctl.abort(), 20000);
     let resp;
@@ -1561,7 +1593,7 @@ export class BrowserAgent {
           "Authorization": `Bearer ${this.apiConfig.groqApiKey}`,
         },
         body: JSON.stringify({
-          model: GROQ_MODEL,
+          model,
           messages: [
             { role: "system", content: system },
             { role: "user", content: userWithJsonNudge },
