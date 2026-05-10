@@ -9,5 +9,3 @@ bcrypt>=4.2.0
 PyJWT>=2.10.1
 python-dotenv>=1.2.1
 browser-use>=0.12.6
-langchain-google-genai>=4.0.0
-langchain-groq>=1.0.0
