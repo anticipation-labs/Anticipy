@@ -417,3 +417,16 @@ User asleep, gave 6 hours, expects engine working end-to-end by morning.
 - Bar from user: 100% on HARD real tasks (canvas, multi-step, web geos, deep logic) — not demos
 - He's asleep for ~8 hours
 - Cron loop fires every 6 min to check + iterate
+
+### Iter 3 → diagnosis 07:15 UTC
+- All 25 tasks failing 0 steps / 17s — Cerebras burst saturating 30 RPM ceiling on first call
+- Even with 90s inter-task cooldown, INTRA-task burst of 30 calls fills rolling window
+- Couldn't change agent.js spacing (no extension reload) — only system_prompt is server-driven
+
+### Fixes pushed (commits 3f7dcea + 30b7257)
+- Disabled /api/agent/plan — saves 1 Cerebras call per task
+- Tightened system prompt: "minimize actions, 2-4 steps, never exceed 8" + read-VISIBLE-TEXT-first pattern
+- Expected: tasks complete in 3-5 LLM calls instead of 30 → stays well under RPM
+- Groq daily quota appears reset (responding 200 again to test calls)
+
+### v7 launched 07:18 UTC
