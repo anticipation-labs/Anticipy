@@ -143,7 +143,9 @@ async def daily_total_usd(user_id: str | None = None) -> float:
     if not _client_configured():
         return 0.0
 
-    cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=1)).isoformat()
+    # `+` in URL query strings gets decoded as space by PostgREST, breaking
+    # timestamptz parse. Percent-encode it so the timezone offset survives.
+    cutoff = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=1)).isoformat().replace("+", "%2B")
     url = (
         f"{_supabase_url()}/rest/v1/engine_cost_log"
         f"?select=cost_usd&occurred_at=gte.{cutoff}"
@@ -183,7 +185,7 @@ async def monthly_total_usd(user_id: str | None = None) -> float:
         return 0.0
 
     now = _dt.datetime.now(_dt.timezone.utc)
-    cutoff = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    cutoff = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat().replace("+", "%2B")
     url = (
         f"{_supabase_url()}/rest/v1/engine_cost_log"
         f"?select=cost_usd&occurred_at=gte.{cutoff}"

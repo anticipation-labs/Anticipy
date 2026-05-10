@@ -291,14 +291,18 @@ def _provider_mistral_pixtral() -> dict | None:
 
 
 def _provider_cerebras() -> dict | None:
-    """Cerebras inference — extremely low-latency Llama. OpenAI-compat."""
+    """Cerebras inference — extremely low-latency. OpenAI-compat.
+
+    Verified live 2026-05-10: catalog is gpt-oss-120b, qwen-3-235b-a22b-instruct-2507,
+    zai-glm-4.7, llama3.1-8b. The previous ``llama-3.3-70b`` returned 404.
+    """
     if not CEREBRAS_API_KEY:
         return None
     return {
         "name": "cerebras",
         "base_url": "https://api.cerebras.ai/v1",
         "api_key": CEREBRAS_API_KEY,
-        "model": "llama-3.3-70b",
+        "model": "qwen-3-235b-a22b-instruct-2507",
         "cost_input": 0.0,    # free tier as of 2026-05
         "cost_output": 0.0,
         "min_interval_seconds": 0.0,

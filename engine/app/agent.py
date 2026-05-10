@@ -469,16 +469,25 @@ _ACTION_STATUS_MAP = {
 
 
 def _get_llm():
-    """Return the best available LLM using browser-use's native wrappers."""
-    from browser_use import ChatGoogle, ChatGroq
+    """Return the best available LLM using browser-use's native wrappers.
 
-    google_key = os.environ.get("GOOGLE_API_KEY")
-    if google_key:
-        return ChatGoogle(
-            model="gemini-2.5-flash",
-            api_key=google_key,
+    Order: Cerebras Qwen3-235B (free 1M tokens/day, ~250ms, text-only) →
+    Groq llama-4-scout (free 14400 RPD with 500k TPD ceiling, vision) →
+    Gemini Flash. Cerebras served via ChatOpenAI with base_url override.
+    Note: Cerebras has no vision, so the Agent must be created with
+    use_vision=False when this path is selected.
+    """
+    from browser_use import ChatGoogle, ChatGroq, ChatOpenAI
+
+    cerebras_key = os.environ.get("CEREBRAS_API_KEY")
+    if cerebras_key:
+        return ChatOpenAI(
+            model="qwen-3-235b-a22b-instruct-2507",
+            api_key=cerebras_key,
+            base_url="https://api.cerebras.ai/v1",
             temperature=0.0,
-            thinking_budget=0,
+            frequency_penalty=0.0,
+            max_completion_tokens=2400,
         )
 
     groq_key = os.environ.get("GROQ_API_KEY")
@@ -489,7 +498,26 @@ def _get_llm():
             temperature=0.0,
         )
 
-    raise RuntimeError("No LLM API key found. Set GOOGLE_API_KEY or GROQ_API_KEY.")
+    google_key = os.environ.get("GOOGLE_API_KEY")
+    if google_key:
+        return ChatGoogle(
+            model="gemini-2.5-flash",
+            api_key=google_key,
+            temperature=0.0,
+            thinking_budget=0,
+        )
+
+    raise RuntimeError("No LLM API key found. Set CEREBRAS_API_KEY, GROQ_API_KEY or GOOGLE_API_KEY.")
+
+
+def _llm_supports_vision(llm) -> bool:
+    """Return True if the LLM can accept image inputs.
+
+    Cerebras Qwen3-235B is text-only — passing screenshots breaks it.
+    Groq llama-4-scout and Gemini both support vision.
+    """
+    model = getattr(llm, "model", "") or ""
+    return "qwen-3" not in model.lower()
 
 
 def _sanitize_status(text: str) -> str:
@@ -550,6 +578,116 @@ def _clean_chromium_lock_files(profile_dir: str) -> None:
                 os.remove(p)
         except Exception:
             pass
+
+
+# Module-level guard so _prewarm_chromium() is idempotent across calls.
+# A successful or attempted pre-warm flips this to True; subsequent calls
+# return immediately without re-spawning. Reset only by re-importing the
+# module (or by tests that explicitly clear it).
+_PREWARM_DONE: bool = False
+
+
+def _find_chromium_binary() -> str | None:
+    """Locate a Chromium executable to pre-warm. Discovers via glob of
+    Playwright's cache directory under `$PLAYWRIGHT_BROWSERS_PATH` (if set)
+    or `$HOME/.cache/ms-playwright`, then falls back to PATH-resolved system
+    installs. The build number suffix (`chromium-1148`, `chromium-1170`, …)
+    varies across Playwright versions so we glob `chromium*-*` rather than
+    hardcoding a specific build.
+
+    When `HEADLESS_BROWSER=1` is set, Browser Use launches the slimmer
+    `headless_shell` binary; we prefer it. Returns None if nothing is found.
+
+    Works on any machine — codespace, local Mac, cloud VM — without
+    hardcoded paths. (Cop-out #7: codespace-only deployment.)
+    """
+    import glob
+
+    _headless = os.environ.get("HEADLESS_BROWSER", "").lower() in {"1", "true", "yes", "on"}
+
+    # Playwright respects PLAYWRIGHT_BROWSERS_PATH:
+    #   <set>     → use that root (or `0` for project-relative — we just glob anyway)
+    #   <unset>   → ~/.cache/ms-playwright on Linux/macOS
+    pw_path_env = os.environ.get("PLAYWRIGHT_BROWSERS_PATH")
+    if pw_path_env and pw_path_env != "0":
+        roots = [pw_path_env]
+    else:
+        roots = [os.path.expanduser("~/.cache/ms-playwright")]
+        # Common alternatives some installs use:
+        roots.append(os.path.expanduser("~/Library/Caches/ms-playwright"))
+        roots.append("/usr/local/share/ms-playwright")
+
+    headless_candidates: list[str] = []
+    headful_candidates: list[str] = []
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        # The trailing build number varies (1148, 1170, …); glob handles all.
+        for d in glob.glob(os.path.join(root, "chromium_headless_shell-*", "chrome-linux")):
+            headless_candidates.append(os.path.join(d, "headless_shell"))
+        for d in glob.glob(os.path.join(root, "chromium-*", "chrome-linux")):
+            # `headless_shell` may live inside the chromium dir as a sibling of `chrome`.
+            headless_candidates.append(os.path.join(d, "headless_shell"))
+            headful_candidates.append(os.path.join(d, "chrome"))
+        # macOS Playwright builds put the binary inside an .app bundle.
+        for d in glob.glob(os.path.join(root, "chromium-*", "chrome-mac", "Chromium.app", "Contents", "MacOS")):
+            headful_candidates.append(os.path.join(d, "Chromium"))
+
+    candidates = (headless_candidates + headful_candidates) if _headless else (
+        headful_candidates + headless_candidates
+    )
+    for c in candidates:
+        if os.path.isfile(c) and os.access(c, os.X_OK):
+            return c
+
+    # Fall back to PATH-resolved system browsers.
+    for name in ("google-chrome", "chromium", "chromium-browser", "google-chrome-stable"):
+        p = shutil.which(name)
+        if p:
+            return p
+    return None
+
+
+def _prewarm_chromium() -> None:
+    """Pre-warm Chromium's binary into the OS page cache by spawning a
+    quick `--version` invocation. The OS reads the binary off disk to
+    exec it, which fills the page cache; subsequent real launches inside
+    `BrowserSession.start()` skip the cold disk-read cost.
+
+    On loaded codespaces with <1GB free RAM the cold first-launch can
+    exceed Browser Use's 180s BrowserStartEvent timeout deterministically.
+    This pre-warm shaves the binary-load portion of that off the critical
+    path so the first real task has a fighting chance.
+
+    Idempotent — only the first call does work. Best-effort — never
+    raises, never blocks engine startup if Chromium can't be found or
+    the spawn errors out."""
+    global _PREWARM_DONE
+    if _PREWARM_DONE:
+        return
+    # Flip the flag BEFORE the work so a slow / hung subprocess doesn't
+    # cause concurrent callers to re-enter (we accept that a failed first
+    # attempt won't be retried — engine continues either way).
+    _PREWARM_DONE = True
+
+    binary = _find_chromium_binary()
+    if not binary:
+        logger.debug("prewarm: no chromium binary found, skipping")
+        return
+
+    try:
+        import subprocess  # local import — only needed on first task
+        subprocess.run(
+            [binary, "--version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+        logger.debug("prewarm: chromium binary read into page cache (%s)", binary)
+    except Exception:
+        # Slow / missing / wrong-permissions binary must not block startup.
+        logger.debug("prewarm: chromium spawn failed (best-effort)", exc_info=True)
 
 
 def _get_domain(url: str) -> str:
@@ -948,6 +1086,19 @@ class EngineAgent:
                 plan = {"url": "https://www.google.com", "sub_goals": [self.goal], "success": ""}
             start_url = plan.get("url") or "https://www.google.com"
 
+            # Pre-warm Chromium's binary into the OS page cache before we ask
+            # Browser Use to launch it. On resource-constrained codespaces the
+            # cold disk read of /…/chromium-1148/chrome-linux/chrome is the
+            # dominant cost of BrowserStartEvent and routinely pushes us past
+            # the 180s timeout. Running this here (instead of at module
+            # import) means we only pay the cost when a real task starts,
+            # and the call is idempotent so subsequent tasks no-op. Wrapped
+            # in a guard so a slow/missing Chromium can't block the request.
+            try:
+                _prewarm_chromium()
+            except Exception:
+                logger.debug("prewarm wrapper raised", exc_info=True)
+
             # --- Configure browser session ---
             # Authenticated users get a stable profile under BROWSER_PROFILE_BASE.
             # Anonymous users get a fresh ephemeral dir per task so they never
@@ -955,28 +1106,52 @@ class EngineAgent:
             if self.user_id:
                 profile_dir = os.path.join(BROWSER_PROFILE_BASE, self.user_id)
                 os.makedirs(profile_dir, exist_ok=True)
+                # B1: pre-emptively strip stale Singleton* lock files. If the
+                # prior task on this user's stable profile crashed (SIGKILL,
+                # OOM, container restart), the lock files persist and would
+                # cause the very first launch to time out — wasting one of
+                # only 2 retry attempts. Cheap insurance: same operation
+                # already runs on the retry path; doing it here too means a
+                # crashed-prior-session is recovered on attempt 1, not 2.
+                _clean_chromium_lock_files(profile_dir)
             else:
                 self._ephemeral_profile_dir = tempfile.mkdtemp(
                     prefix=f"engine_anon_{uuid.uuid4().hex[:8]}_"
                 )
                 profile_dir = self._ephemeral_profile_dir
 
-            # Build chrome args for stealth and stability
+            # Build chrome args for stealth and stability.
+            #
+            # Headless mode is env-gated. Production (vision-on-screenshot
+            # fidelity for canvas / WebGL surfaces, real Chromium UI for
+            # extensions) wants headful — that's the default. For
+            # resource-constrained environments (CI, this codespace) where
+            # free RAM ≪ 1GB and Chromium first-launch can't fit, set
+            # `HEADLESS_BROWSER=1` to swap to the 309MB `headless_shell`
+            # instead of the 549MB `chrome` + Xvfb stack. Saves ~240M RSS,
+            # eliminates the X server dependency.
+            _headless = os.environ.get("HEADLESS_BROWSER", "").lower() in {"1", "true", "yes", "on"}
+
             chrome_args = [
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-infobars",
                 "--window-size=1920,1080",
-                # Software WebGL fallback to prevent crashes on GPU-intensive pages
-                "--use-gl=swiftshader",
                 "--no-first-run",
                 "--no-default-browser-check",
             ]
+            if not _headless:
+                # `--use-gl=swiftshader` adds ~50M RSS for the GPU process and
+                # is meaningless in headless_shell (no GPU process exists).
+                chrome_args.append("--use-gl=swiftshader")
 
-            # NopeCHA extension for CAPTCHA solving
+            # NopeCHA extension for CAPTCHA solving — only loadable in headful
+            # Chromium (extensions don't run in headless_shell). When headless
+            # the agent's CAPTCHA strategy falls back to playwright-recaptcha
+            # via `app.captcha`.
             nopecha_dir = os.path.join(os.path.dirname(__file__), "..", "nopecha")
-            if os.path.isdir(nopecha_dir):
+            if os.path.isdir(nopecha_dir) and not _headless:
                 chrome_args.extend([
                     f"--disable-extensions-except={nopecha_dir}",
                     f"--load-extension={nopecha_dir}",
@@ -984,7 +1159,7 @@ class EngineAgent:
 
             def _make_session() -> BrowserSession:
                 return BrowserSession(
-                    headless=False,
+                    headless=_headless,
                     user_data_dir=profile_dir,
                     args=chrome_args,
                     no_viewport=True,
@@ -1060,6 +1235,19 @@ class EngineAgent:
                     start_attempts, start_failure_reason,
                 )
                 if start_attempts >= max_start_attempts:
+                    # M3: hard-fail summary at ERROR so production logs have
+                    # a single grep target ("browser start failed after") for
+                    # the user-visible BROWSER_ERROR. Without this, ops sees
+                    # only per-attempt WARNINGs and has to count them.
+                    logger.error(
+                        "browser start failed after %d attempts (last reason: %s) — "
+                        "user_id=%s, profile_dir=%s, headless=%s",
+                        start_attempts,
+                        start_failure_reason,
+                        self.user_id,
+                        profile_dir,
+                        os.environ.get("HEADLESS_BROWSER", "0"),
+                    )
                     await _send_error(self.send, msg.BROWSER_ERROR)
                     return
                 # Tear down whatever partial state we have. The old session is
@@ -1092,12 +1280,25 @@ class EngineAgent:
 
             # Force every shadow root open BEFORE any page script runs, so the
             # agent can find elements inside e.g. Salesforce LWC, Polymer, etc.
+            #
+            # B4: bound the CDP probe + script-install with a 5s wait_for. If
+            # CDP went sideways AFTER start() returned (e.g. browser process
+            # crashed during the probe), this previously hung the entire
+            # request indefinitely — the outer asyncio.wait_for around
+            # `agent.run()` doesn't cover this setup block.
             try:
-                cdp = await _get_cdp_client(self._session)
+                cdp = await asyncio.wait_for(
+                    _get_cdp_client(self._session), timeout=5.0
+                )
                 if cdp is not None:
-                    await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
-                        "source": _SHADOW_OPEN_PATCH,
-                    })
+                    await asyncio.wait_for(
+                        cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+                            "source": _SHADOW_OPEN_PATCH,
+                        }),
+                        timeout=5.0,
+                    )
+            except asyncio.TimeoutError:
+                logger.warning("shadow-open patch install timed out, proceeding without it")
             except Exception:
                 logger.debug("shadow-open patch install failed", exc_info=True)
 
@@ -1150,7 +1351,7 @@ class EngineAgent:
                 controller=controller,
                 max_actions_per_step=3,
                 max_failures=5,
-                use_vision=True,
+                use_vision=_llm_supports_vision(llm),
                 register_new_step_callback=self._on_step,
                 register_should_stop_callback=self._should_stop,
                 generate_gif=False,

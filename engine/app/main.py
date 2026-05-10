@@ -40,6 +40,9 @@ from app.config import (
 )
 from app import supabase_client
 from app.crm_log import log_event as crm_log_event
+from app.proactive_routes import router as proactive_router
+from app.orchestrator import run_task as orchestrator_run_task
+from app.ws_bridge import TaskCancelled, WSBridge
 import os
 
 logger = logging.getLogger("engine")
@@ -211,6 +214,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Anticipy Action Engine", version="1.0.0", lifespan=lifespan)
+
+# Proactive cascade routes — POST /proactive/chunk, /proactive/confirm,
+# /proactive/flush, GET /proactive/events. Wires the cascade L0..L6 →
+# BrowserAgentExecutor → end-state verifier so transcripts drive real
+# browser actions with verified outcomes.
+app.include_router(proactive_router)
 
 # --- CORS (restricted to known origins) ---
 ALLOWED_ORIGINS = [
@@ -1044,4 +1053,292 @@ async def ws_task(websocket: WebSocket):
         # Always release the connection counters — even if the browser task
         # is still cancelling. Otherwise a panic-disconnect leaks a slot
         # forever and the cap pins to "Too many connections" for that user.
+        _ws_connection_release(admitted_user_id, admitted_ip)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# /ws/agent — thin-relay extension protocol.
+#
+# Auth is via query params (?userId=...&code=...) because that's what
+# extension_v2/background.js sends. We resolve the access_code → user_id
+# row in engine_users (same table as legacy auth, different column).
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def _resolve_extension_auth(user_id: str, code: str) -> dict | None:
+    """Verify (userId, accessCode) against engine_users. Returns the row on
+    success, None otherwise. Never raises."""
+    if not user_id or not code:
+        return None
+    user_id = user_id.strip()
+    code = code.strip()
+    if not user_id or not code:
+        return None
+    try:
+        rows = await supabase_client.select_rows(
+            "engine_users",
+            filters={"id": user_id, "access_code": code},
+            limit=1,
+        )
+    except Exception:
+        logger.exception("ws_agent: engine_users lookup failed")
+        return None
+    if not rows:
+        return None
+    return rows[0]
+
+
+@app.websocket("/ws/agent")
+async def ws_agent(websocket: WebSocket):
+    """The thin-relay endpoint extension_v2 connects to.
+
+    Protocol summary (extension ↔ server):
+      Inbound:
+        - {type: "task_start", taskId, task, tabGroupId}
+        - {type: "result",     cmdId, ok, tabId?, data?, error?}
+        - {type: "cancel",     taskId?, reason?}
+        - {type: "ping",       t}
+        - {type: "error",      cmdId?, message}
+      Outbound:
+        - {type: <command>, cmdId, ...}     (navigate/click/type/extract/...)
+        - {type: "task_step",  step, message?, stepIndex?}
+        - {type: "done",       success, summary, message, deliverable}
+        - {type: "pong"}
+        - {type: "error",      message}
+    """
+    await websocket.accept()
+
+    client_ip = _ws_client_ip(websocket)
+
+    # Per-IP connection cap before any auth so a flood can't exhaust FDs.
+    refusal = _ws_connection_admit(None, client_ip)
+    if refusal is not None:
+        try:
+            await websocket.send_json({"type": "error", "message": refusal})
+            await websocket.close(code=4429)
+        except Exception:
+            pass
+        return
+    admitted_user_id: str | None = None
+    admitted_ip: str = client_ip
+
+    # ── Query-param auth ───────────────────────────────────────────────
+    query_user_id = websocket.query_params.get("userId") or websocket.query_params.get("user_id")
+    query_code = websocket.query_params.get("code")
+    user_row: dict | None = None
+    if query_user_id and query_code:
+        user_row = await _resolve_extension_auth(query_user_id, query_code)
+
+    if not user_row:
+        _ws_connection_release(None, admitted_ip)
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Invalid access code. Re-authenticate in the popup.",
+            })
+            await websocket.close(code=4401)
+        except Exception:
+            pass
+        return
+
+    user_id = str(user_row.get("id") or query_user_id)
+    user_refusal = _ws_user_attach(user_id)
+    if user_refusal:
+        _ws_connection_release(None, admitted_ip)
+        try:
+            await websocket.send_json({"type": "error", "message": user_refusal})
+            await websocket.close(code=4429)
+        except Exception:
+            pass
+        return
+    admitted_user_id = user_id
+
+    # ── Bridge wiring ──────────────────────────────────────────────────
+    bridge = WSBridge(websocket)
+    bg_task: asyncio.Task | None = None
+
+    async def _run_orchestrator(task_text: str, task_id: str) -> None:
+        global _total_tasks, _total_errors
+        try:
+            outcome = await orchestrator_run_task(
+                task=task_text,
+                user_id=user_id,
+                bridge=bridge,
+                task_id=task_id,
+            )
+            await bridge.emit_done(
+                success=bool(outcome.get("success")),
+                message=str(outcome.get("message") or ""),
+                deliverable=outcome.get("deliverable") if isinstance(outcome.get("deliverable"), dict) else None,
+            )
+            _total_tasks += 1
+        except TaskCancelled:
+            # Cancel is normal; the extension already knows.
+            logger.info("ws_agent: task cancelled (taskId=%s)", task_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _total_errors += 1
+            logger.exception("ws_agent: orchestrator crashed")
+            try:
+                await bridge.emit_done(
+                    success=False,
+                    message=msg.CONNECTION_ERROR,
+                )
+            except Exception:
+                pass
+
+    try:
+        while True:
+            try:
+                raw = await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+
+            # Per-IP message-rate guard.
+            if _check_ws_msg_rate(client_ip):
+                try:
+                    await websocket.send_json({"type": "error", "message": msg.RATE_LIMIT_WS})
+                except Exception:
+                    pass
+                continue
+
+            # Frame size guard.
+            if raw is None or len(raw) > WS_MAX_MESSAGE_BYTES:
+                try:
+                    await websocket.send_json({"type": "error", "message": msg.INPUT_INVALID})
+                except Exception:
+                    pass
+                continue
+
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                try:
+                    await websocket.send_json({"type": "error", "message": msg.INPUT_INVALID})
+                except Exception:
+                    pass
+                continue
+
+            if not isinstance(data, dict):
+                try:
+                    await websocket.send_json({"type": "error", "message": msg.INPUT_INVALID})
+                except Exception:
+                    pass
+                continue
+
+            msg_type = data.get("type", "")
+
+            if msg_type == "task_start":
+                if bg_task is not None and not bg_task.done():
+                    try:
+                        await websocket.send_json({"type": "error", "message": msg.TASK_ALREADY_RUNNING})
+                    except Exception:
+                        pass
+                    continue
+
+                task_text_raw = data.get("task", "")
+                if not isinstance(task_text_raw, str):
+                    try:
+                        await websocket.send_json({"type": "error", "message": msg.INPUT_INVALID})
+                    except Exception:
+                        pass
+                    continue
+                task_text = task_text_raw.strip()
+                if not task_text:
+                    try:
+                        await websocket.send_json({"type": "error", "message": msg.AMBIGUOUS_REQUEST})
+                    except Exception:
+                        pass
+                    continue
+                if len(task_text) > MAX_INPUT_LENGTH:
+                    try:
+                        await websocket.send_json({"type": "error", "message": msg.INPUT_TOO_LONG})
+                    except Exception:
+                        pass
+                    continue
+                task_text = sanitize_input(task_text)
+                if not task_text:
+                    try:
+                        await websocket.send_json({"type": "error", "message": msg.AMBIGUOUS_REQUEST})
+                    except Exception:
+                        pass
+                    continue
+
+                # Safety floor — the same blocked-phrase rules that gate /ws/task.
+                reason = block_reason(task_text)
+                if reason:
+                    if reason == "password":
+                        block_msg = msg.PASSWORD_REQUEST_BLOCKED
+                    elif reason == "financial":
+                        block_msg = msg.FINANCIAL_TRANSACTION_BLOCKED
+                    else:
+                        block_msg = msg.BLOCKED_ACTION
+                    try:
+                        await bridge.emit_done(success=False, message=block_msg)
+                    except Exception:
+                        pass
+                    continue
+
+                # Per-user task rate limit.
+                rate_user = user_id or f"anon:{client_ip}"
+                rate_error = _check_task_rate_limit(rate_user)
+                if rate_error:
+                    try:
+                        await bridge.emit_done(success=False, message=rate_error)
+                    except Exception:
+                        pass
+                    continue
+                _record_task(rate_user)
+
+                task_id = str(data.get("taskId") or "")[:64] or f"t-{int(time.time())}"
+                bg_task = asyncio.create_task(_run_orchestrator(task_text, task_id))
+                continue
+
+            if msg_type == "result":
+                # Extension reply to a server-issued command.
+                await bridge._handle_incoming(data)
+                continue
+
+            if msg_type == "cancel":
+                bridge.mark_cancelled(str(data.get("reason") or "user_cancel"))
+                if bg_task is not None and not bg_task.done():
+                    bg_task.cancel()
+                continue
+
+            if msg_type == "ping":
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception:
+                    pass
+                continue
+
+            if msg_type == "error":
+                # Forward to bridge so any pending command future is failed.
+                await bridge._handle_incoming(data)
+                continue
+
+            # Unknown frame.
+            try:
+                await websocket.send_json({"type": "error", "message": msg.INPUT_INVALID})
+            except Exception:
+                pass
+
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        logger.exception("ws_agent error")
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+    finally:
+        # Tell the bridge the socket is gone; pending awaiters will unblock.
+        bridge.mark_closed()
+        if bg_task is not None and not bg_task.done():
+            bg_task.cancel()
+            try:
+                await bg_task
+            except (asyncio.CancelledError, Exception):
+                pass
         _ws_connection_release(admitted_user_id, admitted_ip)

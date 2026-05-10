@@ -14,16 +14,24 @@ import logging
 
 import httpx
 
+import os
+
 from app.config import SUPABASE_URL, SUPABASE_ANON_KEY
 
 
 logger = logging.getLogger("engine")
 
+# Service-role key for tables under RLS that the engine must write to
+# (e.g. engine_trajectories, engine_cost_log). Falls back to anon if not
+# set; callers needing service-role should pass service_role=True.
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
-def _headers(extra: dict | None = None) -> dict:
+
+def _headers(extra: dict | None = None, service_role: bool = False) -> dict:
+    key = SUPABASE_SERVICE_ROLE_KEY if (service_role and SUPABASE_SERVICE_ROLE_KEY) else SUPABASE_ANON_KEY
     h = {
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
         "Prefer": "return=representation",
     }
@@ -73,10 +81,14 @@ async def _request_with_retry(
     return None
 
 
-async def insert_row(table: str, data: dict) -> dict | None:
-    """Insert a single row and return the created record."""
+async def insert_row(table: str, data: dict, service_role: bool = False) -> dict | None:
+    """Insert a single row and return the created record.
+
+    Set ``service_role=True`` for tables under RLS where the engine must
+    write (e.g. engine_trajectories, engine_cost_log).
+    """
     resp = await _request_with_retry(
-        "POST", _rest_url(table), headers=_headers(), json=data
+        "POST", _rest_url(table), headers=_headers(service_role=service_role), json=data
     )
     if resp is not None and resp.status_code in (200, 201):
         try:
@@ -84,6 +96,8 @@ async def insert_row(table: str, data: dict) -> dict | None:
             return rows[0] if rows else data
         except Exception:
             return data
+    if resp is not None:
+        logger.warning("supabase insert %s failed: %s %s", table, resp.status_code, resp.text[:200])
     return None
 
 

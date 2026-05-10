@@ -196,6 +196,15 @@ async def record_trajectory(
     if outcome not in {"success", "partial", "fail", "aborted"}:
         return None
 
+    # intent_id is a uuid column — drop non-uuid strings (e.g. "smoke-001"
+    # from tests) instead of letting Supabase 400 us.
+    if intent_id is not None:
+        import uuid as _uuid
+        try:
+            _uuid.UUID(str(intent_id))
+        except (ValueError, AttributeError):
+            intent_id = None
+
     # Local import to keep the module load-graph small for callers that
     # only use the read-side find_similar_trajectories.
     from app import supabase_client
@@ -214,7 +223,9 @@ async def record_trajectory(
     }
 
     try:
-        result = await supabase_client.insert_row("engine_trajectories", row)
+        result = await supabase_client.insert_row(
+            "engine_trajectories", row, service_role=True,
+        )
     except Exception:
         logger.exception("trajectory insert raised")
         return None
