@@ -146,6 +146,19 @@ export async function POST(req: Request) {
   if (!ipLimit.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: CORS });
   }
+  // Disabled in production while we run on Cerebras-only with tight RPM
+  // budget. The Verifier was eating ~50% of the LLM-call budget per task,
+  // doubling RPM pressure on the same Cerebras pool the Executor uses.
+  // Agent.js handles this 503 gracefully — runs without the verdict.
+  // Re-enable here once we have a separate quota pool (paid model or
+  // multi-key rotation).
+  return NextResponse.json(
+    { error: "Verifier disabled — Executor only mode" },
+    { status: 503, headers: CORS }
+  );
+
+  /* eslint-disable */
+  // @ts-ignore — kept for re-enable
   if (!agentLLMAvailable()) {
     return NextResponse.json(
       { error: "Verifier unavailable (no CEREBRAS or KIMI key)" },

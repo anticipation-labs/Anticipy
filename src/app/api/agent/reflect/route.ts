@@ -94,6 +94,13 @@ export async function POST(req: Request) {
   if (!ipLimit.allowed) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: CORS });
   }
+  return NextResponse.json(
+    { error: "Reflector disabled — Executor only mode" },
+    { status: 503, headers: CORS }
+  );
+
+  /* eslint-disable */
+  // @ts-ignore
   if (!agentLLMAvailable()) {
     return NextResponse.json(
       { error: "Reflector unavailable (no CEREBRAS or KIMI key)" },
