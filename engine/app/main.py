@@ -572,6 +572,25 @@ async def admin_trigger_task(req: Request):
             await asyncio.wait_for(runner(task, task_id), timeout=240)
         except asyncio.TimeoutError:
             logger.warning("admin trigger task %s hit 240s wall-clock cap", task_id)
+            # Write a trajectory row so the row count actually reflects
+            # reality. record_trajectory is fire-and-forget but synchronous
+            # via supabase REST.
+            try:
+                from app.trajectory_cache import record_trajectory
+                await record_trajectory(
+                    user_id=user_id,
+                    task_summary=task[:500],
+                    domain="unknown",
+                    steps=[{"verdict": "no_progress", "action": "(wall_clock_timeout)", "reason": "240s budget exceeded"}],
+                    outcome="fail",
+                    outcome_message="Task ran 4 minutes without finishing.",
+                    total_steps=0,
+                    duration_ms=240_000,
+                    cost_usd=0.0,
+                    intent_id=None,
+                )
+            except Exception:
+                logger.exception("trajectory write on timeout failed")
             try:
                 await bridge.emit_done(
                     success=False,
@@ -579,6 +598,8 @@ async def admin_trigger_task(req: Request):
                 )
             except Exception:
                 pass
+        except Exception:
+            logger.exception("admin trigger wrapper crashed")
         finally:
             _active_bg_tasks.pop(user_id, None)
     bg = asyncio.create_task(_wrapped())
