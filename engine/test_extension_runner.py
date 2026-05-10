@@ -491,8 +491,8 @@ async def main() -> int:
                 # task fails immediately. 12s/scenario × 25 = +5min total
                 # — small price for stable measurement.
                 if scenario_idx > 0:
-                    print(f"  (cooldown 12s before next scenario)", flush=True)
-                    await asyncio.sleep(12.0)
+                    print(f"  (cooldown 75s before next scenario)", flush=True)
+                    await asyncio.sleep(75.0)
                 print(f"\n== scenario: {scenario['name']}", flush=True)
                 print(f"  task: {scenario['task']}", flush=True)
                 t0 = time.time()
@@ -527,6 +527,23 @@ async def main() -> int:
                 passed = scenario["verify"]({"message": msg})
                 print(f"  finished status={final.get('status')} passed={passed}", flush=True)
                 print(f"  msg: {msg!r}", flush=True)
+                # Surface the actual upstream LLM error if the agent
+                # failed with ai_unavailable. agent.js stashes the
+                # original error in chrome.storage.local.lastUpstreamError
+                # before friendlyAgentMessage rewrites it.
+                try:
+                    upstream = await popup_page.evaluate(
+                        "() => new Promise(r => chrome.storage.local.get('lastUpstreamError', d => r(d?.lastUpstreamError || null)))"
+                    )
+                    if upstream and isinstance(upstream, dict):
+                        err = upstream.get("err", "")
+                        if err:
+                            print(f"  upstream-err: {err[:300]}", flush=True)
+                    await popup_page.evaluate(
+                        "() => new Promise(r => chrome.storage.local.remove('lastUpstreamError', () => r(true)))"
+                    )
+                except Exception as e:
+                    print(f"  (could not read upstream err: {e})", flush=True)
                 results.append({
                     "scenario": scenario["name"],
                     "passed": passed,
