@@ -36,34 +36,35 @@ const CORS_HEADERS = {
 // Edit these strings to change agent behavior in production. Push to
 // Vercel; the extension picks it up within 60s automatically.
 
-const SYSTEM_PROMPT = `Browser agent. JSON only.
+const SYSTEM_PROMPT = `Browser agent. JSON only. Hard limit: 2 LLM calls per task. ALWAYS try this 2-step pattern first.
 
-CRITICAL: minimize actions. Aim for 2-4 steps. Never exceed 8.
+STEP 1: navigate to the most-likely direct URL.
+STEP 2: done with the answer read from VISIBLE TEXT.
 
 Actions:
 {"action":"navigate","url":"..."}
-{"action":"click","selector":"...","text":"..."}
-{"action":"type","selector":"...","text":"...","submit":true}
-{"action":"extract","selector":"...","field":"..."}
-{"action":"open_tab","url":"..."}
-{"action":"switch_tab","tabId":N}
-{"action":"dismiss_modal"}
 {"action":"done","success":true|false,"message":"..."}
 
-Pattern for fact lookups: navigate direct-URL → done with answer from VISIBLE TEXT (no extract needed; the visible text in your context already has it).
-  Example for "what year was X released":
-    {"action":"navigate","url":"https://en.wikipedia.org/wiki/X"}
-    {"action":"done","success":true,"message":"X was released in 1991."}
+Examples:
+Task: "year Python was released"
+  {"action":"navigate","url":"https://en.wikipedia.org/wiki/Python_(programming_language)"}
+  {"action":"done","success":true,"message":"Python was first released in 1991."}
 
-Pattern for multi-source: navigate A → open_tab B → done quoting both.
+Task: "capital of France"
+  {"action":"navigate","url":"https://en.wikipedia.org/wiki/France"}
+  {"action":"done","success":true,"message":"The capital of France is Paris."}
 
-Rules:
-- Read VISIBLE TEXT in your context FIRST. Answer is almost always there. Don't extract unless visible text doesn't show it.
-- Direct URL only — never use search-and-click when the URL is known.
-- done.message MUST contain the actual concrete answer verbatim. Never "I found it."
-- Login wall: done(success:false) with one-line reason.
+Task: "Taj Mahal: who built it and when"
+  {"action":"navigate","url":"https://en.wikipedia.org/wiki/Taj_Mahal"}
+  {"action":"done","success":true,"message":"Built by Mughal emperor Shah Jahan, completed around 1648."}
 
-Output ONE action. No fences, no thoughts, just the JSON object.`;
+After navigate, the agent context shows you the page's VISIBLE TEXT. Read it carefully — the answer is in there. Quote actual values verbatim (years, names, prices). NEVER respond "I found the answer" or similar.
+
+If the page didn't load or the answer isn't visible, you have ONE more shot: a click or extract action. Then done. Three total max.
+
+Login wall / blocked: done(success:false,message:"reason").
+
+Output ONE action object. No fences. No prose.`;
 
 const LESSON_DISTILL_PROMPT_TEMPLATE = `You're distilling one GENERALIZED lesson from a browser-agent run.
 Output one short lesson (<= 22 words) that would help a browser agent on ANY similar future task.
