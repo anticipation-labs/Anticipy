@@ -1358,21 +1358,23 @@ export class BrowserAgent {
     if (hasGroq)     tiers.push({ name: "groq",     fn: () => this._callGroq(userMessage) });
     if (hasKimi)     tiers.push({ name: "kimi",     fn: () => this._callKimi(userMessage) });
 
-    const MAX_ATTEMPTS = 4;
+    const MAX_ATTEMPTS = 2;       // Per tier — short retry, then jump
+    const MAX_TIER_WAIT_MS = 8000; // If cooldown > 8s, skip this tier
     let lastErr = null;
     for (const tier of tiers) {
       for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         if (this._isProviderBlocked(tier.name)) {
-          const wait = Math.min(
-            Math.max(0, (this._providerUnblockAt[tier.name] || 0) - Date.now()),
-            this._QUOTA_MAX_COOLDOWN_MS
-          );
+          const wait = Math.max(0, (this._providerUnblockAt[tier.name] || 0) - Date.now());
+          if (wait > MAX_TIER_WAIT_MS) {
+            console.log(`[Anticipy Agent] ${tier.name} blocked ${wait/1000}s — skipping to next tier`);
+            break;  // Try next tier immediately
+          }
           if (wait > 50) {
             console.log(`[Anticipy Agent] ${tier.name} cooldown — sleeping ${wait/1000}s (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
             await new Promise(r => setTimeout(r, wait));
           }
         } else if (attempt > 0) {
-          await new Promise(r => setTimeout(r, 1500 * attempt));
+          await new Promise(r => setTimeout(r, 1500));
         }
         try {
           const out = await tier.fn();
@@ -1383,9 +1385,9 @@ export class BrowserAgent {
           const msg = String(e?.message || e);
           if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
             this._markProvider429(tier.name);
-            // Try next attempt on this tier (cooldown will gate it)
+            // Continue inner loop; next iteration honors the cooldown / skip
           } else {
-            // Non-quota error — break out of this tier, try next tier
+            // Non-quota error (auth, malformed, 400, etc.) — try next tier
             console.warn(`[Anticipy Agent] ${tier.name} non-quota error: ${msg}`);
             break;
           }
@@ -1504,10 +1506,18 @@ export class BrowserAgent {
   /**
    * Groq llama-3.3-70b-versatile — second free tier. 14400 RPD, 30 RPM,
    * ~500ms latency. Separate quota pool from Cerebras. Used when
-   * Cerebras 429s. JSON mode supported.
+   * Cerebras 429s.
+   *
+   * Quirk: Groq's JSON mode requires the literal word "json" appear
+   * somewhere in `messages` content, otherwise it returns 400. We
+   * append a one-line JSON nudge to userMessage to guarantee the
+   * check passes — content is unchanged for the model.
    */
   async _callGroq(userMessage) {
     const system = await this._buildSystemPrompt();
+    const userWithJsonNudge = /\bjson\b/i.test(userMessage)
+      ? userMessage
+      : userMessage + "\n\n(Output JSON only.)";
     const resp = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -1518,7 +1528,7 @@ export class BrowserAgent {
         model: GROQ_MODEL,
         messages: [
           { role: "system", content: system },
-          { role: "user", content: userMessage },
+          { role: "user", content: userWithJsonNudge },
         ],
         temperature: 0.1,
         max_tokens: 2400,
