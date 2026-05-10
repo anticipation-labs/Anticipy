@@ -143,3 +143,25 @@ async def upsert_row(table: str, data: dict) -> dict | None:
         except Exception:
             return data
     return None
+
+
+async def call_rpc(name: str, args: dict) -> list[dict]:
+    """Invoke a Postgres function exposed via PostgREST.
+
+    Used for similarity search RPCs (anticipy_memory_topk,
+    engine_trajectories_topk). Returns [] on any error so callers can
+    degrade gracefully — same contract as select_rows.
+    """
+    url = f"{SUPABASE_URL}/rest/v1/rpc/{name}"
+    resp = await _request_with_retry("POST", url, headers=_headers(), json=args)
+    if resp is not None and resp.status_code in (200, 201):
+        try:
+            data = resp.json()
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                return [data]
+            return []
+        except Exception:
+            return []
+    return []
