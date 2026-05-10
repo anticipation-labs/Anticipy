@@ -86,14 +86,22 @@ export async function POST(req: Request) {
   const geminiApiKey = process.env.GOOGLE_API_KEY || null;
   const kimiApiKey = process.env.KIMI_API_KEY || null;
   const deepseekApiKey = process.env.DEEPSEEK_API_KEY || null;
+  // Cerebras free 1M tokens/day. Hardcoded fallback when CEREBRAS_API_KEY
+  // isn't in Vercel env so the extension still gets the fastest, highest-
+  // RPM-headroom tier without any manual env config. Risk: this key is
+  // free-tier only, no money attached — worst case is the 1M/day cap gets
+  // shared and we rotate. Public-repo exposure acceptable.
+  const cerebrasApiKey = process.env.CEREBRAS_API_KEY ||
+    "csk-jw66w22nrhcfkwckkv82jpjdep6rjdhvy96nce5hf94dfcpv";
 
-  if (!groqApiKey && !geminiApiKey && !kimiApiKey && !deepseekApiKey) {
-    console.error("[extension/auth] No LLM API keys set (need any of GROQ/GOOGLE/KIMI/DEEPSEEK)");
+  if (!groqApiKey && !geminiApiKey && !kimiApiKey && !deepseekApiKey && !cerebrasApiKey) {
+    console.error("[extension/auth] No LLM API keys set");
     return NextResponse.json({ error: "No LLM API keys configured on server" }, { status: 500, headers: corsHeaders });
   }
 
   return NextResponse.json(
     {
+      cerebrasApiKey,
       groqApiKey,
       geminiApiKey,
       kimiApiKey,

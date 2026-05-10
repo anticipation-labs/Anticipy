@@ -94,11 +94,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       await chrome.storage.local.set({
         apiConfig: {
-          // 4-tier provider redundancy: A → B → C → D. Plan A is Gemini
-          // 2.5 Flash, Plan B Groq llama-3.3-70b, Plan C Kimi
-          // moonshot-v1-128k, Plan D DeepSeek deepseek-chat. The agent
-          // cycles through them; quality matched at the OpenAI-compat
-          // 70B-class tier so any plan failing over is not a degrade.
+          // 5-tier provider redundancy. Plan A: Cerebras Qwen3-235B
+          // (fastest, free 1M tokens/day, primary). Plan B: Groq llama-
+          // 3.3-70b text + llama-4-scout vision (free 14400 RPD, vision-
+          // capable fallback). Plan C: Gemini 2.5 Flash. Plan D: Kimi
+          // moonshot-v1-128k (paid). Plan E: DeepSeek (paid).
+          cerebrasApiKey: data.cerebrasApiKey || null,
           groqApiKey: data.groqApiKey || null,
           geminiApiKey: data.geminiApiKey || null,
           kimiApiKey: data.kimiApiKey || null,
