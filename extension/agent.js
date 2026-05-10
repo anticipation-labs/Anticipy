@@ -322,6 +322,29 @@ export class BrowserAgent {
     this._providerFailCount = {};     // { providerName: consecutive429s }
     this._QUOTA_BASE_COOLDOWN_MS = 5000;
     this._QUOTA_MAX_COOLDOWN_MS = 60000;
+
+    // Per-provider min spacing between calls. Cerebras free is 30 RPM
+    // (2000ms spacing keeps us at the limit). Groq same. The agent waits
+    // up to this much before making the next call to a given provider —
+    // proactively throttles instead of reactively backing off after 429.
+    this._lastProviderCallAt = {};   // { providerName: epochMs }
+    this._PROVIDER_MIN_SPACING_MS = {
+      cerebras: 2000,
+      groq:     2000,
+      kimi:     500,
+    };
+  }
+
+  async _waitForProviderSpacing(name) {
+    const min = this._PROVIDER_MIN_SPACING_MS[name] || 0;
+    if (min <= 0) return;
+    const last = this._lastProviderCallAt[name] || 0;
+    const since = Date.now() - last;
+    if (since < min) {
+      const wait = min - since;
+      await new Promise(r => setTimeout(r, wait));
+    }
+    this._lastProviderCallAt[name] = Date.now();
   }
 
   // ── Per-provider quota helpers ─────────────────────────────────────
@@ -1377,6 +1400,7 @@ export class BrowserAgent {
           await new Promise(r => setTimeout(r, 1500));
         }
         try {
+          await this._waitForProviderSpacing(tier.name);
           const out = await tier.fn();
           this._markProviderOk(tier.name);
           return out;
@@ -1476,23 +1500,31 @@ export class BrowserAgent {
    */
   async _callCerebras(userMessage) {
     const system = await this._buildSystemPrompt();
-    const resp = await fetch(CEREBRAS_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apiConfig.cerebrasApiKey}`,
-      },
-      body: JSON.stringify({
-        model: CEREBRAS_MODEL,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: userMessage },
-        ],
-        temperature: 0.1,
-        max_tokens: 2400,
-        response_format: { type: "json_object" },
-      }),
-    });
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 20000);
+    let resp;
+    try {
+      resp = await fetch(CEREBRAS_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.apiConfig.cerebrasApiKey}`,
+        },
+        body: JSON.stringify({
+          model: CEREBRAS_MODEL,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userMessage },
+          ],
+          temperature: 0.1,
+          max_tokens: 2400,
+          response_format: { type: "json_object" },
+        }),
+        signal: ctl.signal,
+      });
+    } finally {
+      clearTimeout(t);
+    }
     if (!resp.ok) {
       const body = await resp.text().catch(() => String(resp.status));
       throw new Error(`Cerebras ${resp.status}: ${body.substring(0, 200)}`);
@@ -1518,23 +1550,31 @@ export class BrowserAgent {
     const userWithJsonNudge = /\bjson\b/i.test(userMessage)
       ? userMessage
       : userMessage + "\n\n(Output JSON only.)";
-    const resp = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apiConfig.groqApiKey}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: userWithJsonNudge },
-        ],
-        temperature: 0.1,
-        max_tokens: 2400,
-        response_format: { type: "json_object" },
-      }),
-    });
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 20000);
+    let resp;
+    try {
+      resp = await fetch(GROQ_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.apiConfig.groqApiKey}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userWithJsonNudge },
+          ],
+          temperature: 0.1,
+          max_tokens: 2400,
+          response_format: { type: "json_object" },
+        }),
+        signal: ctl.signal,
+      });
+    } finally {
+      clearTimeout(t);
+    }
     if (!resp.ok) {
       const body = await resp.text().catch(() => String(resp.status));
       throw new Error(`Groq ${resp.status}: ${body.substring(0, 200)}`);
