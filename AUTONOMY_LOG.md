@@ -404,3 +404,16 @@ User asleep, gave 6 hours, expects engine working end-to-end by morning.
 - Now: 1 LLM call per step. ~30 calls/task × 25 tasks × 1.5K tokens = ~1.1M tokens (just over Cerebras cap, acceptable risk)
 
 ### v4 benchmark launching
+
+### Iter 2 → diagnosis 06:50 UTC
+- Pre-flight planner ping was failing on 502 (Cerebras momentary 429), aborting whole run
+- Cooldown 12s between tasks too short — Cerebras RPM rolling window not clearing
+
+### Fix pushed (commit 4a05da0 + this commit)
+- Inter-task cooldown 12s → 75s (Cerebras 30 RPM window fully clears between tasks)
+- Pre-flight tolerates 502 (treats only 401/403/404 as fatal — upstream LLM hiccups OK)
+
+### v5 launched 06:55 UTC
+- Bar from user: 100% on HARD real tasks (canvas, multi-step, web geos, deep logic) — not demos
+- He's asleep for ~8 hours
+- Cron loop fires every 6 min to check + iterate

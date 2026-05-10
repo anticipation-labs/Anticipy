@@ -356,7 +356,9 @@ async def preflight(client: httpx.AsyncClient) -> tuple[bool, str]:
             json={"task": "ping"},
             timeout=30,
         )
-        if resp.status_code not in (200, 400):
+        # Tolerate 502 (upstream Cerebras momentarily 429'd); the run
+        # loop will retry. Only auth/route errors should fail pre-flight.
+        if resp.status_code in (401, 403, 404):
             return False, f"/api/agent/plan returned {resp.status_code}"
     except Exception as e:
         return False, f"/api/agent/plan unreachable: {e}"
