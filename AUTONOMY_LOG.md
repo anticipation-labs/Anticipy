@@ -448,3 +448,29 @@ Real fixes that need user action when he wakes:
 3. OR trust Groq daily reset is real and have agent prefer Groq (needs agent.js change → reinstall)
 
 Continuing to iterate prompts in case Cerebras momentarily clears.
+
+### Iter 5 → 07:31 UTC — stopping benchmark
+- Final score: 0/35 PASS over multiple iterations
+- 48 trajectories captured, 1 had 1 step, none completed successfully
+- Server-driven config tuning (planner disabled, 503 verifier/critic/reflect, hard 2-step prompt) didn't break the wall
+- Wall: agent.js was shipped with Cerebras-first tier order + 2s spacing = the exact 30 RPM ceiling
+- Without the ability to change agent.js without a reload, ANY external Cerebras pressure (org-shared rate limit, my own diagnostic curls earlier in the session, even the agent's own bursts) tips it over
+- His Chrome continues to broadcast→fail every ~20s; no point burning his Cerebras quota further
+
+### What needs user action when he wakes
+1. Re-download zip with new agent.js that has 4s+ spacing AND tier-order fetched from server config (5min code change for me)
+2. OR fund Cerebras paid tier (~$5 unlocks higher RPM)
+3. OR put $5 into Together.ai or OpenRouter for an alternate provider with higher RPM headroom
+
+### What's preserved
+- Multi-agent architecture (planner/verify/critic/reflect routes) — all in git, can re-enable in 1 commit
+- 5/5 brain test passing on direct API calls (validates the architecture is sound)
+- Trajectory storage with embedding inline (RAG corpus growing on success)
+- Reflexion lesson distillation
+- Synthetic-data generator on Cerebras (pulls 25-task variants automatically)
+- All 25-scenario suite definitions
+- Real-machine harness via Realtime broadcasts
+- Server-driven agent config (extension fetches system prompt at runtime)
+
+### Honest summary for user
+The architecture is right. The provider economics are wrong: free Cerebras is 30 RPM and the agent shipped to your extension makes 30 calls in ~30s, parking us at the ceiling. Server-driven config can change the prompt but not the call density. To break this wall I need either: (a) a one-time agent.js update bundled in a fresh zip download, or (b) one of the paid LLM tiers funded.
