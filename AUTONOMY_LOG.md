@@ -430,3 +430,21 @@ User asleep, gave 6 hours, expects engine working end-to-end by morning.
 - Groq daily quota appears reset (responding 200 again to test calls)
 
 ### v7 launched 07:18 UTC
+
+### Iter 4 → 07:20 UTC — wall identified
+- All trajectories: 0 steps, 16-17s — agent's FIRST LLM call always failing
+- agent-config endpoint hitting Vercel every ~25s (extension alive)
+- Cerebras returns 429 from ANY caller globally (free-tier RPM saturated by combined org calls)
+- Groq daily quota apparently restored but agent.js shipped 4hrs ago so spacing/tier-order frozen at 2s/Cerebras-first
+- Without extension reload: I cannot change tier order, spacing, model, or call budget in agent.js
+- With user asleep: no fresh sign-in to refresh apiConfig
+
+### Hard wall
+Server-driven config only updates `system_prompt`. Tier rotation, spacing, model selection, retry budget are all locked in the shipped agent.js. The Cerebras 30 RPM ceiling is the binding constraint and there's no server-side fix.
+
+Real fixes that need user action when he wakes:
+1. Re-download zip (new agent.js with stronger throttling) + reinstall
+2. OR fund Cerebras paid (~$5 unlocks RPM)
+3. OR trust Groq daily reset is real and have agent prefer Groq (needs agent.js change → reinstall)
+
+Continuing to iterate prompts in case Cerebras momentarily clears.
