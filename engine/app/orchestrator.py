@@ -345,12 +345,17 @@ async def _apply_action(
             if not url:
                 return {"ok": False, "error": "navigate missing url"}
             data = await bridge.navigate(url)
+            # Settle: extension's onCommitted fires before DOM is fully
+            # parsed, so give the next action a stable page state.
+            await asyncio.sleep(1.5)
             return {"ok": True, "result": data}
         if verb == "click":
             sel = str(action.get("selector") or "")
             if not sel:
                 return {"ok": False, "error": "click missing selector"}
             data = await bridge.click(sel)
+            # Click may trigger navigation (link) or async UI update.
+            await asyncio.sleep(1.0)
             return {"ok": True, "result": data}
         if verb == "type":
             sel = str(action.get("selector") or "")
@@ -359,6 +364,11 @@ async def _apply_action(
             if not sel:
                 return {"ok": False, "error": "type missing selector"}
             data = await bridge.type(sel, text, submit=submit)
+            # type+submit may trigger form submit → navigation; without
+            # waiting, the next extract runs on the OLD DOM and returns
+            # empty text. 2.5s covers most Wikipedia/Google/Amazon search.
+            if submit:
+                await asyncio.sleep(2.5)
             return {"ok": True, "result": data}
         if verb == "extract":
             sel = action.get("selector")
