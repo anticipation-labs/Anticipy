@@ -392,7 +392,7 @@ async def _apply_action(
                     text = await bridge.extract("body")
                     fallback_chain.append(f"body fallback len={len(text) if isinstance(text, str) else 'NOT-STR'}")
             logger.info("extract trace: sel=%r len=%d fallbacks=%s", sel, len(text) if isinstance(text, str) else -1, fallback_chain)
-            return {"ok": True, "result": {"text": text, "_debug_fallbacks": fallback_chain}}
+            return {"ok": True, "result": {"text": text, "_debug_fallbacks": fallback_chain, "_engine_version": "v0511-extract-bodyfallback"}}
         if verb == "screenshot":
             url = await bridge.screenshot()
             return {"ok": True, "result": {"dataUrl": url}}
@@ -874,9 +874,10 @@ async def run_task(
         # so failed runs in Supabase show WHY extract returned empty.
         reason_str = verdict.reason or (outcome.get("error") or "")
         if verb == "extract":
-            dbg = outcome.get("result", {}).get("_debug_fallbacks") if isinstance(outcome.get("result"), dict) else None
-            if dbg:
-                reason_str = f"{reason_str} | debug={dbg}"
+            result_dict = outcome.get("result", {}) if isinstance(outcome.get("result"), dict) else {}
+            ver = result_dict.get("_engine_version", "OLD-NO-VERSION-MARKER")
+            dbg = result_dict.get("_debug_fallbacks", [])
+            reason_str = f"{reason_str} | ver={ver} | dbg={dbg}"
         history.append({
             "verdict": verdict.verdict,
             "action": action,
