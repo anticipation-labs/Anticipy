@@ -1,0 +1,21 @@
+....F.............................                                       [100%]
+=================================== FAILURES ===================================
+__________________ test_verifier_overrides_agent_silent_done ___________________
+test_chain_smoke.py:283: in test_verifier_overrides_agent_silent_done
+    assert len(agent_completes) >= 1, (
+E   AssertionError: expected at least one agent completion event; got: [{'seq': 1, 'kind': 'decision', 'decision': {'decision_id': '7a7e4ed8cf5a401abe75d29ca342843d', 'kind': 'execute', 'intent': {'intent_id': 'a44dd52e87064744862d09c3ed8f10f9', 'text': 'The user wants to look up the population of New Zealand.', 'action_verb': 'look_up_population', 'parameters': {'country': 'New Zealand'}, 'evidence_chunk_ids': [1]}, 'confidence': {'score': 0.9, 'reasoning': 'The user explicitly requested to look up the population of a specific country.'}, 'reversibility': 'reversible', 'urgency': {'level': 2, 'reasoning': 'The user has an actionable intent to look up information without any explicit time pressure.'}, 'user_facing_question': None, 'completion_message': 'Done. The user wants to look up the population of New Zealand.', 'refusal_reason': None, 'created_at': 1778528033.7974503}}, {'seq': 2, 'kind': 'agent', 'type': 'status', 'message': 'Sent to your browser — running on your tab.'}]
+E   assert 0 >= 1
+E    +  where 0 = len([])
+------------------------------ Captured log call -------------------------------
+WARNING  engine.bridge_extension:bridge_extension.py:216 anticipy_intents upsert returned None for 7a7e4ed8cf5a401abe75d29ca342843d — broadcast will still fire
+=============================== warnings summary ===============================
+../../../home/codespace/.python/current/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /home/codespace/.python/current/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED test_chain_smoke.py::test_verifier_overrides_agent_silent_done - Asser...
+1 failed, 33 passed, 1 warning in 67.39s (0:01:07)
+....................                                                     [100%]
+20 passed in 1.07s

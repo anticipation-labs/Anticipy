@@ -1,0 +1,13 @@
+listening on channel anticipy-intents for 30s
+subscribe status=RealtimeSubscribeStates.SUBSCRIBED err=None
+  ... 3s, msgs=0
+  ... 6s, msgs=0
+  ... 9s, msgs=0
+  ... 12s, msgs=0
+  ... 15s, msgs=0
+  ... 18s, msgs=0
+  ... 21s, msgs=0
+  ... 24s, msgs=0
+  ... 27s, msgs=0
+  ... 30s, msgs=0
+done. messages received: 0

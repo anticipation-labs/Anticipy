@@ -1,0 +1,5 @@
+/workspaces/Anticipy/engine/app/planner.py:330:        starting = f"https://www.google.com/search?q={q}" if q else "https://www.google.com"
+/workspaces/Anticipy/engine/app/planner.py:433:                f"https://www.google.com/search?q={q}" if q else "https://www.google.com"
+/workspaces/Anticipy/engine/app/end_state_verifier.py:353:    if not await _safely_navigate(bridge, "https://mail.google.com/mail/u/0/#sent"):
+/workspaces/Anticipy/engine/app/end_state_verifier.py:399:    if not await _safely_navigate(bridge, "https://calendar.google.com"):
+/workspaces/Anticipy/engine/app/agent.py:1326:            if start_url and not start_url.startswith("https://www.google.com/search"):
