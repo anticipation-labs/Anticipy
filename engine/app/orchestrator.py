@@ -222,6 +222,13 @@ Rules:
   - When you reach a page that has the answer, use a SINGLE broad
     extract on a parent container, then go straight to `done` with the
     answer pulled from the returned text.
+  - PREFER DIRECT URL NAVIGATION over search-box typing for known topics:
+      * Wikipedia: `navigate https://en.wikipedia.org/wiki/<Topic_With_Underscores>`
+        e.g. "Eiffel Tower" → `https://en.wikipedia.org/wiki/Eiffel_Tower`
+      * IMDb: `navigate https://www.imdb.com/find?q=<query>`
+      * Amazon: `navigate https://www.amazon.com/s?k=<query>`
+    Search-box typing is fragile (form-submit timing); direct nav is
+    reliable.
   - CRITICAL: The "extract" action returns ALL VISIBLE TEXT of the
     selected element in the `result.text` field. After ANY successful
     extract that returns non-empty text, your NEXT action MUST be `done`
