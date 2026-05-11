@@ -814,6 +814,12 @@ async def run_task(
                         ))
                     consecutive_no_progress = 0
                     reflector_pivots_used += 1
+                else:
+                    # Reflector returned None (LLM cascade failed). Treat
+                    # as a "soft pivot" — increment the counter so the
+                    # MAX_PIVOTS guard fires instead of looping forever.
+                    reflector_pivots_used += 1
+                    consecutive_no_progress = 0
             continue
 
         verb = str(action.get("action") or "").lower()
@@ -967,6 +973,9 @@ async def run_task(
                     ))
                 consecutive_no_progress = 0
                 reflector_pivots_used += 1
+            else:
+                reflector_pivots_used += 1
+                consecutive_no_progress = 0
 
     # ── 4. End-state verification ──────────────────────────────────────
     try:
