@@ -222,6 +222,13 @@ Rules:
   - When you reach a page that has the answer, use a SINGLE broad
     extract on a parent container, then go straight to `done` with the
     answer pulled from the returned text.
+  - CRITICAL: The "extract" action returns ALL VISIBLE TEXT of the
+    selected element in the `result.text` field. After ANY successful
+    extract that returns non-empty text, your NEXT action MUST be `done`
+    with the answer parsed from that text. DO NOT repeat extract on
+    different selectors hoping for a more targeted match — the text you
+    have is enough; read it. If the answer is in `state` already, emit
+    `done` immediately without another extract.
   - When the task is fact-finding, your "done" payload MUST include the
     answer and any required_facts the planner declared.
   - When the task involves an effect (sending, posting, adding), your
