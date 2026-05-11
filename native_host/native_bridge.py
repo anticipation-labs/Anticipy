@@ -27,7 +27,10 @@ import threading
 import uuid
 from typing import Any
 
-from . import protocol
+try:
+    from . import protocol  # type: ignore
+except (ImportError, ValueError):
+    import protocol
 
 
 logger = logging.getLogger("anticipy.bridge")

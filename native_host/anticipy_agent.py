@@ -193,9 +193,9 @@ def _patch_ws_bridge_exports() -> None:
         # Engine package not on path (smoke run) — caller handles.
         return
     try:
+        from . import native_bridge as nb  # type: ignore
+    except (ImportError, ValueError):
         import native_bridge as nb
-    except ImportError:
-        import native_bridge as nb  # type: ignore
     # Re-point the classes so isinstance/identity checks line up.
     wsb.BridgeClosed = nb.BridgeClosed
     wsb.BridgeTimeout = nb.BridgeTimeout
@@ -324,9 +324,9 @@ def main() -> int:
         logging.exception("daemon crashed")
         # Emit one last frame so the extension sees something.
         try:
+            from . import protocol  # type: ignore
+        except (ImportError, ValueError):
             import protocol
-        except ImportError:
-            import protocol  # type: ignore
         try:
             protocol.write_message(sys.stdout.buffer, {
                 "type": "error", "message": f"daemon crashed: {exc}",
