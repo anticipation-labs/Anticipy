@@ -53,7 +53,7 @@ logger = logging.getLogger("engine.ws_bridge")
 # DOM time to settle while still bounding the worst case so the
 # orchestrator can move on. The verifier's per-kind navigations land
 # inside this same envelope.
-COMMAND_TIMEOUT_SECONDS: float = 30.0
+COMMAND_TIMEOUT_SECONDS: float = 8.0  # fail-fast — extension should respond in <2s for any command
 
 
 # ── Errors ──────────────────────────────────────────────────────────────
