@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Anticipy Bridge v4",
+  "version": "4.0.0",
+  "description": "Native-messaging shell. All agent logic lives in a local Python daemon on your machine — this extension never needs another reload after install.",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "scripting",
+    "storage",
+    "activeTab",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArTR9VMW7h9bOhlDOVl8CeflMDYgR2SCkFhounj4XG39nQnTwfH0YR1Fn5XRAk0JrmllmZRObdbEap5rid8oV5Cz9yrcTBKUrnCRpxDpoUiSoxYr2JY8WUrEeA8DtH5RcJTeMz9W2zBp+Xnulzj7+CBh8XkxrIeoqpqoFqHpRgoKwU5JP0lfFbdb2YdJUh+sG8XQnoBOZcfqwX3zbLH35E6aRYM93PNQ/+se2qaQOxG5zXlvq4pJbY78Mo7uq75uvTq3vSW3MfN49gdI7RwomPzk7UmZwj1nX0qkeRregmu7anUgU1pZwzmy/VnGvR4QSwFwv/O3yqWCjZBd2DsyJGQIDAQAB"
+}

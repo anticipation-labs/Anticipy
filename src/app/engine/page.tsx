@@ -2451,8 +2451,8 @@ export default function EnginePage() {
                   </p>
                   <div className="flex items-center gap-2">
                     <a
-                      href="/anticipy-extension-v3.zip?v=20260511-v3"
-                      download="anticipy-extension-v3.zip"
+                      href="/anticipy-extension-v4.zip?v=20260511-v4"
+                      download="anticipy-extension-v4.zip"
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
