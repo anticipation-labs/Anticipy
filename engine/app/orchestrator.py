@@ -375,12 +375,17 @@ async def _apply_action(
             # If empty, the page might still be loading or the selector
             # missed. Retry once after 2s; if still empty, try ``body``
             # as a known-everywhere fallback before giving up.
+            fallback_chain = []
             if not text:
+                fallback_chain.append(f"selector={sel!r} returned empty")
                 await asyncio.sleep(2.0)
                 text = await bridge.extract(sel)
                 if not text:
+                    fallback_chain.append(f"selector={sel!r} retry empty")
                     text = await bridge.extract("body")
-            return {"ok": True, "result": {"text": text}}
+                    fallback_chain.append(f"body fallback len={len(text) if isinstance(text, str) else 'NOT-STR'}")
+            logger.info("extract trace: sel=%r len=%d fallbacks=%s", sel, len(text) if isinstance(text, str) else -1, fallback_chain)
+            return {"ok": True, "result": {"text": text, "_debug_fallbacks": fallback_chain}}
         if verb == "screenshot":
             url = await bridge.screenshot()
             return {"ok": True, "result": {"dataUrl": url}}
@@ -858,10 +863,17 @@ async def run_task(
                     confidence=0.0,
                 )
 
+        # Stash debug info from outcome.result into reason for extract
+        # so failed runs in Supabase show WHY extract returned empty.
+        reason_str = verdict.reason or (outcome.get("error") or "")
+        if verb == "extract":
+            dbg = outcome.get("result", {}).get("_debug_fallbacks") if isinstance(outcome.get("result"), dict) else None
+            if dbg:
+                reason_str = f"{reason_str} | debug={dbg}"
         history.append({
             "verdict": verdict.verdict,
             "action": action,
-            "reason": verdict.reason or (outcome.get("error") or ""),
+            "reason": reason_str,
         })
 
         # Hard-stops
