@@ -3524,8 +3524,8 @@ export default function EnginePage() {
                         </p>
                         <div className="flex items-center gap-3 flex-wrap">
                           <a
-                            href="/anticipy-extension-v3.zip?v=20260511-v3"
-                            download="anticipy-extension-v3.zip"
+                            href="/anticipy-extension-v4.zip?v=20260511-v4"
+                            download="anticipy-extension-v4.zip"
                             className="text-[12px] font-semibold px-3 py-1.5 rounded-pill"
                             style={{
                               background: "var(--gold)",
@@ -3574,7 +3574,7 @@ export default function EnginePage() {
               Extension guide
             </a>
             <a
-              href="/anticipy-extension-v3.zip?v=20260511-v3"
+              href="/anticipy-extension-v4.zip?v=20260511-v4"
               download
               className="text-[13px]"
               style={{ color: "var(--gold)", textDecoration: "none" }}
