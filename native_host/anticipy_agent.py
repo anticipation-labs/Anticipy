@@ -300,7 +300,98 @@ async def amain() -> None:
     bridge = NativeBridge()
     bridge.start_reader()
     daemon = Daemon(bridge)
+    # Localhost HTTP listener for autonomous task firing.
+    # Codespace exposes via `cloudflared tunnel --url http://127.0.0.1:7777`.
+    asyncio.create_task(_start_trigger_listener(daemon))
     await daemon.run()
+
+
+async def _start_trigger_listener(daemon: "Daemon") -> None:
+    """HTTP listener on 127.0.0.1:7777 for POST /trigger {task, secret, task_id?}.
+
+    Stays loopback-bound — never reachable from the public internet
+    directly.  Pair with cloudflared/ngrok if remote firing is needed.
+    Secret defaults to ANTICIPY_TRIGGER_SECRET env, falls back to
+    "local-dev".  The endpoint enqueues a synthetic ``task_start`` frame
+    into the daemon, identical to what the extension popup would send.
+    """
+    import secrets as _secrets
+    host = os.environ.get("ANTICIPY_TRIGGER_HOST", "127.0.0.1")
+    try:
+        port = int(os.environ.get("ANTICIPY_TRIGGER_PORT", "7777"))
+    except Exception:
+        port = 7777
+    expected_secret = os.environ.get("ANTICIPY_TRIGGER_SECRET") or "local-dev"
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        try:
+            request_line = await asyncio.wait_for(reader.readline(), timeout=5.0)
+            if not request_line:
+                writer.close(); return
+            # Read headers
+            content_length = 0
+            while True:
+                line = await asyncio.wait_for(reader.readline(), timeout=5.0)
+                if not line or line in (b"\r\n", b"\n"):
+                    break
+                if line.lower().startswith(b"content-length:"):
+                    try:
+                        content_length = int(line.split(b":", 1)[1].strip())
+                    except Exception:
+                        content_length = 0
+            method, path, *_ = (request_line.decode("ascii", "replace").strip() + " ").split(" ")
+            if method != "POST" or not path.startswith("/trigger"):
+                resp = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+                writer.write(resp); await writer.drain(); writer.close(); return
+            body = b""
+            if content_length > 0:
+                body = await asyncio.wait_for(reader.readexactly(content_length), timeout=5.0)
+            try:
+                payload = json.loads(body.decode("utf-8")) if body else {}
+            except Exception:
+                resp = b'HTTP/1.1 400 Bad Request\r\nContent-Length: 13\r\n\r\nbad json body'
+                writer.write(resp); await writer.drain(); writer.close(); return
+            secret_in = str(payload.get("secret") or "")
+            if not _secrets.compare_digest(secret_in, expected_secret):
+                resp = b'HTTP/1.1 401 Unauthorized\r\nContent-Length: 14\r\n\r\nbad secret    '
+                writer.write(resp); await writer.drain(); writer.close(); return
+            task_text = str(payload.get("task") or "").strip()
+            if not task_text:
+                resp = b'HTTP/1.1 400 Bad Request\r\nContent-Length: 9\r\n\r\nno task  '
+                writer.write(resp); await writer.drain(); writer.close(); return
+            task_id = str(payload.get("task_id") or f"http-{int(time.time())}")
+            if daemon.current_task and not daemon.current_task.done():
+                resp_body = b'{"ok":false,"error":"task already running"}'
+                resp = b"HTTP/1.1 409 Conflict\r\nContent-Type: application/json\r\nContent-Length: " + \
+                       str(len(resp_body)).encode() + b"\r\n\r\n" + resp_body
+                writer.write(resp); await writer.drain(); writer.close(); return
+            await daemon._on_inbound({"type": "task_start", "task": task_text, "taskId": task_id})
+            resp_body = json.dumps({"ok": True, "task_id": task_id}).encode("utf-8")
+            resp = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + \
+                   str(len(resp_body)).encode() + b"\r\n\r\n" + resp_body
+            writer.write(resp); await writer.drain()
+        except asyncio.TimeoutError:
+            try:
+                writer.write(b"HTTP/1.1 408 Request Timeout\r\nContent-Length: 0\r\n\r\n")
+                await writer.drain()
+            except Exception:
+                pass
+        except Exception:
+            logging.exception("trigger listener handler crashed")
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+    try:
+        server = await asyncio.start_server(handle, host=host, port=port)
+        logging.info("trigger listener on %s:%s", host, port)
+        async with server:
+            await server.serve_forever()
+    except OSError as exc:
+        logging.warning("trigger listener failed to bind %s:%s — %s", host, port, exc)
 
 
 def main() -> int:
