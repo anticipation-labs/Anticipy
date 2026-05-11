@@ -193,7 +193,7 @@ def _patch_ws_bridge_exports() -> None:
         # Engine package not on path (smoke run) — caller handles.
         return
     try:
-        from . import native_bridge as nb
+        import native_bridge as nb
     except ImportError:
         import native_bridge as nb  # type: ignore
     # Re-point the classes so isinstance/identity checks line up.
@@ -324,7 +324,7 @@ def main() -> int:
         logging.exception("daemon crashed")
         # Emit one last frame so the extension sees something.
         try:
-            from . import protocol
+            import protocol
         except ImportError:
             import protocol  # type: ignore
         try:
