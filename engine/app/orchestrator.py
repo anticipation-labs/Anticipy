@@ -378,21 +378,39 @@ async def _apply_action(
         if verb == "extract":
             sel = action.get("selector")
             sel = str(sel) if isinstance(sel, str) else None
-            text = await bridge.extract(sel)
-            # If empty, the page might still be loading or the selector
-            # missed. Retry once after 2s; if still empty, try ``body``
-            # as a known-everywhere fallback before giving up.
             fallback_chain = []
+            text = ""
+            # First try the requested selector. Catch BridgeTimeout / errors
+            # here so we always run the fallback chain to body — outer except
+            # block would otherwise short-circuit the fallback.
+            try:
+                text = await bridge.extract(sel) or ""
+            except TaskCancelled:
+                raise
+            except Exception as e:
+                fallback_chain.append(f"{sel!r} threw {type(e).__name__}: {str(e)[:80]}")
+            # If empty or threw, retry after 2s
             if not text:
-                fallback_chain.append(f"selector={sel!r} returned empty")
+                fallback_chain.append(f"{sel!r} empty, retrying after 2s")
                 await asyncio.sleep(2.0)
-                text = await bridge.extract(sel)
-                if not text:
-                    fallback_chain.append(f"selector={sel!r} retry empty")
-                    text = await bridge.extract("body")
-                    fallback_chain.append(f"body fallback len={len(text) if isinstance(text, str) else 'NOT-STR'}")
-            logger.info("extract trace: sel=%r len=%d fallbacks=%s", sel, len(text) if isinstance(text, str) else -1, fallback_chain)
-            return {"ok": True, "result": {"text": text, "_debug_fallbacks": fallback_chain, "_engine_version": "v0511-extract-bodyfallback"}}
+                try:
+                    text = await bridge.extract(sel) or ""
+                except TaskCancelled:
+                    raise
+                except Exception as e:
+                    fallback_chain.append(f"retry {sel!r} threw {type(e).__name__}: {str(e)[:80]}")
+            # If STILL empty, body fallback
+            if not text:
+                fallback_chain.append(f"{sel!r} retry empty, trying body")
+                try:
+                    text = await bridge.extract("body") or ""
+                    fallback_chain.append(f"body returned {len(text)} chars")
+                except TaskCancelled:
+                    raise
+                except Exception as e:
+                    fallback_chain.append(f"body threw {type(e).__name__}: {str(e)[:80]}")
+            logger.info("extract trace: sel=%r final_len=%d chain=%s", sel, len(text), fallback_chain)
+            return {"ok": True, "result": {"text": text, "_debug_fallbacks": fallback_chain, "_engine_version": "v0511-fallback-catches-timeout"}}
         if verb == "screenshot":
             url = await bridge.screenshot()
             return {"ok": True, "result": {"dataUrl": url}}
