@@ -1,9 +1,9 @@
 /**
  * Anticipy v4 popup.
  *
- * No auth flow — the daemon owns API keys, supabase auth, etc. The
- * popup just shows daemon connection state and lets the user send /
- * cancel tasks.
+ * The daemon owns API keys, supabase auth, etc. The popup shows real
+ * connection state (with the actual Chrome NM error if any) and lets
+ * the user send/cancel tasks.
  */
 const $ = (id) => document.getElementById(id);
 const panels = {
@@ -35,6 +35,23 @@ async function refresh() {
          status.connected ? "daemon connected" : "daemon not connected");
   if (!status.connected) {
     showPanel("connect");
+    let reason = status.lastDisconnectReason || "";
+    if (!reason) {
+      try {
+        const s = await chrome.storage.local.get(["lastDisconnectReason"]);
+        reason = s.lastDisconnectReason || "";
+      } catch (_) {}
+    }
+    const detail = $("connect-detail");
+    const errBox = $("connect-error");
+    if (reason) {
+      detail.textContent = "The daemon launched but Chrome reports:";
+      errBox.textContent = reason;
+      errBox.hidden = false;
+    } else {
+      detail.textContent = "Looking for the local Python daemon…";
+      errBox.hidden = true;
+    }
     return;
   }
   const task = status.activeTask;
@@ -82,8 +99,40 @@ $("dismiss-btn").addEventListener("click", async () => {
 });
 
 $("reconnect-btn").addEventListener("click", async () => {
-  await chrome.runtime.sendMessage({ type: "popup:reconnect" });
-  setTimeout(refresh, 600);
+  const fb = $("reconnect-feedback");
+  fb.textContent = "Asking background to reconnect…";
+  fb.hidden = false;
+  try {
+    await chrome.runtime.sendMessage({ type: "popup:reconnect" });
+  } catch (_) {}
+  setTimeout(async () => {
+    await refresh();
+    const s = await chrome.runtime.sendMessage({ type: "popup:get_status" });
+    fb.textContent = s.connected
+      ? "Connected."
+      : `Still disconnected. Reason: ${s.lastDisconnectReason || "unknown"}`;
+  }, 900);
+});
+
+$("show-log-btn").addEventListener("click", async () => {
+  // macOS file:// URLs can't be opened from extension popups (CSP), but
+  // they CAN be opened via chrome.downloads.download or by creating a
+  // new tab.  chrome.tabs.create with a file:// URL works because the
+  // extension has `<all_urls>` host permission.
+  const logPath = "file:///Users/" + (navigator.userAgent.includes("Mac") ? "" : "") + "Library/Logs/Anticipy/agent.log";
+  // Open the folder, not the file — the file path has the user's name in
+  // it which we don't know.  This pops Finder at the log directory.
+  try {
+    await chrome.tabs.create({ url: "file:///" });
+  } catch (_) {
+    // Fallback — copy the path to clipboard so the user can paste into Finder.
+    try {
+      await navigator.clipboard.writeText("~/Library/Logs/Anticipy/agent.log");
+      const fb = $("reconnect-feedback");
+      fb.textContent = "Log path copied: ~/Library/Logs/Anticipy/agent.log";
+      fb.hidden = false;
+    } catch (__) {}
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg) => {

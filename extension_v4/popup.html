@@ -13,12 +13,14 @@
 
     <main>
       <section id="connect-panel" hidden>
-        <div class="task-header">Local daemon not connected</div>
-        <p class="muted">
-          The Python daemon on your Mac hasn't connected yet.
-          Make sure you ran the installer (anticipy-agent should be running).
-        </p>
-        <button id="reconnect-btn" class="primary">Try again</button>
+        <div class="task-header">Daemon not connected</div>
+        <p class="muted" id="connect-detail">Looking for the local Python daemon…</p>
+        <div id="connect-error" class="error-box" hidden></div>
+        <div class="row">
+          <button id="reconnect-btn" class="primary">Try again</button>
+          <button id="show-log-btn" class="secondary">Show log location</button>
+        </div>
+        <div id="reconnect-feedback" class="muted small" hidden></div>
       </section>
 
       <section id="idle-panel" hidden>

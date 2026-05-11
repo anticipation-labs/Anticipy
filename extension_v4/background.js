@@ -26,28 +26,48 @@ let port = null;
 let activeTask = null; // {taskId, summary, tabGroupId, tabIds: Set<number>}
 let keepaliveTimer = null;
 let portConnected = false;
+// Last disconnect reason — surfaces in popup so the user can SEE the real
+// Chrome native-messaging error (e.g. "Specified native messaging host
+// not found" or "Native host has exited") instead of a generic "not
+// connected" string.
+let lastDisconnectReason = "";
+let connectAttempts = 0;
+let lastConnectAt = 0;
 
 // ─── Native port plumbing ──────────────────────────────────────────────
 function connectDaemon() {
   if (port) return;
+  connectAttempts += 1;
   try {
     port = chrome.runtime.connectNative(NATIVE_HOST);
   } catch (err) {
     portConnected = false;
-    broadcastStatus("disconnected", String(err && err.message || err));
+    lastDisconnectReason = String(err && err.message || err);
+    chrome.storage.local.set({ lastDisconnectReason, connectAttempts });
+    broadcastStatus("disconnected", lastDisconnectReason);
     setTimeout(connectDaemon, RECONNECT_MS);
     return;
   }
   portConnected = true;
+  lastConnectAt = Date.now();
   port.onMessage.addListener(onDaemonMessage);
   port.onDisconnect.addListener(() => {
     const err = chrome.runtime.lastError;
     portConnected = false;
     port = null;
     stopKeepalive();
-    broadcastStatus("disconnected", err ? String(err.message || err) : "daemon closed");
+    lastDisconnectReason = err ? String(err.message || err) : "daemon closed";
+    // Persist so the popup can read it even after the service worker recycles.
+    chrome.storage.local.set({
+      lastDisconnectReason,
+      lastDisconnectAt: Date.now(),
+      lastConnectAt,
+      connectAttempts,
+    });
+    broadcastStatus("disconnected", lastDisconnectReason);
     setTimeout(connectDaemon, RECONNECT_MS);
   });
+  chrome.storage.local.set({ lastDisconnectReason: "", lastConnectAt });
   sendToDaemon({ type: "ready", version: "4.0.0" });
   startKeepalive();
   broadcastStatus("connected");
@@ -280,6 +300,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse({
             ok: true,
             connected: portConnected,
+            lastDisconnectReason,
+            connectAttempts,
+            lastConnectAt,
             activeTask: activeTask ? {
               taskId: activeTask.taskId,
               summary: activeTask.summary,

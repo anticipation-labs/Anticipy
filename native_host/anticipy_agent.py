@@ -45,6 +45,57 @@ def _log_dir() -> Path:
     return home / ".anticipy" / "logs"
 
 
+def _state_dir() -> Path:
+    """~/.anticipy/ — always.  Holds startup.log, startup_error.txt,
+    last_status.json so a crashed daemon leaves visible evidence even
+    when the main logger isn't initialized yet."""
+    p = Path.home() / ".anticipy"
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return p
+
+
+def _startup_trace(step: str, ok: bool = True, detail: str = "") -> None:
+    """Append one line to ~/.anticipy/startup.log. Independent of the
+    logging module so it works even if _setup_logging hasn't run yet.
+    Truncates after 100 lines so the file can't grow forever."""
+    line = f"{int(time.time())} {'OK' if ok else 'FAIL'} {step}"
+    if detail:
+        line += f" :: {detail.strip().splitlines()[0][:200]}"
+    line += "\n"
+    try:
+        p = _state_dir() / "startup.log"
+        existing = p.read_text(encoding="utf-8").splitlines() if p.exists() else []
+        existing.append(line.rstrip())
+        if len(existing) > 100:
+            existing = existing[-100:]
+        p.write_text("\n".join(existing) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _crash_report(phase: str, exc: BaseException) -> None:
+    """Dump a full traceback to ~/.anticipy/startup_error.txt. Overwrites
+    on each crash — only the most recent failure matters for debugging."""
+    import traceback as _tb
+    try:
+        body = (
+            f"phase={phase}\n"
+            f"time={int(time.time())}\n"
+            f"python={sys.version.split()[0]}\n"
+            f"platform={sys.platform}\n"
+            f"sys.argv={sys.argv}\n"
+            f"sys.path[:5]={sys.path[:5]}\n"
+            f"--- traceback ---\n"
+            f"{_tb.format_exc()}\n"
+        )
+        (_state_dir() / "startup_error.txt").write_text(body, encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _setup_logging() -> None:
     log_dir = _log_dir()
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -340,6 +391,34 @@ async def _start_trigger_listener(daemon: "Daemon") -> None:
                     except Exception:
                         content_length = 0
             method, path, *_ = (request_line.decode("ascii", "replace").strip() + " ").split(" ")
+            if method == "GET" and path.startswith("/status"):
+                # Public, unauthenticated read of daemon health. Returns
+                # startup.log tail + last error so I can diagnose a stuck
+                # extension without the user touching a terminal.
+                try:
+                    startup_log = (_state_dir() / "startup.log")
+                    log_text = startup_log.read_text() if startup_log.exists() else ""
+                except Exception:
+                    log_text = ""
+                try:
+                    err_path = _state_dir() / "startup_error.txt"
+                    err_text = err_path.read_text() if err_path.exists() else ""
+                except Exception:
+                    err_text = ""
+                status_payload = {
+                    "ok": True,
+                    "current_task_running": bool(daemon.current_task and not daemon.current_task.done()),
+                    "bridge_closed": bool(getattr(daemon.bridge, "closed", False)),
+                    "startup_log_tail": log_text.splitlines()[-30:],
+                    "last_error": err_text[-3000:] if err_text else "",
+                    "pid": os.getpid(),
+                    "python": sys.version.split()[0],
+                    "platform": sys.platform,
+                }
+                body_bytes = json.dumps(status_payload).encode("utf-8")
+                resp = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + \
+                       str(len(body_bytes)).encode() + b"\r\n\r\n" + body_bytes
+                writer.write(resp); await writer.drain(); writer.close(); return
             if method != "POST" or not path.startswith("/trigger"):
                 resp = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
                 writer.write(resp); await writer.drain(); writer.close(); return
@@ -395,29 +474,61 @@ async def _start_trigger_listener(daemon: "Daemon") -> None:
 
 
 def main() -> int:
-    _setup_logging()
-    _activate_pending_update()
-    _load_env()
-    _bootstrap_engine_imports()
-    _patch_ws_bridge_exports()
-    # Self-update check runs in background — never blocks startup.
+    # Every step writes a trace line to ~/.anticipy/startup.log. If any
+    # step throws, we dump a full traceback to startup_error.txt before
+    # we die — so the user (or remote diagnostic) can see exactly where
+    # the daemon failed without needing stderr (which Chrome would treat
+    # as a protocol error).
+    _startup_trace("main_entry", detail=f"pid={os.getpid()}")
+    for step_name, step_fn in [
+        ("setup_logging", _setup_logging),
+        ("activate_pending_update", _activate_pending_update),
+        ("load_env", _load_env),
+        ("bootstrap_engine_imports", _bootstrap_engine_imports),
+        ("patch_ws_bridge_exports", _patch_ws_bridge_exports),
+    ]:
+        try:
+            step_fn()
+            _startup_trace(step_name)
+        except SystemExit:
+            raise
+        except BaseException as exc:  # incl. KeyboardInterrupt — fail visibly
+            _startup_trace(step_name, ok=False, detail=str(exc))
+            _crash_report(step_name, exc)
+            try:
+                logging.exception("startup failed at %s", step_name)
+            except Exception:
+                pass
+            return 1
     try:
         import threading
         threading.Thread(target=_maybe_self_update, daemon=True).start()
-    except Exception:
-        pass
+        _startup_trace("update_thread")
+    except Exception as exc:
+        _startup_trace("update_thread", ok=False, detail=str(exc))
     try:
+        _startup_trace("asyncio_run_enter")
         asyncio.run(amain())
+        _startup_trace("clean_exit")
         return 0
     except KeyboardInterrupt:
+        _startup_trace("keyboard_interrupt")
         return 0
-    except Exception as exc:
-        logging.exception("daemon crashed")
+    except BaseException as exc:
+        _startup_trace("amain", ok=False, detail=str(exc))
+        _crash_report("amain", exc)
+        try:
+            logging.exception("daemon crashed")
+        except Exception:
+            pass
         # Emit one last frame so the extension sees something.
         try:
             from . import protocol  # type: ignore
         except (ImportError, ValueError):
-            import protocol
+            try:
+                import protocol  # type: ignore
+            except Exception:
+                return 1
         try:
             protocol.write_message(sys.stdout.buffer, {
                 "type": "error", "message": f"daemon crashed: {exc}",

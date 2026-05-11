@@ -80,3 +80,28 @@ button {
 
 .step-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
 .task-step { font-size: 12px; font-style: italic; min-height: 18px; }
+
+.secondary {
+  background: white;
+  color: var(--dark);
+  border: 1px solid var(--border);
+}
+.secondary:hover { background: #f5f5f5; }
+.row { display: flex; gap: 8px; }
+.row button { flex: 1; }
+
+.error-box {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 8px 10px;
+  border-left: 3px solid var(--danger);
+  background: rgba(200, 69, 69, 0.06);
+  border-radius: 0 4px 4px 0;
+  color: #6b2020;
+  word-break: break-word;
+  white-space: pre-wrap;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.small { font-size: 11px; margin-top: 6px; }
