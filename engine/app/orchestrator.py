@@ -346,16 +346,15 @@ async def _apply_action(
                 return {"ok": False, "error": "navigate missing url"}
             data = await bridge.navigate(url)
             # Settle: extension's onCommitted fires before DOM is fully
-            # parsed, so give the next action a stable page state.
-            await asyncio.sleep(1.5)
+            # parsed; Wikipedia/Amazon/Google need ~4s for SSR + initial JS.
+            await asyncio.sleep(4.0)
             return {"ok": True, "result": data}
         if verb == "click":
             sel = str(action.get("selector") or "")
             if not sel:
                 return {"ok": False, "error": "click missing selector"}
             data = await bridge.click(sel)
-            # Click may trigger navigation (link) or async UI update.
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(1.5)
             return {"ok": True, "result": data}
         if verb == "type":
             sel = str(action.get("selector") or "")
@@ -364,16 +363,23 @@ async def _apply_action(
             if not sel:
                 return {"ok": False, "error": "type missing selector"}
             data = await bridge.type(sel, text, submit=submit)
-            # type+submit may trigger form submit → navigation; without
-            # waiting, the next extract runs on the OLD DOM and returns
-            # empty text. 2.5s covers most Wikipedia/Google/Amazon search.
+            # type+submit triggers form submission → full page navigation.
+            # 5s is generous but matches realistic page load time.
             if submit:
-                await asyncio.sleep(2.5)
+                await asyncio.sleep(5.0)
             return {"ok": True, "result": data}
         if verb == "extract":
             sel = action.get("selector")
             sel = str(sel) if isinstance(sel, str) else None
             text = await bridge.extract(sel)
+            # If empty, the page might still be loading or the selector
+            # missed. Retry once after 2s; if still empty, try ``body``
+            # as a known-everywhere fallback before giving up.
+            if not text:
+                await asyncio.sleep(2.0)
+                text = await bridge.extract(sel)
+                if not text:
+                    text = await bridge.extract("body")
             return {"ok": True, "result": {"text": text}}
         if verb == "screenshot":
             url = await bridge.screenshot()
