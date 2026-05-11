@@ -351,9 +351,15 @@ async def _apply_action(
             url = str(action.get("url") or "")
             if not url:
                 return {"ok": False, "error": "navigate missing url"}
-            data = await bridge.navigate(url)
-            # Settle: extension's onCommitted fires before DOM is fully
-            # parsed; Wikipedia/Amazon/Google need ~4s for SSR + initial JS.
+            # Bridge `navigate` uses content.js's `window.location.href = url`,
+            # which requires content.js to already be running in a NON-blank
+            # tab. The seed tab created by ensureTabGroup is `about:blank`
+            # which chrome.scripting.executeScript REFUSES to inject into.
+            # Workaround: route navigate through bridge.create_tab — that
+            # uses chrome.tabs.create({url}) which opens at the real URL,
+            # bypassing the about:blank inject restriction entirely.
+            data = await bridge.create_tab(url)
+            # Settle for SSR + initial JS to land.
             await asyncio.sleep(4.0)
             return {"ok": True, "result": data}
         if verb == "click":
