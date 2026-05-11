@@ -774,26 +774,43 @@ async def run_task(
             after_state = ""
             after_url = ""
 
-        # Critic verdict
-        try:
-            verdict = await critic_mod.criticize(
-                action_taken=action,
-                before_state=before_state or before_url,
-                after_state=after_state or after_url,
-                plan=plan,
-                step_idx=plan_step_idx,
-                user_id=user_id,
-                tracker=tracker,
+        # Deterministic verdict overrides for actions where the critic
+        # would otherwise misread the page-state diff:
+        #   - extract returning non-empty text IS progress (DOM doesn't
+        #     change but we have new information). The critic would call
+        #     it no_progress because before_state == after_state.
+        #   - Only call the LLM critic when the verdict isn't obvious.
+        if verb == "extract" and last_extract_text:
+            verdict = critic_mod.CriticResult(
+                verdict="progress",
+                reason=f"extract returned {len(last_extract_text)} chars of text",
             )
-        except TaskCancelled:
-            raise
-        except Exception:
-            logger.exception("orchestrator: critic raised")
+        elif verb == "extract" and not last_extract_text:
             verdict = critic_mod.CriticResult(
                 verdict="no_progress",
-                reason="critic raised",
-                confidence=0.0,
+                reason="extract returned no text — selector likely missed",
             )
+        else:
+            # Critic verdict (LLM-based for non-extract actions)
+            try:
+                verdict = await critic_mod.criticize(
+                    action_taken=action,
+                    before_state=before_state or before_url,
+                    after_state=after_state or after_url,
+                    plan=plan,
+                    step_idx=plan_step_idx,
+                    user_id=user_id,
+                    tracker=tracker,
+                )
+            except TaskCancelled:
+                raise
+            except Exception:
+                logger.exception("orchestrator: critic raised")
+                verdict = critic_mod.CriticResult(
+                    verdict="no_progress",
+                    reason="critic raised",
+                    confidence=0.0,
+                )
 
         history.append({
             "verdict": verdict.verdict,
