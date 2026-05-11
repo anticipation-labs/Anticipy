@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Anticipy Bridge v5",
-  "version": "5.0.0",
+  "name": "Anticipy Bridge v6",
+  "version": "6.0.0",
   "description": "Native-messaging shell with startup tracing + visible disconnect reasons. Pinned ID stays the same as v4 — no remove/re-add needed.",
   "permissions": [
     "tabs",
