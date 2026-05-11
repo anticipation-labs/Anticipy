@@ -494,6 +494,11 @@ async def run_task(
     started_ts = time.time()
     task_kind = classify_task_kind(task)
     tracker = CostTracker()
+    # Tracks whether trajectory has been persisted yet. Helps the early-
+    # exit paths (max_pivots, reflector_abort, verifier mismatch, plan
+    # unreachable, cost cap) ALL produce a row instead of just the
+    # verifier-completion paths.
+    _traj_written = [False]
 
     async def _stream(step: int, message: str) -> None:
         try:
@@ -640,6 +645,31 @@ async def run_task(
     # ── 3. Plan → execute → critic loop ────────────────────────────────
     budget = DynamicBudget(soft_cap=soft_cap, hard_cap=hard_cap)
     history: list[dict] = []
+
+    async def _exit_with_record(
+        outcome_obj: TaskOutcome,
+        outcome_str: str = "fail",
+    ) -> dict:
+        """Write a trajectory row then return the TaskOutcome dict. Use this
+        for every early-exit return so we never lose visibility on aborts.
+        Reads `history` from the enclosing closure.
+        """
+        if not _traj_written[0]:
+            try:
+                await _record_trajectory(
+                    user_id=user_id,
+                    task=task,
+                    history=history,
+                    outcome=outcome_str,
+                    started_ts=started_ts,
+                    cost_usd=getattr(tracker, "total_usd", 0.0) or 0.0,
+                    outcome_message=outcome_obj.message or "",
+                )
+                _traj_written[0] = True
+            except Exception:
+                logger.exception("_exit_with_record: trajectory write failed")
+        return outcome_obj.to_dict()
+
     consecutive_no_progress = 0
     pending_nudge: str | None = None
     last_done_payload: dict | None = None
@@ -705,13 +735,13 @@ async def run_task(
             if consecutive_no_progress >= 2:
                 if reflector_pivots_used >= MAX_PIVOTS:
                     # Hard stop — keep going past 2 pivots = wasted LLM calls.
-                    return TaskOutcome(
+                    return await _exit_with_record(TaskOutcome(
                         success=False,
                         message="Couldn't make progress after 2 pivots. Stopping.",
                         task_kind=task_kind,
                         steps_taken=step_idx,
                         aborted_reason="max_pivots",
-                    ).to_dict()
+                    ))
                 outcome = await _maybe_reflect(
                     task=task,
                     plan=plan,
@@ -723,13 +753,13 @@ async def run_task(
                 if outcome is not None:
                     plan, abort = outcome
                     if abort:
-                        return TaskOutcome(
+                        return await _exit_with_record(TaskOutcome(
                             success=False,
                             message=abort,
                             task_kind=task_kind,
                             steps_taken=step_idx,
                             aborted_reason="reflector_abort",
-                        ).to_dict()
+                        ))
                     consecutive_no_progress = 0
                     reflector_pivots_used += 1
             continue
@@ -821,13 +851,13 @@ async def run_task(
         # Hard-stops
         if verdict.verdict == "unsafe":
             await _stream(step_idx, _MSG_CRITIC_UNSAFE)
-            return TaskOutcome(
+            return await _exit_with_record(TaskOutcome(
                 success=False,
                 message=verdict.reason or _MSG_CRITIC_UNSAFE,
                 task_kind=task_kind,
                 steps_taken=step_idx,
                 aborted_reason="critic_unsafe",
-            ).to_dict()
+            ))
 
         if verdict.verdict == "done":
             last_done_payload = dict(action)
@@ -850,13 +880,13 @@ async def run_task(
         # Reflection after 2 consecutive no_progress.
         if consecutive_no_progress >= 2:
             if reflector_pivots_used >= MAX_PIVOTS:
-                return TaskOutcome(
+                return await _exit_with_record(TaskOutcome(
                     success=False,
                     message="Couldn't make progress after 2 pivots. Stopping.",
                     task_kind=task_kind,
                     steps_taken=step_idx,
                     aborted_reason="max_pivots",
-                ).to_dict()
+                ))
             ref_outcome = await _maybe_reflect(
                 task=task,
                 plan=plan,
@@ -868,13 +898,13 @@ async def run_task(
             if ref_outcome is not None:
                 plan, abort = ref_outcome
                 if abort:
-                    return TaskOutcome(
+                    return await _exit_with_record(TaskOutcome(
                         success=False,
                         message=abort,
                         task_kind=task_kind,
                         steps_taken=step_idx,
                         aborted_reason="reflector_abort",
-                    ).to_dict()
+                    ))
                 consecutive_no_progress = 0
                 reflector_pivots_used += 1
 
