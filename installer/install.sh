@@ -26,10 +26,16 @@ VENV_DIR="${ANTICIPY_HOME}/venv"
 LAUNCHER="/usr/local/bin/anticipy-agent"
 NM_DIR="${HOME}/Library/Application Support/Google/Chrome/NativeMessagingHosts"
 
-# When installed from the zipped bundle, this script lives at
-# bundle_root/installer/install.sh; native_host/ is its sibling.
+# Resolve native_host/ and engine/ relative to this script.  Supports two
+# bundle layouts:
+#   layout A (legacy):  bundle_root/{installer,native_host,engine}/
+#   layout B (v6+):     bundle_root/DAEMON-INSTALLER/{install.sh,native_host,engine}/
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUNDLE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [ -d "${SCRIPT_DIR}/native_host" ]; then
+  BUNDLE_ROOT="${SCRIPT_DIR}"
+else
+  BUNDLE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 NATIVE_HOST_SRC="${BUNDLE_ROOT}/native_host"
 ENGINE_SRC="${BUNDLE_ROOT}/engine"
 
