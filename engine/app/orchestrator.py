@@ -649,6 +649,10 @@ async def run_task(
     # we abort hard.
     reflector_pivots_used = 0
     MAX_PIVOTS = 2
+    # Carry the most recent extract's text into the next executor's state
+    # context, otherwise the agent can't see what it just extracted and
+    # re-extracts the same selector forever.
+    last_extract_text: str = ""
 
     step_idx = 0
     while True:
@@ -670,12 +674,21 @@ async def run_task(
         # executor may need multiple actions per step. Best-effort map.
         plan_step_idx = min(step_idx, len(plan.steps)) if plan.steps else step_idx
 
+        # Stitch the last extract's returned text into state so the
+        # executor can SEE what it just extracted and emit done with the
+        # answer instead of re-extracting forever.
+        state_for_executor = before_state or before_url
+        if last_extract_text:
+            state_for_executor = (
+                f"<last_extract_text>\n{_truncate(last_extract_text, 6000)}\n</last_extract_text>\n\n"
+                f"{state_for_executor}"
+            )
         action = await _executor_step(
             task=task,
             plan=plan,
             step_idx=plan_step_idx,
             history=history,
-            state_snippet=before_state or before_url,
+            state_snippet=state_for_executor,
             user_id=user_id,
             nudge=pending_nudge,
             tracker=tracker,
@@ -737,6 +750,20 @@ async def run_task(
             break
 
         outcome = await _apply_action(bridge, action)
+
+        # If this was an extract, hold onto the returned text so the next
+        # executor step can see it (so the agent doesn't re-extract).
+        if verb == "extract" and outcome.get("ok"):
+            txt = ""
+            try:
+                txt = str(outcome.get("result", {}).get("text") or "")
+            except Exception:
+                txt = ""
+            if txt:
+                last_extract_text = txt
+        elif verb in ("navigate", "click", "type"):
+            # New page = old extract text is stale; clear.
+            last_extract_text = ""
 
         try:
             after_state = await bridge.get_dom_snapshot()

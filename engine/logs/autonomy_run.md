@@ -7,3 +7,4 @@ Method: fire one corporate-real task → trajectory → diagnose → server-side
 |------|------|-------|---------|-------|-----------|-----------|---------------|
 
 | 1 | wiki_python_year | 03:03:47 | fail | 7 | 21.9s | extractor looped on selectors; never emitted done with parsed answer | extractor prompt: 'after non-empty extract, NEXT action MUST be done with answer parsed from result.text' |
+| 2 | wiki_python_year | 03:06:08 | fail | 7 | 21.4s | extractor re-extracted on same selectors because state didn't include previous extract text; agent had no memory of what it just pulled | plumb last_extract_text into next executor's state context |
