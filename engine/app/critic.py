@@ -16,8 +16,9 @@ loop uses this to:
 
 The critic runs on a DIFFERENT model from the planner and executor (multi-
 agent diversity, cop-out #16). The role chain in config.ROLE_CHAINS routes
-``role="critic"`` to Pixtral 12B (Mistral La Plateforme) primary, Gemini
-Flash fallback. If neither is configured the cascade degrades gracefully.
+``role="critic"`` to mistral-small-latest (Mistral La Plateforme) primary,
+Gemini Flash fallback, Cerebras Qwen3 third. If none is configured the
+cascade degrades gracefully.
 
 WIRE-ME: ``app/agent.py`` should call ``criticize(...)`` after every
 executor step and feed the verdict to:

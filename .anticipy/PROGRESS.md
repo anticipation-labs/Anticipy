@@ -31,6 +31,38 @@ Resuming from a partial Phase 0 left on 2026-05-11 (per `.env` comment). No phas
   - `extension/agent.js` (Kimi cascade in extension)
   - `engine/app/{models,config,llm_judge}.py` (the Python cascade still references Kimi/moonshot)
 
+### Phase 2 (partial) — Python cascade rewired to Mistral, Kimi ripped out
+
+Committed alongside Phase 0 audit. `engine/app/config.py`:
+- Renamed `_provider_mistral_pixtral()` → `_provider_mistral()`.
+- Fixed model from `pixtral-12b-2409` (404 on current catalog) to `mistral-small-latest` (262K ctx, vision+tools+reasoning, free tier, verified live).
+- Removed Kimi from `MODEL_CHAIN`; replaced with Mistral as Plan C.
+- Removed Kimi from all `ROLE_CHAINS` slots (planner, critic, reflector, executor).
+- `_provider_kimi()` kept as a no-op symbol returning `None` so any lingering import fails loud rather than silent.
+- `engine/app/critic.py` docstring refreshed to match new role chain.
+
+Real verification (live API calls, no mocks):
+
+| provider | model | tokens in/out | status |
+|---|---|---|---|
+| gemini | gemini-2.5-flash | 15/1 | OK |
+| groq | llama-3.3-70b-versatile | 48/2 | OK |
+| mistral | mistral-small-latest | 30/2 | **OK** (first prod call) |
+| cerebras | qwen-3-235b-a22b-instruct-2507 | 15/2 | OK |
+| deepseek | deepseek-chat | — | 402 (no credit; expected, last in chain) |
+
+Engine imports clean: `app.{config,models,critic,planner,reflector,orchestrator,router,proactive_routes,main}` all load without error after the rewire.
+
+### Phase 2 — still outstanding before tagging `phase-2-complete`
+- [ ] `engine/app/llm_judge.py` Kimi reference (line 6 docstring); test currently asserts Kimi in chain.
+- [ ] `engine/synthetic_trajectory_generator.py` Kimi teacher (offline batch — lower priority since it's not hot path).
+- [ ] `engine/test_prompt_rules_present.py` lines 141-177 assert Kimi position in chain; needs rewrite for the new whitelist.
+- [ ] `engine/test_cascade_resilience.py` 59 hits stubbing kimi — needs rewrite.
+- [ ] `src/lib/{claude,kimi,deepgram,llm-cascade,agent-llm,meta-monitor}.ts` move to `archive/2026-05-pre-overhaul/`.
+- [ ] `src/app/api/engine/analyze/route.ts` replace with pass-through to Python cascade `/proactive/chunk`.
+- [ ] `src/app/api/engine/{deepgram-key,transcribe}/route.ts` replace Deepgram with Mistral voxtral-mini OR archive (depends on whether the website's transcription path is still in use).
+- [ ] `extension/agent.js` Kimi-paths rewrite — requires extension reload by Omar.
+
 ### Phase 0 — outstanding before tagging `phase-0-complete`
 - [ ] Query Supabase `anticipy_intents` for last 100 `status='pending'` rows. Classify into (a) dispatcher bug, (b) confirmation-UX bug, (c) confirm-then-fail. Write to `.anticipy/PENDING_DIAGNOSTIC.md`.
 - [ ] Check Vercel env for forbidden keys still set. The codebase still reads them; if Vercel still has `KIMI_API_KEY`/`ANTHROPIC_API_KEY`, the prod routes still call them.

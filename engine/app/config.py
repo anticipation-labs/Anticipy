@@ -32,9 +32,9 @@ DEEPSEEK_API_KEY: str = os.environ.get("DEEPSEEK_API_KEY", "")
 GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
 GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "")
 KIMI_API_KEY: str = os.environ.get("KIMI_API_KEY", "")
-# Mistral La Plateforme — used for the Critic role (Pixtral 12B,
-# vision-capable). Different family from the planner/executor so role
-# diversity is preserved.
+# Mistral La Plateforme — used for the Critic role primary (mistral-small,
+# 262K ctx, vision+tools+reasoning). Different family from the
+# planner/executor so role diversity is preserved.
 MISTRAL_API_KEY: str = os.environ.get("MISTRAL_API_KEY", "")
 # Cerebras — used for the Executor role (very low-latency Llama hosted on
 # wafer-scale silicon). Different family from the planner/critic so role
@@ -176,19 +176,18 @@ def _build_model_chain() -> list[dict]:
                 "min_interval_seconds": 0.0,
             }
         )
-    # Plan C — Kimi (Moonshot) moonshot-v1-128k. 128k ctx, accepts
-    # temperature ≠ 1 (kimi-k2.x requires temp=1.0 which is non-
-    # deterministic — bad for cascade gates that need stable verdicts).
-    if KIMI_API_KEY:
+    # Plan C — Mistral La Plateforme (replaces forbidden Kimi/Moonshot per
+    # v-final-prototype whitelist 2026-05-13). 262K ctx, free tier.
+    if MISTRAL_API_KEY:
         chain.append(
             {
-                "name": "kimi",
-                "base_url": "https://api.moonshot.ai/v1",
-                "api_key": KIMI_API_KEY,
-                "model": "moonshot-v1-128k",
-                "cost_input": 0.0006,
-                "cost_output": 0.0024,
-                "min_interval_seconds": 0.0,
+                "name": "mistral",
+                "base_url": "https://api.mistral.ai/v1",
+                "api_key": MISTRAL_API_KEY,
+                "model": "mistral-small-latest",
+                "cost_input": 0.0,
+                "cost_output": 0.0,
+                "min_interval_seconds": 1.2,
             }
         )
     # Plan D — DeepSeek. OpenAI-compat API. 128k ctx. Positioned last
@@ -221,11 +220,13 @@ MODEL_CHAIN = _build_model_chain()
 # rationalizes the same errors. Different families per role break the
 # rationalization loop.
 #
-# Role assignments (each role's PRIMARY then FALLBACK):
-#   planner   : Gemini 2.5 Flash       → Cerebras Llama 3.3 70b → Groq Llama
-#   critic    : Pixtral 12B (Mistral)  → Gemini 2.5 Flash       → Groq Llama
-#   reflector : Gemini 2.5 Flash       → Cerebras Llama 3.3 70b → Kimi
-#   executor  : Cerebras Llama 3.3 70b → Pixtral 12B (Mistral)  → Groq Llama
+# Role assignments (each role's PRIMARY then FALLBACK). Refreshed
+# 2026-05-13: Kimi/Moonshot removed (forbidden by v-final-prototype
+# whitelist); Mistral now slots in via mistral-small-latest.
+#   planner   : Gemini 2.5 Flash  → Cerebras Qwen3-235b → Mistral-small → Groq
+#   critic    : Mistral-small     → Gemini 2.5 Flash    → Cerebras Qwen3 → Groq
+#   reflector : Gemini 2.5 Flash  → Cerebras Qwen3-235b → Mistral-small → Groq
+#   executor  : Cerebras Qwen3    → Mistral-small       → Gemini Flash  → Groq
 #
 # When the primary for a role is not configured (no key), we fall through
 # in role order to the next configured provider rather than collapsing to a
@@ -262,28 +263,26 @@ def _provider_groq() -> dict | None:
 
 
 def _provider_kimi() -> dict | None:
-    if not KIMI_API_KEY:
-        return None
-    return {
-        "name": "kimi",
-        "base_url": "https://api.moonshot.ai/v1",
-        "api_key": KIMI_API_KEY,
-        "model": "moonshot-v1-128k",
-        "cost_input": 0.0006,
-        "cost_output": 0.0024,
-        "min_interval_seconds": 0.0,
-    }
+    """Forbidden by v-final-prototype provider whitelist (2026-05-13).
+    Permanent no-op; callers that import this get None back. Kept as a
+    declared symbol so any lingering reference fails loud at runtime rather
+    than silently."""
+    return None
 
 
-def _provider_mistral_pixtral() -> dict | None:
-    """Mistral La Plateforme — Pixtral 12B free tier. Vision-capable."""
+def _provider_mistral() -> dict | None:
+    """Mistral La Plateforme. Verified live 2026-05-13 against /v1/models —
+    `mistral-small-latest` aliases mistral-small-2603 (262K ctx, vision +
+    tools + reasoning) and was the right balance of capability/cost for the
+    role chain. The previous ``pixtral-12b-2409`` returned 404 against the
+    current Mistral catalog (vision is now under pixtral-large-2411)."""
     if not MISTRAL_API_KEY:
         return None
     return {
         "name": "mistral",
         "base_url": "https://api.mistral.ai/v1",
         "api_key": MISTRAL_API_KEY,
-        "model": "pixtral-12b-2409",
+        "model": "mistral-small-latest",
         "cost_input": 0.0,    # free tier
         "cost_output": 0.0,
         "min_interval_seconds": 1.2,  # free tier ~1 req/sec
@@ -323,26 +322,26 @@ def _build_role_chains() -> dict[str, list[dict]]:
         "planner": _filter_none(
             _provider_gemini(),
             _provider_cerebras(),
+            _provider_mistral(),
             _provider_groq(),
-            _provider_kimi(),
         ),
         "critic": _filter_none(
-            _provider_mistral_pixtral(),
+            _provider_mistral(),
             _provider_gemini(),
+            _provider_cerebras(),
             _provider_groq(),
-            _provider_kimi(),
         ),
         "reflector": _filter_none(
             _provider_gemini(),
             _provider_cerebras(),
-            _provider_kimi(),
+            _provider_mistral(),
             _provider_groq(),
         ),
         "executor": _filter_none(
             _provider_cerebras(),
-            _provider_mistral_pixtral(),
-            _provider_groq(),
+            _provider_mistral(),
             _provider_gemini(),
+            _provider_groq(),
         ),
     }
 
