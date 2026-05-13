@@ -117,3 +117,33 @@ DISPLAY=:99 python test_real.py  # 10 real-world tests, target 9/10
 - Client components: `"use client"` directive
 - CSS: Tailwind utilities + CSS variables from globals.css
 - Colors: dark (#0C0C0C), cream (#F5F0EB), gold (#C8A97E)
+
+---
+
+## Canonical local path (added 2026-05-13)
+
+The local working copy lives at **`/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`** — NOT `~/Desktop/Anticipy-DEV-FINAL`. Reason: `~/Desktop` is governed by macOS `fileproviderd` even when iCloud Drive's "Desktop & Documents Folders" toggle is off, and any path under it can re-enter the FPCK queue and become slow again. `~/Developer/` is plain local.
+
+If a script or doc references the old `~/Desktop/Anticipy-DEV-FINAL` path, treat it as a soft alias for the new path.
+
+---
+
+## Terminal & git operational rules (added 2026-05-13)
+
+Full diagnostic + root-cause analysis in `.anticipy/TERMINAL_DEBUG.md`. Read that before re-attempting any terminal/git debugging in this repo.
+
+1. **NEVER `git commit -m "…"` inline if the message was copied from a chat tool.** Chat tools rewrite straight `"` → curly `"` `"` and `-` → em-dash. zsh's `"…"` parser only recognises ASCII 0x22 quotes, so an "opening" curly `"` is treated literally and the shell waits forever for a closing `"` (the `>` continuation prompt). Use `gcmsg "the message"` (defined in `~/.zshrc`) — it sed-normalises curly→ASCII and dashes→hyphens, then commits via `git commit -F`. Or pass `-F /tmp/msg.txt` directly.
+
+2. **NEVER `kill -9` a running `git` mid-write.** It leaves `.git/index.lock` (or a 0-byte `.git/index`). Use `kill` (SIGTERM) first, wait 5 s, only then `-9`. After `-9`, run `cleanstale` (defined in `~/.zshrc`) — it removes any stale lock in CWD's repo.
+
+3. **Run `cleanstale` between Claude Code sessions.** Kills leftover `mcp-server-*` and stale CLT git processes, removes any `.git/index.lock` in CWD.
+
+4. **A new top-level dir with > 1 000 files MUST be in `.gitignore` before it's created.** Already covered: `node_modules`, `engine/.venv/`, `.venv/`, `.next/`, `.anticipy/models/`, `.anticipy/*.db`, `.anticipy/*.wav`, `.anticipy/*.npy`.
+
+5. **VS Code git extension polls this repo with `git ls-files --recurse-submodules` constantly.** While the v-final-prototype build is hot, either close the workspace or set `"git.enabled": false` in `.vscode/settings.json` for this workspace.
+
+6. **Desktop & Documents Folders iCloud sync must stay OFF.** System Settings → Apple ID → iCloud → Drive → "Sync this Mac" → "Desktop & Documents Folders" → off. When that toggle is on, macOS `fileproviderd` runs a continuous `FPCKTask` (File Provider Consistency Check) over every file in `~/Desktop`, which throttles every read to ~1 s/file. With 598 tracked files, `git status` walks for 10+ minutes. Verified at the kernel level via `sample <git-pid>` showing 100% of git's time in `cmd_status → refresh_index → ie_modified → index_fd → read_in_full → xread → read()`. Repo lives under `~/Developer/` precisely to keep it outside `fileproviderd`'s scope.
+
+7. **If `git status` ever hangs > 10 s**: `sample <git-pid> 1`. If the stack shows `index_fd → read`, FPCK is throttling — confirm Desktop & Documents iCloud toggle is OFF, and confirm the working copy is at `~/Developer/Anticipy-DEV-FINAL`. If the stack shows `lstat` only, root cause is different — log it in `.anticipy/TERMINAL_DEBUG.md`.
+
+8. **Local git perf config is already set** in `.git/config`: `core.untrackedCache=true`, `core.preloadIndex=true`, `core.fsmonitor=false`, `feature.manyFiles=true`, `gc.auto=256`. Re-apply after any fresh clone.

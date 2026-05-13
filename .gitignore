@@ -40,8 +40,42 @@ skills-lock.json
 # python
 __pycache__/
 *.pyc
+*.pyo
 engine/logs/test_results.json
 engine/browser-data/
+
+# python virtualenvs (43k+ files; not tracking)
+.venv/
+engine/.venv/
+**/.venv/
+**/__pycache__/
+
+# anticipy local artifacts (model weights, sqlite-vec dbs, transcripts, wearer voiceprint)
+.anticipy/models/
+.anticipy/*.db
+.anticipy/*.wav
+.anticipy/*.npy
+
+# macOS / Finder duplicates
+.DS_Store
+**/.DS_Store
+**/* 2
+**/* 2.*
+.metadata_never_index
+.metadata_never_index_unless_rootfs
+
+# build / coverage artifacts
+.next/
+out/
+.turbo/
+.swc/
+.cache/
+
+# editor / IDE droppings
+.idea/
+.vscode/launch.json
+*.swp
+*.swo
 
 # training corpus contains real user transcripts — NEVER commit
 engine/data/training_corpus.jsonl
