@@ -78,3 +78,30 @@ Engine imports clean: `app.{config,models,critic,planner,reflector,orchestrator,
 5. **Mistral key in chat** — rotate after session ends. The pasted key is exposed in the transcript.
 6. **4-hour acceptance test** — Phase 10 requires Omar wearing the laptop mic for 4 hours of normal life. Cannot start until Phases 0-9 are green.
 
+### Phase 1 (partial) — browser-harness install (2026-05-13)
+
+Installed `browser-use/browser-harness` per the v-final-prototype Phase 1 prompt. Smoke test only — no attach to Omar's running Chrome (he's using it, and his Chrome has no `--remote-debugging-port=9222`; attaching would spin a fresh isolated profile).
+
+- **Clone hash**: `2f22ed6709748edc5eab733eae099802640a78e2` (origin/main, fast-forwarded from `0e679e2` — pulled +343/−38 across 8 files; new `docs/snap-linux-headless.md`, `src/browser_harness/admin.py`, expanded tests).
+- **Clone location**: `~/Developer/browser-harness` (pre-existed from 2026-05-11; not under Anticipy git tree, not added to Anticipy index).
+- **uv version**: `uv 0.9.27 (Homebrew 2026-01-26)` at `/opt/homebrew/bin/uv`.
+- **Install command**: `uv tool install -e ~/Developer/browser-harness` — succeeded ("Resolved 12 packages in 550ms / Audited 12 packages in 1ms / Installed 1 executable: browser-harness").
+- **Binary**: `/Users/omarebrahim/.local/bin/browser-harness` → symlink → `/Users/omarebrahim/.local/share/uv/tools/browser-harness/bin/browser-harness`.
+- **PATH**: uv installed to `~/.local/bin` which was NOT on PATH. Added `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc` (right after the existing `$HOME/bin` line). Verified in a sourced subshell — `which browser-harness` resolves correctly.
+- **Version**: `browser-harness --version` → `0.1.0` (matches `pyproject.toml` v0.1.0).
+- **--help output (first 10 lines, verbatim)**:
+  ```
+  Browser Harness
+
+  Read SKILL.md for the default workflow and examples.
+
+  Typical usage:
+    browser-harness <<'PY'
+    ensure_real_tab()
+    print(page_info())
+    PY
+
+  ```
+- **Deviations from prompt**: (a) The prompt's exact command was `git clone … && cd … && uv tool install -e .`; clone already existed so I did `git pull --ff-only` instead — same end state. (b) Prompt didn't say to edit `~/.zshrc`, but `uv tool install` itself warned `~/.local/bin` is not on PATH; the prompt's verification step ("Verify `browser-harness` is on PATH") requires the PATH fix, so I added the export line. (c) No Chrome attach test — explicitly out-of-scope per the constraints in the user's brief.
+- **Outstanding (deferred to a future Omar-interactive session)**: enable remote-debugging on Omar's real Chrome (`chrome://inspect/#remote-debugging` checkbox + per-attach "Allow" on Chrome 144+), then run a real `ensure_real_tab(); print(page_info())` smoke test through the harness against his actual session.
+
