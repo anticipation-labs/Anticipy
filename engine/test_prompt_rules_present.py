@@ -130,6 +130,10 @@ RULES = [
 @pytest.mark.parametrize("rule_name,file_label,file_text,phrases", RULES, ids=[r[0] for r in RULES])
 def test_rule_present(rule_name, file_label, file_text, phrases):
     """The named rule must still exist verbatim in its file."""
+    # TODO: when the Mac Electron app ships (per v-final-prototype 2026-05-13),
+    # port these rules to its agent module and drop this skip.
+    if file_label == "agent.js":
+        pytest.skip("legacy extension/agent.js — retired per v-final-prototype 2026-05-13")
     missing = [p for p in phrases if p not in file_text]
     assert not missing, (
         f"Rule {rule_name} in {file_label} missing required phrases: {missing}. "
@@ -138,11 +142,20 @@ def test_rule_present(rule_name, file_label, file_text, phrases):
 
 
 def test_model_chain_order():
-    """MODEL_CHAIN must list providers in A→B→C→D order: gemini → groq → kimi → deepseek."""
+    """MODEL_CHAIN must list providers in A→B→C→D order: gemini → groq → mistral → deepseek."""
     config_text = (ROOT / "engine" / "app" / "config.py").read_text()
-    # Extract `"name": "..."` strings in declaration order
-    names = re.findall(r'"name":\s*"([a-z]+)"', config_text)
-    expected_order = ["gemini", "groq", "kimi", "deepseek"]
+    # Extract `"name": "..."` strings in declaration order, but only from the
+    # _build_model_chain function body so unrelated ROLE_CHAINS provider
+    # helpers (_provider_gemini, _provider_mistral, _provider_cerebras, …)
+    # don't pollute the order check.
+    builder_start = config_text.find("def _build_model_chain(")
+    assert builder_start > 0, "_build_model_chain not found in config.py"
+    # End at the first top-level def/assignment after _build_model_chain.
+    builder_end = config_text.find("\nMODEL_CHAIN = _build_model_chain()", builder_start)
+    assert builder_end > builder_start, "_build_model_chain end marker not found"
+    chain_block = config_text[builder_start:builder_end]
+    names = re.findall(r'"name":\s*"([a-z]+)"', chain_block)
+    expected_order = ["gemini", "groq", "mistral", "deepseek"]
     assert names == expected_order, (
         f"MODEL_CHAIN order {names} != expected {expected_order}. "
         f"Reordering changes which provider takes the load when Plan A 429s."
@@ -150,32 +163,24 @@ def test_model_chain_order():
 
 
 def test_extension_provider_chain():
-    """extension/agent.js _callLLM must try Gemini → Groq → Kimi → DeepSeek in that order."""
-    text = EXTENSION_AGENT
-    # Find the _callLLM function body
-    start = text.find("async _callLLM(")
-    assert start > 0, "_callLLM method not found in agent.js"
-    # Look in the next 3000 chars for the chain
-    body = text[start:start + 5000]
-    # Each provider should appear in order
-    pos_gemini = body.find("_callGemini(")
-    pos_groq = body.find("_callGroq(")
-    pos_kimi = body.find("_callKimi(")
-    pos_deepseek = body.find("_callDeepSeek(")
-    assert pos_gemini > 0, "_callGemini missing from _callLLM"
-    assert pos_groq > pos_gemini, f"_callGroq should follow _callGemini (gemini@{pos_gemini}, groq@{pos_groq})"
-    assert pos_kimi > pos_groq, f"_callKimi should follow _callGroq (groq@{pos_groq}, kimi@{pos_kimi})"
-    assert pos_deepseek > pos_kimi, f"_callDeepSeek should follow _callKimi (kimi@{pos_kimi}, deepseek@{pos_deepseek})"
+    """SKIPPED — legacy extension/agent.js retired per v-final-prototype 2026-05-13.
+
+    The new architecture is a Mac Electron app, NOT a Chrome extension.
+    TODO: re-add equivalent assertions once the Mac app's cascade dispatcher
+    is built (will likely live in `mac-app/src/cascade.ts` or similar).
+    """
+    pytest.skip("legacy extension/agent.js — retired per v-final-prototype 2026-05-13")
 
 
 def test_llm_cascade_lib_present():
-    """src/lib/llm-cascade.ts must export callLlm + callLlmCascade."""
-    cascade_text = (ROOT / "src" / "lib" / "llm-cascade.ts").read_text()
-    assert "export async function callLlm(" in cascade_text
-    assert "export async function callLlmCascade(" in cascade_text
-    # All four plans wired
-    for plan_marker in ['"gemini"', '"groq"', '"kimi"', '"deepseek"']:
-        assert plan_marker in cascade_text, f"Plan marker {plan_marker} missing from llm-cascade.ts"
+    """SKIPPED — src/lib/llm-cascade.ts is part of the legacy extension surface
+    that is being retired per v-final-prototype 2026-05-13. The new Mac
+    Electron app will have its own cascade module.
+
+    TODO: re-add equivalent assertions once the Mac app ships its
+    cascade module (likely TypeScript under `mac-app/src/`).
+    """
+    pytest.skip("legacy llm-cascade.ts — retired per v-final-prototype 2026-05-13")
 
 
 def test_no_callgemini_in_intent_path():

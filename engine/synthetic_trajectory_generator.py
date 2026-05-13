@@ -4,9 +4,8 @@ Synthetic trajectory generator for browser-agent fine-tuning.
 The fine-tune corpus needs (state, correct-action, reasoning) tuples by the
 thousands. Real-wearer trajectories are the gold standard but accumulate
 slowly. This script generates synthetic high-quality trajectories now, by
-having a strong teacher LLM (Kimi K2.6 — the reasoning variant on Moonshot
-AI) walk through canonical tasks and emit the correct sequence of actions
-for each.
+having a strong teacher LLM (Cerebras Qwen3-235B-Instruct) walk through
+canonical tasks and emit the correct sequence of actions for each.
 
 Output JSONL is shaped like the production agent's `BrowserAgent.run()`
 trajectory POST to /api/engine/trajectory: each step is
@@ -16,17 +15,17 @@ always {"action": "done", "success": true|false, "message": "<answer>"}.
 This means synthetic rows are interchangeable with the real
 `engine_trajectories.steps` JSON column — same ingestion, same RAG.
 
-Why Kimi K2.6 (reasoning) as teacher:
-  - Agent-tuned (long-horizon coordination is its design intent).
-  - Gemini Pro endpoint we used previously is dead (404) and we have no
-    Gemini quota anyway.
-  - Single Moonshot org/key already wired into the rest of the stack.
+Why Cerebras Qwen3-235B-Instruct as teacher:
+  - High-quality 235B-param instruct model with 1M context.
+  - Cerebras free tier: 1M tokens/day, 30 RPM, $0 ongoing — no billing
+    concerns for offline batch generation.
+  - The existing CEREBRAS_API_KEY in the project's env is already wired.
+  - Replaces the prior Kimi K2.6 (Moonshot) teacher, which was retired
+    along with Kimi from the production LLM cascade on 2026-05-13.
 
-Cost model: K2.6 reasoning runs about 1500-3000 internal-reasoning tokens
-plus ~500-1000 visible output tokens, on ~600 input tokens. At Moonshot
-pricing ($0.60 in / $0.95 out per 1M) a typical trajectory is roughly
-$0.003-0.005. 100 tasks ≈ $0.50, 1000 tasks ≈ $5. Under our $10 budget for
-the full corpus.
+Cost model: Cerebras free tier is $0. Daily quota is 1M tokens. A typical
+trajectory uses ~600 input + ~1000 output tokens, so 1000 trajectories ≈
+1.6M tokens — split across 2 days or batch overnight.
 
 Usage:
     set -a && source ../.env.local && set +a
@@ -59,16 +58,16 @@ import httpx
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Kimi K2.6 (reasoning) teacher
+# Cerebras Qwen3-235B-Instruct teacher
 # ─────────────────────────────────────────────────────────────────────
 
-KIMI_URL = "https://api.cerebras.ai/v1/chat/completions"
-KIMI_MODEL = "qwen-3-235b-a22b-instruct-2507"  # Cerebras Qwen3-235B free
+CEREBRAS_URL = "https://api.cerebras.ai/v1/chat/completions"
+CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507"  # Cerebras Qwen3-235B free
 # Cerebras free tier: 1M tokens/day, 30 RPM. $0 ongoing. No reasoning
 # overhead (Qwen3-235B-instruct, not the thinking variant).
-KIMI_INPUT_USD_PER_1M = 0.0
-KIMI_OUTPUT_USD_PER_1M = 0.0
-KIMI_MAX_TOKENS = 3000
+CEREBRAS_INPUT_USD_PER_1M = 0.0
+CEREBRAS_OUTPUT_USD_PER_1M = 0.0
+CEREBRAS_MAX_TOKENS = 3000
 
 
 SYNTH_SYSTEM_PROMPT = """\
@@ -144,42 +143,44 @@ JSON only — no code fences, no preamble."""
 
 
 def estimate_cost_usd(usage: dict | None) -> float:
-    """Compute $ for one Kimi call from usage block."""
+    """Compute $ for one teacher call from usage block. Free tier ⇒ $0."""
     if not usage:
         return 0.0
     pin = usage.get("prompt_tokens") or 0
     pout = usage.get("completion_tokens") or 0
     return (
-        (pin / 1_000_000.0) * KIMI_INPUT_USD_PER_1M
-        + (pout / 1_000_000.0) * KIMI_OUTPUT_USD_PER_1M
+        (pin / 1_000_000.0) * CEREBRAS_INPUT_USD_PER_1M
+        + (pout / 1_000_000.0) * CEREBRAS_OUTPUT_USD_PER_1M
     )
 
 
-async def call_kimi_k26(
+async def call_cerebras_teacher(
     client: httpx.AsyncClient,
     *,
     system: str,
     user: str,
     api_key: str,
 ) -> tuple[str, dict | None]:
-    """One K2.6 reasoning call. Returns (visible_text, usage_dict).
+    """One Cerebras Qwen3-235B-Instruct call. Returns (visible_text, usage_dict).
 
-    K2.6 is a reasoning model. The internal reasoning_content tokens are
-    billed but we only see message.content. temperature=1.0 is required —
-    K2.6 returns 400 otherwise."""
+    Qwen3-235B-Instruct (not the thinking variant) — no internal reasoning
+    tokens, just direct output. Free tier on Cerebras; quota is 1M tokens
+    per day, 30 RPM.
+    """
     body = {
-        "model": KIMI_MODEL,
+        "model": CEREBRAS_MODEL,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
         "temperature": 0.2,  # Cerebras Qwen3-235B works at any temp
-        "max_tokens": KIMI_MAX_TOKENS,
+        "max_tokens": CEREBRAS_MAX_TOKENS,
         "response_format": {"type": "json_object"},
     }
-    # K2.6 reasoning latency: 30-90s typical. Give it 180s ceiling.
+    # Cerebras inference is fast (sub-second typical); 180s ceiling is
+    # generous and covers retries on a slow connection.
     resp = await client.post(
-        KIMI_URL,
+        CEREBRAS_URL,
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -291,7 +292,7 @@ async def generate_one(
     api_key: str,
     variant: int,
 ) -> tuple[dict | None, dict | None, float]:
-    """One K2.6 call → one trajectory. Returns (parsed_traj, usage, cost_usd)."""
+    """One Cerebras teacher call → one trajectory. Returns (parsed_traj, usage, cost_usd)."""
     user_prompt = (
         f"USER TASK: {task}\n"
         f"STARTING URL: {start_url}\n"
@@ -302,7 +303,7 @@ async def generate_one(
     )
 
     try:
-        text, usage = await call_kimi_k26(
+        text, usage = await call_cerebras_teacher(
             client,
             system=SYNTH_SYSTEM_PROMPT,
             user=user_prompt,
@@ -310,17 +311,17 @@ async def generate_one(
         )
     except httpx.HTTPStatusError as e:
         body = (e.response.text or "")[:300]
-        print(f"  Kimi HTTP {e.response.status_code}: {body}", file=sys.stderr)
+        print(f"  Cerebras HTTP {e.response.status_code}: {body}", file=sys.stderr)
         return None, None, 0.0
     except Exception as e:
-        print(f"  Kimi error: {e}", file=sys.stderr)
+        print(f"  Cerebras error: {e}", file=sys.stderr)
         return None, None, 0.0
 
     cost = estimate_cost_usd(usage)
     if not text:
         return None, usage, cost
 
-    # Strip code fence if K2.6 wrapped the JSON despite instructions.
+    # Strip code fence if the teacher wrapped the JSON despite instructions.
     stripped = text.strip()
     if stripped.startswith("```"):
         lines = stripped.split("\n")
@@ -351,7 +352,7 @@ async def main() -> int:
                     help="If > 0, only process the first N tasks (for fast iteration)")
     args = ap.parse_args()
 
-    api_key = os.environ.get("CEREBRAS_API_KEY") or os.environ.get("KIMI_API_KEY")
+    api_key = os.environ.get("CEREBRAS_API_KEY")
     if not api_key:
         print("ERROR: CEREBRAS_API_KEY not set. Source .env.local first.", file=sys.stderr)
         return 2
@@ -379,7 +380,7 @@ async def main() -> int:
         f"{len(tasks) * args.per_task} trajectories",
         flush=True,
     )
-    print(f"== teacher: kimi-k2.6 (reasoning) at {KIMI_URL}", flush=True)
+    print(f"== teacher: {CEREBRAS_MODEL} at {CEREBRAS_URL}", flush=True)
     print(f"== output: {out_path}", flush=True)
 
     success = 0
@@ -414,13 +415,13 @@ async def main() -> int:
                     # still inspectable.
                     traj["task"] = task
                     traj["variant"] = variant
-                    traj["generated_by"] = KIMI_MODEL
+                    traj["generated_by"] = CEREBRAS_MODEL
                     traj["generated_at"] = time.strftime(
                         "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
                     )
                     if usage:
-                        traj["_kimi_usage"] = usage
-                        traj["_kimi_cost_usd"] = round(cost, 6)
+                        traj["_teacher_usage"] = usage
+                        traj["_teacher_cost_usd"] = round(cost, 6)
 
                     ok, why = validate_trajectory(traj)
                     traj["validated"] = ok

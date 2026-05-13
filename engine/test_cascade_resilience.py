@@ -1,5 +1,5 @@
 """
-Cascade-resilience tests for the 4-tier MODEL_CHAIN (gemini → groq → kimi → deepseek).
+Cascade-resilience tests for the 4-tier MODEL_CHAIN (gemini → groq → mistral → deepseek).
 
 These tests stub `_call_gemini` and `_call_openai_compatible` in `app.models` so
 no real API traffic is generated, then verify the high-level
@@ -7,7 +7,7 @@ no real API traffic is generated, then verify the high-level
 behave correctly under partial-degradation conditions:
 
   - Gemini 429 → fall over to Groq
-  - Gemini 429 + Groq 503 → fall over to Kimi
+  - Gemini 429 + Groq 503 → fall over to Mistral
   - All providers down → DegradedResponse() (falsy)
   - Broken JSON on first provider → succeed on second
   - tracker.exceeded → no provider called, returns DegradedResponse
@@ -83,10 +83,10 @@ _FIXED_CHAIN: list[dict] = [
         "min_interval_seconds": 0.0,
     },
     {
-        "name": "kimi",
-        "base_url": "https://api.moonshot.ai/v1",
-        "api_key": "fake-kimi",
-        "model": "moonshot-v1-128k",
+        "name": "mistral",
+        "base_url": "https://api.mistral.ai/v1",
+        "api_key": "fake-mistral",
+        "model": "mistral-large-latest",
         "cost_input": 0.0006,
         "cost_output": 0.0024,
         "min_interval_seconds": 0.0,
@@ -202,11 +202,11 @@ def test_gemini_429_falls_over_to_groq() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. Gemini 429 + Groq 503 → Kimi succeeds
+# 2. Gemini 429 + Groq 503 → Mistral succeeds
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_two_providers_down_kimi_works() -> None:
+def test_two_providers_down_mistral_works() -> None:
     saved_chain = _install_fixed_chain()
     saved_sleep = _patch_no_sleep_in_models()
     seen_providers: list[str] = []
@@ -219,9 +219,9 @@ def test_two_providers_down_kimi_works() -> None:
         if "groq" in base_url:
             seen_providers.append("groq")
             raise _make_http_error(503)
-        if "moonshot" in base_url:
-            seen_providers.append("kimi")
-            return ('{"src": "kimi"}', 5, 3)
+        if "api.mistral.ai" in base_url:
+            seen_providers.append("mistral")
+            return ('{"src": "mistral"}', 5, 3)
         if "deepseek" in base_url:
             seen_providers.append("deepseek")
             return ('{"src": "deepseek"}', 5, 3)
@@ -237,12 +237,12 @@ def test_two_providers_down_kimi_works() -> None:
             t = CostTracker()
             result = await llm_call_json([{"role": "user", "content": "x"}], t)
             assert isinstance(result, dict), f"expected dict, got {type(result)}"
-            assert result.get("src") == "kimi"
-            # Order of providers tried: gemini (≥1), groq (≥1), kimi (1).
-            # Deepseek must NOT have been called — kimi short-circuited.
+            assert result.get("src") == "mistral"
+            # Order of providers tried: gemini (≥1), groq (≥1), mistral (1).
+            # Deepseek must NOT have been called — mistral short-circuited.
             assert "deepseek" not in seen_providers, f"deepseek leaked: {seen_providers}"
-            assert "kimi" in seen_providers
-            assert seen_providers.index("kimi") > seen_providers.index("groq")
+            assert "mistral" in seen_providers
+            assert seen_providers.index("mistral") > seen_providers.index("groq")
 
         asyncio.run(go())
     finally:
@@ -428,7 +428,7 @@ def test_llm_call_json_str_forwards_json_mode() -> None:
 
 
 def test_provider_slot_serializes_same_parallelizes_different() -> None:
-    """3 concurrent slot acquires on `kimi` with min_interval=1.0 finish at
+    """3 concurrent slot acquires on `mistral` with min_interval=1.0 finish at
     ~0s/~1s/~2s; 3 acquires on different providers all finish near-zero."""
     _reset_throttle_state()
 
@@ -436,16 +436,16 @@ def test_provider_slot_serializes_same_parallelizes_different() -> None:
         finishes: list[float] = []
         start = time.monotonic()
 
-        async def acquire_kimi() -> None:
-            async with provider_slot("kimi", 1.0):
+        async def acquire_mistral() -> None:
+            async with provider_slot("mistral", 1.0):
                 finishes.append(time.monotonic() - start)
 
-        await asyncio.gather(acquire_kimi(), acquire_kimi(), acquire_kimi())
+        await asyncio.gather(acquire_mistral(), acquire_mistral(), acquire_mistral())
         finishes.sort()
         assert len(finishes) == 3
-        assert finishes[0] < 0.1, f"first kimi finish {finishes[0]:.3f}s should be ~0"
-        assert 0.95 <= finishes[1] <= 1.3, f"second kimi finish {finishes[1]:.3f}s, expected ~1s"
-        assert 1.95 <= finishes[2] <= 2.4, f"third kimi finish {finishes[2]:.3f}s, expected ~2s"
+        assert finishes[0] < 0.1, f"first mistral finish {finishes[0]:.3f}s should be ~0"
+        assert 0.95 <= finishes[1] <= 1.3, f"second mistral finish {finishes[1]:.3f}s, expected ~1s"
+        assert 1.95 <= finishes[2] <= 2.4, f"third mistral finish {finishes[2]:.3f}s, expected ~2s"
 
         # Now reset and verify different-provider acquires run in parallel.
         _reset_throttle_state()
@@ -498,7 +498,7 @@ def test_effective_layer_timeout_with_throttled_primary() -> None:
     try:
         models.MODEL_CHAIN.clear()
         models.MODEL_CHAIN.append({
-            "name": "kimi",
+            "name": "mistral",
             "min_interval_seconds": 1.5,
             "base_url": "x", "api_key": "x", "model": "x",
             "cost_input": 0.0, "cost_output": 0.0,
@@ -631,8 +631,8 @@ if __name__ == "__main__":
     # Allow `python test_cascade_resilience.py` for quick local runs.
     test_gemini_429_falls_over_to_groq()
     print("PASS test_gemini_429_falls_over_to_groq")
-    test_two_providers_down_kimi_works()
-    print("PASS test_two_providers_down_kimi_works")
+    test_two_providers_down_mistral_works()
+    print("PASS test_two_providers_down_mistral_works")
     test_all_providers_down_returns_degraded()
     print("PASS test_all_providers_down_returns_degraded")
     test_broken_json_first_provider_recovers_on_second()

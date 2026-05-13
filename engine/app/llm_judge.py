@@ -3,7 +3,7 @@
 ZERO hardcoded phrase lists. Given a task and the agent's reply, asks
 whichever free model has quota right now whether the reply actually
 answered the task. Uses the existing MODEL_CHAIN cascade (gemini →
-groq → kimi → deepseek → ...) which already handles 429 cooldown +
+groq → mistral → deepseek → ...) which already handles 429 cooldown +
 provider rotation.
 
 Public surface:
