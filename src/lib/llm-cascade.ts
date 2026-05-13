@@ -9,7 +9,8 @@
  *
  *   Plan A — Gemini 2.5 Flash (1M ctx, primary speed/cost)
  *   Plan B — Groq llama-3.3-70b-versatile (128k ctx, 70B class)
- *   Plan C — Kimi moonshot-v1-128k (128k ctx, OpenAI-compat)
+ *   Plan C — Mistral mistral-small-latest (262k ctx, free tier, replaces
+ *            forbidden Kimi/Moonshot per v-final-prototype whitelist 2026-05-13)
  *   Plan D — DeepSeek deepseek-chat (128k ctx, last-resort)
  *
  * Provider-health cache: when a provider returns 429 (or 402, 401,
@@ -24,7 +25,7 @@
  */
 import { callGemini } from "@/lib/gemini";
 import { callGroq } from "@/lib/groq";
-import { callKimi } from "@/lib/kimi";
+import { callMistral } from "@/lib/mistral";
 
 interface LlmMessage {
   role: "system" | "user" | "assistant";
@@ -44,7 +45,7 @@ interface CascadeOptions {
 
 interface CascadeResult {
   text: string;
-  provider: "gemini" | "groq" | "kimi" | "deepseek" | "none";
+  provider: "gemini" | "groq" | "mistral" | "deepseek" | "none";
   errors: Record<string, string>;
 }
 
@@ -111,7 +112,7 @@ async function tryDeepSeek(
 }
 
 interface Plan {
-  name: "gemini" | "groq" | "kimi" | "deepseek";
+  name: "gemini" | "groq" | "mistral" | "deepseek";
   run: () => Promise<string>;
 }
 
@@ -139,15 +140,13 @@ function buildPlans(messages: LlmMessage[], options: CascadeOptions): Plan[] {
         }),
     },
     {
-      name: "kimi",
+      name: "mistral",
       run: () =>
-        callKimi(messages, {
-          model: "moonshot-v1-128k",
+        callMistral(messages, {
+          model: "mistral-small-latest",
           temperature: options.temperature ?? 0,
           max_tokens: options.max_tokens,
-          ...(options.jsonOnly !== false
-            ? { response_format: { type: "json_object" } }
-            : {}),
+          jsonOnly: options.jsonOnly !== false,
         }),
     },
     {
@@ -235,7 +234,7 @@ export async function callLlm(
  */
 export interface MixtureResult {
   text: string;
-  provider: "gemini" | "groq" | "kimi" | "deepseek" | "none";
+  provider: "gemini" | "groq" | "mistral" | "deepseek" | "none";
   /** How many providers returned a non-empty response. */
   voters: number;
   /** Whether the providers AGREED in their answer. */

@@ -22,8 +22,8 @@ async function main() {
   console.log(`[planC-probe] text=${result.text.slice(0, 100)}`);
   console.log(`[planC-probe] errors=${JSON.stringify(result.errors).slice(0, 200)}`);
   if (result.provider === "none") process.exit(1);
-  if (result.provider !== "kimi" && result.provider !== "deepseek") {
-    console.error(`FAIL: should have fallen to kimi or deepseek, got ${result.provider}`);
+  if (result.provider !== "mistral" && result.provider !== "deepseek") {
+    console.error(`FAIL: should have fallen to mistral or deepseek, got ${result.provider}`);
     process.exit(1);
   }
   console.log(`OK: cascade fell off Gemini+Groq → ${result.provider}`);
