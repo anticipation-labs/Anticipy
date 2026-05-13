@@ -39,7 +39,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { callGemini } from "@/lib/gemini";
 import { callGroq } from "@/lib/groq";
-import { callKimi } from "@/lib/kimi";
+import { callMistral } from "@/lib/mistral";
 
 const PROFILE_REBUILD_PROMPT = `You are a meta-monitor for an AI assistant. The user has just \
 accepted or rejected an extracted intent. Your job is to update the user's \
@@ -281,11 +281,10 @@ async function buildUserProfileInner(userId: string): Promise<void> {
       })),
     });
 
-    // Provider redundancy chain: A=Gemini, B=Groq, C=Kimi. Each tier
-    // uses that provider's best available model. If A is quota'd, B
-    // takes over with no quality drop; if B fails, C takes over.
-    // Plan-D DeepSeek is currently out of credits (per memory); not
-    // wired here yet — when it returns, add a fourth tier in parallel.
+    // Provider redundancy chain (v-final-prototype whitelist, 2026-05-13):
+    // A=Gemini, B=Groq, C=Mistral. Kimi/Moonshot removed (forbidden).
+    // Each tier uses that provider's best available model. If A is
+    // quota'd, B takes over with no quality drop; if B fails, C takes over.
     let llmText = "";
     let usedProvider = "";
     type Plan = {
@@ -320,21 +319,18 @@ async function buildUserProfileInner(userId: string): Promise<void> {
           ),
       },
       {
-        name: "kimi",
+        name: "mistral",
         run: () =>
-          callKimi(
+          callMistral(
             [
               { role: "system", content: PROFILE_REBUILD_PROMPT },
               { role: "user", content: userMessage },
             ],
             {
-              // moonshot-v1-128k is the highest-context Kimi model that
-              // accepts temperature ≠ 1 (kimi-k2.x requires temp=1.0
-              // which is non-deterministic — bad for a profile rebuild).
-              model: "moonshot-v1-128k",
+              model: "mistral-small-latest",
               temperature: 0.2,
               max_tokens: 1500,
-              response_format: { type: "json_object" },
+              jsonOnly: true,
             }
           ),
       },
