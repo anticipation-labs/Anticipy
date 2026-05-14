@@ -194,3 +194,52 @@ The prior session's PROGRESS overstated what remained. Real-state audit revealed
 
 Tagging `phase-2-complete`.
 
+### Phase 1 — scaffolding only (not tagged)
+
+The Phase 1 scope (synthetic data generation + QLoRA + 30+/32 gold-standard eval) is blocked on two real-world prerequisites that cannot be addressed in a single autonomous session: a non-empty `OPENROUTER_API_KEY` (currently empty in `.env.local`) and a Kaggle T4 fine-tune run. So this session lands the SCAFFOLDING and leaves the generator + fine-tune for a future session.
+
+What's on disk now: `engine/data/synth/` has
+
+- `README.md` — full schema + offline-batch pipeline diagram.
+- `gold_standard.jsonl` — 17 hand-authored exemplars covering every boundary tag named in the master prompt (sarcasm, hedging, abandonment, third_party, past_tense, conditional, real_action, multi_turn). Schema-valid. Label distribution `{REFUSE: 8, STORE_AS_LATENT: 4, COMMIT: 5}`. Serves as the smoke-test gate until the generator produces the remaining ~15 boundary variants.
+- `prompts.py` — generator prompt templates for the three datasets (utterance_in_context @25k rows, memory_resolution @10k rows, negative @15k rows) + a `BATCH_TARGETS` dict + a `DEFAULT_BOUNDARY_DISTRIBUTION`. Pure Python module, no API calls at import.
+- `validate.py` — stdlib-only schema + sanity validator. Verifies label/intent/memory_write consistency, evidence-quote-is-substring, boundary_tag enum, action_category enum. Reports label and tag distributions on every run.
+
+`gold_standard.jsonl` passes `validate.py` with 0 errors. The CI gate for Phase 1 graduation is later: 30+/32 of the FINAL set after generation + QLoRA.
+
+What's still missing for `phase-1-complete`:
+
+- `generate.py` — the DeepSeek-V4-Flash-via-OpenRouter caller. Not built. Needs `OPENROUTER_API_KEY` (empty in `.env.local`). Estimated spend at full volume: ~$10-20.
+- The generated `.jsonl` files (utterance_in_context, memory_resolution, negative).
+- The QLoRA adapter at `~/.anticipy/adapters/hedge_filter_v1/`.
+- Eval against `gold_standard.jsonl` passing 30+/32.
+
+### Phase 3 — typed-contract SCHEMA (not tagged; only the SQL + TS types land here)
+
+The proactive engine, middle layer, and executor all communicate via three typed contracts (Intent → Task → Result) over Supabase Realtime channels. The schema lands first so each side can be developed and tested independently against fake objects.
+
+`supabase/migrations/20260513_anticipy_v2_typed_contracts.sql` — writes `anticipy_intents_v2`, `anticipy_tasks_v2`, `anticipy_results_v2`. Each table mirrors the master prompt's contract block verbatim (down to field names and enum values). RLS: user_id = auth.uid()::text reads, service-role-only writes. CHECK constraints on every enum (hedge_filter_decision, source, status, verifier_output). FK cascades from results → tasks → intents. Indexes on user_id+created_at (Realtime backfill), skill_id (router lookups), verifier_output (fleet-learning promotion). Idempotent `ALTER PUBLICATION supabase_realtime ADD TABLE` for the three Realtime channels.
+
+`src/lib/contracts-v2.ts` — TypeScript mirror of all three contracts. Realtime channel-name helpers (`channelIntentDetected(userId)` etc.). Dependency-free runtime validators (`isIntent`, `isTask`, `isResult`) for the TS subscribers to fail loud on unexpected shapes. `npx tsc --noEmit --skipLibCheck` passes clean.
+
+**NOT applied to production.** Adding tables to prod is a real production change. Omar reviews the migration diff and runs `npx supabase db push` himself.
+
+Also note: the existing migration `supabase/migrations/20260513_skill_library_task_state.sql` (from commit `93d9ead`) is also pending application — it adds `skill_library` and `task_state` tables. Both migrations are additive and can be applied together.
+
+What's still missing for `phase-3-complete`:
+
+- Apply both pending migrations to prod (Omar's call).
+- Build the proactive engine (`engine/app/proactive/{asr,vad,diarization,demand_detection,hedge_filter,intent_extraction,pipeline}.py`). The Stage 1.5 hedge_filter requires the Phase 1 adapter to be trained first.
+- Wire the cascade output to publish on `intent.detected.{user_id}`.
+
+### Session 2 — close
+
+Phase 0 + Phase 0.5 (non-sudo) + Phase 2 fully completed and tagged. Phase 1 scaffolding + Phase 3 schema land as forward progress on disk; not tagged because the actual training and dispatcher work is multi-session.
+
+**Next session entry points (any of):**
+
+1. Apply both pending migrations (`npx supabase db push`) and verify they take cleanly.
+2. Once `OPENROUTER_API_KEY` is populated, build `engine/data/synth/generate.py` and run a small smoke batch (~100 rows) to validate the prompt templates before spending on the full 50k.
+3. Investigate the executor's 93% trajectory failure (per `PENDING_DIAGNOSTIC.md`). This is the real production-blocking bug and the v-final-prototype architecture builds on top of a working executor. Requires Omar to reload a v7 extension build at `chrome://extensions`.
+4. Build the Stage 1 demand-detection module (`engine/app/proactive/demand_detection.py`) — doesn't depend on the hedge filter, can be built and tested independently against the 138 production trajectories' transcripts.
+
