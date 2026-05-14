@@ -40,7 +40,30 @@ from .types import (
 )
 from .urgency import UrgencyScorer
 
+# ─────────────────────────────────────────────────────────────────────────
+# v-final-prototype Pod A surface (2026-05-13).
+# The full audio -> typed Intent cascade lives below. Module-level imports
+# are cheap; the heavy ML deps (parakeet-mlx, pyannote.audio, silero-vad)
+# are loaded inside each class's __init__ so this package can still be
+# imported when only the contract shapes are needed.
+# ─────────────────────────────────────────────────────────────────────────
+from .demand_detection import DemandDecision, DemandDetector
+from .hedge_filter import HedgeFilter, HedgeResult, MemoryWriteSpec
+from .intent_extraction import IntentExtractor, IntentSlots, TypedIntent
+from .pipeline import PipelineResult, PodAPipeline
+
 __all__ = [
+    # v-final-prototype Pod A
+    "DemandDecision",
+    "DemandDetector",
+    "HedgeFilter",
+    "HedgeResult",
+    "IntentExtractor",
+    "IntentSlots",
+    "MemoryWriteSpec",
+    "PipelineResult",
+    "PodAPipeline",
+    "TypedIntent",
     "AdmitVerdict",
     "Confidence",
     "Decision",
