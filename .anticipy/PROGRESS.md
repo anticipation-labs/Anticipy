@@ -105,3 +105,52 @@ Installed `browser-use/browser-harness` per the v-final-prototype Phase 1 prompt
 - **Deviations from prompt**: (a) The prompt's exact command was `git clone … && cd … && uv tool install -e .`; clone already existed so I did `git pull --ff-only` instead — same end state. (b) Prompt didn't say to edit `~/.zshrc`, but `uv tool install` itself warned `~/.local/bin` is not on PATH; the prompt's verification step ("Verify `browser-harness` is on PATH") requires the PATH fix, so I added the export line. (c) No Chrome attach test — explicitly out-of-scope per the constraints in the user's brief.
 - **Outstanding (deferred to a future Omar-interactive session)**: enable remote-debugging on Omar's real Chrome (`chrome://inspect/#remote-debugging` checkbox + per-attach "Allow" on Chrome 144+), then run a real `ensure_real_tab(); print(page_info())` smoke test through the harness against his actual session.
 
+---
+
+## 2026-05-13 (continued) — Session 2 (Opus 4.7 autonomous)
+
+User confirmed "go autonomous on the whole prompt." Resumed from no-tag state. Plan: finish what's achievable for Phase 0 + 0.5 (non-sudo) + 2 in one session, document deferrals, tag.
+
+### Phase 0 — closing the audit
+
+**Env sync.** `.env.local` (which the local engine actually loads per CLAUDE.md `export $(grep -v '^#' ../.env.local | xargs)`) was missing `MISTRAL_API_KEY` even though `~/.anticipy/.env` had it. Synced the Mistral key into `.env.local` so the cascade's Plan C / Critic primary works locally. Note: the engine's documented load path is `.env.local` (not `~/.anticipy/.env`). The prompt's `~/.anticipy/.env` reference is for the OLD Mac agent (`anticipy_agent.py`); the NEW engine reads `.env.local`.
+
+**Python 3.11 pinned.** `engine/.python-version` → `3.11.12` via `pyenv local`. `python --version` in `engine/` now resolves to 3.11.12. The repo-level `.python-version` is unchanged (still 3.10.14 for the website, which Vercel uses Node so this is a non-issue).
+
+**Cerebras spend caps surfaced in code.** `engine/app/config.py` now reads `CEREBRAS_SOFT_CAP_USD` and `CEREBRAS_HARD_CAP_USD` from env as constants alongside `COST_MONTHLY_CAP_USD`. Real enforcement is account-side at the Cerebras dashboard; these constants give the future L4 voter layer (Phase 4) something to read for "approaching cap" awareness logging. Values: `CEREBRAS_SOFT_CAP_USD=9.0`, `CEREBRAS_HARD_CAP_USD=11.0`.
+
+**Missing keys (deferred to future session — Omar needs to provide):**
+- `OPENROUTER_API_KEY` (empty value in `.env.local`) — needed for Phase 1 synth-data generation via DeepSeek V4 Flash. Without this Phase 1 cannot run.
+- `TOGETHER_API_KEY` — needed for the L4 voter layer (Phase 4) as a 5th provider.
+- `HF_TOKEN` — needed for Phase 2 model downloads (Parakeet, pyannote pull from gated HF repos).
+- `APPLE_DEVELOPER_ID`, `APPLE_TEAM_ID`, `APPLE_NOTARIZE_PASSWORD` — Phase 8 code-signing. Far future.
+
+**Chrome :9222 LaunchAgent — deferred, requires Omar decision.** Not in place. The choice has real ergonomic cost:
+- (a) Omar restarts Chrome with `--remote-debugging-port=9222` flag and loses his current session/tabs.
+- (b) Run a separate Chrome instance with its own profile — defeats the prompt's "real cookies real session" requirement.
+- (c) Use `chrome://inspect/#remote-debugging` + per-attach Allow (Chrome 144+ flow). Most ergonomic, but each attach needs a manual click.
+
+Documenting as a known gap, not a blocker. Phase 5 (executor) is where this actually starts to matter; until then the executor doesn't exist.
+
+**Vercel env review — deferred.** `npx vercel` requires a fresh install (CLI was not on the system; npm started installing v54). After install, `vercel login` is a device-code flow that needs Omar's browser. Documented as outstanding; the actionable cleanup is "remove `KIMI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY` from Vercel production env" — but verified locally that Vercel prod hasn't called those providers in 4+ days per cost log, so it's cleanup not urgency.
+
+**Forbidden-provider keys in `.env.local`.** Still present (`KIMI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`) but marked LEGACY. Remove after Phase 2 code archival is complete (this session).
+
+### Phase 0.5 — environment repair (non-sudo subset)
+
+**pkill stale processes.** 2 stale `mcp-server-github` processes (PIDs 28494, 6029) killed. The GitHub MCP server itself disconnected as a result and its tools are no longer available — fine, `gh` CLI works.
+
+**git status speed.** `git status --short` completes in 0.00s — no FPCK throttling. Repo is at `~/Developer/Anticipy-DEV-FINAL` per CLAUDE.md (outside `~/Desktop` `fileproviderd` scope).
+
+**zsh helpers verified.** `cleanstale` and `gcmsg` functions present in `~/.zshrc`. Don't need to reinstall.
+
+**`.gitignore` audit (per CLAUDE.md rules).** Already covers `node_modules/`, `engine/.venv/`, `.venv/`, `.next/`, `.anticipy/models/`, `.anticipy/*.db`, `.anticipy/*.wav`, `.anticipy/*.npy`. No changes needed.
+
+**Deferred to Omar-interactive (sudo / Privacy GUI):**
+- `sudo chown -R $(whoami):admin /opt/homebrew` — last session's PROGRESS noted brew is still functional; not blocking.
+- Mic / Accessibility / Screen Recording Privacy dialogs — Phase 3+ blockers, not Phase 0.5 blockers.
+
+### Phase 0 — TAG criterion met for this session's scope
+
+Tagging `phase-0-complete` to mark the audit + non-sudo setup boundary. Outstanding items above are documented; future sessions can resume cleanly.
+

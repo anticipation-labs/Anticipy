@@ -356,6 +356,17 @@ COST_MONTHLY_CAP_USD: float = float(
     os.environ.get("COST_MONTHLY_CAP_USD", "10.0") or "10.0"
 )
 
+# Cerebras spend awareness (the L4 voter layer in v-final-prototype will read
+# these). Real enforcement is configured at the Cerebras account dashboard;
+# these constants exist so the runtime can log "approaching cap" warnings
+# without inventing values. Set to 0.0 to disable awareness logging.
+CEREBRAS_SOFT_CAP_USD: float = float(
+    os.environ.get("CEREBRAS_SOFT_CAP_USD", "0.0") or "0.0"
+)
+CEREBRAS_HARD_CAP_USD: float = float(
+    os.environ.get("CEREBRAS_HARD_CAP_USD", "0.0") or "0.0"
+)
+
 
 # --- Required env vars for production ---
 REQUIRED_ENV_VARS: list[str] = [
