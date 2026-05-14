@@ -131,17 +131,16 @@ async def _gemini_json(system: str, user: str, max_tokens: int = 4096) -> dict:
                 if attempt < 1:
                     await asyncio.sleep(2)
 
-    # ── Kimi (Moonshot) tertiary fallback ──
+    # ── Mistral tertiary fallback ──
     # When both Gemini AND Groq exhaust their daily token budget, the
-    # harness used to die. Kimi is on a separate quota / org so it survives
-    # those simultaneous walls. Use `moonshot-v1-32k` because `kimi-k2.6`
-    # requires `temperature=1.0` (returns 400 at temp 0) and we need
-    # deterministic verdicts here.
-    kimi_key = os.environ.get("KIMI_API_KEY")
-    if kimi_key:
-        kimi_url = "https://api.moonshot.ai/v1/chat/completions"
-        kimi_body = {
-            "model": "moonshot-v1-32k",
+    # harness used to die. Mistral La Plateforme is on a separate quota /
+    # org so it survives those simultaneous walls. Replaces Kimi/Moonshot
+    # (removed 2026-05-13 per v-final-prototype provider whitelist).
+    mistral_key = os.environ.get("MISTRAL_API_KEY")
+    if mistral_key:
+        mistral_url = "https://api.mistral.ai/v1/chat/completions"
+        mistral_body = {
+            "model": "mistral-small-latest",
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -154,9 +153,9 @@ async def _gemini_json(system: str, user: str, max_tokens: int = 4096) -> dict:
             for attempt in range(2):
                 try:
                     r = await client.post(
-                        kimi_url,
-                        json=kimi_body,
-                        headers={"Authorization": f"Bearer {kimi_key}"},
+                        mistral_url,
+                        json=mistral_body,
+                        headers={"Authorization": f"Bearer {mistral_key}"},
                     )
                     if r.status_code == 200:
                         data = r.json()
@@ -165,7 +164,7 @@ async def _gemini_json(system: str, user: str, max_tokens: int = 4096) -> dict:
                     last_status = r.status_code
                     last_body = r.text[:200]
                 except json.JSONDecodeError as e:
-                    last_status = "kimi_json_decode"
+                    last_status = "mistral_json_decode"
                     last_body = str(e)[:200]
                 except Exception:
                     pass
@@ -173,7 +172,7 @@ async def _gemini_json(system: str, user: str, max_tokens: int = 4096) -> dict:
                     await asyncio.sleep(2)
 
     raise RuntimeError(
-        f"all providers failed (last gemini/groq/kimi {last_status}: {last_body})"
+        f"all providers failed (last gemini/groq/mistral {last_status}: {last_body})"
     )
 
 

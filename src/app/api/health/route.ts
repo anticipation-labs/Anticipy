@@ -19,13 +19,19 @@ export async function GET() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     ),
     supabaseAdmin: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    deepgram: Boolean(process.env.DEEPGRAM_API_KEY),
+    cerebras: Boolean(process.env.CEREBRAS_API_KEY),
     gemini: Boolean(process.env.GOOGLE_API_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
+    mistral: Boolean(process.env.MISTRAL_API_KEY),
     resend: Boolean(process.env.RESEND_API_KEY),
   };
 
-  const ok = env.supabase && env.supabaseAdmin && env.deepgram && (env.gemini || env.groq);
+  // Deepgram dropped from healthcheck 2026-05-13 (v-final-prototype provider
+  // whitelist forbids it). At least one whitelisted hot-path LLM must be set.
+  const ok =
+    env.supabase &&
+    env.supabaseAdmin &&
+    (env.cerebras || env.gemini || env.groq || env.mistral);
 
   return NextResponse.json(
     {

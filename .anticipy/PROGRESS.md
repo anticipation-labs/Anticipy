@@ -154,3 +154,43 @@ Documenting as a known gap, not a blocker. Phase 5 (executor) is where this actu
 
 Tagging `phase-0-complete` to mark the audit + non-sudo setup boundary. Outstanding items above are documented; future sessions can resume cleanly.
 
+### Phase 2 — cleanup completed
+
+The prior session's PROGRESS overstated what remained. Real-state audit revealed:
+
+- `src/lib/{agent-llm,llm-cascade,meta-monitor}.ts` were already rewired in-place by commit 0e351d4 (not archived). Verified clean of all forbidden refs. Imports cerebras + groq + mistral only.
+- `engine/test_prompt_rules_present.py` and `engine/test_cascade_resilience.py` already had Mistral-whitelist assertions from commit 784eacf. The Kimi-asserting rules are skipped via `if file_label == "agent.js": pytest.skip()` because the extension surface is retired.
+- `engine/app/llm_judge.py` already clean (no Kimi reference in docstring or code).
+
+**This session's edits (8 files):**
+
+`src/app/api/extension/auth/route.ts` — vends `mistralApiKey` to extension. `kimiApiKey` kept as explicit `null` so old extension builds that destructure it don't crash. Provider redundancy comment updated to reflect Cerebras/Gemini/Groq/Mistral/DeepSeek whitelist.
+
+`src/app/api/extension/agent-config/route.ts` — `tier_order` is now `["cerebras", "groq", "mistral"]`. Removed `kimi` block from `per_tier`. Added Mistral block with 1200ms spacing (Mistral free tier ~1 req/sec).
+
+`src/app/api/engine/deepgram-key/route.ts` — replaced full Deepgram-token-grant implementation with a permanent-503 stub matching the `llm-proxy` pattern. Caller gets a structured refusal pointing to the local engine ASR path (Mistral voxtral-mini or Parakeet TDT on the Mac). `/engine/page.tsx` still fetches this route and will degrade to a "network" error toast — full fix requires wiring the page to local-engine ASR, which is Phase 3 work.
+
+`src/app/api/health/route.ts` — removed Deepgram from healthcheck criteria. Added Cerebras + Mistral booleans. Now requires `supabase && supabaseAdmin && (cerebras || gemini || groq || mistral)` for `ok=true`.
+
+`engine/test_models.py` — bulk renamed `"kimi"` → `"mistral"` throughout (14 occurrences). The throttle test is provider-agnostic: the provider name is just a dict key. Renaming aligns with the whitelist without changing semantics.
+
+`engine/test_torture_browser.py` — replaced the Kimi/Moonshot tertiary fallback block with a Mistral La Plateforme block (same shape, calls `mistral-small-latest` via `https://api.mistral.ai/v1/chat/completions`). The tertiary now fires when both Gemini + Groq exhaust their daily token budget — same role Kimi played before.
+
+`engine/test_extension_runner.py` — extension's apiConfig mock now includes `mistralApiKey` from env. `kimiApiKey` kept as explicit `None` to match the response shape from the rewired auth route.
+
+`scripts/smoke_per_provider.ts` — `probeKimi()` → `probeMistral()`. Calls `callMistral` from `src/lib/mistral` against `mistral-small-latest`. The provider union type and the Promise.all call site updated accordingly.
+
+**Out of scope for this session (documented, not blocking):**
+
+- `extension/agent.js` and `extension/popup.js` Kimi paths — requires Omar to load a v7+ extension build in `chrome://extensions`. Deferred per prior session's CHANGELOG entry on extension reload friction.
+- `src/app/engine/page.tsx` Deepgram WebSocket path — needs to route through the local engine's ASR once Phase 3 wires Parakeet. For now the page degrades to a "network" error on `/api/engine/deepgram-key` (503).
+- CRM-side `src/lib/crm/deepgram.ts` and `src/app/api/crm/{voice,integrations/test}` — CRM is a separate product per FORBIDDEN_PROVIDER_HITS.md. Not in scope.
+- Vercel production env still has `KIMI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY` — cleanup needed (`vercel env rm`) but those routes can no longer call those providers, so this is hygiene not urgency.
+
+**Verification:**
+- Python AST parse passes on all 10 `engine/app/` modules + all 5 modified test files.
+- `npx tsc --noEmit --skipLibCheck` passes with zero errors across the whole repo.
+- Runtime import + pytest deferred to Phase 1 (engine .venv bootstrap).
+
+Tagging `phase-2-complete`.
+

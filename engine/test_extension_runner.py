@@ -344,8 +344,12 @@ async def configure_extension(popup_page, *, user_id: str) -> None:
         "cerebrasApiKey": os.environ.get("CEREBRAS_API_KEY") or None,
         "groqApiKey": os.environ.get("GROQ_API_KEY") or None,
         "geminiApiKey": os.environ.get("GOOGLE_API_KEY") or None,
-        "kimiApiKey": os.environ.get("KIMI_API_KEY") or None,
+        "mistralApiKey": os.environ.get("MISTRAL_API_KEY") or None,
         "deepseekApiKey": os.environ.get("DEEPSEEK_API_KEY") or None,
+        # kimiApiKey kept as explicit None to match the response shape from
+        # /api/extension/auth (backward compat for old extension builds).
+        # Remove once extension v7+ ships without Kimi paths.
+        "kimiApiKey": None,
         "proxyBaseUrl": os.environ.get("WEBSITE_BASE", "https://www.anticipy.ai"),
     }
     await popup_page.evaluate(

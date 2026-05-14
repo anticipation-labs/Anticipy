@@ -89,8 +89,9 @@ const RUNTIME_CONFIG = {
   // Tier order: extension tries these in order, each with proactive
   // spacing. Cerebras Qwen3-235B (free 1M tok/day, ~250ms) is the
   // primary; Groq llama-3.3-70b (free 14400 RPD, but daily-token-limit
-  // sensitive) is fallback; Kimi paid is last resort.
-  tier_order: ["cerebras", "groq", "kimi"],
+  // sensitive) is fallback; Mistral mistral-small-latest (free, 262K ctx)
+  // is third-tier. Kimi removed 2026-05-13 per v-final-prototype whitelist.
+  tier_order: ["cerebras", "groq", "mistral"],
   per_tier: {
     cerebras: {
       spacing_ms: 2000,
@@ -104,8 +105,10 @@ const RUNTIME_CONFIG = {
       temperature: 0.1,
       timeout_ms: 20000,
     },
-    kimi: {
-      spacing_ms: 500,
+    mistral: {
+      // Free tier is roughly 1 req/sec across La Plateforme. 1200ms spacing
+      // keeps us safely under that without leaving headroom on the table.
+      spacing_ms: 1200,
       max_tokens: 2400,
       temperature: 0.1,
       timeout_ms: 30000,

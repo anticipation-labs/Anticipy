@@ -62,7 +62,7 @@ async def _async_test_throttle_spaces_calls() -> None:
     """5 calls at 1s spacing should take ~4s and each gap >= ~1s."""
     _reset_throttle_state()
     start = time.monotonic()
-    ts = await _fire_n_calls("kimi", 5, 1.0)
+    ts = await _fire_n_calls("mistral", 5, 1.0)
     elapsed = time.monotonic() - start
 
     assert len(ts) == 5
@@ -89,24 +89,24 @@ async def _async_test_different_providers_independent() -> None:
     """A slow provider should not block fast calls to a different provider."""
     _reset_throttle_state()
 
-    # Pre-poison kimi so the next call would have to wait 2s, then verify
+    # Pre-poison mistral so the next call would have to wait 2s, then verify
     # gemini calls fire instantly anyway.
-    models._throttle_last_call["kimi"] = time.monotonic()
+    models._throttle_last_call["mistral"] = time.monotonic()
 
     start = time.monotonic()
     await _fire_n_calls("gemini", 5, 0.0)
     elapsed = time.monotonic() - start
-    assert elapsed < 0.1, f"gemini blocked on kimi state: {elapsed:.3f}s"
-    print(f"PASS test_different_providers_independent: gemini ran in {elapsed:.4f}s while kimi was throttled")
+    assert elapsed < 0.1, f"gemini blocked on mistral state: {elapsed:.3f}s"
+    print(f"PASS test_different_providers_independent: gemini ran in {elapsed:.4f}s while mistral was throttled")
 
 
 async def _async_test_burst_then_steady() -> None:
     """First call goes through immediately; subsequent calls space out."""
     _reset_throttle_state()
     start = time.monotonic()
-    await models._await_throttle("kimi", 1.2)
+    await models._await_throttle("mistral", 1.2)
     first_done = time.monotonic() - start
-    await models._await_throttle("kimi", 1.2)
+    await models._await_throttle("mistral", 1.2)
     second_done = time.monotonic() - start
 
     assert first_done < 0.05, f"first call delayed: {first_done:.3f}s"
@@ -121,7 +121,7 @@ async def _async_test_effective_timeout_with_throttle() -> None:
     try:
         models.MODEL_CHAIN.clear()
         models.MODEL_CHAIN.append({
-            "name": "kimi",
+            "name": "mistral",
             "min_interval_seconds": 1.2,
             "base_url": "x", "api_key": "x", "model": "x",
             "cost_input": 0.0, "cost_output": 0.0,
@@ -180,17 +180,17 @@ async def _async_test_provider_slot_serializes_concurrent() -> None:
     # Fan out 3 calls to the same provider with min_interval=1.0. Only one
     # is in-flight at a time. Completions should be ~0s, ~1s, ~2s.
     await asyncio.gather(
-        acquire("kimi", 1.0, "k1"),
-        acquire("kimi", 1.0, "k2"),
-        acquire("kimi", 1.0, "k3"),
+        acquire("mistral", 1.0, "k1"),
+        acquire("mistral", 1.0, "k2"),
+        acquire("mistral", 1.0, "k3"),
     )
     same_provider_finishes = sorted(t for label, t in finish_times if label.startswith("k"))
     assert len(same_provider_finishes) == 3
-    assert same_provider_finishes[0] < 0.1, f"first kimi finish: {same_provider_finishes[0]:.3f}s"
+    assert same_provider_finishes[0] < 0.1, f"first mistral finish: {same_provider_finishes[0]:.3f}s"
     assert 0.95 <= same_provider_finishes[1] <= 1.3, (
-        f"second kimi finish: {same_provider_finishes[1]:.3f}s, expected ~1s")
+        f"second mistral finish: {same_provider_finishes[1]:.3f}s, expected ~1s")
     assert 1.95 <= same_provider_finishes[2] <= 2.4, (
-        f"third kimi finish: {same_provider_finishes[2]:.3f}s, expected ~2s")
+        f"third mistral finish: {same_provider_finishes[2]:.3f}s, expected ~2s")
 
     # Now reset and fan out 3 calls to DIFFERENT providers — they should
     # all complete near-instantly because the per-provider semaphores are

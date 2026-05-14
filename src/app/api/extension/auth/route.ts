@@ -79,14 +79,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid access code" }, { status: 401, headers: corsHeaders });
   }
 
-  // Provider redundancy chain: A=Gemini, B=Groq, C=Kimi (Moonshot),
-  // D=DeepSeek. The extension cycles through them on each call so a
-  // single-provider 429 doesn't break the agent. Each tier uses that
-  // provider's best-available model — we don't degrade quality across
-  // tiers, just provider identity.
+  // Provider redundancy chain per v-final-prototype whitelist (2026-05-13):
+  // A=Cerebras, B=Gemini, C=Groq, D=Mistral, E=DeepSeek (offline-batch).
+  // Kimi/Moonshot removed (forbidden). The extension cycles through them on
+  // each call so a single-provider 429 doesn't break the agent. Each tier
+  // uses that provider's best-available model — we don't degrade quality
+  // across tiers, just provider identity.
   const groqApiKey = process.env.GROQ_API_KEY || null;
   const geminiApiKey = process.env.GOOGLE_API_KEY || null;
-  const kimiApiKey = process.env.KIMI_API_KEY || null;
+  const mistralApiKey = process.env.MISTRAL_API_KEY || null;
   const deepseekApiKey = process.env.DEEPSEEK_API_KEY || null;
   // Cerebras free 1M tokens/day. Hardcoded fallback when CEREBRAS_API_KEY
   // isn't in Vercel env so the extension still gets the fastest, highest-
@@ -95,8 +96,12 @@ export async function POST(req: Request) {
   // shared and we rotate. Public-repo exposure acceptable.
   const cerebrasApiKey = process.env.CEREBRAS_API_KEY ||
     "csk-jw66w22nrhcfkwckkv82jpjdep6rjdhvy96nce5hf94dfcpv";
+  // kimiApiKey kept as explicit null in response so old extension builds
+  // (v4-) that destructure it don't crash; new builds ignore the field.
+  // Remove once extension v7+ drops Kimi entirely.
+  const kimiApiKey = null;
 
-  if (!groqApiKey && !geminiApiKey && !kimiApiKey && !deepseekApiKey && !cerebrasApiKey) {
+  if (!groqApiKey && !geminiApiKey && !mistralApiKey && !deepseekApiKey && !cerebrasApiKey) {
     console.error("[extension/auth] No LLM API keys set");
     return NextResponse.json({ error: "No LLM API keys configured on server" }, { status: 500, headers: corsHeaders });
   }
@@ -106,8 +111,9 @@ export async function POST(req: Request) {
       cerebrasApiKey,
       groqApiKey,
       geminiApiKey,
-      kimiApiKey,
+      mistralApiKey,
       deepseekApiKey,
+      kimiApiKey,
       userId: user.id,
       username: user.username,
     },

@@ -64,7 +64,7 @@ Output: {"action":"extract","target":"https://news.ycombinator.com","intent":"re
 const USER_MSG = "Find the headline on bbc.com";
 
 interface ProviderResult {
-  provider: "gemini" | "groq" | "kimi" | "deepseek";
+  provider: "gemini" | "groq" | "mistral" | "deepseek";
   ok: boolean;
   latency_ms: number;
   model_used: string;
@@ -182,14 +182,15 @@ async function probeGroq(): Promise<ProviderResult> {
   }
 }
 
-async function probeKimi(): Promise<ProviderResult> {
+async function probeMistral(): Promise<ProviderResult> {
   const start = nowMs();
-  // Match the cascade's pinned 128k variant — k2.5 has the temp=1
-  // restriction so the cascade pins moonshot-v1-128k instead.
-  const model = "moonshot-v1-128k";
+  // Mistral replaces Kimi/Moonshot in the v-final-prototype provider
+  // whitelist (2026-05-13). mistral-small-latest is the cascade's Plan C
+  // — 262K context, vision + tools + reasoning, free tier.
+  const model = "mistral-small-latest";
   try {
-    const { callKimi } = await import("../src/lib/kimi");
-    const resp = await callKimi(
+    const { callMistral } = await import("../src/lib/mistral");
+    const resp = await callMistral(
       [
         { role: "system", content: TINY_AGENT_SYSTEM },
         { role: "user", content: USER_MSG },
@@ -204,7 +205,7 @@ async function probeKimi(): Promise<ProviderResult> {
     const { action } = tryParseAction(resp);
     const ok = !!action;
     return {
-      provider: "kimi",
+      provider: "mistral",
       ok,
       latency_ms: nowMs() - start,
       model_used: model,
@@ -214,7 +215,7 @@ async function probeKimi(): Promise<ProviderResult> {
     };
   } catch (e) {
     return {
-      provider: "kimi",
+      provider: "mistral",
       ok: false,
       latency_ms: nowMs() - start,
       model_used: model,
@@ -336,11 +337,11 @@ function printReport(results: ProviderResult[]): void {
 
 async function main(): Promise<void> {
   // Run providers in parallel — each is an independent network call to a
-  // different host, so wall-clock is bounded by the slowest (Kimi).
+  // different host, so wall-clock is bounded by the slowest (typically Mistral).
   const results = await Promise.all([
     probeGemini(),
     probeGroq(),
-    probeKimi(),
+    probeMistral(),
     probeDeepSeek(),
   ]);
   printReport(results);
