@@ -6,7 +6,7 @@
 //   1. Cerebras Qwen3-235B  — 1M tok/day, 30 RPM, ~250ms latency
 //   2. Groq llama-3.3-70b   — 14400 RPD, 30 RPM (separate quota pool)
 //   3. Gemini 2.5 Flash     — 1500 RPD (when AI Studio cap allows; vision-capable)
-//   4. Kimi moonshot-v1-128k — paid Moonshot fallback
+//   4. Mistral mistral-small-latest — free La Plateforme tertiary fallback
 // Each tier has its own per-minute quota. By rotating across tiers we
 // effectively get 90+ RPM combined, vs the 30 RPM of any single tier.
 // The agent tries them in order; on 429 of one tier, the next call goes
@@ -20,7 +20,7 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 // vision-required action types.
 const GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
 const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-const KIMI_API_URL = "https://api.moonshot.ai/v1/chat/completions";
+const MISTRAL_API_URL = "https://api.mistral.ai/v1/chat/completions";
 
 const MAX_STEPS = 60;
 const TASK_TIMEOUT_MS = 600_000; // 10 minutes hard limit (multi-step flows)
@@ -321,7 +321,7 @@ export class BrowserAgent {
     // any provider whose unblock time is in the future. When ALL
     // providers are blocked, _callLLM sleeps until the earliest unblock.
     // No hardcoded provider names beyond the keys we read from apiConfig
-    // (gemini/groq/kimi/deepseek). Whichever has quota next is what we
+    // (gemini/groq/mistral/deepseek). Whichever has quota next is what we
     // use — that's the "cheapest available" policy.
     this._providerUnblockAt = {};     // { providerName: epochMs }
     this._providerFailCount = {};     // { providerName: consecutive429s }
@@ -336,12 +336,27 @@ export class BrowserAgent {
     this._PROVIDER_MIN_SPACING_MS = {
       cerebras: 2000,
       groq:     2000,
-      kimi:     500,
+      mistral:  1200,
     };
   }
 
   async _waitForProviderSpacing(name) {
-    const min = this._PROVIDER_MIN_SPACING_MS[name] || 0;
+    // SERVER-DRIVEN SPACING (v7+): read per_tier[name].spacing_ms from the
+    // /api/extension/agent-config response if we have a cached copy.
+    // Falls back to the bundled _PROVIDER_MIN_SPACING_MS map only if the
+    // server hasn't provided a spacing for this tier. This means we can
+    // tune Cerebras spacing on the server (push to Vercel) and within ~60s
+    // every shipped extension picks it up — NO extension reload required.
+    // This is the fix for the 30 RPM burst pattern that killed the 0/35
+    // benchmark: when Cerebras hits 429, we can bump server spacing to
+    // 2500ms and shipped agents will respect it on next config refresh.
+    let min = 0;
+    const remoteSpacing = this._cachedAgentConfig?.per_tier?.[name]?.spacing_ms;
+    if (typeof remoteSpacing === "number" && remoteSpacing >= 0) {
+      min = remoteSpacing;
+    } else {
+      min = this._PROVIDER_MIN_SPACING_MS[name] || 0;
+    }
     if (min <= 0) return;
     const last = this._lastProviderCallAt[name] || 0;
     const since = Date.now() - last;
@@ -503,13 +518,13 @@ export class BrowserAgent {
   }
 
   // ─── Reflexion: lesson distillation + persistence ────────────────────
-  // Inline so we don't need a new HTTP endpoint. One Kimi call per task
+  // Inline so we don't need a new HTTP endpoint. One Mistral call per task
   // end (success OR failure). Cost: ~$0.001 per task. Lessons stored in
   // chrome.storage.local.lessons (cap 5, FIFO). Loaded into the system
-  // prompt by _getNextAction. NEVER site-specific — the Kimi prompt
+  // prompt by _getNextAction. NEVER site-specific — the Mistral prompt
   // demands a generalized rule that would apply across many sites.
   async _distillAndStoreLesson(result) {
-    if (!this.apiConfig?.kimiApiKey || this._isProviderBlocked("kimi")) return;
+    if (!this.apiConfig?.mistralApiKey || this._isProviderBlocked("mistral")) return;
     if (this.steps.length === 0) return;
     const recent = this.steps.slice(-8).map((s, i) => {
       const a = s.action || {};
@@ -535,14 +550,14 @@ export class BrowserAgent {
       `- If nothing useful was learned, output the literal string: SKIP.\n\n` +
       `JSON only: {"lesson": "<the lesson, or 'SKIP'>"}`;
     try {
-      const resp = await fetch(KIMI_API_URL, {
+      const resp = await fetch(MISTRAL_API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${this.apiConfig.kimiApiKey}`,
+          "Authorization": `Bearer ${this.apiConfig.mistralApiKey}`,
         },
         body: JSON.stringify({
-          model: "moonshot-v1-128k",
+          model: "mistral-small-latest",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.2,
           max_tokens: 120,
@@ -550,7 +565,7 @@ export class BrowserAgent {
         }),
       });
       if (!resp.ok) {
-        if (/\b429\b|\b402\b/.test(`${resp.status}`)) this._markProvider429("kimi");
+        if (/\b429\b|\b402\b/.test(`${resp.status}`)) this._markProvider429("mistral");
         return;
       }
       const data = await resp.json();
@@ -916,7 +931,7 @@ export class BrowserAgent {
       }
 
       // ─── Verifier agent call (server-side at /api/agent/verify) ───────
-      // Independent agent — same Kimi K2.6, fresh context, no Executor
+      // Independent agent — same Mistral small, fresh context, no Executor
       // bias. Catches the silent-stall failure mode where the Executor
       // thinks it succeeded but the page didn't actually move. Fires only
       // on observable actions (those with a signalDiff captured) and only
@@ -1037,7 +1052,7 @@ export class BrowserAgent {
 
   // ─── Agent-team HTTP helpers ─────────────────────────────────────────
   // These call /api/agent/{verify,critic,reflect} on anticipy.ai. Same
-  // upstream Kimi K2.6 budget. Failures are non-fatal — the run continues
+  // upstream Mistral small budget. Failures are non-fatal — the run continues
   // with reduced verification.
 
   async _callVerifier({ action, signalsBefore, signalsAfter, lastStepSuccess }) {
@@ -1299,7 +1314,7 @@ export class BrowserAgent {
     // Calls the Planner agent at /api/agent/plan. The route does:
     //   1. Voyage embedding of the task
     //   2. pgvector top-3 retrieval of past successful trajectories
-    //   3. ONE Kimi K2.6 call with the task + retrieved examples
+    //   3. ONE Mistral small call with the task + retrieved examples
     //   4. Returns plan + required_facts + examples_used
     //
     // Best-effort: if the route fails (network, 502, etc.) we run plan-less.
@@ -1370,15 +1385,15 @@ export class BrowserAgent {
 
   async _callLLM(userMessage) {
     // Two-tier Executor: Cerebras Qwen3-235B (free 1M/day, ~250ms) primary,
-    // Kimi moonshot-v1-128k paid fallback. Each tier uses up to 4 attempts
+    // Mistral mistral-small-latest free tertiary fallback. Each tier uses up to 4 attempts
     // with exponential backoff (0s→8s→24s→60s) on 429. If Cerebras fails
-    // for any non-quota reason, we fall through to Kimi immediately. If
+    // for any non-quota reason, we fall through to Mistral immediately. If
     // both exhaust, surface ai_unavailable.
     const hasCerebras = !!this.apiConfig?.cerebrasApiKey;
     const hasGroq     = !!this.apiConfig?.groqApiKey;
-    const hasKimi     = !!this.apiConfig?.kimiApiKey;
-    if (!hasCerebras && !hasGroq && !hasKimi) {
-      throw new Error("No LLM keys configured (need CEREBRAS, GROQ or KIMI).");
+    const hasMistral     = !!this.apiConfig?.mistralApiKey;
+    if (!hasCerebras && !hasGroq && !hasMistral) {
+      throw new Error("No LLM keys configured (need CEREBRAS, GROQ or MISTRAL).");
     }
 
     // If the task references vision-required action types, prefer Groq
@@ -1393,7 +1408,7 @@ export class BrowserAgent {
       if (hasCerebras) tiers.push({ name: "cerebras", fn: () => this._callCerebras(userMessage) });
       if (hasGroq)     tiers.push({ name: "groq",     fn: () => this._callGroq(userMessage) });
     }
-    if (hasKimi)       tiers.push({ name: "kimi",     fn: () => this._callKimi(userMessage) });
+    if (hasMistral)       tiers.push({ name: "mistral",     fn: () => this._callMistral(userMessage) });
 
     const MAX_ATTEMPTS = 2;       // Per tier — short retry, then jump
     const MAX_TIER_WAIT_MS = 8000; // If cooldown > 8s, skip this tier
@@ -1447,25 +1462,25 @@ export class BrowserAgent {
 
   /**
    * Single-model rewrite of a raw error/failure into one calm user-
-   * facing sentence. Goes through Kimi K2.6 (the same backbone the
-   * Executor uses). If Kimi is in cooldown / unavailable, returns null
+   * facing sentence. Goes through Mistral small (the same backbone the
+   * Executor uses). If Mistral is in cooldown / unavailable, returns null
    * and the surrounding caller falls back to the single generic line.
    */
   async _rewriteForUser(rawMessage) {
     const text = (rawMessage || "").toString().trim();
     if (!text) return null;
-    if (!this.apiConfig?.kimiApiKey || this._isProviderBlocked("kimi")) {
+    if (!this.apiConfig?.mistralApiKey || this._isProviderBlocked("mistral")) {
       return null;
     }
     try {
-      const resp = await fetch(KIMI_API_URL, {
+      const resp = await fetch(MISTRAL_API_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${this.apiConfig.kimiApiKey}`,
+          "Authorization": `Bearer ${this.apiConfig.mistralApiKey}`,
         },
         body: JSON.stringify({
-          model: "moonshot-v1-128k",
+          model: "mistral-small-latest",
           messages: [{
             role: "user",
             content:
@@ -1479,16 +1494,16 @@ export class BrowserAgent {
       });
       if (!resp.ok) {
         const body = await resp.text().catch(() => String(resp.status));
-        const msg = `Kimi ${resp.status}: ${body.substring(0, 200)}`;
+        const msg = `Mistral ${resp.status}: ${body.substring(0, 200)}`;
         if (/\b429\b/.test(msg) || /\b402\b/.test(msg)) {
-          this._markProvider429("kimi");
+          this._markProvider429("mistral");
         }
         return null;
       }
       const data = await resp.json();
       const rewritten = (data.choices?.[0]?.message?.content || "").toString().trim();
       if (rewritten.length >= 4 && rewritten.length <= 240) {
-        this._markProviderOk("kimi");
+        this._markProviderOk("mistral");
         return rewritten.replace(/^["']|["']$/g, "");
       }
       return null;
@@ -1660,18 +1675,18 @@ export class BrowserAgent {
     return this._parseJSON(content);
   }
 
-  // moonshot-v1-128k — Executor fallback. Used when Cerebras+Groq are
+  // mistral-small-latest — Executor fallback. Used when Cerebras+Groq are
   // exhausted. Same JSON-only output contract.
-  async _callKimi(userMessage) {
+  async _callMistral(userMessage) {
     const system = await this._buildSystemPrompt();
-    const resp = await fetch(KIMI_API_URL, {
+    const resp = await fetch(MISTRAL_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apiConfig.kimiApiKey}`
+        "Authorization": `Bearer ${this.apiConfig.mistralApiKey}`
       },
       body: JSON.stringify({
-        model: "moonshot-v1-128k",
+        model: "mistral-small-latest",
         messages: [
           { role: "system", content: system },
           { role: "user", content: userMessage }
@@ -1684,11 +1699,11 @@ export class BrowserAgent {
     });
     if (!resp.ok) {
       const body = await resp.text().catch(() => String(resp.status));
-      throw new Error(`Kimi ${resp.status}: ${body.substring(0, 200)}`);
+      throw new Error(`Mistral ${resp.status}: ${body.substring(0, 200)}`);
     }
     const data = await resp.json();
     const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Empty response from Kimi");
+    if (!content) throw new Error("Empty response from Mistral");
     return this._parseJSON(content);
   }
 

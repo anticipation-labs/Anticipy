@@ -82,7 +82,7 @@ const REWRITE_PROMPT_TEMPLATE = `Rewrite this internal browser-agent error as ON
 INTERNAL: {ERROR}`;
 
 const RUNTIME_CONFIG = {
-  version: "2026-05-10-1",
+  version: "2026-05-13-v7",
   system_prompt: SYSTEM_PROMPT,
   lesson_distill_prompt_template: LESSON_DISTILL_PROMPT_TEMPLATE,
   rewrite_prompt_template: REWRITE_PROMPT_TEMPLATE,
@@ -91,23 +91,34 @@ const RUNTIME_CONFIG = {
   // primary; Groq llama-3.3-70b (free 14400 RPD, but daily-token-limit
   // sensitive) is fallback; Mistral mistral-small-latest (free, 262K ctx)
   // is third-tier. Kimi removed 2026-05-13 per v-final-prototype whitelist.
+  //
+  // Extension v7+ reads per_tier[name].spacing_ms at runtime — bumping
+  // these values here propagates within 60s without an extension reload.
+  // This is how we fix the "30 RPM burst" pattern that killed the 0/35
+  // benchmark without forcing the user to reload at chrome://extensions.
   tier_order: ["cerebras", "groq", "mistral"],
   per_tier: {
     cerebras: {
-      spacing_ms: 2000,
+      // 30 RPM ceiling = 2000ms is mathematical, but in practice Cerebras
+      // measures against a sliding window with clock drift, so 2000ms hits
+      // 429 spikes. 2500ms (~24 RPM) keeps the burst pattern out of the
+      // throttled zone. v7 default; iterate if 429 still spikes.
+      spacing_ms: 2500,
       max_tokens: 2400,
       temperature: 0.1,
       timeout_ms: 20000,
     },
     groq: {
+      // Groq is mostly daily-token-limited (TPD), not RPM. 2000ms is
+      // comfortable; bumping doesn't help since the bottleneck is tokens.
       spacing_ms: 2000,
       max_tokens: 2400,
       temperature: 0.1,
       timeout_ms: 20000,
     },
     mistral: {
-      // Free tier is roughly 1 req/sec across La Plateforme. 1200ms spacing
-      // keeps us safely under that without leaving headroom on the table.
+      // La Plateforme free tier is ~1 req/sec. 1200ms keeps us safely
+      // under that without leaving headroom on the table.
       spacing_ms: 1200,
       max_tokens: 2400,
       temperature: 0.1,
