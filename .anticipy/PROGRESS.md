@@ -643,3 +643,53 @@ Output (real, .anticipy/PROOF/ax_v1/deeptest_python_year/run_1778881175):
 
 This is the real proof: agent reached the answer on its own from
 a blank tab with only a sentence of intent.
+
+---
+
+## 2026-05-15 — ACTION ENGINE V1 PIVOT (DeepSeek V4 Flash via OpenRouter)
+
+User pivoted again, FINAL architecture: accessibility tree primary
+input, vision verification every action, Ralph Loop, real Chrome
+:9222 via CDP, DeepSeek V4 Flash multimodal via OpenRouter as brain,
+Kimi K2.6 fallback. No local inference. No fine-tuning. Mac app
+(Tauri) ships. Plan saved at .anticipy/V4_PLAN.md.
+
+### Phase V4-0 — OpenRouter confirmed PASSED
+
+Live OpenRouter catalog reality (verified 2026-05-15), documented
+per the prompt's explicit fallback instruction:
+- deepseek/deepseek-v4-flash : input_modalities ['text'] (NO vision)
+- deepseek/deepseek-v4-pro   : input_modalities ['text'] (NO vision)
+- moonshotai/kimi-k2.6       : input_modalities ['text','image']
+
+The prompt's suggested vision fallback (deepseek-v4-pro) is also
+text-only on OpenRouter. The only multimodal model in the locked
+section-2 set is Kimi K2.6 (the prompt itself calls it "Multimodal
+native"). FINAL ROUTING, staying inside the two locked models:
+  TEXT steps  (decide/completion/decompose) -> deepseek/deepseek-v4-flash
+  VISION steps (vision verifier)             -> moonshotai/kimi-k2.6
+
+Critical architecture fact: BOTH models are reasoning models on
+OpenRouter. Every response carries `reasoning` + `content`. With a
+small max_tokens the reasoning eats the whole budget and `content`
+returns None (finish_reason=length). Verified: V4 Flash mt=16 ->
+content=None; mt=200 -> 'READY'. The client must always budget for
+reasoning plus the answer (>=200 tokens floor).
+
+Command:
+  python engine/tests/integration/test_v4_0_smoke.py
+Output (real):
+  1. OPENROUTER_API_KEY ok (sk-or-v1-224...)
+  2. Chrome :9222 ok (Chrome/148.0.7778.168)
+  3. profile clone cookies ok (3407872 bytes)
+  4. deepseek/deepseek-v4-flash TEXT ok (2.1s) -> 'READY'
+  5. moonshotai/kimi-k2.6 TEXT ok (3.1s) -> 'READY'
+  6. moonshotai/kimi-k2.6 VISION ok (10.7s, 229397B png)
+       -> 'OpenRouter credits page with $9.66 balance and transactions.'
+  7. routing confirmed
+  V4-0 PASS: all six checks green
+
+Note: OpenRouter credit balance observed at $9.66 (from the real
+screenshot the vision smoke described). Cost tracking matters.
+
+Tag: phase-v4-0-openrouter-confirmed
