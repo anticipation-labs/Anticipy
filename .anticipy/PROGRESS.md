@@ -316,9 +316,25 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 - Per-skill symbolic verifiers (one per Phase 6 skill).
 - `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
 
+### Phase 5 / 6 / 7 / 9 / 10 — all gated and shipped 2026-05-14
+
+(Detailed per-phase outputs in CHANGELOG. Tags pushed to remote.)
+
+| Phase | Tag | Test result |
+|---|---|---|
+| 5  | `phase-5-complete`           | smoke 7/7 + voter 10/10 + sandbox+verifiers 10/10 |
+| 6  | `phase-6-complete`           | skills 34/34 (11 skills × 3 checks each) |
+| 7  | `phase-7-complete`           | scenarios 7/7 (5x each, A=3 + B=2 + C=2) |
+| 9  | `phase-9-complete`           | watchdog 7/7 (Chrome+Supabase+4/5 providers+canary) |
+| 10 | `phase-10-harness-complete`  | acceptance harness selftest 4/4; real 4h test gated on Omar wearing mic |
+
+Unsigned `Anticipy.dmg` (101 MB) uploaded to GitHub Releases tag `v0.1.0-executor`. `/download` redirects there. Will go live on next Vercel auto-deploy from `main`. Phase 8 distribution code shipped; route verification pending the deploy.
+
+`HANDOFF.md` written for the next /clear session.
+
 ### Session 3 — checkpoint for /clear
 
-Token budget approaching threshold. Final state for resume:
+Final state for resume:
 - Last green tag: `phase-5-shell-complete`
 - Tags: phase-0, phase-2, phase-2.5-chrome, phase-3-pod-a, phase-4, phase-5-shell all complete
 - Next session entry point: complete Phase 5 outstanding items (sandbox rehearsal, /download deploy), then Phase 6 ten-skills work
