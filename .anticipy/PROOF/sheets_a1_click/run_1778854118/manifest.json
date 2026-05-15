@@ -1,0 +1,60 @@
+{
+  "skill_id": "sheets_a1_click",
+  "goal": "Click cell A1.",
+  "setup_url": "https://sheets.new",
+  "run_ts": 1778854118,
+  "final_verdict": "PARTIAL",
+  "completion_status": "failed:dispatch:dispatch_threw:CDP Input.dispatchMouseEvent timed out after 3.0s",
+  "n_steps": 3,
+  "n_diverged": 0,
+  "steps": [
+    {
+      "index": 0,
+      "fara_action": "left_click",
+      "fara_coordinate": [
+        35,
+        243
+      ],
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 26027,
+      "dispatch_ok": true,
+      "verifier_verdict": "SKIPPED",
+      "verifier_reason": "verifier_disabled",
+      "screenshot_before": "step_00_before.png",
+      "screenshot_after": "step_00_after.png"
+    },
+    {
+      "index": 1,
+      "fara_action": "left_click",
+      "fara_coordinate": [
+        83,
+        501
+      ],
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 25420,
+      "dispatch_ok": true,
+      "verifier_verdict": "SKIPPED",
+      "verifier_reason": "verifier_disabled",
+      "screenshot_before": "step_01_before.png",
+      "screenshot_after": "step_01_after.png"
+    },
+    {
+      "index": 2,
+      "fara_action": "left_click",
+      "fara_coordinate": [
+        198,
+        1033
+      ],
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 26880,
+      "dispatch_ok": false,
+      "verifier_verdict": "SKIPPED",
+      "verifier_reason": "verifier_disabled",
+      "screenshot_before": "step_02_before.png",
+      "screenshot_after": "step_02_after.png"
+    }
+  ]
+}

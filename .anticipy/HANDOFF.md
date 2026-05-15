@@ -1,6 +1,70 @@
 # Anticipy v-final-prototype — HANDOFF (read this first on /clear)
 
-If you are an Opus 4.7 instance resuming the Anticipy v-final-prototype build after a /clear, this is the document the user explicitly told the prior instance to write for you. **Read this first, then `.anticipy/PROGRESS.md`, then `.anticipy/CHANGELOG.md`, then `git tag | tail -10`.** Resume past the last green tag.
+If you are an Opus 4.7 instance resuming the Anticipy v-final-prototype build after a /clear, this is the document the user explicitly told the prior instance to write for you. **Read this first, then `.anticipy/PROGRESS.md`, then `.anticipy/FARA_PLAN.md`, then `git tag | tail -15`.** Resume past the last green tag.
+
+## CURRENT BUILD: FARA-7B integration (2026-05-15)
+
+The user pivoted on 2026-05-15: ALL service APIs are out (Gmail/Sheets/Slack/Notion/Linear/Spotify/Maps/Resy/Amazon, every single one). The product is the world's best BROWSER agent. Visual grounding by Microsoft Fara-7B running locally on the Mac. Master plan at `.anticipy/FARA_PLAN.md`.
+
+Hard rules from the FARA pivot (also saved in memory):
+- No service APIs. EVER. Use real browser navigation. See [[feedback-no-api-keys]].
+- No fabrication. Real screenshots. Real artifacts in `.anticipy/PROOF/`. See [[feedback-no-fabrication]].
+- No em-dashes anywhere. See [[feedback-no-em-dashes]].
+- No "should work" without a runnable command + its actual output pasted to PROGRESS.md.
+- No telling the user to run terminal commands (two GUI exceptions only).
+- 2-attempt rule then pivot to the alt path defined in FARA_PLAN section 5+.
+
+### FARA build phase tags as of this handoff
+
+| Phase | Tag | What | Status |
+|---|---|---|---|
+| 0 | `phase-fara-0-env-confirmed` | env audit, mlx-vlm + patchright installed, Fara HF reachable | DONE |
+| 1 | `phase-fara-1-real-chrome-attached` | Chrome :9222 attached to a CLONE of the real signed-in profile at `~/.anticipy/chrome-real-clone/` (8.3 GB). Gmail inbox loads directly with omarkebrahim@gmail.com signed in | DONE |
+| 2 | `phase-fara-2-local-inference-up` | Fara-7B 15 GB downloaded, MLX 4-bit converted (5.3 GB at 5.4 bpw), FastAPI server `com.anticipy.fara.plist` on :8742, /infer returns real action. **Honest latency: 33s wall on M2 Air 16GB (target was 3s).** | DONE with latency caveat |
+| 3 | `phase-fara-3-dispatcher-ready` | CDP dispatcher with Bezier motion + Gaussian timing, 8/8 unit tests + 1/1 real Chrome integration (example.com -> iana.org). Modules at `engine/app/action_engine/{humanlike, cdp_dispatcher}.py` | DONE |
+| 4 | (no tag yet; framework done) | Trajectory recorder at `engine/data/synth/record_trajectory.py`. ONE smoke trajectory recorded (smoke_wikipedia, 3 steps). The 8 real proof recipes (Gmail, Sheets, Docs, Canva, Resy, Amazon, Notion, Slack) still need writing | FRAMEWORK ONLY |
+| 5 | (staged; Omar-blocked) | Kaggle T4 QLoRA notebook at `engine/data/synth/finetune_qlora.ipynb`. 8 cells: deps, paths, base load 4-bit, attach LoRA r=8 alpha=16, trajectory dataset, train 3 epochs, cold-test eval (>=70% gate), merge + reconvert MLX 4-bit. Omar uploads trajectories to Kaggle and hits Run. | NOTEBOOK READY, NEEDS OMAR |
+| 6 | (no tag yet; partial) | `engine/app/action_engine/fara_skill_runner.py` wires CDP + Fara :8742 + Mistral pixtral verifier on OpenRouter. One real-prod run against Google Sheets: Fara controlled real Chrome, opened an existing Sheet from recent files (clicked wrong target without QLoRA tuning), then ran Click-A1 with 2-of-3 dispatches OK | PARTIAL |
+| 7-10 | (not started) | Eight proofs, cascade lock, Hermes 30/run, dmg ship | NOT STARTED |
+
+### What was demonstrated end-to-end (real artifacts on disk)
+
+`.anticipy/PROOF/sheets_create_test/run_1778853862/` and `.anticipy/PROOF/sheets_a1_click/run_1778854118/` each have:
+- `manifest.json` with full step record, latencies, Fara actions, dispatch outcomes
+- `step_NN_before.png` and `step_NN_after.png` from real Chrome
+- The screenshots show real Google Sheets pages with Omar's account signed in
+
+The Sheets-write test clicked at [35, 243] (correctly hit cell A1 area), then attempted another click before timing out at CDP level. Zero-shot Fara accuracy on canvas-heavy pages is the QLoRA gap.
+
+### Key infrastructure files
+
+- `~/Library/LaunchAgents/com.anticipy.chrome.plist` -- Chrome :9222 on real-profile clone
+- `~/Library/LaunchAgents/com.anticipy.fara.plist` -- Fara FastAPI :8742, lazy-loads MLX model
+- `~/.anticipy/chrome-real-clone/` -- 8.3 GB clone of Omar's signed-in Chrome profile
+- `~/.anticipy/models/fara-7b/` -- HF download (15 GB, can be deleted after MLX convert)
+- `~/.anticipy/models/fara-7b-mlx-4bit/` -- 5.3 GB MLX 4-bit, what the server loads
+- `engine/.venv/` -- Python 3.11.12 with mlx-vlm, patchright, fastapi, websockets, etc.
+
+### Next session resume order
+
+1. Verify infra still up: `curl localhost:9222/json/version && curl localhost:8742/health` should both return 200.
+2. Tag Phase 4 framework if not tagged: `phase-fara-4-framework-ready`.
+3. Either (a) write the 8 real proof recipes and record 50 trajectories each (multi-hour, no Kaggle needed yet), or (b) wait for Omar to run Kaggle and merge the adapter, then re-run the proof recipes with the fine-tuned weights.
+4. Phase 6 full: wire Hermes lifecycle to use Fara-grounded skills instead of API skills. Delete the API-based skill modules (per [[feedback-no-api-keys]]).
+5. Phase 7: run 8 proofs 3x each against real Chrome. Capture all artifacts.
+6. Phase 8: cascade lock 17/17.
+7. Phase 9: 30 runs per skill (300 total).
+8. Phase 10: ship signed-or-unsigned dmg.
+
+### Pre-FARA state (also still in repo, may need cleanup)
+
+The pre-FARA skills under `executor/skills/*.js` all use service APIs. They are DEPRECATED per the no-API rule. They are not deleted yet because Phase 6 wiring will replace them with Fara-grounded recipes; deleting the directory before that would break the existing tests and the path Hermes uses for the watchdog canary. Delete after Phase 6 swap.
+
+The pre-FARA build's phase tags (`phase-0-complete` through `phase-10-harness-complete` plus `phase-9-full-pipeline-passing` and `phase-9-hermes-promote-verified`) are still on remote. They represent the prior API-based architecture which is now obsolete. The FARA `phase-fara-N-*` tags are the current architecture.
+
+---
+
+
 
 ## The five locked rules (the user has stated they will not edit them again)
 
