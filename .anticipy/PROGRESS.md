@@ -757,3 +757,18 @@ Real smoke: python -m app.action_engine.vision_verifier
   no-op PageDown, verifier honestly caught it)
 
 Tag: phase-v4-3-verifier-ready
+
+### Phase V4-4 — DSv4 Ralph Loop runner DONE (unit)
+
+dsv4_skill_runner.py: AX tree via CDP Accessibility.getFullAXTree +
+DOM.getBoxModel ref->coord, page-text channel, V4 Flash decide/
+completion/decompose (text), Kimi K2.6 vision verifier on state
+changes, DIVERGED feedback + 2x->escalate-to-Kimi + 4x->HARD_FAIL,
+compound decomposition w/ TaskMemory, no confirm gates, max 30
+iters, trajectory artifacts to ~/.anticipy/trajectories/<id>/.
+
+Command: python -m pytest engine/tests/test_dsv4_skill_runner.py -v
+Output: 10 passed in 0.12s (incl. no-confirm-gate-on-Send,
+diverged-2x-escalates, compound decompose, dispatch+complete).
+
+Tag: phase-v4-4-runner-ready
