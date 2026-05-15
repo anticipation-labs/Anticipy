@@ -1,0 +1,25 @@
+{
+  "skill_id": "wiki_python_lookup",
+  "goal": "Find the year Python was first released by reading the Wikipedia article. When you have the year on screen, terminate.",
+  "setup_url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+  "run_ts": 1778854365,
+  "final_verdict": "DIVERGED",
+  "completion_status": "failed:dispatch:no_action_in_fara_response",
+  "n_steps": 1,
+  "n_diverged": 1,
+  "steps": [
+    {
+      "index": 0,
+      "fara_action": null,
+      "fara_coordinate": null,
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 26335,
+      "dispatch_ok": false,
+      "verifier_verdict": "DIVERGED",
+      "verifier_reason": "verifier_said_diverged",
+      "screenshot_before": "step_00_before.png",
+      "screenshot_after": "step_00_after.png"
+    }
+  ]
+}
