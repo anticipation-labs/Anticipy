@@ -23,13 +23,15 @@ F. Chrome :9222 is ONE LaunchAgent at `~/Library/LaunchAgents/com.anticipy.chrom
 |---|---|---|---|
 | 0   | `phase-0-complete`              | env sync, Cerebras caps, audit              | gates closed |
 | 0.5 | (no tag, see PROGRESS)          | env repair (non-sudo subset)                | clean |
+| 1   | (partial, no tag)               | synth data scaffolding + 76 rows generated  | 56/60 (93%) held-out cascade |
 | 2   | `phase-2-complete`              | forbidden providers ripped from hot path    | TS+Py syntax clean |
 | 2.5 | `phase-2.5-chrome-complete`     | Chrome :9222 LaunchAgent (REAL profile)     | curl /json/version returns Chrome/148 |
-| 3   | `phase-3-pod-a-complete`        | Pod A cascade (ASR+VAD+diar+S1+S1.5+S2)     | TEXT 17/17, AUDIO 16/17 |
+| 3   | `phase-3-pod-a-complete`        | Pod A cascade (ASR+VAD+diar+S1+S1.5+S2)     | TEXT 16/17, AUDIO 16/17, OOD 56/60 |
 | 4   | `phase-4-complete`              | middle layer (slot/skill/policy/dispatch)   | 11/11 against real Supabase |
 | 5   | `phase-5-complete`              | executor + sandbox + verifiers + /download  | 7/7 smoke + 10/10 voter + 10/10 phase5 |
 | 6   | `phase-6-complete`              | 10 reference skills + verifiers + comp.    | 34/34 |
 | 7   | `phase-7-complete`              | 3 ultra-complex scenarios (5x each)         | 7/7 |
+| 8   | `phase-8-complete`              | anticipy.ai/download → unsigned dmg via GH Releases | curl returns 302 → 200 |
 | 9   | `phase-9-complete`              | watchdog + canary + Hermes lifecycle        | 7/7 |
 | 10  | `phase-10-harness-complete`     | resumable 4-hour acceptance HARNESS         | 4/4 selftest |
 
@@ -43,17 +45,20 @@ F. Chrome :9222 is ONE LaunchAgent at `~/Library/LaunchAgents/com.anticipy.chrom
 
 ## What's NOT done (the only remaining work for the [ANTICIPY-READY] email)
 
-**Phase 8 — distribute via anticipy.ai/download**: code shipped, dmg in GitHub Releases, route deploys with next push. Verify the route serves the correct latest dmg by hitting `https://www.anticipy.ai/download` → should redirect to `github.com/omize10/Anticipy/releases/latest/download/Anticipy.dmg` and the dmg downloads + opens with right-click→Open. NO git tag yet.
+**Phase 1 full** — the QLoRA fine-tune over a 5k+ row synth dataset on Kaggle T4. The pipeline + generator both work (`engine/data/synth/generate.py` running clean against OpenRouter/DeepSeek; 76 rows generated; 93% held-out cascade with prompt-only). Full run is ~$5-10 OpenRouter spend + 4-6 hour Kaggle T4 fine-tune; bumps the held-out from 93% toward the master prompt's 30+/32 floor on the gold-standard set.
 
 **Phase 10 — REAL 4-hour acceptance test**: only Omar can do this (wearing the laptop mic for 4h of normal life is hardware-only-he-can-do per Rule D). Harness ready at `engine/tests/test_phase10_acceptance.py run --hours 4`. Resumable per correction #8: state at `~/.anticipy/acceptance/test_<id>/progress.json`; restart-from-0 only if the classifier fingerprint changes.
 
-**[ANTICIPY-READY] email**: gates on the real 4-hour test passing. Send via Resend FROM `aevoy@anticipy.ai` TO `omarkebrahim@gmail.com` with subject `[ANTICIPY-READY] v-final-prototype shipped` once Phase 10 returns passed=true.
+**[ANTICIPY-READY] email**: gates on the real 4-hour test passing. Script ready at `engine/scripts/send_anticipy_ready.py`. Run with `--test-id <id>` (the test_id from the Phase 10 wear test) to send the final-artifact email to omarkebrahim@gmail.com via Resend FROM aevoy@anticipy.ai.
 
 ## Resume order
 
-1. **Verify Phase 8 deploy.** `curl -I https://www.anticipy.ai/download` should redirect to the GitHub Releases dmg URL. If not, push HEAD to trigger Vercel deploy. Tag `phase-8-complete` when verified.
-2. **Run the 4-hour acceptance test** (Omar's job; the harness is ready). Once passed, write `.anticipy/FINAL_STATUS.md` and send the [ANTICIPY-READY] email. Tag `phase-10-complete`.
-3. **Stop.** Build is shipped.
+1. **Verify the watchdog is still running.** `launchctl list | grep ai.anticipy.watchdog` and `tail ~/.anticipy/watchdog.stdout.log` — the LaunchAgent runs every 300s. If it's stopped, `launchctl load ~/Library/LaunchAgents/ai.anticipy.watchdog.plist`.
+2. **Verify the Chrome :9222 LaunchAgent is still up.** `curl http://localhost:9222/json/version`. Per Rule F, if port is bound, do not touch.
+3. **Run the 4-hour acceptance test** (Omar's job; the harness is ready). Once Omar fires it and it returns passed=true, run `python -m engine.scripts.send_anticipy_ready --test-id <id>` to send the [ANTICIPY-READY] email. Tag `phase-10-complete`.
+4. **Stop.** Build is shipped.
+
+Anything else (more synth data, more skills, more tests) is incremental polish, not blocking.
 
 ## Things to know that aren't obvious from the tree
 
