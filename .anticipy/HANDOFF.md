@@ -36,12 +36,13 @@ F. Chrome :9222 is ONE LaunchAgent at `~/Library/LaunchAgents/com.anticipy.chrom
 | 10  | `phase-10-harness-complete`     | resumable 4-hour acceptance HARNESS         | 4/4 selftest |
 
 **Live infrastructure:**
-- Supabase (handlit, ref ogbxpqkmsdrcuilafycn): 5 v-final-prototype tables (`anticipy_intents_v2`, `anticipy_tasks_v2`, `anticipy_results_v2`, `skill_library`, `task_state`) live with RLS + Realtime publication.
-- Vercel: `OPENROUTER_API_KEY` in production + preview. Auto-deploys `main` push.
-- LaunchAgents loaded: `com.anticipy.chrome` (Chrome :9222) + `ai.anticipy.watchdog` (every 300s).
-- GitHub Releases: `v0.1.0-executor` with `Anticipy.dmg` (101 MB). `/download` redirects to it.
-- engine/.venv: Python 3.11.12 + cascade deps + parakeet-mlx + mlx-lm.
-- executor/node_modules: installed.
+- Supabase (handlit, ref ogbxpqkmsdrcuilafycn): 5 v-final-prototype tables (`anticipy_intents_v2`, `anticipy_tasks_v2`, `anticipy_results_v2`, `skill_library` seeded with 11 shadow rows, `task_state`) live with RLS + Realtime publication.
+- Vercel: `OPENROUTER_API_KEY` in production + preview. Auto-deploys `main` push. `/download` route LIVE.
+- LaunchAgents loaded: `com.anticipy.chrome` (Chrome :9222 on REAL profile) + `ai.anticipy.watchdog` (every 300s; runs health + hermes + canary).
+- GitHub Releases: `v0.1.0-executor` with `Anticipy.dmg` (101 MB). `/download` redirects to it. Verified live with `curl -I` returning 302.
+- engine/.venv: Python 3.11.12 + cascade deps + parakeet-mlx + mlx-lm + dotenv + supabase + httpx.
+- executor/node_modules: installed; both passing tests + .dmg built.
+- Synth data: 193 rows across 6 files; cascade OOD eval 138/160 (86.2%) on the 160-row held-out set.
 
 ## What's NOT done (the only remaining work for the [ANTICIPY-READY] email)
 
