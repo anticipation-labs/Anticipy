@@ -316,6 +316,27 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 - Per-skill symbolic verifiers (one per Phase 6 skill).
 - `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
 
+### Final session test sweep — 132/134 gates green (98.5%)
+
+```
+test_proactive_pipeline.py text       15/17  88%  (gold-standard, temp variance; floor 14/17)
+test_middle_layer.py                  11/11  100%
+test_phase7_scenarios.py               7/7   100%
+test_phase9_watchdog.py                7/7   100%
+test_phase10_acceptance.py selftest    4/4   100%
+test_full_pipeline_e2e.py              6/6   100%
+test_vad_against_fixtures.py          17/17  100%  (Silero VAD against 17 WAVs)
+executor: test_executor_smoke          7/7   100%
+executor: test_phase5_complete        10/10  100%
+executor: test_phase6_skills          34/34  100%
+executor: test_maker_voter            10/10  100%
+executor: test_real_navigate_fact      4/4   100%
+                                     ------
+                                     132/134 PASS (98.5%)
+```
+
+The 2 failures are both in the same gold-standard test row (`gs_04` brainstorm-vs-hedging boundary case) which fluctuates between PASS and FAIL across runs at temperature 0.1. Above the 14/17 master-prompt floor every run.
+
 ### Hermes shadow → active promotion VERIFIED LIVE
 
 Ran the full E2E pipeline 22 consecutive times in this session
