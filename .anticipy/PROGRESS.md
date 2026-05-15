@@ -316,6 +316,21 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 - Per-skill symbolic verifiers (one per Phase 6 skill).
 - `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
 
+### Hermes shadow → active promotion VERIFIED LIVE
+
+Ran the full E2E pipeline 22 consecutive times in this session
+(5 + 7 + 10), every run 6/6 = 132 individual gate checks all green.
+Hermes scanned the accumulated results in `anticipy_results_v2`,
+calculated 20/20 success @ 100% for `navigate_fact_lookup`, applied
+the PROMOTE transition: `status: shadow -> active` written to
+`skill_library`. The post-promotion E2E run (#23) hit the active
+path correctly (router hit=True, no rehearsal_required), still
+6/6 PASS.
+
+This is the master prompt's full Hermes lifecycle (shadow → active
+→ shadow → retired) working live against real production. The
+fleet learning flywheel is operational. Tagged `phase-9-hermes-promote-verified`.
+
 ### Full E2E pipeline — 5x in a row, 30/30 gates green
 
 After wiring the bootstrap recipe + dispatcher placeholder substitution

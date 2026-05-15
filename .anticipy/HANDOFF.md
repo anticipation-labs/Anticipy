@@ -35,9 +35,11 @@ F. Chrome :9222 is ONE LaunchAgent at `~/Library/LaunchAgents/com.anticipy.chrom
 | 9   | `phase-9-complete`              | watchdog + canary + Hermes lifecycle        | 7/7 |
 | 10  | `phase-10-harness-complete`     | resumable 4-hour acceptance HARNESS         | 4/4 selftest |
 | FullE2E | `phase-9-full-pipeline-passing` | utterance → cascade → middle → executor → Result | 6/6 (real Supabase + Chrome :9222 + Wikipedia) |
+| FullE2E×5 | `phase-9-full-pipeline-5x` | same E2E run 5x consecutively | 30/30 gates green |
+| Hermes | `phase-9-hermes-promote-verified` | shadow→active promotion at 20/20 100% on `navigate_fact_lookup` | live promotion observed in DB |
 
 **Live infrastructure:**
-- Supabase (handlit, ref ogbxpqkmsdrcuilafycn): 5 v-final-prototype tables (`anticipy_intents_v2`, `anticipy_tasks_v2`, `anticipy_results_v2`, `skill_library` seeded with 11 shadow rows, `task_state`) live with RLS + Realtime publication.
+- Supabase (handlit, ref ogbxpqkmsdrcuilafycn): 5 v-final-prototype tables. `skill_library` has 11 rows (10 shadow + 1 active — `navigate_fact_lookup` was promoted by Hermes after 20/20 successful E2E runs in this session).
 - Vercel: `OPENROUTER_API_KEY` in production + preview. Auto-deploys `main` push. `/download` route LIVE.
 - LaunchAgents loaded: `com.anticipy.chrome` (Chrome :9222 on REAL profile) + `ai.anticipy.watchdog` (every 300s; runs health + hermes + canary).
 - GitHub Releases: `v0.1.0-executor` with `Anticipy.dmg` (101 MB). `/download` redirects to it. Verified live with `curl -I` returning 302.
