@@ -17,6 +17,8 @@
 # production
 /build
 /dist
+dist/executor/
+dist/anticipy-extension*
 
 # misc
 .DS_Store

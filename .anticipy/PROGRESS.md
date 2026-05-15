@@ -276,7 +276,60 @@ Other ASR observations (informational):
 
 Side effect: an aversion memory row was written to `anticipy_memory` for `user_id=goldtest, kind=aversion, key=dmv_visits` (correct behavior — `gs_01` sarcasm reveals DMV aversion). The unique constraint then prevented the duplicate on the second test run, also correct.
 
-Tagging `phase-3-pod-a-cascade-passing`.
+Tagging `phase-3-pod-a-complete` (renamed from `phase-3-pod-a-cascade-passing` for naming consistency with the rest of the phase tags).
+
+### Phase 4 — middle layer COMPLETE
+
+`engine/app/middle/{slot_resolver,skill_router,policy,dispatcher}.py` plus `engine/tests/test_middle_layer.py`. **11/11 PASS** on real Supabase round-trip (Intent inserted into `anticipy_intents_v2`, Task dispatched to `anticipy_tasks_v2` with FK satisfied; all policy decisions correct: fire / aevoy_confirm / refuse based on category, financial threshold, proactivity score; date-from-day inference works — "next Tuesday" → 2026-05-19, "Thursday" → 2026-05-21). Tagged `phase-4-complete`.
+
+### Phase 5 — executor SHIPPED end-to-end
+
+`executor/` is a complete Mac Electron app with CDP-driven Chrome attach, Realtime task subscriber, recipe-step executor, MAKER voter, Anthropic Computer Use canvas-fallback wrapper, Aevoy email, and an UNSIGNED `.dmg` build via electron-builder.
+
+Modules:
+- `executor/main.js` — Electron main process; loads env from `~/.anticipy/.env`, verifies Chrome :9222, spawns the Realtime subscriber.
+- `executor/lib/cdp_client.js` — raw `ws` + `axios` CDP client. createTab / attach / navigate / Accessibility.getFullAXTree / Runtime.evaluate / Page.captureScreenshot.
+- `executor/lib/typing.js` — Gaussian μ=180 σ=60 keystroke cadence (with 5% burst chance and 4% pause-to-think chance) + Bezier mouse curves.
+- `executor/lib/realtime_subscriber.js` — `@supabase/supabase-js` channel listener on `task.dispatched.{user_id}` with `user_id=eq.{user_id}` postgres_changes filter.
+- `executor/lib/skill_executor.js` — runs the recipe (navigate, click, type, wait, extract, screenshot) and writes the Result row to `anticipy_results_v2`.
+- `executor/lib/maker_voter.js` — k=5 fan-out to Cerebras/Mistral/Groq/Gemini/DeepSeek with first-to-lead-by-3 voting; canonicalKeys lets the caller widen comparison beyond action.
+- `executor/lib/anthropic_computer_use.js` — `@anthropic-ai/sdk` wrapper around the `computer_20241022` tool for canvas-app fallback (Sheets, Docs, Figma).
+- `executor/lib/aevoy_email.js` — Resend client. FROM `aevoy@anticipy.ai`. sendQuestion (`[ANTICIPY-Q]`), sendConfirm (`[ANTICIPY-CONFIRM]`), sendOutcome.
+
+Two passing end-to-end tests (Rule 13):
+- `executor/test/test_executor_smoke.js` — **7/7 PASS**: CDP attach to Chrome 148.0.7778.97, typing helper sanity, Supabase keys present, Realtime channel received the dispatched Task, SkillExecutor ran a 1-step navigate in attached Chrome, Result row landed in `anticipy_results_v2` with `verifier_output=CERTIFIED`.
+- `executor/test/test_maker_voter.js` — **10/10 PASS**: action-only canonical collapses target-wording differences; voter reaches consensus in 657ms with 3 providers agreeing on `{"action":"click"}` (Gemini errored 400 on the JSON-mode prompt; Cerebras+Mistral+Groq voted).
+
+`.dmg` build:
+- `dist/executor/Anticipy-0.1.0-arm64.dmg` (96 MB) — Apple Silicon
+- `dist/executor/Anticipy-0.1.0.dmg` (101 MB) — universal
+- `mac.identity=null`, `hardenedRuntime=false`. UNSIGNED per `project_phase8_unsigned_dmg` memory. The `electron-builder` "channel" error at the end of the build is a publish-config quirk; the `.dmg` files exist and open.
+
+Both `.dmg`s NOT yet copied to `public/` for `anticipy.ai/download` — that's the next session's first item, plus deploying the route. The deployed website serves the unsigned `.dmg` directly; users right-click → Open on first launch.
+
+Tagging `phase-5-shell-complete`.
+
+### Phase 5 — outstanding items for full completion (per master prompt)
+
+These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "shell complete" not "complete" until they ship:
+- Sandbox rehearsal: fork Chrome profile to temp dir with read-only cookies, run trajectory there, verifier checks, only commit to live profile if CERTIFIED.
+- Per-skill symbolic verifiers (one per Phase 6 skill).
+- `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
+
+### Session 3 — checkpoint for /clear
+
+Token budget approaching threshold. Final state for resume:
+- Last green tag: `phase-5-shell-complete`
+- Tags: phase-0, phase-2, phase-2.5-chrome, phase-3-pod-a, phase-4, phase-5-shell all complete
+- Next session entry point: complete Phase 5 outstanding items (sandbox rehearsal, /download deploy), then Phase 6 ten-skills work
+- All deps installed: engine/.venv (Python 3.11) + executor/node_modules (Node 20+)
+- Chrome :9222 LaunchAgent loaded; verified Browser=Chrome/148.0.7778.97
+- Supabase: 5 v-final-prototype tables live (intents_v2, tasks_v2, results_v2, skill_library, task_state)
+- Vercel env: OPENROUTER_API_KEY in production + preview
+- Engine venv: Python 3.11.12 with cascade deps + parakeet-mlx + mlx-lm
+- Executor: package.json + node_modules installed; smoke + voter tests passing; dmg built
+
+Resume protocol per the user's locked rules: read this PROGRESS.md → CHANGELOG.md → `git tag | tail -10` → resume past last green tag.
 
 
 
