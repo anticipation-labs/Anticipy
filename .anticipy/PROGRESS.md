@@ -723,3 +723,20 @@ Command + output:
   PASS: proactive hedge_filter still imports
 
 Tag: phase-v4-1-cleanup
+
+### Phase V4-2 — OpenRouter client DONE
+
+openrouter_client.py: chat() w/ vision block, chat_with_fallback()
+(error OR unparseable-JSON triggers fallback), 429/5xx/timeout
+retry exp backoff, reasoning-starve auto-retry at 2x budget,
+MIN_TOKENS=256 floor, per-call JSONL ledger to
+~/.anticipy/openrouter_calls.jsonl with real cost.
+
+Command: python -m pytest engine/tests/test_openrouter_client.py -v
+Output: 9 passed, 1 skipped (30.27s). Real path:
+  RUN_REAL_OPENROUTER=1 ... ::test_real_text_smoke PASSED (1.34s)
+  CLI: content "READY" model deepseek-v4-flash-20260423 1.25s
+       cost_usd 1.6e-05 p_tok 12 c_tok 25
+  call log writing real rows w/ latency+tokens+cost.
+
+Tag: phase-v4-2-client-ready
