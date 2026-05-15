@@ -118,14 +118,18 @@ class SkillRouter:
             except Exception as e:
                 _logger.warning("skill_router hint lookup failed: %s", e)
 
-        # Pass 2 — substring match on intent_match_pattern by action_category
+        # Pass 2 — substring match on intent_match_pattern by action_category.
+        # Like Pass 1, surfaces both active and shadow candidates; only
+        # active counts as a hit, shadow surfaces selector_chain for the
+        # bootstrap-recipe-with-rehearsal path.
         if intent.action_category:
             try:
                 resp = (
                     sb.table("skill_library")
                     .select("skill_id,intent_match_pattern,selector_chain,postcondition_spec,status")
-                    .eq("status", "active")
+                    .in_("status", ["active", "shadow"])
                     .ilike("intent_match_pattern", f"%{intent.action_category}%")
+                    .order("status", desc=False)  # 'active' < 'shadow' alphabetically; active first
                     .limit(self.top_k)
                     .execute()
                 )
@@ -142,11 +146,12 @@ class SkillRouter:
                         )
                         for r in rows
                     ]
-                    proposed = cands[0].skill_id if cands[0].similarity >= self.hit_threshold else None
+                    # Hit only if the top candidate is active and above sim threshold
+                    is_hit = cands[0].status == "active" and cands[0].similarity >= self.hit_threshold
                     return SkillRouteResult(
-                        hit=proposed is not None,
+                        hit=is_hit,
                         top_candidates=cands,
-                        proposed_skill_id=proposed,
+                        proposed_skill_id=cands[0].skill_id if is_hit else None,
                     )
             except Exception as e:
                 _logger.warning("skill_router category match failed: %s", e)

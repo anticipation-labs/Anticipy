@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Optional
@@ -26,6 +27,25 @@ from app.middle.slot_resolver import ResolvedSlots
 from app.proactive.intent_extraction import TypedIntent
 
 _logger = logging.getLogger("anticipy.middle.dispatcher")
+
+
+_PLACEHOLDER_RE = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
+
+
+def _substitute_placeholders(step: dict, params: dict) -> dict:
+    """Replace {{slot_name}} in step values + target_refs with values
+    from params. Leaves unresolved placeholders in place so the
+    executor can detect missing slots.
+    """
+    out = dict(step)
+    for k in ("value", "target_ref"):
+        v = out.get(k)
+        if isinstance(v, str) and "{{" in v:
+            out[k] = _PLACEHOLDER_RE.sub(
+                lambda m: str(params.get(m.group(1), m.group(0))),
+                v,
+            )
+    return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,17 +94,24 @@ class Dispatcher:
             )
 
         task_id = str(uuid.uuid4())
+        merged_params = slots.merged()
+        # Substitute {{slot_name}} placeholders in the recipe steps from
+        # merged params. Bootstrap recipes (in skill_library.selector_chain
+        # .steps) use {{url}}/{{day}}/etc. placeholders that the dispatcher
+        # fills here. Walks step values + target_refs.
+        raw_steps = (
+            route.top_candidates[0].selector_chain.get("steps", [])
+            if route.top_candidates
+            else []
+        )
+        recipe_steps = [_substitute_placeholders(step, merged_params) for step in raw_steps]
         row = {
             "task_id": task_id,
             "intent_id": intent.intent_id,
             "user_id": intent.user_id,
             "skill_id": route.proposed_skill_id,
-            "parameters": slots.merged(),
-            "recipe_steps": (
-                route.top_candidates[0].selector_chain.get("steps", [])
-                if route.top_candidates
-                else []
-            ),
+            "parameters": merged_params,
+            "recipe_steps": recipe_steps,
             "global_postcondition": (
                 {
                     "verifier": route.top_candidates[0].postcondition_spec,

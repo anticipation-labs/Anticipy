@@ -71,8 +71,16 @@ proactivity_score:
   0.3 — STORE_AS_LATENT follow-ups where the action is now clear but
         wasn't in the original turn
 
-NEVER halucinate slot values. If the utterance does not specify a date,
+NEVER hallucinate slot values. If the utterance does not specify a date,
 DO NOT fill `slots.filled.date` — put `"date"` in `slots.needs_inference`.
+
+EXCEPTION for fact_lookup / navigate_to action_category: when the
+utterance is a knowledge query (e.g. "Look up when Python was first
+released"), DO fill `slots.filled.url` with the most likely
+authoritative source — typically a Wikipedia URL of the form
+`https://en.wikipedia.org/wiki/<TopicSlug>`. Convert spaces to
+underscores; use canonical capitalisation. This is NOT
+hallucination — the URL is derivable from the topic.
 """
 
 
