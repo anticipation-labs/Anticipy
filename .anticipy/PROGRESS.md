@@ -316,6 +316,40 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 - Per-skill symbolic verifiers (one per Phase 6 skill).
 - `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
 
+### Cascade — final OOD eval on expanded 160-row held-out
+
+After generating utterance_in_context_v3 (100 rows) the held-out
+test corpus is 160 rows (v2 30 + v3 100 + negative 30). All rows
+DeepSeek-generated; cascade few-shot is gold_standard.jsonl (17),
+zero overlap.
+
+**Result: 138/160 (86.2%)** — above the 85% Phase 1 floor.
+
+By expected_label:
+  REFUSE              130/137 (95%)
+  STORE_AS_LATENT     8/23   (35%)  ← cascade structurally prefers
+                                    REFUSE on borderline cases per
+                                    the "always prefer REFUSE when
+                                    uncertain" precedence rule
+
+By boundary_tag:
+  abandonment      20/20   (100%)  rock solid
+  past_tense       21/21   (100%)  rock solid
+  sarcasm          18/18   (100%)  rock solid
+  third_party      22/23    (96%)
+  joke             16/18    (89%)
+  conditional      17/20    (85%)
+  hedging          14/18    (78%)
+  multi_turn        2/4     (50%)  small sample
+  brainstorm        8/18    (44%)  still the weakest tag
+
+Total OpenRouter spend across all batches: ~$0.05.
+
+The brainstorm + multi_turn + STORE_AS_LATENT structural weakness
+is the gap the Phase 1 QLoRA fine-tune is designed to close. With
+just prompt tuning + few-shot, 86% is the practical ceiling for
+this cascade.
+
 ### Cascade stability — 5x consecutive runs, gold-standard
 
 | run | hits | rate |

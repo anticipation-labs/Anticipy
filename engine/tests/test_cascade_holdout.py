@@ -27,6 +27,7 @@ from app.proactive.pipeline import PodAPipeline  # noqa: E402
 
 HOLDOUT_FILES = [
     ROOT / "data" / "synth" / "utterance_in_context_v2.jsonl",
+    ROOT / "data" / "synth" / "utterance_in_context_v3.jsonl",
     ROOT / "data" / "synth" / "negative.jsonl",
 ]
 
