@@ -173,12 +173,21 @@ def _parse_fara_output(raw: str) -> dict:
     raw_lower = raw.lower()
     refusal_hit = next((p for p in _REFUSAL_PATTERNS if p in raw_lower), None)
 
-    # Find the first tool_call-shaped JSON block
-    # Try to extract a JSON object containing "name": "computer_use"
-    json_blocks = re.findall(r"\{[^{}]*\"name\"\s*:\s*\"computer_use\"[\s\S]*?\}\s*\}", raw)
+    # Find the first tool_call-shaped JSON block.
+    # Fara emits either "computer" or "computer_use" as the function name
+    # depending on training mix. Strip <tool_call> wrappers if present.
+    # Quantization can sometimes garble the name (e.g. "chatbot");
+    # fall through to any JSON object with an "action" key.
+    cleaned = raw.replace("<tool_call>", " ").replace("</tool_call>", " ")
+
+    # Pass 1: strict computer_use or computer match
+    json_blocks = re.findall(
+        r"\{[\s\S]*?\"name\"\s*:\s*\"computer(?:_use)?\"[\s\S]*?\"arguments\"\s*:\s*\{[\s\S]*?\}\s*\}",
+        cleaned,
+    )
+    # Pass 2: any object with an action key
     if not json_blocks:
-        # fall back: look for any object with action key
-        json_blocks = re.findall(r"\{[\s\S]*?\"action\"[\s\S]*?\}", raw)
+        json_blocks = re.findall(r"\{[\s\S]*?\"action\"[\s\S]*?\}", cleaned)
 
     parsed_args = None
     for blob in json_blocks:
@@ -190,7 +199,19 @@ def _parse_fara_output(raw: str) -> dict:
                     parsed_args = args
                     break
         except json.JSONDecodeError:
-            # Try to fix common issues with truncation
+            # Truncation handling: try to find the inner arguments block
+            inner = re.search(
+                r"\"arguments\"\s*:\s*(\{[\s\S]*?\})\s*\}",
+                blob,
+            )
+            if inner:
+                try:
+                    inner_obj = json.loads(inner.group(1))
+                    if isinstance(inner_obj, dict) and "action" in inner_obj:
+                        parsed_args = inner_obj
+                        break
+                except json.JSONDecodeError:
+                    pass
             continue
 
     if parsed_args is None:
