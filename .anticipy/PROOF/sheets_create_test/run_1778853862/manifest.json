@@ -1,0 +1,41 @@
+{
+  "skill_id": "sheets_create_test",
+  "goal": "Open Google Sheets, create a new blank spreadsheet by clicking the Blank template.",
+  "setup_url": "https://docs.google.com/spreadsheets/u/0/",
+  "run_ts": 1778853862,
+  "final_verdict": "PARTIAL",
+  "completion_status": "failed:dispatch:no_action_in_fara_response",
+  "n_steps": 2,
+  "n_diverged": 0,
+  "steps": [
+    {
+      "index": 0,
+      "fara_action": "left_click",
+      "fara_coordinate": [
+        722,
+        404
+      ],
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 26431,
+      "dispatch_ok": true,
+      "verifier_verdict": "SKIPPED",
+      "verifier_reason": "verifier_disabled",
+      "screenshot_before": "step_00_before.png",
+      "screenshot_after": "step_00_after.png"
+    },
+    {
+      "index": 1,
+      "fara_action": null,
+      "fara_coordinate": null,
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 25909,
+      "dispatch_ok": false,
+      "verifier_verdict": "SKIPPED",
+      "verifier_reason": "verifier_disabled",
+      "screenshot_before": "step_01_before.png",
+      "screenshot_after": "step_01_after.png"
+    }
+  ]
+}
