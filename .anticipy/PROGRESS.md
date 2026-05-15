@@ -693,3 +693,33 @@ Note: OpenRouter credit balance observed at $9.66 (from the real
 screenshot the vision smoke described). Cost tracking matters.
 
 Tag: phase-v4-0-openrouter-confirmed
+
+### Phase V4-1 — cleanup DONE
+
+Deleted: com.anticipy.fara.plist + com.anticipy.ollama.plist,
+~/.anticipy/models/fara-7b + fara-7b-mlx-4bit (20GB freed, models
+dir 23G -> 2.3G, only parakeet ASR for proactive remains),
+~/.anticipy/ollama, ~/.ollama, engine/app/fara/,
+engine/data/synth/{recipes,trajectories,record_trajectory.py,
+finetune_qlora.ipynb}. Archived fara_skill_runner.py +
+ax_skill_runner.py to archive/*.bak.
+
+DOCUMENTED DEVIATION from the prompt's V4-1 deletion list: kept
+engine/data/synth/{gold_standard.jsonl, generate.py, prompts.py,
+validate.py, utterance_in_context*.jsonl, memory_resolution.jsonl,
+negative.jsonl}. Reason: gold_standard.jsonl is loaded at runtime by
+engine/app/proactive/hedge_filter.py:46. The prompt's hard rule "No
+proactive engine work ... do not modify it" outranks the literal
+deletion list (the list assumed those were Fara scaffolding; they
+are actually the out-of-scope proactive cascade's few-shot data).
+Deleting them would break the proactive hedge filter.
+
+Command + output:
+  (verification script, all green)
+  PASS: fara-7b gone / recipes gone / engine/app/fara gone
+  PASS: ollama dir gone / fara_skill_runner moved
+  PASS: no fara agent / no ollama agent
+  KEPT (proactive dep): gold_standard.jsonl
+  PASS: proactive hedge_filter still imports
+
+Tag: phase-v4-1-cleanup
