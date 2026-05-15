@@ -316,6 +316,24 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 - Per-skill symbolic verifiers (one per Phase 6 skill).
 - `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
 
+### Cascade stability — 5x consecutive runs, gold-standard
+
+| run | hits | rate |
+|-----|------|------|
+|  1  | 16/17 | 94.1% |
+|  2  | 16/17 | 94.1% |
+|  3  | 17/17 | 100%  |
+|  4  | 16/17 | 94.1% |
+|  5  | 16/17 | 94.1% |
+
+Mean 16.2/17 (95.3%). All runs above the 14/17 floor. The 1-row variance is `gs_04` ("We should maybe grab dinner sometime") — the brainstorm-vs-hedging boundary case the new prompt tuning explicitly addresses. At temperature 0.1 the cascade is stable but not deterministic; the full QLoRA fine-tune (Phase 1 endgame) would lock this.
+
+### Phase 6 real-prod proof — navigate_fact_lookup against Wikipedia
+
+`executor/test/test_real_navigate_fact.js` runs the navigate -> wait -> extract recipe through the live executor against `https://en.wikipedia.org/wiki/Python_(programming_language)`. **4/4 PASS** with the `verifier_output=CERTIFIED` row landing in `anticipy_results_v2`. This is the first of the 10 skills with strictly Rule-A-complete real production proof. The remaining 9 skills (Notion, Slack, Linear, Spotify, Calendar, Gmail, Sheets, Maps, Amazon, Resy) need their respective auth tokens / OAuth before the same proof can run.
+
+The test caught a real recipe issue: Wikipedia's first `<p>` is empty (used for spacing). Selector switched from `#mw-content-text p` to `.mw-parser-output` wrapper. Verifier's >= 5-char guard correctly rejected the empty-text path before the fix.
+
 ### Phase 5 / 6 / 7 / 9 / 10 — all gated and shipped 2026-05-14
 
 (Detailed per-phase outputs in CHANGELOG. Tags pushed to remote.)
