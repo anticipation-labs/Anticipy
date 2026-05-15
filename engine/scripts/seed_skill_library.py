@@ -32,6 +32,15 @@ SKILLS = [
         "skill_id": "navigate_fact_lookup",
         "intent_match_pattern": "fact_lookup | navigate_to",
         "postcondition_spec": "Extracted text >= 5 chars in evidence.parsed_confirmations.",
+        # Bootstrap recipe used until Hermes captures a learned
+        # trajectory. The {{url}} placeholder is filled by the
+        # dispatcher from slots; Pod A's intent_extraction names
+        # the target URL in slots.filled.url.
+        "selector_chain_steps": [
+            {"action": "navigate", "target_ref": None, "value": "{{url}}", "timeout_ms": 20000},
+            {"action": "wait", "target_ref": ".mw-parser-output, main, article, #content", "timeout_ms": 8000},
+            {"action": "extract", "target_ref": ".mw-parser-output, main, article, #content", "value": "first_paragraph", "timeout_ms": 5000},
+        ],
     },
     {
         "skill_id": "google_calendar_create_event",
@@ -107,7 +116,10 @@ def main() -> int:
             "skill_id": s["skill_id"],
             "intent_match_pattern": s["intent_match_pattern"],
             "code": empty_bytea,
-            "selector_chain": {"executor_module": f"executor/skills/{s['skill_id']}.js"},
+            "selector_chain": {
+                "executor_module": f"executor/skills/{s['skill_id']}.js",
+                "steps": s.get("selector_chain_steps", []),
+            },
             "verifier_code": empty_bytea,
             "postcondition_spec": s["postcondition_spec"],
             "status": "shadow",
@@ -129,6 +141,7 @@ def main() -> int:
             sb.table("skill_library").update({
                 "intent_match_pattern": s["intent_match_pattern"],
                 "postcondition_spec": s["postcondition_spec"],
+                "selector_chain": row["selector_chain"],
                 "updated_at": now,
             }).eq("skill_id", s["skill_id"]).execute()
             results.append({"skill_id": s["skill_id"], "action": "updated", "status": rows[0]["status"]})

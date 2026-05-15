@@ -84,14 +84,16 @@ class SkillRouter:
         if sb is None:
             return SkillRouteResult(hit=False)
 
-        # Pass 1 — direct hint
+        # Pass 1 — direct hint (matches active OR shadow — shadow skills
+        # are gated by sandbox rehearsal before live commit, so it's
+        # safe to surface them as candidates with status carried through).
         if intent.proposed_skill_hint:
             try:
                 resp = (
                     sb.table("skill_library")
                     .select("skill_id,intent_match_pattern,selector_chain,postcondition_spec,status")
                     .eq("skill_id", intent.proposed_skill_hint)
-                    .eq("status", "active")
+                    .in_("status", ["active", "shadow"])
                     .limit(1)
                     .execute()
                 )
@@ -105,10 +107,13 @@ class SkillRouter:
                         postcondition_spec=rows[0].get("postcondition_spec", ""),
                         status=rows[0]["status"],
                     )
+                    # Only count as hit if active; shadow surfaces a
+                    # candidate but routes to sandbox rehearsal first.
+                    is_hit = cand.status == "active"
                     return SkillRouteResult(
-                        hit=True,
+                        hit=is_hit,
                         top_candidates=[cand],
-                        proposed_skill_id=cand.skill_id,
+                        proposed_skill_id=cand.skill_id if is_hit else None,
                     )
             except Exception as e:
                 _logger.warning("skill_router hint lookup failed: %s", e)
