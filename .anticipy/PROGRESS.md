@@ -328,7 +328,7 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 | 9  | `phase-9-complete`           | watchdog 7/7 (Chrome+Supabase+4/5 providers+canary) |
 | 10 | `phase-10-harness-complete`  | acceptance harness selftest 4/4; real 4h test gated on Omar wearing mic |
 
-Unsigned `Anticipy.dmg` (101 MB) uploaded to GitHub Releases tag `v0.1.0-executor`. `/download` redirects there. Will go live on next Vercel auto-deploy from `main`. Phase 8 distribution code shipped; route verification pending the deploy.
+Unsigned `Anticipy.dmg` (101 MB) uploaded to GitHub Releases tag `v0.1.0-executor`. `/download` redirects there. **VERIFIED LIVE 2026-05-14**: `curl -I https://www.anticipy.ai/download` returns HTTP 302 → `https://github.com/omize10/Anticipy/releases/latest/download/Anticipy.dmg` and the redirect target returns 200. Phase 8 ships. Tagged `phase-8-complete`.
 
 `HANDOFF.md` written for the next /clear session.
 
