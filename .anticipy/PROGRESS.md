@@ -391,6 +391,31 @@ Caveat: future logins in the user's main Chrome will not sync into the clone. A 
 
 Phase fara-1 tag: `phase-fara-1-real-chrome-attached`.
 
+### Phase fara-3: CDP dispatcher with humanlike Bezier motion
+
+(Phase fara-2 still in progress. Fara-7B model download is running in background. Phase 3 doesn't depend on Fara so building it in parallel.)
+
+Modules:
+- `engine/app/action_engine/humanlike.py` — `bezier_path()`, `gaussian_delay()`, `typing_inter_char_delays()`. Deterministic when given a seeded numpy RNG.
+- `engine/app/action_engine/cdp_dispatcher.py` — `CDPSession`, `connect_to_chrome`, `humanlike_click`, `humanlike_type`, `humanlike_key`, `humanlike_scroll`, `navigate`, `capture_screenshot`, `wait_for_settle`, `dispatch_fara_action`. Talks to Chrome on :9222 over websockets.
+- `engine/app/fara/server.py` — FastAPI inference server skeleton on 127.0.0.1:8742. Lazy-loads MLX model on first /infer. Includes `_parse_fara_output()` that extracts the tool_call JSON from Fara's ChatML output and detects the six refusal patterns. Resolution rescaling for non-Fara screens (1428x896 native).
+
+Test command (unit):
+```
+cd engine && source .venv/bin/activate && python -m pytest tests/test_cdp_dispatcher.py -v
+```
+Output: 8 passed in 0.32s. Bezier deterministic with seed, endpoints converge to within 5px of target, delays clamp to [5, 50]ms, typing delays clamp to [30, 1500]ms, Fara parser extracts left_click + coordinate, detects refusal pattern, parses type+text.
+
+Test command (integration, real Chrome :9222):
+```
+python -m pytest tests/integration/test_dispatcher_real_chrome.py -v
+```
+Output: 1 passed in 6.09s. Dispatcher opened new tab to example.com, found iana.org link via DOM query, performed Bezier-curve click, navigated to iana.org, screenshot is valid PNG.
+
+Phase fara-3 tag: `phase-fara-3-dispatcher-ready`.
+
+
+
 
 
 ### Final session test sweep 132/134 gates green (98.5%)
