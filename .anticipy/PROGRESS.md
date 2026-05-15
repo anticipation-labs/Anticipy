@@ -353,6 +353,46 @@ Notes:
 
 Phase fara-0 tag: `phase-fara-0-env-confirmed`.
 
+### Phase fara-1: Switch Chrome :9222 to REAL signed-in profile
+
+Hit Chrome's hard security gate first. Quote from Chrome stderr:
+
+```
+DevTools remote debugging requires a non-default data directory.
+Specify this using --user-data-dir.
+```
+
+Chrome 111+ refuses `--remote-debugging-port` when `--user-data-dir` matches the OS default (`~/Library/Application Support/Google/Chrome` on macOS). The check is by path string not contents. Workaround per master prompt's alternative path: clone the real profile to a non-default location.
+
+Clone procedure:
+1. `osascript -e 'tell application "Google Chrome" to quit'` so Chrome flushes SQLite. Wait 4 seconds.
+2. `rsync -a --exclude='*Cache*' --exclude='GPUCache' --exclude='ShaderCache' --exclude='GraphiteDawnCache' --exclude='Service Worker/CacheStorage' --exclude='Service Worker/ScriptCache' --exclude='File System' --exclude='blob_storage' "/Users/omarebrahim/Library/Application Support/Google/Chrome/" ~/.anticipy/chrome-real-clone/`
+3. Result: 8.3 GB clone (down from 11 GB original via cache excludes). Cookies file 3.4 MB, Login Data 262 KB, Local State 150 KB all present.
+4. LaunchAgent updated with `--user-data-dir=/Users/omarebrahim/.anticipy/chrome-real-clone --profile-directory=Default --remote-allow-origins=http://localhost:* --restore-last-session`.
+
+Test command:
+```
+launchctl load ~/Library/LaunchAgents/com.anticipy.chrome.plist && \
+  sleep 8 && \
+  curl -s -X PUT 'http://localhost:9222/json/new?https://mail.google.com' && \
+  sleep 8 && \
+  curl -s http://localhost:9222/json/list | python3 -c "import json,sys; t=next((x for x in json.load(sys.stdin) if 'mail.google' in x.get('url','')), None); print(f'url: {t[\"url\"]}\\ntitle: {t[\"title\"]}')"
+```
+
+Output:
+```
+url: https://mail.google.com/mail/u/0/#inbox
+title: Inbox (3,185) - omarkebrahim@gmail.com - Gmail
+```
+
+The cloned cookies authenticate to Gmail directly. No login redirect. This is the first real-production environment we have shipped.
+
+Caveat: future logins in the user's main Chrome will not sync into the clone. A re-clone watchdog is needed before Phase 7 proofs that depend on fresh sessions. Tracked as a Phase 9 watchdog enhancement (re-clone every N hours when main Chrome is idle).
+
+Phase fara-1 tag: `phase-fara-1-real-chrome-attached`.
+
+
+
 ### Final session test sweep 132/134 gates green (98.5%)
 
 ```
