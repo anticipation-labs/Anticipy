@@ -91,3 +91,5 @@ engine/data/few_shot_block.txt
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+public/Anticipy.dmg
+public/Anticipy*.dmg
