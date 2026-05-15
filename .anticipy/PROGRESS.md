@@ -740,3 +740,20 @@ Output: 9 passed, 1 skipped (30.27s). Real path:
   call log writing real rows w/ latency+tokens+cost.
 
 Tag: phase-v4-2-client-ready
+
+### Phase V4-3 — vision verifier DONE
+
+vision_verifier.py: verify(action, before_png, after_png, subgoal)
+-> Verdict(status, evidence, confidence, fellback). Routes to Kimi
+K2.6 (only multimodal in locked set, documented). json_object
+format. conf<0.6 -> independent stricter 2nd Kimi call; agree=that
+verdict, mixed=conservative DIVERGED; unparseable=DIVERGED.
+
+Command: python -m pytest engine/tests/test_vision_verifier.py -v
+Output: 9 passed in 0.19s
+Real smoke: python -m app.action_engine.vision_verifier
+  real before, CDP PageDown, real after, Kimi K2.6 ->
+  DIVERGED conf 0.9 "page identical before/after" (correct: a
+  no-op PageDown, verifier honestly caught it)
+
+Tag: phase-v4-3-verifier-ready
