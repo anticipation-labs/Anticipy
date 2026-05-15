@@ -1,0 +1,44 @@
+{
+  "skill_id": "wiki_search_python",
+  "goal": "Click the search bar at the top of the Wikipedia main page.",
+  "setup_url": "https://en.wikipedia.org/wiki/Main_Page",
+  "run_ts": 1778855092,
+  "final_verdict": "DIVERGED",
+  "completion_status": "max_steps_reached",
+  "n_steps": 2,
+  "n_diverged": 2,
+  "steps": [
+    {
+      "index": 0,
+      "fara_action": "left_click",
+      "fara_coordinate": [
+        1177,
+        68
+      ],
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 27005,
+      "dispatch_ok": true,
+      "verifier_verdict": "DIVERGED",
+      "verifier_reason": "verifier_said_diverged",
+      "screenshot_before": "step_00_before.png",
+      "screenshot_after": "step_00_after.png"
+    },
+    {
+      "index": 1,
+      "fara_action": "left_click",
+      "fara_coordinate": [
+        1175,
+        68
+      ],
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 25752,
+      "dispatch_ok": true,
+      "verifier_verdict": "DIVERGED",
+      "verifier_reason": "verifier_said_diverged",
+      "screenshot_before": "step_01_before.png",
+      "screenshot_after": "step_01_after.png"
+    }
+  ]
+}
