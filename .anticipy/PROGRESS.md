@@ -316,6 +316,17 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 - Per-skill symbolic verifiers (one per Phase 6 skill).
 - `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
 
+### Full E2E pipeline — 5x in a row, 30/30 gates green
+
+After wiring the bootstrap recipe + dispatcher placeholder substitution
++ intent-extraction URL-from-topic for fact_lookup, the full
+end-to-end pipeline (utterance → cascade → middle → executor → CERTIFIED
+Result row) passed **5/5 consecutive runs at 6/6 each** = 30/30 gates.
+
+This is the master prompt's "5x in a row real production" gate met for
+the FULL pipeline. The four-layer typed-contract architecture is rock
+solid. Tagged `phase-9-full-pipeline-5x`.
+
 ### Cascade — final OOD eval on expanded 160-row held-out
 
 After generating utterance_in_context_v3 (100 rows) the held-out
