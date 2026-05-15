@@ -772,3 +772,22 @@ Output: 10 passed in 0.12s (incl. no-confirm-gate-on-Send,
 diverged-2x-escalates, compound decompose, dispatch+complete).
 
 Tag: phase-v4-4-runner-ready
+
+### Phase V4-5 — Wikipedia HARD GATE PASSED
+
+Real run, blank Chrome tab, zero setup, task "Find what year the
+Python programming language was first released. Report the year."
+
+Command: python -m pytest engine/tests/integration/test_v4_5_wikipedia.py -v -s
+Output (real):
+  status SUCCESS | answer "1991"
+  evidence "visible page text states 'Python was first released on
+  February 20, 1991' and 'First appeared: 20 February 1991'"
+  n_iterations 2 | wall 53.3s | 1 passed in 55.11s
+  trajectory ~/.anticipy/trajectories/1778884193_313e70 (real
+  before/after PNGs 3418x1848 + Kimi CERTIFIED verdict.json each)
+
+Fixed mid-gate: /json/new needs PUT not GET on Chrome 111+ (urllib
+defaulted GET -> 405). 2-attempt rule: one fix, passed.
+
+Tag: phase-v4-5-wikipedia-passes
