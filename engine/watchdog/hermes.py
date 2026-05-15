@@ -27,6 +27,9 @@ DEMOTE_THRESHOLD = 0.70
 DEMOTE_WINDOW = 10
 RETIRE_THRESHOLD = 0.50
 RETIRE_WINDOW = 5
+# Per the master prompt: shadow -> active after 20 real usage runs at 85%+
+PROMOTE_THRESHOLD = 0.85
+PROMOTE_WINDOW = 20
 
 
 @dataclass
@@ -166,6 +169,9 @@ def sync_once() -> dict:
             elif srow["status"] == "shadow" and total >= RETIRE_WINDOW and rate < RETIRE_THRESHOLD:
                 new_status = "retired"
                 actions.append(HermesAction(sid, "retire", rate, total, "below_50_over_5"))
+            elif srow["status"] == "shadow" and total >= PROMOTE_WINDOW and rate >= PROMOTE_THRESHOLD:
+                new_status = "active"
+                actions.append(HermesAction(sid, "promote_active", rate, total, "above_85_over_20"))
 
             sb.table("skill_library").update({
                 "success_count": new_succ,
