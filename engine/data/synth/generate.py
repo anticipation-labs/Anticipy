@@ -149,14 +149,26 @@ def generate(kind: str, n: int, out_path: Path, batch_size: int = DEFAULT_BATCH_
                 break
 
             rows = parse_jsonl_lines(text)
+            sample_errs: list[str] = []
             for row in rows:
                 if "id" not in row:
                     next_id += 1
                     row["id"] = f"gen_{int(time.time())}_{next_id}"
                 if "kind" not in row:
                     row["kind"] = kind
+                # Cheap auto-coerce: if the generator left expected_intent
+                # missing, infer from label.
+                if row.get("expected_label") in {"REFUSE", "STORE_AS_LATENT"}:
+                    row.setdefault("expected_intent", None)
+                if row.get("expected_label") != "COMMIT":
+                    row["expected_intent"] = None  # force null for non-COMMIT
+                row.setdefault("expected_memory_write", None)
+                row.setdefault("turn_history", [])
+                row.setdefault("user_memory", [])
                 errs = validate_row(row, written)
                 if errs:
+                    if len(sample_errs) < 3:
+                        sample_errs.append(errs[0])
                     rejected += 1
                     continue
                 fh.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -164,6 +176,8 @@ def generate(kind: str, n: int, out_path: Path, batch_size: int = DEFAULT_BATCH_
                 written += 1
                 if written >= n:
                     break
+            if sample_errs:
+                print(f"[generate] batch sample rejections: {sample_errs[:3]}", file=sys.stderr)
 
     return {
         "written": written,
