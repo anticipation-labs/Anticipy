@@ -42,6 +42,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+import httpx
+import numpy as np
+from websockets.sync.client import connect as _ws_connect
+
 from .cdp_dispatcher import (
     CDPSession,
     capture_screenshot,
@@ -53,6 +57,48 @@ from .cdp_dispatcher import (
     navigate,
     wait_for_settle,
 )
+
+
+def _connect_session_keepalive(port: int = 9222,
+                               open_url: Optional[str] = None) -> CDPSession:
+    """Same attach logic as cdp_dispatcher.connect_to_chrome, but with
+    websocket client keepalive DISABLED (ping_interval=None).
+
+    Why this exists separately: cdp_dispatcher.py is a protected file
+    in this build and must not be modified. Its connect_to_chrome
+    opens the ws with the websockets default 20s client keepalive.
+    The sync websockets client only services control frames during
+    send/recv, so a 30s+ OpenRouter call between CDP ops starves the
+    keepalive and the client kills the connection ("sent 1011 ...
+    keepalive ping timeout"). Disabling client pings keeps the CDP
+    socket alive across long model calls. Chrome does not ping, so
+    nothing else needs the keepalive.
+    """
+    r = httpx.get(f"http://localhost:{port}/json/list", timeout=5.0)
+    r.raise_for_status()
+    targets = r.json()
+    target = None
+    if open_url:
+        pr = httpx.put(f"http://localhost:{port}/json/new?{open_url}", timeout=10.0)
+        pr.raise_for_status()
+        target = pr.json()
+    if target is None:
+        for t in targets:
+            if (t.get("url") or "").startswith(("http://", "https://")):
+                target = t
+                break
+        if target is None and targets:
+            target = targets[0]
+    if target is None:
+        raise RuntimeError("no CDP target available on :9222")
+    ws = _ws_connect(target["webSocketDebuggerUrl"], max_size=16 * 1024 * 1024,
+                     ping_interval=None, ping_timeout=None, open_timeout=20)
+    sess = CDPSession(ws=ws, target_id=target["id"],
+                      rng=np.random.default_rng())
+    sess.send("Page.enable")
+    sess.send("Runtime.enable")
+    sess.send("DOM.enable")
+    return sess
 from .openrouter_client import OpenRouterClient, TEXT_MODEL, VISION_MODEL
 from .vision_verifier import VisionVerifier
 
@@ -155,10 +201,22 @@ def _page_url(sess: CDPSession) -> str:
 # ── prompts ───────────────────────────────────────────────────────────
 
 _DECOMPOSE_SYS = (
-    "Split a browser task into ordered atomic subtasks. Output ONLY "
-    'JSON: {"subtasks": ["...", "..."]}. If the task is already a '
-    'single step, return it as the only element. Keep each subtask a '
-    "single observable browser objective."
+    "Split a browser task into the FEWEST independent subtasks. "
+    'Output ONLY JSON: {"subtasks": ["...", "..."]}.\n'
+    "Hard rules:\n"
+    "- Preserve EVERY requirement of the original task verbatim. "
+    "Never drop, summarize, or omit any value, cell, row, or detail. "
+    "If the task lists data (cells, rows, numbers), that data MUST "
+    "appear in full inside a subtask.\n"
+    "- Default to ONE subtask. Only split when subtasks are truly "
+    "independent objectives that need different pages or a result "
+    "from an earlier step (e.g. 'look up X' then 'email about X').\n"
+    "- Do NOT split a single coherent piece of work into micro-steps. "
+    "Filling many cells in ONE spreadsheet is ONE subtask (the loop "
+    "handles the individual cells). Opening a site and acting on it "
+    "is ONE subtask.\n"
+    "Example: 'Open Sheets, make a sheet, put a title in A1 and "
+    "three data rows' -> ONE subtask containing all of that, not five."
 )
 
 _DECIDE_SYS = (
@@ -170,7 +228,22 @@ _DECIDE_SYS = (
     '"url":"url for navigate, or null","answer":"final answer if done"}\n'
     "Rules: if the page is blank, navigate first (a Google search is "
     "fine). If the visible page text already answers the sub-goal, "
-    "return action done with the answer. One action only. No prose."
+    "return action done with the answer. One action only. No prose.\n"
+    "GOOGLE SHEETS / spreadsheet grid (follow EXACTLY):\n"
+    "Grid cells are canvas with NO @eN ref. NEVER click a cell. NEVER "
+    "click toolbar buttons, the Insert menu, or use Ctrl/Cmd key "
+    "combos on a sheet (that creates Tables/charts and breaks the "
+    "task). Use ONLY this mechanical loop per cell:\n"
+    "  1. action click on the Name Box (the small textbox at the far "
+    "left just below the toolbar, its accessible name is the current "
+    "cell like \"A1\"; pick that @eN ref).\n"
+    "  2. action type with text equal to the target cell, e.g. \"A1\".\n"
+    "  3. action key with text Enter (selects that cell).\n"
+    "  4. action type with text equal to the cell's value.\n"
+    "  5. action key with text Enter (commits the value).\n"
+    "Repeat 1-5 for every required cell (A1, A3, B3, A4..A6, B4..B6, "
+    "etc.). When every required cell has been entered, action done. "
+    "Do not declare done before all listed cells and rows are filled."
 )
 
 _COMPLETE_SYS = (
@@ -268,8 +341,16 @@ class DSv4SkillRunner:
                 t = ref_map.get(ref)
                 if t:
                     humanlike_click(sess, int(t["x"]), int(t["y"]))
-                humanlike_type(sess, action.get("text") or "")
-                return (True, "typed", True)
+                txt = action.get("text") or ""
+                # Canvas grid apps (Google Sheets/Docs) ignore raw
+                # keyDown/keyUp; CDP Input.insertText reliably inserts
+                # into the focused cell/editor. Keep humanlike click
+                # for targeting, use insertText for the payload.
+                try:
+                    sess.send("Input.insertText", {"text": txt}, timeout_s=8.0)
+                except Exception:
+                    humanlike_type(sess, txt)
+                return (True, f"typed {txt[:30]!r}", True)
             if kind == "key":
                 humanlike_key(sess, [action.get("text") or "Enter"])
                 return (True, f"key {action.get('text')}", True)
@@ -286,8 +367,10 @@ class DSv4SkillRunner:
                      sub_idx: int, memory: dict) -> dict:
         history: list[str] = []
         diverged_streak = 0
+        no_action_count = 0
         decide_model = TEXT_MODEL
         last_sig = None
+        best_ptext_len = 0  # progress proxy: a sheet being filled grows
 
         for it in range(self.max_iters):
             tag = f"s{sub_idx}_i{it:02d}"
@@ -308,13 +391,17 @@ class DSv4SkillRunner:
                 mem_hint = " KNOWN: " + json.dumps(memory)[:200]
             action = self._decide(subgoal + mem_hint, ax, ptext, history, decide_model)
             if not action or not action.get("action"):
-                history.append(f"i{it}: model gave no action")
-                diverged_streak += 1
-                if diverged_streak >= 4:
+                # A single unparseable response is usually transient.
+                # Re-observe and re-decide; only hard-fail if the model
+                # cannot produce ANY action many times in a row.
+                no_action_count += 1
+                history.append(f"i{it}: model gave no parseable action, retrying")
+                if no_action_count >= 8:
                     return {"subgoal": subgoal, "status": "HARD_FAIL",
-                            "answer": "", "evidence": "no parseable action",
+                            "answer": "", "evidence": "no parseable action x8",
                             "iters": it}
                 continue
+            no_action_count = 0
 
             if (action.get("action") or "").lower() == "done":
                 ans = action.get("answer") or ""
@@ -335,7 +422,7 @@ class DSv4SkillRunner:
             history.append(f"i{it}: {action.get('action')} {action.get('target_ref') or action.get('url') or ''} -> {detail}")
             if not ok:
                 diverged_streak += 1
-                if diverged_streak >= 4:
+                if diverged_streak >= 6:
                     return {"subgoal": subgoal, "status": "HARD_FAIL",
                             "answer": "", "evidence": f"dispatch failures: {detail}",
                             "iters": it}
@@ -350,13 +437,22 @@ class DSv4SkillRunner:
                 (traj / f"{tag}_verdict.json").write_text(json.dumps({
                     "status": v.status, "evidence": v.evidence,
                     "confidence": v.confidence, "fellback": v.fellback}))
-                if v.status == "DIVERGED":
+                # Progress proxy: a sheet/page being filled grows its
+                # visible text. If text grew since the best seen, the
+                # task IS advancing even when the verifier is strict on
+                # an intermediate cell-selection step. Reset the streak.
+                cur_len = len(ptext)
+                made_progress = cur_len > best_ptext_len + 2
+                if made_progress:
+                    best_ptext_len = cur_len
+
+                if v.status == "DIVERGED" and not made_progress:
                     diverged_streak += 1
                     history.append(f"i{it}: VERIFIER DIVERGED: {v.evidence}")
                     if diverged_streak == 2 and decide_model == TEXT_MODEL:
                         decide_model = VISION_MODEL  # escalate
                         history.append("i: escalating action model to Kimi K2.6")
-                    elif diverged_streak >= 4:
+                    elif diverged_streak >= 6:
                         return {"subgoal": subgoal, "status": "HARD_FAIL",
                                 "answer": "", "evidence": f"diverged repeatedly: {v.evidence}",
                                 "iters": it}
@@ -376,8 +472,8 @@ class DSv4SkillRunner:
         result = TaskResult(task=task, trajectory_dir=str(traj))
 
         try:
-            sess = connect_to_chrome(port=self.cdp_port,
-                                     open_url=starting_url or "about:blank")
+            sess = _connect_session_keepalive(
+                port=self.cdp_port, open_url=starting_url or "about:blank")
         except Exception as e:
             result.status = "ERROR"
             result.error = f"connect failed: {e}"

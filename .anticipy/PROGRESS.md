@@ -791,3 +791,43 @@ Fixed mid-gate: /json/new needs PUT not GET on Chrome 111+ (urllib
 defaulted GET -> 405). 2-attempt rule: one fix, passed.
 
 Tag: phase-v4-5-wikipedia-passes
+
+### Phase V4-6 — Compound HARD GATE: FAILED, ESCALATED, STOPPED
+
+V4-6 is a hard gate. Per the prompt, failure means email Omar via
+Aevoy with the trajectory and DO NOT proceed to V4-7. Honoring that.
+
+Attempts (all real, all distinct root causes, no fabrication):
+1. Original runner. Sheets canvas: humanlike keyDown/keyUp ignored,
+   "type" never landed in A1. HARD_FAIL "cell A1 empty".
+2. Fix: CDP Input.insertText for text + grid guidance + CDP socket
+   keepalive disabled (websockets sync client was killing the
+   connection during 30s OpenRouter calls). Result: typing now
+   WORKS (A1 got "Anticipy Test Tracker", A3 got "Week", confirmed
+   by page innerText). New failure: decomposer over-split into 5
+   subtasks and silently DROPPED "add three rows of data 4-6".
+   HARD_FAIL at B3 "no parseable action".
+3. Decomposer rewrite (fewest subtasks, preserve every requirement
+   verbatim, one coherent subtask for one sheet) + loop resilience.
+   Result: decomposer FIXED (1 subtask, all requirements kept). New
+   failure: model's exploratory clicks triggered Sheets' Insert
+   Table feature (A1 became "Column 1" Table header). HARD_FAIL.
+4. Final: deterministic Name-Box cell-addressing recipe + hard
+   guardrail against toolbar/Insert/Ctrl + progress-aware
+   divergence tolerance. Result: ran 25 iterations (vs 6 before;
+   tolerance worked), mixed CERTIFIED/DIVERGED, ultimately
+   HARD_FAIL "no parseable action x8". Trajectory:
+   ~/.anticipy/trajectories/1778886552_eac666 (33 real screenshots).
+
+Honest diagnosis: the decomposer, the insertText dispatch, the CDP
+keepalive, and divergence tolerance are all genuinely fixed and
+verified. The residual blocker is model capability: DeepSeek V4
+Flash (text-only over the AX tree) cannot reliably drive the
+Google Sheets canvas across ~15+ sequential cell operations. It
+loses the plot mid-sequence and emits unparseable actions. This is
+an architecture-level finding the gate is designed to surface. The
+fix (different/larger action model, or a Sheets-specific
+deterministic cell-writer) is the user's call, not mine, per the
+prompt. NOT proceeding to V4-7. NOT tagging V4-6.
+
+Last green tag remains phase-v4-5-wikipedia-passes.
