@@ -105,11 +105,18 @@ class Dispatcher:
             else []
         )
         recipe_steps = [_substitute_placeholders(step, merged_params) for step in raw_steps]
+        # When using a shadow skill's bootstrap recipe, route.proposed_skill_id
+        # is None (hit=False) but route.top_candidates[0] has the real
+        # skill_id. We tag the task with that ID so hermes can track
+        # success/failure counts and apply the lifecycle.
+        skill_id = route.proposed_skill_id or (
+            route.top_candidates[0].skill_id if route.top_candidates else None
+        )
         row = {
             "task_id": task_id,
             "intent_id": intent.intent_id,
             "user_id": intent.user_id,
-            "skill_id": route.proposed_skill_id,
+            "skill_id": skill_id,
             "parameters": merged_params,
             "recipe_steps": recipe_steps,
             "global_postcondition": (
