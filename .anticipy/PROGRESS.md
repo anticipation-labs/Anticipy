@@ -316,7 +316,44 @@ These are the parts of Phase 5 that are NOT yet done. Per Rule A, Phase 5 is "sh
 - Per-skill symbolic verifiers (one per Phase 6 skill).
 - `anticipy.ai/download` route deploy + copy of latest `.dmg` to `public/`.
 
-### Final session test sweep — 132/134 gates green (98.5%)
+## 2026-05-15 (continued) FARA-7B integration build
+
+Master plan saved at `.anticipy/FARA_PLAN.md`. Memory entries for the four hard rules saved (no em-dashes, no fabrication, no API keys, FARA build plan project memory).
+
+Path correction: master prompt referenced `~/Desktop/Anticipy-DEV-FINAL`. Canonical is `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`. The `~/Desktop/Anticipy-DEV-FINAL` path is a symlink to Developer (verified: `lrwxr-xr-x ... -> /Users/omarebrahim/Developer/Anticipy-DEV-FINAL`). Using Developer in all commands.
+
+### Phase fara-0: Repo audit + env repair
+
+Test command:
+```
+cd /Users/omarebrahim/Developer/Anticipy-DEV-FINAL && \
+  source engine/.venv/bin/activate && \
+  python -c "import mlx_vlm, patchright; print('phase 0 env ok')" && \
+  ls "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default/Cookies" && \
+  curl -s -m 5 https://huggingface.co/api/models/microsoft/Fara-7B | grep -o '"id":"microsoft/Fara-7B"' && \
+  git describe --tags --abbrev=0
+```
+
+Output:
+```
+phase 0 env ok
+/Users/omarebrahim/Library/Application Support/Google/Chrome/Default/Cookies
+"id":"microsoft/Fara-7B"
+phase-9-hermes-promote-verified
+```
+
+Notes:
+- engine/.venv has Python 3.11.12 (master prompt requires 3.11.x, satisfied).
+- mlx 0.x + mlx-vlm 0.5.0 + patchright 1.49+ installed in venv.
+- Real Chrome Default profile cookies file is 3.4 MB (master prompt threshold is 100 KB, well over).
+- microsoft/Fara-7B is MIT-licensed and not gated. Anonymous HF access works without HF_TOKEN. Master prompt step 7 was conservative; Fara public access is fine.
+- xcode-select tools at /Library/Developer/CommandLineTools (no GUI moment needed).
+- Disk free 112 GB (need 30 GB for models, satisfied).
+- Last green tag is phase-9-hermes-promote-verified (matches expected baseline).
+
+Phase fara-0 tag: `phase-fara-0-env-confirmed`.
+
+### Final session test sweep 132/134 gates green (98.5%)
 
 ```
 test_proactive_pipeline.py text       15/17  88%  (gold-standard, temp variance; floor 14/17)
