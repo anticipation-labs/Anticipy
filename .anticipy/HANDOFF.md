@@ -34,6 +34,7 @@ F. Chrome :9222 is ONE LaunchAgent at `~/Library/LaunchAgents/com.anticipy.chrom
 | 8   | `phase-8-complete`              | anticipy.ai/download → unsigned dmg via GH Releases | curl returns 302 → 200 |
 | 9   | `phase-9-complete`              | watchdog + canary + Hermes lifecycle        | 7/7 |
 | 10  | `phase-10-harness-complete`     | resumable 4-hour acceptance HARNESS         | 4/4 selftest |
+| FullE2E | `phase-9-full-pipeline-passing` | utterance → cascade → middle → executor → Result | 6/6 (real Supabase + Chrome :9222 + Wikipedia) |
 
 **Live infrastructure:**
 - Supabase (handlit, ref ogbxpqkmsdrcuilafycn): 5 v-final-prototype tables (`anticipy_intents_v2`, `anticipy_tasks_v2`, `anticipy_results_v2`, `skill_library` seeded with 11 shadow rows, `task_state`) live with RLS + Realtime publication.
