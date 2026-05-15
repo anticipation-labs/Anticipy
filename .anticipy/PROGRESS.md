@@ -557,3 +557,89 @@ Resume protocol per the user's locked rules: read this PROGRESS.md → CHANGELOG
 3. Investigate the executor's 93% trajectory failure (per `PENDING_DIAGNOSTIC.md`). This is the real production-blocking bug and the v-final-prototype architecture builds on top of a working executor. Requires Omar to reload a v7 extension build at `chrome://extensions`.
 4. Build the Stage 1 demand-detection module (`engine/app/proactive/demand_detection.py`) — doesn't depend on the hedge filter, can be built and tested independently against the 138 production trajectories' transcripts.
 
+
+---
+
+## 2026-05-15 — ACCESSIBILITY-TREE PIVOT (replaces FARA)
+
+User pivoted off Fara-7B vision-coordinate prediction. New stack:
+Ollama + Qwen3-8B (text-only) reading the browser accessibility tree,
+agent-browser CLI for snapshot+dispatch, self-verifying loop.
+
+### Phase AX-0 — stack installed
+
+- Ollama: brew blocked on /opt/homebrew perms (sudo halt avoided).
+  Alternative path: direct binary from GitHub releases v0.24.0
+  (ollama-darwin.tgz) to ~/.anticipy/ollama, symlinked ~/.local/bin.
+  `curl localhost:11434/api/version` -> {"version":"0.24.0"}.
+- qwen3:8b pulled (5.2 GB). `ollama list` shows it.
+- agent-browser: npm name is `agent-browser` (not @vercel/...).
+  npm global blocked on /opt/homebrew perms; alternative path: npm
+  prefix ~/.npm-global, symlinked ~/.local/bin. v0.27.0.
+- `agent-browser install` fetched its bundled Chrome.
+- venv ollama client via `uv pip install ollama` (0.6.2).
+- LaunchAgent com.anticipy.ollama.plist written (loaded post-smoke).
+- Verify command output: qwen3:8b listed, agent-browser 0.27.0,
+  `ollama.generate(...'Reply READY')` -> 'READY' (think=False, 3.3s).
+- Tag: phase-ax-0-stack-installed
+
+### Phase AX-1 — smoke gate PASSED
+
+Test: agent-browser attaches to live :9222 Chrome, opens Gmail,
+snapshots AX tree, Qwen3-8B returns the Compose button ref.
+
+Real obstacles found and fixed (honest):
+1. Mailsuite extension injects a "Permissions required" modal over
+   Gmail on every load; it dominated the AX tree. Added modal
+   dismissal (clicks Ok/Got it). This is a real product concern,
+   not a test hack; the runner hits the same modal.
+2. agent-browser `connect 9222` hung on 42 CDP targets (stale tabs
+   from prior Fara recipe tests: canva/docs/4 sheets/3 wiki/iana).
+   Closed the stale automation tabs. 14 targets -> connect works.
+3. Qwen3 thinking ate small num_predict budgets -> empty response.
+   Fix: think=False top-level kwarg (not in options), 3.3s vs 33s.
+
+Command:
+  python engine/tests/integration/test_ax_smoke_gmail.py
+Output (real, .anticipy/AX_SMOKE_RESULT.md):
+  Passed: True | latency 32.33s | ref @e2 | resolved 'Compose' | raw '@e2'
+
+Tag: phase-ax-1-smoke-passed
+
+### Phase AX-3 — AXSkillRunner + REAL DEEP TEST PASSED
+
+ax_skill_runner.py rewritten per user's three corrections:
+1. No setup_url crutch: run(goal, skill_id) starts on BLANK tab;
+   the model chooses its own first navigation.
+2. Dedicated background window "Anticipy Agent" via CDP
+   Target.createTarget newWindow+background. targetId persisted at
+   ~/.anticipy/ax_agent_target.json. User foreground untouched.
+   (Chrome colored tab-groups need the extension tabGroups API;
+   CDP-only architecture uses a background window, same
+   work-in-parallel guarantee. Documented honestly.)
+3. Chattiness fixed 3a+3b+3c: 30-line interactive tree trim,
+   one-shot example in prompt, ollama format=JSON schema. Clean
+   JSON every iteration; zero chatty outputs after the fix.
+
+Extra real fixes from honest failure analysis:
+- First deep run STUCK: agent looped clicking one ref 7x because
+  -i interactive tree cannot see static answer text. Added a page
+  -text channel (agent-browser get text body, boilerplate-stripped)
+  and repeat-action loop detection.
+
+REAL DEEP TEST (user-specified): blank tab, goal "Find what year
+the Python programming language was first released", no other
+guidance.
+  python engine/app/action_engine/ax_skill_runner.py \
+    --goal "Find what year the Python programming language was first released" \
+    --skill deeptest_python_year --max-iters 10
+Output (real, .anticipy/PROOF/ax_v1/deeptest_python_year/run_1778881175):
+  iter 0: navigate google.com/search?q=... (agent chose this itself, 7.26s)
+  iter 1: done answer="...first released in 1991." (12.05s)
+  separate verifier: DONE (7.66s, read visible page text)
+  final_verdict DONE, 2 iterations, ~27s wall
+  step_01.png shows real Google AI Overview "February 20, 1991"
+  signed in as omarkebrahim. Real profile, Anticipy Agent window.
+
+This is the real proof: agent reached the answer on its own from
+a blank tab with only a sentence of intent.

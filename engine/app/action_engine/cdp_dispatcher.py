@@ -168,7 +168,7 @@ def humanlike_click(
             "x": pt.x,
             "y": pt.y,
             "button": "none",
-        }, timeout_s=3.0)
+        }, timeout_s=8.0)
     sess.cursor_x = path[-1].x
     sess.cursor_y = path[-1].y
     # Settle before press
@@ -179,7 +179,7 @@ def humanlike_click(
         "y": float(y),
         "button": "left",
         "clickCount": click_count,
-    }, timeout_s=3.0)
+    }, timeout_s=8.0)
     time.sleep(gaussian_delay(60.0, 20.0, 30.0, 150.0, rng=sess.rng) / 1000.0)
     sess.send("Input.dispatchMouseEvent", {
         "type": "mouseReleased",
@@ -187,7 +187,7 @@ def humanlike_click(
         "y": float(y),
         "button": "left",
         "clickCount": click_count,
-    }, timeout_s=3.0)
+    }, timeout_s=8.0)
 
 
 def humanlike_type(sess: CDPSession, text: str) -> None:
@@ -200,17 +200,17 @@ def humanlike_type(sess: CDPSession, text: str) -> None:
             "text": ch,
             "key": ch,
             "unmodifiedText": ch,
-        }, timeout_s=3.0)
-        sess.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": ch}, timeout_s=3.0)
+        }, timeout_s=8.0)
+        sess.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": ch}, timeout_s=8.0)
 
 
 def humanlike_key(sess: CDPSession, keys: list[str]) -> None:
     """Press keys in order, release in reverse (combo key support)."""
     for k in keys:
-        sess.send("Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": k, "code": k}, timeout_s=3.0)
+        sess.send("Input.dispatchKeyEvent", {"type": "rawKeyDown", "key": k, "code": k}, timeout_s=8.0)
         time.sleep(gaussian_delay(20.0, 8.0, 5.0, 60.0, rng=sess.rng) / 1000.0)
     for k in reversed(keys):
-        sess.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": k, "code": k}, timeout_s=3.0)
+        sess.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": k, "code": k}, timeout_s=8.0)
 
 
 def humanlike_scroll(sess: CDPSession, pixels: int) -> None:
@@ -225,7 +225,7 @@ def humanlike_scroll(sess: CDPSession, pixels: int) -> None:
             "y": sess.cursor_y,
             "deltaX": 0,
             "deltaY": chunk * direction,
-        }, timeout_s=3.0)
+        }, timeout_s=8.0)
         time.sleep(gaussian_delay(35.0, 10.0, 20.0, 80.0, rng=sess.rng) / 1000.0)
         remaining -= chunk
 
