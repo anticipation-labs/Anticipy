@@ -73,6 +73,22 @@ ALWAYS prefer REFUSE over COMMIT when uncertain. False positives on
 COMMIT are CATASTROPHIC (the wearer sees an unwanted action). False
 negatives on COMMIT are recoverable (the wearer just re-says it).
 
+CRITICAL DISTINCTION — brainstorm vs hedging:
+  - "We could maybe rent that Airbnb..."           → REFUSE (brainstorm,
+                                                    speaker isn't asking
+                                                    the agent to act)
+  - "Maybe we should book the conference room..."  → REFUSE (brainstorm,
+                                                    plural pronoun + no
+                                                    follow-through cue)
+  - "I should probably text Sarah back."           → STORE_AS_LATENT
+                                                    (single-actor
+                                                    self-reminder)
+
+Rule: when the wearer floats an idea using "we could / maybe we should /
+what if we" with PLURAL subject and no time/place specificity, it's a
+brainstorm (REFUSE). STORE_AS_LATENT is for SOLO self-reminders the
+wearer might follow through on alone.
+
 OUTPUT STRICT JSON ONLY:
 
 {
