@@ -1020,3 +1020,98 @@ macOS (large shared mappings). The binding check is measured peak
 ru_maxrss < 2 GB, which passed at 23.7 MB empty. Stated, not
 hidden. The 2 GB cap is re verified with the real loaded suite at
 P5 and P10.
+
+## P1 CASCADE PRESERVE AND RE-VALIDATE  (honest result, canonical
+## tag WITHHELD; checkpoint tag p1-cascade-port-faithful)
+
+Built: engine/app/anticipy/proactive_engine.py (cascade driver +
+P1 minimal decision mapping), re wired engine/app/proactive/
+llm_adapter.py to route the preserved cascade through
+platform_adapter.model_call. The three cascade prompt+stage
+modules (demand_detection, hedge_filter, intent_extraction) were
+NOT modified. Gate: engine/tests/anticipy/gate_p1.py.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/anticipy/gate_p1.py
+
+RUN 1 literal output (initial port):
+  == SCOREBOARD p1-cascade-revalidated ==
+  EXPLICIT_COMMAND  n=60 exact=0.967 over=0.000 under=0.033 silentACT=0 pass=True
+  CLEAR_IMPLICIT    n=60 exact=0.367 over=0.000 under=0.633 silentACT=0 pass=False
+  adversarial: sampled=8 flagged=0 rate=0.000 pass=True
+  ALL_PASS=False elapsed=241.2s
+  P1_GATE FAIL
+
+Two attempt rule, attempt 1 (port robustness, section 8 mandated,
+allowed: fix the port never the cascade logic): added empty
+content / reasoning starvation retry with doubled tokens in
+platform_adapter.model_call (the proven frozen action engine fix)
+and dropped strict provider response_format json_object for the
+cascade (it degenerated deepseek-v4-flash into multilingual word
+salad on the cascade's long few shot prompts, observed live) plus
+one stricter reparse in llm_adapter. Cascade prompts untouched.
+
+RUN 2 literal output (post attempt 1 robustness):
+  == SCOREBOARD p1-cascade-revalidated ==
+  EXPLICIT_COMMAND  n=60 exact=0.967 over=0.000 under=0.033 silentACT=0 pass=True
+  CLEAR_IMPLICIT    n=60 exact=0.367 over=0.000 under=0.633 silentACT=0 pass=False
+  adversarial: sampled=8 flagged=0 rate=0.000 pass=True
+  ALL_PASS=False elapsed=183.45s
+  P1_GATE FAIL
+
+Plus a 12 case CLEAR_IMPLICIT smoke at ACT-rate 0.33. Three
+independent measurements agree: 0.367 / 0.33 / 0.367.
+
+ROOT CAUSE (evidence, not speculation). The per case cascade
+evidence strings are explicit: "stage1.5 latent: hedging 'I need
+to' is a self-reminder", "'have to' expresses obligation but
+lacks specificity", "'remind me' is a self-reminder not a direct
+act". CLEAR_IMPLICIT distribution: ACT 22, STORE_AS_LATENT 33,
+IGNORE 5. The proven cascade's Stage 1.5 hedge module
+deterministically classifies committed first person near term
+tasks ("I need to email Sarah the deck before end of day") as
+STORE_AS_LATENT. This is exactly the behavior it was validated to
+on the gold_standard set (gs_03 "I should probably text Sarah
+back" -> STORE_AS_LATENT, gs_05 "I gotta remember to email John"
+-> STORE_AS_LATENT). The port did NOT break it: EXPLICIT_COMMAND
+holds at 0.967 with over=0.000 and the different model
+adversarial check flags 0 of 8. The robustness fix removed the
+garbage driven false IGNOREs (real correctness improvement, kept)
+but did not move the aggregate because the bottleneck is the old
+hedge module's deliberate conservative COMMIT/LATENT boundary.
+
+WHY NO PERMITTED ATTEMPT 2. The only changes that could lift
+CLEAR_IMPLICIT are: (a) edit the cascade core classification
+prompt or stage logic (FORBIDDEN hard rule), (b) weaken the test
+or the 0.92 threshold (FORBIDDEN hard rule), or (c) build the P2
+four way decision policy / the P3 hedge rewrite now (FORBIDDEN:
+one architectural change per phase, and the spec itself sequences
+the hedge rewrite at P3). The build spec section 3 explicitly puts
+the hedge filter in the REWRITE set ("Rewrite, not patch, every
+other proactive module (hedge filter, ...)") and P3 is "Replace
+the old hedge module entirely". So P1's literal premise ("if both
+are not >=0.92 the port broke it") is empirically falsified here:
+the port is faithful (EXPLICIT_COMMAND proves it) and the cause is
+the conservative hedge stage the spec replaces in P3. This is a
+genuine spec internal sequencing tension that tuning cannot fix
+within P1's hard rule envelope.
+
+DECISION (decide-do-log, no halt, no fabrication, no silent pass).
+Per the established precedent in THIS repo's V4 build ("v4-6
+intentionally untagged: that compound/canvas gate did not pass and
+is the documented frontier limit"), the canonical phase tag
+p1-cascade-revalidated is WITHHELD because CLEAR_IMPLICIT did not
+reach 0.92. An honest checkpoint tag p1-cascade-port-faithful is
+applied instead. It asserts ONLY what is proven: the preserved
+Stage 1 demand detection and Stage 2 typed extraction perform
+faithfully through the new portable spine (EXPLICIT_COMMAND 0.967,
+over=0.000, adversarial 0 flags) and the attempt 1 port robustness
+fixes are real correctness improvements. CLEAR_IMPLICIT's ACT rate
+is carried as an explicit open number, structurally deferred to
+the P5 full corpus combined gate which runs AFTER the P3 hedge
+rewrite, exactly per the spec's own module replacement sequencing.
+No Aevoy email sent: section 9 says do not email for an honest
+lower number that the build's own later phase addresses; report in
+PROGRESS.md and continue past. Cost to here: $0.1958 total
+(712 model calls), well within budget.
