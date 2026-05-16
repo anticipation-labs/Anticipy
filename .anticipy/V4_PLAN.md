@@ -1,3 +1,5 @@
+> v1 action engine FROZEN at 7f3b72e 2026-05-16. No architecture changes without explicit Omar instruction.
+
 # ANTICIPY ACTION ENGINE V1 — BUILD BIBLE
 ## DeepSeek V4 Flash multimodal via OpenRouter + vision-woven Ralph Loop + real Chrome
 ## Single run. Smoke-gated. FINAL. No architecture revisits after this.

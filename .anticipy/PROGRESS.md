@@ -885,3 +885,53 @@ Command: python -m pytest engine/tests/test_dsv4_skill_runner.py
 Output: 30 passed, 1 skipped in 30.25s
 
 No tag (V4-6 not passed). Last green tag: phase-v4-5-wikipedia-passes.
+
+---
+
+## 2026-05-16 — V1 ACTION ENGINE LOCKED / FROZEN
+
+### Cleanup (item 1) - exact deleted vs kept
+
+DELETED:
+- 62 non-evidence trajectory dirs under ~/.anticipy/trajectories/
+  (superseded fix-loop failed/mid-run attempts + pre-V4 Fara/AX/
+  recipe-era debris: deeptest_*, wiki_*, sheets_*, the failed
+  gmail/slack/amazon/resy attempts that were later re-run green).
+  Trajectory dir count 98 -> 37; size 544M -> 109M.
+- Transient logs/scratch: ~/.anticipy/ollama-server.log,
+  ollama-server.err, /tmp/ab-connect.log, /tmp/gmail-state.png,
+  /tmp/Anticipy.dmg, /tmp/anticipy_dmg/, /tmp/ev_*.txt.
+- ~70 stale background-shell .output capture files in the harness
+  tmp tasks dir.
+
+KEPT (evidence for the 100% number, never touched):
+- The 36 V4-7 final-pass SUCCESS trajectory dirs (12 tasks x 3 runs
+  = the exact set backing the scoreboard) + 1 V4-8 logging-
+  verification SUCCESS run (a complete success, not debris) = 37.
+- ~/.anticipy/openrouter_calls.jsonl (cost ledger, 716KB, intact).
+- .anticipy/v4_7_results.jsonl (scoreboard backing data, intact).
+- .anticipy/V4_SCOREBOARD.md, .anticipy/HANDOFF_V4_V1.md,
+  .anticipy/V4_PLAN.md, .anticipy/PROGRESS.md.
+- All Supabase-logged trajectories (cloud action_engine_tasks/
+  steps + storage screenshots; untouched).
+Verified post-cleanup: 0 of 36 evidence dirs missing; all evidence
+files present.
+
+### Final state (item 3)
+
+V1 action engine FROZEN at commit 7f3b72e (2026-05-16). Tier 1
+(general DOM web) = 36/36 successful runs = 100.0% aggregate,
+honest and not rounded, vision-auditor-graded on real pixels, no
+fabrication, both gates satisfied (>=11/12 at 3/3; all 12 >=2/3
+with >=95% aggregate). Real measured OpenRouter cost: median
+$0.0154/task (~1.5 cents), mean $0.0211, p90 $0.0377, p99 $0.0897;
+total all-time build spend $4.74. Tier 2 canvas cell-commit
+(Sheets/Docs/Slides) documented as a frontier exception with
+~12-experiment evidence (Google canvas resists synthetic input;
+nav/extract work, commit does not) - accepted per directive, not
+retried. Phase tags phase-v4-0..phase-v4-10 pushed to origin main
+(v4-6 intentionally untagged: that compound/canvas gate did not
+pass and is the documented frontier limit). Mac app shipped
+(Tauri, unsigned) at anticipy.ai/download, verified 302 ->
+Anticipy.dmg -> HTTP 200. No further build work; proactive engine
+untouched.
