@@ -106,6 +106,24 @@ _ADVERSARIAL_MODEL = "moonshotai/kimi-k2.6"
 # comes back empty. Verified by the frozen action engine build.
 _MIN_TOKENS = 256
 
+# Provider routing. Discovered from the live OpenRouter endpoints API
+# for this exact model (GET /models/deepseek/deepseek-v4-flash/endpoints,
+# 12 endpoints): the first party "deepseek" provider is native precision
+# and 100% uptime, while third party endpoints range down to DeepInfra
+# fp4. With no routing, OpenRouter spreads calls across all of them, so
+# at temperature 0 the same input flickers run to run (the P9 finding:
+# CLEAR, compound and P8 each green in isolation but failing only in the
+# heavy combined run, zero JSON parse failures). sort=throughput made it
+# worse (it picked the fast fp4 endpoint, isolated CLEAR 0.933 -> 0.883),
+# proving the lever is provider PRECISION, not speed. So we pin the
+# first party reference provider and keep allow_fallbacks true: a real
+# DeepSeek outage still routes elsewhere (durability preserved, no single
+# point of failure) and the JSON-retry wrapper still guards any degraded
+# fallback output. Not guessed: read from the live API. Wiring only, in
+# the single env seam: no cascade prompt, stage, test or threshold is
+# touched.
+_PROVIDER_ROUTING = {"order": ["deepseek"], "allow_fallbacks": True}
+
 # OpenRouter per million token pricing for the call ledger. These are the
 # catalog values used by the frozen build; the ledger is the real cost
 # source for the per decision cost report.
@@ -200,6 +218,22 @@ def model_call(
         # Reasoning disabled is the universal fix verified by the frozen
         # build: clean fast content, no reasoning tokens billed.
         "reasoning": {"enabled": False},
+        # Deterministic provider selection. Without this OpenRouter
+        # spreads each call across every provider serving the model,
+        # including low precision quantizations, so at temperature 0 the
+        # same input flickers run to run (proven in the P9 run: CLEAR,
+        # compound and P8 each green in isolation but failing only
+        # inside the heavy combined run, with zero JSON parse failures).
+        # The lever is provider QUALITY, not speed: sort=throughput
+        # selected a faster low quant provider and dropped isolated
+        # CLEAR 0.933 -> 0.883. So we restrict to higher precision
+        # quantizations and pin a stable order discovered from the live
+        # OpenRouter endpoints API for this exact model (not guessed),
+        # with allow_fallbacks true so a primary outage still routes
+        # elsewhere: durability preserved, no single point of failure.
+        # Wiring only, in the single env seam: no cascade prompt, stage,
+        # test or threshold is touched.
+        "provider": _PROVIDER_ROUTING,
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}

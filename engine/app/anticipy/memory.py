@@ -130,6 +130,33 @@ def has_active_matching(user_id: str, gist: str) -> bool:
     return False
 
 
+def delete_matching(user_id: str, gist: str) -> int:
+    """Deterministically deactivate latent intents matching gist. A
+    detected self retraction ("I should X. Never mind.") unambiguously
+    cancels the just stated intent, that is not a model judgment, so the
+    nevermind path uses this guaranteed delete rather than round
+    tripping through the reconcile model (which is the right primitive
+    for genuinely ambiguous ADD/UPDATE/DELETE/NOOP, but occasionally
+    NOOPs a borderline retraction phrasing). Returns the count
+    deactivated.
+    """
+    g = gist.strip().lower()
+    if not g:
+        return 0
+    n = 0
+    with _lock:
+        entries = _load(user_id)
+        for e in entries:
+            if e.active and e.kind == "latent_intent" and (
+                g[:24] in e.value.lower() or e.value.lower()[:24] in g
+            ):
+                e.active = False
+                n += 1
+        if n:
+            _save(user_id, entries)
+    return n
+
+
 _RECONCILE_SYS = """\
 You maintain a user's long term memory. Given the existing relevant
 memory entries and one new candidate observation, choose EXACTLY ONE
@@ -258,6 +285,47 @@ async def resolve_reference(
     res = await asyncio.to_thread(
         platform_adapter.model_call, _RESOLVE_SYS, user, 256, 0.0, False
     )
+    if not res.ok:
+        return ResolveResult(False, "", 0.0, "resolve_model_failed")
+    s = res.content
+    a, b = s.find("{"), s.rfind("}")
+    if a == -1 or b == -1 or b <= a:
+        return ResolveResult(False, "", 0.0, "resolve_no_json")
+    try:
+        p = json.loads(s[a : b + 1])
+    except Exception:
+        return ResolveResult(False, "", 0.0, "resolve_bad_json")
+    return ResolveResult(
+        resolved=bool(p.get("resolved")) and bool(p.get("value")),
+        value=str(p.get("value", "")),
+        confidence=float(p.get("confidence", 0.0) or 0.0),
+        reason=str(p.get("reason", ""))[:160],
+    )
+
+
+def resolve_reference_sync(user_id: str, reference_text: str, profile=None) -> ResolveResult:
+    """Synchronous reference resolution. platform_adapter.model_call is
+    itself blocking, so this needs no event loop. Used by the synchronous
+    handoff path, which is called both from plain sync code and from
+    inside the durable workflow's event loop where asyncio.run would
+    raise. Same logic and safe defaults as resolve_reference.
+    """
+    try:
+        with _lock:
+            active = [e for e in _load(user_id) if e.active]
+    except Exception:
+        return ResolveResult(False, "", 0.0, "memory_unavailable")
+    anchors = [{"key": e.key, "value": e.value} for e in active]
+    if profile is not None:
+        for rel, who in (getattr(profile, "people", {}) or {}).items():
+            anchors.append({"key": rel, "value": who})
+    if not anchors:
+        return ResolveResult(False, "", 0.0, "no_anchors")
+    user = (
+        f"KNOWN ANCHORS:\n{json.dumps(anchors, ensure_ascii=False)}\n\n"
+        f"REFERENCE TO RESOLVE: {reference_text}\n\nReturn the JSON now."
+    )
+    res = platform_adapter.model_call(_RESOLVE_SYS, user, 256, 0.0, False)
     if not res.ok:
         return ResolveResult(False, "", 0.0, "resolve_model_failed")
     s = res.content

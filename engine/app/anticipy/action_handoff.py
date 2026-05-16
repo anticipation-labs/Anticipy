@@ -24,7 +24,6 @@ is NEVER left synchronously blocked on a human).
 
 from __future__ import annotations
 
-import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -100,16 +99,19 @@ def to_task_string(contract: ProactiveContract) -> str:
     return base
 
 
-async def _resolve_clarification(
+def _resolve_clarification(
     clar: dict, user_ctx: UserContext
 ) -> tuple[bool, str, float]:
-    """Memory first. Returns (resolved, answer, confidence). Never raises;
-    a memory failure returns not resolved so the caller escalates rather
-    than guesses.
+    """Memory first, synchronous. Returns (resolved, answer,
+    confidence). Synchronous on purpose: handoff is called both from
+    plain sync code and from inside the durable workflow's running event
+    loop, where an asyncio.run would raise. memory.resolve_reference_sync
+    needs no loop. Never raises; a memory failure returns not resolved
+    so the caller escalates rather than guesses.
     """
     q = str(clar.get("question", ""))
     try:
-        rr = await memory_mod.resolve_reference(user_ctx.user_id, q, user_ctx.profile)
+        rr = memory_mod.resolve_reference_sync(user_ctx.user_id, q, user_ctx.profile)
     except Exception:
         return (False, "", 0.0)
     if rr.resolved and rr.confidence >= ESCALATION_THRESHOLD:
@@ -149,7 +151,7 @@ def handoff(
             return result
 
         # action engine asked a clarifying question: memory first
-        resolved, answer, conf = asyncio.run(_resolve_clarification(clar, user_ctx))
+        resolved, answer, conf = _resolve_clarification(clar, user_ctx)
         if resolved:
             result.clarification_path.append(
                 {"q": clar.get("question"), "via": "memory_resolved", "conf": round(conf, 3)}

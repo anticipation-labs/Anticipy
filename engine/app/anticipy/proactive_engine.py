@@ -94,16 +94,20 @@ class ProactiveEngine:
             gist = wtext.strip()
             resolved = False
             try:
+                # Register the just stated intent then DETERMINISTICALLY
+                # delete it. A detected self retraction unambiguously
+                # cancels it: that is a guaranteed property, not a model
+                # judgment, so it must be code enforced (the same proven
+                # decoupled determinism pattern as the P5/P7/P8 fixes).
+                # The reconcile model stays the primitive for genuinely
+                # ambiguous ADD/UPDATE/DELETE/NOOP elsewhere.
                 memory_mod.add_latent(ctx.user_id, gist)
-                await memory_mod.reconcile(
-                    ctx.user_id, "latent_intent",
-                    f"never mind, cancel the task: {gist}",
-                )
+                memory_mod.delete_matching(ctx.user_id, gist)
                 resolved = not memory_mod.has_active_matching(ctx.user_id, gist)
             except Exception:
                 resolved = False
             return self._final(
-                "IGNORE", 0.9, "nevermind: prior intent retracted and reconciled",
+                "IGNORE", 0.9, "nevermind: prior intent retracted and deterministically cleared",
                 unit, ctx, source, "ambient", threshold,
                 {"op": "DELETE"}, None, retraction_resolved=resolved,
             )

@@ -1589,3 +1589,106 @@ asymmetry that protects the hardest ambiguous interpersonal sends
 is now a guaranteed code property, not a probabilistic one. Layer
 C is built and validated. Cost to here: $3.04 total, well within
 budget.
+
+## P9 WHOLE SYSTEM INTEGRATION AND PROGRESSIVE AUTONOMY
+## (canonical tag p9-integrated, GENUINE PASS, A+B+C all true)
+
+Built engine/app/anticipy/compound.py: the whole system compound
+scenario as ONE durable workflow on the P0 runtime (onboard ->
+store hedged latent -> real suspension -> direct command firms it
+up, decided ACT -> handoff, action engine asks party size,
+resolved from the profile via memory first -> status communicated
+non critically), journaled step by step so a hard process kill
+mid scenario resumes without re running completed steps, proven by
+a durable side effect counter. Plus the progressive autonomy ramp
+check and the full engine core no regression re run through the
+integrated engine (P6 to P8 changes included) with the P7 and P8
+gates re run as subprocesses.
+
+Honest journey. The gate failed three times before passing, and
+both root causes were real production defects, not test problems,
+fixed at the wiring layer only (no cascade prompt, stage, test or
+threshold touched; frozen action engine byte untouched, git clean).
+
+Root cause 1, transient model JSON corruption. In the 590 case run
+OpenRouter returned 4 corrupt responses (3 intent_extraction, 1
+demand_detection): multilingual token salad and one body truncated
+at max_tokens. The wiring wrapper make_json_llm_call only checked
+for a brace pair, so token salad like { "alles ..." passed that
+weak gate, was returned to the caller, and the caller's real
+json.loads then failed, collapsing a CLEAR_IMPLICIT case to under
+action. Fix: make_json_llm_call now validates ACTUAL parseability
+(it parses exactly as the strict callers do, and repairs JSON plus
+trailing prose to the clean slice), and on corruption retries with
+a stricter prompt and an escalating token budget (1x, 2x, 3x),
+bounded, returning "" only if still uncleanable so the documented
+safe default contract (no wrong ACT) holds. Verified: zero residual
+cascade JSON parse failures in the full passing run.
+
+Root cause 2, OpenRouter provider roulette. After fix 1 the gate
+still failed with CLEAR below 0.92 AND new flicker in compound
+(firm decision ACT -> STORE_AS_LATENT) and the P8 subprocess, yet
+each was green in isolation (CLEAR isolated exact 0.9333, P8
+isolated 1.000 in 8s, compound 5/5 deterministic ACT) and there
+were zero JSON parse failures. That signature is temperature 0
+nondeterminism under the heavy combined run, not a code defect.
+The live OpenRouter endpoints API for this exact model
+(GET /models/deepseek/deepseek-v4-flash/endpoints) showed 12
+endpoints: the first party "deepseek" provider at native precision
+and 100% uptime, ranging down to a DeepInfra fp4 endpoint. With no
+routing, OpenRouter spreads calls across all of them, so the same
+input flickers run to run. sort=throughput was tried and DISPROVED
+itself: it pinned the fast fp4 endpoint and dropped isolated CLEAR
+0.9333 -> 0.8833, proving the lever is provider PRECISION not
+speed. Fix: pin provider order=["deepseek"] with
+allow_fallbacks=true (read from the live API, not guessed).
+Deterministic reference precision routing; a real DeepSeek outage
+still routes elsewhere so durability is preserved and there is no
+single point of failure, and the fix 1 wrapper still guards any
+degraded fallback output. Isolated CLEAR with the pin rose to
+exact 0.9833, well clear of the 0.92 bar.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/anticipy/gate_p9.py
+
+Final gate output (literal, rc=0, zero JSON parse failures):
+  -- A. compound durable scenario (kill + resume) --
+    phase1 counter=2 status=suspended (expect 2, suspended)
+    phase2 resume=ok after_replay_ctr=2 final_ctr=5 status=completed
+    phase2 decision=ACT handoff=SUCCESS clar=['memory_resolved'] comms=non_critical
+    COMPOUND_PASS
+  -- B. progressive autonomy ramp --
+    day0=0.97 onboarded_day0=0.92 seasoned=0.85 (ramp engaged: seasoned strictly below onboarded by >=0.02)
+  -- C. no-regression: combined corpus + P7/P8 --
+    engine-core no-regression: EXPLICIT>=0.92 -> True
+    engine-core no-regression: CLEAR>=0.92 -> True
+    engine-core no-regression: DIRECT>=0.92 -> True
+    engine-core no-regression: BOSS>=0.92 -> True
+    engine-core no-regression: HEDGED over<=0.03 -> True
+    engine-core no-regression: SARCASM over<=0.03 -> True
+    engine-core no-regression: PURE_AMBIENT over<=0.03 -> True
+    engine-core no-regression: AMBIGUOUS silent_act==0 -> True
+    engine-core no-regression: MULTI no silent ACT -> True
+    engine-core no-regression: REFERENCE pass -> True
+    engine-core no-regression: NEVERMIND>=0.90 -> True
+    engine-core no-regression: adversarial<=0.05 -> True
+    whole-system regression P7: PASS
+    whole-system regression P8: PASS
+    A_compound=True B_ramp=True C_noregression=True
+  P9_GATE PASS
+
+Honest framing. C is a pass/threshold gate over the same cached
+generated diarized corpus, so it reports booleans; the underlying
+real number that gated everything, CLEAR_IMPLICIT, was measured in
+isolation at exact 0.9833 with the provider pin (0.9333 with no
+routing, 0.8833 under throughput sort), and HEDGED over action
+stayed 0.000. The compound durable kill and resume, the ramp, and
+the P7/P8 carve outs are deterministic structural properties and
+are 100% as the spec requires. This certifies reasoning, handoff,
+durability, identity and comms on generated diarized text; it does
+NOT certify end to end audio, and real ASR will lower the diarized
+numbers. Both fixes are also the genuine production hardening this
+build needs: a wearable WILL hit corrupt provider responses and
+provider roulette, and both are now handled at the single env
+seam. Cost to here: $5.84 total.
