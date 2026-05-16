@@ -190,18 +190,30 @@ class TaskResult:
 # ── AX tree extraction over raw CDP ───────────────────────────────────
 
 
-def _ax_tree_and_refs(sess: CDPSession, max_lines: int = 40) -> tuple[str, dict]:
+_HIGH_ROLES = {"button", "textbox", "searchbox", "combobox", "checkbox",
+               "radio", "switch", "menuitem", "tab"}
+
+
+def _ax_tree_and_refs(sess: CDPSession, max_lines: int = 110) -> tuple[str, dict]:
     """Return (compact_listing, ref_map). ref_map: '@eN' -> {x,y,role,
-    name}. Interactive nodes only, each with a resolved click point."""
+    name}.
+
+    Two-pass + priority. Big apps (Gmail) have huge a11y trees where
+    the first 40 nodes are inbox/labels and the action control (the
+    compose 'Send' button) is far deeper. Truncating by tree order
+    dropped Send, so the agent could never click it. Now: cheaply
+    collect ALL interactive named nodes, PRIORITIZE action controls
+    (button/textbox/searchbox/...) over the hundreds of row links,
+    cap to max_lines, then resolve click coords only for the
+    selected set (bounds the expensive DOM.getBoxModel calls).
+    General: any deep-tree app's key buttons get a ref."""
     try:
         res = sess.send("Accessibility.getFullAXTree", {}, timeout_s=15.0)
     except Exception as e:
         return (f"(ax tree error: {e})", {})
-    nodes = res.get("nodes", [])
-    listing: list[str] = []
-    ref_map: dict[str, dict] = {}
-    n = 0
-    for node in nodes:
+    high: list[tuple] = []
+    low: list[tuple] = []
+    for node in res.get("nodes", []):
         if node.get("ignored"):
             continue
         role = (node.get("role", {}) or {}).get("value", "")
@@ -213,6 +225,15 @@ def _ax_tree_and_refs(sess: CDPSession, max_lines: int = 40) -> tuple[str, dict]
         backend_id = node.get("backendDOMNodeId")
         if backend_id is None:
             continue
+        (high if role in _HIGH_ROLES else low).append(
+            (role, name.strip(), backend_id))
+    # Action controls first (preserve tree order within each group),
+    # then fill remaining budget with links/other.
+    selected = high[:max_lines] + low[: max(0, max_lines - len(high))]
+    listing: list[str] = []
+    ref_map: dict[str, dict] = {}
+    n = 0
+    for role, name, backend_id in selected:
         try:
             box = sess.send("DOM.getBoxModel",
                             {"backendNodeId": backend_id}, timeout_s=5.0)
@@ -225,8 +246,6 @@ def _ax_tree_and_refs(sess: CDPSession, max_lines: int = 40) -> tuple[str, dict]
         ref = f"@e{n}"
         ref_map[ref] = {"x": cx, "y": cy, "role": role, "name": name[:80]}
         listing.append(f'{ref} [{role}] "{name[:80]}"')
-        if n >= max_lines:
-            break
     return ("\n".join(listing) if listing else "(no interactive elements)", ref_map)
 
 
