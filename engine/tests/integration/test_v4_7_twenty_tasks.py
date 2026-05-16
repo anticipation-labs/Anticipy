@@ -168,11 +168,12 @@ def _load_results() -> list[dict]:
     return out
 
 
-def run_task(task: Task, runs: int = 3) -> list[dict]:
+def run_task(task: Task, runs: int = 3, kimi_primary: bool = False) -> list[dict]:
     rows = []
+    fm = "moonshotai/kimi-k2.6" if kimi_primary else None
     for r in range(runs):
         _reset_chrome_blank()
-        runner = DSv4SkillRunner(max_iters=task.max_iters)
+        runner = DSv4SkillRunner(max_iters=task.max_iters, force_model=fm)
         t0 = time.monotonic()
         try:
             res = runner.run(task.goal)
@@ -306,6 +307,9 @@ def main():
     p.add_argument("--all", action="store_true")
     p.add_argument("--runs", type=int, default=3)
     p.add_argument("--scoreboard-only", action="store_true")
+    p.add_argument("--kimi-primary", action="store_true",
+                   help="escalate the entire decide loop to Kimi K2.6 "
+                        "as primary (per the fix-loop directive)")
     args = p.parse_args()
 
     if args.scoreboard_only:
@@ -313,10 +317,11 @@ def main():
         return 0
 
     if args.task:
-        run_task(TASK_BY_NAME[args.task], runs=args.runs)
+        run_task(TASK_BY_NAME[args.task], runs=args.runs,
+                 kimi_primary=args.kimi_primary)
     elif args.tier:
         for t in [x for x in TASKS if x.tier == args.tier]:
-            run_task(t, runs=args.runs)
+            run_task(t, runs=args.runs, kimi_primary=args.kimi_primary)
     elif args.all:
         for t in TASKS:
             run_task(t, runs=args.runs)
