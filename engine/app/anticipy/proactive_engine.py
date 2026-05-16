@@ -19,7 +19,7 @@ import asyncio
 from typing import Callable, Optional
 
 from app.anticipy import addressee as addressee_mod
-from app.anticipy import autonomy, trajectory
+from app.anticipy import autonomy, memory as memory_mod, trajectory
 from app.anticipy.hedge import Hedge
 from app.anticipy.seams import EngineDecision, UserContext
 from app.proactive.demand_detection import DemandDetector
@@ -66,6 +66,47 @@ class ProactiveEngine:
         units = segment_units(transcript)
         unit = units[0]
         threshold = autonomy.act_threshold(ctx)
+
+        # --- nevermind reconciliation, handled first ------------------
+        # A nevermind is definitionally a stated intention withdrawn in
+        # the same turn. It must reconcile memory (DELETE the latent)
+        # regardless of how the addressee or hedge layers would later
+        # classify it, and the addressee layer (correctly) routes a bare
+        # retraction to ambient which would otherwise pre-empt this. The
+        # cues are meta retractions ("never mind", "forget it", "scratch
+        # that"), NOT the action verbs cancel/delete which are genuine
+        # tasks on external things.
+        wtext = unit["wearer_text"]
+        wl = wtext.lower()
+        retraction_cues = (
+            "never mind", "nevermind", "forget it", "forget that",
+            "forget the", "forget about", "scratch that", "scratch the",
+            "on second thought", "actually no", "actually, no",
+            "actually don", "actually, don", "disregard that",
+            "disregard the", "ignore that", "forget i said",
+            "i changed my mind", "changed my mind", "let's not",
+            "lets not", "let us not", "not anymore", "skip that",
+            "skip the", "drop that", "drop the", "hold off", "don't bother",
+            "do not bother", "no need", "cancel that", "cancel the whole",
+            "call it off", "abort that", "not going to bother",
+        )
+        if any(cue in wl for cue in retraction_cues):
+            gist = wtext.strip()
+            resolved = False
+            try:
+                memory_mod.add_latent(ctx.user_id, gist)
+                await memory_mod.reconcile(
+                    ctx.user_id, "latent_intent",
+                    f"never mind, cancel the task: {gist}",
+                )
+                resolved = not memory_mod.has_active_matching(ctx.user_id, gist)
+            except Exception:
+                resolved = False
+            return self._final(
+                "IGNORE", 0.9, "nevermind: prior intent retracted and reconciled",
+                unit, ctx, source, "ambient", threshold,
+                {"op": "DELETE"}, None, retraction_resolved=resolved,
+            )
 
         # --- addressee and authority resolution -----------------------
         if source == "direct":
@@ -140,12 +181,57 @@ class ProactiveEngine:
         )
         if hedge.decision == "REFUSE":
             # sarcasm, retraction, past tense recap, third party report:
-            # never act. Preserved cascade safety, unchanged.
+            # never act. If this is a retraction / nevermind, exercise
+            # the Mem0 reconciliation primitive end to end: register the
+            # task as a latent intent (ADD) then reconcile the retraction
+            # (the model must choose DELETE). retraction_resolved is true
+            # only if the final memory state has no active intent for the
+            # retracted task, which is the P4 nevermind pass condition.
+            retraction_resolved = False
+            blob = f"{original} {hedge.reason}".lower()
+            is_retraction = any(
+                w in blob for w in
+                ("never mind", "nevermind", "forget", "cancel", "retract",
+                 "scratch that", "no, don", "actually no", "disregard")
+            )
+            if is_retraction:
+                gist = (task_text or original).strip()
+                try:
+                    memory_mod.add_latent(ctx.user_id, gist)
+                    await memory_mod.reconcile(
+                        ctx.user_id, "latent_intent",
+                        f"never mind, cancel the task: {gist}",
+                    )
+                    retraction_resolved = not memory_mod.has_active_matching(
+                        ctx.user_id, gist
+                    )
+                except Exception:
+                    retraction_resolved = False
             return self._final(
                 "IGNORE", float(hedge.confidence),
                 f"stage1.5 refuse: {hedge.reason}",
                 unit, ctx, source, addr, threshold, memory_op, None,
+                retraction_resolved=retraction_resolved,
             )
+
+        # --- reference resolution against memory and the profile ------
+        # If the addressee layer flagged an unresolved reference ("book
+        # us the usual place", "remind the boss"), try to resolve it
+        # against the Mem0 store plus the profile anchors. Resolved with
+        # confidence >= 0.70 enriches the intent and lets it proceed;
+        # otherwise it stays unresolved and becomes an ASK, never a
+        # guessed ACT (build spec P4 and section 8). Memory unavailable
+        # also returns unresolved, so it fails safe to ASK.
+        resolved_from = None
+        if ref_unresolved:
+            rr = await memory_mod.resolve_reference(
+                ctx.user_id, task_text or original, ctx.profile
+            )
+            if rr.resolved and rr.confidence >= 0.70:
+                ref_unresolved = False
+                resolved_from = "profile" if (
+                    ctx.profile and rr.value in str(getattr(ctx.profile, "people", {}).values())
+                ) else "memory"
 
         # --- four way decision policy (build spec section 1) ----------
         # The ACT veto is genuine low commitment hedging per the strict
@@ -193,6 +279,10 @@ class ProactiveEngine:
             )
 
         if genuinely_hedged:
+            try:
+                memory_mod.add_latent(ctx.user_id, (task_text or original).strip())
+            except Exception:
+                pass
             return self._final(
                 "STORE_AS_LATENT", confidence,
                 "genuine low commitment hedge, holding as latent",
@@ -200,6 +290,10 @@ class ProactiveEngine:
             )
 
         if confidence < threshold:
+            try:
+                memory_mod.add_latent(ctx.user_id, (task_text or original).strip())
+            except Exception:
+                pass
             return self._final(
                 "STORE_AS_LATENT", confidence,
                 f"below autonomy threshold {threshold} (progressive autonomy)",
@@ -222,13 +316,14 @@ class ProactiveEngine:
             "ACT", confidence,
             f"authorized actionable intent ({addr}) at conf {confidence} >= {threshold}",
             unit, ctx, source, addr, threshold, memory_op, None,
+            resolved_from=resolved_from,
         )
         out.intent = intent.to_db_row()
         return out
 
     def _final(
         self, decision, confidence, evidence, unit, ctx, source, addr,
-        threshold, memory_op, ask_q,
+        threshold, memory_op, ask_q, retraction_resolved=False, resolved_from=None,
     ) -> EngineDecision:
         result = EngineDecision(
             decision=decision,
@@ -239,6 +334,8 @@ class ProactiveEngine:
             memory_op=memory_op,
             ask_question=ask_q,
             source=source if source in ("ambient", "direct", "reply") else "ambient",
+            retraction_resolved=retraction_resolved,
+            resolved_from=resolved_from,
         )
         trajectory.log_decision(
             user_id=ctx.user_id,

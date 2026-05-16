@@ -164,6 +164,8 @@ class EngineDecision:
     memory_op: Optional[dict] = None  # ADD | UPDATE | DELETE | NOOP record
     ask_question: Optional[str] = None
     source: InboundKind = "ambient"
+    retraction_resolved: bool = False  # nevermind reconciliation outcome
+    resolved_from: Optional[str] = None  # "memory" | "profile" when a reference resolved
 
     def to_dict(self) -> dict:
         return {
@@ -176,4 +178,6 @@ class EngineDecision:
             "memory_op": self.memory_op,
             "ask_question": self.ask_question,
             "source": self.source,
+            "retraction_resolved": self.retraction_resolved,
+            "resolved_from": self.resolved_from,
         }

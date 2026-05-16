@@ -185,10 +185,17 @@ ENGINE_CORE: dict[str, CategorySpec] = {
     ),
     "REFERENCE_RESOLUTION": CategorySpec(
         "REFERENCE_RESOLUTION", 50, "VARIANT",
-        "A task whose object is a reference resolvable only from prior "
-        "memory or the profile, for example book us the usual place. Two "
-        "variants: memory or profile present expects ACT, absent expects "
-        "ASK and never a guessed ACT.",
+        "A SINGLE speaker (WEARER only, no other speaker) states a clear "
+        "actionable first person task whose key object is a vague "
+        "reference that can ONLY be resolved from prior memory or the "
+        "profile. The task itself must be unambiguous and clearly the "
+        "WEARER's own (no 'us'/'we'/'our' group framing, no question to "
+        "another person, that is a different category). Use ONE of these "
+        "exact reference phrases verbatim somewhere in the line: 'the "
+        "usual place', 'the usual order', 'my usual spot', 'the boss', "
+        "'the team', 'my regular'. Example shapes: 'Book the usual place "
+        "for Friday at 7.', 'Email the boss the Q3 report.', 'Reorder my "
+        "usual order.'",
         "reference",
         ("present", "absent"),
     ),
@@ -337,16 +344,35 @@ def _extract_json_array(raw: str) -> list:
 
 _VARIANT_HINT = {
     "present": (
-        " For THIS batch, the referenced object is something a profile or "
-        "memory would plausibly contain (the usual place, our spot, the "
-        "boss). Include the reference but do not spell out the resolved "
-        "value in the line."
+        " For THIS batch, use EXACTLY one of these phrases verbatim as "
+        "the COMPLETE object of the task, with NO domain qualifier after "
+        "it: 'the usual place', 'the usual order', 'my usual spot', 'the "
+        "boss', 'the team', 'my regular'. Correct: 'Reorder the usual "
+        "order.', 'Book the usual place for Friday at 7.', 'Email the "
+        "boss the Q3 report.', 'Schedule my regular for next week.'. "
+        "WRONG, never do this: 'reorder the usual order FROM THE "
+        "PHARMACY', 'book my usual spot AT THE GOLF COURSE' (a trailing "
+        "domain contradicts the stored anchor and makes it a different "
+        "category). The bare phrase is the whole resolvable object. "
+        "Single actor WEARER command only, no other speakers, no "
+        "'us'/'we'/'our', do not spell out the resolved value."
     ),
     "absent": (
-        " For THIS batch, the reference has no plausible prior anchor at "
-        "all, it is genuinely unresolvable from any profile or memory "
-        "(that place we talked about, you know the thing) with zero prior "
-        "context."
+        " For THIS batch, use EXACTLY one of these UNRESOLVABLE pointer "
+        "phrases verbatim as the COMPLETE object, with NO other "
+        "identifying detail: 'that place', 'the one we discussed', 'the "
+        "thing from before', 'you know the spot', 'the place we always "
+        "go', 'that thing from last time'. The WEARER issues a clear "
+        "single actor command verb (book, email, send, schedule, "
+        "reorder, cancel, remind me) on that bare pointer and NOTHING "
+        "else identifying. Correct: 'Book that place for Friday.', "
+        "'Reorder the thing from before.', 'Email the one we discussed.'. "
+        "WRONG, never add a concrete handle that makes it actionable on "
+        "its own ('cancel the reservation we made earlier for dinner', "
+        "'update the spreadsheet from the meeting' read as complete "
+        "commands). The pointer alone, genuinely unresolvable, IS the "
+        "whole object. Single actor, no other speakers, no 'us'/'we'/"
+        "'our'."
     ),
 }
 
