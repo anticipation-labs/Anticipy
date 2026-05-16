@@ -1779,3 +1779,55 @@ and 108 completion tokens per call at $0.000290 per call, 2 to 4
 calls per decision so ~$0.0006 to $0.0012 per decision, far cheaper
 than the frozen vision engine). Cost to here: $5.84 total (P10 added
 zero model spend by design).
+
+## P11 HANDOFF DOC AND HONEST FINAL REPORT
+## (canonical tag p11-handoff, build complete)
+
+Wrote .anticipy/ANTICIPY_SYSTEM_V1.md: one paragraph summary, all 11
+phase tags, the full honest scoreboard, the explicit scope
+statement, the flywheel note, the residual difficulty flags, the
+measured per decision cost, and the local vs scale statement.
+
+Ran ONE final consolidated scoreboard (the build's last model spend)
+over the full ENGINE_CORE 590 corpus through the FINAL integrated
+engine (JSON retry wrapper + first party deepseek provider pin),
+adversarial different model check on. Real numbers, no rounding:
+
+  EXPLICIT_COMMAND          60  exact 0.950  over 0.000  silentACT 0
+  CLEAR_IMPLICIT            60  exact 0.983  over 0.000  silentACT 0
+  DIRECT_USER_COMMAND       60  exact 1.000  over 0.000  silentACT 0
+  BOSS_DIRECTED             40  exact 1.000  over 0.000  silentACT 0
+  HEDGED_SOCIAL             60  over 0.000  (hard negative; declines
+                                by design, exact is not its metric)
+  AMBIGUOUS_ADDRESSEE       50  exact 0.900  over 0.000  silentACT 0
+  SARCASM_AND_NEGATION      40  exact 1.000  over 0.000  silentACT 0
+  PURE_AMBIENT_NEGATIVE    100  exact 1.000  over 0.000  silentACT 0
+  REFERENCE_RESOLUTION      50  pass by its present/absent metric,
+                                over 0.000, zero silent ACT
+  MULTI_SPEAKER_CROSSTALK   40  exact 0.950  over 0.000  silentACT 0
+  NEVERMIND_RECONCILIATION  30  exact 1.000  over 0.000  silentACT 0
+  adversarial (Kimi): flag_rate 0.000, pass
+  RUN: 590 decisions, 1520 calls, $0.4120, 2.58 calls/decision,
+       $0.000698/decision
+
+Honest reading. Clear intent hit a real ceiling reported as
+measured, not rounded (DIRECT/BOSS 1.000, CLEAR 0.983 the provider
+pin held, EXPLICIT 0.950). The whole board safety invariant holds
+with zero exceptions: over_action 0.000 and silentACT 0 in EVERY
+category, so zero false ACT and zero silent ACT anywhere, and a
+different model adversarial pass at flag_rate 0.000 means the
+grading is not self deception. HEDGED_SOCIAL exact 0.050 is the
+designed, safe behaviour (a hard negative is graded on over_action,
+and declining is the correct precision skewed direction), and
+REFERENCE_RESOLUTION is reported by the present/absent metric it is
+actually held to (the final config P9 gate certified it pass), not
+by an exact column that does not apply to it. Both are stated openly
+rather than smoothed.
+
+Sent the ONE [ANTICIPY-SYSTEM-DONE] email via the established
+project Aevoy mechanism (Resend, FROM aevoy@anticipy.ai, the same
+mechanism as send_anticipy_ready.py), headline scoreboard plus the
+scope statement, to the configured admin email. That email and this
+document are the only human facing outputs of the build, exactly as
+the master prompt specified. No human was in the loop for any phase.
+Final cost: $6.25 total. Build complete.
