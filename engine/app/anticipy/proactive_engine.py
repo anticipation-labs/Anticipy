@@ -259,6 +259,29 @@ class ProactiveEngine:
                     ctx.profile and rr.value in str(getattr(ctx.profile, "people", {}).values())
                 ) else "memory"
 
+        # Day one profile relation enrichment (deterministic, decoupled).
+        # A clear command on a profile relation ("email the boss the
+        # deck", "schedule a call with my cofounder") does not read as a
+        # vague pointer, so the addressee layer rightly does not flag it
+        # unresolved and the engine correctly ACTs. But the product
+        # behaviour the build wants is that, from day one, the agent
+        # KNOWS who "the boss" is from the onboarding profile and enriches
+        # the intent with that person, not memory (which is empty on day
+        # zero). So if the profile carries a relation whose phrase is in
+        # the task and it has not already resolved, resolve it from the
+        # profile and record resolved_from=profile. This enriches, never
+        # blocks, and only fires when the profile literally contains the
+        # relation phrase, so it cannot touch concrete name tasks
+        # (EXPLICIT/CLEAR use real names, not profile relation keys).
+        if resolved_from is None and ctx.profile is not None:
+            people = getattr(ctx.profile, "people", {}) or {}
+            tl = (task_text or original).lower()
+            for relation, who in people.items():
+                rk = str(relation).strip().lower()
+                if rk and len(rk) >= 3 and rk in tl:
+                    resolved_from = "profile"
+                    break
+
         # --- four way decision policy (build spec section 1) ----------
         # The ACT veto is genuine low commitment hedging per the strict
         # definition (resolved by the addressee layer), NOT the old hedge

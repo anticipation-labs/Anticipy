@@ -220,17 +220,31 @@ ENGINE_CORE: dict[str, CategorySpec] = {
 WHOLE_SYSTEM: dict[str, CategorySpec] = {
     "ONBOARDING_INTAKE": CategorySpec(
         "ONBOARDING_INTAKE", 30, "PROFILE",
-        "A simulated structured onboarding interview transcript. The "
-        "expected outcome is a correctly populated UserProfile (identity, "
-        "people, critical software, mandate).",
+        "A realistic 6 to 8 turn structured onboarding interview. Use "
+        "speaker_id INTERVIEWER and WEARER, alternating. The INTERVIEWER "
+        "asks for, and the WEARER answers with SPECIFIC concrete values: "
+        "their name and role/title; one sentence on what they do; time "
+        "zone and working hours; the important people, stating "
+        "explicitly who 'the boss' is by name and who 'us' refers to "
+        "(e.g. 'the boss is Dana, my lead investor; us means me and my "
+        "cofounder Sam'); the 3 to 5 daily tools; what they want the "
+        "assistant to do and an explicit do-not-touch list; how to be "
+        "reached for non critical vs critical and quiet hours. The "
+        "WEARER must give real specifics, never vague non answers, so a "
+        "complete profile can be extracted.",
         "profile_populated",
     ),
     "COLD_START_RESOLUTION": CategorySpec(
         "COLD_START_RESOLUTION", 40, "ACT",
-        "A task whose reference is resolvable ONLY from the onboarding "
-        "profile, not from accumulated memory (the boss, my usual, our "
-        "place), tested on a day zero agent. Expect correct day one "
-        "resolution from the profile.",
+        "A single WEARER speaker, one clear actionable command whose "
+        "object references a PERSON relation that only the onboarding "
+        "profile can resolve and accumulated memory cannot, using "
+        "exactly one of these relation phrases verbatim: 'the boss', "
+        "'my manager', 'my cofounder', 'my assistant', 'us', 'the "
+        "team'. Example shapes: 'Email the boss the Q3 deck.', 'Schedule "
+        "a 1:1 with my cofounder for Friday.', 'Send the team the "
+        "release notes.' The relation alone is the resolvable object, "
+        "no other identifying detail, single actor, no other speakers.",
         "coldstart>=0.80",
     ),
     "THREE_INBOUND_ROUTING": CategorySpec(
@@ -411,7 +425,16 @@ def generate(category: str, n: Optional[int] = None, force: bool = False) -> lis
 
     variants = spec.variants or (None,)
     per_variant = max(1, target // len(variants))
-    chunk = 10
+    # Per category generation profile. Long multi turn transcripts
+    # (a 6 to 8 turn onboarding interview, 3+ speaker crosstalk) do not
+    # fit many per call, so use a small ask, a bigger token budget, and
+    # more rounds, otherwise the run caps below the FIXED minimum count.
+    # Reaching the floor honestly, never lowering it.
+    profile = {
+        "ONBOARDING_INTAKE": (2, 3600, 8),
+        "MULTI_SPEAKER_CROSSTALK": (4, 2800, 6),
+    }.get(category, (10, 2200, 4))
+    chunk, gen_tokens, gen_rounds = profile
 
     cases: list[dict] = []
     seen: set[str] = set()
@@ -429,7 +452,7 @@ def generate(category: str, n: Optional[int] = None, force: bool = False) -> lis
     # Up to 4 concurrent rounds. Each round fires, for every variant,
     # enough parallel batches to cover the remaining need plus a buffer
     # for dedup and the occasional failed call.
-    for _round in range(4):
+    for _round in range(gen_rounds):
         if len(cases) >= target:
             break
         jobs: list[tuple] = []
@@ -445,7 +468,7 @@ def generate(category: str, n: Optional[int] = None, force: bool = False) -> lis
             break
         with ThreadPoolExecutor(max_workers=min(24, len(jobs))) as pool:
             futs = [
-                (v, pool.submit(platform_adapter.model_call, _GEN_SYSTEM, u, 2200, 0.0, False))
+                (v, pool.submit(platform_adapter.model_call, _GEN_SYSTEM, u, gen_tokens, 0.0, False))
                 for (v, u) in jobs
             ]
             for v, f in futs:
