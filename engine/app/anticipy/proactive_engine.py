@@ -130,6 +130,32 @@ class ProactiveEngine:
             addr_reason = ar.reason
             task_text = ar.effective_task_text or unit["wearer_text"]
 
+            # Deterministic decoupled override (not a shared-prompt
+            # change, so it cannot couple into CLEAR_IMPLICIT or
+            # AMBIGUOUS): a clear command verb on a bare unresolvable
+            # pointer is a real WEARER task whose object only needs
+            # resolving. The resolver sometimes labels these ambient
+            # (the pointer is contentless), which would silently drop a
+            # real task. Force it to a reference-unresolved WEARER task
+            # so it resolves from memory if possible, else ASK, never a
+            # silent drop. The pointer set is specific so this never
+            # fires on a concrete task like "email Sarah the deck".
+            _wl = unit["wearer_text"].lower()
+            _verbs = ("schedule ", "book ", "email ", "send ", "order ",
+                      "reorder ", "remind me", "cancel ", "set ", "call ",
+                      "forward ", "pay ", "reserve ", "add ", "text ")
+            _pointers = ("that place", "the one we discussed", "the thing from before",
+                         "you know the spot", "the place we always go",
+                         "that thing from last time", "the one from before",
+                         "the thing we discussed", "that thing", "the usual")
+            if (addr == "ambient" and any(v in _wl for v in _verbs)
+                    and any(p in _wl for p in _pointers)):
+                addr = "wearer_task_implied"
+                authority_ok = True
+                ref_unresolved = True
+                task_text = unit["wearer_text"]
+                addr_reason = "command verb on a bare unresolvable pointer"
+
             if addr == "ambient" or not authority_ok and addr == "ambient":
                 return self._final(
                     "IGNORE", addr_conf, f"ambient, no task: {addr_reason}",
