@@ -591,16 +591,28 @@ class DSv4SkillRunner:
     max_iters: int = 30
     client: Optional[OpenRouterClient] = None
     verifier: Optional[VisionVerifier] = None
+    # Kimi-primary escalation: when set, EVERY model call (decompose,
+    # ledger, decide, completion, vision-confirm) routes to this model
+    # instead of the cheaper V4 Flash for text steps. Used by the fix
+    # loop to escalate a still-failing Tier 1 task to the strongest
+    # OpenRouter model as the primary decider, not just fallback.
+    force_model: Optional[str] = None
 
     def __post_init__(self):
         self.client = self.client or OpenRouterClient()
         self.verifier = self.verifier or VisionVerifier(client=self.client)
 
+    def _txt_model(self) -> str:
+        return self.force_model or TEXT_MODEL
+
+    def _vis_model(self) -> str:
+        return self.force_model or VISION_MODEL
+
     # decomposition
     def _decompose(self, task: str) -> list[str]:
         r = self.client.chat(
             [{"role": "user", "content": f"{_DECOMPOSE_SYS}\n\nTASK: {task}"}],
-            model=TEXT_MODEL, max_tokens=512, temperature=0.0,
+            model=self._txt_model(), max_tokens=512, temperature=0.0,
             response_format={"type": "json_object"},
         )
         obj = _json_from(r.content)
@@ -626,7 +638,7 @@ class DSv4SkillRunner:
         )
         r = self.client.chat(
             [{"role": "user", "content": f"{sysp}\n\nOBJECTIVE: {subgoal}"}],
-            model=TEXT_MODEL, max_tokens=700, temperature=0.0,
+            model=self._txt_model(), max_tokens=700, temperature=0.0,
             response_format={"type": "json_object"},
         )
         obj = _json_from(r.content)
@@ -650,7 +662,7 @@ class DSv4SkillRunner:
                 f"{page_text or '(empty)'}\n\nINTERACTIVE:\n{ax[:1500]}")
         r = self.client.chat(
             [{"role": "user", "content": f"{sysp}\n\n{user}"}],
-            model=TEXT_MODEL, max_tokens=400, temperature=0.0,
+            model=self._txt_model(), max_tokens=400, temperature=0.0,
             response_format={"type": "json_object"},
         )
         obj = _json_from(r.content)
@@ -687,7 +699,7 @@ class DSv4SkillRunner:
         )
         r = self.client.chat(
             [{"role": "user", "content": f"{_DECIDE_SYS}\n\n{user}"}],
-            model=VISION_MODEL, max_tokens=600, temperature=0.0,
+            model=self._vis_model(), max_tokens=600, temperature=0.0,
             image_b64=screenshot_b64,
             response_format={"type": "json_object"},
         )
@@ -711,7 +723,7 @@ class DSv4SkillRunner:
         user = f"OBJECTIVE: {subgoal}\n\nIs it fully done on screen?"
         r = self.client.chat(
             [{"role": "user", "content": f"{sysp}\n\n{user}"}],
-            model=VISION_MODEL, max_tokens=400, temperature=0.0,
+            model=self._vis_model(), max_tokens=400, temperature=0.0,
             image_b64=screenshot_b64,
             response_format={"type": "json_object"},
         )
@@ -725,7 +737,7 @@ class DSv4SkillRunner:
                 f"{page_text or '(empty)'}\n\nINTERACTIVE:\n{ax}\n\nDone?")
         r = self.client.chat(
             [{"role": "user", "content": f"{_COMPLETE_SYS}\n\n{user}"}],
-            model=TEXT_MODEL, max_tokens=300, temperature=0.0,
+            model=self._txt_model(), max_tokens=300, temperature=0.0,
             response_format={"type": "json_object"},
         )
         return _json_from(r.content)

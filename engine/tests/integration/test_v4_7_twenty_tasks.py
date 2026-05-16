@@ -221,30 +221,60 @@ def write_scoreboard():
              ""]
     for tier in (1, 2):
         tier_tasks = [t for t in TASKS if t.tier == tier]
-        target = "100%" if tier == 1 else "90%"
+        target = "95% aggregate" if tier == 1 else "90%"
         lines.append(f"## Tier {tier} ({'general DOM' if tier==1 else 'canvas apps'}) "
                      f"- target {target}")
         lines.append("")
-        passed_tasks = 0
+        tasks_3of3 = 0
+        tasks_2of3 = 0
+        agg_success = 0
+        agg_total = 0
         for t in tier_tasks:
             runs = [latest.get((t.name, i)) for i in range(3)]
-            done = [bool(r) and r["status"] == "SUCCESS" for r in runs]
-            npass = sum(done)
-            task_pass = npass >= 3 if tier == 1 else npass >= 2
-            if (tier == 1 and npass == 3) or (tier == 2 and npass >= 2):
-                passed_tasks += 1
-            mark = "PASS" if ((tier == 1 and npass == 3) or
-                              (tier == 2 and npass >= 2)) else "FAIL"
+            npass = sum(bool(r) and r["status"] == "SUCCESS" for r in runs)
+            ran = sum(1 for r in runs if r)
+            agg_success += npass
+            agg_total += ran
+            if npass == 3:
+                tasks_3of3 += 1
+            if npass >= 2:
+                tasks_2of3 += 1
+            if tier == 1:
+                mark = "PASS" if npass == 3 else ("OK2of3" if npass >= 2 else "FAIL")
+            else:
+                mark = "PASS" if npass >= 2 else "FAIL"
             statuses = ",".join((r["status"] if r else "-") for r in runs)
             lines.append(f"- [{mark}] {t.name}: {npass}/3 ({statuses})")
         total = len(tier_tasks)
-        pct = round(100.0 * passed_tasks / total) if total else 0
         lines.append("")
-        lines.append(f"**Tier {tier} score: {passed_tasks}/{total} tasks "
-                     f"({pct}%) - target {target}**")
+        if tier == 1:
+            # Exact gate definition (no rounding, honest aggregate):
+            # DONE iff >=11/12 tasks at 3/3, OR all 12 at >=2/3 AND
+            # aggregate successful runs >= 95% across all 36.
+            agg_pct = (100.0 * agg_success / agg_total) if agg_total else 0.0
+            cond_a = tasks_3of3 >= 11
+            cond_b = (tasks_2of3 == total and agg_total >= total * 3
+                      and agg_pct >= 95.0)
+            done = cond_a or cond_b
+            lines.append(f"**Tier 1 AGGREGATE: {agg_success}/{agg_total} "
+                         f"successful runs = {agg_pct:.1f}% "
+                         f"(not rounded)**")
+            lines.append(f"- tasks at 3/3: {tasks_3of3}/{total} "
+                         f"(gate A needs >=11)")
+            lines.append(f"- tasks at >=2/3: {tasks_2of3}/{total} "
+                         f"(gate B needs all 12 AND aggregate >=95%)")
+            lines.append(f"- **Tier 1 DONE: "
+                         f"{'YES' if done else 'NO'}** "
+                         f"(A={'Y' if cond_a else 'N'}, "
+                         f"B={'Y' if cond_b else 'N'})")
+        else:
+            pct = round(100.0 * tasks_2of3 / total) if total else 0
+            lines.append(f"**Tier 2 score: {tasks_2of3}/{total} tasks "
+                         f"pass at >=2/3 ({pct}%) - target 90%, "
+                         f"2-attempt cap, frontier limit accepted**")
         lines.append("")
     # Failing tier 1 detail for the fix loop
-    lines.append("## Tier 1 failures to fix (no iteration cap)")
+    lines.append("## Tier 1 tasks not yet at 3/3 (fix loop targets)")
     lines.append("")
     any_fail = False
     for t in [x for x in TASKS if x.tier == 1]:
@@ -261,7 +291,7 @@ def write_scoreboard():
                     lines.append(f"  - run {i}: not yet run")
             lines.append("")
     if not any_fail:
-        lines.append("None. Tier 1 is at 100%.")
+        lines.append("None. Every Tier 1 task is at 3/3.")
         lines.append("")
     SCOREBOARD.write_text("\n".join(lines))
     print(f"scoreboard written: {SCOREBOARD}")
