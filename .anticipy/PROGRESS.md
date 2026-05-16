@@ -1396,3 +1396,55 @@ Layer A, the complete proactive engine (ingest, segment, preserved
 cascade, addressee/authority, rewritten hedge, Mem0 memory with
 reconciliation, four way decision, progressive autonomy, trajectory
 logging) is built and integration validated end to end.
+
+## P6 LAYER B HANDOFF, MOCKED THEN ONE REAL PATH
+## (canonical tag p6-handoff-real, GENUINE PASS)
+
+Built engine/app/anticipy/action_handoff.py: the typed contract
+proactive->action (intent_id, action, object, time_window,
+constraints, ambiguity_budget, memory_refs), the typed
+clarification action->proactive (intent_id, question, options,
+criticality_hint), memory first resolution, escalation ONLY below
+0.70, and the never synchronously blocked invariant (an
+unresolvable clarification returns a proceed under stated
+assumption directive immediately per the 3 hour rule default, the
+action engine is never left waiting on a human). It is a NEW
+adapter module. The ONLY thing that touches frozen code is
+make_real_action_engine, which imports the frozen DSv4SkillRunner
+and calls its public run, no edit to any frozen file. Passed first
+attempt, no rework.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/anticipy/gate_p6.py
+
+Final gate output (literal, rc=0):
+  -- mocked scenarios --
+    [ok] round-trip SUCCESS, intent_id preserved, not blocked
+    [ok] clarification memory-resolved >=0.70, NOT escalated, SUCCESS
+    [ok] clarification <0.70 escalated, PROCEEDED_ON_ASSUMPTION, never blocked
+    [ok] action engine never synchronously blocked (invariant)
+  -- one real READ-only path --
+    proactive decision: ACT (conf 0.9735)
+    real handoff status=SUCCESS answer="The Python programming
+    language's first release year is displayed on the Wikipedia
+    page for Python." traj=~/.anticipy/trajectories/1778965016_c97930
+    [ok] real frozen DSv4SkillRunner invoked through the adapter
+    and returned (not mock)
+  -- frozen action engine integrity --
+    [ok] no frozen action-engine file changed (status empty=True,
+    diff clean=True)
+  P6_GATE PASS
+
+The real path is real, proven three independent ways: the
+proactive engine produced an actual ACT decision at conf 0.9735;
+the frozen engine wrote its own real trajectory directory; and the
+frozen engine's own separate call log (~/.anticipy/
+openrouter_calls.jsonl) showed live calls during the run while the
+build's own ledger did not, which is only possible if the ACTUAL
+frozen DSv4SkillRunner Ralph loop executed against live Chrome,
+not a mock. git proves zero frozen action-engine files changed and
+all ten phase-v4 tags intact. Layer B is built and validated,
+mocked protocol plus one real end to end path. Cost to here on the
+build ledger: $2.83; the one real frozen run added about a cent on
+the frozen engine's own ledger. Well within budget.
