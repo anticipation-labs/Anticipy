@@ -335,12 +335,45 @@ def _extract_json_array(raw: str) -> list:
             return []
 
 
+_VARIANT_HINT = {
+    "present": (
+        " For THIS batch, the referenced object is something a profile or "
+        "memory would plausibly contain (the usual place, our spot, the "
+        "boss). Include the reference but do not spell out the resolved "
+        "value in the line."
+    ),
+    "absent": (
+        " For THIS batch, the reference has no plausible prior anchor at "
+        "all, it is genuinely unresolvable from any profile or memory "
+        "(that place we talked about, you know the thing) with zero prior "
+        "context."
+    ),
+}
+
+
+def _gen_user(category: str, spec: CategorySpec, variant: Optional[str], ask: int) -> str:
+    return (
+        f"CATEGORY: {category}\nDEFINITION: {spec.definition}"
+        f"{_VARIANT_HINT.get(variant or '', '')}\n\n"
+        f"Produce {ask} distinct cases as the specified JSON array. "
+        f"Maximize surface variety. Do not reuse phrasings."
+    )
+
+
 def generate(category: str, n: Optional[int] = None, force: bool = False) -> list[dict]:
     """Generate (or load cached) at least the fixed minimum count of
     cases for a category. Expected labels are stamped here from the
-    fixed spec, never decided by a model. Cached to disk so later phases
+    fixed spec, NEVER decided by a model. Cached to disk so later phases
     reuse the exact same cases.
+
+    Generation batches are independent and their labels are stamped
+    deterministically from the spec, so the batch calls run concurrently
+    (model latency is the bottleneck and is highly variable; serial
+    generation made the 590 case suite intractable). Concurrency is pure
+    I/O wait, bounded by the resource gate.
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     spec = ALL_SPECS[category]
     target = max(n or spec.min_count, spec.min_count)
     path = _corpus_path(category)
@@ -350,75 +383,55 @@ def generate(category: str, n: Optional[int] = None, force: bool = False) -> lis
         if len(existing) >= target:
             return existing[:target]
 
-    cases: list[dict] = []
     variants = spec.variants or (None,)
     per_variant = max(1, target // len(variants))
     chunk = 10
-    for variant in variants:
-        produced = 0
-        guard = 0
-        while produced < per_variant and guard < 40:
-            guard += 1
-            ask = min(chunk, per_variant - produced)
-            vtext = ""
-            if variant == "present":
-                vtext = (
-                    " For THIS batch, the referenced object is something a "
-                    "profile or memory would plausibly contain (the usual "
-                    "place, our spot, the boss). Include the reference but "
-                    "do not spell out the resolved value in the line."
-                )
-            elif variant == "absent":
-                vtext = (
-                    " For THIS batch, the reference has no plausible prior "
-                    "anchor at all, it is genuinely unresolvable from any "
-                    "profile or memory (that place we talked about, you "
-                    "know the thing) with zero prior context."
-                )
-            user = (
-                f"CATEGORY: {category}\nDEFINITION: {spec.definition}{vtext}\n\n"
-                f"Produce {ask} distinct cases as the specified JSON array. "
-                f"Maximize surface variety. Do not reuse phrasings."
-            )
-            res = platform_adapter.model_call(_GEN_SYSTEM, user, max_tokens=2200, json_mode=False)
-            if not res.ok:
-                continue
-            arr = _extract_json_array(res.content)
-            for obj in arr:
-                if not isinstance(obj, dict) or not obj.get("transcript"):
-                    continue
-                stamped = _stamp(category, spec, obj, variant)
-                if any(c["case_id"] == stamped["case_id"] for c in cases):
-                    continue
-                cases.append(stamped)
-                produced += 1
-                if produced >= per_variant:
-                    break
 
-    # Top up if a variant under produced, so we never fall below the floor.
-    guard = 0
-    while len(cases) < target and guard < 30:
-        guard += 1
-        user = (
-            f"CATEGORY: {category}\nDEFINITION: {spec.definition}\n\n"
-            f"Produce {min(chunk, target - len(cases))} more distinct cases, "
-            f"new phrasings only."
-        )
-        res = platform_adapter.model_call(_GEN_SYSTEM, user, max_tokens=2200, json_mode=False)
-        if not res.ok:
-            continue
-        for obj in _extract_json_array(res.content):
+    cases: list[dict] = []
+    seen: set[str] = set()
+
+    def _add(arr, variant) -> None:
+        for obj in arr:
             if not isinstance(obj, dict) or not obj.get("transcript"):
                 continue
-            stamped = _stamp(category, spec, obj, spec.variants[0] if spec.variants else None)
-            if any(c["case_id"] == stamped["case_id"] for c in cases):
+            stamped = _stamp(category, spec, obj, variant)
+            if stamped["case_id"] in seen:
                 continue
+            seen.add(stamped["case_id"])
             cases.append(stamped)
-            if len(cases) >= target:
-                break
+
+    # Up to 4 concurrent rounds. Each round fires, for every variant,
+    # enough parallel batches to cover the remaining need plus a buffer
+    # for dedup and the occasional failed call.
+    for _round in range(4):
+        if len(cases) >= target:
+            break
+        jobs: list[tuple] = []
+        for variant in variants:
+            have_v = sum(1 for c in cases if c.get("variant") == variant)
+            need_v = max(0, per_variant - have_v)
+            if need_v <= 0 and len(variants) > 1:
+                continue
+            n_batches = max(1, -(-need_v // chunk)) + 2  # ceil + buffer
+            for _ in range(n_batches):
+                jobs.append((variant, _gen_user(category, spec, variant, chunk)))
+        if not jobs:
+            break
+        with ThreadPoolExecutor(max_workers=min(24, len(jobs))) as pool:
+            futs = [
+                (v, pool.submit(platform_adapter.model_call, _GEN_SYSTEM, u, 2200, 0.0, False))
+                for (v, u) in jobs
+            ]
+            for v, f in futs:
+                try:
+                    res = f.result()
+                except Exception:
+                    continue
+                if res.ok:
+                    _add(_extract_json_array(res.content), v)
 
     with path.open("w", encoding="utf-8") as fh:
-        for c in cases:
+        for c in cases[:target]:
             fh.write(json.dumps(c, ensure_ascii=False) + "\n")
     return cases[:target]
 

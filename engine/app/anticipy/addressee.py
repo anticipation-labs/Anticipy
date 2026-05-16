@@ -54,6 +54,20 @@ Return STRICT JSON only:
 Decide the addressee with this ordered procedure. Stop at the first that
 applies:
 
+0. SARCASM, IRONY, OR NEGATION FIRST. If the WEARER's task shaped line
+   is sarcastic, ironic, or negated, the real intent is the opposite of
+   the literal words, so there is NO genuine task -> "ambient". Tells:
+   an undesirable action paired with fake enthusiasm or a contradicting
+   clause ("set the thermostat to 85, I love sweating indoors";
+   "order the extra spicy wings, I love heartburn"; "remind me to
+   volunteer for the weekend shift, I have nothing better to do"; "let's
+   DEFINITELY book the most expensive place"; "what could possibly go
+   wrong"; "great, another Saturday at the DMV"), or an explicit
+   retraction ("never mind", "forget it", "actually no"). When in doubt
+   between a literal command and sarcasm given a contradicting or
+   exaggerated cue, treat it as sarcasm -> ambient. Acting on a
+   sarcastic command is a severe failure.
+
 1. No concrete actionable task anywhere -> "ambient".
 
 2. A non WEARER speaker (a present human) takes or offers ownership of

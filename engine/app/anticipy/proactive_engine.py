@@ -20,9 +20,9 @@ from typing import Callable, Optional
 
 from app.anticipy import addressee as addressee_mod
 from app.anticipy import autonomy, trajectory
+from app.anticipy.hedge import Hedge
 from app.anticipy.seams import EngineDecision, UserContext
 from app.proactive.demand_detection import DemandDetector
-from app.proactive.hedge_filter import HedgeFilter
 from app.proactive.intent_extraction import IntentExtractor
 
 
@@ -50,11 +50,11 @@ class ProactiveEngine:
     def __init__(
         self,
         demand: Optional[DemandDetector] = None,
-        hedge: Optional[HedgeFilter] = None,
+        hedge: Optional[Hedge] = None,
         intent: Optional[IntentExtractor] = None,
     ) -> None:
         self._demand = demand or DemandDetector()
-        self._hedge = hedge or HedgeFilter()
+        self._hedge = hedge or Hedge()  # P3: rewritten module, old one replaced
         self._intent = intent or IntentExtractor()
 
     async def decide(
@@ -119,7 +119,21 @@ class ProactiveEngine:
                 unit, ctx, source, addr, threshold, None, None,
             )
 
-        hedge = await self._hedge.classify(task_text, context=None)
+        # The hedge module judges tone (sarcasm, negation, retraction,
+        # commitment). The addressee layer strips tone to extract a clean
+        # imperative, which fixed boss recap misfires but also hid
+        # sarcasm. Give the hedge module the WEARER's original wording as
+        # tone context when it differs from the resolved task. The
+        # rewritten hedge prompt is sarcasm aware and does not recap
+        # misfire like the old one; for boss_to_wearer the WEARER line is
+        # a plain acceptance the prompt does not treat as sarcasm.
+        original = unit["wearer_text"].strip()
+        tone_ctx = (
+            f"The WEARER actually said, verbatim: {original}"
+            if original and original.lower() != task_text.strip().lower()
+            else None
+        )
+        hedge = await self._hedge.classify(task_text, context=tone_ctx)
         memory_op = (
             {"op": "ADD", "spec": hedge.store_as_memory.to_dict()}
             if hedge.store_as_memory is not None else None
