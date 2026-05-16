@@ -831,3 +831,57 @@ deterministic cell-writer) is the user's call, not mine, per the
 prompt. NOT proceeding to V4-7. NOT tagging V4-6.
 
 Last green tag remains phase-v4-5-wikipedia-passes.
+
+### Phase V4-6 — STILL FAILS, but critical INTEGRITY bug found + fixed
+
+After ~9 distinct attempts. All general plumbing fixes are real and
+verified (they improve every task, not Sheets-only):
+- CSS-pixel coordinate normalization (screenshots are 3418x1848
+  device px, CDP uses 1709x924 CSS px; every vision click was 2x
+  off). Verified live.
+- Fractional-coordinate handling (model returns [0..1] not pixels;
+  int() was sending all clicks to (0,0)). Verified.
+- Proper CDP keyDown/keyUp + virtual key codes (legacy rawKeyDown
+  is IGNORED by the Sheets canvas). Verified live: C8->D9.
+- Focus-then-keyboard: a CDP grid click focuses the canvas, then
+  keys work. Verified live (A1->C8->D9, type+Enter -> text present).
+- reasoning:{enabled:false} on every OpenRouter call: both locked
+  models are reasoning models that otherwise burn the whole token
+  budget and return empty. Verified: Kimi vision 10-25s -> ~1s.
+- keepalive-disabled CDP socket (websockets sync client killed the
+  connection during long model calls).
+- progress ledger (decompose subgoal into atomic tracked outcomes).
+- deterministic grid_fill executor (model emits cell->value map,
+  runner focuses + arrow-steps + insertText + commit per cell).
+
+CRITICAL INTEGRITY BUG FOUND: a V4-6 run reported
+status=SUCCESS "all ledger items satisfied" while the actual
+screenshot showed a COMPLETELY EMPTY sheet (only an accidental
+Insert-Table template). The completion signal (_ledger_status, a
+text model reading page innerText) gave a FALSE POSITIVE. The
+separate vision verifier had correctly said DIVERGED every step.
+Verified by reading the real screenshot
+(.anticipy/.../1778898673_50d73a/s0_i05_after.png) - empty grid.
+
+FIX (general, makes every result trustworthy): completion
+authority moved to a VISION auditor (_vision_confirm) that looks
+at the real screenshot via Kimi. SUCCESS now requires pixel
+confirmation; the innerText ledger only drives per-step focus, it
+can no longer declare done. Same gate applied to actor-"done".
+Unit-tested: test_ledger_false_positive_does_not_fabricate_success
+and test_vision_confirm_gates_real_success.
+
+Honest V4-6 status: the Sheets-compound canvas task still does not
+reliably produce committed cell data (Insert-Table hijack + commit
+not landing). It is NOT marked passed. No fabrication. Per the
+user, Sheets is a vision filler/tester, not the product. The
+integrity fix is the key deliverable: the agent can no longer
+report a win it did not earn, so the upcoming real scoreboard is
+trustworthy.
+
+Command: python -m pytest engine/tests/test_dsv4_skill_runner.py
+  engine/tests/test_vision_verifier.py
+  engine/tests/test_openrouter_client.py -q
+Output: 30 passed, 1 skipped in 30.25s
+
+No tag (V4-6 not passed). Last green tag: phase-v4-5-wikipedia-passes.

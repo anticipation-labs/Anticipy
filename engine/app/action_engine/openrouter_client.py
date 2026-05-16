@@ -133,6 +133,15 @@ class OpenRouterClient:
             "messages": msgs,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            # Both locked models (V4 Flash, Kimi K2.6) are reasoning
+            # models on OpenRouter. With reasoning ON they spend the
+            # entire token budget on an internal CoT and return
+            # content="" finish="length", especially on image prompts.
+            # Disabling reasoning is the universal fix: verified live
+            # to take Kimi vision from 10-25s (starved, empty) to ~1s
+            # with clean content, and it cuts cost (no reasoning
+            # tokens billed). General across every call.
+            "reasoning": {"enabled": False},
         }
         if response_format:
             payload["response_format"] = response_format
