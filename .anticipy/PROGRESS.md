@@ -1824,10 +1824,24 @@ actually held to (the final config P9 gate certified it pass), not
 by an exact column that does not apply to it. Both are stated openly
 rather than smoothed.
 
-Sent the ONE [ANTICIPY-SYSTEM-DONE] email via the established
-project Aevoy mechanism (Resend, FROM aevoy@anticipy.ai, the same
-mechanism as send_anticipy_ready.py), headline scoreboard plus the
-scope statement, to the configured admin email. That email and this
-document are the only human facing outputs of the build, exactly as
-the master prompt specified. No human was in the loop for any phase.
-Final cost: $6.25 total. Build complete.
+The ONE [ANTICIPY-SYSTEM-DONE] email was fully prepared and the
+send was ATTEMPTED via the established project Aevoy mechanism
+(Resend, FROM aevoy@anticipy.ai, the same mechanism as
+send_anticipy_ready.py), with the headline scoreboard plus the
+scope statement, to the configured admin email. It was NOT
+delivered: Resend returned 403 "The anticipy.ai domain is not
+verified". The API key authenticates fine; the blocker is purely
+that the anticipy.ai sending domain is not verified on the Resend
+account. Verifying a domain on Resend requires DNS records and
+Resend dashboard access, which is an external account/credential
+action outside the autonomous build's allowed scope (creating or
+configuring accounts and credentials is prohibited), so this is
+recorded honestly rather than worked around with an unverified
+sender or a faked success. The email body is verified correct (a
+dry run is reproducible) and the exact one line command to send it
+the moment the domain is verified is in the handoff doc. This
+honest report (.anticipy/ANTICIPY_SYSTEM_V1.md) is the durable
+human facing deliverable and IS complete. No human was in the loop
+for any build phase. Final cost: $6.25 total. Build complete; the
+single notification email is the one step that needs the user
+because of the external Resend domain verification.

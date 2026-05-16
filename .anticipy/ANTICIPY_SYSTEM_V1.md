@@ -202,7 +202,31 @@ path; the portability gate proves it across the full runtime set.
 
 ## Status
 
-Build complete through P10. P11 (this report and the one
-notification) closes the run. No human was in the loop for any
-phase; the only human facing outputs are this document and the
-single completion email.
+Build complete: all 12 phase tags (p0-seams through p11-handoff)
+are genuine, committed, and in order; the frozen action engine and
+desktop app were never modified (git clean on those paths every
+phase, 10 phase-v4 tags intact). No human was in the loop for any
+build phase.
+
+The one open item is the completion email, and it is open for an
+external reason, stated honestly rather than faked: the
+[ANTICIPY-SYSTEM-DONE] email was prepared and the send was
+attempted via the established Aevoy mechanism (Resend, FROM
+aevoy@anticipy.ai), and Resend rejected it 403 because the
+anticipy.ai sending domain is not verified on the Resend account.
+The API key authenticates correctly; verifying a domain needs DNS
+records plus Resend dashboard access, which is an account and
+credential action outside the autonomous build's allowed scope.
+This document is the durable human facing deliverable and is
+complete; the email is the notification of it.
+
+To send it (one line, after anticipy.ai is verified at
+https://resend.com/domains, or change the from to a domain already
+verified on the account):
+
+  PYTHONPATH=engine engine/.venv/bin/python \
+    engine/scripts/send_anticipy_system_done.py \
+    --scoreboard .anticipy/final_scoreboard_headline.txt
+
+Add --dry-run to print the exact subject and body without sending.
+The body is already verified correct.
