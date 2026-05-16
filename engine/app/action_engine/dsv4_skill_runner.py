@@ -708,6 +708,9 @@ class DSv4SkillRunner:
     # loop to escalate a still-failing Tier 1 task to the strongest
     # OpenRouter model as the primary decider, not just fallback.
     force_model: Optional[str] = None
+    # Optional callable(dict) for live progress (the Tauri app sets
+    # this via --stream to print one JSON line per event to stdout).
+    event_sink: Optional[Any] = None
 
     def __post_init__(self):
         self.client = self.client or OpenRouterClient()
@@ -715,6 +718,13 @@ class DSv4SkillRunner:
         # No-op logger until run() installs the real one. Lets
         # _run_subtask be called directly (unit tests) without error.
         self._logger = _NullLogger()
+
+    def _emit(self, **ev) -> None:
+        if self.event_sink:
+            try:
+                self.event_sink(ev)
+            except Exception:
+                pass
 
     def _txt_model(self) -> str:
         return self.force_model or TEXT_MODEL
@@ -1187,6 +1197,12 @@ class DSv4SkillRunner:
                     latency_decide_s=dlat)
             except Exception:
                 pass
+            self._emit(kind="step", subtask=sub_idx, iteration=it,
+                       action=(action.get("action") if action else None),
+                       target=(action.get("target_ref") or action.get("url")
+                               if action else None),
+                       verdict=(v.status if v else "-"),
+                       detail=detail)
 
             if state_changing:
                 # Progress proxy: a sheet/page being filled grows its
@@ -1228,6 +1244,8 @@ class DSv4SkillRunner:
                 force_model=self.force_model)
         except Exception:
             pass
+        self._emit(kind="start", task=task, task_id=task_id,
+                   model=self._vis_model())
 
         try:
             sess = _connect_session_keepalive(
@@ -1285,6 +1303,9 @@ class DSv4SkillRunner:
                 n_iterations=result.n_iterations, error=result.error)
         except Exception:
             pass
+        self._emit(kind="done", status=result.status,
+                   answer=result.answer, evidence=result.evidence,
+                   n_iterations=result.n_iterations, error=result.error)
 
         self._write_manifest(traj, result)
         return result
@@ -1308,13 +1329,22 @@ class DSv4SkillRunner:
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
+    import sys as _sys
     p.add_argument("--task", required=True)
     p.add_argument("--url", default=None)
     p.add_argument("--max-iters", type=int, default=30)
+    p.add_argument("--stream", action="store_true",
+                   help="emit one JSON line per event to stdout (Tauri app)")
     args = p.parse_args()
     runner = DSv4SkillRunner(max_iters=args.max_iters)
+    if args.stream:
+        def _sink(ev):
+            _sys.stdout.write(json.dumps(ev) + "\n")
+            _sys.stdout.flush()
+        runner.event_sink = _sink
     res = runner.run(args.task, starting_url=args.url)
-    print(json.dumps({
+    final = {
+        "kind": "result",
         "status": res.status,
         "answer": res.answer,
         "evidence": res.evidence,
@@ -1322,4 +1352,9 @@ if __name__ == "__main__":
         "n_subtasks": len(res.subtasks),
         "trajectory_dir": res.trajectory_dir,
         "error": res.error,
-    }, indent=2))
+    }
+    if args.stream:
+        _sys.stdout.write(json.dumps(final) + "\n")
+        _sys.stdout.flush()
+    else:
+        print(json.dumps(final, indent=2))

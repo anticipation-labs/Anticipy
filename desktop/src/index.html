@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anticipy</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+  <body>
+    <main class="container">
+      <header><span class="brand">Anticipy</span></header>
+
+      <!-- IDLE -->
+      <section id="idle" class="state">
+        <h1>What should Anticipy do?</h1>
+        <textarea id="task" rows="3"
+          placeholder="e.g. Open Gmail and tell me the subject of the most recent email"></textarea>
+        <button id="run">Run</button>
+        <p class="hint">Runs against your real signed-in Chrome in an
+          isolated Anticipy window. It stops at password and payment
+          walls.</p>
+      </section>
+
+      <!-- RUNNING -->
+      <section id="running" class="state hidden">
+        <h2>Working<span class="dots">...</span></h2>
+        <div id="current" class="current"></div>
+        <ul id="feed" class="feed"></ul>
+        <button id="cancel" class="ghost">Run something else</button>
+      </section>
+
+      <!-- DONE -->
+      <section id="done" class="state hidden">
+        <h2 id="done-title">Done</h2>
+        <div id="answer" class="answer"></div>
+        <div id="evidence" class="evidence"></div>
+        <p id="meta" class="meta"></p>
+        <button id="again">Run another task</button>
+      </section>
+    </main>
+  </body>
+</html>
