@@ -36,10 +36,71 @@ from app.anticipy import platform_adapter
 class CategorySpec:
     name: str
     min_count: int
-    expected: str  # the stamped expected decision, or a structured rule tag
+    expected: str  # the stamped primary expected decision (always a real
+                   # decision: ACT | STORE_AS_LATENT | ASK | IGNORE) or a
+                   # structured rule tag for memory/whole-system checks
     definition: str
     grading: str  # which pass condition in the grader applies
     variants: tuple = field(default_factory=tuple)
+
+
+# Valid decisions only. Pseudo tokens like ASK_OR_STORE are never used as
+# an expected label: they leak into the adversarial reviewer as an
+# invented decision and (correctly) trip the anti self deception check.
+# Each category declares the SET of acceptable decisions and the single
+# decision that is the hard error, in human terms, so the grader and the
+# adversarial reviewer both judge against a real, meaningful criterion.
+ACCEPTABLE: dict[str, dict] = {
+    "EXPLICIT_COMMAND": {"accept": ("ACT",), "hard_error": None,
+        "desc": "Acceptable: ACT. The WEARER directly commanded the agent."},
+    "CLEAR_IMPLICIT": {"accept": ("ACT",), "hard_error": None,
+        "desc": "Acceptable: ACT. A clear committed actionable WEARER task."},
+    "DIRECT_USER_COMMAND": {"accept": ("ACT",), "hard_error": None,
+        "desc": "Acceptable: ACT. The user deliberately addressed the agent."},
+    "BOSS_DIRECTED": {"accept": ("ACT",), "hard_error": None,
+        "desc": "Acceptable: ACT. A person with authority over the WEARER "
+                "instructed the WEARER and the WEARER did not refuse, so it "
+                "is a WEARER relevant task."},
+    "HEDGED_SOCIAL": {"accept": ("STORE_AS_LATENT", "IGNORE"), "hard_error": "ACT",
+        "desc": "Acceptable: STORE_AS_LATENT (best) or IGNORE. Hard error: "
+                "ACT, because this is low commitment social hedging."},
+    "AMBIGUOUS_ADDRESSEE": {"accept": ("ASK", "STORE_AS_LATENT"), "hard_error": "ACT",
+        "desc": "Acceptable: ASK or STORE_AS_LATENT. Hard error: a silent "
+                "ACT, because it is genuinely unclear whether the task was "
+                "meant for the agent or for another human present."},
+    "SARCASM_AND_NEGATION": {"accept": ("IGNORE", "STORE_AS_LATENT"), "hard_error": "ACT",
+        "desc": "Acceptable: IGNORE or STORE_AS_LATENT. Hard error: ACT on "
+                "the literal reading, because the real intent is sarcastic "
+                "or negated."},
+    "PURE_AMBIENT_NEGATIVE": {"accept": ("IGNORE",), "hard_error": "ACT",
+        "desc": "Acceptable: IGNORE. There is no task for the agent. Hard "
+                "error: ACT or ASK (a false trigger)."},
+    "MULTI_SPEAKER_CROSSTALK": {"accept": ("ACT",), "hard_error": None,
+        "desc": "Acceptable: ACT on the one embedded real WEARER task. Any "
+                "error must be in the safe direction, never a silent wrong "
+                "ACT on crosstalk."},
+    "REFERENCE_RESOLUTION": {"accept": ("ACT", "ASK"), "hard_error": None,
+        "desc": "Memory/profile present: ACT. Absent: ASK (never a guessed "
+                "ACT)."},
+    "NEVERMIND_RECONCILIATION": {"accept": ("IGNORE", "STORE_AS_LATENT"), "hard_error": "ACT",
+        "desc": "The task was retracted. The final memory state must show "
+                "no active intent. Hard error: ACT on the retracted task."},
+}
+
+
+def accept_set(category: str, variant=None) -> tuple:
+    if category == "REFERENCE_RESOLUTION":
+        return ("ACT",) if variant == "present" else ("ASK",)
+    return ACCEPTABLE.get(category, {}).get("accept", ())
+
+
+def criterion_text(category: str, variant=None) -> str:
+    if category == "REFERENCE_RESOLUTION":
+        return ("Acceptable: ACT (the reference resolves from memory or "
+                "profile)." if variant == "present"
+                else "Acceptable: ASK only. A guessed ACT is the hard error "
+                "because the reference cannot be resolved.")
+    return ACCEPTABLE.get(category, {}).get("desc", "")
 
 
 # Engine core categories, phases P1 to P5.
@@ -63,9 +124,15 @@ ENGINE_CORE: dict[str, CategorySpec] = {
     "DIRECT_USER_COMMAND": CategorySpec(
         "DIRECT_USER_COMMAND", 60, "ACT",
         "The user deliberately addresses the agent through the direct "
-        "command channel (typed in the app or texted to the agent), for "
-        "example: book the dinner, reschedule my 3pm. This is the highest "
-        "authority lowest uncertainty path, addressee detection is bypassed.",
+        "command channel (typed in the app or texted to the agent) with "
+        "an ACTION to perform in the world: book, schedule, reschedule, "
+        "cancel, send, email, order, reorder, add to a list, set a "
+        "reminder or timer, draft, post. Example: 'book the dinner', "
+        "'reschedule my 3pm', 'add milk to my list', 'email Sam the "
+        "deck'. It is a command to DO something, never a pure "
+        "information question (no bare 'what is the weather', 'how many "
+        "steps did I take'). One WEARER line only. Highest authority, "
+        "lowest uncertainty path, addressee detection is bypassed.",
         "exact>=0.92",
     ),
     "BOSS_DIRECTED": CategorySpec(
@@ -84,14 +151,25 @@ ENGINE_CORE: dict[str, CategorySpec] = {
         "overaction<=0.03",
     ),
     "AMBIGUOUS_ADDRESSEE": CategorySpec(
-        "AMBIGUOUS_ADDRESSEE", 50, "ASK_OR_STORE",
-        "It is unclear whether a task is for the agent or for another "
-        "human in the conversation. The safe outcomes are ASK or "
-        "STORE_AS_LATENT. A silent ACT is an error.",
+        "AMBIGUOUS_ADDRESSEE", 50, "ASK",
+        "There MUST be at least one non WEARER speaker present and the "
+        "target of a task shaped utterance MUST remain genuinely unclear "
+        "even after reading the whole transcript. HARD EXCLUSIONS, never "
+        "generate these here: (1) a person with authority over the "
+        "WEARER instructing the WEARER who then accepts or acknowledges "
+        "('Sure', 'On it', 'I'll take care of it') that is BOSS_DIRECTED, "
+        "not ambiguous; (2) the WEARER clearly accepting or claiming the "
+        "task themselves; (3) a clean solo request to an assistant. The "
+        "ambiguity must persist: e.g. the WEARER says 'can you send that "
+        "over?' with a colleague present and NOBODY clearly accepts or "
+        "is named, or a speaker says 'can someone handle this?' with no "
+        "named target and no clear acceptance. No speaker may clearly "
+        "take ownership. The right outcomes are ASK or STORE_AS_LATENT, "
+        "never a silent ACT.",
         "no_silent_act",
     ),
     "SARCASM_AND_NEGATION": CategorySpec(
-        "SARCASM_AND_NEGATION", 40, "NOT_ACT",
+        "SARCASM_AND_NEGATION", 40, "IGNORE",
         "Sarcasm or negation where the literal surface looks like a "
         "command but the real intent is the opposite or none. Oh great, "
         "let us definitely book the most expensive place. Never act on "

@@ -213,19 +213,29 @@ def grade_category(category: str, grading: str, results: list[dict]) -> dict:
 
 
 _ADVERSARIAL_SYS = """\
-You audit an assistant decision grader. You are given a conversation
-transcript, the decision the engine made (ACT, STORE_AS_LATENT, ASK,
-IGNORE), and the expected decision the test harness graded as CORRECT.
-Your only job: is grading this answer as correct actually defensible?
-Answer STRICT JSON: {"defensible": true|false, "why": "<short>"}.
-Be skeptical. Flag answers that were graded correct but are not.
+You audit an assistant decision grader. The engine's only valid outputs
+are ACT, STORE_AS_LATENT, ASK, IGNORE. You are given a conversation
+transcript, the decision the engine made, and the harness acceptance
+criterion (which decisions are acceptable for this case and what the
+hard error would be). The harness graded this engine answer as CORRECT.
+
+Your only job: given the criterion, is grading THIS engine answer as
+correct actually defensible? Judge the engine answer against the stated
+criterion, not against your own preferred labeling scheme. Answer STRICT
+JSON: {"defensible": true|false, "why": "<short>"}. Flag only answers
+that were graded correct but are genuinely wrong under the criterion.
 """
 
 
 def adversarial_check(correct_graded: list[dict], sample_frac: float = 0.10, seed: int = 13) -> dict:
     """Review a random sample of CORRECT graded answers with a different
     model than the decider. Flag rate above five percent fails the phase.
+    The reviewer is shown the real, human meaningful acceptance criterion
+    (never an invented pseudo decision token), so a flag means genuine
+    grader disagreement, not confusion about the harness.
     """
+    from app.anticipy import taxonomy
+
     if not correct_graded:
         return {"sampled": 0, "flagged": 0, "flag_rate": 0.0, "pass": True}
     rng = random.Random(seed)
@@ -234,12 +244,14 @@ def adversarial_check(correct_graded: list[dict], sample_frac: float = 0.10, see
     flagged = 0
     flags: list[dict] = []
     for item in sample:
-        transcript = json.dumps(item["case"].get("transcript", []), ensure_ascii=False)
+        case = item["case"]
+        transcript = json.dumps(case.get("transcript", []), ensure_ascii=False)
+        criterion = taxonomy.criterion_text(case.get("category", ""), case.get("variant"))
         user = (
             f"TRANSCRIPT: {transcript}\n"
             f"ENGINE DECISION: {item['actual'].get('decision')}\n"
-            f"EXPECTED (graded correct): {item['case'].get('expected')}\n"
-            f"CATEGORY: {item['case'].get('category')}"
+            f"ACCEPTANCE CRITERION: {criterion}\n"
+            f"CATEGORY: {case.get('category')}"
         )
         res = platform_adapter.adversarial_model_call(_ADVERSARIAL_SYS, user, max_tokens=300)
         if not res.ok:

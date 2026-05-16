@@ -19,7 +19,13 @@ from app.anticipy import grader, platform_adapter, taxonomy
 
 DecideFn = Callable[[dict], dict]
 
-_MAX_WORKERS = 8
+# Each decision is several blocking network calls (addressee, demand,
+# hedge, intent, plus reparse/retry). The work is pure I/O wait, not
+# CPU or memory, so high concurrency stays far inside the 2 GB envelope
+# (a thread blocked on a socket costs a small stack, nothing else) and
+# is the only thing that keeps the 590 case P5 suite tractable at the
+# observed model latency. Verified bounded by the resource gate.
+_MAX_WORKERS = 24
 
 
 def run_category(category: str, decide_fn: DecideFn, n: Optional[int] = None) -> list[dict]:
@@ -68,19 +74,12 @@ def run_suite(
         scoreboard["categories"][category] = block
         if not block.get("pass"):
             scoreboard["all_pass"] = False
-        # collect CORRECT graded items for the adversarial backstop
+        # collect CORRECT graded items for the adversarial backstop, using
+        # the real per category acceptance set (never a pseudo token)
         for r in results:
             d = r["actual"].get("decision")
-            exp = r["case"].get("expected")
-            graded_correct = (
-                (block.get("grading") == "exact>=0.92" and d == exp)
-                or (block.get("grading") == "overaction<=0.03" and d != "ACT")
-                or (block.get("grading") == "no_silent_act" and d != "ACT")
-                or (block.get("grading") == "reference" and (
-                    (r["case"].get("variant") == "present" and d == "ACT")
-                    or (r["case"].get("variant") == "absent" and d == "ASK")))
-            )
-            if graded_correct:
+            accept = taxonomy.accept_set(r["case"].get("category", ""), r["case"].get("variant"))
+            if accept and d in accept:
                 correct_pool.append(r)
 
     if run_adversarial and correct_pool:
