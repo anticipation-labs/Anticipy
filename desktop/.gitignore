@@ -17,6 +17,7 @@ src-tauri/target/
 src-tauri/gen/
 
 # Editor directories and files
+.vscode/
 .vscode/*
 !.vscode/extensions.json
 .idea

@@ -1,6 +1,6 @@
 # V4-7 SCOREBOARD
 
-Generated 2026-05-16 02:10:41
+Generated 2026-05-16 02:22:21
 
 Each task: 3 runs from blank Chrome, vision-auditor grades the final state on real pixels (no fabrication possible).
 
