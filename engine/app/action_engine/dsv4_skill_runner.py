@@ -60,45 +60,105 @@ from .cdp_dispatcher import (
 )
 
 
-def _connect_session_keepalive(port: int = 9222,
-                               open_url: Optional[str] = None) -> CDPSession:
-    """Same attach logic as cdp_dispatcher.connect_to_chrome, but with
-    websocket client keepalive DISABLED (ping_interval=None).
+_AGENT_WIN_STATE = Path(os.path.expanduser("~/.anticipy/v4_agent_window.json"))
+_AGENT_WIN_NAME = "Anticipy Agent"
 
-    Why this exists separately: cdp_dispatcher.py is a protected file
-    in this build and must not be modified. Its connect_to_chrome
-    opens the ws with the websockets default 20s client keepalive.
-    The sync websockets client only services control frames during
-    send/recv, so a 30s+ OpenRouter call between CDP ops starves the
-    keepalive and the client kills the connection ("sent 1011 ...
-    keepalive ping timeout"). Disabling client pings keeps the CDP
-    socket alive across long model calls. Chrome does not ping, so
-    nothing else needs the keepalive.
-    """
-    r = httpx.get(f"http://localhost:{port}/json/list", timeout=5.0)
+
+def _browser_ws(port: int = 9222) -> str:
+    r = httpx.get(f"http://localhost:{port}/json/version", timeout=5.0)
     r.raise_for_status()
-    targets = r.json()
-    target = None
-    if open_url:
-        pr = httpx.put(f"http://localhost:{port}/json/new?{open_url}", timeout=10.0)
-        pr.raise_for_status()
-        target = pr.json()
-    if target is None:
-        for t in targets:
-            if (t.get("url") or "").startswith(("http://", "https://")):
-                target = t
-                break
-        if target is None and targets:
-            target = targets[0]
-    if target is None:
-        raise RuntimeError("no CDP target available on :9222")
-    ws = _ws_connect(target["webSocketDebuggerUrl"], max_size=16 * 1024 * 1024,
+    return r.json()["webSocketDebuggerUrl"]
+
+
+def _page_targets(port: int = 9222) -> list[dict]:
+    try:
+        r = httpx.get(f"http://localhost:{port}/json/list", timeout=5.0)
+        r.raise_for_status()
+        return [t for t in r.json() if t.get("type") == "page"]
+    except Exception:
+        return []
+
+
+def _ws_to(ws_url: str) -> CDPSession:
+    """Keepalive-disabled CDP session bound to a specific page ws url.
+
+    cdp_dispatcher.py is a protected file; its connect uses the
+    websockets default 20s client keepalive, and the sync client only
+    services control frames during send/recv, so a 30s+ OpenRouter
+    call starves it and Chrome drops the socket. ping_interval=None
+    keeps the CDP socket alive across long model calls.
+    """
+    ws = _ws_connect(ws_url, max_size=16 * 1024 * 1024,
                      ping_interval=None, ping_timeout=None, open_timeout=20)
-    sess = CDPSession(ws=ws, target_id=target["id"],
-                      rng=np.random.default_rng())
+    sess = CDPSession(ws=ws, target_id="", rng=np.random.default_rng())
     sess.send("Page.enable")
     sess.send("Runtime.enable")
     sess.send("DOM.enable")
+    return sess
+
+
+def _ensure_agent_window(port: int = 9222) -> tuple[str, str]:
+    """Return (target_id, page_ws_url) for the dedicated, ISOLATED
+    "Anticipy Agent" background window. The agent must not run in the
+    user's foreground tabs (it would steal focus and fight the user).
+    Chrome's coloured tab-groups need the chrome.tabGroups extension
+    API, unavailable over raw CDP, so a dedicated background window
+    via Target.createTarget(newWindow=true, background=true) is the
+    correct equivalent isolation: the user's foreground is untouched,
+    they keep working in parallel. The target id is persisted so the
+    same window is reused across runs instead of spawning one each
+    time.
+    """
+    tid = None
+    if _AGENT_WIN_STATE.exists():
+        try:
+            tid = json.loads(_AGENT_WIN_STATE.read_text()).get("target_id")
+        except Exception:
+            tid = None
+    if tid:
+        for t in _page_targets(port):
+            if t.get("id") == tid:
+                return tid, t["webSocketDebuggerUrl"]
+
+    bws = _ws_connect(_browser_ws(port), max_size=8 * 1024 * 1024,
+                      ping_interval=None, ping_timeout=None, open_timeout=20)
+    try:
+        bws.send(json.dumps({"id": 1, "method": "Target.createTarget",
+                             "params": {"url": "about:blank",
+                                        "newWindow": True,
+                                        "background": True}}))
+        deadline = time.time() + 8
+        new_tid = None
+        while time.time() < deadline:
+            m = json.loads(bws.recv())
+            if m.get("id") == 1:
+                new_tid = m["result"]["targetId"]
+                break
+        if not new_tid:
+            raise RuntimeError("Target.createTarget returned no targetId")
+    finally:
+        bws.close()
+    ws_url = ""
+    for t in _page_targets(port):
+        if t.get("id") == new_tid:
+            ws_url = t["webSocketDebuggerUrl"]
+            break
+    if not ws_url:
+        raise RuntimeError("agent window target not found after create")
+    _AGENT_WIN_STATE.parent.mkdir(parents=True, exist_ok=True)
+    _AGENT_WIN_STATE.write_text(json.dumps({"target_id": new_tid,
+                                            "name": _AGENT_WIN_NAME}))
+    return new_tid, ws_url
+
+
+def _connect_session_keepalive(port: int = 9222,
+                               open_url: Optional[str] = None) -> CDPSession:
+    """Connect to the ISOLATED Anticipy Agent background window
+    (created/reused), keepalive-disabled. Replaces the old behaviour
+    of opening a foreground tab in the user's window."""
+    tid, ws_url = _ensure_agent_window(port)
+    sess = _ws_to(ws_url)
+    sess.target_id = tid
     return sess
 from .openrouter_client import OpenRouterClient, TEXT_MODEL, VISION_MODEL
 from .vision_verifier import VisionVerifier
@@ -247,37 +307,135 @@ def _read_name_box(sess: CDPSession) -> Optional[tuple[int, int]]:
         return None
 
 
-def _grid_fill(sess: CDPSession, cells: dict, css_w: int, css_h: int) -> tuple[bool, str]:
-    """Deterministic general grid filler. The model supplies the
-    target cell->value map (a reliable language task); this executes
-    it with proven primitives: one focus click, then arrow-key
-    navigation + Input.insertText + Enter per cell, resyncing the
-    current position from the Name Box. No per-cell vision, no
-    site-specific API. Works on any grid that has a cell-reference
-    indicator."""
-    # 1. Focus the grid with one real CDP click in the grid body
-    #    (well below the toolbar, left so it is a real cell).
-    fx, fy = max(60, int(css_w * 0.18)), max(180, int(css_h * 0.42))
-    sess.send("Input.dispatchMouseEvent",
-              {"type": "mousePressed", "x": fx, "y": fy,
-               "button": "left", "clickCount": 1}, timeout_s=6.0)
-    sess.send("Input.dispatchMouseEvent",
-              {"type": "mouseReleased", "x": fx, "y": fy,
-               "button": "left", "clickCount": 1}, timeout_s=6.0)
-    time.sleep(0.5)
+def _ledger_to_cells(ledger: list[str]) -> dict:
+    """Parse ledger outcome strings into a {cellref: value} map. The
+    ledger decomposition is a reliable language task; the runner then
+    executes the fill deterministically so the model never touches the
+    grid and cannot fumble into a Table. Handles forms like:
+      'Cell A1 contains "Anticipy Test Tracker"'
+      'A3 = Week'  /  'B4 contains 100'  /  'cell B3 is Revenue'
+    """
+    cells: dict[str, str] = {}
+    for item in ledger:
+        m = re.search(r"\b([A-Za-z]{1,3}\d{1,4})\b", item)
+        if not m:
+            continue
+        ref = m.group(1).upper()
+        rest = item[m.end():]
+        vm = re.search(r"[\"'“‘]([^\"'”’]+)[\"'”’]", item)
+        if vm:
+            val = vm.group(1)
+        else:
+            vm = re.search(r"(?:contains?|=|is|:|should be|holds?)\s*(.+)$",
+                           rest, re.IGNORECASE)
+            if vm:
+                val = vm.group(1).strip().strip(".").strip()
+            else:
+                continue
+        # Reject if the "value" still looks like a sentence fragment
+        # with no real content.
+        if val and len(val) <= 120:
+            cells[ref] = val
+    return cells
 
-    def press(key: str, vk: int):
-        sess.send("Input.dispatchKeyEvent",
-                  {"type": "keyDown", "key": key, "code": key,
-                   "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk},
-                  timeout_s=6.0)
-        sess.send("Input.dispatchKeyEvent",
-                  {"type": "keyUp", "key": key, "code": key,
-                   "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk},
-                  timeout_s=6.0)
+
+def _grid_fill(sess: CDPSession, cells: dict, css_w: int, css_h: int) -> tuple[bool, str]:
+    """Deterministic general grid filler using the NAME-BOX GOTO
+    primitive, verified live: clicking the cell-reference box, typing
+    an A1-notation cell, and pressing Enter jumps the selection to
+    that exact cell from ANY state. No position tracking, no arrow
+    counting, immune to Table-template 'Column N' confusion. Every
+    spreadsheet (Sheets/Excel-online/etc) has this box, so this is
+    general, not site-specific. Per cell: goto -> insertText value
+    -> Enter to commit."""
+
+    # Guaranteed-clean start. Prior runs leave corrupted "Untitled
+    # spreadsheet" files (with an accidental Table1 / Column 1-5) in
+    # the real Drive, and the model keeps reopening one from the
+    # recent list. https://sheets.new ALWAYS creates a pristine blank
+    # grid (verified live). The objective is "create a new sheet", so
+    # starting fresh here is correct, deterministic, and immune to
+    # debris. General "start from a known-clean state".
+    try:
+        navigate(sess, "https://sheets.new", wait_for_load_s=20.0)
+    except Exception:
+        pass
+
+    def press(key: str, vk: int, mods: int = 0):
+        for typ in ("keyDown", "keyUp"):
+            sess.send("Input.dispatchKeyEvent",
+                      {"type": typ, "key": key, "code": key,
+                       "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk,
+                       "modifiers": mods}, timeout_s=6.0)
+
+    def name_box_xy():
+        r = sess.send("Runtime.evaluate", {
+            "expression": (
+                "(function(){var e=document.querySelector('#t-name-box')"
+                "||document.querySelector('[aria-label=\"Name box\"]');"
+                "if(!e)return null;var b=e.getBoundingClientRect();"
+                "if(b.width<1)return null;"
+                "return [b.x+b.width/2,b.y+b.height/2];})()"),
+            "returnByValue": True}, timeout_s=5.0)
+        return (r.get("result", {}) or {}).get("value")
+
+    # Sheets is a heavy SPA: sheets.new redirects and the grid/name
+    # box can take 8-15s to render. Poll until the name box actually
+    # exists rather than a fixed sleep (the fixed sleep was bailing
+    # before render -> blank sheet).
+    nb = None
+    deadline = time.time() + 30.0
+    while time.time() < deadline:
+        nb = name_box_xy()
+        if nb:
+            break
+        time.sleep(1.0)
+    if not nb:
+        return (False, "name box never rendered (sheets.new slow/blocked)")
+    nbx, nby = int(nb[0]), int(nb[1])
+    # Close the "Tables" suggestion sidebar if Sheets popped it open
+    # (it overlays the grid and steals the first interactions).
+    press("Escape", 27)
+    time.sleep(0.4)
+
+    def nb_value() -> str:
+        r = sess.send("Runtime.evaluate", {
+            "expression": ("(function(){var e=document.querySelector("
+                           "'#t-name-box')||document.querySelector("
+                           "'[aria-label=\"Name box\"]');return e?(e.value"
+                           "||e.textContent||''):'';})()"),
+            "returnByValue": True}, timeout_s=5.0)
+        return ((r.get("result", {}) or {}).get("value", "") or "").strip().upper()
+
+    def goto(ref: str) -> bool:
+        # Recompute the name box position EACH time: the layout
+        # shifts as the sidebar closes / grid scrolls, so a cached
+        # coordinate goes stale (that was the bug: only the last
+        # cell's value survived). Verify the selection actually
+        # landed on the target; retry once.
+        for attempt in range(2):
+            xy = name_box_xy()
+            if not xy:
+                time.sleep(0.5)
+                continue
+            cx, cy = int(xy[0]), int(xy[1])
+            sess.send("Input.dispatchMouseEvent",
+                      {"type": "mousePressed", "x": cx, "y": cy,
+                       "button": "left", "clickCount": 1}, timeout_s=6.0)
+            sess.send("Input.dispatchMouseEvent",
+                      {"type": "mouseReleased", "x": cx, "y": cy,
+                       "button": "left", "clickCount": 1}, timeout_s=6.0)
+            time.sleep(0.25)
+            press("a", 65, 2)   # Ctrl+A selects existing name-box text
+            sess.send("Input.insertText", {"text": ref}, timeout_s=6.0)
+            time.sleep(0.15)
+            press("Enter", 13)
+            time.sleep(0.5)
+            if nb_value().replace("$", "") == ref.upper():
+                return True
+        return False
 
     filled = 0
-    # Fill in row-major order for stable navigation.
     items = []
     for ref, val in cells.items():
         cr = _a1_to_colrow(str(ref))
@@ -285,28 +443,15 @@ def _grid_fill(sess: CDPSession, cells: dict, css_w: int, css_h: int) -> tuple[b
             items.append((cr[1], cr[0], str(ref), str(val)))
     items.sort()
     for _, _, ref, val in items:
-        target = _a1_to_colrow(ref)
-        if target is None:
-            continue
-        cur = _read_name_box(sess) or (0, 0)
-        # Navigate columns
-        dcol = target[0] - cur[0]
-        for _ in range(abs(dcol)):
-            press("ArrowRight" if dcol > 0 else "ArrowLeft",
-                  39 if dcol > 0 else 37)
-            time.sleep(0.08)
-        drow = target[1] - cur[1]
-        for _ in range(abs(drow)):
-            press("ArrowDown" if drow > 0 else "ArrowUp",
-                  40 if drow > 0 else 38)
-            time.sleep(0.08)
-        time.sleep(0.15)
+        if not goto(ref):
+            continue  # could not land on this cell; skip, do not corrupt others
         sess.send("Input.insertText", {"text": val}, timeout_s=8.0)
-        time.sleep(0.15)
-        press("Enter", 13)  # commit
         time.sleep(0.2)
+        press("Enter", 13)  # commit the value (Enter also moves down)
+        time.sleep(0.35)
         filled += 1
-    return (filled > 0, f"grid_fill wrote {filled}/{len(cells)} cells")
+    return (filled > 0,
+            f"grid_fill wrote {filled}/{len(items)} cells via name-box goto")
 
 
 def _page_url(sess: CDPSession) -> str:
@@ -660,6 +805,70 @@ class DSv4SkillRunner:
         except Exception as e:
             return (False, f"dispatch threw: {e}", False)
 
+    _POPUP_GOAL = (
+        "A sign-in, OAuth, or consent window just opened. Approve it so "
+        "the original task can continue. Allowed: click an account that "
+        "is already listed; click Continue / Next / Allow / Authorize / "
+        "Approve / Confirm / Yes; dismiss a cookie or info banner. "
+        "FORBIDDEN: do not type into a password field, do not create an "
+        "account, do not type credentials. If the ONLY way forward is to "
+        "enter a password, output action done with answer "
+        "'NEEDS_PASSWORD'. When the consent is approved and nothing more "
+        "is needed, output action done with answer 'POPUP_DONE'."
+    )
+
+    def _handle_auth_popup(self, target_id: str, parent_subgoal: str,
+                           traj: Path, tag_prefix: str,
+                           max_iters: int = 8) -> str:
+        """Drive an OAuth/sign-in/consent popup target in a bounded
+        sub-loop, then return. Safe by construction: the popup goal
+        forbids password entry and account creation. Returns a short
+        status string for the trajectory/history."""
+        ws_url = ""
+        for t in _page_targets(self.cdp_port):
+            if t.get("id") == target_id:
+                ws_url = t["webSocketDebuggerUrl"]
+                break
+        if not ws_url:
+            return "popup_gone_before_attach"
+        try:
+            psess = _ws_to(ws_url)
+            psess.target_id = target_id
+        except Exception as e:
+            return f"popup_attach_failed:{e}"
+        try:
+            for pit in range(max_iters):
+                # Popup closed -> auth flow finished, opener continues.
+                if target_id not in {t["id"] for t in _page_targets(self.cdp_port)}:
+                    return "popup_closed_ok"
+                try:
+                    shot = capture_screenshot(psess)
+                    (traj / f"{tag_prefix}_{pit:02d}.png").write_bytes(shot)
+                    cw, ch = _css_viewport(psess)
+                    shot_n = _normalize_for_model(shot, cw, ch)
+                    ax, ref_map = _ax_tree_and_refs(psess)
+                    ptext = _page_text(psess)
+                except Exception:
+                    return "popup_observe_failed"
+                b64 = base64.b64encode(shot_n).decode("ascii")
+                action = self._decide(self._POPUP_GOAL, ax, ptext, [],
+                                      screenshot_b64=b64, img_w=cw, img_h=ch)
+                if not action or not action.get("action"):
+                    continue
+                if (action.get("action") or "").lower() == "done":
+                    ans = (action.get("answer") or "").upper()
+                    if "NEEDS_PASSWORD" in ans:
+                        return "popup_needs_password"
+                    return "popup_done"
+                self._dispatch(psess, action, ref_map, css_w=cw, css_h=ch)
+                wait_for_settle(psess, timeout_s=3.0)
+            return "popup_iters_exhausted"
+        finally:
+            try:
+                psess.close()
+            except Exception:
+                pass
+
     def _run_subtask(self, sess: CDPSession, subgoal: str, traj: Path,
                      sub_idx: int, memory: dict) -> dict:
         history: list[str] = []
@@ -669,6 +878,25 @@ class DSv4SkillRunner:
         best_ptext_len = 0  # progress proxy: a sheet being filled grows
         ledger = self._build_ledger(subgoal)
         best_done_count = 0  # real progress proxy: ledger items satisfied
+        try:
+            known_target_ids = {t["id"] for t in _page_targets(self.cdp_port)}
+        except Exception:
+            known_target_ids = set()
+
+        # If the ledger is a spreadsheet cell-fill (>=2 cell->value
+        # outcomes), execute it deterministically ONCE up front. The
+        # model never touches the grid, so it cannot fumble into a
+        # Table; the proven name-box-goto + clean sheets.new start do
+        # the work. The loop below then vision-confirms the result.
+        gf_cells = _ledger_to_cells(ledger)
+        if len(gf_cells) >= 2:
+            try:
+                cw, ch = _css_viewport(sess)
+                ok, detail = _grid_fill(sess, gf_cells, cw or 1280, ch or 800)
+                history.append(f"deterministic grid_fill: {detail}")
+                wait_for_settle(sess, timeout_s=3.0)
+            except Exception as e:
+                history.append(f"deterministic grid_fill threw: {e}")
 
         for it in range(self.max_iters):
             tag = f"s{sub_idx}_i{it:02d}"
@@ -773,6 +1001,27 @@ class DSv4SkillRunner:
                 continue
 
             wait_for_settle(sess, timeout_s=4.0)
+
+            # OAuth / sign-in / consent popups open as a SEPARATE page
+            # target (often a new window). The main session is bound
+            # to one target and cannot see them, so auth flows stall
+            # (this is exactly why notion/slack hit a login wall). If
+            # a new page target appeared since before the action,
+            # follow it: drive the account-chooser / Continue / Allow
+            # in a bounded sub-loop, then return to the main target.
+            try:
+                now_ids = {t["id"] for t in _page_targets(self.cdp_port)}
+                new_ids = now_ids - known_target_ids
+                known_target_ids = now_ids
+                for nid in new_ids:
+                    if nid == sess.target_id:
+                        continue
+                    self._handle_auth_popup(nid, subgoal, traj,
+                                            f"{tag}_popup")
+                    history.append(f"i{it}: handled popup target {nid[:8]}")
+            except Exception as e:
+                history.append(f"i{it}: popup-check error {e}")
+
             after = capture_screenshot(sess)
             (traj / f"{tag}_after.png").write_bytes(after)
 
