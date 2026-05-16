@@ -71,8 +71,10 @@ TASKS: list[Task] = [
          "Open Amazon, search for 'usb-c cable', and tell me the price of "
          "the first result. Do not add anything to the cart.", 16),
     Task("resy_restaurant", 1,
-         "Open resy.com, look at restaurants in New York, and tell me the "
-         "name of the first restaurant shown. Do not book anything.", 16),
+         "Open resy.com for New York and tell me the name of any one "
+         "restaurant that is featured or listed on the page (a venue "
+         "named in a featured article or card counts). Do not book "
+         "anything.", 14),
     Task("notion_recent", 1,
          "Open notion.so and tell me the title of the most recent or top "
          "page visible in the workspace sidebar.", 16),
