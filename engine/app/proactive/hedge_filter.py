@@ -12,15 +12,13 @@ For any utterance that passes Stage 1, decides:
                     utterance may still write to memory (sarcasm reveals
                     aversion — that's data).
 
-This module supports two backends, set at construction:
-
-  backend="cascade"  : few-shot prompt over the engine's free-tier cascade
-                       (Mistral → Gemini → Groq via llm_adapter). DEFAULT.
-                       Works today against the existing infra.
-  backend="adapter"  : the QLoRA adapter at
-                       ~/.anticipy/adapters/hedge_filter_v1/. Phase 1's
-                       trained-on-synthetic-data adapter — drops in
-                       transparently once available.
+Backend: a few-shot prompt over the portable model seam via
+llm_adapter. (A QLoRA adapter backend existed in the pre-P3 design;
+the P3 hedge rewrite replaced the live hedge stage with
+app/anticipy/hedge.py and that dead adapter path, the only
+environment assumption in this module, was removed in the P10
+final sweep. On this build's runtime path the sole thing imported
+from here is the HedgeResult contract, by intent_extraction.)
 
 The few-shot examples come from `engine/data/synth/gold_standard.jsonl`.
 We sample one row per boundary tag so the classifier sees the full
@@ -135,26 +133,24 @@ class HedgeResult:
 
 
 class HedgeFilter:
-    """Stage 1.5 classifier with two backends (cascade few-shot, QLoRA adapter)."""
+    """Stage 1.5 classifier over the portable model seam (few-shot)."""
 
     def __init__(
         self,
-        backend: Literal["cascade", "adapter"] = "cascade",
+        backend: Literal["cascade"] = "cascade",
         fewshot_count: int = 8,
         max_tokens: int = 400,
         gold_standard_path: Path = GOLD_STANDARD_PATH,
     ) -> None:
-        self.backend = backend
+        if backend != "cascade":
+            raise ValueError(
+                f"unknown hedge_filter backend: {backend!r} "
+                "(the QLoRA adapter backend was removed in P10)"
+            )
+        self.backend = "cascade"
         self.fewshot_count = fewshot_count
         self._gold = self._load_gold(gold_standard_path)
-        if backend == "cascade":
-            self._llm = make_json_llm_call(max_tokens=max_tokens)
-            self._adapter = None
-        elif backend == "adapter":
-            self._llm = None
-            self._adapter = self._load_adapter()
-        else:
-            raise ValueError(f"unknown hedge_filter backend: {backend!r}")
+        self._llm = make_json_llm_call(max_tokens=max_tokens)
 
     @staticmethod
     def _load_gold(path: Path) -> list[dict]:
@@ -172,24 +168,6 @@ class HedgeFilter:
                 except json.JSONDecodeError:
                     continue
         return rows
-
-    def _load_adapter(self):
-        """Load the Phase-1 QLoRA adapter. Imports mlx-lm lazily."""
-        try:
-            from mlx_lm import load  # type: ignore
-        except ImportError as e:
-            raise RuntimeError(
-                "mlx-lm is not installed. Run: uv pip install 'mlx-lm>=0.20'"
-            ) from e
-        adapter_dir = Path.home() / ".anticipy" / "adapters" / "hedge_filter_v1"
-        if not adapter_dir.exists():
-            raise RuntimeError(
-                f"QLoRA adapter not found at {adapter_dir}. Run Phase 1 fine-tune first."
-            )
-        return load(
-            "mlx-community/Qwen3-8B-MLX-4bit",
-            adapter_path=str(adapter_dir),
-        )
 
     def _build_fewshot_block(self) -> str:
         """Sample ONE example per boundary tag (or all if fewer than count)."""
@@ -224,9 +202,7 @@ class HedgeFilter:
         context: Optional[str] = None,
         user_memory_summary: Optional[str] = None,
     ) -> HedgeResult:
-        if self.backend == "cascade":
-            return await self._classify_cascade(utterance, context, user_memory_summary)
-        return self._classify_adapter(utterance, context, user_memory_summary)
+        return await self._classify_cascade(utterance, context, user_memory_summary)
 
     async def _classify_cascade(
         self,
@@ -257,30 +233,6 @@ class HedgeFilter:
                 confidence=0.0,
                 store_as_memory=None,
             )
-        return self._parse(raw, utterance)
-
-    def _classify_adapter(
-        self,
-        utterance: str,
-        context: Optional[str],
-        user_memory_summary: Optional[str],
-    ) -> HedgeResult:
-        """QLoRA adapter inference (Phase 1 trained). Sync — MLX LM
-        already runs locally so async wrapping just adds overhead.
-        """
-        from mlx_lm import generate  # type: ignore
-
-        prompt = _SYSTEM_PROMPT_TEMPLATE.replace(
-            "{FEWSHOT_EXAMPLES}", self._build_fewshot_block()
-        )
-        if context and context.strip():
-            prompt += f"\n\nPRIOR CONVERSATION:\n{context.strip()}"
-        if user_memory_summary and user_memory_summary.strip():
-            prompt += f"\n\nWEARER LONG-TERM MEMORY:\n{user_memory_summary.strip()}"
-        prompt += f"\n\nWEARER'S MOST RECENT UTTERANCE:\n{utterance.strip()}\n\nOUTPUT:"
-
-        model, tokenizer = self._adapter
-        raw = generate(model, tokenizer, prompt=prompt, max_tokens=400, verbose=False)
         return self._parse(raw, utterance)
 
     @staticmethod
