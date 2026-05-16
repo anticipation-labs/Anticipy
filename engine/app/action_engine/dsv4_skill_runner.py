@@ -665,6 +665,13 @@ _DECIDE_SYS = (
     "else action done."
 )
 
+class _NullLogger:
+    """Safe default before run() installs the real Supabase logger."""
+    def start_task(self, *a, **k): pass
+    def finish_task(self, *a, **k): pass
+    def log_step(self, *a, **k): pass
+
+
 _COMPLETE_SYS = (
     "Decide if the sub-goal is already satisfied by what is visible. "
     'Output ONLY JSON: {"done": true|false, "evidence": "one '
@@ -705,6 +712,9 @@ class DSv4SkillRunner:
     def __post_init__(self):
         self.client = self.client or OpenRouterClient()
         self.verifier = self.verifier or VisionVerifier(client=self.client)
+        # No-op logger until run() installs the real one. Lets
+        # _run_subtask be called directly (unit tests) without error.
+        self._logger = _NullLogger()
 
     def _txt_model(self) -> str:
         return self.force_model or TEXT_MODEL
@@ -1034,6 +1044,14 @@ class DSv4SkillRunner:
                 vconf = self._vision_confirm(
                     subgoal, base64.b64encode(before_norm).decode("ascii"))
                 if vconf[0]:
+                    try:
+                        self._logger.log_step(
+                            sub_idx, it, {"action": "done"}, ax,
+                            traj / f"{tag}_before.png", None,
+                            verifier_verdict="CERTIFIED",
+                            verifier_evidence=vconf[1])
+                    except Exception:
+                        pass
                     return {"subgoal": subgoal, "status": "SUCCESS",
                             "answer": "; ".join(ledger),
                             "evidence": f"vision-confirmed: {vconf[1]}",
@@ -1092,6 +1110,14 @@ class DSv4SkillRunner:
                 vc = self._vision_confirm(
                     subgoal, base64.b64encode(before_norm).decode("ascii"))
                 if vc[0]:
+                    try:
+                        self._logger.log_step(
+                            sub_idx, it, action, ax,
+                            traj / f"{tag}_before.png", None,
+                            verifier_verdict="CERTIFIED",
+                            verifier_evidence=vc[1], latency_decide_s=dlat)
+                    except Exception:
+                        pass
                     return {"subgoal": subgoal, "status": "SUCCESS",
                             "answer": ans or "; ".join(ledger),
                             "evidence": f"vision-confirmed: {vc[1]}",
@@ -1141,11 +1167,28 @@ class DSv4SkillRunner:
             after = capture_screenshot(sess)
             (traj / f"{tag}_after.png").write_bytes(after)
 
+            v = None
             if state_changing:
                 v = self.verifier.verify(action, before, after, subgoal)
                 (traj / f"{tag}_verdict.json").write_text(json.dumps({
                     "status": v.status, "evidence": v.evidence,
                     "confidence": v.confidence, "fellback": v.fellback}))
+
+            # V4-8: one row per dispatched iteration, regardless of
+            # whether a verifier verdict was produced (a quick
+            # navigate->done run still logs its step).
+            try:
+                self._logger.log_step(
+                    sub_idx, it, action, ax,
+                    traj / f"{tag}_before.png", traj / f"{tag}_after.png",
+                    verifier_verdict=(v.status if v else ""),
+                    verifier_evidence=(v.evidence if v else ""),
+                    verifier_confidence=(v.confidence if v else None),
+                    latency_decide_s=dlat)
+            except Exception:
+                pass
+
+            if state_changing:
                 # Progress proxy: a sheet/page being filled grows its
                 # visible text. If text grew since the best seen, the
                 # task IS advancing even when the verifier is strict on
@@ -1175,12 +1218,27 @@ class DSv4SkillRunner:
         traj.mkdir(parents=True, exist_ok=True)
         result = TaskResult(task=task, trajectory_dir=str(traj))
 
+        # V4-8: real-time trajectory logging (best-effort, never
+        # blocks/breaks the agent). Step calls happen inside the loop.
+        from .trajectory_logger import make_logger
+        self._logger = make_logger(task_id)
+        try:
+            self._logger.start_task(
+                task, model=self._vis_model(),
+                force_model=self.force_model)
+        except Exception:
+            pass
+
         try:
             sess = _connect_session_keepalive(
                 port=self.cdp_port, open_url=starting_url or "about:blank")
         except Exception as e:
             result.status = "ERROR"
             result.error = f"connect failed: {e}"
+            try:
+                self._logger.finish_task("ERROR", error=result.error)
+            except Exception:
+                pass
             self._write_manifest(traj, result)
             return result
 
@@ -1219,6 +1277,14 @@ class DSv4SkillRunner:
                 sess.close()
             except Exception:
                 pass
+
+        try:
+            self._logger.finish_task(
+                result.status, answer=result.answer,
+                evidence=result.evidence,
+                n_iterations=result.n_iterations, error=result.error)
+        except Exception:
+            pass
 
         self._write_manifest(traj, result)
         return result
