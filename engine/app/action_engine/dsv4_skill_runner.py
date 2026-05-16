@@ -253,26 +253,53 @@ _VK = {
     "Enter": 13, "Tab": 9, "Escape": 27, "Backspace": 8, "Delete": 46,
     "ArrowUp": 38, "ArrowDown": 40, "ArrowLeft": 37, "ArrowRight": 39,
     "Home": 36, "End": 35, "PageUp": 33, "PageDown": 34, "Space": 32,
+    "Control": 17, "Shift": 16, "Alt": 18, "Meta": 91,
 }
 
 
+_MOD_BITS = {"alt": 1, "control": 2, "ctrl": 2, "meta": 4, "cmd": 4,
+             "command": 4, "shift": 8}
+
+
 def _send_key(sess: CDPSession, keyname: str) -> None:
-    """Proper CDP keyDown/keyUp with virtual key codes. Verified live:
-    rawKeyDown (what the legacy dispatcher uses) is IGNORED by the
-    Google Sheets canvas grid; full keyDown/keyUp with
-    windows/nativeVirtualKeyCode IS honored once the grid has focus.
-    General: this is the correct way to drive any app by key."""
-    vk = _VK.get(keyname, 0)
-    text = "\r" if keyname == "Enter" else ("\t" if keyname == "Tab" else "")
-    down = {"type": "keyDown", "key": keyname, "code": keyname,
-            "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk}
+    """Proper CDP keyDown/keyUp with virtual key codes, including
+    modifier combos like 'Control+Enter' (Gmail send), 'Meta+Enter',
+    'Control+a'. rawKeyDown is ignored by canvas grids; full
+    keyDown/keyUp with windows/nativeVirtualKeyCode is honored.
+    General: the correct way to drive any app by key."""
+    parts = [p.strip() for p in str(keyname).split("+") if p.strip()]
+    mods = 0
+    main = parts[-1] if parts else "Enter"
+    for p in parts[:-1]:
+        mods |= _MOD_BITS.get(p.lower(), 0)
+    vk = _VK.get(main, 0)
+    text = ("\r" if main == "Enter" and mods == 0
+            else ("\t" if main == "Tab" and mods == 0 else ""))
+    held = []
+    for p in parts[:-1]:
+        name = {"ctrl": "Control", "cmd": "Meta", "command": "Meta"}.get(
+            p.lower(), p.capitalize())
+        mvk = _VK.get(name, 0)
+        sess.send("Input.dispatchKeyEvent",
+                  {"type": "rawKeyDown", "key": name, "code": name,
+                   "windowsVirtualKeyCode": mvk, "nativeVirtualKeyCode": mvk,
+                   "modifiers": mods}, timeout_s=6.0)
+        held.append((name, mvk))
+    down = {"type": "keyDown", "key": main, "code": main,
+            "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk,
+            "modifiers": mods}
     if text:
         down["text"] = text
     sess.send("Input.dispatchKeyEvent", down, timeout_s=6.0)
     sess.send("Input.dispatchKeyEvent",
-              {"type": "keyUp", "key": keyname, "code": keyname,
-               "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk},
-              timeout_s=6.0)
+              {"type": "keyUp", "key": main, "code": main,
+               "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk,
+               "modifiers": mods}, timeout_s=6.0)
+    for name, mvk in reversed(held):
+        sess.send("Input.dispatchKeyEvent",
+                  {"type": "keyUp", "key": name, "code": name,
+                   "windowsVirtualKeyCode": mvk, "nativeVirtualKeyCode": mvk},
+                  timeout_s=6.0)
 
 
 def _a1_to_colrow(ref: str) -> Optional[tuple[int, int]]:
@@ -585,9 +612,12 @@ _DECIDE_SYS = (
     "directly, with NO target_ref and NO click. "
     "3) key Tab to move to Subject, then type the subject. "
     "4) key Tab to move to the Body, then type the body. "
-    "5) click the Send button (@eN named 'Send'), or key "
-    "Control+Enter, to send. Do not click the To/Subject/Body "
-    "fields - just type and Tab between them.\n"
+    "5) IMMEDIATELY after the body is typed, the VERY NEXT action "
+    "must be key Control+Enter to send (Gmail's send shortcut). Do "
+    "NOT click anything, do NOT press Tab again, do NOT reopen "
+    "Compose, do NOT re-type fields - any extra action resets the "
+    "draft. Just key Control+Enter once. If the verifier shows the "
+    "compose closed / 'Message sent', action done.\n"
     "EXTRACTING an answer (the goal asks to 'tell me' / find a name, "
     "title, price, count): if the VISIBLE PAGE TEXT or the screenshot "
     "already shows it, immediately action done with the answer. Do "
