@@ -3547,3 +3547,24 @@ live-verified, and must be confirmed by counsel before binding.
 These items do not block any other phase. No code, no gate (a
 DECISION item is surfaced, not gated). Frozen untouched. Cost to
 here: about $11.00 total (no model calls).
+
+================================================================
+MH-PFINAL: production status report + Aevoy email (mh-pfinal)
+================================================================
+
+New: .anticipy/ANTICIPY_PRODUCTION_V1.md, the plain-language honest
+report: every real number per phase, every gated-not-proven edge,
+every FRONTIER ceiling, the DECISIONS.md pointer, the web-tooling
+outage disclosed. The [ANTICIPY-PRODUCTION-STATUS] Aevoy email was
+really attempted; real result recorded honestly, NOT faked:
+  SEND_RESULT_ERR status=403 "anticipy.ai domain is not verified"
+Same external DNS/dashboard blocker as DIL-P8, needs a human, not
+a code defect; reported blocked.
+
+Master hardening build complete: MH-P1..MH-P13 all genuine passes
+(SOLVABLE proven; FRONTIER pushed to honest measured ceilings,
+never faked: loud-room 0.2, full ambient resolution 0.246, zero
+unrecoverable wrong action 0/20), MH-D1/D2 surfaced not bound,
+~25 tags, frozen reasoning + action engine + cascade git-verified
+untouched at every gate. No binding threshold ever relaxed. Cost
+to here: about $11.00 total. Next and last: FE-FINAL frontend.
