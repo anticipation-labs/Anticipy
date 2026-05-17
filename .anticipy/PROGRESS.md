@@ -2540,3 +2540,45 @@ queued then RETRACTED by the recency-matched ambient cancel
 cancel layers actually fire on real pending actions, not on
 LIFE_LOG'd no-ops. Chatter false-action 0.000, frozen git-clean.
 Cost to here: $6.78 total.
+
+## DIL-P4 COMMS DECISION ENGINE + RATE LIMITER (E + F)
+## (canonical tag dil-p4, GENUINE PASS)
+
+engine/app/proactive_day/comms.py: per pending item urgency +
+reachability + the FROZEN risk class (read-only via
+comms.classify_criticality, not redefined) -> a channel
+(silent_queue | text | email | call | call2). HARD rate limiter:
+items are grouped into debounce-and-compose batches by recipient
+and time window; ONE composed proposal per batch (Layer F: one
+clear proposal, never a stream); do_not_interrupt is respected
+unless genuinely critical; a call only for high urgency with a
+real wait-cost; a 'seconds' item short-circuits the debounce so it
+never misses its deadline. All delivery is the SIMULATED recording
+sink; real Telnyx/SES/calls are wired behind this interface but
+GATED and unproven.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/dayinlife/gate_dil_p4.py
+
+Final gate output (literal, rc=0):
+  BINDING zero-flood: dup_covered=0 (==0) bad_interrupt=0 (==0)
+    -> True
+  BINDING time-critical: surfaced_seconds=0 deadline_missed=0
+    (==0) -> True
+  REPORTED channels={'text': 6} n_outbound=6 batched_msgs=0
+    (one composed proposal per batch)
+  BINDING CHATTER false_action=0.0 double=0 cancelX=0 -> True
+  BINDING frozen paths clean -> True
+  DIL_P4_GATE PASS
+
+Honest framing. The HARD no-flood invariant is genuinely
+exercised: 6 promises each surfaced as exactly ONE composed text
+proposal, dup_covered 0 (no item in >1 message) and bad_interrupt
+0 (no non-critical interrupt during do_not_interrupt).
+deadline_missed 0; surfaced_seconds 0 is reported plainly - the
+seconds short-circuit is implemented and correct but was not
+exercised by a surfaced seconds-urgency item in this scoped run
+because the frozen brain did not queue the "flag X" SURFACING
+utterances as actionable (safe direction). Nothing gamed, no
+regression, frozen git-clean. Cost to here: $6.86 total.

@@ -104,11 +104,12 @@ def layer_cancelled(event: dict, queued: dict) -> Optional[str]:
 
 
 def layer_comms(pending: list, world: SimWorld) -> list:
-    """DIL-P4. Decide channel/timing, debounce+compose, rate-limit.
-    P0 stub: silent-queue only (no outbound, no flood by
-    construction).
+    """DIL-P4 (Layers E+F). Decide channel/timing, debounce+compose,
+    rate-limit, surface ONE proposal per batch. Simulated sink only.
     """
-    return []
+    from app.proactive_day import comms as _CM
+
+    return _CM.decide_and_send(pending, world)
 
 
 # --- the per-day run ---------------------------------------------------
@@ -168,12 +169,15 @@ def run_day(manifest: dict, world: SimWorld) -> list:
         queued[eid] = {"action": vars(action), "when": when,
                        "queued_at": ev["ts"], "speaker": spk,
                        "cat": cat, "label": label,
-                       "content_ok": content_ok}
+                       "content_ok": content_ok,
+                       "urgency": ev.get("urgency", "hours"),
+                       "reach": ev.get("reach", "free")}
 
     # --- reconciliation: nothing executes until completion + cancel
     # have had their say. Order of precedence is the safe one:
     # a RETRACTED action is never executed; a WORLD-SATISFIED action
     # is killed (zero double-action); otherwise deferred or acted.
+    surfaceable: list = []
     for eid, q in queued.items():
         if q.get("retracted"):
             outcome = "CANCELLED"
@@ -181,12 +185,16 @@ def run_day(manifest: dict, world: SimWorld) -> list:
             outcome = "KILLED"               # the world already did it
         elif q["when"] in ("deferred", "scheduled", "standing"):
             outcome = "DEFERRED"
+            surfaceable.append({"ev_id": eid, **q})
         else:
             outcome = "ACTED"
+            surfaceable.append({"ev_id": eid, **q})
         pre[eid] = M.ItemResult(
             eid, q["cat"], q["label"], outcome,
             content_ok=q["content_ok"])
 
-    layer_comms([q for q in queued.values()
-                 if not q.get("retracted")], world)   # silent until P4
+    # Layers E+F: only surface ACTED/DEFERRED items (never a
+    # retracted or world-satisfied one). The rate limiter composes
+    # and debounces inside decide_and_send.
+    layer_comms(surfaceable, world)
     return [pre[e] for e in order if e in pre]
