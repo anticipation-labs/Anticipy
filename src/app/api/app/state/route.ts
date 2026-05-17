@@ -23,7 +23,7 @@ type Segment = {
 };
 
 async function engineReachable(): Promise<Segment> {
-  const url = process.env.NEXT_PUBLIC_ENGINE_URL;
+  const url = process.env.ENGINE_URL || process.env.NEXT_PUBLIC_ENGINE_URL;
   if (!url) {
     return {
       status: "gated",

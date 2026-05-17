@@ -196,6 +196,39 @@ export default function AnticipyApp() {
   const [view, setView] = useState<View>("entry");
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [run, setRun] = useState<{
+    proposal: string | null;
+    transcript: string;
+    engine_decision: string;
+    stages: { name: string; real: boolean; gated: boolean; detail: string }[];
+    gated?: boolean;
+    reason?: string;
+  } | null>(null);
+
+  const doListen = useCallback(async () => {
+    setRunning(true);
+    setRun(null);
+    try {
+      const r = await fetch("/api/app/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setRun(await r.json());
+    } catch (e) {
+      setRun({
+        proposal: null,
+        transcript: "",
+        engine_decision: "",
+        stages: [],
+        gated: true,
+        reason: "The run could not reach the engine. Honest state, not faked.",
+      });
+    } finally {
+      setRunning(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -374,19 +407,8 @@ export default function AnticipyApp() {
 
         {view === "listen" && (
           <div className="min-h-screen flex flex-col items-center
-          justify-center text-center max-w-[640px] mx-auto">
-            {state?.engine.status === "live" ? (
-              <>
-                <Orb live />
-                <p className="mt-12 text-[13px] uppercase tracking-[0.24em]
-                text-gold/70 fade-up">Listening</p>
-                <p className="mt-4 text-[15px] text-cream/50 fade-up"
-                  style={{ animationDelay: "120ms" }}>
-                  Anticipy is quietly with you. It will surface here only
-                  when it has caught something worth one clear question.
-                </p>
-              </>
-            ) : (
+          justify-center text-center max-w-[680px] mx-auto py-28">
+            {state?.engine.status !== "live" ? (
               <>
                 <Orb live={false} />
                 <p className="mt-12 text-[13px] uppercase tracking-[0.24em]
@@ -394,11 +416,88 @@ export default function AnticipyApp() {
                 <p className="mt-4 text-[14px] text-cream/45 leading-relaxed
                 fade-up max-w-[48ch]" style={{ animationDelay: "120ms" }}>
                   {state?.engine.detail ??
-                    "The live listening path is proven on the engine host (the real microphone to a real proposal ran end to end). From this origin it is an honest gated edge, shown as its real state, never a faked live orb or a fabricated proposal."}
+                    "No engine reachable from this origin. Honest gated state, never a faked live orb or a fabricated proposal."}
                 </p>
                 <Ghost onClick={() => setView("history")}>
                   See what it has handled
                 </Ghost>
+              </>
+            ) : run ? (
+              <div className="w-full fade-up">
+                {run.proposal ? (
+                  <div className="rounded-card border border-dark-border
+                  bg-dark-elevated px-8 py-9 text-left">
+                    <p className="text-[11px] uppercase tracking-[0.22em]
+                    text-gold/80 mb-4">Anticipy caught something</p>
+                    <p className="font-serif text-[clamp(20px,3vw,28px)]
+                    text-cream leading-snug">{run.proposal}</p>
+                    <p className="mt-5 text-[12.5px] text-cream/45
+                    leading-relaxed">
+                      Heard: {run.transcript || "(no transcript)"} . Reasoning
+                      decision: {run.engine_decision || "n/a"}.
+                    </p>
+                    <div className="mt-8 flex gap-3">
+                      <button className="rounded-pill bg-cream text-dark
+                      px-7 py-3 text-[13px] font-medium hover:bg-gold
+                      transition-colors">Yes, do it</button>
+                      <button className="rounded-pill border
+                      border-dark-border text-cream/70 px-7 py-3
+                      text-[13px] hover:text-cream transition-colors">
+                        No</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-card border border-dark-border
+                  bg-dark-elevated px-8 py-9 text-left">
+                    <p className="text-[13px] text-cream/80 font-medium">
+                      No proposal this run, honestly.
+                    </p>
+                    <p className="mt-3 text-[12.5px] text-cream/45
+                    leading-relaxed">{run.reason ||
+                      "The pipeline ran but did not surface a proposal."}</p>
+                  </div>
+                )}
+                <div className="mt-8 grid gap-px bg-dark-border
+                rounded-card overflow-hidden text-left">
+                  {run.stages?.map((s, i) => (
+                    <div key={i} className="bg-dark-elevated px-5 py-3
+                    flex items-start gap-3">
+                      <span className={`text-[10px] uppercase
+                      tracking-wider mt-[2px] ${s.real ? "text-gold/80"
+                        : "text-cream/35"}`}>
+                        {s.real ? "real" : s.gated ? "gated" : "fail"}
+                      </span>
+                      <div>
+                        <p className="text-[12.5px] text-cream/80">
+                          {s.name}</p>
+                        <p className="text-[11.5px] text-cream/40
+                        leading-relaxed">{s.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={doListen}
+                  className="mt-8 text-[13px] text-cream/45
+                  hover:text-cream/80 underline-offset-4 hover:underline">
+                  Listen again
+                </button>
+              </div>
+            ) : (
+              <>
+                <Orb live={running} />
+                <p className="mt-12 text-[13px] uppercase tracking-[0.24em]
+                text-gold/70 fade-up">
+                  {running ? "Listening, running the real pipeline"
+                    : "Engine live"}</p>
+                <p className="mt-4 text-[14px] text-cream/50 fade-up
+                max-w-[48ch]" style={{ animationDelay: "120ms" }}>
+                  {running
+                    ? "Real audio is going through the real stack, the real reasoning engine, and the real browser action. This takes a minute; nothing is mocked."
+                    : "Press Listen. Real spoken audio runs the whole real pipeline and a real proposal returns here."}
+                </p>
+                {!running && (
+                  <Primary onClick={doListen}>Listen</Primary>
+                )}
               </>
             )}
           </div>
