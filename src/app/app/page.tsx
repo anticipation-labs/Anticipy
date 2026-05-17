@@ -441,9 +441,27 @@ export default function AnticipyApp() {
             <Sub>
               The desktop app is the calm home for everything. It runs quietly
               in the background and surfaces only when there is something worth
-              your attention. The build is unsigned: on first launch,
-              right-click the app and choose Open.
+              your attention.
             </Sub>
+            <div
+              className="mt-8 rounded-card border border-dark-border bg-dark-elevated px-6 py-5 max-w-[560px] fade-up"
+              style={{ animationDelay: "180ms" }}
+            >
+              <p className="text-[12px] uppercase tracking-[0.18em] text-gold/80 mb-3">
+                First launch (the app is not yet Apple-notarized)
+              </p>
+              <ol className="text-[13px] text-cream/55 leading-relaxed list-decimal pl-5 space-y-1">
+                <li>Open the downloaded Anticipy.dmg and drag Anticipy to Applications.</li>
+                <li>In Applications, right-click Anticipy and choose Open, then Open again.</li>
+                <li>If macOS still says it is damaged, open Terminal and run: xattr -dr com.apple.quarantine /Applications/Anticipy.app, then open it.</li>
+              </ol>
+              <p className="mt-3 text-[11.5px] text-cream/30 leading-relaxed">
+                These steps are the normal one-time cost of an unsigned build.
+                Zero-friction install for everyone requires Apple notarization
+                (an Apple Developer account); that step is honestly not done
+                yet and is not faked.
+              </p>
+            </div>
             <div>
               <Primary href="/download">Download for macOS</Primary>
               <Ghost onClick={() => setView("onboarding")}>
