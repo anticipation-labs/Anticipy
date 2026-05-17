@@ -3529,3 +3529,21 @@ rather than ever wrong-acting. Imperfect resolution is safe BY
 DESIGN (ask, never guess), which is the point of a FRONTIER item:
 the honest number is reported, the safety is absolute. No binding
 relaxed, frozen git-clean. Cost to here: about $11.00 total.
+
+================================================================
+MH-D1 + MH-D2: DECISION items surfaced (not bound)
+================================================================
+
+DECISION class. New: .anticipy/DECISIONS.md. MH-D1 (privacy /
+consent / recording non-consenting people) and MH-D2 (data
+lifecycle: retention, deletion, export, wipe-on-cancel,
+encryption-at-rest) are surfaced with the real options, honest
+tradeoffs, and a recommended default each, plus the explicit
+statement that the binding choice is the founder's (with counsel).
+The agent did NOT invent a binding policy. The web-tooling outage
+is disclosed at the top of DECISIONS.md: the legal framework is
+documented-knowledge, stable long-standing consent doctrine, NOT
+live-verified, and must be confirmed by counsel before binding.
+These items do not block any other phase. No code, no gate (a
+DECISION item is surfaced, not gated). Frozen untouched. Cost to
+here: about $11.00 total (no model calls).
