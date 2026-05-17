@@ -3219,3 +3219,37 @@ instead of blindly continuing; the unapplied ops stayed unapplied
 (not a silent half-completion, it is surfaced for the wearer).
 Deterministic. No binding relaxed, frozen git-clean. Cost to here:
 about $10.30 total.
+
+================================================================
+MH-P7: multi-action conflict resolution (mh-p7, genuine PASS)
+================================================================
+
+SOLVABLE. New: engine/app/recovery/conflicts.py +
+engine/tests/e2e/gate_mh_p7.py. Extends the
+completion/cancel idea to action-invalidates-action WITHOUT
+modifying the frozen engine or the DIL completion module. A
+single executor guard (safe_to_execute) is the only thing the
+side-effecting path needs to call.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p7.py
+
+Literal output (rc=0):
+  stale=['dinner-7pm','dinner-8pm'] cancelled=['cab']
+    killed=['old-email']
+  BINDING zero stale execution (all 4 blocked by the guard)
+    -> True
+  BINDING dinner winner=dinner-830 (newest only) -> True
+  BINDING zero double-booking: per-resource={'dinner':1,
+    'flowers':1} executed=['dinner-830','flowers'] -> True
+  BINDING frozen paths clean -> True
+  MH_P7_GATE PASS
+
+Honest framing: three conflicting dinner reservations (7pm -> 8pm
+-> 8:30) collapse to ONLY the newest executing; the two superseded
+ones are stale and the executor guard refuses them; a cancelled
+cab and a world-already-satisfied email are also blocked. Zero
+stale-action execution, zero double-booking (exactly one execution
+per resource). Deterministic. No binding relaxed, frozen
+git-clean. Cost to here: about $10.30 total.
