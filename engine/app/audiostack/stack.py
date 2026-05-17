@@ -128,11 +128,14 @@ def _layer2_directed_or_degraded(utts, anchor, episode):
 
 
 def _layer3_slot_trust(utt):
-    """P3 fills this. Returns ('FIRE'|'CONFIRM', reason). P0 stub:
-    never blind-fire -> CONFIRM is the safe placeholder, but P0 never
-    reaches here because L1/L2 stubs admit nothing.
+    """Layer 3: returns ('FIRE'|'CONFIRM', reason). Delegates to
+    layer3.slot_trust which never FIREs on a low-confidence
+    load-bearing slot (verb / person / date / amount).
     """
-    return "CONFIRM", "p0-stub"
+    from app.audiostack import layer3
+
+    verdict, reason, _detail = layer3.slot_trust(utt)
+    return verdict, reason
 
 
 class AudioStack:
@@ -202,20 +205,40 @@ class AudioStack:
             return (StackDecision("LIFE_LOG", "not_wearer_conversation"), utts)
 
         # a candidate exists: Layer 3 decides fire vs confirm. Never
-        # blind-fire a low-confidence load-bearing slot.
+        # blind-fire a low-confidence load-bearing slot. On CONFIRM,
+        # send EXACTLY ONE short confirmation over the existing comms
+        # path (never a bombardment: one message per pending action).
         for u in candidates:
             verdict, why = _layer3_slot_trust(u)
             if verdict == "FIRE":
                 self._emit(u, episode)
                 return (StackDecision("ACTIONABLE", f"member+slots_ok:{why}",
                                       emitted_text=u.text), utts)
+            q = self._send_one_confirmation(u, why, episode)
             return (StackDecision("CONFIRM", f"low_conf_slot:{why}",
-                                   confirm_question=f"did you mean: {u.text}?"),
-                    utts)
+                                   confirm_question=q), utts)
         self._demote_all(utts, "no_fireable_candidate", episode)
         return (StackDecision("LIFE_LOG", "no_fireable_candidate"), utts)
 
     # --- sinks -------------------------------------------------------
+    def _send_one_confirmation(self, u: Utterance, why: str,
+                               episode: dict) -> str:
+        """Exactly ONE short confirmation over the existing comms seam
+        (test-mode recorder now, real Telnyx/SES later, same shape).
+        One message per pending action: never a bombardment.
+        """
+        from app.anticipy import platform_adapter
+        from app.audiostack import layer3
+
+        q = layer3.confirm_question(u, {})
+        platform_adapter.comms_send({
+            "task_id": f"astack-confirm-{episode.get('category', 'x')}",
+            "user_id": self.user_id, "channel": "text",
+            "body": q, "criticality": "non_critical",
+            "options": ["yes", "no"], "ts": episode.get("ts", 0.0),
+        })
+        return q
+
     def _emit(self, u: Utterance, episode: dict) -> None:
         from app.anticipy import platform_adapter
 
