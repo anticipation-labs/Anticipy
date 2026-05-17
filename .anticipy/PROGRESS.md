@@ -3324,3 +3324,61 @@ production trace store is a table; the gate uses an exact JSON
 round-trip so reconstruction is proven from PERSISTED bytes, not
 live objects. Deterministic. No binding relaxed, frozen git-clean.
 Cost to here: about $10.30 total.
+
+================================================================
+MH-P10: onboarding + cold-start experience (mh-p10, genuine PASS
+after a caught vacuous-pass)
+================================================================
+
+SOLVABLE. New: engine/app/coldstart/ramp.py (+ __init__) +
+engine/tests/e2e/gate_mh_p10.py. The ACT threshold is the FROZEN
+autonomy ramp REUSED READ-ONLY (app.anticipy.autonomy.act_threshold:
+COLD_START 0.97 pre-onboarding, ONBOARDED 0.92 -> SEASONED/FLOOR
+0.85 as trajectory_confidence accrues). Never redefined. This
+layer adds only the non-annoying ask budget + the trust-earning
+loop. Frozen untouched.
+
+Honest iteration (the no-faked-green discipline applied to my own
+work): the first version FED THE FROZEN RAMP AN EMPTY PROFILE, so
+it returned a flat COLD_START 0.97 every day and auto-acts were
+[0,0,0]; the gate still went green because the "trust earned"
+check was a vacuous 0>=0. That is the exact "safe because it does
+nothing" degenerate I rejected at DIL-P6. It was caught, not
+shipped: I probed the real frozen ramp curve, found it only
+graduates once the profile is POPULATED (post onboarding intake)
+and trajectory_confidence accrues, fixed the layer to model that
+real transition, and rewrote the gate to bind on GENUINE
+graduation with real non-zero numbers.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p10.py
+
+Literal output (rc=0), simulated new user's first 4 days:
+  thresholds/day = [0.97, 0.8854, 0.8508, 0.85]
+  auto-acts/day  = [0, 1, 3, 3]
+  asks/day       = [4, 4, 2, 2]
+  tconf trace    = [0.48, 0.96, 1.0, 1.0]
+  BINDING conservative cold start: day0 thr=0.97 (==COLD_START)
+    day0 acts=0 -> True
+  BINDING real ramp movement: thresholds strictly decreasing
+    -> True
+  BINDING genuine graduation: auto-acts non-decreasing and final
+    3 > 0 and > day0 0 -> True
+  BINDING non-annoying: max asks/day=4 (cap 4) -> True
+  BINDING safety intact: chatter_false_action=0
+    ultra_high_unconfirmed=0 min_thr=0.85 >=FLOOR 0.85 -> True
+  BINDING trust earned across days: 0.48 -> 1.0 -> True
+  BINDING frozen paths clean -> True
+  MH_P10_GATE PASS
+
+Honest framing: day 0 is genuinely conservative (COLD_START 0.97,
+zero auto-acts: the system confirms, it does not guess on a user
+it does not know); over the next days the FROZEN ramp lowers the
+bar as confirmed interactions earn trust, and auto-acts genuinely
+rise 0 -> 1 -> 3 (real graduation, not a vacuous pass), while asks
+stay within the non-annoying cap and drop as more items auto-act.
+Chatter is never actioned, an ultra-high item is never auto-acted,
+and the bar never goes below the frozen FLOOR 0.85, on any day. No
+binding relaxed, frozen git-clean. Cost to here: about $10.30
+total.
