@@ -3428,3 +3428,61 @@ a gated unproven edge. The mitigation is escalate-only backstop +
 frozen hard-stop + human confirm, never a claim of perfection. No
 binding relaxed, frozen git-clean. Cost to here: about $10.50
 total.
+
+================================================================
+MH-P12: loud-room understanding (mh-p12, FRONTIER, genuine PASS
+on bindings; HONEST 0.2 ceiling, NOT improved, stated plainly)
+================================================================
+
+FRONTIER. New: engine/app/proactive_day/loudroom_v2.py +
+engine/tests/e2e/gate_mh_p12.py. Composes dil-p7's loudroom
+primitives (read-only) + a joint life-consistent beam recovery
+(negative-enrollment-inspired, arXiv 2502.16611 in spirit), gate-
+swapped (no pipeline or frozen edit). Web-research tools still
+infra-down (recorded); methods from documented practice + the
+repo's dil-p7 work, labelled.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p12.py
+
+Literal output (rc=0):
+  BINDING adversarial loud-chatter false_action=0.0 (<=0.02)
+    -> True
+  BINDING loud-scoped hard zeros (chat + loud) all==0 -> True
+  BINDING v2 not harmful: dil-p7_hardened=0.2 -> mh-p12_v2=0.2
+    (v2 >= baseline) -> True
+  REPORTED loud true-pass (FRONTIER, honest, NOT inflated): dil-p7
+    hardened baseline=0.2 -> MH-P12 joint-recovery=0.2
+    improved=False
+  REPORTED hardware gap: text-level corpus only; real two-mic
+    spatial front end GATED/unproven, faked=False; corpus-to-
+    hardware gap unmeasured, NOT closed by assertion.
+  BINDING frozen paths clean -> True
+  MH_P12_GATE PASS
+
+HONEST FRONTIER framing (the important part, not buried): the
+bindings hold but the FRONTIER objective "improve past the 0.2
+ceiling" was NOT achieved, and that is reported as a fact, not
+hidden behind the green. A deterministic measurement of the fixed
+adversarial loud corpus shows WHY: of the 10 loud items only 2 are
+genuinely recoverable concrete promises after the corruption
+("forward the signed contract to Priya", "send the contractor the
+signed contract") and BOTH are recovered (0.2). The other 8 are
+vague-reference templates ("send it to them", "move that to
+Thursday", "tell them I'll be late"), a no-action-verb promise
+("let me check and get back to Sean"), or a memory-alias ("the
+usual") -- for every one of those CONFIRM is the CORRECT safe
+outcome; recovering them would require GUESSING, which is forbidden
+and would breach the loud false-action binding. So no SAFE method
+can exceed ~0.2 on this corpus at text level: two distinct
+principled approaches (dil-p7 single-anchor, MH-P12 joint-beam)
+each recover exactly the recoverable 2 and each correctly refuse
+to guess the other 8. The genuine lift requires the two-mic
+spatial front end, which recovers the acoustic signal BEFORE ASR
+destroys it; that is GATED hardware, labelled, the gap stated and
+NOT closed by assertion. Per the FRONTIER rule this is the honest
+ceiling reported as measured, not faked to a target, and not
+thrashed with guess-y methods to inflate a non-binding number. No
+binding relaxed, frozen git-clean. Cost to here: about $10.70
+total.
