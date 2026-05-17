@@ -2414,3 +2414,51 @@ governing prompt explicitly redirected the build away from the
 audio stack ("the product is not the audio stack"). They are
 SUPERSEDED by the DIL build, not blocked. Cost to here: $6.55
 total.
+
+## DIL-P1 RESOLUTION ENGINE (Layer A)
+## (canonical tag dil-p1, GENUINE PASS)
+
+engine/app/proactive_day/resolve.py: resolves it/them/that/the-
+usual against the day's conversation memory + contacts/calendar/
+files with a per-reference confidence, deterministically (recency
++ account match, never an LLM hallucinating a referent). HARD safe
+rule: an action proceeds only if EVERY load-bearing reference
+clears the bar; otherwise it CONFIRMs with a one-line question
+naming the unresolved reference. The pipeline reuses the FROZEN
+reasoning engine read-only (ProactiveEngine.decide over the
+existing seam) to judge 'is this an actionable instruction at all'
+- chatter / hypothetical / 3rd-party -> not an instruction ->
+LIFE_LOG - then Layer A resolves the variables. Frozen engine NOT
+modified (git-clean).
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/dayinlife/gate_dil_p1.py
+
+Final gate output (literal, rc=0):
+  ALREADY_DONE      n=8  false_action 0.0  dbl 0  cancelX 0
+  AMBIENT_CANCEL    n=16 false_action 0.0  dbl 0  cancelX 0
+  CHATTER           n=20 false_action 0.0
+  VAGUE_VARIABLE    n=12 confirm 1.0
+  BINDING chatter_false_action=0.0 (<=0.02) double_actions=0
+    acted_after_cancel=0 floods=0 deadline_missed=0
+  BINDING VAGUE_VARIABLE acted_on_unresolved=0 (==0) -> True
+  REPORTED VAGUE_VARIABLE resolved_or_confirmed=1.0 of n=12
+    (target >=0.80; MEETS)
+  BINDING CHATTER false_action=0.0 (<=0.02) -> True
+  BINDING double_actions=0 / acted_after_cancel=0 -> True
+  BINDING frozen paths clean -> True
+  DIL_P1_GATE PASS
+
+Honest framing. The BINDING safe property holds: zero act on an
+unresolved reference (acted_on_unresolved=0), and chatter false-
+action 0.000 (the frozen brain refuses storytelling/hypothetical/
+3rd-party). VAGUE_VARIABLE resolved_or_confirmed=1.0: every vague
+item was correctly CONFIRMED (all 12 went to a one-line confirm
+naming the unresolved reference) - the correct safe direction when
+the references are genuinely vague in isolation; in the full day
+(DIL-P6) accumulated memory will resolve more of them outright.
+true_pass-by-ACT is 0 here by safe construction and is reported
+plainly, not gamed. Over-action is the disaster; the design answer
+is confirm/under-action, never a silent wrong action. Cost to
+here: $6.62 total.

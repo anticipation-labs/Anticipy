@@ -22,12 +22,53 @@ from app.proactive_day.world import SimWorld
 
 # --- layer hook points. P0 ships safe stubs; P1..P7 replace each. ---
 
-def layer_resolve(event: dict, world: SimWorld):
-    """DIL-P1. Resolve it/them/that/the-usual/when against the day +
-    accounts; return (resolved_action|None, all_refs_confident: bool).
-    P0 stub: unresolved (safe -> not actionable).
+def frozen_is_instruction(event: dict) -> str:
+    """Reuse the FROZEN reasoning engine (read-only, via its public
+    decide over the existing seam shape) to decide whether this
+    utterance is an actionable wearer instruction at all. This is the
+    validated hedge/demand/addressee brain (0.0 over-action on hard
+    negatives in the reasoning build); chatter / hypothetical /
+    3rd-party -> IGNORE/STORE -> not an instruction. The frozen
+    engine is NOT modified. Returns the raw decision string.
     """
-    return None, False
+    import asyncio
+
+    from app.anticipy.proactive_engine import ProactiveEngine
+    from app.anticipy.seams import UserContext, UserProfile
+
+    spk = event.get("speaker", "WEARER")
+    line = [{"speaker_id": "WEARER" if spk == "WEARER" else "S1",
+             "text": event.get("text", ""), "ts": float(event.get("ts", 0))}]
+    ctx = UserContext.from_profile(UserProfile(
+        user_id="dil-wearer", name="Omar", role_title="Founder",
+        what_they_do="runs an AI hardware startup",
+        mandate="Handle scheduling, dinner and email proactively. "
+                "Do not touch payroll or legal.",
+        people={"the boss": "Dana", "us": "Omar and Priya"},
+        trajectory_confidence=0.0, days_since_onboard=3))
+    try:
+        r = asyncio.run(ProactiveEngine().decide(line, ctx, "mac_mic"))
+        return getattr(r, "decision", "IGNORE")
+    except Exception:
+        return "IGNORE"   # fail SAFE: not an instruction
+
+
+def layer_resolve(event: dict, world: SimWorld):
+    """DIL-P1 (Layer A). Returns (ResolvedAction|None, all_confident).
+    Only consults resolution if the FROZEN engine judged this an
+    actionable instruction; chatter -> (None, False) -> LIFE_LOG.
+    An unresolved reference is NEVER guessed (safe direction).
+    """
+    from app.proactive_day import resolve as _R
+
+    decision = frozen_is_instruction(event)
+    if decision not in ("ACT", "ASK"):
+        return None, False, "not_instruction"     # -> LIFE_LOG
+    ra = _R.resolve(event.get("text", ""), world,
+                    named_thing=event.get("slots", {}).get("thing"),
+                    named_person=event.get("slots", {}).get("name"))
+    return ra, ra.all_confident, ("ok" if ra.all_confident
+                                  else f"unresolved:{ra.unresolved}")
 
 
 def layer_timing(event: dict, action, world: SimWorld) -> str:
@@ -38,11 +79,17 @@ def layer_timing(event: dict, action, world: SimWorld) -> str:
 
 
 def layer_completed(action, world: SimWorld) -> bool:
-    """DIL-P3. True if the world already satisfied this action (kill,
-    zero double-act). P0 stub conservatively True only via the world
-    helper, so a satisfied action is never re-done.
+    """DIL-P3 (the world helper is live from P1). True if the world
+    already satisfied this action by ANY means -> kill it, zero
+    double-act. Accepts a ResolvedAction or a dict.
     """
-    return world.already_satisfied(action or {})
+    if action is None:
+        return False
+    a = action if isinstance(action, dict) else {
+        "kind": getattr(action, "kind", None),
+        "target": getattr(action, "target", None),
+        "object": getattr(action, "object", None)}
+    return world.already_satisfied(a)
 
 
 def layer_cancelled(event: dict, queued: dict) -> Optional[str]:
@@ -93,9 +140,9 @@ def run_day(manifest: dict, world: SimWorld) -> list:
             results.append(M.ItemResult(eid, cat, label, "CANCELLED"))
             continue
 
-        action, refs_ok = layer_resolve(ev, world)
+        action, refs_ok, why = layer_resolve(ev, world)
 
-        # safe default / completion / cancel guards (hold at P0)
+        # completion guard (the world already did it by other means)
         if action is not None and layer_completed(action, world):
             results.append(M.ItemResult(eid, cat, label, "KILLED"))
             continue
@@ -103,31 +150,32 @@ def run_day(manifest: dict, world: SimWorld) -> list:
             results.append(M.ItemResult(eid, cat, label, "CANCELLED"))
             continue
 
-        if action is None or not refs_ok:
-            # cannot trust -> the safe direction
-            outcome = "LIFE_LOG" if label == "LIFE_LOG" else "CONFIRMED"
-            if label == "LIFE_LOG":
-                outcome = "LIFE_LOG"
-            elif label == "KILL":
-                # an ALREADY_DONE whose action never resolved at P0:
-                # still never actioned -> not a double-action.
-                outcome = "LIFE_LOG"
-            elif label == "CANCEL":
-                outcome = "CANCELLED"
-            else:
-                outcome = "CONFIRMED"
-            results.append(M.ItemResult(eid, cat, label, outcome))
+        # the safe asymmetric direction, decided from CONTENT (the
+        # frozen engine's instruction judgement + Layer A resolution),
+        # NEVER from the mix-time label:
+        #  not an instruction (chatter/hypothetical/3rd-party) -> LIFE_LOG
+        #  an instruction with an unresolved load-bearing ref  -> CONFIRM
+        if action is None:
+            results.append(M.ItemResult(eid, cat, label, "LIFE_LOG"))
+            continue
+        if not refs_ok:
+            results.append(M.ItemResult(eid, cat, label, "CONFIRMED"))
             continue
 
         when = layer_timing(ev, action, world)
         if when in ("deferred", "scheduled", "standing"):
-            queued[eid] = {"action": action, "when": when}
+            queued[eid] = {"action": vars(action), "when": when}
             results.append(M.ItemResult(eid, cat, label, "DEFERRED"))
             continue
 
-        queued[eid] = {"action": action, "when": "now"}
+        queued[eid] = {"action": vars(action), "when": "now"}
+        # content_ok: a confidently-resolved action that did not act on
+        # any None reference (zero act on unresolved is structural:
+        # unresolved -> CONFIRMED above, never reaches here).
+        content_ok = (action.verb != "" and not (
+            action.kind in ("send_email",) and action.target is None))
         results.append(M.ItemResult(eid, cat, label, "ACTED",
-                                    content_ok=True))
+                                    content_ok=content_ok))
 
     layer_comms(list(queued.values()), world)   # P0: no-op (silent)
     return results
