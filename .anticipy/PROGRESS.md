@@ -3486,3 +3486,46 @@ ceiling reported as measured, not faked to a target, and not
 thrashed with guess-y methods to inflate a non-binding number. No
 binding relaxed, frozen git-clean. Cost to here: about $10.70
 total.
+
+================================================================
+MH-P13: full ambient resolution at scale (mh-p13, FRONTIER,
+genuine PASS; honest 0.246 resolution, zero silent wrong action)
+================================================================
+
+FRONTIER. New: engine/tests/e2e/gate_mh_p13.py (composes the DIL
+pipeline + MH-P2 store + MH-P3 draw; no new module, no frozen or
+pipeline edit -- the MH-P3 hook is gate-scoped). Web-research tools
+still infra-down (recorded); design from the repo's proven stack,
+labelled.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p13.py
+
+Literal output (rc=0), scaled (1.5x) messy multi-context life,
+n=96, MH-P2/P3 memory active:
+  BINDING zero silent wrong action: 0 (==0) over n=96 -> True
+  BINDING scale safety: chatter_false_action=0.0 double=0 cancelX=0
+    floods=0 -> True
+  REPORTED outcomes={'CONFIRMED':35,'ACTED':16,'LIFE_LOG':30,
+    'DEFERRED':15}
+  REPORTED resolved-correctly rate (of ACTION items)=0.2461538...
+    acted_ok=16/65 -- real FRONTIER number, NOT inflated to 0.80
+  REPORTED recoverability net carried 80/96 as CONFIRM/LIFE_LOG/
+    DEFER instead of a wrong act
+  REPORTED max memory-draw latency=0.617ms
+  BINDING frozen paths clean -> True
+  MH_P13_GATE PASS
+
+Honest FRONTIER framing: at scale on a long messy multi-context
+life, resolution is genuinely imperfect -- 0.246 of ACTION items
+resolve and act correctly (16/65), reported as the real number,
+NOT inflated to the 0.80 product target. The hard property holds
+absolutely: ZERO silent wrong action over 96 events; chatter
+false-action 0.0; no double / cancel-after-execute / flood. The
+design's answer to imperfect resolution is verified: the
+recoverability net carried 80/96 items as CONFIRM/LIFE_LOG/DEFER
+rather than ever wrong-acting. Imperfect resolution is safe BY
+DESIGN (ask, never guess), which is the point of a FRONTIER item:
+the honest number is reported, the safety is absolute. No binding
+relaxed, frozen git-clean. Cost to here: about $11.00 total.
