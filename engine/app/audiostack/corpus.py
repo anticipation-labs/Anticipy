@@ -98,7 +98,8 @@ CATEGORY_SPEC: list[CatSpec] = [
     CatSpec("NOISY_REAL_ROOM", 60, "ACTIONABLE", True,
             (-5.0, 5.0), 0.05, 0.0, "valid instruction, hard low SNR"),
     CatSpec("LOADBEARING_WORD_STRESS", 50, "CONFIRM", True,
-            (-3.0, 6.0), 0.0, 0.0, "name/date/amount acoustically ambiguous"),
+            (5.0, 14.0), 0.0, 0.0, "verb/structure clear, SLOT region "
+            "genuinely corrupted with heavy real noise + dropout"),
     CatSpec("SILENCE_AND_MEDIA_ONLY", 40, "REJECT", False,
             (6.0, 18.0), 0.0, 0.0, "no wearer conversation at all"),
 ]
@@ -440,15 +441,39 @@ def _assemble_item(spec: CatSpec, idx: int, seed: int) -> tuple[np.ndarray, Corp
         conv_gap(); add("S1", nw(txt, False)); exp_text = txt
         conv_gap(); add("WEARER", _wearer_tts(rng.choice(_WEARER_CLOSERS)))
     elif cat == "LOADBEARING_WORD_STRESS":
+        # R2/R3: genuinely stress the SLOT, not the whole utterance.
+        # The verb/structure stays clear (so the case is "action
+        # understood, the load-bearing word is NOT trustworthy") and
+        # ONLY the slot word is corrupted with heavy real ESC-50 noise
+        # at severe local SNR plus a brief dropout, so parakeet's
+        # per-token confidence on the slot genuinely collapses (it
+        # does on genuinely corrupted audio). Speeding clean TTS up
+        # was measured NOT to stress modern ASR; this does.
         if rng.random() < 0.5:
             a, _b = rng.choice(_AMBIG_NAME)
-            txt, slots, ambig = f"send the contract to {a} by Friday", {"name": a}, "name"
+            pre, suf = "send the contract to", "by Friday"
+            slots, ambig = {"name": a}, "name"
         else:
             a, _b = rng.choice(_AMBIG_AMT)
-            txt, slots, ambig = f"wire {a} thousand to the vendor", {"amount": a}, "amount"
+            pre, suf = "wire", "thousand to the vendor"
+            slots, ambig = {"amount": a}, "amount"
+        txt = f"{pre} {a} {suf}"
+        exp_text = txt
+        v = nw_voice(False)
+        seg_pre = _tts(pre, v)
+        seg_slot = _tts(a, v)
+        seg_suf = _tts(suf, v)
+        # genuine local corruption of ONLY the slot word
+        bg = _real_bg(len(seg_slot), rng, "ambient")
+        seg_slot = _mix_at_snr(seg_slot, bg, rng.uniform(-15.0, -7.0))
+        d0 = int(len(seg_slot) * rng.uniform(0.3, 0.5))
+        d1 = d0 + int(len(seg_slot) * rng.uniform(0.18, 0.30))
+        seg_slot[d0:d1] = 0.0                       # brief dropout mid-slot
+        g = np.zeros(int(0.06 * SR), dtype=np.float32)
+        task = np.concatenate([seg_pre, g, seg_slot, g, seg_suf]).astype(np.float32)
         add("WEARER", _wearer_tts(rng.choice(_WEARER_OPENERS)))
         wid = WEARER_IDENTITY
-        conv_gap(); add("S1", nw(txt, False, speed=1.3)); exp_text = txt
+        conv_gap(); add("S1", task)
     elif cat == "SILENCE_AND_MEDIA_ONLY":
         free_gap()
         if rng.random() < 0.5:

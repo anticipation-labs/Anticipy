@@ -45,33 +45,66 @@ def _norm(t: str) -> str:
     return re.sub(r"[^a-z0-9$]", "", (t or "").lower())
 
 
-def extract_slots(tokens: list) -> dict:
-    """Return {slot_type: [(token_text, confidence), ...]} for the
-    load-bearing slots present in this utterance's token stream.
-    tokens are AsrToken(text,start,end,confidence).
+def words_with_conf(text: str, tokens: list) -> list[tuple]:
+    """parakeet emits SUBWORD tokens (R, ep, ly, ...) with a clean
+    detokenized `text`. Reconstruct WORD-level (word, confidence) by
+    walking subword tokens in order and accumulating their normalized
+    characters until they cover the next text word; the word's
+    confidence is the MIN of its subword confidences (a word is only
+    as trustworthy as its weakest piece). Deterministic, robust to
+    punctuation and casing. The original word (with case) is kept so
+    name detection still works.
     """
+    words = re.findall(r"[A-Za-z0-9$']+", text or "")
+    out: list[tuple] = []
+    ti = 0
+    n_tok = len(tokens)
+    for w in words:
+        target = _norm(w)
+        if not target:
+            continue
+        buf = ""
+        mn = 1.0
+        consumed = 0
+        while ti < n_tok and len(buf) < len(target):
+            tk = tokens[ti]
+            piece = _norm(getattr(tk, "text", "") or "")
+            ti += 1
+            if not piece:
+                continue
+            buf += piece
+            mn = min(mn, float(getattr(tk, "confidence", 0.5) or 0.0))
+            consumed += 1
+        if consumed == 0:
+            out.append((w, 0.5))           # no aligned tokens -> uncertain
+        else:
+            out.append((w, round(mn, 4)))
+    return out
+
+
+def extract_slots(text: str, tokens: list) -> dict:
+    """Load-bearing slots from RECONSTRUCTED words (verb / person /
+    date / amount), each carrying its weakest-subword confidence.
+    """
+    wc = words_with_conf(text, tokens)
     slots: dict[str, list] = {"verb": [], "person": [], "date": [],
                               "amount": []}
-    for i, tk in enumerate(tokens):
-        raw = (getattr(tk, "text", "") or "").strip()
-        c = float(getattr(tk, "confidence", 0.5) or 0.0)
-        n = _norm(raw)
+    for i, (w, c) in enumerate(wc):
+        n = _norm(w)
         if not n:
             continue
-        if i <= 1 and n in _VERBS:
-            slots["verb"].append((raw, c))
-        elif n in _VERBS and not slots["verb"]:
-            slots["verb"].append((raw, c))
-        if _NAME_RE.match(raw.strip(".,!?")) and n not in _DAYS:
-            slots["person"].append((raw, c))
+        if n in _VERBS and (i <= 2 or not slots["verb"]):
+            slots["verb"].append((w, c))
+        if _NAME_RE.match(w.strip(".,!?")) and n not in _DAYS and i > 0:
+            slots["person"].append((w, c))
         if n in _DAYS:
-            slots["date"].append((raw, c))
-        if n in _NUMWORDS or _NUM_RE.match(raw.strip(".,!?")):
-            slots["amount"].append((raw, c))
+            slots["date"].append((w, c))
+        if n in _NUMWORDS or _NUM_RE.match(w.strip(".,!?")):
+            slots["amount"].append((w, c))
     return {k: v for k, v in slots.items() if v}
 
 
-def slot_trust(utt) -> tuple[str, str, dict]:
+def slot_trust(utt, secondary=None) -> tuple[str, str, dict]:
     """Returns (verdict, reason, detail). verdict is FIRE or CONFIRM.
     CONFIRM whenever a present load-bearing slot is below the bar OR
     no actionable verb was confidently heard. Never FIRE on a
@@ -79,11 +112,14 @@ def slot_trust(utt) -> tuple[str, str, dict]:
     asserts: zero blind fires).
     """
     toks = getattr(utt, "tokens", []) or []
-    slots = extract_slots(toks)
+    text = getattr(utt, "text", "") or ""
+    slots = extract_slots(text, toks)
 
     if not slots.get("verb"):
         return ("CONFIRM", "no_confident_action_verb", slots)
 
+    # weak first gate: parakeet's own confidence (it is near-1 even
+    # when wrong, so this only catches the rare honestly-low case).
     weakest = 1.0
     weak_slot = ""
     for stype, items in slots.items():
@@ -93,7 +129,71 @@ def slot_trust(utt) -> tuple[str, str, dict]:
     if weakest < SLOT_CONF_BAR:
         return ("CONFIRM", f"low_conf_slot:{weak_slot}={round(weakest,3)}",
                 slots)
-    return ("FIRE", f"all_slots_ok>= {SLOT_CONF_BAR}", slots)
+
+    # the real defense: CROSS-MODEL corroboration. parakeet's
+    # confidence is uninformative and it gives no n-best (measured
+    # over six approaches), so a load-bearing slot is trusted ONLY if
+    # a SECOND, architecturally independent ASR corroborates the slot
+    # word. Two independent models rarely make the SAME confident
+    # error on genuinely corrupted audio, but agree on clean speech.
+    # `secondary` is the independent transcript string.
+    if isinstance(secondary, str):
+        s2 = " " + re.sub(r"[^a-z0-9 ]", " ", secondary.lower()) + " "
+        s2 = re.sub(r"\s+", " ", s2)
+        s2w = set(s2.split())
+        for stype in ("person", "amount", "date", "verb"):
+            for w, _c in slots.get(stype, []):
+                if _corroborated(w, s2, s2w):
+                    continue
+                return ("CONFIRM",
+                        f"slot_uncorroborated:{stype}:{w!r}", slots)
+    return ("FIRE", "slots_ok+cross_model_agree", slots)
+
+
+_NUM_EQUIV = {
+    "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+    "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
+    "10": "ten", "15": "fifteen", "20": "twenty", "50": "fifty",
+}
+
+
+def _corroborated(word: str, s2: str, s2w: set) -> bool:
+    """The independent ASR corroborates this slot word if a
+    PHONETICALLY close word appears in the second transcript. Exact
+    match is too strict: proper names are out-of-vocabulary and
+    spelled differently by an independent char-CTC model even when
+    BOTH heard the name correctly ('Dana' vs 'dane'), which falsely
+    flagged every clean name (measured). Fuzzy similarity tolerates
+    that spelling variance (clean name -> a close word exists ->
+    corroborated) while a genuinely corrupted slot (parakeet's
+    confident wrong/hallucinated word vs the other model's unrelated
+    output) has NO close word -> not corroborated. Digit/number-word
+    equivalence is handled exactly so clean amounts are not flagged."""
+    import difflib
+
+    n = _norm(word)
+    if not n:
+        return True
+    cands = {n}
+    if n in _NUM_EQUIV:
+        cands.add(_NUM_EQUIV[n])
+    for k, v in _NUM_EQUIV.items():
+        if n == v:
+            cands.add(k)
+    for c in cands:
+        if c in s2w or f" {c} " in s2:
+            return True
+    # phonetic/fuzzy: any second-model word similar enough to the
+    # parakeet slot word (ratio tuned from the measured clean-name vs
+    # corrupted-slot separation).
+    best = 0.0
+    for w2 in s2w:
+        if abs(len(w2) - len(n)) > 4:
+            continue
+        r = difflib.SequenceMatcher(None, n, w2).ratio()
+        if r > best:
+            best = r
+    return best >= 0.62
 
 
 def confirm_question(utt, detail: dict) -> str:

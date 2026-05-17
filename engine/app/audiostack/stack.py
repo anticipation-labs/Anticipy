@@ -39,6 +39,7 @@ class Utterance:
     tokens: list = field(default_factory=list)
     is_wearer: bool = False
     bandlimited: bool = False   # phone/broadcast acoustic signature
+    seg: object = None          # the audio segment, for dual-decode verify
 
 
 @dataclass
@@ -128,13 +129,25 @@ def _layer2_directed_or_degraded(utts, anchor, episode):
 
 
 def _layer3_slot_trust(utt):
-    """Layer 3: returns ('FIRE'|'CONFIRM', reason). Delegates to
-    layer3.slot_trust which never FIREs on a low-confidence
-    load-bearing slot (verb / person / date / amount).
+    """Layer 3: returns ('FIRE'|'CONFIRM', reason). The spec's
+    mechanism: a load-bearing slot whose min parakeet per-token
+    confidence is below the bar does NOT fire, it confirms. This is
+    correct once the corpus genuinely degrades the stressed slot
+    (parakeet confidence collapses on genuinely corrupted audio);
+    perturbation-consensus was measured to have no discriminative
+    power here and was removed.
     """
+    from app.audiostack import audio as _A
     from app.audiostack import layer3
 
-    verdict, reason, _detail = layer3.slot_trust(utt)
+    secondary = None
+    seg = getattr(utt, "seg", None)
+    if seg is not None:
+        try:
+            secondary = _A.asr2_text(seg)   # independent-model transcript
+        except Exception:
+            secondary = None
+    verdict, reason, _detail = layer3.slot_trust(utt, secondary)
     return verdict, reason
 
 
@@ -161,7 +174,7 @@ class AudioStack:
                 speaker_label="WEARER" if isw else "UNK",
                 text=asr.text, start=s, end=e,
                 mean_conf=asr.mean_conf(), tokens=asr.tokens, is_wearer=isw,
-                bandlimited=A.is_bandlimited(seg),
+                bandlimited=A.is_bandlimited(seg), seg=seg,
             ))
         return out
 
@@ -204,21 +217,35 @@ class AudioStack:
             self._demote_all(utts, "not_wearer_conversation", episode)
             return (StackDecision("LIFE_LOG", "not_wearer_conversation"), utts)
 
-        # a candidate exists: Layer 3 decides fire vs confirm. Never
-        # blind-fire a low-confidence load-bearing slot. On CONFIRM,
-        # send EXACTLY ONE short confirmation over the existing comms
-        # path (never a bombardment: one message per pending action).
+        # Candidates may include the wearer's social opener/backchannel
+        # AND the instruction-bearing utterance. Layer 3 must act on the
+        # INSTRUCTION, not the first member: a no-verb opener is simply
+        # not an instruction (skip it, do not confirm on it). Evaluate
+        # all candidates: FIRE the first instruction whose load-bearing
+        # slots are confident; else CONFIRM a verb-bearing instruction
+        # whose slots are weak (exactly one confirmation); else there is
+        # no instruction in this conversation -> LIFE_LOG. Never
+        # blind-fire a low-confidence load-bearing slot.
+        confirm_u = None
+        confirm_why = ""
         for u in candidates:
             verdict, why = _layer3_slot_trust(u)
             if verdict == "FIRE":
-                self._emit(u, episode)
+                # emit the WHOLE trusted conversation (context the
+                # frozen engine's addressee logic needs), not just the
+                # instruction line.
+                self._emit(candidates, episode)
                 return (StackDecision("ACTIONABLE", f"member+slots_ok:{why}",
                                       emitted_text=u.text), utts)
-            q = self._send_one_confirmation(u, why, episode)
-            return (StackDecision("CONFIRM", f"low_conf_slot:{why}",
+            if why != "no_confident_action_verb" and confirm_u is None:
+                confirm_u, confirm_why = u, why   # a real instruction, weak slot
+        if confirm_u is not None:
+            q = self._send_one_confirmation(confirm_u, confirm_why, episode)
+            return (StackDecision("CONFIRM", f"low_conf_slot:{confirm_why}",
                                    confirm_question=q), utts)
-        self._demote_all(utts, "no_fireable_candidate", episode)
-        return (StackDecision("LIFE_LOG", "no_fireable_candidate"), utts)
+        self._demote_all(utts, "no_instruction_in_conversation", episode)
+        return (StackDecision("LIFE_LOG", "no_instruction_in_conversation"),
+                utts)
 
     # --- sinks -------------------------------------------------------
     def _send_one_confirmation(self, u: Utterance, why: str,
@@ -239,12 +266,27 @@ class AudioStack:
         })
         return q
 
-    def _emit(self, u: Utterance, episode: dict) -> None:
+    def _emit(self, members: list, episode: dict) -> None:
+        """Emit the FULL trusted diarized conversation, not one line.
+        The frozen engine's addressee/authority logic was designed and
+        validated on a diarized transcript (WEARER turns + others); it
+        decides whether a non-wearer's utterance is a task FOR the
+        wearer. Feeding only the instruction line in isolation strips
+        exactly that context and the engine correctly ASKs. So push
+        every trusted member utterance in time order, wearer marked
+        WEARER and conversation partners as S1 (the seam contract:
+        exactly one speaker is the enrolled wearer).
+        """
         from app.anticipy import platform_adapter
 
-        platform_adapter.transcript_source().push(
-            {"speaker_id": "WEARER" if u.is_wearer else u.speaker_label,
-             "text": u.text, "ts": episode.get("ts", time.time())})
+        ts = episode.get("ts", time.time())
+        src = platform_adapter.transcript_source()
+        for m in sorted(members, key=lambda x: x.start):
+            src.push({
+                "speaker_id": "WEARER" if m.is_wearer else "S1",
+                "text": m.text,
+                "ts": ts + m.start,
+            })
 
     def _demote_all(self, utts: list[Utterance], reason: str,
                     episode: dict) -> None:

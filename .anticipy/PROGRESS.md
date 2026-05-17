@@ -2132,3 +2132,96 @@ audio scores lower (P7 restates). The NOISY true-pass of 0 at
 unconfirmed firing at that SNR; the system stays safe and
 recoverable (confirm, never blind-act), which is the whole point of
 Layer 3.
+
+## ASTACK P3/P4 BLOCKER — HONEST CORRECTION + AEVOY ESCALATION
+## (the earlier astack-p3-trust PASS was FALSE; binding LOADBEARING
+##  zero-blind-fire-at-usable-true-pass is not achievable with the
+##  available offline ASR stack. Spec sec 2/7: stop, report, email.)
+
+Honest correction. The earlier astack-p3-trust gate PASS was a
+FALSE pass. While wiring P4 (full stack into the frozen engine) the
+end-to-end run produced ZERO ACTs. Root cause, measured: Layer 3
+slot extraction matched whole words against parakeet tokens, but
+parakeet emits SUBWORD tokens (R, ep, ly, ...), so the action verb
+was NEVER extracted and EVERY item returned CONFIRM
+no_confident_action_verb. The P3 zero-blind-fire invariant only
+"held" because nothing ever fired. Three genuine pipeline bugs were
+then found and fixed (real progress, kept): (1) subword->word
+reconstruction aligning tokens to parakeet's clean detokenized
+text; (2) evaluate ALL candidates, not the first (a wearer social
+opener has no verb and is not the instruction); (3) emit the FULL
+diarized conversation, not one isolated line, so the frozen engine's
+addressee/authority logic gets its context. After these, the
+end-to-end path genuinely works for CLEAN instructions: measured
+WEARER_DIRECT 3/3 ACT, BOSS_INSTRUCTION 2/3 ACT via the frozen
+engine's real boss_to_wearer/agent_direct logic. The frozen
+reasoning system and action engine remain git-clean throughout.
+
+But with the corrected (real) Layer 3, LOADBEARING_WORD_STRESS
+blind-fires on the misheard load-bearing slot, and EIGHT distinct
+principled approaches were implemented and MEASURED, none of which
+achieves the binding requirement (zero blind fire on a low-
+confidence load-bearing slot AND >=0.90 true-pass on clean
+WEARER_DIRECT/BOSS) on the available offline ASR stack:
+
+  1. parakeet per-token self-confidence: ~0.99 even on genuinely
+     destroyed audio -> 5/15 blind fires. Uninformative.
+  2. raw-vs-denoise re-decode agreement: parakeet stably wrong ->
+     no disagreement -> 4/15 blind fires.
+  3. acoustic rate/SNR stress separation: LOADBEARING rate 6.2
+     SNR 19.5 vs WEARER 7.7/25.0 vs BOSS 6.0/21.5 -> distributions
+     overlap, no separation.
+  4. time-warp consensus (0.85x/1.0x/1.2x): no discriminative
+     power; flagged clean WEARER_DIRECT 5/6 CONFIRM (true-pass
+     destroyed) while still missing LOADBEARING.
+  5. genuine local slot corruption (heavy real ESC-50 at -7..-15 dB
+     + dropout ON the slot word) + per-token confidence: parakeet
+     STILL >=0.70 on the destroyed slot -> 6/6 LOADBEARING FIRE.
+  6. slot-region acoustic clarity (dropout frac / local RMS):
+     ~0.13 dropout and ~1.2 rms-ratio for BOTH corrupted and clean
+     (it is just normal speech pauses) -> no separation.
+  7. cross-model EXACT word agreement (parakeet + independent
+     torchaudio HUBERT_ASR_LARGE): clean proper names are OOV and
+     spelled differently by the char-CTC model -> every clean name
+     uncorroborated -> WEARER_DIRECT 6/6 CONFIRM (true-pass 0).
+  8. cross-model PHONETIC/fuzzy agreement (SequenceMatcher >=0.62):
+     still cannot separate -> clean names uncorroborated AND some
+     corrupted slots spuriously corroborated (LOADBEARING 2/6
+     FIRE, WEARER_DIRECT 5/6 CONFIRM).
+
+This is the spec sec 7 condition: a genuine architectural problem
+tuning cannot fix, far past the two-attempt-plus-alternative bound
+(sec 2). Continuing to a ninth approach would be the "thrashing"
+the rule explicitly forbids. No P3 pass is faked and the binding
+zero-blind-fire requirement is NOT weakened.
+
+Most likely cause. The spec's Layer-3 design assumes the ASR
+exposes a usable per-token uncertainty. parakeet-mlx does not (its
+confidence is ~1.0 regardless of audio quality and it returns no
+n-best/lattice); and an independent second ASR disagrees on clean
+out-of-vocabulary proper names even when both heard them correctly,
+so cross-model verification cannot distinguish a clean name slot
+from a confidently-misheard one without also confirming clean names
+(which fails the binding WEARER_DIRECT/BOSS >=0.90 true-pass). The
+binding LOADBEARING guarantee at usable true-pass is not reachable
+with the offline ASR stack available in this environment.
+
+Decision needed (in the Aevoy email). One of: (a) adopt an ASR
+that exposes real token/word uncertainty (lattice/n-best/calibrated
+confidence) or a word-level confidence model, as the load-bearing
+verifier (an architecture/dependency decision); OR (b) accept the
+safe-but-conservative behaviour as the product contract for any
+instruction carrying a name/amount/date slot (always CONFIRM on a
+load-bearing slot -> zero blind fire by construction, but
+WEARER_DIRECT/BOSS true-pass becomes confirm-gated and cannot meet
+>=0.90 unconfirmed) and relax those true-pass targets to the honest
+ceiling accordingly; OR (c) descope LOADBEARING_WORD_STRESS as a
+known limitation of the synthetic+offline-ASR setup, certified only
+that the system never blind-fires because it confirms all load-
+bearing slots. P2 is unaffected and PASSED; P0/P1/P2 tags stand.
+
+Per spec sec 2/7: stopping P3/P4 here, this honest blocker recorded
+with literal evidence, and ONE [ANTICIPY-Q] audiostack blocker
+phase P3 email sent (or its delivery status recorded honestly if
+the aevoy@anticipy.ai Resend domain is still unverified, as in the
+prior build). Cost to here: $6.27 total.

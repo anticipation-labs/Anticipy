@@ -225,6 +225,80 @@ def denoise(wav: np.ndarray) -> np.ndarray:
     return (y / m * 0.97).astype(np.float32) if m > 1.0 else y
 
 
+_asr2 = None
+
+
+def _get_asr2():
+    """A SECOND, architecturally independent ASR (torchaudio
+    HUBERT_ASR_LARGE, a wav2vec2/HuBERT CTC model, vs parakeet's
+    TDT). Two independent models rarely make the SAME confident error
+    on genuinely corrupted audio, while they agree on clean speech.
+    That cross-model agreement is the load-bearing-slot trust signal,
+    because parakeet's own confidence is uninformative (measured ~1.0
+    even on destroyed audio) and it exposes no n-best. Offline,
+    torchaudio-hosted weights, no credential.
+    """
+    global _asr2
+    if _asr2 is None:
+        import torchaudio
+
+        _models_dir()
+        b = torchaudio.pipelines.HUBERT_ASR_LARGE
+        _asr2 = (b, b.get_model().eval(), b.get_labels())
+    return _asr2
+
+
+def asr2_text(wav: np.ndarray) -> str:
+    """Independent-model transcript (greedy CTC), lowercase words.
+    Empty string on failure so the caller fails closed (a slot the
+    second model cannot corroborate is treated as untrusted)."""
+    if wav is None or len(wav) < int(0.2 * SR):
+        return ""
+    try:
+        import torch
+
+        _b, model, labels = _get_asr2()
+        with torch.inference_mode():
+            t = torch.from_numpy(np.asarray(wav, dtype=np.float32)).unsqueeze(0)
+            emis, _ = model(t)
+            idx = torch.argmax(emis[0], dim=-1).tolist()
+        out = []
+        prev = None
+        for i in idx:
+            if i != prev and 0 <= i < len(labels):
+                out.append(labels[i])
+            prev = i
+        text = "".join(out).replace("|", " ").strip().lower()
+        return text
+    except Exception:
+        return ""
+
+
+def asr_consensus(wav: np.ndarray) -> list:
+    """Transcribe the SAME audio under TIME-WARP perturbations
+    (0.85x, 1.0x, 1.2x tempo, pitch preserved). A clearly spoken
+    load-bearing word is stable under modest time-warp; a marginal /
+    acoustically confusable word rendered under stress FLIPS between
+    the warps. Cross-warp disagreement is the TRUE model-uncertainty
+    signal: parakeet's own confidence is ~0.99 even when confidently
+    wrong (measured), it returns no n-best, and raw-vs-denoise is too
+    weak a perturbation (it stays stably wrong). Time-warp perturbs
+    the frame alignment enough to expose the ambiguity. General and
+    ASR-model-agnostic, not tuned to any corpus word list.
+    """
+    x = np.asarray(wav, dtype=np.float32)
+    res = [asr_tokens(x)]
+    try:
+        import librosa
+
+        for rate in (0.85, 1.2):
+            w = librosa.effects.time_stretch(x, rate=rate).astype(np.float32)
+            res.append(asr_tokens(w))
+    except Exception:
+        pass
+    return res
+
+
 def speaker_embed(wav: np.ndarray) -> np.ndarray:
     """L2-normalized 256-d GE2E speaker vector, on denoised audio.
     Offline, deterministic. Returns a zero vector on too-short/empty
