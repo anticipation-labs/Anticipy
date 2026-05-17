@@ -3289,3 +3289,38 @@ under, never over); a spend-velocity spike is hard-killed; and a
 calm legitimate 20-call load is completely unaffected (zero false
 kill, zero false throttle). Deterministic. No binding relaxed,
 frozen git-clean. Cost to here: about $10.30 total.
+
+================================================================
+MH-P9: observability per-decision trace (mh-p9, genuine PASS)
+================================================================
+
+SOLVABLE. New: engine/app/observ/trace.py (+ __init__) +
+engine/tests/e2e/gate_mh_p9.py. Frozen untouched. One structured
+append-only trace per decision (heard/attributed/gate/resolved/
+timing/reconcile/comms/outcome), JSON-persisted, per-user
+queryable, with reconstruct() and root_cause() derived ONLY from
+the stored bytes.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p9.py
+
+Literal output (rc=0): a synthetic wrong-action recorded, the live
+object DELETED, then answered from persisted bytes alone:
+  BINDING user-scoped query: rows=1 other_user=0 -> True
+  BINDING reconstructable from persisted trace alone: complete=True
+    all_stages_in_narrative=True -> True
+  BINDING root cause identified: "low-confidence ref 'the deck'
+    resolved to 'Q2_OLD.pdf' at conf=0.52 (source memory_draw) yet
+    the action proceeded" -> True
+  BINDING frozen paths clean -> True
+  MH_P9_GATE PASS
+
+Honest framing: support can answer "why did it send that?" for one
+user's one complaint entirely from the stored trace, with the live
+state discarded; every stage is present and the single decisive
+wrong step (a sub-threshold ref that proceeded) is named. The
+production trace store is a table; the gate uses an exact JSON
+round-trip so reconstruction is proven from PERSISTED bytes, not
+live objects. Deterministic. No binding relaxed, frozen git-clean.
+Cost to here: about $10.30 total.
