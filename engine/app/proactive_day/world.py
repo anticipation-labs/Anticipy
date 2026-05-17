@@ -72,8 +72,18 @@ class SimWorld:
         obj = str(a.get("object", "")).lower()
         for w in self.world_actions:
             if kind == "send_email" and w["kind"] == "email_sent":
-                if (tgt and tgt in str(w.get("to", "")).lower()) or (
-                        obj and obj in str(w.get("subject", "")).lower()):
+                # SAME task only if BOTH recipient and subject
+                # correspond. A shared recipient alone (an unrelated
+                # promise to the same person) or a shared topic alone
+                # (a different promise about the same file) is a
+                # DIFFERENT task and must NOT be silently killed. A
+                # genuine already-done always carries both the same
+                # recipient and the same subject, so every real
+                # double-send is still killed: zero double-action is
+                # preserved while distinct real promises survive.
+                to_l = str(w.get("to", "")).lower()
+                sub_l = str(w.get("subject", "")).lower()
+                if (tgt and tgt in to_l) and (obj and obj in sub_l):
                     return True
             if kind == "calendar" and w["kind"] == "calendar_changed":
                 if obj and obj in str(w.get("title", "")).lower():
