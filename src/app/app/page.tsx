@@ -444,22 +444,29 @@ export default function AnticipyApp() {
               your attention.
             </Sub>
             <div
-              className="mt-8 rounded-card border border-dark-border bg-dark-elevated px-6 py-5 max-w-[560px] fade-up"
+              className="mt-8 rounded-card border border-dark-border bg-dark-elevated px-6 py-5 max-w-[600px] fade-up"
               style={{ animationDelay: "180ms" }}
             >
               <p className="text-[12px] uppercase tracking-[0.18em] text-gold/80 mb-3">
-                First launch (the app is not yet Apple-notarized)
+                Install (the app is not yet Apple-notarized)
               </p>
-              <ol className="text-[13px] text-cream/55 leading-relaxed list-decimal pl-5 space-y-1">
-                <li>Open the downloaded Anticipy.dmg and drag Anticipy to Applications.</li>
-                <li>In Applications, right-click Anticipy and choose Open, then Open again.</li>
-                <li>If macOS still says it is damaged, open Terminal and run: xattr -dr com.apple.quarantine /Applications/Anticipy.app, then open it.</li>
-              </ol>
+              <p className="text-[13px] text-cream/55 leading-relaxed mb-2">
+                Fastest, opens cleanly. Paste this one line into Terminal:
+              </p>
+              <code className="block rounded-md bg-dark border border-dark-border px-4 py-3 text-[12.5px] text-gold/90 select-all break-all">
+                curl -fsSL https://www.anticipy.ai/install.sh | bash
+              </code>
+              <p className="mt-4 text-[13px] text-cream/55 leading-relaxed">
+                Prefer no Terminal? Click Download, open the .dmg, drag
+                Anticipy to Applications. If macOS says it is damaged, go to
+                System Settings, Privacy and Security, scroll down, and click
+                Open Anyway for Anticipy, then open it again.
+              </p>
               <p className="mt-3 text-[11.5px] text-cream/30 leading-relaxed">
-                These steps are the normal one-time cost of an unsigned build.
-                Zero-friction install for everyone requires Apple notarization
-                (an Apple Developer account); that step is honestly not done
-                yet and is not faked.
+                This one-time step is the normal cost of an un-notarized build.
+                The only way to remove it entirely for everyone is Apple
+                notarization, which needs an Apple Developer account. That is
+                honestly not done yet and is not faked.
               </p>
             </div>
             <div>
