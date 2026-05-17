@@ -177,7 +177,28 @@ def run_day(manifest: dict, world: SimWorld) -> list:
             ev_eff["text"] = pval                # the learned expansion
             trusted = True                       # wearer-confirmed standing
 
+        # Layer I (DIL-P7): a loud-restaurant line is not heard
+        # cleanly. Model the corruption (the only transcript the
+        # system actually has; the clean slot oracle is NOT
+        # available in noise) BEFORE any decision, then harden the
+        # resolved action against it. A strict no-op for clean tiers
+        # (guarded), so no other category can regress.
+        from app.proactive_day import loudroom as _LR
+
+        loud = ev_eff.get("snr_tier") == _LR.LOUD_TIER
+        asr_conf = 1.0
+        if loud:
+            ev_eff = dict(ev_eff)
+            g, asr_conf = _LR.degrade(ev_eff.get("text", ""),
+                                      _LR.LOUD_TIER)
+            ev_eff["text"] = g
+            ev_eff["slots"] = {}                 # no clean oracle in noise
+
         action, refs_ok, why = layer_resolve(ev_eff, world, trusted)
+        if loud and action is not None:
+            action, refs_ok = _LR.harden(
+                action, refs_ok, asr_conf, world,
+                ev_eff.get("text", ""))
         if action is None:                       # not an instruction
             pre[eid] = M.ItemResult(eid, cat, label, "LIFE_LOG")
             continue
