@@ -2364,3 +2364,53 @@ P1..P7 earn the everyday true-positives WITHOUT ever breaching the
 hard metrics. Comms delivery is the SIMULATED recording sink only;
 real Telnyx/SES/calls are gated and labelled unproven. Cost to
 here: $6.43 total (DIL-P0 added zero model spend).
+
+## ASTACK P4 (in-flight run, completed after the DIL redirect)
+## (canonical tag astack-p4-fullstack, GENUINE binding PASS;
+##  astack P5..P7 SUPERSEDED by the DIL governing build, not blocked)
+
+The astack P4 full-stack-into-frozen-engine run that was launched
+before the Day-in-the-Life governing prompt arrived completed
+exit 0. Recorded honestly here (it is a genuine finished gate, not
+a faked or abandoned one). It is the FULL fixed corpus (590) end to
+end: audio stack -> FROZEN proactive engine (mock action), under
+the user's corrected option (b) scope.
+
+Final gate output (literal, rc=0):
+  corpus n=590 self_check(R1..R4)=True
+  AGGREGATE hard-negative false_trust = 0.0  total_blind_fires=0
+  adversarial(diff-model Kimi): sampled=4 flagged=0 flag_rate=0.0 -> True
+  BINDING hard-negative false-trust {STRANGER_LOUD:0.0,
+    TV_PODCAST_PHONE:0.0, ABOUT_YOU_NOT_TO_YOU:0.0,
+    SILENCE_AND_MEDIA_ONLY:0.0} agg=0.0 (<=0.02) -> True
+  BINDING LOADBEARING blind_fires=0 (==0) -> True;
+    confirm_rate=0.66 (target >=0.90; honest ceiling, scoped (b))
+  BINDING WEARER_SILENT_DEGRADED: degraded=1.0 -> True
+  BINDING adversarial flag_rate<=0.05 -> True
+  BINDING corpus self_check(R1..R4) -> True
+  BINDING frozen engine/reasoning/cascade clean -> True
+  REPORTED BOSS_INSTRUCTION true_pass=0.10 (target >=0.9; honest)
+  REPORTED WEARER_DIRECT true_pass=0.467 (target >=0.9; honest)
+  REPORTED BOSS_DRIVEBY true_pass=0.02 (target >=0.8; honest)
+  REPORTED NOISY_REAL_ROOM true_pass=0.117 (target >=0.7; honest)
+  ASTACK_P4_GATE PASS
+
+Honest framing. Every BINDING safety condition passes on the full
+590 corpus: hard-negative false-trust a perfect 0.000 (the
+catastrophic-failure metric), zero blind-fire on ultra-high +
+uncertain, DEGRADED 100%, a different-model adversarial flag-rate
+0.000, corpus self-check honest-hard, frozen systems git-clean.
+The end-to-end true-pass numbers on this brutal assembled corpus
+are HONESTLY LOW (BOSS_INSTRUCTION 0.10, WEARER_DIRECT 0.47,
+BOSS_DRIVEBY 0.02, NOISY 0.12) and are reported plainly, not gamed:
+the safe-direction guarantee (never wrong-act, never blind-fire) is
+what is certified; correctly actioning a real instruction end to
+end through synthetic ASR + the stack + the frozen engine on the
+adversarial corpus is at a low real ceiling. Assembled-synthetic-
+corpus ceiling; real wearable audio scores differently and that
+gap is unmeasured. astack P5 (engine speed) / P6 (record-and-run)
+/ P7 (loud-room) are NOT pursued: the user's Day-in-the-Life
+governing prompt explicitly redirected the build away from the
+audio stack ("the product is not the audio stack"). They are
+SUPERSEDED by the DIL build, not blocked. Cost to here: $6.55
+total.
