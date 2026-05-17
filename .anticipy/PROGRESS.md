@@ -3105,3 +3105,38 @@ the draw is unreachable for chatter because the frozen gate
 IGNOREs it first). Retrieval latency 0.155ms is far inside the
 hard 25ms budget. No binding relaxed, frozen git-clean. Cost to
 here: about $10.30 total.
+
+================================================================
+MH-P4: offline buffer + sync (mh-p4, genuine PASS)
+================================================================
+
+SOLVABLE. New: engine/app/offline/buffer.py (+ __init__) +
+engine/tests/e2e/gate_mh_p4.py. Frozen untouched. Append-only,
+crash-safe, Fernet-encrypted local capture reusing the repo's
+EXISTING key scheme (PROFILE_ENCRYPTION_KEY else device-derived
+sha256 seed; never a new credential). Content-hash idempotency key
++ a durable delivered-set carried across reconnect attempts.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p4.py
+
+Literal output (rc=0), scripted disconnect -> flaky reconnect:
+  captured tokens on disk = 21 (20 distinct + 1 redelivered)
+  BINDING encrypted-at-rest (no plaintext payload on disk) -> True
+  partial s1.delivered=8 s2.delivered=12 s3.delivered=0
+    s3.skipped_dupes=21
+  BINDING zero-loss: 20/20 distinct events delivered -> True
+  BINDING zero-double: total deliveries=20 (==N=20)
+    skipped(dupe+resynced)=30 -> True
+  BINDING idempotent re-sync: deliveries unchanged (20==20) -> True
+  BINDING frozen paths clean -> True
+  MH_P4_GATE PASS
+
+Honest framing: a real connection-drop mid-sync (after 8 of 21),
+a full resync, a redelivery storm, and an exact content-duplicate
+were all exercised; every distinct event was delivered exactly
+once (zero loss), nothing twice (zero double-processing), and the
+on-disk bytes are genuine Fernet ciphertext (no plaintext payload
+present). Deterministic, no model calls. No binding relaxed,
+frozen git-clean. Cost to here: about $10.30 total.
