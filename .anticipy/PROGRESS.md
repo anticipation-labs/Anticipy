@@ -3253,3 +3253,39 @@ cab and a world-already-satisfied email are also blocked. Zero
 stale-action execution, zero double-booking (exactly one execution
 per resource). Deterministic. No binding relaxed, frozen
 git-clean. Cost to here: about $10.30 total.
+
+================================================================
+MH-P8: cost + rate control at scale (mh-p8, genuine PASS)
+================================================================
+
+SOLVABLE. New: engine/app/costctl/guard.py (+ __init__) +
+engine/tests/e2e/gate_mh_p8.py. Frozen untouched. Pre-authorization
+ceiling (charge checked BEFORE spend so cumulative never exceeds),
+loop breaker, spend-velocity spike kill, and throttle as
+backpressure (not a kill). Deterministic virtual clock.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p8.py
+
+Literal output (rc=0):
+  BINDING looping runaway killed, spend_at_kill=0.25 (<= ceiling
+    1.00) reason="loop breaker: op 'same_search_op' x26 in 5.0s"
+    -> True
+  BINDING ceiling pre-auth: killed at spend=0.95 final_spend=0.95
+    (never > 1.00) -> True
+  BINDING spike kill triggered -> True
+  BINDING normal load unaffected: completed=20/20 spend=0.20
+    killed=False -> True
+  BINDING frozen paths clean -> True
+  MH_P8_GATE PASS
+
+Honest framing: a deliberate infinite loop is killed at $0.25 by
+the loop breaker, far below the $1.00 ceiling; distinct-op
+overspend is refused by pre-authorization so cumulative spend
+never crosses the ceiling (it stops at $0.95, killing slightly
+EARLY on a floating-point boundary, which is the safe direction:
+under, never over); a spend-velocity spike is hard-killed; and a
+calm legitimate 20-call load is completely unaffected (zero false
+kill, zero false throttle). Deterministic. No binding relaxed,
+frozen git-clean. Cost to here: about $10.30 total.
