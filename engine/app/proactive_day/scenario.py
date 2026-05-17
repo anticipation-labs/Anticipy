@@ -132,6 +132,7 @@ class DayEvent:
     cancels_ev: Optional[str] = None           # AMBIENT_CANCEL: which ev it kills
     defer_until: Optional[str] = None          # WHEN_DEFERRED condition
     shorthand_key: Optional[str] = None        # PERSONAL_SHORTHAND learn key
+    expansion: Optional[str] = None            # the concrete meaning learned
     first_occurrence: bool = False
 
 
@@ -193,12 +194,17 @@ def assemble(scale: float = 1.0, seed: int = 20260516) -> dict:
                 ev.text = rng.choice(_CHATTER)
                 ev.speaker = rng.choice(["WEARER", "S1", "S2"])
             elif spec.name == "PERSONAL_SHORTHAND":
-                txt, sl = _fill(rng.choice(_SHORTHAND), rng)
-                ev.text, ev.slots = txt, sl
-                ev.shorthand_key = txt.split()[0] + "_" + (sl.get("name", "x"))
+                # ONE fixed wearer shorthand repeated through the day:
+                # the FIRST occurrence is ambiguous (no learned
+                # mapping) -> CONFIRM, and the wearer's reply teaches
+                # the expansion; every LATER occurrence of the SAME
+                # shorthand must resolve from learned memory WITHOUT
+                # asking again.
+                ev.text = "handle the thursday thing"
+                ev.shorthand_key = "the_thursday_thing"
+                ev.expansion = "send Dana the budget before the Thursday review"
                 ev.first_occurrence = (i == 0)
-                if i > 0:
-                    ev.label = "ACTION"  # later occurrence resolves
+                ev.label = "CONFIRM" if i == 0 else "ACTION"
             elif spec.name == "LOUD_RESTAURANT":
                 base = rng.choice(_PROMISE + _VAGUE)
                 txt, sl = _fill(base, rng)

@@ -53,17 +53,26 @@ def frozen_is_instruction(event: dict) -> str:
         return "IGNORE"   # fail SAFE: not an instruction
 
 
-def layer_resolve(event: dict, world: SimWorld):
+def layer_resolve(event: dict, world: SimWorld,
+                  trusted_instruction: bool = False):
     """DIL-P1 (Layer A). Returns (ResolvedAction|None, all_confident).
-    Only consults resolution if the FROZEN engine judged this an
+    Normally only resolves if the FROZEN engine judged this an
     actionable instruction; chatter -> (None, False) -> LIFE_LOG.
-    An unresolved reference is NEVER guessed (safe direction).
+    `trusted_instruction` skips that gate ONLY for a wearer-confirmed
+    LEARNED shorthand expansion (DIL-P5): the wearer explicitly
+    taught that exact shorthand via a confirmation earlier today, so
+    its standing meaning is a known instruction, not ambient speech
+    to re-filter; re-judging it would let frozen-engine variance
+    silently DROP a known instruction. This is strongly gated (only
+    fires on a previously-confirmed learned key) so chatter can never
+    reach it. An unresolved reference is still NEVER guessed.
     """
     from app.proactive_day import resolve as _R
 
-    decision = frozen_is_instruction(event)
-    if decision not in ("ACT", "ASK"):
-        return None, False, "not_instruction"     # -> LIFE_LOG
+    if not trusted_instruction:
+        decision = frozen_is_instruction(event)
+        if decision not in ("ACT", "ASK"):
+            return None, False, "not_instruction"  # -> LIFE_LOG
     ra = _R.resolve(event.get("text", ""), world,
                     named_thing=event.get("slots", {}).get("thing"),
                     named_person=event.get("slots", {}).get("name"))
@@ -152,7 +161,23 @@ def run_day(manifest: dict, world: SimWorld) -> list:
             pre[eid] = M.ItemResult(eid, cat, label, "CANCELLED")
             continue
 
-        action, refs_ok, why = layer_resolve(ev, world)
+        # Layer G: wearer shorthand. Unknown the first time -> CONFIRM
+        # (and the reply teaches the mapping). Known -> resolve on the
+        # learned expansion. Memory-driven, never label-driven.
+        from app.proactive_day import personalize as _P
+
+        pstat, pval = _P.personalize(ev, world)
+        if pstat == "confirm_learn":
+            pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
+            continue
+        ev_eff = ev
+        trusted = False
+        if pstat == "resolved":
+            ev_eff = dict(ev)
+            ev_eff["text"] = pval                # the learned expansion
+            trusted = True                       # wearer-confirmed standing
+
+        action, refs_ok, why = layer_resolve(ev_eff, world, trusted)
         if action is None:                       # not an instruction
             pre[eid] = M.ItemResult(eid, cat, label, "LIFE_LOG")
             continue
@@ -160,7 +185,7 @@ def run_day(manifest: dict, world: SimWorld) -> list:
             pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
             continue
 
-        when = layer_timing(ev, action, world)
+        when = layer_timing(ev_eff, action, world)
         if when == "hold":
             pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
             continue
