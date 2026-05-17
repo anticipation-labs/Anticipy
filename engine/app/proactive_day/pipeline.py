@@ -72,10 +72,14 @@ def layer_resolve(event: dict, world: SimWorld):
 
 
 def layer_timing(event: dict, action, world: SimWorld) -> str:
-    """DIL-P2. now | deferred | scheduled | standing. P0 stub: 'now'
-    (unused at P0 because nothing resolves).
+    """DIL-P2 (Layer B). now | deferred | scheduled | standing | hold.
+    A time-conditioned action is never 'now' (never executed
+    immediately) and is never dropped; an uninferable condition
+    becomes 'hold' (surface one-line now-or-later), not a guess.
     """
-    return "now"
+    from app.proactive_day import timing as _T
+
+    return _T.classify(action, event, world).when
 
 
 def layer_completed(action, world: SimWorld) -> bool:
@@ -164,8 +168,15 @@ def run_day(manifest: dict, world: SimWorld) -> list:
 
         when = layer_timing(ev, action, world)
         if when in ("deferred", "scheduled", "standing"):
+            # queued against the inferred condition: NOT executed now,
+            # NOT dropped.
             queued[eid] = {"action": vars(action), "when": when}
             results.append(M.ItemResult(eid, cat, label, "DEFERRED"))
+            continue
+        if when == "hold":
+            # time condition present but release not inferable: surface
+            # one clear now-or-later question; not executed, not dropped.
+            results.append(M.ItemResult(eid, cat, label, "CONFIRMED"))
             continue
 
         queued[eid] = {"action": vars(action), "when": "now"}

@@ -2462,3 +2462,39 @@ true_pass-by-ACT is 0 here by safe construction and is reported
 plainly, not gamed. Over-action is the disaster; the design answer
 is confirm/under-action, never a silent wrong action. Cost to
 here: $6.62 total.
+
+## DIL-P2 TIMING ENGINE (Layer B)
+## (canonical tag dil-p2, GENUINE PASS)
+
+engine/app/proactive_day/timing.py: classify(action, event,
+world) -> now | deferred | scheduled | standing | hold. Explicit
+clock/date -> scheduled at a concrete sim time; "after the
+meeting" -> deferred until the next calendar event end;
+"once X ready" -> deferred on a dependency; opportunistic ("when
+you get a chance/later") -> deferred; recurring -> standing. A
+time phrase present but whose release cannot be inferred -> HOLD
+(surface one-line now-or-later), never a guess. Two hard rules:
+a time-conditioned action is NEVER executed immediately and is
+NEVER silently dropped.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/dayinlife/gate_dil_p2.py
+
+Final gate output (literal, rc=0):
+  WHEN_DEFERRED n=8 immediate_exec=0 (==0) silent_drop=0 (==0) -> True
+  REPORTED WHEN_DEFERRED scheduled=6 held(confirm)=2 of n=8
+    (scheduled-correctly rate=0.75, honest)
+  BINDING CHATTER false_action=0.0 (<=0.02) -> True
+  BINDING double_actions=0 acted_after_cancel=0 -> True
+  BINDING frozen paths clean -> True
+  DIL_P2_GATE PASS
+
+Honest framing. The two HARD timing rules hold: zero immediate
+execution of a deferred action and zero silent drop. 6/8 were
+scheduled against an inferred release condition; the other 2 were
+HELD with a one-line now-or-later question because the condition
+was genuinely not inferable - the correct safe direction, not a
+guess and not a drop. scheduled-correctly 0.75 reported plainly.
+Chatter false-action 0.000, no regression on the hard metrics,
+frozen git-clean. Cost to here: $6.70 total.
