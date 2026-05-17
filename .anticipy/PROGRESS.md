@@ -3140,3 +3140,41 @@ once (zero loss), nothing twice (zero double-processing), and the
 on-disk bytes are genuine Fernet ciphertext (no plaintext payload
 present). Deterministic, no model calls. No binding relaxed,
 frozen git-clean. Cost to here: about $10.30 total.
+
+================================================================
+MH-P5: auth + per-user isolation + token lifecycle (mh-p5,
+genuine PASS)
+================================================================
+
+SOLVABLE. New: engine/app/authsec/tokens.py (+ __init__) +
+engine/tests/e2e/gate_mh_p5.py. Frozen untouched. Real token
+lifecycle logic + a minimal durable runtime; tokens Fernet at rest
+(repo's existing key scheme, no new credential). Real OAuth network
+exchange is the labelled gated edge (simulated IdP in the gate,
+never faked).
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p5.py
+
+Literal output (rc=0), two simulated tenants:
+  BINDING per-user isolation (cross refused, self ok, ciphertext
+    at rest) -> True
+  BINDING expiry-mid-action: steps=['s0','s1','s2'] refreshed=True
+    completed_once=True no_double_exec(runs=1==1) -> True
+  BINDING zero wrong-user data in the resumed task -> True
+  GATED (labelled, not faked): real OAuth network exchange wired,
+    unproven
+  BINDING frozen paths clean -> True
+  MH_P5_GATE PASS
+
+Honest framing: a cross-tenant token/checkpoint read is refused
+(CrossTenantError), tokens are genuine ciphertext at rest, and a
+token that expires WHILE a task runs is refreshed by the real
+lifecycle logic so the SAME task resumes from its durable
+checkpoint and completes exactly once (idempotent re-run does not
+re-execute: runs stayed 1). Zero wrong-user data in the resumed
+task. The real OAuth exchange (real Google/email creds + a human)
+is wired and labelled unproven, not faked. Deterministic, no model
+calls. No binding relaxed, frozen git-clean. Cost to here: about
+$10.30 total.
