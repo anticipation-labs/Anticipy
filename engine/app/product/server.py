@@ -1,37 +1,40 @@
-"""Anticipy local product backend, fully integrated.
+"""Anticipy local product backend, fully integrated, continuously
+listening. Modifies no frozen code.
 
-ONE product loop, real end to end, modifying no frozen code:
+ONE product loop, real end to end:
 
   onboarding   real conversational intake -> app.anticipy.onboarding
-               .run_intake -> a real structured UserProfile, and the
+               .run_intake -> a real structured UserProfile; the
                profile people are seeded into the real anticipy_memory
                so "the boss" / "us" resolve from day one.
-  microphone   a real macOS capture-permission probe (triggers TCC)
-               and a real 6s capture on Listen. No synthetic voice.
-  listen       real sounddevice capture -> real local parakeet ASR ->
-               the FROZEN reasoning + proactive_day pipeline WITH the
-               real anticipy_memory draw wired in (references resolve
-               over time) -> a real proposal. Every heard utterance is
-               written to the real per-user memory via the Mem0-style
-               reconcile primitive (ADD/UPDATE/DELETE/NOOP).
-  act          on the user's explicit "Yes, do it", the proposal's
-               instruction is handed to the FROZEN browser action
-               engine (action_handoff.make_real_action_engine ->
-               DSv4SkillRunner) which really drives Chrome over CDP.
+  listen       ALWAYS-ON. A real sounddevice InputStream captures the
+               microphone continuously; a processor thread drains
+               rolling windows, runs real local parakeet ASR + the
+               FROZEN reasoning + proactive_day pipeline (with the real
+               anticipy_memory draw armed) on each window WHILE capture
+               keeps running, and never self-stops. Every window with
+               speech is written to the real per-user memory via the
+               Mem0-style reconcile primitive, so references resolve
+               over time. No synthetic voice anywhere.
+  act          on the user's explicit confirmation, the pending
+               proposal's instruction is handed to the FROZEN browser
+               action engine (action_handoff.make_real_action_engine
+               -> DSv4SkillRunner) which really drives Chrome over CDP.
   history      the real active memory snapshot, surfaced.
 
 Frozen code is only ever used through its existing public seams
-(read-only): the reasoning engine, onboarding.run_intake, memory.*,
-and the action engine via action_handoff. pipeline._MEMORY_DRAW is a
-designed runtime hook, set here, not a code edit.
+(read-only). pipeline._MEMORY_DRAW is a designed runtime hook, set
+here, not a code edit.
 """
 
 from __future__ import annotations
 
 import asyncio
+import collections
 import os
 import shutil
 import subprocess
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -40,13 +43,15 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="Anticipy", version="product-2")
+app = FastAPI(title="Anticipy", version="product-3")
 
-# single-user desktop session, in-process
 _SESS: dict = {"i": 0, "transcript": [], "profile": None,
-               "profile_obj": None, "last_action_text": None}
+               "profile_obj": None}
 USER_ID = "anticipy-user"
 CDP_PORT = 9222
+# Shipped default: rolling 60s windows. Overridable for the proof so
+# continuous behaviour is observable quickly through the same code.
+WINDOW_SECONDS = float(os.environ.get("ANTICIPY_WINDOW_SECONDS", "60"))
 
 
 # --------------------------------------------------------------------------
@@ -92,22 +97,19 @@ def set_key(k: Key) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
-# memory wiring (Step 1): the real anticipy_memory system, used through
-# its public API only. The draw closure resolves a vague reference from
-# the onboarded profile + accrued per-user memory and feeds it back into
-# the proactive_day resolver via the designed pipeline._MEMORY_DRAW hook.
+# memory: the real anticipy_memory system, via its public API only
 # --------------------------------------------------------------------------
 
 _PERSON_CUES = ("boss", "manager", "lead", "client", "partner", "wife",
                 "husband", "report", "team", "she", "he", "them", "her",
-                "him", "they", "us", "we")
+                "him", "they", "us", "we", "co-founder", "investor")
 
 
 def _memory_draw(event_text: str):
     """(event_text) -> (object_hint|None, person_hint|None). Resolve a
     vague reference against the real per-user memory + the onboarded
-    profile anchors. Returns nothing on ambiguity so an unresolved
-    reference is still never guessed (the resolver then CONFIRMs).
+    profile anchors. Nothing on ambiguity so an unresolved reference is
+    never guessed (the resolver then CONFIRMs).
     """
     from app.anticipy import memory as MEM
 
@@ -118,8 +120,11 @@ def _memory_draw(event_text: str):
         return (None, None)
     if not (rr.resolved and rr.value and rr.confidence >= 0.70):
         return (None, None)
+    import re
     low = (event_text or "").lower()
-    looks_person = any(c in low for c in _PERSON_CUES)
+    looks_person = bool(re.search(
+        r"\b(" + "|".join(re.escape(c) for c in _PERSON_CUES) + r")\b",
+        low))
     people_vals = set()
     if prof is not None:
         people_vals = {str(v).lower()
@@ -136,8 +141,7 @@ def _install_memory_draw() -> None:
 
 def _memory_write(text: str, kind: str) -> dict:
     """Write the heard utterance to the real per-user memory via the
-    Mem0-style reconcile primitive (ADD/UPDATE/DELETE/NOOP). Genuine
-    episodic memory: this is what makes later references resolve.
+    Mem0-style reconcile primitive (ADD/UPDATE/DELETE/NOOP).
     """
     from app.anticipy import memory as MEM
     try:
@@ -173,6 +177,7 @@ def state() -> JSONResponse:
         "onboarded": _SESS["profile"] is not None,
         "profile": _SESS["profile"],
         "total_questions": len(INTERVIEW_SCRIPT),
+        "window_seconds": WINDOW_SECONDS,
     })
 
 
@@ -205,7 +210,6 @@ def onb_answer(a: Answer) -> JSONResponse:
         return JSONResponse({"question": q, "index": _SESS["i"],
                              "total": len(script)})
 
-    # all answered -> real profile via the frozen onboarding brain
     prof = asyncio.run(OB.run_intake(_SESS["transcript"], USER_ID))
     _SESS["profile_obj"] = prof
     pj = {
@@ -216,10 +220,6 @@ def onb_answer(a: Answer) -> JSONResponse:
         "well_populated": OB.profile_is_well_populated(prof),
     }
     _SESS["profile"] = pj
-
-    # warm start: seed the profile people into the real memory so
-    # "the boss" / "us" resolve from day one (onboarding's stated
-    # intent), then arm the memory draw for the listen loop.
     try:
         from app.anticipy import memory as MEM
         if prof.people:
@@ -232,14 +232,13 @@ def onb_answer(a: Answer) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
-# microphone (Step 3): a real permission probe + the real listen loop
+# microphone permission probe
 # --------------------------------------------------------------------------
 
 @app.get("/api/mic/probe")
 def mic_probe() -> JSONResponse:
     """A short REAL capture: triggers the macOS microphone permission
-    prompt and proves the device opens. Honest on failure (TCC denied /
-    no device): the real error, never faked.
+    prompt and proves the device opens. Honest on failure.
     """
     try:
         import numpy as np
@@ -261,78 +260,177 @@ def mic_probe() -> JSONResponse:
                              "error": f"{type(e).__name__}: {e}"})
 
 
-@app.post("/api/listen/once")
-def listen_once() -> JSONResponse:
-    """Real microphone -> real local ASR -> the frozen reasoning +
-    proactive_day pipeline (with the real memory draw armed) -> a real
-    proposal. The heard utterance is written to the real per-user
-    memory. No synthetic voice; honest empty result if nothing is said.
-    """
+# --------------------------------------------------------------------------
+# CONTINUOUS always-on listening
+# --------------------------------------------------------------------------
+
+_LISTEN: dict = {
+    "on": False, "stream": None, "proc": None,
+    "lock": threading.Lock(),
+    "buf": collections.deque(), "buf_lock": threading.Lock(),
+    "level": 0.0, "windows": 0, "recent": [], "pending": None,
+    "started_at": None, "error": None, "acted": None,
+}
+
+
+def _audio_cb(indata, frames, time_info, status) -> None:
+    import numpy as np
+    chunk = np.asarray(indata).reshape(-1).copy()
+    with _LISTEN["buf_lock"]:
+        _LISTEN["buf"].append(chunk)
     try:
-        import numpy as np
-        import sounddevice as sd
+        _LISTEN["level"] = float(np.sqrt(np.mean(chunk ** 2)) or 0.0)
+    except Exception:
+        pass
 
-        from app.audiostack import audio as A
 
-        seconds = 6
-        rec = sd.rec(int(seconds * A.SR), samplerate=A.SR, channels=1,
-                     dtype="float32")
-        sd.wait()
-        wav = np.asarray(rec).reshape(-1)
+def _run_pipeline(text: str):
+    """The real frozen reasoning + proactive_day pipeline (memory draw
+    armed). Returns (outcome, proposal|None).
+    """
+    _install_memory_draw()
+    from app.proactive_day import pipeline
+    from app.proactive_day import world as W
+    manifest = {"events": [{
+        "ev_id": "live", "category": "VERBAL_PROMISE", "label": "ACTION",
+        "ts": 9.0, "place": "home", "speaker": "WEARER", "text": text,
+        "slots": {}, "snr_tier": "clean", "reach": "free",
+        "urgency": "hours", "world_done_at": None, "world_done": None,
+        "cancels_ev": None, "defer_until": None, "shorthand_key": None,
+        "expansion": None, "first_occurrence": False}]}
+    world = W.populated()
+    res = pipeline.run_day(manifest, world)
+    outcome = res[0].outcome if res else "?"
+    proposal = world.outbound[0].body if world.outbound else None
+    return outcome, proposal
+
+
+def _proc_loop() -> None:
+    import numpy as np
+
+    from app.audiostack import audio as A
+    while _LISTEN["on"]:
+        t0 = time.time()
+        while _LISTEN["on"] and time.time() - t0 < WINDOW_SECONDS:
+            time.sleep(0.2)
+        if not _LISTEN["on"]:
+            break
+        with _LISTEN["buf_lock"]:
+            chunks = list(_LISTEN["buf"])
+            _LISTEN["buf"].clear()
+        if not chunks:
+            continue
+        try:
+            wav = np.concatenate(chunks).astype("float32")
+        except Exception:
+            continue
         rms = float(np.sqrt(np.mean(wav ** 2)) or 0.0)
-        asr = A.asr_tokens(wav)
-        text = (asr.text or "").strip()
-        if not text:
-            return JSONResponse({
-                "transcript": "", "proposal": None, "rms": rms,
-                "note": "No speech captured from the microphone. Press "
-                        "Listen and speak; nothing synthetic is "
-                        "substituted."})
+        rec = {"ts": time.time(), "rms": rms, "transcript": "",
+               "outcome": None, "proposal": None, "memory": None,
+               "window": _LISTEN["windows"] + 1}
+        try:
+            asr = A.asr_tokens(wav)
+            text = (asr.text or "").strip()
+        except Exception as e:
+            text = ""
+            rec["asr_error"] = f"{type(e).__name__}: {e}"
+        rec["transcript"] = text
+        if text:
+            try:
+                outcome, proposal = _run_pipeline(text)
+                rec["outcome"] = outcome
+                rec["proposal"] = proposal
+                kind = ("latent_intent"
+                        if outcome in ("ACTED", "DEFERRED", "CONFIRMED")
+                        else "fact")
+                rec["memory"] = _memory_write(text, kind)
+                if proposal:
+                    _LISTEN["pending"] = {
+                        "instruction": text, "proposal": proposal,
+                        "ts": rec["ts"]}
+            except Exception as e:
+                rec["error"] = f"{type(e).__name__}: {e}"
+        with _LISTEN["lock"]:
+            _LISTEN["windows"] += 1
+            _LISTEN["recent"] = ([rec] + _LISTEN["recent"])[:10]
 
+
+@app.post("/api/listen/start")
+def listen_start() -> JSONResponse:
+    import sounddevice as sd
+
+    from app.audiostack import audio as A
+    with _LISTEN["lock"]:
+        if _LISTEN["on"]:
+            return JSONResponse({"on": True, "already": True,
+                                 "window_seconds": WINDOW_SECONDS})
         _install_memory_draw()
-        from app.proactive_day import pipeline
-        from app.proactive_day import world as W
+        with _LISTEN["buf_lock"]:
+            _LISTEN["buf"].clear()
+        _LISTEN["error"] = None
+        try:
+            stream = sd.InputStream(samplerate=A.SR, channels=1,
+                                    dtype="float32", callback=_audio_cb)
+            stream.start()
+        except Exception as e:
+            _LISTEN["error"] = f"{type(e).__name__}: {e}"
+            return JSONResponse({"on": False, "error": _LISTEN["error"]})
+        _LISTEN["stream"] = stream
+        _LISTEN["on"] = True
+        _LISTEN["started_at"] = time.time()
+        _LISTEN["windows"] = 0
+        _LISTEN["recent"] = []
+        _LISTEN["pending"] = None
+        th = threading.Thread(target=_proc_loop, daemon=True)
+        _LISTEN["proc"] = th
+        th.start()
+    return JSONResponse({"on": True, "window_seconds": WINDOW_SECONDS})
 
-        manifest = {"events": [{
-            "ev_id": "live", "category": "VERBAL_PROMISE",
-            "label": "ACTION", "ts": 9.0, "place": "home",
-            "speaker": "WEARER", "text": text, "slots": {},
-            "snr_tier": "clean", "reach": "free", "urgency": "hours",
-            "world_done_at": None, "world_done": None,
-            "cancels_ev": None, "defer_until": None,
-            "shorthand_key": None, "expansion": None,
-            "first_occurrence": False}]}
-        world = W.populated()
-        res = pipeline.run_day(manifest, world)
-        outcome = res[0].outcome if res else "?"
 
-        proposal = None
-        if world.outbound:
-            proposal = world.outbound[0].body
+def _stop_listen() -> None:
+    with _LISTEN["lock"]:
+        _LISTEN["on"] = False
+        st = _LISTEN["stream"]
+        _LISTEN["stream"] = None
+    if st:
+        try:
+            st.stop()
+            st.close()
+        except Exception:
+            pass
 
-        # genuine episodic memory write: this is what makes later
-        # references resolve over time (the real Mem0 primitive).
-        kind = ("latent_intent"
-                if outcome in ("ACTED", "DEFERRED", "CONFIRMED")
-                else "fact")
-        mem = _memory_write(text, kind)
 
-        # the instruction handed to the action engine on confirm is the
-        # wearer's own resolved utterance.
-        _SESS["last_action_text"] = text
+@app.post("/api/listen/stop")
+def listen_stop() -> JSONResponse:
+    _stop_listen()
+    return JSONResponse({"on": False})
+
+
+@app.post("/api/listen/dismiss")
+def listen_dismiss() -> JSONResponse:
+    _LISTEN["pending"] = None
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/listen/status")
+def listen_status() -> JSONResponse:
+    with _LISTEN["lock"]:
         return JSONResponse({
-            "transcript": text, "rms": rms, "outcome": outcome,
-            "proposal": proposal, "action_text": text,
-            "memory": mem})
-    except Exception as e:
-        import traceback
-        return JSONResponse(status_code=500, content={
-            "error": f"{type(e).__name__}: {e}",
-            "trace": traceback.format_exc()[-1500:]})
+            "on": _LISTEN["on"],
+            "window_seconds": WINDOW_SECONDS,
+            "windows": _LISTEN["windows"],
+            "level": round(_LISTEN["level"], 6),
+            "uptime": round(time.time() - _LISTEN["started_at"], 1)
+            if _LISTEN["started_at"] else 0,
+            "recent": _LISTEN["recent"][:10],
+            "pending": _LISTEN["pending"],
+            "acted": _LISTEN["acted"],
+            "error": _LISTEN["error"],
+        })
 
 
 # --------------------------------------------------------------------------
-# act (Step 2): the proposal handed to the FROZEN browser action engine
+# act: the proposal handed to the FROZEN browser action engine
 # --------------------------------------------------------------------------
 
 def _cdp_up() -> bool:
@@ -345,16 +443,11 @@ def _cdp_up() -> bool:
 
 
 def _ensure_cdp_chrome() -> bool:
-    """Ensure a CDP Chrome is reachable on :9222. If not, launch one
-    with an isolated profile (a normal local action). Returns True if
-    reachable.
-    """
     if _cdp_up():
         return True
     chrome = None
     for c in ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-              shutil.which("google-chrome"),
-              shutil.which("chromium")):
+              shutil.which("google-chrome"), shutil.which("chromium")):
         if c and Path(c).exists():
             chrome = c
             break
@@ -383,11 +476,8 @@ class Act(BaseModel):
 
 @app.post("/api/act")
 def act(a: Act) -> JSONResponse:
-    """The user confirmed the proposal. Hand the instruction to the
-    FROZEN action engine, which really drives Chrome over CDP. Honest
-    gating if the browser is unreachable; never a faked success.
-    """
-    instruction = (a.instruction or _SESS.get("last_action_text")
+    instruction = (a.instruction
+                   or (_LISTEN.get("pending") or {}).get("instruction")
                    or "").strip()
     if not instruction:
         return JSONResponse({"ran": False,
@@ -395,10 +485,10 @@ def act(a: Act) -> JSONResponse:
     if not _ensure_cdp_chrome():
         return JSONResponse({
             "ran": False, "gated": True,
-            "error": "No Chrome with remote debugging on :9222 and "
-                     "none could be launched. The real path "
-                     "(action_handoff -> frozen DSv4SkillRunner) is "
-                     "wired; a running browser is the edge."})
+            "error": "No Chrome with remote debugging on :9222 and none "
+                     "could be launched. The real path (action_handoff "
+                     "-> frozen DSv4SkillRunner) is wired; a running "
+                     "browser is the edge."})
     try:
         from app.anticipy.action_handoff import make_real_action_engine
         eng = make_real_action_engine(cdp_port=CDP_PORT, max_iters=12)
@@ -406,12 +496,17 @@ def act(a: Act) -> JSONResponse:
         status = res.get("status", "?")
         ran = status in ("SUCCESS", "PROCEEDED_ON_ASSUMPTION",
                          "ITERATION_EXHAUSTED")
-        return JSONResponse({
+        out = {
             "ran": ran, "status": status,
             "answer": str(res.get("answer", ""))[:600],
             "evidence": str(res.get("evidence", ""))[:600],
             "trajectory_dir": res.get("trajectory_dir", ""),
-            "error": res.get("error")})
+            "error": res.get("error")}
+        if ran:
+            _LISTEN["acted"] = {"instruction": instruction,
+                                "status": status, "ts": time.time()}
+            _LISTEN["pending"] = None
+        return JSONResponse(out)
     except Exception as e:
         import traceback
         return JSONResponse(status_code=500, content={
@@ -464,7 +559,7 @@ padding:17px 32px;border-radius:100px;cursor:pointer;transition:.22s}
 button.cta:hover{background:var(--gold);transform:translateY(-1px)}
 button.cta:disabled{opacity:.4;cursor:default;transform:none}
 .ghost{background:transparent;border:1px solid var(--bd);color:var(--cream);
-padding:16px 30px;border-radius:100px;cursor:pointer;font:500 14px/1
+padding:15px 28px;border-radius:100px;cursor:pointer;font:500 13px/1
 'Plus Jakarta Sans';transition:.2s}
 .ghost:hover{border-color:var(--gold);color:var(--gold)}
 .qa{display:flex;flex-direction:column;gap:13px;margin:6px 0 20px;
@@ -485,37 +580,44 @@ color:var(--cream);padding:15px 18px;border-radius:14px;font:400 14px
 input:focus,textarea:focus{border-color:rgba(200,169,126,.55)}
 .send{border:0;background:var(--cream);color:var(--dark);padding:0 24px;
 height:50px;border-radius:14px;cursor:pointer;font-weight:600;transition:.2s}
-.send:hover{background:var(--gold)}
-.send:disabled{opacity:.4;cursor:default}
+.send:hover{background:var(--gold)}.send:disabled{opacity:.4;cursor:default}
 .center{text-align:center;align-items:center}
 .center p.sub,.center h1{margin-left:auto;margin-right:auto}
 .center .lab{text-align:center}
-.orb{width:172px;height:172px;margin:10px auto 0;border-radius:50%;
+.orb{width:150px;height:150px;margin:6px auto 0;border-radius:50%;
 position:relative;background:radial-gradient(circle at 50% 44%,
 rgba(200,169,126,.5),rgba(200,169,126,.04) 60%,transparent 72%)}
-.orb i{position:absolute;inset:35%;border-radius:50%;
-background:rgba(200,169,126,.9);box-shadow:0 0 60px rgba(200,169,126,.5);
-transition:transform .15s ease}
-.orb.on{animation:br 2.4s ease-in-out infinite}
-@keyframes br{0%,100%{transform:scale(.96)}50%{transform:scale(1.07)}}
+.orb i{position:absolute;inset:36%;border-radius:50%;
+background:rgba(200,169,126,.9);box-shadow:0 0 60px rgba(200,169,126,.5)}
+.orb.on{animation:br 2.2s ease-in-out infinite}
+@keyframes br{0%,100%{transform:scale(.95)}50%{transform:scale(1.08)}}
 .ring{position:absolute;inset:0;border-radius:50%;
 border:1.5px solid rgba(200,169,126,.28)}
-.orb.on .ring{animation:pl 2.4s ease-out infinite}
-@keyframes pl{0%{transform:scale(.9);opacity:.8}
-100%{transform:scale(1.35);opacity:0}}
-.count{font-family:'DM Serif Display',serif;font-size:42px;
-color:var(--gold);margin-top:8px;min-height:50px}
+.orb.on .ring{animation:pl 2.2s ease-out infinite}
+@keyframes pl{0%{transform:scale(.88);opacity:.85}
+100%{transform:scale(1.4);opacity:0}}
+.live{display:inline-flex;align-items:center;gap:9px;font-size:11px;
+letter-spacing:.2em;text-transform:uppercase;color:var(--ok);margin-top:18px}
+.live .bd{width:8px;height:8px;border-radius:50%;background:var(--ok);
+animation:bk 1.4s ease-in-out infinite}
+@keyframes bk{0%,100%{opacity:1}50%{opacity:.25}}
+.meter{width:220px;height:5px;background:var(--bd);border-radius:5px;
+margin:16px auto 0;overflow:hidden}
+.meter>i{display:block;height:100%;background:var(--gold);width:0;
+transition:width .25s ease}
+.stat{display:flex;gap:26px;justify-content:center;margin-top:20px;
+font-size:12.5px;color:var(--mut)}
+.stat b{color:var(--cream);font-weight:600}
 .card{background:var(--elev);border:1px solid var(--bd);border-radius:22px;
-padding:30px;text-align:left;margin-top:26px;animation:f .45s ease}
+padding:28px;text-align:left;margin-top:24px;animation:f .45s ease}
 .card h2{font-family:'DM Serif Display',serif;font-size:22px;
 line-height:1.32;font-weight:400}
-.meta{margin-top:13px;font-size:12.5px;color:rgba(245,240,235,.46);
+.meta{margin-top:12px;font-size:12.5px;color:rgba(245,240,235,.46);
 line-height:1.6}
 .kv{display:grid;gap:1px;background:var(--bd);border-radius:16px;
 overflow:hidden;margin-top:18px}
 .kv>div{background:var(--elev);padding:15px 18px}
-.kv b{font-size:13px;color:rgba(245,240,235,.88);font-weight:600;
-display:block}
+.kv b{font-size:13px;color:rgba(245,240,235,.88);font-weight:600;display:block}
 .kv span{display:block;margin-top:4px;font-size:12.5px;
 color:rgba(245,240,235,.5)}
 .pill{display:inline-flex;align-items:center;gap:7px;font-size:11px;
@@ -527,6 +629,13 @@ border:1px solid var(--bd);padding:7px 13px;border-radius:100px}
 border-top-color:var(--gold);border-radius:50%;display:inline-block;
 animation:sp .7s linear infinite;vertical-align:-3px}
 @keyframes sp{to{transform:rotate(360deg)}}
+.feed{display:flex;flex-direction:column;gap:8px;margin-top:22px;
+max-height:30vh;overflow-y:auto}
+.feed .w{background:var(--elev);border:1px solid var(--bd);
+border-radius:12px;padding:11px 15px;font-size:13px;line-height:1.5;
+display:flex;justify-content:space-between;gap:12px}
+.feed .w .t{color:rgba(245,240,235,.8)}
+.feed .w .m{color:var(--mut);font-size:11px;white-space:nowrap}
 .hist{display:flex;flex-direction:column;gap:10px;margin-top:22px}
 .hist .it{background:var(--elev);border:1px solid var(--bd);
 border-radius:14px;padding:15px 18px;font-size:13.5px;line-height:1.55}
@@ -537,19 +646,19 @@ border:1px dashed var(--bd);border-radius:16px;padding:34px;text-align:center}
 .err{color:var(--warn)}
 @media (max-width:560px){.wrap{padding:0 20px}}
 </style></head><body><div class=wrap>
-<nav><span class=b>Anticipy</span>
-<span class=lk id=nav></span></nav>
+<nav><span class=b>Anticipy</span><span class=lk id=nav></span></nav>
 <div id=app class=scr></div></div>
 <script>
 const app=document.getElementById('app'),nav=document.getElementById('nav');
-let ST={},OB={qs:[]};
+let ST={},OB={qs:[]},POLL=null;
 async function J(u,o){const r=await fetch(u,o);return r.json()}
 function esc(s){return(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 '>':'&gt;','"':'&quot;'}[c]))}
+function stopPoll(){if(POLL){clearInterval(POLL);POLL=null}}
 function setNav(active){if(!ST.onboarded){nav.innerHTML='';return}
  nav.innerHTML=['listen','history','settings'].map(s=>
  `<a class="${s==active?'on':''}" onclick="go('${s}')">${s}</a>`).join('')}
-async function boot(){ST=await J('/api/state');
+async function boot(){stopPoll();ST=await J('/api/state');
  if(!ST.key_ok)return scrKey();
  if(!ST.onboarded)return scrWelcome();
  go('listen')}
@@ -572,7 +681,7 @@ async function saveKey(){const v=document.getElementById('k').value.trim();
 function scrWelcome(){setNav();app.innerHTML=`<div class=lab>Welcome</div>
 <h1>Let's set you up.</h1><p class=sub>A short conversation so Anticipy
 understands your life before it does anything. Real questions, your real
-answers. It takes about a minute.</p>
+answers. About a minute.</p>
 <button class=cta onclick=startOnb()>Begin</button>`}
 async function startOnb(){const r=await J('/api/onboarding/start');
  OB={qs:[{a:r.question}],total:r.total,idx:0};renderOnb()}
@@ -584,9 +693,10 @@ function renderOnb(){const pct=Math.round(100*OB.idx/(OB.total||1));
  h+=`</div><div class=row><textarea id=ans rows=2
  placeholder="Type your answer, then press Enter"></textarea>
  <button class=send id=sb onclick=sendAns()>Send</button></div>`;
- app.innerHTML=h;const qa=document.getElementById('qa');qa.scrollTop=qa.scrollHeight;
- const ta=document.getElementById('ans');ta.focus();
- ta.onkeydown=e=>{if(e.key=='Enter'&&!e.shiftKey){e.preventDefault();sendAns()}}}
+ app.innerHTML=h;const qa=document.getElementById('qa');
+ qa.scrollTop=qa.scrollHeight;const ta=document.getElementById('ans');
+ ta.focus();ta.onkeydown=e=>{if(e.key=='Enter'&&!e.shiftKey){
+ e.preventDefault();sendAns()}}}
 async function sendAns(){const el=document.getElementById('ans');
  const v=el.value.trim();if(!v)return;
  OB.qs[OB.qs.length-1].u=v;OB.idx++;
@@ -601,8 +711,8 @@ function scrProfile(fresh){setNav();const p=ST.profile||{};
  `<div><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join('');
  app.innerHTML=`<div class=lab>${fresh?"You're set up":'Your profile'}</div>
  <h1>${fresh?'Good to meet you':'Hello'}${p.name?', '+esc(p.name.split(' ')[0]):''}.</h1>
- <p class=sub>Anticipy now knows who you are and what matters. This is
- stored locally and used to resolve who and what you mean.</p>
+ <p class=sub>Anticipy now knows who you are and what matters, stored
+ locally, used to resolve who and what you mean.</p>
  <div class=kv><div><b>Role</b><span>${esc(p.role_title||'-')}</span></div>
  <div><b>What you do</b><span>${esc(p.what_they_do||'-')}</span></div>
  <div><b>Mandate</b><span>${esc(p.mandate||'-')}</span></div>
@@ -610,11 +720,11 @@ function scrProfile(fresh){setNav();const p=ST.profile||{};
  <span>${esc(p.do_not_touch.join(', '))}</span></div>`:''}${ppl}</div>
  <button class=cta onclick="go('mic')">Continue</button>`}
 
-function scrMic(){setNav('listen');app.innerHTML=`<div class="scr center">
- <div class=lab>Microphone</div>
+function scrMic(){stopPoll();setNav('listen');
+ app.innerHTML=`<div class="scr center"><div class=lab>Microphone</div>
  <h1>Let Anticipy hear you.</h1>
- <p class=sub>Anticipy listens to your real microphone, on this Mac,
- only while you hold a session. macOS will ask for permission now.</p>
+ <p class=sub>Anticipy listens continuously to your real microphone, on
+ this Mac, while it is open. macOS will ask for permission now.</p>
  <div id=ms style="margin-top:30px"></div>
  <button class=cta id=mb style="align-self:center"
  onclick=probeMic()>Enable microphone</button></div>`}
@@ -626,72 +736,88 @@ async function probeMic(){const b=document.getElementById('mb'),
  s.innerHTML=`<div class=pill><span class="dot g"></span>
  ${esc(r.device||'microphone')} ready</div>
  <p class=sub style="margin:18px auto 0">Captured a real test sample
- (level ${r.rms.toFixed(4)}). Taking you to Listen.</p>`;
+ (level ${r.rms.toFixed(4)}). Starting continuous listening.</p>`;
  setTimeout(()=>go('listen'),1100)}
  else{b.textContent='Try again';
- s.innerHTML=`<p class=sub err style="margin:0 auto;color:var(--warn)">
+ s.innerHTML=`<p class=sub style="margin:0 auto;color:var(--warn)">
  ${esc(r.error||'Microphone unavailable')}. Grant Anticipy microphone
  access in System Settings, Privacy, Microphone.</p>`}}
 
-function scrListen(){setNav('listen');app.innerHTML=`<div class="scr center">
- <div class=lab>Listening</div>
- <div class="orb" id=orb><div class=ring></div><i></i></div>
- <div class=count id=cd></div>
- <h1 style="margin-top:6px">Press Listen and speak.</h1>
- <p class=sub style="margin:14px auto 0">Anticipy hears your real
- microphone, understands it against what it knows about you, and
- proposes one clear thing. Nothing synthetic.</p>
- <button class=cta id=lb style="align-self:center"
- onclick=doListen()>Listen</button><div id=out></div></div>`}
-async function doListen(){const b=document.getElementById('lb'),
- orb=document.getElementById('orb'),cd=document.getElementById('cd'),
- out=document.getElementById('out');
- b.disabled=true;b.textContent='Listening...';out.innerHTML='';
- orb.classList.add('on');let n=6;cd.textContent=n;
- const iv=setInterval(()=>{n--;cd.textContent=n>0?n:'';},1000);
- const r=await J('/api/listen/once',{method:'POST'});
- clearInterval(iv);cd.textContent='';orb.classList.remove('on');
- b.disabled=false;b.textContent='Listen again';
- if(r.error){out.innerHTML=`<div class=card><h2>Something went wrong</h2>
- <div class="meta err">${esc(r.error)}</div></div>`;return}
- if(!r.transcript){out.innerHTML=`<div class=card>
- <div class=lab>Nothing heard</div><h2>I didn't catch anything.</h2>
- <div class=meta>${esc(r.note||'')} Mic level ${(r.rms||0).toFixed(4)}.
- </div></div>`;return}
- const mem=r.memory?`<span class=pill style="margin-top:14px">
- <span class=dot></span>memory ${esc(r.memory.op||'-')}</span>`:'';
- let h=`<div class=card><div class=lab>Heard</div>
- <h2>${esc(r.transcript)}</h2>
- <div class=meta>Decision: ${esc(r.outcome||'-')} &middot; mic level
- ${(r.rms||0).toFixed(4)}</div>`;
- if(r.proposal){h+=`<div class=lab style="margin-top:22px">Proposal</div>
- <p style="margin-top:8px;font-size:15px;line-height:1.6">
- ${esc(r.proposal)}</p>
- <div class=row style="margin-top:20px">
- <button class=send id=yes onclick='doAct(${JSON.stringify(
- r.action_text||r.transcript)})'>Yes, do it</button>
- <button class=ghost onclick="go('listen')">No</button></div>
- <div id=act></div>`}
- else{h+=`${mem}<div class=meta style="margin-top:14px">Nothing worth
- interrupting you for. Logged to memory.</div>`}
- h+='</div>';out.innerHTML=h}
-async function doAct(instr){const y=document.getElementById('yes'),
- ac=document.getElementById('act');y.disabled=true;
+async function scrListen(){setNav('listen');
+ const s=await J('/api/listen/start',{method:'POST'});
+ app.innerHTML=`<div class="scr center"><div class=lab>Listening</div>
+ <div class="orb on" id=orb><div class=ring></div><i></i></div>
+ <div class=live id=lv><span class=bd></span><span>Listening
+ continuously</span></div>
+ <div class=meter><i id=mtr></i></div>
+ <div class=stat id=stt></div>
+ <p class=sub style="margin:18px auto 0">Anticipy is always listening
+ in rolling ${Math.round(s.window_seconds||60)}s windows. Speak
+ naturally; it surfaces one clear thing when it hears something
+ worth acting on. Nothing synthetic.</p>
+ <div id=prop></div>
+ <div class=feed id=feed></div>
+ <button class=ghost style="align-self:center;margin-top:24px"
+ onclick=stopListen()>Stop listening</button></div>`;
+ if(s.error){document.getElementById('lv').innerHTML=
+ `<span class=err>Microphone: ${esc(s.error)}</span>`;return}
+ stopPoll();POLL=setInterval(pollListen,1500);pollListen()}
+async function pollListen(){let st;try{st=await J('/api/listen/status')}
+ catch(e){return}
+ const orb=document.getElementById('orb');if(!orb)return stopPoll();
+ const lvl=Math.min(100,Math.round((st.level||0)*4000));
+ const mtr=document.getElementById('mtr');if(mtr)mtr.style.width=lvl+'%';
+ const stt=document.getElementById('stt');
+ if(stt)stt.innerHTML=`<span><b>${st.windows||0}</b> windows</span>
+ <span><b>${Math.round(st.uptime||0)}</b>s on</span>
+ <span><b>${(st.level||0).toFixed(4)}</b> level</span>`;
+ const lv=document.getElementById('lv');
+ if(lv&&!st.on)lv.innerHTML=`<span class=err>Listening stopped${
+ st.error?': '+esc(st.error):''}</span>`;
+ const pr=document.getElementById('prop');
+ if(pr){if(st.pending){pr.innerHTML=`<div class=card>
+ <div class=lab>Heard, worth acting on</div>
+ <h2>${esc(st.pending.proposal)}</h2>
+ <div class=meta>From: "${esc(st.pending.instruction)}"</div>
+ <div class=row style="margin-top:18px">
+ <button class=send id=yes onclick='doAct()'>Yes, do it</button>
+ <button class=ghost onclick=dismiss()>Dismiss</button></div>
+ <div id=act></div></div>`}
+ else if(st.acted){pr.innerHTML=`<div class=card>
+ <div class=lab><span class=dot></span> Done in Chrome</div>
+ <h2>${esc(st.acted.instruction)}</h2>
+ <div class=meta>Status ${esc(st.acted.status)}. Still listening.
+ </div></div>`}
+ else if(!pr.querySelector('.spin'))pr.innerHTML=''}
+ const fd=document.getElementById('feed');
+ if(fd&&st.recent){fd.innerHTML=st.recent.map(w=>`<div class=w>
+ <span class=t>${w.transcript?esc(w.transcript):'<span style=color:var(--mut)>(quiet window)</span>'}</span>
+ <span class=m>w${w.window} &middot; ${(w.rms||0).toFixed(3)}${
+ w.memory?' &middot; mem '+esc(w.memory.op||''):''}</span></div>`).join('')}}
+async function doAct(){const y=document.getElementById('yes'),
+ ac=document.getElementById('act');if(!y)return;y.disabled=true;
  y.innerHTML='<span class=spin></span> Acting in Chrome';
- ac.innerHTML=`<div class=meta style="margin-top:16px">Anticipy is
- driving a real Chrome window. This can take a minute.</div>`;
+ ac.innerHTML=`<div class=meta style="margin-top:14px">Anticipy is
+ driving a real Chrome window. This can take a minute. It keeps
+ listening while it works.</div>`;
  const r=await J('/api/act',{method:'POST',headers:{'Content-Type':
- 'application/json'},body:JSON.stringify({instruction:instr})});
- y.style.display='none';
- if(r.ran){ac.innerHTML=`<div class=lab style="margin-top:20px">
- <span class=dot></span> Done in Chrome</div>
- <p style="margin-top:8px;font-size:14.5px;line-height:1.6">
- ${esc(r.answer||r.status)}</p>
- <div class=meta>${esc(r.evidence||'')}</div>`}
- else{ac.innerHTML=`<div class="meta err" style="margin-top:16px">
+ 'application/json'},body:JSON.stringify({})});
+ if(r.ran){ac.innerHTML=`<div class=meta style="margin-top:14px">
+ <span class=dot></span> ${esc(r.answer||r.status)}<br>
+ ${esc(r.evidence||'')}</div>`}
+ else{ac.innerHTML=`<div class="meta err" style="margin-top:14px">
  ${esc(r.error||('status '+(r.status||'?')))}</div>`}}
+async function dismiss(){await J('/api/listen/dismiss',{method:'POST'});
+ pollListen()}
+async function stopListen(){stopPoll();
+ await J('/api/listen/stop',{method:'POST'});
+ const lv=document.getElementById('lv');
+ if(lv)lv.innerHTML='<span style=color:var(--mut)>Listening paused. '
+ +'<a style=color:var(--gold);cursor:pointer onclick="go(\'listen\')">'
+ +'Resume</a></span>';
+ const orb=document.getElementById('orb');if(orb)orb.classList.remove('on')}
 
-async function scrHistory(){setNav('history');
+async function scrHistory(){stopPoll();setNav('history');
  app.innerHTML=`<div class=lab>Memory</div><h1>What Anticipy remembers.</h1>
  <p class=sub>Everything it has heard worth keeping, on this Mac. This is
  what lets it resolve who and what you mean over time.</p>
@@ -699,20 +825,20 @@ async function scrHistory(){setNav('history');
  <span class=spin></span> Loading</div></div>`;
  const r=await J('/api/memory');const hl=document.getElementById('hl');
  if(!r.entries||!r.entries.length){hl.innerHTML=`<div class=empty>
- Nothing remembered yet. What you tell Anticipy in a session shows up
- here.</div>`;return}
+ Nothing remembered yet. What you say while it listens shows up here.
+ </div>`;return}
  hl.innerHTML='<div class=hist>'+r.entries.map(e=>
  `<div class=it><div class=k>${esc(e.kind||'note')}</div>
  ${esc(e.value||'')}</div>`).join('')+'</div>'}
 
-function scrSettings(){setNav('settings');const p=ST.profile||{};
+function scrSettings(){stopPoll();setNav('settings');const p=ST.profile||{};
  app.innerHTML=`<div class=lab>Settings</div><h1>Your setup.</h1>
  <div class=kv style="margin-top:24px">
  <div><b>Name</b><span>${esc(p.name||'not set')}</span></div>
  <div><b>Reasoning</b><span>${ST.key_ok?'Connected, OpenRouter cloud':
  'Key missing'}</span></div>
- <div><b>Microphone</b><span>Used live, only while a Listen session is
- open</span></div>
+ <div><b>Microphone</b><span>Continuous, rolling ${Math.round(
+ ST.window_seconds||60)}s windows while the app is open</span></div>
  <div><b>Memory</b><span>Stored locally on this Mac, per user</span></div>
  <div><b>Browser actions</b><span>Run in a real Chrome window on your
  explicit confirmation</span></div></div>
@@ -720,6 +846,7 @@ function scrSettings(){setNav('settings');const p=ST.profile||{};
  onclick="go('mic')">Re-check microphone</button>`}
 
 function go(s){window.scrollTo(0,0);
+ if(s!='listen')stopPoll();
  if(s=='listen')scrListen();
  else if(s=='mic')scrMic();
  else if(s=='history')scrHistory();
