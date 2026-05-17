@@ -2996,3 +2996,60 @@ real frozen browser action on a safe target, with the real-accounts
 boundary the single honestly-labelled gated edge. No binding
 relaxed, nothing faked, frozen git-clean. Cost to here: about
 $10.10 total.
+
+================================================================
+MH-P2: memory write path + store + decay/dedup (mh-p2, genuine
+PASS)
+================================================================
+
+SOLVABLE, "the heart, done properly". New:
+engine/app/memory_v2/write.py (+ __init__) +
+engine/tests/e2e/gate_mh_p2.py. Composes the EXISTING app.memory
+backend (InProcess for the exact local gate; Supabase pgvector +
+the anticipy_memory_topk RPC + Gemini text-embedding-004 wired as
+the labelled prod edge, never autonomously written so the shared
+DB is not polluted). app.memory and every frozen file untouched.
+Web-research tools still infra-down this session (recorded); the
+design source is the repo's proven memory stack + documented
+practice, labelled, not faked.
+
+Added on top of the backend, none of it modifying it: a
+non-promotable invariant (a low-trust life-log item is quarantined
+to kind=life_log and can NEVER become a durable fact; promotion is
+explicit and needs >= 2 independent corroborations or a wearer
+confirm, never automatic), semantic + canonical-signature dedup
+(paraphrases collapse onto the one durable row via the backend's
+own merge), and importance-scaled exponential decay with a durable
+floor (stale low-trust life-log is pruned; real preferences are
+never silently forgotten).
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p2.py
+
+Literal gate output (rc=0), simulated multi-day life:
+  BINDING non-promotable: lifelog_absent_from_durable=True
+    blocked_promotions=2 auto_promote_refused=True -> True
+  BINDING no-dup: wife_rows=1 (==1) boss_rows=1 (==1) deduped=3
+    (>=2) -> True
+  BINDING storage: durable_kinds=['contact','fact','preference']
+    n_durable=4 -> True
+  BINDING promotion explicit-only: corroborated_promote=True
+    auto_refused=True promoted_row_present=True -> True
+  BINDING decay: rows 9->4 pruned=5 (>=1) durable_survive=4 -> True
+  REPORTED mean write latency/batch=0.05ms (baseline for MH-P3's
+    hard retrieval budget) [stored=3 deduped=3
+    quarantined_lifelog=5]
+  BINDING frozen paths clean -> True
+  MH_P2_GATE PASS
+
+Honest framing: the dedup/decay/invariant are proven exactly and
+deterministically (offline TF-IDF embedder so the gate is not
+network-bound and is reproducible); the production embedder
+(Gemini text-embedding-004) and the Supabase pgvector store are
+wired behind the same roles and labelled as the real edge, not
+faked and not autonomously written. The hard property (a low-trust
+life-log line, even phrased like a fact and asking to be durable,
+never becomes a durable fact) holds with zero leakage. No binding
+relaxed, frozen git-clean. Cost to here: about $10.10 total (MH-P2
+made no model calls; deterministic).
