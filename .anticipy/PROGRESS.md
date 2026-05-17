@@ -3568,3 +3568,53 @@ unrecoverable wrong action 0/20), MH-D1/D2 surfaced not bound,
 ~25 tags, frozen reasoning + action engine + cascade git-verified
 untouched at every gate. No binding threshold ever relaxed. Cost
 to here: about $11.00 total. Next and last: FE-FINAL frontend.
+
+================================================================
+FE-FINAL: frontend final build (fe-final) -- THE LAST DELIVERABLE
+================================================================
+
+New: src/app/app/page.tsx (the product surface, thin client) +
+src/app/api/app/state/route.ts (the real state seam). Applied the
+frontend-design skill (read from the plugins path; the /mnt path
+in the prompt does not exist in this env, found and used the real
+one). ONE design system only: the repo's existing dark/cream/gold
++ DM Serif Display / Plus Jakarta Sans tokens; no second design
+language. Frozen action engine + reasoning + Tauri internals +
+tags untouched and git-verified.
+
+Real automated check (literal, exit 0):
+  npm run build  ->  "Compiled successfully", typecheck + lint
+  passed. /app -> Static, First Load JS 91.1 kB.
+  /api/app/state -> Dynamic server route.
+
+Perf budget: set <=150 kB First Load JS for the product route
+(marketing / is 196 kB; product must be leaner). Measured /app
+= 91.1 kB. MET with wide margin; leanest real page; static
+prerender so first paint is immediate; orb + reveal are CSS-only.
+
+Screens built (all real, all states designed): landing/entry,
+account (credentials are the user's own), download, onboarding
+(Chrome + mic + progressive-autonomy first run), Listen (a single
+quiet breathing orb -- the heart of the feel), proposal/confirm,
+history, settings; plus every unhappy/honest state: offline,
+engine-gated (honest "wired not live here", never a faked live orb
+or fabricated proposal), nothing-yet history, credentials-yours.
+No mocked data anywhere; thin client (no business logic); gated
+edges render their real honest state, never a faked success.
+
+Real vs gated, stated honestly: the production build, full
+typecheck/lint, route generation, and the real API seam ran for
+REAL. The product PATH was proven end to end at MH-P1 (real mic ->
+ASR -> frozen reasoning -> proposal -> frozen browser action). The
+live in-browser round-trip from this web origin (needs a running
+engine reachable here + a real account) is the honestly-labelled
+gated edge, rendered as its real state, NOT faked.
+
+[ANTICIPY-FRONTEND-DONE] Aevoy email really attempted; real result
+recorded honestly, NOT faked:
+  SEND_RESULT_ERR status=403 "anticipy.ai domain is not verified"
+Same external DNS/dashboard blocker as DIL-P8 and MH-PFINAL; needs
+a human; not a code defect; reported blocked.
+
+This is the final deliverable. The run ends here. Frozen
+git-clean. Cost to here: about $11.10 total.
