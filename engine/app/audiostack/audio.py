@@ -246,6 +246,24 @@ def speaker_embed(wav: np.ndarray) -> np.ndarray:
     return (v / n).astype(np.float32) if n > 0 else v
 
 
+def is_bandlimited(wav: np.ndarray) -> bool:
+    """True if energy is concentrated in the 300-3400 Hz telephone
+    band with little outside it: the deterministic, ASR-INDEPENDENT
+    signature of phone / compressed-broadcast / TV audio. A person
+    physically co-present giving the wearer a drive-by is full-band,
+    so this can only REJECT (strengthen precision), never loosen.
+    """
+    if wav is None or len(wav) < int(0.2 * SR):
+        return False
+    x = np.asarray(wav, dtype=np.float32)
+    sp = np.abs(np.fft.rfft(x * np.hanning(len(x))))
+    fr = np.fft.rfftfreq(len(x), 1.0 / SR)
+    total = float(np.sum(sp) + 1e-9)
+    out_of_band = float(np.sum(sp[(fr < 250) | (fr > 3600)]))
+    # phone/broadcast: <8% of spectral energy outside the phone band
+    return (out_of_band / total) < 0.08
+
+
 def cosine(a: np.ndarray, b: np.ndarray) -> float:
     a = np.asarray(a, dtype=np.float32)
     b = np.asarray(b, dtype=np.float32)

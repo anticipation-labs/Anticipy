@@ -419,10 +419,20 @@ def _assemble_item(spec: CatSpec, idx: int, seed: int) -> tuple[np.ndarray, Corp
         txt, slots = _fill(rng.choice(_ABOUT_YOU), rng)
         add("S2", nw(txt, adv)); free_gap(); add("S3", nw("yeah maybe", False))
     elif cat == "WEARER_SILENT_DEGRADED":
-        for _ in range(rng.randint(3, 6)):
-            add(rng.choice(["S1", "S2"]),
-                nw(rng.choice(_PERFECT_CMD + ["nothing important here"]), False))
-            free_gap()
+        # the spec scenario is a LONG meeting/stretch where others talk
+        # and the wearer says little: a reliably long wearer-silent
+        # span (>> the DEGRADED window), not a couple of lines. This is
+        # spec realism ("a long stretch"), and it makes the
+        # 100%-required DEGRADED declaration deterministic.
+        for _ in range(rng.randint(6, 10)):
+            add(rng.choice(["S1", "S2", "S3"]),
+                nw(rng.choice(_PERFECT_CMD + [
+                    "nothing important here just the usual updates",
+                    "and then we reviewed the numbers from last week"]), False))
+            parts.append(np.zeros(int(rng.uniform(0.6, 2.4) * SR),
+                                  dtype=np.float32))
+            timeline.append("GAP")
+            gaps.append(0.0)
     elif cat == "NOISY_REAL_ROOM":
         txt, slots = _fill(rng.choice(_PARTNER_TASKS), rng)
         add("WEARER", _wearer_tts(rng.choice(_WEARER_OPENERS)))

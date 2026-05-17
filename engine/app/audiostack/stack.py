@@ -38,6 +38,7 @@ class Utterance:
     mean_conf: float
     tokens: list = field(default_factory=list)
     is_wearer: bool = False
+    bandlimited: bool = False   # phone/broadcast acoustic signature
 
 
 @dataclass
@@ -105,10 +106,25 @@ def _layer1_membership(utts, anchor, episode):
 
 
 def _layer2_directed_or_degraded(utts, anchor, episode):
-    """P2 fills this. Returns (directed_utts, degraded_bool). P0 stub:
-    nothing directed, not degraded.
+    """Layer 2, parallel to Layer 1. (a) DEGRADED: wearer silent past
+    the window -> log everything, fire nothing, declare silence.
+    (b) directed-speech gate: a SHORT directive addressed at the
+    wearer is a candidate even with zero turn-taking. Precision-
+    skewed: strangers / TV / third-party do not pass.
     """
-    return [], False
+    from app.audiostack import layer2
+
+    wearer_speech_s = sum((u.end - u.start) for u in utts if u.is_wearer)
+    dur = float(episode.get("dur", 0.0)) or (
+        max((u.end for u in utts), default=0.0))
+    if layer2.is_degraded(wearer_speech_s, dur):
+        return [], True
+    directed = [u for u in utts
+                if not u.is_wearer
+                and not u.bandlimited                       # phone/broadcast
+                and u.mean_conf >= layer2.DIRECTED_MIN_ASR_CONF
+                and layer2.directed_speech_gate(u.text, u.end - u.start)]
+    return directed, False
 
 
 def _layer3_slot_trust(utt):
@@ -142,6 +158,7 @@ class AudioStack:
                 speaker_label="WEARER" if isw else "UNK",
                 text=asr.text, start=s, end=e,
                 mean_conf=asr.mean_conf(), tokens=asr.tokens, is_wearer=isw,
+                bandlimited=A.is_bandlimited(seg),
             ))
         return out
 
@@ -161,7 +178,8 @@ class AudioStack:
     # --- the pipeline ------------------------------------------------
     def process(self, wav: np.ndarray, episode: Optional[dict] = None
                 ) -> tuple[StackDecision, list[Utterance]]:
-        episode = episode or {}
+        episode = dict(episode or {})
+        episode.setdefault("dur", len(wav) / A.SR if wav is not None else 0.0)
         utts = self._utterances(wav)
 
         # anchor fail-closed: a weak/absent anchor means membership is
