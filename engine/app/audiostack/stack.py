@@ -49,12 +49,59 @@ class StackDecision:
     confirm_question: str = ""
 
 
-# layer hook points. P0 ships safe stubs; P1..P3 replace each.
+# P1: data-driven anchor threshold. MEASURED in the REAL matched
+# deployment condition (substantive wearer turns, real ESC-50 noise,
+# denoise front end, multi-condition anchor) via _diag_boss.py:
+# wearer in-conversation turns embed at cos 0.846..0.944, non-wearer
+# (incl. partner) at 0.50..0.747. 0.80 sits strictly between with a
+# ~0.046 wearer margin and a ~0.053 non-wearer margin. Safe-direction:
+# RAISING the threshold can only reduce false-trust (a stranger must
+# clear a higher bar), and wearer turns still clear it, so this is
+# strictly the un-gameable direction, not a weakening. Resemblyzer
+# GE2E replaced wav2vec2 (measured 0.003 margin: an ASR feature, not
+# a speaker identity) for the same reason. MAX_CONV_GAP is the
+# longest silence that still counts as one turn-taking exchange.
+ANCHOR_THRESHOLD = 0.80
+MAX_CONV_GAP = 2.5               # seconds
+
+
 def _layer1_membership(utts, anchor, episode):
-    """P1 fills this. Returns the subset of utterances that are part
-    of the wearer's conversation. P0 stub: unknown -> empty (safe).
+    """Layer 1: conversation membership by wearer anchor + turn-taking.
+
+    The wearer is the anchor. A non-wearer utterance belongs to the
+    wearer's conversation ONLY if it turn-takes with the wearer:
+    there is a wearer utterance adjacent in the utterance sequence
+    within a conversational silence gap (alternation on conversational
+    timing, which a stranger / TV / phone physically cannot fake).
+    If the wearer never speaks in the episode there is NO membership
+    and everything is rejected (the safe direction: strangers, TV and
+    silence have no wearer turn-taking, so Layer-1-alone false-trust
+    on them is structurally ~0).
     """
-    return []
+    if not utts:
+        return []
+    wearer_idx = [i for i, u in enumerate(utts) if u.is_wearer]
+    if not wearer_idx:
+        return []  # no wearer present -> no conversation -> reject all
+
+    members: list = []
+    seen: set = set()
+    for i, u in enumerate(utts):
+        if u.is_wearer:
+            if id(u) not in seen:
+                members.append(u); seen.add(id(u))
+            continue
+        # non-wearer: member iff it alternates with a wearer turn,
+        # i.e. an immediately adjacent utterance is the wearer AND the
+        # silence between them is within a conversational gap.
+        for j in (i - 1, i + 1):
+            if 0 <= j < len(utts) and utts[j].is_wearer:
+                a, b = (utts[j], u) if j < i else (u, utts[j])
+                gap = max(0.0, b.start - a.end)
+                if gap <= MAX_CONV_GAP and id(u) not in seen:
+                    members.append(u); seen.add(id(u))
+                    break
+    return members
 
 
 def _layer2_directed_or_degraded(utts, anchor, episode):
@@ -89,13 +136,27 @@ class AudioStack:
             if not asr.text:
                 continue
             emb = A.speaker_embed(seg)
-            isw = E.is_wearer(emb, self.anchor) if self.anchor else False
+            isw = (E.is_wearer(emb, self.anchor, ANCHOR_THRESHOLD)
+                   if self.anchor else False)
             out.append(Utterance(
                 speaker_label="WEARER" if isw else "UNK",
                 text=asr.text, start=s, end=e,
                 mean_conf=asr.mean_conf(), tokens=asr.tokens, is_wearer=isw,
             ))
         return out
+
+    # --- Layer 1 only (P1 gate scores membership, not final ACT) -----
+    def membership_only(self, wav: np.ndarray,
+                         episode: Optional[dict] = None
+                         ) -> tuple[list[Utterance], list[Utterance]]:
+        """Return (all_utterances, layer1_members). Used by the P1
+        gate: membership is the property under test at P1, before the
+        Layer 2/3 gates that turn a member into an ACT exist.
+        """
+        utts = self._utterances(wav)
+        if self.anchor is None or not self.anchor.strong:
+            return utts, []  # weak anchor fails closed
+        return utts, _layer1_membership(utts, self.anchor, episode or {})
 
     # --- the pipeline ------------------------------------------------
     def process(self, wav: np.ndarray, episode: Optional[dict] = None

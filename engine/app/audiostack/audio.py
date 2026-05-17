@@ -179,37 +179,71 @@ def asr_tokens(wav: np.ndarray) -> AsrResult:
 # speaker embedding  -> the wearer anchor (Layer 1)
 # --------------------------------------------------------------------------
 
+EMB_DIM = 256
 _spk = None
 
 
 def _get_spk():
+    """Resemblyzer GE2E voice encoder: a real speaker-verification
+    embedding (purpose-built for 'same speaker?'), not an ASR feature.
+    Weights ship inside the wheel, so there is no download and no
+    credential. wav2vec2 was tried first and measured: it barely
+    separated speakers (0.003 cosine margin) because it encodes
+    phonetic content, not identity. This is the correct tool.
+    """
     global _spk
     if _spk is None:
-        import torchaudio
+        from resemblyzer import VoiceEncoder
 
-        _models_dir()
-        bundle = torchaudio.pipelines.WAV2VEC2_BASE
-        _spk = (bundle, bundle.get_model().eval())
+        _spk = VoiceEncoder(verbose=False)
     return _spk
 
 
-def speaker_embed(wav: np.ndarray) -> np.ndarray:
-    """A fixed-length L2-normalized speaker vector. wav2vec2-base
-    features, mean+std pooled. Offline, no credential. Deterministic.
+def denoise(wav: np.ndarray) -> np.ndarray:
+    """Light spectral-gate denoise. Estimates the noise magnitude from
+    the quietest frames and subtracts it with a floor. Conservative
+    (keeps speaker structure, does not over-suppress). Applied before
+    speaker embedding so enrollment and inference see the SAME front
+    end, which is what lets a noised short wearer turn still land near
+    the anchor without lowering any decision threshold.
     """
-    import torch
+    from scipy.signal import istft, stft
 
     if wav is None or len(wav) < int(0.2 * SR):
-        return np.zeros(1536, dtype=np.float32)
-    bundle, model = _get_spk()
-    with torch.inference_mode():
-        t = torch.from_numpy(np.asarray(wav, dtype=np.float32)).unsqueeze(0)
-        feats, _ = model.extract_features(t)
-        h = feats[-1].squeeze(0)  # (frames, 768)
-        emb = torch.cat([h.mean(0), h.std(0)], dim=0)  # (1536,)
-    v = emb.numpy().astype(np.float32)
+        return np.asarray(wav, dtype=np.float32)
+    f, t, Z = stft(np.asarray(wav, dtype=np.float32), fs=SR, nperseg=512,
+                    noverlap=384)
+    mag, phase = np.abs(Z), np.angle(Z)
+    frame_e = mag.sum(axis=0)
+    floor = np.quantile(mag[:, frame_e <= np.quantile(frame_e, 0.20)]
+                        if (frame_e <= np.quantile(frame_e, 0.20)).any()
+                        else mag, 0.5, axis=1, keepdims=True)
+    clean = np.maximum(mag - 1.5 * floor, 0.05 * mag)
+    _, y = istft(clean * np.exp(1j * phase), fs=SR, nperseg=512, noverlap=384)
+    y = np.asarray(y, dtype=np.float32)
+    m = np.max(np.abs(y))
+    return (y / m * 0.97).astype(np.float32) if m > 1.0 else y
+
+
+def speaker_embed(wav: np.ndarray) -> np.ndarray:
+    """L2-normalized 256-d GE2E speaker vector, on denoised audio.
+    Offline, deterministic. Returns a zero vector on too-short/empty
+    audio so callers fail closed (cosine 0 to any anchor -> not wearer).
+    """
+    from resemblyzer import preprocess_wav
+
+    if wav is None or len(wav) < int(0.4 * SR):
+        return np.zeros(EMB_DIM, dtype=np.float32)
+    try:
+        dn = denoise(np.asarray(wav, dtype=np.float32))
+        proc = preprocess_wav(dn, source_sr=SR)
+        if proc is None or len(proc) < SR // 2:
+            return np.zeros(EMB_DIM, dtype=np.float32)
+        v = _get_spk().embed_utterance(proc).astype(np.float32)
+    except Exception:
+        return np.zeros(EMB_DIM, dtype=np.float32)
     n = np.linalg.norm(v)
-    return v / n if n > 0 else v
+    return (v / n).astype(np.float32) if n > 0 else v
 
 
 def cosine(a: np.ndarray, b: np.ndarray) -> float:

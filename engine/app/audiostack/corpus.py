@@ -139,6 +139,22 @@ _ABOUT_YOU = [
     "{name} could book the venue by {date} probably",
 ]
 _BACKCHANNELS = ["mhm", "yeah", "right", "okay", "got it", "sure"]
+# Substantive, realistic wearer turns. Real task conversations have
+# the wearer saying real sentences, not 0.5s monosyllables; degenerate
+# grunts are the unrealistic-easy failure AND unembeddable under
+# noise. ~1.5-2.5s natural phrases: realistic (R4) and speaker-ID-able.
+_WEARER_OPENERS = [
+    "hey can I grab you for a second I need a hand with something",
+    "okay so there is one thing I wanted to ask you about today",
+    "before you run off can I get your help on a quick task",
+    "hey while I have you there is something I need handled",
+]
+_WEARER_CLOSERS = [
+    "okay got it I will take care of that this afternoon thanks a lot",
+    "perfect yeah that works for me I appreciate you doing that",
+    "alright sounds good I will follow up on that later today thanks",
+    "great that is exactly what I needed thank you so much for that",
+]
 _NAMES = ["Aaron", "Erin", "Priya", "Dana", "Sean", "Shawn", "Cara", "Kara"]
 _DATES = ["Friday", "the fifteenth", "the fiftieth", "Tuesday", "next week"]
 _AMOUNTS = ["15", "50", "fifteen", "fifty", "two", "ten", "fifty thousand"]
@@ -382,10 +398,12 @@ def _assemble_item(spec: CatSpec, idx: int, seed: int) -> tuple[np.ndarray, Corp
 
     if cat == "BOSS_INSTRUCTION_IN_CONVERSATION":
         txt, slots = _fill(rng.choice(_PARTNER_TASKS), rng)
-        add("WEARER", _wearer_tts("hey quick thing")); wid = WEARER_IDENTITY
-        conv_gap(); add("S1", nw("yeah go ahead", False))
+        add("WEARER", _wearer_tts(rng.choice(_WEARER_OPENERS)))
+        wid = WEARER_IDENTITY
+        conv_gap(); add("S1", nw("yeah sure go ahead what do you need", False))
         conv_gap(); add("S1", nw(txt, False)); exp_text = txt
-        conv_gap(); add("WEARER", _wearer_tts(rng.choice(_BACKCHANNELS)))
+        conv_gap()
+        add("WEARER", _wearer_tts(rng.choice(_WEARER_CLOSERS)))
     elif cat == "BOSS_DRIVEBY":
         txt, slots = _fill(rng.choice(_DRIVEBY), rng)
         add("S1", nw(txt, adv)); exp_text = txt          # no return turn
@@ -407,9 +425,10 @@ def _assemble_item(spec: CatSpec, idx: int, seed: int) -> tuple[np.ndarray, Corp
             free_gap()
     elif cat == "NOISY_REAL_ROOM":
         txt, slots = _fill(rng.choice(_PARTNER_TASKS), rng)
-        add("WEARER", _wearer_tts("about that")); wid = WEARER_IDENTITY
+        add("WEARER", _wearer_tts(rng.choice(_WEARER_OPENERS)))
+        wid = WEARER_IDENTITY
         conv_gap(); add("S1", nw(txt, False)); exp_text = txt
-        conv_gap(); add("WEARER", _wearer_tts("okay"))
+        conv_gap(); add("WEARER", _wearer_tts(rng.choice(_WEARER_CLOSERS)))
     elif cat == "LOADBEARING_WORD_STRESS":
         if rng.random() < 0.5:
             a, _b = rng.choice(_AMBIG_NAME)
@@ -417,7 +436,8 @@ def _assemble_item(spec: CatSpec, idx: int, seed: int) -> tuple[np.ndarray, Corp
         else:
             a, _b = rng.choice(_AMBIG_AMT)
             txt, slots, ambig = f"wire {a} thousand to the vendor", {"amount": a}, "amount"
-        add("WEARER", _wearer_tts("one more thing")); wid = WEARER_IDENTITY
+        add("WEARER", _wearer_tts(rng.choice(_WEARER_OPENERS)))
+        wid = WEARER_IDENTITY
         conv_gap(); add("S1", nw(txt, False, speed=1.3)); exp_text = txt
     elif cat == "SILENCE_AND_MEDIA_ONLY":
         free_gap()

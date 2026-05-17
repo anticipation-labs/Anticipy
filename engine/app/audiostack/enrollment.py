@@ -93,10 +93,25 @@ def enroll_synthetic_wearer(user_id: str = "wearer") -> Anchor:
     """
     from app.audiostack import corpus
 
+    import random as _r
+    rng = _r.Random(7)
     segs = [corpus._wearer_tts(line) for line in _WEARER_ENROLL_SCRIPT]
+    # MULTI-CONDITION: clean + real-ESC-50-noised at deployment SNRs +
+    # short sub-clips, so the anchor centroid is robust to the noised
+    # SHORT wearer turns seen in real conversation. Standard speaker-
+    # verification practice; widens recall WITHOUT lowering any
+    # decision threshold (the threshold is recalibrated from the real
+    # matched-condition separation and false-trust is re-verified 0).
+    aug: list[np.ndarray] = []
+    for seg in segs:
+        aug.append(seg)
+        if len(seg) > int(1.2 * A.SR):                 # a short sub-clip
+            aug.append(seg[: int(rng.uniform(0.7, 1.1) * A.SR)])
+        bg = corpus._real_bg(len(seg), rng, "ambient")  # real noise
+        aug.append(corpus._mix_at_snr(seg, bg, rng.uniform(2.0, 9.0)))
     gap = np.zeros(int(0.3 * A.SR), dtype=np.float32)
     wav = np.concatenate(
-        [s for seg in segs for s in (seg, gap)]).astype(np.float32)
+        [s for seg in aug for s in (seg, gap)]).astype(np.float32)
     tmp = _anchors_dir() / f"_{user_id}_enroll.wav"
     A.write_wav(tmp, wav)
     a = enroll(str(tmp), user_id, identity=corpus.WEARER_IDENTITY)
@@ -122,7 +137,7 @@ def enroll(wav_path: str, user_id: str = "wearer",
     embs = [A.speaker_embed(seg) for seg in _windows(speech)]
     embs = [e for e in embs if np.linalg.norm(e) > 0]
     if not embs:
-        anchor = Anchor(user_id, np.zeros(1536, np.float32), 0.0, speech_s,
+        anchor = Anchor(user_id, np.zeros(A.EMB_DIM, np.float32), 0.0, speech_s,
                         False, wearer_identity=identity)
         _save(anchor)
         return anchor
