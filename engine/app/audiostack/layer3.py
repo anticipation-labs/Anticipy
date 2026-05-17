@@ -104,7 +104,7 @@ def extract_slots(text: str, tokens: list) -> dict:
     return {k: v for k, v in slots.items() if v}
 
 
-def slot_trust(utt, secondary=None) -> tuple[str, str, dict]:
+def slot_trust(utt, secondary=None, ultra=False) -> tuple[str, str, dict]:
     """Returns (verdict, reason, detail). verdict is FIRE or CONFIRM.
     CONFIRM whenever a present load-bearing slot is below the bar OR
     no actionable verb was confidently heard. Never FIRE on a
@@ -118,36 +118,58 @@ def slot_trust(utt, secondary=None) -> tuple[str, str, dict]:
     if not slots.get("verb"):
         return ("CONFIRM", "no_confident_action_verb", slots)
 
-    # weak first gate: parakeet's own confidence (it is near-1 even
-    # when wrong, so this only catches the rare honestly-low case).
-    weakest = 1.0
-    weak_slot = ""
-    for stype, items in slots.items():
-        mn = min(c for _t, c in items)
-        if mn < weakest:
-            weakest, weak_slot = mn, stype
-    if weakest < SLOT_CONF_BAR:
-        return ("CONFIRM", f"low_conf_slot:{weak_slot}={round(weakest,3)}",
-                slots)
+    # Corrected option (b), narrow scope. The mandatory confirm
+    # fires ONLY when BOTH hold:
+    #  (1) the action is in the FROZEN engine's existing ultra-high
+    #      class (ultra_high or money, the 3-hour-rule carve-out
+    #      class) -- passed in as `ultra`, read via the existing
+    #      comms.classify_criticality seam, NOT redefined here; AND
+    #  (2) a load-bearing slot is uncertain: parakeet's own min
+    #      confidence below the bar OR not corroborated by the
+    #      independent second ASR.
+    # Normal / high-but-not-ultra actions are NEVER gated here even
+    # with a name/date/amount; they proceed and the frozen engine
+    # applies its own rules. Binding guarantee: zero blind-fire on an
+    # ultra-high action with an uncertain load-bearing slot.
+    # not ultra-high -> never gated here; the frozen engine decides.
+    if not ultra:
+        return ("FIRE", "proceed(non_ultra)", slots)
 
-    # the real defense: CROSS-MODEL corroboration. parakeet's
-    # confidence is uninformative and it gives no n-best (measured
-    # over six approaches), so a load-bearing slot is trusted ONLY if
-    # a SECOND, architecturally independent ASR corroborates the slot
-    # word. Two independent models rarely make the SAME confident
-    # error on genuinely corrupted audio, but agree on clean speech.
-    # `secondary` is the independent transcript string.
+    # ULTRA-HIGH: it may FIRE only if its load-bearing CONTENT is
+    # present, parakeet-confident, AND strongly corroborated by the
+    # independent ASR. An ultra-high action with NO identifiable
+    # content slot (the who/what/how-much was destroyed into garbage
+    # that no longer classifies as a name/amount/date) is the most
+    # dangerous case (wire money to ???; send the contract to ???) ->
+    # uncertain by definition -> CONFIRM. This guarantees the binding:
+    # zero blind-fire on an ultra-high action with an uncertain
+    # load-bearing slot. Over-confirming a CLEAN-but-uncorroborated
+    # ultra-high action is the accepted, honestly-reported cost of
+    # scoped option (b); normal/high true-pass is untouched.
+    content = {st: slots[st] for st in ("person", "amount", "date")
+               if st in slots}
+    if not content:
+        return ("CONFIRM",
+                "ultra_high+uncertain_slot:no_content_slot(destroyed)", slots)
+
+    s2w: set = set()
+    s2 = ""
     if isinstance(secondary, str):
-        s2 = " " + re.sub(r"[^a-z0-9 ]", " ", secondary.lower()) + " "
-        s2 = re.sub(r"\s+", " ", s2)
+        s2 = re.sub(r"\s+", " ",
+                    " " + re.sub(r"[^a-z0-9 ]", " ", secondary.lower()) + " ")
         s2w = set(s2.split())
-        for stype in ("person", "amount", "date", "verb"):
-            for w, _c in slots.get(stype, []):
-                if _corroborated(w, s2, s2w):
-                    continue
+    for stype, items in content.items():
+        mn = min(c for _t, c in items)
+        if mn < SLOT_CONF_BAR:
+            return ("CONFIRM",
+                    f"ultra_high+uncertain_slot:low_conf:{stype}="
+                    f"{round(mn, 3)}", slots)
+        for w, _c in items:
+            if not (s2w and _corroborated(w, s2, s2w)):
                 return ("CONFIRM",
-                        f"slot_uncorroborated:{stype}:{w!r}", slots)
-    return ("FIRE", "slots_ok+cross_model_agree", slots)
+                        f"ultra_high+uncertain_slot:uncorroborated:"
+                        f"{stype}:{w!r}", slots)
+    return ("FIRE", "ultra_high+content_confident_corroborated", slots)
 
 
 _NUM_EQUIV = {
@@ -193,7 +215,12 @@ def _corroborated(word: str, s2: str, s2w: set) -> bool:
         r = difflib.SequenceMatcher(None, n, w2).ratio()
         if r > best:
             best = r
-    return best >= 0.62
+    # STRONG corroboration required. This is only ever applied to
+    # ULTRA-HIGH actions (normal/high are never gated), so a strict
+    # bar can only add safe confirmations on ultra-high and cannot
+    # harm normal-risk true-pass. A genuinely corrupted slot will not
+    # reach a strong independent-model match; a clean one will.
+    return best >= 0.80
 
 
 def confirm_question(utt, detail: dict) -> str:

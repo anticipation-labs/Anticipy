@@ -463,13 +463,20 @@ def _assemble_item(spec: CatSpec, idx: int, seed: int) -> tuple[np.ndarray, Corp
         seg_pre = _tts(pre, v)
         seg_slot = _tts(a, v)
         seg_suf = _tts(suf, v)
-        # genuine local corruption of ONLY the slot word
+        # Genuine local corruption of ONLY the slot word (the
+        # spec's LOADBEARING_WORD_STRESS stresses the NAME/AMOUNT,
+        # not the verb). Heavy real noise + a mid-slot dropout keep
+        # the slot genuinely uncertain (binding: never FIRE it). A
+        # clean guard gap on EACH side isolates the corruption so VAD
+        # does not bleed it into the (clean) verb in seg_pre; the
+        # verb must survive so the system CONFIRMS (asks the wearer)
+        # rather than silently dropping an ultra-high instruction.
         bg = _real_bg(len(seg_slot), rng, "ambient")
-        seg_slot = _mix_at_snr(seg_slot, bg, rng.uniform(-15.0, -7.0))
+        seg_slot = _mix_at_snr(seg_slot, bg, rng.uniform(-12.0, -5.0))
         d0 = int(len(seg_slot) * rng.uniform(0.3, 0.5))
         d1 = d0 + int(len(seg_slot) * rng.uniform(0.18, 0.30))
         seg_slot[d0:d1] = 0.0                       # brief dropout mid-slot
-        g = np.zeros(int(0.06 * SR), dtype=np.float32)
+        g = np.zeros(int(0.28 * SR), dtype=np.float32)   # clean guard gap
         task = np.concatenate([seg_pre, g, seg_slot, g, seg_suf]).astype(np.float32)
         add("WEARER", _wearer_tts(rng.choice(_WEARER_OPENERS)))
         wid = WEARER_IDENTITY

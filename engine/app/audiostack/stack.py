@@ -147,8 +147,41 @@ def _layer3_slot_trust(utt):
             secondary = _A.asr2_text(seg)   # independent-model transcript
         except Exception:
             secondary = None
-    verdict, reason, _detail = layer3.slot_trust(utt, secondary)
+    ultra = _is_ultra_high(getattr(utt, "text", "") or "")
+    verdict, reason, _detail = layer3.slot_trust(utt, secondary, ultra)
     return verdict, reason
+
+
+def _is_ultra_high(action_text: str) -> bool:
+    """Read the FROZEN engine's EXISTING risk classification through
+    the existing comms.classify_criticality seam (read-only; the
+    frozen engine is NOT modified). Ultra-high = the same class the
+    3-hour-rule carve-outs use: ultra_high or money. Sync-safe wrapper
+    (classify_criticality is async; this is called from sync stack
+    code and sometimes inside a running loop)."""
+    import asyncio
+
+    from app.anticipy import comms
+
+    async def _go():
+        c = await comms.classify_criticality(action_text)
+        return c.risk_tier in (comms.RISK_ULTRA, comms.RISK_MONEY)
+
+    try:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return bool(asyncio.run(_go()))
+        # inside a running loop: run on a private loop in a thread
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            return bool(ex.submit(lambda: asyncio.run(_go())).result(timeout=30))
+    except Exception:
+        # fail SAFE for the binding guarantee: if risk cannot be
+        # read, treat as ultra-high so an uncertain slot still
+        # confirms rather than blind-fires.
+        return True
 
 
 class AudioStack:
