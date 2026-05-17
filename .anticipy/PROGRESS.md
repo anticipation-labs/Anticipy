@@ -3178,3 +3178,44 @@ task. The real OAuth exchange (real Google/email creds + a human)
 is wired and labelled unproven, not faked. Deterministic, no model
 calls. No binding relaxed, frozen git-clean. Cost to here: about
 $10.30 total.
+
+================================================================
+MH-P6: failure recovery in the real world (mh-p6, genuine PASS)
+================================================================
+
+SOLVABLE. New: engine/app/recovery/resume.py (+ __init__) +
+engine/tests/e2e/gate_mh_p6.py. Frozen untouched. Per-action
+journal of idempotent ops + a precondition guard. Hard invariant:
+an interrupted action EITHER completes on resume (idempotent,
+exactly once) OR fails safe and surfaces; never silent-half,
+never double.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p6.py
+
+Literal output (rc=0):
+  [hang                  ] status=completed         effects=
+    ['op0','op1','op2'] -> True
+  [network               ] status=completed         effects=
+    ['op0','op1','op2'] -> True
+  [power                 ] status=completed         effects=
+    ['op0','op1','op2'] -> True
+  [site_changed_pre      ] status=surfaced_failsafe effects=
+    ['op0'] -> True
+  [site_changed_on_resume] status=surfaced_failsafe effects=
+    ['op0','op1'] -> True
+  BINDING every interrupt -> complete-on-resume OR
+    fail-safe-surface; never silent-half, never double -> True
+  BINDING frozen paths clean -> True
+  MH_P6_GATE PASS
+
+Honest framing: browser hang, network drop, and power loss at ~60%
+each resumed from the durable journal and completed EXACTLY once
+(no op re-applied). A site that changed before the next op, and a
+world fact that drifted after an op was applied (detected on
+resume by the precondition guard), both FAILED SAFE and surfaced
+instead of blindly continuing; the unapplied ops stayed unapplied
+(not a silent half-completion, it is surfaced for the wearer).
+Deterministic. No binding relaxed, frozen git-clean. Cost to here:
+about $10.30 total.
