@@ -3053,3 +3053,55 @@ life-log line, even phrased like a fact and asking to be durable,
 never becomes a durable fact) holds with zero leakage. No binding
 relaxed, frozen git-clean. Cost to here: about $10.10 total (MH-P2
 made no model calls; deterministic).
+
+================================================================
+MH-P3: retrieval/draw path into the resolution engine (mh-p3,
+genuine PASS)
+================================================================
+
+SOLVABLE. New: engine/app/memory_v2/draw.py +
+engine/tests/e2e/gate_mh_p3.py. Changed:
+engine/app/proactive_day/pipeline.py (one OPTIONAL, default-None
+hook only; not frozen). Frozen reasoning + action engine + cascade
+git-verified untouched. Web-research tools still infra-down
+(recorded); design from the repo's proven memory stack +
+documented practice, labelled, not faked.
+
+The draw resolves an alias-style reference ("the usual") to a
+DURABLE, wearer-confirmed fact from the MH-P2 store, supplied to
+the resolution engine ONLY as a fallback for a slot the utterance
+did not carry, and ONLY after the frozen instruction gate has
+already passed. It is precision-over-recall: exactly one durable
+hit or nothing (ambiguity -> nothing -> the resolver still
+CONFIRMs, never guesses). life_log is excluded by the MH-P2
+invariant, so retrieved memory can never be a low-trust item.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/e2e/gate_mh_p3.py
+
+Literal gate output (rc=0), VAGUE_VARIABLE + CHATTER, two runs on
+one seed:
+  BINDING memory-OFF == dil-p6 baseline: VAGUE true_pass=0.0
+    (==0.0) chatter_fa=0.0 (<=0.02) -> True
+  BINDING resolution improves: VAGUE true_pass OFF=0.0 -> ON=0.25
+    improved=True (real before/after, no rounding)
+  BINDING no context-rot: CHATTER false_action ON=0.0 (<=0.02)
+    -> True
+  BINDING retrieval latency max=0.155ms (<= hard budget 25.0ms)
+    -> True
+  BINDING frozen paths clean -> True
+  MH_P3_GATE PASS
+
+Honest framing: the improvement is a real, modest, measured
+0.0 -> 0.25 on VAGUE_VARIABLE (the share of vague items that are
+an alias the live world cannot resolve but a durable wearer fact
+can); it is NOT inflated toward the 0.80 product target and the
+other vague items still safely CONFIRM. The memory-OFF run
+reproduces the committed dil-p6 / dil-p7 baseline exactly, proving
+the hook is a strict no-op when disabled: zero regression to every
+prior gate. Context-rot binding holds (chatter false-action 0.0:
+the draw is unreachable for chatter because the frozen gate
+IGNOREs it first). Retrieval latency 0.155ms is far inside the
+hard 25ms budget. No binding relaxed, frozen git-clean. Cost to
+here: about $10.30 total.

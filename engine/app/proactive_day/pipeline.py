@@ -20,6 +20,15 @@ from app.proactive_day import metrics as M
 from app.proactive_day.world import SimWorld
 
 
+# MH-P3: an OPTIONAL durable-memory draw. Default None == OFF, so
+# every DIL gate path is byte-identical (zero regression). Only the
+# MH-P3 gate sets it. Signature: (event_text) -> (obj_hint|None,
+# person_hint|None). It is consulted ONLY after the frozen
+# instruction gate has already passed, so chatter (IGNOREd upstream)
+# can never reach it: no context-rot.
+_MEMORY_DRAW = None
+
+
 # --- layer hook points. P0 ships safe stubs; P1..P7 replace each. ---
 
 def frozen_is_instruction(event: dict) -> str:
@@ -73,9 +82,22 @@ def layer_resolve(event: dict, world: SimWorld,
         decision = frozen_is_instruction(event)
         if decision not in ("ACT", "ASK"):
             return None, False, "not_instruction"  # -> LIFE_LOG
+    nt = event.get("slots", {}).get("thing")
+    np_ = event.get("slots", {}).get("name")
+    # MH-P3: only when explicitly enabled, and only as a FALLBACK for
+    # a slot the utterance itself did not carry. A durable wearer
+    # fact may resolve an alias the live world cannot; an unresolved
+    # reference is still never guessed (the draw returns nothing on
+    # ambiguity, so the resolver still CONFIRMs).
+    if _MEMORY_DRAW is not None and (nt is None or np_ is None):
+        try:
+            d_obj, d_per = _MEMORY_DRAW(event.get("text", ""))
+            nt = nt or d_obj
+            np_ = np_ or d_per
+        except Exception:
+            pass
     ra = _R.resolve(event.get("text", ""), world,
-                    named_thing=event.get("slots", {}).get("thing"),
-                    named_person=event.get("slots", {}).get("name"))
+                    named_thing=nt, named_person=np_)
     return ra, ra.all_confident, ("ok" if ra.all_confident
                                   else f"unresolved:{ra.unresolved}")
 
