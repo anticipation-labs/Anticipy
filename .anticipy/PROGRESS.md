@@ -2498,3 +2498,45 @@ was genuinely not inferable - the correct safe direction, not a
 guess and not a drop. scheduled-correctly 0.75 reported plainly.
 Chatter false-action 0.000, no regression on the hard metrics,
 frozen git-clean. Cost to here: $6.70 total.
+
+## DIL-P3 COMPLETION DETECTOR (C) + AMBIENT CANCEL (D)
+## (canonical tag dil-p3, GENUINE deep PASS; safety-critical)
+
+engine/app/proactive_day/completion.py + a restructured
+pipeline.run_day with a TIME-ORDERED completion+cancel
+reconciliation. Events queue resolved actions with their
+queued_at/speaker; NOTHING executes until reconciliation. Order of
+precedence (the safe one): a RETRACTED action is never executed;
+a WORLD-SATISFIED action is KILLED (zero double-action); else
+deferred or acted. Layer C: world_satisfied() detects the outcome
+already produced by ANY means (mail sent, calendar changed, the
+wearer doing it manually). Layer D: an ambient cancel ("never
+mind", "actually ... Monday instead", frozen NEVERMIND signal +
+cue backstop) retracts the most recent LIVE queued action by the
+same speaker (recency = the deterministic ambient-cancel referent).
+Operates on already-resolved-and-queued actions, which the frozen
+engine's own tests never covered. Frozen engine NOT modified.
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/dayinlife/gate_dil_p3.py
+
+Final gate output (literal, rc=0):
+  ALREADY_DONE   n=8  double_actions=0 (==0) -> True  [killed=8]
+  AMBIENT_CANCEL promises n=8 executed_after_cancel=0 (==0)
+    -> True  [cancelled=8]
+  BINDING CHATTER false_action=0.0 (<=0.02) -> True
+  BINDING frozen paths clean -> True
+  DIL_P3_GATE PASS
+
+Honest framing. Both HARD safety metrics are exactly 0 and the
+pass is DEEP, not shallow: all 8 ALREADY_DONE promises were
+genuinely resolved and QUEUED (the frozen engine judged "I'll send
+Dana the deck" actionable) then KILLED by the completion detector
+because the world satisfied them by other means (killed=8, zero
+double-action). All 8 AMBIENT_CANCEL promises were genuinely
+queued then RETRACTED by the recency-matched ambient cancel
+(cancelled=8, zero execution-after-cancel). The completion and
+cancel layers actually fire on real pending actions, not on
+LIFE_LOG'd no-ops. Chatter false-action 0.000, frozen git-clean.
+Cost to here: $6.78 total.

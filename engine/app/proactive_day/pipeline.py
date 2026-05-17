@@ -120,73 +120,73 @@ def run_day(manifest: dict, world: SimWorld) -> list:
     plumbing and the hard binding metrics are exercised before any
     layer can earn a true-positive.
     """
+    from app.proactive_day import completion as _C
+
     events = sorted(manifest["events"], key=lambda e: e["ts"])
-    queued: dict[str, dict] = {}      # ev_id -> resolved action awaiting
-    cancelled: set = set()
-    results: list[M.ItemResult] = []
+    queued: dict[str, dict] = {}      # ev_id -> live queued action
+    order: list[str] = []             # event order for the output
+    pre: dict[str, M.ItemResult] = {}  # immediate (non-executing) outcomes
 
     for ev in events:
         world.tick(ev["ts"])
         world.hear(ev.get("speaker", "WEARER"), ev["text"],
                    ev.get("place", "home"))
-
-        # apply a world-by-other-means completion at its scripted time
         if ev.get("world_done_at") is not None and ev.get("world_done"):
             world.tick(ev["world_done_at"])
             world.world_did(ev["world_done"]["kind"], ev["world_done"])
 
         cat, label, eid = ev["category"], ev["label"], ev["ev_id"]
+        order.append(eid)
+        spk = ev.get("speaker", "WEARER")
 
-        # an ambient cancel retracts a live queued action
-        canc = layer_cancelled(ev, queued)
-        if canc:
-            cancelled.add(canc)
-            results.append(M.ItemResult(eid, cat, label, "CANCELLED"))
+        # Layer D: an ambient cancel retracts the most recent LIVE
+        # queued action by the same speaker (frozen NEVERMIND signal
+        # + cue backstop). The cancel utterance itself is recorded.
+        fr_dec = frozen_is_instruction(ev) if _C._CANCEL_CUE.search(
+            ev["text"]) else None
+        if _C.is_cancel(ev["text"], fr_dec):
+            tgt = _C.cancel_target(spk, queued)
+            if tgt:
+                queued[tgt]["retracted"] = True
+            pre[eid] = M.ItemResult(eid, cat, label, "CANCELLED")
             continue
 
         action, refs_ok, why = layer_resolve(ev, world)
-
-        # completion guard (the world already did it by other means)
-        if action is not None and layer_completed(action, world):
-            results.append(M.ItemResult(eid, cat, label, "KILLED"))
+        if action is None:                       # not an instruction
+            pre[eid] = M.ItemResult(eid, cat, label, "LIFE_LOG")
             continue
-        if eid in cancelled:
-            results.append(M.ItemResult(eid, cat, label, "CANCELLED"))
-            continue
-
-        # the safe asymmetric direction, decided from CONTENT (the
-        # frozen engine's instruction judgement + Layer A resolution),
-        # NEVER from the mix-time label:
-        #  not an instruction (chatter/hypothetical/3rd-party) -> LIFE_LOG
-        #  an instruction with an unresolved load-bearing ref  -> CONFIRM
-        if action is None:
-            results.append(M.ItemResult(eid, cat, label, "LIFE_LOG"))
-            continue
-        if not refs_ok:
-            results.append(M.ItemResult(eid, cat, label, "CONFIRMED"))
+        if not refs_ok:                          # unresolved -> ask once
+            pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
             continue
 
         when = layer_timing(ev, action, world)
-        if when in ("deferred", "scheduled", "standing"):
-            # queued against the inferred condition: NOT executed now,
-            # NOT dropped.
-            queued[eid] = {"action": vars(action), "when": when}
-            results.append(M.ItemResult(eid, cat, label, "DEFERRED"))
-            continue
         if when == "hold":
-            # time condition present but release not inferable: surface
-            # one clear now-or-later question; not executed, not dropped.
-            results.append(M.ItemResult(eid, cat, label, "CONFIRMED"))
+            pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
             continue
-
-        queued[eid] = {"action": vars(action), "when": "now"}
-        # content_ok: a confidently-resolved action that did not act on
-        # any None reference (zero act on unresolved is structural:
-        # unresolved -> CONFIRMED above, never reaches here).
         content_ok = (action.verb != "" and not (
-            action.kind in ("send_email",) and action.target is None))
-        results.append(M.ItemResult(eid, cat, label, "ACTED",
-                                    content_ok=content_ok))
+            action.kind == "send_email" and action.target is None))
+        queued[eid] = {"action": vars(action), "when": when,
+                       "queued_at": ev["ts"], "speaker": spk,
+                       "cat": cat, "label": label,
+                       "content_ok": content_ok}
 
-    layer_comms(list(queued.values()), world)   # P0: no-op (silent)
-    return results
+    # --- reconciliation: nothing executes until completion + cancel
+    # have had their say. Order of precedence is the safe one:
+    # a RETRACTED action is never executed; a WORLD-SATISFIED action
+    # is killed (zero double-action); otherwise deferred or acted.
+    for eid, q in queued.items():
+        if q.get("retracted"):
+            outcome = "CANCELLED"
+        elif _C.world_satisfied(q["action"], world):
+            outcome = "KILLED"               # the world already did it
+        elif q["when"] in ("deferred", "scheduled", "standing"):
+            outcome = "DEFERRED"
+        else:
+            outcome = "ACTED"
+        pre[eid] = M.ItemResult(
+            eid, q["cat"], q["label"], outcome,
+            content_ok=q["content_ok"])
+
+    layer_comms([q for q in queued.values()
+                 if not q.get("retracted")], world)   # silent until P4
+    return [pre[e] for e in order if e in pre]
