@@ -2306,3 +2306,61 @@ ceiling; real wearable audio scores lower (P7 restates). The
 earlier astack-p3-trust false pass was retired (astack-p3-blocked)
 then honestly resolved here; canonical astack-p3-trust restored on
 this genuine pass. Cost to here: $6.43 total.
+
+================================================================
+# ANTICIPY DAY-IN-THE-LIFE CORRECTION BUILD V1
+# (the everyday proactive product, on top of FROZEN reasoning
+# p0..p11 + FROZEN action engine phase-v4, git-verified untouched.
+# astack-p0..p3 stand as genuine. The product is not the audio
+# stack; it is the boring high-frequency moment forty times a day.)
+================================================================
+
+## DIL-P0 SIMULATED LIFE + DAY CORPUS + HARNESS + SEAMS
+## (canonical tag dil-p0, GENUINE PASS, zero model calls)
+
+New engine/app/proactive_day package, zero frozen edits. world.py:
+a populated SimWorld (contacts, calendar, files, conversation day-
+memory, a phone/SMS/call/email sink that RECORDS every outbound and
+sends nothing, plus world_did/already_satisfied for completion-
+detection). scenario.py: the FIXED scripted-day spec (10 categories,
+min counts, labels written at build time, never model-judged) with
+a self_check that FAILS the build if the realized day is softer than
+spec (distractor density, vague-ref share, loud tier, safety-
+critical pairs). metrics.py: both rates per category together, no
+rounding, and the HARD binding counters (chatter false-action,
+double-action, acted-after-cancel, flood). pipeline.py: the seven-
+layer orchestrator skeleton with the asymmetric SAFE default (P0
+acts on NOTHING; P1..P7 earn true-positives without breaching the
+hard metrics).
+
+Gate command (literal):
+  cd engine && ANTICIPY_DATA_DIR=$HOME/.anticipy/system_v1 \
+    .venv/bin/python tests/dayinlife/gate_dil_p0.py
+
+Final gate output (literal, rc=0):
+  scenario assembled n=116 -> self_check=True
+  AMBIENT_CANCEL: n=16 ok  (8 promise+cancel pairs)
+  metrics: chatter_false_action==0.5 -> True
+  metrics: VERBAL true_pass==0.5 -> True
+  metrics: double_actions==1 -> True
+  metrics: acted_after_cancel==1 -> True
+  metrics: floods==1 -> True
+  P0 default: results==n_events -> True
+  P0 default: P0 acted==0 (safe default) -> True
+  P0 default: chatter_false_action==0 -> True
+  P0 default: double_actions==0 -> True
+  P0 default: acted_after_cancel==0 -> True
+  P0 default: floods==0 -> True
+  P0 default: no outbound (silent) -> True
+  frozen paths clean -> True
+  proactive_day is a new (non-frozen) package -> True
+  DIL_P0_GATE PASS
+
+Honest framing. P0 proves the simulated life, the anti-gaming
+scripted day, the honest harness and the asymmetric safe default;
+the pipeline ACTs on nothing yet (true-pass 0, every hard binding
+metric trivially clean by construction) which is the safe baseline.
+P1..P7 earn the everyday true-positives WITHOUT ever breaching the
+hard metrics. Comms delivery is the SIMULATED recording sink only;
+real Telnyx/SES/calls are gated and labelled unproven. Cost to
+here: $6.43 total (DIL-P0 added zero model spend).
