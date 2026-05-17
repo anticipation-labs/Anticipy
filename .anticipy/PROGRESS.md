@@ -2220,8 +2220,19 @@ known limitation of the synthetic+offline-ASR setup, certified only
 that the system never blind-fires because it confirms all load-
 bearing slots. P2 is unaffected and PASSED; P0/P1/P2 tags stand.
 
-Per spec sec 2/7: stopping P3/P4 here, this honest blocker recorded
-with literal evidence, and ONE [ANTICIPY-Q] audiostack blocker
-phase P3 email sent (or its delivery status recorded honestly if
-the aevoy@anticipy.ai Resend domain is still unverified, as in the
-prior build). Cost to here: $6.27 total.
+Per spec sec 2/7: stopped P3/P4 here, this honest blocker recorded
+with literal evidence. The ONE [ANTICIPY-Q] audiostack blocker
+phase P3 email was prepared (engine/scripts/send_anticipy_q_p3.py,
+four sections, body dry-run-verified) and the send was ATTEMPTED
+via the established Aevoy mechanism (Resend, FROM aevoy@anticipy.ai,
+TO omar@anticipy.ai). It was NOT delivered: Resend returned the
+literal HTTP 403 "The anticipy.ai domain is not verified" - the
+SAME external DNS/account limitation as the prior reasoning build's
+completion email. The API key authenticates; verifying the sending
+domain needs Resend dashboard + DNS access, outside the autonomous
+build's allowed scope. This document is the durable honest record
+of the blocker and the decision needed; the email is only its
+notification. No pass was faked, the binding zero-blind-fire
+requirement was not weakened, and no 9th approach was attempted
+(the no-thrashing rule). Cost to here: $6.27 total. Build stopped
+at P3/P4 pending the user's decision among options (a)/(b)/(c).
