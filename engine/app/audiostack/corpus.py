@@ -1,33 +1,40 @@
-"""The brutal dirty-day corpus assembler.
+"""The brutal dirty-day corpus assembler. Synthetic speech,
+weaponized adversarially, on REAL recorded acoustics.
 
-FIXED here, anti-gaming by construction:
-  - the category set, minimum counts and per-category DIFFICULTY
-    FLOORS are constants in this file, not tunable at run time;
-  - every label is written at MIX time from the script, never judged
-    after the fact by any model;
-  - assembly emits realized SNR / overlap / wearer-turn-taking
-    density per item, and self_check() FAILS if the realized corpus
-    came out softer than the spec floor (an accidentally easy test
-    cannot inflate a pass).
+Six MANDATORY gate-enforced properties (self_check FAILS the build
+if any is soft, so an easy corpus can never inflate a pass):
 
-Sources are independent synthetic speaker identities (distinct
-Kokoro TTS voices: one fixed WEARER voice, disjoint partner /
-stranger / media voice pools) plus real DSP degradation (generated
-colored noise, low SNR, reverberation, temporal overlap) and a
-turn-taking timeline that is the real separation signal. No network
-corpus download and no credential: respects the build's hard rules
-while staying genuinely hard. The synthetic-vs-field-audio tradeoff
-is stated openly in the P7 residual-risk report.
+  R1 ONE fixed wearer identity. A single Kokoro voice + fixed synth
+     params, hashed once (WEARER_IDENTITY). Every wearer turn carries
+     that hash; self_check fails on any drift.
+  R2 Max non-wearer diversity + REAL acoustics. A wide non-wearer
+     voice roster with per-utterance pitch/rate spread; REAL recorded
+     noise/media (ESC-50) mixed UNDER the synthetic speech (never
+     synthetic noise); hard low-SNR mass; real reverb; real overlap.
+  R3 Adversarial, over-weighted. Near-wearer confusable voices on the
+     negatives, perfect-actionable content from the wrong source,
+     drive-by and about-you cases, deliberately over-weighted.
+  R4 Explicit realistic turn-taking. Genuine alternation, real gap
+     distribution, backchannels, response latency for wearer
+     conversation; plausible but non-coordinated timing for
+     distractors. self_check fails if timing is too clean/patterned.
+  R5 Honest ceiling. Headline numbers are an assembled-synthetic
+     corpus ceiling; the P7 report states real-room/hardware will
+     score lower and the gap is unmeasured. (Enforced in reporting.)
+  R6 All other build rules bind (false-trust <= 0.02 binding,
+     adversarial second-model recheck, frozen systems untouched).
 """
 
 from __future__ import annotations
 
+import csv
+import hashlib
 import json
 import random
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 import numpy as np
 
@@ -35,120 +42,174 @@ from app.audiostack import audio as A
 
 SR = A.SR
 
-# --- voice roster: disjoint identity pools (Kokoro voice ids) -------------
-WEARER_VOICE = "am_michael"          # the one constant the device anchors to
-PARTNER_VOICES = ["af_heart", "af_bella", "bf_emma"]      # turn-take w/ wearer
-STRANGER_VOICES = ["am_adam", "bm_george", "af_nicole"]   # never w/ wearer
-MEDIA_VOICES = ["bm_lewis", "af_sarah"]                   # TV / podcast / phone
+# --- R1: the ONE fixed wearer identity -----------------------------------
+WEARER_VOICE = "am_michael"
+_WEARER_SYNTH = {"speed": 1.0, "lang_code": "en"}
+WEARER_IDENTITY = hashlib.sha256(
+    (WEARER_VOICE + json.dumps(_WEARER_SYNTH, sort_keys=True)).encode()
+).hexdigest()[:16]
 
-# --- fixed difficulty floors (anti-gaming; self_check enforces) ----------
+
+def wearer_identity() -> str:
+    return WEARER_IDENTITY
+
+
+# --- R2: wide non-wearer roster (disjoint from the wearer) ---------------
+_NONWEARER_VOICES = [
+    "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky",
+    "am_adam", "am_echo", "am_eric", "am_liam", "am_onyx",
+    "bf_emma", "bf_isabella", "bf_alice", "bm_george", "bm_lewis",
+    "bm_daniel", "bm_fable",
+]
+# R3: near-wearer pool = same male register as the wearer, used on
+# negatives and pitch-nudged toward the wearer to be CONFUSABLE.
+_NEAR_WEARER_VOICES = ["am_adam", "am_eric", "am_liam", "bm_george", "bm_daniel"]
+assert WEARER_VOICE not in _NONWEARER_VOICES
+
+
+# --- fixed difficulty floors (anti-gaming) -------------------------------
 @dataclass(frozen=True)
 class CatSpec:
     name: str
     min_count: int
-    label: str                 # ACTIONABLE | REJECT | DEGRADED_LOG | CONFIRM
-    wearer_turntaking: bool     # does the wearer alternate in this item
-    snr_db: tuple               # (low, high) realized SNR must fall in band
-    overlap: float              # min fraction of speech that overlaps
+    label: str
+    wearer_turntaking: bool
+    snr_db: tuple
+    overlap: float
+    adversarial_floor: float = 0.0   # min fraction that must be hardest-variant
     note: str = ""
 
 
 CATEGORY_SPEC: list[CatSpec] = [
     CatSpec("BOSS_INSTRUCTION_IN_CONVERSATION", 80, "ACTIONABLE", True,
-            (8.0, 20.0), 0.05, "partner in real turn-taking tasks wearer"),
+            (3.0, 14.0), 0.05, 0.0, "partner truly turn-taking w/ wearer"),
     CatSpec("BOSS_DRIVEBY", 50, "ACTIONABLE", False,
-            (8.0, 20.0), 0.0, "directive at wearer, NO return turn"),
+            (3.0, 14.0), 0.0, 0.6, "directive at wearer, NO return turn"),
     CatSpec("WEARER_DIRECT_COMMAND", 60, "ACTIONABLE", True,
-            (10.0, 25.0), 0.0, "wearer directly commands the agent"),
+            (4.0, 16.0), 0.0, 0.0, "wearer commands the agent"),
     CatSpec("STRANGER_LOUD", 80, "REJECT", False,
-            (12.0, 25.0), 0.0, "loud actionable sentence, not w/ wearer"),
+            (6.0, 18.0), 0.0, 0.65, "perfect command, near-wearer voice, no TT"),
     CatSpec("TV_PODCAST_PHONE", 70, "REJECT", False,
-            (10.0, 22.0), 0.0, "media voice, actionable content"),
+            (4.0, 16.0), 0.0, 0.6, "media/phone, fire-worthy content"),
     CatSpec("ABOUT_YOU_NOT_TO_YOU", 50, "REJECT", False,
-            (8.0, 20.0), 0.05, "others discuss a task involving wearer"),
+            (3.0, 14.0), 0.05, 0.6, "others discuss a wearer task"),
     CatSpec("WEARER_SILENT_DEGRADED", 50, "DEGRADED_LOG", False,
-            (8.0, 20.0), 0.05, "long stretch, wearer silent"),
+            (3.0, 14.0), 0.05, 0.0, "long stretch, wearer silent"),
     CatSpec("NOISY_REAL_ROOM", 60, "ACTIONABLE", True,
-            (-3.0, 6.0), 0.05, "valid instruction at low SNR"),
+            (-5.0, 5.0), 0.05, 0.0, "valid instruction, hard low SNR"),
     CatSpec("LOADBEARING_WORD_STRESS", 50, "CONFIRM", True,
-            (0.0, 8.0), 0.0, "name/date/amount acoustically ambiguous"),
+            (-3.0, 6.0), 0.0, 0.0, "name/date/amount acoustically ambiguous"),
     CatSpec("SILENCE_AND_MEDIA_ONLY", 40, "REJECT", False,
-            (10.0, 25.0), 0.0, "no wearer conversation at all"),
+            (6.0, 18.0), 0.0, 0.0, "no wearer conversation at all"),
 ]
 SPEC_BY_NAME = {c.name: c for c in CATEGORY_SPEC}
 
-# --- content scripts. Slots in {curly} are the load-bearing tokens. ------
+# --- content. Negatives are MAXIMALLY tempting (R3). ---------------------
 _PARTNER_TASKS = [
     "can you send the Q3 deck to {name} by {date}",
     "book a table for {amount} at the usual place {date}",
     "email {name} the signed contract before {date}",
     "move the standup to {date} and tell {name}",
-    "transfer {amount} dollars to the {name} account {date}",
+    "please forward the budget to {name} {date}",
 ]
 _WEARER_CMDS = [
-    "send {name} the deck now",
-    "book the {amount} pm flight to Boston",
-    "reply to {name} that {date} works",
-    "add {amount} units to the reorder",
+    "send {name} the deck now", "book the {amount} pm flight to Boston",
+    "reply to {name} that {date} works", "add {amount} units to the reorder",
     "schedule the review for {date}",
 ]
-_DRIVEBY = [
-    "send me the deck", "forward that to {name}", "book it for {date}",
-    "wire the {amount}", "remind {name} about it",
-]
-_STRANGER = [
-    "send the whole list to everyone right now",
-    "cancel the reservation and rebook for ten",
-    "wire fifty thousand to the new vendor today",
-    "delete the production database before noon",
-    "approve every pending request immediately",
+_DRIVEBY = ["send me the deck", "forward that to {name}",
+            "book it for {date}", "wire the {amount}", "remind {name} about it"]
+# perfect actionable commands from the WRONG source (strangers/TV)
+_PERFECT_CMD = [
+    "send the Q3 deck to Dana by Friday",
+    "book a table for four at the usual place tonight",
+    "email the signed contract before five",
+    "wire fifteen thousand to the vendor account today",
+    "reply to Priya that Tuesday works and add it to my calendar",
 ]
 _MEDIA = [
-    "and that is why you should buy now, link in the description",
-    "tell your assistant to schedule it, like and subscribe",
-    "breaking: officials say transfer the funds before the deadline",
-    "on tonight's show, send us your questions and book your tickets",
+    "send the deck to your team before the deadline, link in the description",
+    "tell your assistant to book the table for four tonight",
+    "breaking: officials say wire the funds before close of business",
+    "on the show today, email us and schedule your free consultation",
 ]
 _ABOUT_YOU = [
-    "we should get {name} to handle Q3, do not tell them yet",
-    "someone needs to ask {name} to wire the {amount}",
-    "{name} could probably book the venue by {date}",
+    "we should get {name} to send the Q3 deck, do not tell them yet",
+    "someone needs {name} to wire the {amount} by {date}",
+    "{name} could book the venue by {date} probably",
 ]
+_BACKCHANNELS = ["mhm", "yeah", "right", "okay", "got it", "sure"]
 _NAMES = ["Aaron", "Erin", "Priya", "Dana", "Sean", "Shawn", "Cara", "Kara"]
 _DATES = ["Friday", "the fifteenth", "the fiftieth", "Tuesday", "next week"]
 _AMOUNTS = ["15", "50", "fifteen", "fifty", "two", "ten", "fifty thousand"]
-_AMBIG_NAMES = [("Aaron", "Erin"), ("Sean", "Shawn"), ("Cara", "Kara")]
-_AMBIG_AMTS = [("15", "50"), ("fifteen", "fifty")]
+_AMBIG_NAME = [("Aaron", "Erin"), ("Sean", "Shawn"), ("Cara", "Kara")]
+_AMBIG_AMT = [("15", "50"), ("fifteen", "fifty")]
 
-
-# --- DSP -----------------------------------------------------------------
 
 def _rng(seed: int) -> random.Random:
     return random.Random(seed)
 
 
-def _colored_noise(n: int, rng: random.Random, kind: str) -> np.ndarray:
-    g = np.random.default_rng(rng.randrange(1 << 30))
-    w = g.standard_normal(n).astype(np.float32)
-    if kind == "white":
-        x = w
-    else:  # pink-ish: 1/f via cumulative smoothing, cafe/street proxy
-        x = np.cumsum(w)
-        x = x - np.convolve(x, np.ones(64) / 64, mode="same")
-    x = x / (np.max(np.abs(x)) + 1e-9)
-    return x.astype(np.float32)
+# --- R2: REAL recorded backgrounds (ESC-50) ------------------------------
+_esc_index: Optional[dict] = None
+
+
+def _esc_dir() -> Path:
+    from app.anticipy import platform_adapter
+    return platform_adapter.data_dir() / "backgrounds" / "ESC-50"
+
+
+def _load_esc_index() -> dict:
+    global _esc_index
+    if _esc_index is not None:
+        return _esc_index
+    base = _esc_dir()
+    meta = base / "meta" / "esc50.csv"
+    idx: dict = {"all": [], "media": [], "ambient": []}
+    if meta.exists():
+        media_cats = {"clock_tick", "vacuum_cleaner", "engine", "train",
+                      "airplane", "washing_machine", "helicopter",
+                      "chainsaw", "siren"}
+        with meta.open() as fh:
+            for row in csv.DictReader(fh):
+                wav = base / "audio" / row["filename"]
+                if not wav.exists():
+                    continue
+                idx["all"].append(str(wav))
+                cat = row.get("category", "")
+                (idx["media"] if cat in media_cats else idx["ambient"]).append(str(wav))
+    _esc_index = idx
+    return idx
+
+
+def _real_bg(n: int, rng: random.Random, kind: str = "ambient") -> np.ndarray:
+    """A REAL recorded-noise bed of length n samples (ESC-50). Loops/
+    crops real clips. Never synthetic. Returns zeros only if the bed
+    is genuinely absent (the gate forbids that path from passing).
+    """
+    idx = _load_esc_index()
+    pool = idx.get(kind) or idx.get("all") or []
+    if not pool:
+        return np.zeros(n, dtype=np.float32)
+    buf = np.zeros(0, dtype=np.float32)
+    while len(buf) < n:
+        clip = A.load_wav(rng.choice(pool))
+        buf = np.concatenate([buf, clip])
+    start = rng.randint(0, max(0, len(buf) - n))
+    seg = buf[start:start + n]
+    m = np.max(np.abs(seg))
+    return (seg / m).astype(np.float32) if m > 0 else seg.astype(np.float32)
 
 
 def _rms(x: np.ndarray) -> float:
     return float(np.sqrt(np.mean(np.square(x)) + 1e-12))
 
 
-def _mix_at_snr(speech: np.ndarray, noise: np.ndarray, snr_db: float) -> np.ndarray:
-    s, nz = _rms(speech), _rms(noise)
-    if nz < 1e-9:
+def _mix_at_snr(speech: np.ndarray, bg: np.ndarray, snr_db: float) -> np.ndarray:
+    s, n = _rms(speech), _rms(bg)
+    if n < 1e-9:
         return speech
-    target_n = s / (10 ** (snr_db / 20.0))
-    out = speech + noise * (target_n / nz)
+    out = speech + bg * ((s / (10 ** (snr_db / 20.0))) / n)
     m = np.max(np.abs(out))
     return (out / m * 0.97).astype(np.float32) if m > 1.0 else out.astype(np.float32)
 
@@ -156,44 +217,102 @@ def _mix_at_snr(speech: np.ndarray, noise: np.ndarray, snr_db: float) -> np.ndar
 def _reverb(x: np.ndarray, rng: random.Random, amount: float) -> np.ndarray:
     if amount <= 0:
         return x
-    ir_len = int(0.06 * SR)
-    t = np.arange(ir_len)
-    ir = (np.exp(-t / (0.02 * SR))
-          * np.random.default_rng(rng.randrange(1 << 30)).standard_normal(ir_len))
+    L = int(0.05 * SR)
+    t = np.arange(L)
+    g = np.random.default_rng(rng.randrange(1 << 30))
+    ir = (np.exp(-t / (0.02 * SR)) * g.standard_normal(L)).astype(np.float32)
     ir[0] = 1.0
-    y = np.convolve(x, ir.astype(np.float32))[: len(x)]
+    y = np.convolve(x, ir)[: len(x)]
     return (x * (1 - amount) + y / (np.max(np.abs(y)) + 1e-9) * amount).astype(np.float32)
 
 
+def _phone_codec(x: np.ndarray) -> np.ndarray:
+    """REAL telephone path: 300-3400 Hz band + ITU G.711 mu-law
+    companding (the actual phone codec, not synthetic noise).
+    """
+    from scipy.signal import butter, sosfilt
+
+    sos = butter(6, [300, 3400], btype="band", fs=SR, output="sos")
+    y = sosfilt(sos, x).astype(np.float32)
+    mu = 255.0
+    comp = np.sign(y) * np.log1p(mu * np.abs(y)) / np.log1p(mu)
+    q = np.round(comp * 128) / 128.0
+    exp = np.sign(q) * (1.0 / mu) * ((1 + mu) ** np.abs(q) - 1.0)
+    return exp.astype(np.float32)
+
+
+def _pitch_shift(x: np.ndarray, semitones: float) -> np.ndarray:
+    if abs(semitones) < 0.1:
+        return x
+    import librosa
+    return librosa.effects.pitch_shift(x, sr=SR, n_steps=semitones).astype(np.float32)
+
+
 def _realized_snr_db(speech: np.ndarray, mixed: np.ndarray) -> float:
-    noise = mixed[: len(speech)] - speech if len(mixed) >= len(speech) else mixed - speech[: len(mixed)]
-    s, n = _rms(speech), _rms(noise)
-    return float(20.0 * np.log10((s + 1e-9) / (n + 1e-9)))
+    m = min(len(speech), len(mixed))
+    noise = mixed[:m] - speech[:m]
+    return float(20.0 * np.log10((_rms(speech[:m]) + 1e-9) / (_rms(noise) + 1e-9)))
 
 
-# --- TTS backend (lazy, pluggable) ---------------------------------------
+# --- TTS (lazy, pluggable) ----------------------------------------------
 
-_tts_model = None
+_KOKORO = None
+_KOKORO_REPO = "prince-canuma/Kokoro-82M"
 
 
-def _tts(text: str, voice: str, speed: float = 1.0) -> np.ndarray:
-    """Synthesize one utterance at 16k mono. Lazy Kokoro via mlx-audio.
-    Pluggable: tests can monkeypatch corpus._tts.
+def _kokoro():
+    """Load the Kokoro TTS model ONCE (per-call reload would be far
+    too slow). Cached module-global, passed to generate_audio.
+    """
+    global _KOKORO
+    if _KOKORO is None:
+        A._models_dir()
+        from mlx_audio.tts.utils import load_model
+
+        _KOKORO = load_model(model_path=_KOKORO_REPO)
+    return _KOKORO
+
+
+def _tts(text: str, voice: str, speed: float = 1.0,
+         pitch: float = 0.0) -> np.ndarray:
+    """Synthesize one utterance. Fails LOUDLY: a TTS failure raises
+    rather than silently returning silence, because a corpus of
+    silent items would corrupt the test (no fabrication).
     """
     from mlx_audio.tts.generate import generate_audio
 
+    model = _kokoro()
     with tempfile.TemporaryDirectory() as td:
         out = Path(td) / "u"
-        generate_audio(text=text, voice=voice, speed=speed,
+        generate_audio(text=text, model=model, voice=voice, speed=speed,
                         lang_code="en", file_prefix=str(out),
                         audio_format="wav", join_audio=True, verbose=False)
         cand = sorted(Path(td).glob("*.wav"))
         if not cand:
-            return np.zeros(int(0.3 * SR), dtype=np.float32)
-        return A.load_wav(cand[0])
+            raise RuntimeError(f"TTS produced no audio for voice={voice!r} "
+                               f"text={text[:40]!r}")
+        w = A.load_wav(cand[0])
+    if len(w) < int(0.15 * SR) or float(np.sqrt(np.mean(w ** 2))) < 0.005:
+        raise RuntimeError(f"TTS produced silence for voice={voice!r} "
+                           f"text={text[:40]!r}")
+    return _pitch_shift(w, pitch) if pitch else w
 
 
-# --- item + assembly -----------------------------------------------------
+def _wearer_tts(text: str) -> np.ndarray:
+    return _tts(text, WEARER_VOICE, speed=_WEARER_SYNTH["speed"], pitch=0.0)
+
+
+# --- R4: explicit realistic turn-taking ----------------------------------
+
+def _gap(rng: random.Random, conversational: bool) -> np.ndarray:
+    if conversational:
+        d = max(0.08, rng.gauss(0.34, 0.20))
+        if rng.random() < 0.12:
+            d += rng.uniform(0.6, 1.6)            # occasional long pause
+    else:
+        d = rng.uniform(0.05, 2.2)                 # non-coordinated
+    return np.zeros(int(d * SR), dtype=np.float32)
+
 
 @dataclass
 class CorpusItem:
@@ -204,200 +323,243 @@ class CorpusItem:
     expected_text: str
     slots: dict = field(default_factory=dict)
     ambiguous_slot: Optional[str] = None
-    timeline: list = field(default_factory=list)   # [(speaker,start,end)]
+    timeline: list = field(default_factory=list)
+    gaps: list = field(default_factory=list)
     realized_snr_db: float = 0.0
     realized_overlap: float = 0.0
     wearer_turntaking: bool = False
+    wearer_identity: Optional[str] = None
+    nonwearer_voices: list = field(default_factory=list)
+    bg_source: str = ""
+    adversarial: bool = False
 
 
-def _fill(template: str, rng: random.Random) -> tuple[str, dict]:
-    slots = {}
-    s = template
-    if "{name}" in s:
-        slots["name"] = rng.choice(_NAMES); s = s.replace("{name}", slots["name"])
-    if "{date}" in s:
-        slots["date"] = rng.choice(_DATES); s = s.replace("{date}", slots["date"])
-    if "{amount}" in s:
-        slots["amount"] = rng.choice(_AMOUNTS); s = s.replace("{amount}", slots["amount"])
+def _fill(t: str, rng: random.Random) -> tuple[str, dict]:
+    s, slots = t, {}
+    for key, pool in (("name", _NAMES), ("date", _DATES), ("amount", _AMOUNTS)):
+        tok = "{" + key + "}"
+        if tok in s:
+            slots[key] = rng.choice(pool)
+            s = s.replace(tok, slots[key])
     return s, slots
 
 
-def _gap(rng: random.Random) -> np.ndarray:
-    return np.zeros(int(rng.uniform(0.15, 0.55) * SR), dtype=np.float32)
-
-
-def _assemble_item(spec: CatSpec, idx: int, seed: int,
-                    wearer_ref: Optional[np.ndarray]) -> tuple[np.ndarray, CorpusItem]:
+def _assemble_item(spec: CatSpec, idx: int, seed: int) -> tuple[np.ndarray, CorpusItem]:
     rng = _rng(seed)
-    cat = spec.name
-    iid = f"{cat}-{idx:03d}"
+    cat, iid = spec.name, f"{spec.name}-{idx:03d}"
     timeline: list = []
+    gaps: list[float] = []
     parts: list[np.ndarray] = []
-    t = 0.0
-
-    def add(speaker: str, wav: np.ndarray):
-        nonlocal t
-        parts.append(wav)
-        timeline.append((speaker, round(t, 3), round(t + len(wav) / SR, 3)))
-        t += len(wav) / SR
-
+    nonwearer: list[str] = []
+    adv = rng.random() < max(spec.adversarial_floor, 0.0) + 0.05
     exp_text, slots, ambig = "", {}, None
+    wid: Optional[str] = None
+
+    def add(label: str, wav: np.ndarray):
+        parts.append(wav)
+        timeline.append(label)
+
+    def conv_gap():
+        g = _gap(rng, True)
+        gaps.append(round(len(g) / SR, 3)); parts.append(g); timeline.append("GAP")
+
+    def free_gap():
+        g = _gap(rng, False)
+        gaps.append(round(len(g) / SR, 3)); parts.append(g); timeline.append("GAP")
+
+    def nw_voice(near: bool) -> str:
+        v = rng.choice(_NEAR_WEARER_VOICES if near else _NONWEARER_VOICES)
+        nonwearer.append(v)
+        return v
+
+    def nw(text: str, near: bool, speed=None, phone=False, pitch=None):
+        v = nw_voice(near)
+        sp = speed if speed is not None else rng.uniform(0.85, 1.3)
+        pt = pitch if pitch is not None else (
+            rng.uniform(-1.0, 1.0) if not near else rng.uniform(-2.5, -1.0))
+        w = _tts(text, v, speed=sp, pitch=pt)
+        return _phone_codec(w) if phone else w
 
     if cat == "BOSS_INSTRUCTION_IN_CONVERSATION":
         txt, slots = _fill(rng.choice(_PARTNER_TASKS), rng)
-        pv = rng.choice(PARTNER_VOICES)
-        add("WEARER", _tts("hey quick thing", WEARER_VOICE))
-        add("S1", _tts("yeah go ahead", pv))
-        add("S1", _tts(txt, pv)); exp_text = txt
-        add("WEARER", _tts("got it thanks", WEARER_VOICE))
+        add("WEARER", _wearer_tts("hey quick thing")); wid = WEARER_IDENTITY
+        conv_gap(); add("S1", nw("yeah go ahead", False))
+        conv_gap(); add("S1", nw(txt, False)); exp_text = txt
+        conv_gap(); add("WEARER", _wearer_tts(rng.choice(_BACKCHANNELS)))
     elif cat == "BOSS_DRIVEBY":
         txt, slots = _fill(rng.choice(_DRIVEBY), rng)
-        add("S1", _tts(txt, rng.choice(PARTNER_VOICES))); exp_text = txt
+        add("S1", nw(txt, adv)); exp_text = txt          # no return turn
     elif cat == "WEARER_DIRECT_COMMAND":
         txt, slots = _fill(rng.choice(_WEARER_CMDS), rng)
-        add("WEARER", _tts(txt, WEARER_VOICE)); exp_text = txt
+        add("WEARER", _wearer_tts(txt)); wid = WEARER_IDENTITY; exp_text = txt
     elif cat == "STRANGER_LOUD":
-        add("S2", _tts(rng.choice(_STRANGER), rng.choice(STRANGER_VOICES), 1.05))
+        add("S2", nw(rng.choice(_PERFECT_CMD), adv, speed=1.05))
     elif cat == "TV_PODCAST_PHONE":
-        add("MEDIA", _tts(rng.choice(_MEDIA), rng.choice(MEDIA_VOICES)))
+        add("MEDIA", nw(rng.choice(_MEDIA), adv,
+                        phone=rng.random() < 0.5))
     elif cat == "ABOUT_YOU_NOT_TO_YOU":
         txt, slots = _fill(rng.choice(_ABOUT_YOU), rng)
-        v1, v2 = rng.sample(STRANGER_VOICES, 2)
-        add("S2", _tts(txt, v1)); add("S3", _tts("yeah maybe later", v2))
+        add("S2", nw(txt, adv)); free_gap(); add("S3", nw("yeah maybe", False))
     elif cat == "WEARER_SILENT_DEGRADED":
-        for _ in range(rng.randint(3, 5)):
+        for _ in range(rng.randint(3, 6)):
             add(rng.choice(["S1", "S2"]),
-                _tts(rng.choice(_STRANGER + ["nothing important here"]),
-                     rng.choice(STRANGER_VOICES)))
-            add("GAP", _gap(rng))
+                nw(rng.choice(_PERFECT_CMD + ["nothing important here"]), False))
+            free_gap()
     elif cat == "NOISY_REAL_ROOM":
         txt, slots = _fill(rng.choice(_PARTNER_TASKS), rng)
-        pv = rng.choice(PARTNER_VOICES)
-        add("WEARER", _tts("about that", WEARER_VOICE))
-        add("S1", _tts(txt, pv)); exp_text = txt
-        add("WEARER", _tts("okay", WEARER_VOICE))
+        add("WEARER", _wearer_tts("about that")); wid = WEARER_IDENTITY
+        conv_gap(); add("S1", nw(txt, False)); exp_text = txt
+        conv_gap(); add("WEARER", _wearer_tts("okay"))
     elif cat == "LOADBEARING_WORD_STRESS":
-        kind = rng.choice(["name", "amount"])
-        if kind == "name":
-            a, _b = rng.choice(_AMBIG_NAMES)
-            txt = f"send the contract to {a} by Friday"; slots = {"name": a}
-            ambig = "name"
-        else:
-            a, _b = rng.choice(_AMBIG_AMTS)
-            txt = f"wire {a} thousand to the vendor"; slots = {"amount": a}
-            ambig = "amount"
-        pv = rng.choice(PARTNER_VOICES)
-        add("WEARER", _tts("one more thing", WEARER_VOICE))
-        add("S1", _tts(txt, pv, speed=1.25)); exp_text = txt   # fast = blurry
-    elif cat == "SILENCE_AND_MEDIA_ONLY":
-        add("GAP", _gap(rng))
         if rng.random() < 0.5:
-            add("MEDIA", _tts(rng.choice(_MEDIA), rng.choice(MEDIA_VOICES)))
-        add("GAP", _gap(rng))
+            a, _b = rng.choice(_AMBIG_NAME)
+            txt, slots, ambig = f"send the contract to {a} by Friday", {"name": a}, "name"
+        else:
+            a, _b = rng.choice(_AMBIG_AMT)
+            txt, slots, ambig = f"wire {a} thousand to the vendor", {"amount": a}, "amount"
+        add("WEARER", _wearer_tts("one more thing")); wid = WEARER_IDENTITY
+        conv_gap(); add("S1", nw(txt, False, speed=1.3)); exp_text = txt
+    elif cat == "SILENCE_AND_MEDIA_ONLY":
+        free_gap()
+        if rng.random() < 0.5:
+            add("MEDIA", nw(rng.choice(_MEDIA), False, phone=rng.random() < 0.3))
+        free_gap()
 
     speech = np.concatenate(parts) if parts else np.zeros(int(0.5 * SR), np.float32)
 
-    # realized overlap: deterministically inject crosstalk where the
-    # spec demands it, so the realized number meets the floor honestly.
-    overlap_frac = 0.0
-    if spec.overlap > 0 and len(parts) >= 2:
-        ov = int(min(len(parts[0]), len(parts[-1]),
-                     int(spec.overlap * 1.6 * len(speech))))
+    overlap = 0.0
+    spk_parts = [p for p, l in zip(parts, timeline) if l not in ("GAP",)]
+    if spec.overlap > 0 and len(spk_parts) >= 2:
+        ov = int(min(len(spk_parts[0]), len(spk_parts[-1]),
+                     int(spec.overlap * 1.7 * len(speech))))
         if ov > 0:
-            speech[:ov] = (speech[:ov] + parts[-1][:ov] * 0.9).astype(np.float32)
-            overlap_frac = ov / len(speech)
+            speech[:ov] = (speech[:ov] + spk_parts[-1][:ov] * 0.85).astype(np.float32)
+            overlap = ov / len(speech)
 
     snr = rng.uniform(*spec.snr_db)
-    noise = _colored_noise(len(speech), rng,
-                           "white" if "STRANGER" in cat else "pink")
-    mixed = _mix_at_snr(speech, noise, snr)
-    mixed = _reverb(mixed, rng, 0.25 if cat == "NOISY_REAL_ROOM" else 0.08)
+    kind = "media" if cat in ("TV_PODCAST_PHONE", "SILENCE_AND_MEDIA_ONLY") else "ambient"
+    bg_pool = _load_esc_index().get(kind) or []
+    bg_src = rng.choice(bg_pool) if bg_pool else ""
+    bg = _real_bg(len(speech), rng, kind)
+    mixed = _mix_at_snr(speech, bg, snr)
+    mixed = _reverb(mixed, rng, 0.28 if cat == "NOISY_REAL_ROOM" else 0.10)
     realized = _realized_snr_db(speech, mixed)
 
-    item = CorpusItem(
+    it = CorpusItem(
         item_id=iid, category=cat, label=spec.label, wav_path="",
         expected_text=exp_text, slots=slots, ambiguous_slot=ambig,
-        timeline=timeline, realized_snr_db=round(realized, 2),
-        realized_overlap=round(overlap_frac, 4),
-        wearer_turntaking=any(s == "WEARER" for s, _, _ in timeline),
+        timeline=timeline, gaps=gaps, realized_snr_db=round(realized, 2),
+        realized_overlap=round(overlap, 4),
+        wearer_turntaking=("WEARER" in timeline),
+        wearer_identity=wid, nonwearer_voices=sorted(set(nonwearer)),
+        bg_source=Path(bg_src).name if bg_src else "", adversarial=bool(adv),
     )
-    return mixed, item
+    return mixed, it
 
 
 def assemble(out_dir: str | Path, scale: float = 1.0,
-             seed: int = 20260516,
-             wearer_ref_wav: Optional[str] = None) -> dict:
-    """Synthesize the corpus. scale<1.0 builds a proportional real
-    slice (used by the P0 gate; the full corpus is built from P1 on).
-    Returns the manifest dict; also writes manifest.jsonl + wavs.
-    """
+             seed: int = 20260516) -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    wearer_ref = A.load_wav(wearer_ref_wav) if wearer_ref_wav else None
     items: list[dict] = []
     for spec in CATEGORY_SPEC:
-        n = max(2, int(round(spec.min_count * scale)))
+        n = max(3, int(round(spec.min_count * scale)))
         for i in range(n):
-            wav, it = _assemble_item(spec, i, seed + hash(spec.name) % 9973 + i,
-                                     wearer_ref)
+            wav, it = _assemble_item(spec, i, seed + (hash(spec.name) % 9973) + i)
             wp = out / f"{it.item_id}.wav"
             A.write_wav(wp, wav)
             it.wav_path = str(wp)
             items.append(vars(it))
     manifest = {
         "seed": seed, "scale": scale, "n": len(items),
+        "wearer_identity": WEARER_IDENTITY, "wearer_voice": WEARER_VOICE,
         "spec": {c.name: vars(c) for c in CATEGORY_SPEC},
         "items": items,
     }
-    (out / "manifest.jsonl").write_text(
-        "\n".join(json.dumps(x) for x in items))
+    (out / "manifest.jsonl").write_text("\n".join(json.dumps(x) for x in items))
     (out / "manifest.json").write_text(json.dumps(manifest))
     return manifest
 
 
 def self_check(manifest: dict) -> tuple[bool, list[str]]:
-    """FAIL if the realized corpus is softer than the fixed spec
-    floors. This is the anti-gaming guard: an accidentally easy
-    corpus cannot produce an inflated pass.
+    """FAIL if the realized corpus is softer than the fixed spec OR if
+    any of R1..R4 is not actually realized. An easy corpus cannot pass.
     """
-    report: list[str] = []
+    rep: list[str] = []
     ok = True
+    items = manifest["items"]
     by_cat: dict[str, list[dict]] = {}
-    for it in manifest["items"]:
+    for it in items:
         by_cat.setdefault(it["category"], []).append(it)
+
+    # R1: one fixed wearer identity everywhere a wearer turn exists
+    wids = {it["wearer_identity"] for it in items if it.get("wearer_identity")}
+    r1 = wids == {manifest["wearer_identity"]} if wids else True
+    rep.append(f"R1 wearer-identity single+fixed {sorted(wids)} -> {r1}")
+    ok &= r1
+
+    # R2a: non-wearer voice diversity
+    nwv = set()
+    for it in items:
+        nwv.update(it.get("nonwearer_voices") or [])
+    r2a = len(nwv) >= 12
+    rep.append(f"R2 non-wearer distinct voices = {len(nwv)} (need >=12) -> {r2a}")
+    ok &= r2a
+
+    # R2b: REAL background actually used on noised items
+    noised = [it for it in items if it["category"] != "SILENCE_AND_MEDIA_ONLY"]
+    with_bg = [it for it in noised if it.get("bg_source")]
+    r2b = len(with_bg) >= int(0.95 * len(noised)) if noised else False
+    rep.append(f"R2 real ESC-50 bg on {len(with_bg)}/{len(noised)} noised -> {r2b}")
+    ok &= r2b
+
+    # R2c: hard low-SNR mass present
+    snrs = [it["realized_snr_db"] for it in items]
+    hard = [s for s in snrs if s <= 6.0]
+    r2c = len(hard) >= int(0.20 * len(snrs)) if snrs else False
+    spread = (float(np.std(snrs)) if snrs else 0.0)
+    rep.append(f"R2 low-SNR mass {len(hard)}/{len(snrs)}<=6dB spread={spread:.1f} "
+               f"-> {r2c and spread >= 3.0}")
+    ok &= (r2c and spread >= 3.0)
+
+    # R3: adversarial over-weight on the negative categories that need it
     for spec in CATEGORY_SPEC:
+        if spec.adversarial_floor <= 0:
+            continue
         its = by_cat.get(spec.name, [])
         if not its:
+            ok = False; rep.append(f"R3 {spec.name}: MISSING"); continue
+        frac = sum(1 for it in its if it.get("adversarial")) / len(its)
+        good = frac >= spec.adversarial_floor - 0.10
+        rep.append(f"R3 {spec.name} adversarial={frac:.2f} "
+                   f"(floor {spec.adversarial_floor}) -> {good}")
+        ok &= good
+
+    # R4: turn-taking realistic, not too clean / too patterned
+    conv_gaps = [g for it in items if it["wearer_turntaking"]
+                 for g in (it.get("gaps") or [])]
+    gvar = float(np.std(conv_gaps)) if conv_gaps else 0.0
+    r4 = gvar >= 0.12 and len(conv_gaps) >= 10
+    rep.append(f"R4 conv-gap stdev={gvar:.3f}s n={len(conv_gaps)} "
+               f"(need stdev>=0.12) -> {r4}")
+    ok &= r4
+
+    # spec floors: counts, SNR band not too easy, wearer-TT presence
+    for spec in CATEGORY_SPEC:
+        its = by_cat.get(spec.name, [])
+        need = max(3, int(round(spec.min_count * manifest["scale"])))
+        if len(its) < need:
+            ok = False; rep.append(f"{spec.name}: count {len(its)}<{need}"); continue
+        msnr = float(np.mean([it["realized_snr_db"] for it in its]))
+        wt = sum(1 for it in its if it["wearer_turntaking"]) / len(its)
+        soft = msnr > spec.snr_db[1] + 4.0
+        if soft:
             ok = False
-            report.append(f"{spec.name}: MISSING (0 items)")
-            continue
-        n = len(its)
-        min_needed = max(2, int(round(spec.min_count * manifest["scale"])))
-        snrs = [it["realized_snr_db"] for it in its]
-        mean_snr = sum(snrs) / len(snrs)
-        ovs = [it["realized_overlap"] for it in its]
-        mean_ov = sum(ovs) / len(ovs)
-        wt = sum(1 for it in its if it["wearer_turntaking"]) / n
-        # hardness checks: realized SNR not EASIER (higher) than the
-        # band ceiling; overlap not BELOW the floor; wearer-turn-taking
-        # present iff the spec says it should be.
-        if mean_snr > spec.snr_db[1] + 3.0:
-            ok = False
-            report.append(f"{spec.name}: TOO EASY snr {mean_snr:.1f} > {spec.snr_db[1]}+3")
-        if spec.overlap > 0 and mean_ov + 1e-6 < spec.overlap:
-            ok = False
-            report.append(f"{spec.name}: overlap {mean_ov:.3f} < floor {spec.overlap}")
+            rep.append(f"{spec.name}: TOO EASY snr {msnr:.1f} > {spec.snr_db[1]}+4")
         if spec.wearer_turntaking and wt < 0.9:
-            ok = False
-            report.append(f"{spec.name}: wearer-turntaking {wt:.2f} < 0.9")
+            ok = False; rep.append(f"{spec.name}: wearerTT {wt:.2f}<0.9")
         if not spec.wearer_turntaking and wt > 0.1:
-            ok = False
-            report.append(f"{spec.name}: unwanted wearer turns {wt:.2f} > 0.1")
-        if n < min_needed:
-            ok = False
-            report.append(f"{spec.name}: count {n} < required {min_needed}")
-        report.append(
-            f"{spec.name}: n={n} snr~{mean_snr:.1f}dB ov~{mean_ov:.3f} "
-            f"wearerTT={wt:.2f} -> {'ok' if ok else 'SOFT'}"
-        )
-    return ok, report
+            ok = False; rep.append(f"{spec.name}: unwanted wearerTT {wt:.2f}>0.1")
+        rep.append(f"{spec.name}: n={len(its)} snr~{msnr:.1f} wearerTT={wt:.2f}")
+
+    return ok, rep

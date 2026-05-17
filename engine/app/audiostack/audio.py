@@ -130,41 +130,48 @@ def _get_asr():
     return _asr
 
 
-def _logprob_to_conf(lp: Optional[float]) -> float:
-    if lp is None:
+def _clamp01(x) -> float:
+    try:
+        return float(max(0.0, min(1.0, float(x))))
+    except (TypeError, ValueError):
         return 0.5
-    # token logprob (natural log) -> probability, clamped. Calibrated
-    # softly so a strong token is ~0.9+ and a guessed token is ~0.3.
-    import math
-
-    p = math.exp(max(min(float(lp), 0.0), -10.0))
-    return float(max(0.0, min(1.0, p)))
 
 
 def asr_tokens(wav: np.ndarray) -> AsrResult:
-    """Transcribe with per-token timing and confidence. Never raises on
-    empty audio; returns an empty result so callers fail closed.
+    """Transcribe with per-token timing and parakeet's NATIVE per-token
+    confidence (the Layer 3 substrate). parakeet-mlx.transcribe takes
+    a path, so the segment is written to a temp wav. Never raises on
+    empty/garbled audio; returns an empty result so callers fail
+    closed (safe direction).
     """
     if wav is None or len(wav) < int(0.1 * SR):
         return AsrResult(text="", tokens=[])
+    import tempfile
+
     model = _get_asr()
-    res = model.transcribe(np.asarray(wav, dtype=np.float32))
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tf:
+        write_wav(tf.name, np.asarray(wav, dtype=np.float32))
+        try:
+            res = model.transcribe(tf.name)
+        except Exception:
+            return AsrResult(text="", tokens=[])
     toks: list[AsrToken] = []
-    text_parts: list[str] = []
+    parts: list[str] = []
     for sent in getattr(res, "sentences", []) or []:
         for tk in getattr(sent, "tokens", []) or []:
             txt = (getattr(tk, "text", "") or "").strip()
             if not txt:
                 continue
-            conf = _logprob_to_conf(getattr(tk, "logprob", None))
+            start = float(getattr(tk, "start", 0.0) or 0.0)
+            end = float(getattr(tk, "end", None)
+                        if getattr(tk, "end", None) is not None
+                        else start + (getattr(tk, "duration", 0.0) or 0.0))
             toks.append(AsrToken(
-                text=txt,
-                start=float(getattr(tk, "start", 0.0) or 0.0),
-                end=float(getattr(tk, "end", 0.0) or 0.0),
-                confidence=conf,
+                text=txt, start=start, end=end,
+                confidence=_clamp01(getattr(tk, "confidence", 0.5)),
             ))
-            text_parts.append(txt)
-    text = (getattr(res, "text", "") or " ".join(text_parts)).strip()
+            parts.append(txt)
+    text = (getattr(res, "text", "") or " ".join(parts)).strip()
     return AsrResult(text=text, tokens=toks)
 
 

@@ -59,6 +59,7 @@ class Anchor:
     consistency: float           # mean intra-sample window cosine, 0..1
     speech_seconds: float
     strong: bool                 # False -> membership must fail closed
+    wearer_identity: Optional[str] = None  # R1: the fixed voice hash
 
 
 def _windows(wav: np.ndarray, win_s: float = 3.0, hop_s: float = 1.5):
@@ -69,7 +70,45 @@ def _windows(wav: np.ndarray, win_s: float = 3.0, hop_s: float = 1.5):
             yield seg
 
 
-def enroll(wav_path: str, user_id: str = "wearer") -> Anchor:
+_WEARER_ENROLL_SCRIPT = [
+    "okay let me get set up for the day",
+    "remind me to send the quarterly deck to the team this afternoon",
+    "I think we should move the review to next week",
+    "book a table for two at the usual place on friday",
+    "reply to the contractor that the fifteenth works for me",
+    "add this to my calendar and tell dana about it",
+    "transfer the budget to the operations account before noon",
+    "what time is the standup tomorrow morning",
+    "draft a short note to priya about the schedule change",
+    "that is everything for now thanks",
+]
+
+
+def enroll_synthetic_wearer(user_id: str = "wearer") -> Anchor:
+    """R1: build the anchor from the ONE fixed synthetic wearer voice
+    (corpus.WEARER_VOICE), the SAME identity used for every wearer
+    turn in the corpus, so the anchor is a stable real target. The
+    anchor records corpus.WEARER_IDENTITY; the gate asserts it equals
+    the corpus manifest identity (no drift, ever).
+    """
+    from app.audiostack import corpus
+
+    segs = [corpus._wearer_tts(line) for line in _WEARER_ENROLL_SCRIPT]
+    gap = np.zeros(int(0.3 * A.SR), dtype=np.float32)
+    wav = np.concatenate(
+        [s for seg in segs for s in (seg, gap)]).astype(np.float32)
+    tmp = _anchors_dir() / f"_{user_id}_enroll.wav"
+    A.write_wav(tmp, wav)
+    a = enroll(str(tmp), user_id, identity=corpus.WEARER_IDENTITY)
+    try:
+        tmp.unlink()
+    except OSError:
+        pass
+    return a
+
+
+def enroll(wav_path: str, user_id: str = "wearer",
+           identity: Optional[str] = None) -> Anchor:
     """Build and persist the encrypted anchor. Fails CLOSED (strong=
     False) on a too-short or inconsistent sample rather than minting
     a permissive anchor.
@@ -83,7 +122,8 @@ def enroll(wav_path: str, user_id: str = "wearer") -> Anchor:
     embs = [A.speaker_embed(seg) for seg in _windows(speech)]
     embs = [e for e in embs if np.linalg.norm(e) > 0]
     if not embs:
-        anchor = Anchor(user_id, np.zeros(1536, np.float32), 0.0, speech_s, False)
+        anchor = Anchor(user_id, np.zeros(1536, np.float32), 0.0, speech_s,
+                        False, wearer_identity=identity)
         _save(anchor)
         return anchor
 
@@ -96,7 +136,7 @@ def enroll(wav_path: str, user_id: str = "wearer") -> Anchor:
     strong = (speech_s >= MIN_SPEECH_S) and (consistency >= STRONG_CONSISTENCY)
 
     anchor = Anchor(user_id, centroid.astype(np.float32), consistency,
-                    speech_s, strong)
+                    speech_s, strong, wearer_identity=identity)
     _save(anchor)
     return anchor
 
@@ -110,6 +150,7 @@ def _save(a: Anchor) -> None:
         "consistency": a.consistency,
         "speech_seconds": a.speech_seconds,
         "strong": a.strong,
+        "wearer_identity": a.wearer_identity,
     }).encode()
     enc = Fernet(_key()).encrypt(blob)
     (_anchors_dir() / f"{a.user_id}.enc").write_bytes(enc)
@@ -131,6 +172,7 @@ def load_anchor(user_id: str = "wearer") -> Optional[Anchor]:
         consistency=float(d["consistency"]),
         speech_seconds=float(d["speech_seconds"]),
         strong=bool(d["strong"]),
+        wearer_identity=d.get("wearer_identity"),
     )
 
 

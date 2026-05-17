@@ -102,35 +102,43 @@ def _structural() -> tuple[bool, list[str]]:
     return ok, log
 
 
-def _full(wearer_wav: str) -> tuple[bool, list[str]]:
+def _full() -> tuple[bool, list[str]]:
+    """Real corpus slice with the R1..R4 self-check, plus enrollment
+    from the ONE fixed synthetic wearer voice. No user recording: the
+    chosen path is the fixed synthetic wearer identity.
+    """
     from app.audiostack import corpus, enrollment
     log: list[str] = []
     ok = True
 
-    # real corpus slice + the anti-gaming self-check
     out = tempfile.mkdtemp(prefix="astack_p0_corpus_")
-    man = corpus.assemble(out, scale=0.04, wearer_ref_wav=wearer_wav)
+    man = corpus.assemble(out, scale=0.06)
     sc_ok, sc_report = corpus.self_check(man)
-    log.append(f"  corpus assembled n={man['n']} -> self_check={sc_ok}")
+    log.append(f"  corpus assembled n={man['n']} identity={man['wearer_identity']}"
+               f" -> self_check={sc_ok}")
     for ln in sc_report:
         log.append("    " + ln)
     ok = ok and sc_ok and man["n"] > 0
 
-    # enrollment yields a STRONG, usable anchor
-    a = enrollment.enroll(wearer_wav, "wearer")
-    log.append(f"  enrollment: speech={a.speech_seconds:.1f}s "
-               f"consistency={a.consistency:.3f} strong={a.strong}")
+    a = enrollment.enroll_synthetic_wearer("wearer")
+    log.append(f"  enroll(synthetic fixed voice): speech={a.speech_seconds:.1f}s "
+               f"consistency={a.consistency:.3f} strong={a.strong} "
+               f"identity={a.wearer_identity}")
     rl = enrollment.load_anchor("wearer")
-    rt_ok = rl is not None and rl.strong == a.strong
-    log.append(f"  anchor persisted+decrypts, strong={a.strong} roundtrip={rt_ok}")
-    ok = ok and a.strong and rt_ok
+    rt_ok = (rl is not None and rl.strong == a.strong
+             and rl.wearer_identity == a.wearer_identity)
+    log.append(f"  anchor persisted+decrypts roundtrip={rt_ok}")
+    # R1 end to end: enrollment identity == corpus manifest identity
+    r1_e2e = (a.wearer_identity == man["wearer_identity"] == corpus.WEARER_IDENTITY)
+    log.append(f"  R1 end-to-end identity match (enroll==corpus=={corpus.WEARER_IDENTITY})"
+               f" -> {r1_e2e}")
+    ok = ok and a.strong and rt_ok and r1_e2e
     return ok, log
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--full", action="store_true")
-    ap.add_argument("--wearer", default="")
     args = ap.parse_args()
 
     print("== ASTACK P0 GATE ==")
@@ -140,14 +148,10 @@ def main() -> int:
         print(ln)
     f_ok = True
     if args.full:
-        print("-- full (real corpus + enrollment) --")
-        if not args.wearer or not Path(args.wearer).exists():
-            print(f"  FULL requested but --wearer wav missing: {args.wearer!r}")
-            f_ok = False
-        else:
-            f_ok, f_log = _full(args.wearer)
-            for ln in f_log:
-                print(ln)
+        print("-- full (real corpus R1..R4 self-check + synthetic enrollment) --")
+        f_ok, f_log = _full()
+        for ln in f_log:
+            print(ln)
     ok = s_ok and f_ok
     mode = "full" if args.full else "structural"
     print(f"  structural={s_ok} full={'n/a' if not args.full else f_ok}")
