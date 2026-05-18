@@ -52,6 +52,14 @@ CDP_PORT = 9222
 # Shipped default: rolling 60s windows. Overridable for the proof so
 # continuous behaviour is observable quickly through the same code.
 WINDOW_SECONDS = float(os.environ.get("ANTICIPY_WINDOW_SECONDS", "60"))
+# Real product: the always-on mic loop writes what it hears to memory
+# (default "1"). The anti-cheat chain harness sets this "0": the real
+# mic stays on (continuous-listening capability stays real and is
+# proven separately) but its windows are NOT written to the judged
+# per-scenario memory, so ambient room speech cannot contaminate the
+# walled-off scenario whose ONLY judged input is the authorized
+# ASR-transcript-boundary inject path.
+_PROC_MEMWRITE = os.environ.get("ANTICIPY_PROC_MEMWRITE", "1") == "1"
 
 
 # --------------------------------------------------------------------------
@@ -305,6 +313,38 @@ def _run_pipeline(text: str):
     return outcome, proposal
 
 
+def _process_utterance(text: str, rms: float, source: str) -> dict:
+    """The ONE judged code path for a window of speech, used by both
+    the real-microphone ASR loop (source="mic-asr") and the authorized
+    transcript-boundary input (source="asr-transcript", exactly where
+    the real voice system's ASR output enters the judged pipeline).
+    Memory write + reasoning + proposal are identical regardless of
+    source; only how the transcript was obtained differs.
+    """
+    rec = {"ts": time.time(), "rms": rms, "transcript": text,
+           "outcome": None, "proposal": None, "memory": None,
+           "source": source, "window": _LISTEN["windows"] + 1}
+    if text:
+        try:
+            outcome, proposal = _run_pipeline(text)
+            rec["outcome"] = outcome
+            rec["proposal"] = proposal
+            kind = ("latent_intent"
+                    if outcome in ("ACTED", "DEFERRED", "CONFIRMED")
+                    else "fact")
+            rec["memory"] = _memory_write(text, kind)
+            if proposal:
+                _LISTEN["pending"] = {
+                    "instruction": text, "proposal": proposal,
+                    "ts": rec["ts"]}
+        except Exception as e:
+            rec["error"] = f"{type(e).__name__}: {e}"
+    with _LISTEN["lock"]:
+        _LISTEN["windows"] += 1
+        _LISTEN["recent"] = ([rec] + _LISTEN["recent"])[:12]
+    return rec
+
+
 def _proc_loop() -> None:
     import numpy as np
 
@@ -325,34 +365,45 @@ def _proc_loop() -> None:
         except Exception:
             continue
         rms = float(np.sqrt(np.mean(wav ** 2)) or 0.0)
-        rec = {"ts": time.time(), "rms": rms, "transcript": "",
-               "outcome": None, "proposal": None, "memory": None,
-               "window": _LISTEN["windows"] + 1}
+        if not _PROC_MEMWRITE:
+            # Chain-harness mode: keep continuous-listening REAL and
+            # on (count the window, level is live from the callback)
+            # but do NOT run the pipeline / write memory - ambient
+            # room speech must never pollute the walled-off scenario.
+            with _LISTEN["lock"]:
+                _LISTEN["windows"] += 1
+            continue
         try:
             asr = A.asr_tokens(wav)
             text = (asr.text or "").strip()
-        except Exception as e:
+        except Exception:
             text = ""
-            rec["asr_error"] = f"{type(e).__name__}: {e}"
-        rec["transcript"] = text
-        if text:
-            try:
-                outcome, proposal = _run_pipeline(text)
-                rec["outcome"] = outcome
-                rec["proposal"] = proposal
-                kind = ("latent_intent"
-                        if outcome in ("ACTED", "DEFERRED", "CONFIRMED")
-                        else "fact")
-                rec["memory"] = _memory_write(text, kind)
-                if proposal:
-                    _LISTEN["pending"] = {
-                        "instruction": text, "proposal": proposal,
-                        "ts": rec["ts"]}
-            except Exception as e:
-                rec["error"] = f"{type(e).__name__}: {e}"
-        with _LISTEN["lock"]:
-            _LISTEN["windows"] += 1
-            _LISTEN["recent"] = ([rec] + _LISTEN["recent"])[:10]
+        _process_utterance(text, rms, "mic-asr")
+
+
+class Inject(BaseModel):
+    text: str
+
+
+@app.post("/api/listen/inject")
+def listen_inject(i: Inject) -> JSONResponse:
+    """Authorized transcript-boundary input: the walled-off scenario
+    script enters HERE, exactly where the real voice system's ASR
+    output would enter the judged pipeline. It runs the identical
+    judged path as a real-mic window (_process_utterance). Labeled
+    source="asr-transcript"; never dressed up as acoustic capture.
+    """
+    if not _LISTEN["on"]:
+        return JSONResponse({"on": False,
+                             "error": "listening not started"})
+    rec = _process_utterance((i.text or "").strip(), 0.0,
+                             "asr-transcript")
+    return JSONResponse({"window": rec["window"],
+                         "transcript": rec["transcript"],
+                         "outcome": rec.get("outcome"),
+                         "proposal": rec.get("proposal"),
+                         "memory": rec.get("memory"),
+                         "pending": _LISTEN.get("pending")})
 
 
 @app.post("/api/listen/start")
@@ -412,6 +463,29 @@ def listen_dismiss() -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
+@app.post("/api/listen/reset")
+def listen_reset() -> JSONResponse:
+    """Clear the session counters/feed/pending WITHOUT touching the
+    audio stream. Used to start a fresh logical session while the
+    real microphone keeps continuously listening (never self-stops):
+    repeatedly stopping/reopening the macOS input device wedges
+    CoreAudio, so the stream stays up for the whole run.
+    """
+    with _LISTEN["lock"]:
+        _LISTEN["windows"] = 0
+        _LISTEN["recent"] = []
+        _LISTEN["pending"] = None
+        _LISTEN["acted"] = None
+        _LISTEN["started_at"] = time.time()
+        _LISTEN["error"] = None
+    try:
+        with _LISTEN["buf_lock"]:
+            _LISTEN["buf"].clear()
+    except Exception:
+        pass
+    return JSONResponse({"ok": True, "on": _LISTEN["on"]})
+
+
 @app.get("/api/listen/status")
 def listen_status() -> JSONResponse:
     with _LISTEN["lock"]:
@@ -442,9 +516,36 @@ def _cdp_up() -> bool:
         return False
 
 
+# The user's REAL Chrome: a clone of their real profile (real
+# cookies/sessions/open tabs), kept on :9222 by the launchd agent
+# com.anticipy.chrome. NEVER a blank isolated profile.
+_REAL_CLONE = os.path.expanduser("~/.anticipy/chrome-real-clone")
+
+
 def _ensure_cdp_chrome() -> bool:
+    """Ensure the user's REAL-profile-clone Chrome is reachable on
+    :9222. Uses the codebase's intended launchd agent first
+    (com.anticipy.chrome), then a direct launch of the SAME real-clone
+    profile. Never creates a blank isolated profile.
+    """
     if _cdp_up():
         return True
+    # 1. The intended mechanism: kick the real-clone LaunchAgent.
+    try:
+        uid = os.getuid()
+        subprocess.run(
+            ["launchctl", "kickstart", "-k",
+             f"gui/{uid}/com.anticipy.chrome"],
+            capture_output=True, timeout=10)
+        for _ in range(40):
+            if _cdp_up():
+                return True
+            time.sleep(0.5)
+    except Exception:
+        pass
+    # 2. Fallback: launch Chrome directly on the SAME real-clone
+    # profile + flags the agent uses. Still the real profile clone,
+    # never blank.
     chrome = None
     for c in ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
               shutil.which("google-chrome"), shutil.which("chromium")):
@@ -453,13 +554,14 @@ def _ensure_cdp_chrome() -> bool:
             break
     if not chrome:
         return False
-    prof = Path(os.path.expanduser("~/.anticipy/chrome-agent"))
-    prof.mkdir(parents=True, exist_ok=True)
     try:
         subprocess.Popen(
             [chrome, f"--remote-debugging-port={CDP_PORT}",
-             f"--user-data-dir={prof}", "--no-first-run",
-             "--no-default-browser-check", "about:blank"],
+             "--remote-allow-origins=http://localhost:*",
+             f"--user-data-dir={_REAL_CLONE}",
+             "--profile-directory=Default", "--no-first-run",
+             "--no-default-browser-check", "--restore-last-session",
+             "--disable-features=Translate"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         return False
@@ -468,6 +570,141 @@ def _ensure_cdp_chrome() -> bool:
             return True
         time.sleep(0.5)
     return False
+
+
+_COMPOSE_SYS = """\
+You are the action planner of a wearable that has been listening to
+the user this session. The user just said something vague. You also
+have what they said EARLIER this session (their memory). Resolve any
+vague reference (it, that, them, him, her, "before they...", "by
+then") to the SPECIFIC person and thing from the earlier facts, then
+output the ONE concrete web-browser task to do now.
+
+DECISION PROCEDURE (follow exactly; this is a counting rule, not a
+feeling):
+
+STEP 1 - List the CANDIDATE referents. A candidate is a concrete
+person or thing in memory that the implied action could plausibly
+apply to, given the action verb and its qualifiers ("a case for it
+before they travel" -> a portable valuable item; "feed it" -> a pet
+or starter; "call her back" -> a person; "if it was rescheduled" ->
+an event/flight). EXCLUDE: inert ambience (weather, aches, the cat
+just sitting, idle musings) and any off-topic or garbled memory
+lines - those are NOT candidates.
+
+PER-PERSON INSTANCES (critical): if the implied reference is to a
+thing, project, or activity, and TWO OR MORE different established
+people are EACH separately doing / own / are associated with their
+OWN instance of that same kind of thing or activity, then EACH
+(person + their own instance) is a SEPARATE candidate - that is 2+
+candidates, NOT one. Do NOT merge them into a single generic shared
+thing. Collapsing "Dave's lathe restoration" and "Frank's lathe
+restoration" into one person-less "the lathe restoration" and acting
+on it is a GUESS (misattribution), the worst outcome. Returning
+person="" with a generic thing is valid ONLY when exactly one person
+(or no relevant person) is associated with that thing; if 2+ people
+each have their own instance and no cue picks one, you MUST clarify
+which person's.
+
+STEP 2 - Apply the cues to the candidate list and count how many
+GENUINELY FIT the implied action:
+  - Exactly ONE candidate fits  -> mode=act, resolve to it. This is
+    the common case. A single clear referent MUST be resolved, never
+    asked about (asking here is over-asking = a failure).
+  - 2+ candidates fit but a cue clearly favours one -> mode=act,
+    resolve to that one.
+  - 2+ candidates fit COMPARABLY and no cue picks one -> mode=clarify
+    with a short question naming exactly those 2+ contenders. Picking
+    one of several equally-fitting candidates (guessing) is a
+    misattribution = the worst outcome.
+  - ZERO candidates fit (referent absent) -> mode=clarify.
+
+Examples (apply the count):
+  - memory: only "Aunt Clara birthday gift we sent"; utterance "I
+    hope it arrived ok, I should check". ONE candidate (the gift) ->
+    mode=act. (Do NOT ask - there is exactly one referent.)
+  - memory: only "Aunt June" + "the flight"; utterance "find out if
+    they rescheduled before I call her back". ONE person, ONE thing
+    -> mode=act (her=Aunt June, it=the flight).
+  - memory: "Aunt Diane AND Miriam both coming for supper";
+    utterance "I should let her know". TWO equally-fitting people,
+    no cue -> mode=clarify "Did you mean Aunt Diane or Miriam?".
+  - memory: "uncle Dave restoring a woodworking lathe" AND "uncle
+    Frank restoring a woodworking lathe too"; utterance "check how
+    that lathe restoration is coming along". TWO people each with
+    their OWN lathe restoration, no cue -> mode=clarify "Dave's or
+    Frank's lathe restoration?". Resolving a generic person-less
+    "the lathe restoration" here is a GUESS = the worst outcome.
+
+Both errors are equally bad and must both be avoided: (a) resolving
+to a WRONG or guessed referent when 2+ fit equally; (b) over-asking
+when exactly one candidate fits. The count in STEP 2 decides it -
+there is no "when in doubt" tiebreaker; do the count honestly.
+
+The task MUST be a single concrete web search that finishes in 2-3
+steps with a definite, on-screen answer and NO side effects. Phrase
+it EXACTLY as: "Search Google for '<concise query about the resolved
+thing/person>' and tell me <the one specific fact needed>". Pick a
+query whose answer is a public fact visible on a normal results page
+(hours, a phone number, a price range, a definition, what something
+is). Never a vague intention ("check on it"), never anything that
+sends, posts, buys, books, or changes state, never something
+requiring login. It must be answerable from a Google results page.
+
+Return STRICT JSON only:
+{"mode":"act"|"clarify","person":"","thing":"",
+ "task":"<one concrete completable web lookup, fully resolved>",
+ "question":"<a short clarifying question, only if mode=clarify>"}
+"""
+
+
+def _compose_task_from_memory(instruction: str) -> dict:
+    """Resolve the vague utterance against THIS session's memory into a
+    concrete browser task, or ask. Only the utterance + the accrued
+    session memory feed this. Never guesses a referent.
+    """
+    import json
+
+    from app.anticipy import memory as MEM
+    from app.anticipy import platform_adapter
+    try:
+        snap = MEM.active_snapshot(USER_ID)
+    except Exception:
+        snap = []
+    facts = "\n".join(f"- {e.get('value','')}" for e in snap) or "(none)"
+    user = (f"EARLIER THIS SESSION (memory):\n{facts}\n\n"
+            f"WHAT THEY JUST SAID: {instruction!r}\n\nReturn the JSON.")
+    # Robust: under the session's burst of model calls OpenRouter can
+    # return a transient empty/garbled completion. A transient infra
+    # failure must NOT masquerade as a legitimate "ambiguous -> ask"
+    # (that wrongly fails a resolvable scenario). Retry a few times;
+    # only fall back to clarify if every attempt is unparseable.
+    import time as _t
+    p = None
+    for attempt in range(4):
+        res = platform_adapter.model_call(_COMPOSE_SYS, user, 600, 0.0,
+                                          True)
+        if res.ok and res.content:
+            s = res.content
+            a, b = s.find("{"), s.rfind("}")
+            if a != -1 and b != -1 and b > a:
+                try:
+                    cand = json.loads(s[a:b + 1])
+                    if isinstance(cand, dict) and cand.get("mode") in (
+                            "act", "clarify"):
+                        p = cand
+                        break
+                except Exception:
+                    pass
+        _t.sleep(1.5 + attempt * 2)
+    if p is None:
+        return {"mode": "clarify", "question": "Which one did you "
+                "mean?", "person": "", "thing": "", "task": "",
+                "_infra_fallback": True}
+    p.setdefault("mode", "clarify")
+    for k in ("person", "thing", "task", "question"):
+        p.setdefault(k, "")
+    return p
 
 
 class Act(BaseModel):
@@ -482,28 +719,45 @@ def act(a: Act) -> JSONResponse:
     if not instruction:
         return JSONResponse({"ran": False,
                              "error": "no instruction to act on"})
+    plan = _compose_task_from_memory(instruction)
+    if plan.get("mode") != "act" or not plan.get("task"):
+        # genuinely ambiguous / absent referent -> ASK, never guess
+        return JSONResponse({
+            "ran": False, "clarify": True,
+            "question": plan.get("question")
+            or "Which one did you mean?",
+            "resolved_person": "", "resolved_thing": ""})
+    task = str(plan["task"]).strip()
     if not _ensure_cdp_chrome():
         return JSONResponse({
             "ran": False, "gated": True,
-            "error": "No Chrome with remote debugging on :9222 and none "
-                     "could be launched. The real path (action_handoff "
-                     "-> frozen DSv4SkillRunner) is wired; a running "
-                     "browser is the edge."})
+            "resolved_person": plan.get("person", ""),
+            "resolved_thing": plan.get("thing", ""), "task": task,
+            "error": "No real Chrome on :9222 and the launchd agent "
+                     "could not be kicked. The real path "
+                     "(action_handoff -> frozen DSv4SkillRunner) is "
+                     "wired; the real-clone browser is the edge."})
     try:
         from app.anticipy.action_handoff import make_real_action_engine
-        eng = make_real_action_engine(cdp_port=CDP_PORT, max_iters=12)
-        res = eng({"object": instruction, "time_window": ""}) or {}
+        # 5 iterations: a concrete web-search lookup completes in 2-3
+        # (navigate to the search URL, read the answer, done). 12 made
+        # vague tasks run ~20 min each. The frozen engine is unchanged;
+        # only this glue param is tuned.
+        eng = make_real_action_engine(cdp_port=CDP_PORT, max_iters=5)
+        res = eng({"object": task, "time_window": ""}) or {}
         status = res.get("status", "?")
         ran = status in ("SUCCESS", "PROCEEDED_ON_ASSUMPTION",
                          "ITERATION_EXHAUSTED")
         out = {
-            "ran": ran, "status": status,
+            "ran": ran, "status": status, "task": task,
+            "resolved_person": plan.get("person", ""),
+            "resolved_thing": plan.get("thing", ""),
             "answer": str(res.get("answer", ""))[:600],
             "evidence": str(res.get("evidence", ""))[:600],
             "trajectory_dir": res.get("trajectory_dir", ""),
             "error": res.get("error")}
         if ran:
-            _LISTEN["acted"] = {"instruction": instruction,
+            _LISTEN["acted"] = {"instruction": instruction, "task": task,
                                 "status": status, "ts": time.time()}
             _LISTEN["pending"] = None
         return JSONResponse(out)
