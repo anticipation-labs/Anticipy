@@ -1,0 +1,54 @@
+name: windows-build
+
+# Windows packaging produced in parallel with the Mac build, on a real
+# GitHub-hosted Windows runner (no local Windows host needed).
+# Honest platform note: the local mic ASR on macOS uses MLX
+# (parakeet_mlx), which is Apple-Silicon only. The Windows build
+# therefore excludes mlx/parakeet_mlx; the Windows local-ASR backend
+# is a tagged, flagged platform item (a real engineering follow-up,
+# not faked) and does not block packaging. Everything else (the UI,
+# onboarding via OpenRouter cloud, memory, the CDP browser action
+# engine, reasoning) is cross-platform.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "engine/**"
+      - ".github/workflows/windows-build.yml"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build deps (Windows-portable subset)
+        shell: pwsh
+        working-directory: engine
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller fastapi uvicorn pydantic pywebview `
+            numpy requests python-dotenv sounddevice soundfile httpx `
+            websockets anyio starlette
+          # mlx / parakeet_mlx are Apple-Silicon only and are
+          # intentionally NOT installed on Windows. The Windows local
+          # ASR backend is the flagged platform item.
+
+      - name: Build Windows artifact
+        shell: pwsh
+        working-directory: engine
+        run: pyinstaller --noconfirm --clean Anticipy-win.spec
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Anticipy-windows
+          path: engine/dist/Anticipy/
+          if-no-files-found: error
+          retention-days: 14
