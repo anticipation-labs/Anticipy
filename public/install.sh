@@ -11,11 +11,31 @@ set -euo pipefail
 URL="https://www.anticipy.ai/download"
 TMP="$(mktemp -d)"
 DMG="$TMP/Anticipy.dmg"
+ANTICIPY_HOME="$HOME/.anticipy"
+LOG="$ANTICIPY_HOME/product-engine.log"
+PIDFILE="$ANTICIPY_HOME/product-engine.pid"
 
 cleanup() { rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
 
-echo "Anticipy: downloading the real app (~96 MB)..."
+stop_existing_engine() {
+  if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    echo "Anticipy: stopping prior local engine PID $(cat "$PIDFILE") ..."
+    kill -TERM "$(cat "$PIDFILE")" 2>/dev/null || true
+    for _ in $(seq 1 40); do
+      if ! kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        break
+      fi
+      sleep 0.25
+    done
+  fi
+  rm -f "$PIDFILE"
+}
+
+mkdir -p "$ANTICIPY_HOME"
+stop_existing_engine
+
+echo "Anticipy: downloading the real app (~609 MB)..."
 curl -fL --retry 3 -o "$DMG" "$URL"
 
 # Sanity: a real disk image, not a truncated/parked file.
@@ -41,7 +61,26 @@ hdiutil detach "$MNT" -quiet 2>/dev/null || true
 echo "Anticipy: clearing the macOS quarantine flag..."
 xattr -dr com.apple.quarantine "/Applications/Anticipy.app" 2>/dev/null || true
 
+echo "Anticipy: starting the local engine on http://127.0.0.1:8731 ..."
+ANTICIPY_HEADLESS=1 ANTICIPY_PORT=8731 \
+  nohup "/Applications/Anticipy.app/Contents/MacOS/Anticipy" \
+    --server --port 8731 >"$LOG" 2>&1 &
+echo $! > "$PIDFILE"
+
+for _ in $(seq 1 80); do
+  if curl -fsS "http://127.0.0.1:8731/health" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.5
+done
+
+if ! curl -fsS "http://127.0.0.1:8731/health" >/dev/null 2>&1; then
+  echo "Anticipy engine did not become healthy. Log:"
+  tail -80 "$LOG" 2>/dev/null || true
+  exit 1
+fi
+
 echo ""
-echo "Done. Anticipy is installed in your Applications folder and"
-echo "will open normally (no 'damaged' warning)."
-open "/Applications/Anticipy.app" 2>/dev/null || true
+echo "Done. Anticipy is installed and the local engine is running."
+echo "Health: http://127.0.0.1:8731/health"
+echo "Log: $LOG"

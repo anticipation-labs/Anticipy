@@ -33,6 +33,13 @@ type View =
   | "settings";
 
 const GATED: View[] = ["download", "onboarding", "listen", "history", "settings"];
+const LOCAL_ENGINE = "http://127.0.0.1:8731";
+
+type LocalEngine = {
+  live: boolean;
+  detail: string;
+  health?: Record<string, unknown>;
+};
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -156,6 +163,11 @@ export default function AnticipyApp() {
   const [view, setView] = useState<View>("entry");
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [localEngine, setLocalEngine] = useState<LocalEngine>({
+    live: false,
+    detail:
+      "Local engine not connected yet. Install and start Anticipy, then this page connects to 127.0.0.1:8731 from your browser.",
+  });
 
   // ── real Supabase auth ──────────────────────────────────────────
   const [session, setSession] = useState<Session | null>(null);
@@ -227,24 +239,70 @@ export default function AnticipyApp() {
     reason?: string;
   } | null>(null);
 
+  const probeLocalEngine = useCallback(async () => {
+    try {
+      const r = await fetch(`${LOCAL_ENGINE}/health`, {
+        cache: "no-store",
+        mode: "cors",
+      });
+      if (!r.ok) throw new Error(`local engine ${r.status}`);
+      const health = (await r.json()) as Record<string, unknown>;
+      setLocalEngine({
+        live: true,
+        detail: `Connected to the local engine on ${LOCAL_ENGINE}.`,
+        health,
+      });
+    } catch (e) {
+      setLocalEngine({
+        live: false,
+        detail:
+          "No local engine answered on 127.0.0.1:8731. The deployed app shell is loaded, but the user-device server is not connected.",
+      });
+    }
+  }, []);
+
   const doListen = useCallback(async () => {
     setRunning(true);
     setRun(null);
     try {
-      const r = await fetch("/api/app/run", {
+      const r = await fetch(`${LOCAL_ENGINE}/api/listen/start`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        mode: "cors",
       });
-      setRun(await r.json());
+      const started = await r.json();
+      const s = await fetch(`${LOCAL_ENGINE}/api/listen/status`, {
+        cache: "no-store",
+        mode: "cors",
+      });
+      const status = await s.json();
+      setRun({
+        proposal: status?.pending?.proposal ?? null,
+        transcript: status?.recent?.[0]?.transcript ?? "",
+        engine_decision: status?.recent?.[0]?.outcome ?? "",
+        stages: [
+          {
+            name: "localhost engine",
+            real: Boolean(started?.on && !started?.error),
+            gated: Boolean(started?.error),
+            detail: started?.error
+              ? String(started.error)
+              : `listening=${Boolean(status?.on)} windows=${status?.windows ?? 0}`,
+          },
+        ],
+        gated: Boolean(started?.error),
+        reason: started?.error
+          ? String(started.error)
+          : "The local engine is listening. Proposals appear when the real rolling window hears or receives an authorized post-ASR transcript.",
+      });
     } catch (e) {
       setRun({
         proposal: null,
         transcript: "",
         engine_decision: "",
         stages: [],
-        gated: true,
-        reason: "The run could not reach the engine. Honest state, not faked.",
+          gated: true,
+          reason:
+            "The browser could not reach the local engine on 127.0.0.1:8731. Honest state, not faked.",
       });
     } finally {
       setRunning(false);
@@ -264,7 +322,10 @@ export default function AnticipyApp() {
 
   useEffect(() => {
     load();
-  }, [load]);
+    probeLocalEngine();
+    const t = window.setInterval(probeLocalEngine, 4000);
+    return () => window.clearInterval(t);
+  }, [load, probeLocalEngine]);
 
   // session gate: a gated view with no real session sends you to auth
   useEffect(() => {
@@ -510,18 +571,17 @@ export default function AnticipyApp() {
 
         {view === "listen" && (
           <div className="min-h-screen flex flex-col items-center justify-center text-center max-w-[680px] mx-auto py-28">
-            {state?.engine.status !== "live" ? (
+            {!localEngine.live ? (
               <>
                 <Orb live={false} />
                 <p className="mt-12 text-[13px] uppercase tracking-[0.24em] text-cream/40 fade-up">
-                  Wired, not live here
+                  Local engine not connected
                 </p>
                 <p
                   className="mt-4 text-[14px] text-cream/45 leading-relaxed fade-up max-w-[48ch]"
                   style={{ animationDelay: "120ms" }}
                 >
-                  {state?.engine.detail ??
-                    "No engine reachable from this origin. Honest gated state, never a faked live orb or a fabricated proposal."}
+                  {localEngine.detail}
                 </p>
                 <Ghost onClick={() => setView("history")}>
                   See what it has handled
@@ -624,13 +684,14 @@ export default function AnticipyApp() {
               style={{ animationDelay: "140ms" }}
             >
               <p className="text-[14px] text-cream/80 font-medium">
-                {state?.proposals.status === "live"
-                  ? "Connected. Real proposals appear here as one calm list."
-                  : "Nothing to show yet, honestly."}
+                  {localEngine.live
+                    ? "Connected. Real proposals appear here as one calm list."
+                    : "Nothing to show yet, honestly."}
               </p>
               <p className="mt-3 text-[13px] text-cream/45 leading-relaxed max-w-[54ch]">
-                {state?.proposals.detail ??
-                  "Real history will appear here as one calm, scannable list."}
+                {localEngine.live
+                  ? "The deployed app shell is connected to the local device engine."
+                  : "Real history will appear here once the browser connects to the local engine."}
               </p>
             </div>
           </div>
@@ -654,7 +715,7 @@ export default function AnticipyApp() {
                 ["Microphone", state?.onboarding.microphone.detail],
                 ["Connected browser", state?.onboarding.chrome.detail],
                 ["Autonomy level", state?.onboarding.autonomy.detail],
-                ["Engine", state?.engine.detail],
+                ["Engine", localEngine.detail],
                 ["Safety", state?.safety.detail],
               ].map(([t, d], i) => (
                 <div

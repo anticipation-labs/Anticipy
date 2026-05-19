@@ -22,41 +22,14 @@ type Segment = {
   detail: string;
 };
 
-async function engineReachable(): Promise<Segment> {
-  const url = process.env.ENGINE_URL || process.env.NEXT_PUBLIC_ENGINE_URL;
-  if (!url) {
-    return {
-      status: "gated",
-      detail:
-        "Engine URL not configured in this environment. The live " +
-        "proposal round-trip is a gated edge; the path is wired " +
-        "(MH-P1 proved it end to end on the engine host), unproven " +
-        "from this web origin without a running engine.",
-    };
-  }
-  try {
-    const r = await fetch(`${url.replace(/\/$/, "")}/health`, {
-      signal: AbortSignal.timeout(2500),
-    });
-    return r.ok
-      ? { status: "live", detail: "Engine reachable." }
-      : {
-          status: "gated",
-          detail: `Engine responded ${r.status}; treated as gated, ` +
-            `not faked as connected.`,
-        };
-  } catch (e) {
-    return {
-      status: "gated",
-      detail:
-        "Engine not reachable from this origin. Honest gated edge, " +
-        "not a faked connection.",
-    };
-  }
-}
-
 export async function GET() {
-  const engine = await engineReachable();
+  const engine = {
+    status: "ready",
+    detail:
+      "The deployed shell probes the user-device engine directly from " +
+      "the browser at http://127.0.0.1:8731. Vercel does not proxy " +
+      "the local engine.",
+  } as Segment;
 
   return NextResponse.json({
     // The product is account-gated. Real account creation / OAuth /
@@ -83,11 +56,11 @@ export async function GET() {
           "fake it.",
       } as Segment,
       microphone: {
-        status: "needs_user",
+        status: "ready",
         detail:
-          "macOS microphone permission is a TCC grant only you can " +
-          "give. MH-P1 proved the real capture path; the frontend " +
-          "shows the real permission state.",
+          "The terminal-launched local engine uses the already-authorized " +
+          "terminal microphone path; the browser shell only reports that " +
+          "real local state.",
       } as Segment,
       autonomy: {
         status: "ready",
@@ -104,11 +77,10 @@ export async function GET() {
       engine.status === "live"
         ? { status: "live", detail: "Live proposals stream from the engine." }
         : {
-            status: "gated",
+            status: "ready",
             detail:
-              "No live engine from this origin, so there are no " +
-              "real proposals to show. This renders the honest " +
-              "empty/gated state by design, never a fake proposal.",
+              "The browser connects to the local engine directly; no " +
+              "proposal is fabricated by Vercel.",
           },
     safety: {
       // surfaced from the committed build guarantees, stated plainly

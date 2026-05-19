@@ -12,7 +12,8 @@ for pkg in ("mlx", "parakeet_mlx", "torch", "torchaudio",
             "silero_vad", "soundfile", "sounddevice", "numpy",
             "scipy", "sklearn", "webview", "uvicorn", "fastapi",
             "starlette", "pydantic", "anyio", "objc",
-            "WebKit", "Foundation", "AppKit", "app"):
+            "WebKit", "Foundation", "AppKit", "AVFoundation",
+            "CoreAudio", "CoreMedia", "app"):
     try:
         d, b, h = collect_all(pkg)
         datas += d
