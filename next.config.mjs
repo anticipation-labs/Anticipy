@@ -1,5 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  async redirects() {
+    return [
+      { source: "/", destination: "/app", permanent: false },
+      { source: "/engine", destination: "/app", permanent: false },
+      { source: "/engine/:path*", destination: "/app", permanent: false },
+      { source: "/demo", destination: "/app", permanent: false },
+      { source: "/engine-transfer", destination: "/app", permanent: false },
+      { source: "/ambient-intent", destination: "/app", permanent: false },
+      { source: "/compare", destination: "/app", permanent: false },
+      { source: "/funded", destination: "/app", permanent: false },
+      { source: "/for", destination: "/app", permanent: false },
+      { source: "/for/:path*", destination: "/app", permanent: false },
+      { source: "/vs/:path*", destination: "/app", permanent: false },
+      { source: "/waitlist", destination: "/app", permanent: false },
+      { source: "/crm", destination: "/app", permanent: false },
+      { source: "/crm/:path*", destination: "/app", permanent: false },
+      { source: "/guide/:path*", destination: "/app", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

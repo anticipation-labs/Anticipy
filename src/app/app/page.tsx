@@ -583,9 +583,27 @@ export default function AnticipyApp() {
                 >
                   {localEngine.detail}
                 </p>
-                <Ghost onClick={() => setView("history")}>
-                  See what it has handled
-                </Ghost>
+                <div
+                  className="mt-8 rounded-card border border-dark-border bg-dark-elevated px-6 py-5 text-left w-full max-w-[600px] fade-up"
+                  style={{ animationDelay: "180ms" }}
+                >
+                  <p className="text-[12px] uppercase tracking-[0.18em] text-gold/80 mb-3">
+                    Install and start the Mac engine
+                  </p>
+                  <p className="text-[13px] text-cream/55 leading-relaxed mb-2">
+                    Paste this into Terminal. It downloads Anticipy, installs
+                    the app, clears quarantine, and starts the local engine.
+                  </p>
+                  <code className="block rounded-md bg-dark border border-dark-border px-4 py-3 text-[12.5px] text-gold/90 select-all break-all">
+                    curl -fsSL https://www.anticipy.ai/install.sh | bash
+                  </code>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <Primary onClick={() => setView("download")}>
+                    Install Anticipy
+                  </Primary>
+                  <Ghost onClick={probeLocalEngine}>Check again</Ghost>
+                </div>
               </>
             ) : run ? (
               <div className="w-full fade-up">

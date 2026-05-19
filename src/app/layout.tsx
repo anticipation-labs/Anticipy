@@ -19,31 +19,31 @@ const jakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.anticipy.ai"),
-  title: "Anticipy — AI Wearable Pendant for Ambient Intent",
+  title: "Anticipy App",
   description:
-    "Anticipy listens to your life and acts on ambient intent — booking, scheduling, canceling, disputing — all autonomously. Titanium pendant. 8g. $149.",
+    "Open Anticipy, install the local Mac engine, and connect the private on-device assistant to the public app shell.",
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true },
   },
   openGraph: {
-    title: "Anticipy — AI Wearable Pendant for Ambient Intent",
+    title: "Anticipy App",
     description:
-      "The AI wearable that listens to your life and handles what needs handling. Brushed titanium. 8 grams. $149.",
-    url: "https://www.anticipy.ai",
+      "The public Anticipy app shell plus the private local Mac engine.",
+    url: "https://www.anticipy.ai/app",
     siteName: "Anticipy",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Anticipy — AI Wearable Pendant for Ambient Intent",
+    title: "Anticipy App",
     description:
-      "The AI wearable that listens to your life and handles what needs handling. Brushed titanium. 8 grams. $149.",
+      "Open Anticipy, install the local Mac engine, and connect the private on-device assistant.",
   },
   alternates: {
-    canonical: "https://www.anticipy.ai",
+    canonical: "https://www.anticipy.ai/app",
   },
 };
 
@@ -66,21 +66,22 @@ const jsonLdOrganization = {
 
 const jsonLdProduct = {
   "@context": "https://schema.org",
-  "@type": "Product",
+  "@type": "SoftwareApplication",
   name: "Anticipy",
   description:
-    "AI wearable pendant that listens to your life and autonomously completes tasks: booking, scheduling, canceling, and more.",
+    "Public app shell plus private local Mac engine for ambient intent capture, onboarding, memory, and browser actions.",
   brand: {
     "@type": "Brand",
     name: "Anticipation Labs",
   },
-  category: "AI Wearable",
+  applicationCategory: "ProductivityApplication",
+  operatingSystem: "macOS",
   offers: {
     "@type": "Offer",
-    price: "149",
+    price: "0",
     priceCurrency: "USD",
-    availability: "https://schema.org/PreOrder",
-    url: "https://www.anticipy.ai/waitlist",
+    availability: "https://schema.org/InStock",
+    url: "https://www.anticipy.ai/app",
   },
 };
 
@@ -88,7 +89,7 @@ const jsonLdWebSite = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: "Anticipy",
-  url: "https://www.anticipy.ai",
+  url: "https://www.anticipy.ai/app",
 };
 
 export default function RootLayout({
