@@ -19,6 +19,12 @@
 /dist
 dist/executor/
 dist/anticipy-extension*
+# PyInstaller build artifacts under engine/ (2.6G+, never tracked)
+engine/build/
+engine/dist/
+# stale duplicate of the canonical CLAUDE.md (dead Browser Use/Gemini
+# architecture); kept on disk, not tracked
+AGENTS.md
 
 # misc
 .DS_Store
