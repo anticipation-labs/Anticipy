@@ -714,7 +714,12 @@ def _ambiguity_guard(instruction: str, plan: dict) -> dict | None:
     same remembered thing, ask instead of letting a model guess.
     """
     low = (instruction or "").lower()
-    if not re.search(r"\b(her|him|them|they|she|he)\b", low):
+    ambiguous_ref = re.search(
+        r"\b(her|him|them|they|she|he|advisor|adviser|manager|"
+        r"client|partner|co[- ]?founder|teammate|report)\b",
+        low,
+    )
+    if not ambiguous_ref:
         return None
     if _contains_explicit_person(instruction):
         return None
