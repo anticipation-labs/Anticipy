@@ -1,0 +1,15 @@
+{
+  "mic_probe": {
+    "ok": true,
+    "rms": 0.00012132087431382388,
+    "samples": 6400,
+    "device": "MacBook Air Microphone",
+    "permission": "authorized"
+  },
+  "listen": {
+    "on": true,
+    "window_seconds": 100000.0,
+    "windows": 8,
+    "level": 9.4e-05
+  }
+}

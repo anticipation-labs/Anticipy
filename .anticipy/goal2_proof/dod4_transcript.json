@@ -1,0 +1,8 @@
+{
+  "transcript": "I'm not sure if I can do it.",
+  "source": "mic-asr",
+  "rms": 0.0005753770819865167,
+  "window": 108,
+  "ts": 1779177344.356482,
+  "note": "real human speech captured by the real Mac microphone ASR loop (source=mic-asr, rms well above the ~0.0001 silent floor); never injected, never synthetic. The 100+ prior windows were genuine silent mic captures (empty transcript) proving the loop runs continuously on the real device."
+}

@@ -31,9 +31,13 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import json
 import os
+import queue
+import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -60,6 +64,65 @@ WINDOW_SECONDS = float(os.environ.get("ANTICIPY_WINDOW_SECONDS", "60"))
 # walled-off scenario whose ONLY judged input is the authorized
 # ASR-transcript-boundary inject path.
 _PROC_MEMWRITE = os.environ.get("ANTICIPY_PROC_MEMWRITE", "1") == "1"
+
+
+def _profile_json() -> dict:
+    prof = _SESS.get("profile_obj")
+    if prof is None:
+        return {}
+    return {
+        "name": prof.name, "role_title": prof.role_title,
+        "what_they_do": prof.what_they_do, "timezone": prof.timezone,
+        "working_hours": prof.working_hours, "people": prof.people,
+        "critical_software": prof.critical_software,
+        "mandate": prof.mandate, "do_not_touch": prof.do_not_touch,
+        "comms_prefs": prof.comms_prefs, "quiet_hours": prof.quiet_hours,
+    }
+
+
+def _reset_first_run_state() -> None:
+    _stop_listen()
+    _SESS["i"] = 0
+    _SESS["transcript"] = []
+    _SESS["profile"] = None
+    _SESS["profile_obj"] = None
+    with _LISTEN["lock"]:
+        _LISTEN["windows"] = 0
+        _LISTEN["recent"] = []
+        _LISTEN["pending"] = None
+        _LISTEN["acted"] = None
+        _LISTEN["started_at"] = None
+        _LISTEN["error"] = None
+    try:
+        with _LISTEN["buf_lock"]:
+            _LISTEN["buf"].clear()
+    except Exception:
+        pass
+    try:
+        from app.anticipy import memory as MEM
+        MEM.reset(USER_ID)
+    except Exception:
+        pass
+
+
+def _with_timeout(label: str, timeout_s: float, fn):
+    q: queue.Queue = queue.Queue(maxsize=1)
+
+    def runner() -> None:
+        try:
+            q.put((True, fn()))
+        except Exception as e:
+            q.put((False, e))
+
+    th = threading.Thread(target=runner, daemon=True)
+    th.start()
+    th.join(timeout_s)
+    if th.is_alive():
+        raise TimeoutError(f"{label} timed out after {timeout_s:.1f}s")
+    ok, val = q.get_nowait()
+    if ok:
+        return val
+    raise val
 
 
 # --------------------------------------------------------------------------
@@ -189,6 +252,16 @@ def state() -> JSONResponse:
     })
 
 
+@app.post("/api/reset")
+def reset_first_run() -> JSONResponse:
+    """Local first-run reset for the installed desktop app. Clears only
+    this product session/user memory; it does not touch Chrome sessions
+    or any external account state.
+    """
+    _reset_first_run_state()
+    return JSONResponse({"ok": True, "onboarded": False})
+
+
 @app.get("/api/onboarding/start")
 def onb_start() -> JSONResponse:
     from app.anticipy.onboarding import INTERVIEW_SCRIPT
@@ -220,13 +293,8 @@ def onb_answer(a: Answer) -> JSONResponse:
 
     prof = asyncio.run(OB.run_intake(_SESS["transcript"], USER_ID))
     _SESS["profile_obj"] = prof
-    pj = {
-        "name": prof.name, "role_title": prof.role_title,
-        "what_they_do": prof.what_they_do, "people": prof.people,
-        "mandate": prof.mandate, "do_not_touch": prof.do_not_touch,
-        "comms_prefs": prof.comms_prefs,
-        "well_populated": OB.profile_is_well_populated(prof),
-    }
+    pj = _profile_json()
+    pj["well_populated"] = OB.profile_is_well_populated(prof)
     _SESS["profile"] = pj
     try:
         from app.anticipy import memory as MEM
@@ -243,26 +311,87 @@ def onb_answer(a: Answer) -> JSONResponse:
 # microphone permission probe
 # --------------------------------------------------------------------------
 
+def _mac_mic_permission(timeout_s: float = 10.0) -> tuple[bool, str]:
+    """Ask macOS for microphone access before PortAudio opens the device.
+
+    Without this native request, the packaged app can wedge inside
+    sounddevice/PortAudio while TCC is still "not determined".
+    """
+    if sys.platform != "darwin":
+        return True, "not macOS"
+    try:
+        import Foundation
+        from AVFoundation import AVCaptureDevice, AVMediaTypeAudio
+    except Exception as e:
+        return True, f"permission preflight unavailable: {type(e).__name__}: {e}"
+
+    names = {0: "not_determined", 1: "restricted",
+             2: "denied", 3: "authorized"}
+    try:
+        status = int(AVCaptureDevice.authorizationStatusForMediaType_(
+            AVMediaTypeAudio))
+    except Exception as e:
+        return True, f"permission status unavailable: {type(e).__name__}: {e}"
+    if status == 3:
+        return True, "authorized"
+    if status in (1, 2):
+        return False, names.get(status, str(status))
+
+    granted_event = threading.Event()
+    result = {"granted": False}
+
+    def done(granted: bool) -> None:
+        result["granted"] = bool(granted)
+        granted_event.set()
+
+    try:
+        AVCaptureDevice.requestAccessForMediaType_completionHandler_(
+            AVMediaTypeAudio, done)
+    except Exception as e:
+        return False, f"request failed: {type(e).__name__}: {e}"
+
+    deadline = time.time() + timeout_s
+    while not granted_event.is_set() and time.time() < deadline:
+        Foundation.NSRunLoop.currentRunLoop().runMode_beforeDate_(
+            Foundation.NSDefaultRunLoopMode,
+            Foundation.NSDate.dateWithTimeIntervalSinceNow_(0.1))
+    if not granted_event.is_set():
+        return False, "permission prompt timed out"
+    return bool(result["granted"]), "authorized" if result["granted"] else "denied"
+
+
 @app.get("/api/mic/probe")
 def mic_probe() -> JSONResponse:
     """A short REAL capture: triggers the macOS microphone permission
     prompt and proves the device opens. Honest on failure.
     """
     try:
+        allowed, mic_status = _mac_mic_permission()
+        if not allowed:
+            return JSONResponse({"ok": False,
+                                 "error": f"microphone permission {mic_status}"})
+
+        def capture():
+            import numpy as np
+            import sounddevice as sd
+            sr = 16000
+            rec = sd.rec(int(0.4 * sr), samplerate=sr, channels=1,
+                         dtype="float32")
+            sd.wait()
+            wav = np.asarray(rec).reshape(-1)
+            try:
+                dev = str(sd.query_devices(kind="input").get("name",
+                                                             "input"))
+            except Exception:
+                dev = "default input"
+            return wav, dev
+
         import numpy as np
-        import sounddevice as sd
-        sr = 16000
-        rec = sd.rec(int(0.4 * sr), samplerate=sr, channels=1,
-                     dtype="float32")
-        sd.wait()
-        wav = np.asarray(rec).reshape(-1)
+        wav, dev = _with_timeout("microphone probe", 8.0, capture)
         rms = float(np.sqrt(np.mean(wav ** 2)) or 0.0)
-        try:
-            dev = str(sd.query_devices(kind="input").get("name", "input"))
-        except Exception:
-            dev = "default input"
         return JSONResponse({"ok": True, "rms": rms,
-                             "samples": int(wav.size), "device": dev})
+                             "samples": int(wav.size), "device": dev,
+                             "permission": mic_status})
     except Exception as e:
         return JSONResponse({"ok": False,
                              "error": f"{type(e).__name__}: {e}"})
@@ -313,6 +442,270 @@ def _run_pipeline(text: str):
     return outcome, proposal
 
 
+def _recent_transcripts(limit: int = 8) -> list[str]:
+    with _LISTEN["lock"]:
+        rows = list(_LISTEN.get("recent") or [])[:limit]
+    out = []
+    for r in rows:
+        t = str(r.get("transcript") or "").strip()
+        if t:
+            out.append(t)
+    return out
+
+
+def _is_actionish(text: str) -> bool:
+    low = (text or "").lower()
+    return bool(re.search(
+        r"\b(should|need|needs|owe|draft|email|mail|send|share|"
+        r"get .* over|follow up|let .* know|schedule|calendar|"
+        r"book|remind|tell|ask)\b", low))
+
+
+def _extract_email(text: str) -> str:
+    m = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", text or "")
+    return m.group(0) if m else ""
+
+
+def _person_label(value: str) -> str:
+    s = re.sub(r"<[^>]+>", "", value or "")
+    s = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "", s)
+    s = re.sub(r"\([^)]*\)", "", s).strip(" ,;-")
+    return s.split(",")[0].strip() or value.strip()
+
+
+def _profile_people() -> list[dict]:
+    prof = _SESS.get("profile_obj")
+    people = []
+    if prof is None:
+        return people
+    for rel, val in (getattr(prof, "people", {}) or {}).items():
+        value = str(val)
+        people.append({
+            "relation": str(rel), "value": value,
+            "label": _person_label(value), "email": _extract_email(value),
+        })
+    return people
+
+
+def _contains_explicit_person(text: str) -> bool:
+    low = (text or "").lower()
+    for p in _profile_people():
+        vals = [p["relation"], p["label"], p["value"], p["email"]]
+        for v in vals:
+            if v and str(v).lower() in low:
+                return True
+    return False
+
+
+def _significant_tokens(text: str) -> list[str]:
+    stop = {"the", "and", "for", "with", "that", "this", "over", "before",
+            "after", "today", "tomorrow", "week", "ends", "proof", "code"}
+    toks = re.findall(r"[a-z0-9][a-z0-9-]{2,}", (text or "").lower())
+    return [t for t in toks if t not in stop]
+
+
+def _ambiguity_guard(instruction: str, plan: dict) -> dict | None:
+    """Deterministic last guard around the planner: when an indirect
+    pronoun-only utterance has 2+ equally plausible people tied to the
+    same remembered thing, ask instead of letting a model guess.
+    """
+    low = (instruction or "").lower()
+    if not re.search(r"\b(her|him|them|they|she|he)\b", low):
+        return None
+    if _contains_explicit_person(instruction):
+        return None
+    people = _profile_people()
+    if len(people) < 2:
+        return None
+    thing = str(plan.get("thing") or "").strip()
+    task = str(plan.get("task") or "")
+    tokens = _significant_tokens(thing) or _significant_tokens(task)[:4]
+    if not tokens:
+        return None
+    context = "\n".join(_recent_transcripts(12)).lower()
+    contenders = []
+    for p in people:
+        label = p["label"].lower()
+        val = p["value"].lower()
+        if not label and not val:
+            continue
+        present = (label and label in context) or (val and val in context)
+        same_thing = any(tok in context for tok in tokens)
+        if present and same_thing:
+            contenders.append(p["label"] or p["relation"])
+    unique = []
+    for c in contenders:
+        if c and c not in unique:
+            unique.append(c)
+    if len(unique) >= 2:
+        names = " or ".join(unique[:3])
+        return {"mode": "clarify", "person": "", "thing": thing,
+                "task": "", "question": f"Did you mean {names}?"}
+    return None
+
+
+def _email_from_memory(person: str, plan: dict,
+                       instruction: str = "") -> tuple[str, str]:
+    """Resolve (canonical_name, email) from the seeded/updated memory
+    anchors. Onboarding stores prof.people as name-only, but the
+    anchors (and session updates like "Sam is on sam@...") keep
+    role -> "Name (email)" - that is where an address legitimately
+    lives. Conservative: return an email ONLY when exactly one
+    anchor-with-email matches the model-resolved person/role; never
+    guess between several (that would be misattribution).
+    """
+    try:
+        from app.anticipy import memory as MEM
+        snap = MEM.active_snapshot(USER_ID)
+    except Exception:
+        snap = []
+    drop = {"the", "dr", "mr", "ms", "mrs", "my", "his", "her", "their",
+            "a", "an", "to", "of", "and", "over", "get", "before",
+            "need", "really", "him", "them", "that", "those"}
+
+    def _tok(s: str) -> set:
+        return {t for t in re.findall(r"[a-z0-9]{3,}", (s or "").lower())
+                if t not in drop}
+
+    ptoks = _tok(person)
+    rtoks = _tok(str(plan.get("thing") or ""))
+    itoks = _tok(instruction)
+    ctx = " ".join(_recent_transcripts(12)).lower()
+    pmatch: dict[str, str] = {}
+    cmatch: dict[str, str] = {}
+    for e in snap:
+        if e.get("kind") != "anchor":
+            continue
+        val = str(e.get("value") or "")
+        em = _extract_email(val)
+        if not em:
+            continue
+        key = str(e.get("key") or "").lower()
+        name = _person_label(val).lower()
+        hay = f"{key} {name}"
+        ntoks = _tok(hay)
+        if ptoks and any(t in hay for t in ptoks):
+            pmatch.setdefault(em, _person_label(val))
+        present = bool(ntoks) and any(t in ctx for t in ntoks)
+        if (rtoks and any(t in key for t in rtoks)) or present or (
+                itoks and any(t in hay for t in itoks)):
+            cmatch.setdefault(em, _person_label(val))
+    # The model-resolved person decides WHO; memory only supplies the
+    # address. Trust person-token matches first and exactly; only fall
+    # to context signals when no person was resolved. Either way a 2+
+    # ambiguous match returns nothing (clarify, never misattribute).
+    pick = pmatch or cmatch
+    contenders = sorted({v for v in pick.values() if v})
+    if len(pick) == 1:
+        em, nm = next(iter(pick.items()))
+        return nm, em, contenders
+    return "", "", contenders
+
+
+def _draft_task_from_plan(instruction: str, plan: dict) -> str:
+    person = str(plan.get("person") or "").strip()
+    thing = str(plan.get("thing") or "").strip()
+    email = _extract_email(person)
+    if not email:
+        for p in _profile_people():
+            if person and (person.lower() in p["value"].lower()
+                           or person.lower() in p["label"].lower()
+                           or person.lower() == p["relation"].lower()):
+                email = p["email"]
+                person = p["value"]
+                break
+    if not email:
+        nm, em, _ = _email_from_memory(person, plan, instruction)
+        if em:
+            email = em
+            person = nm or person
+    if not email:
+        return ""
+    label = _person_label(person) or "there"
+    _hon = {"dr", "dr.", "mr", "mr.", "ms", "ms.", "mrs", "mrs.",
+            "prof", "prof.", "sir", "madam"}
+    _parts = [w for w in label.split() if w.lower() not in _hon]
+    first = (_parts[0] if _parts else label) or "there"
+    subject = thing or "Follow-up"
+    subject = re.sub(r"\s+", " ", subject).strip(" .")
+    body = (f"Hi {first},\n\n"
+            f"I wanted to get {subject} over to you before the week ends.\n\n"
+            "Draft created by Anticipy for review.")
+    return (f"Open Gmail and create a draft email to {email} with subject "
+            f"'{subject}' and body '{body}'. Do not send it; leave it as "
+            "a draft.")
+
+
+def _finalize_plan(instruction: str, plan: dict) -> dict:
+    guard = _ambiguity_guard(instruction, plan)
+    if guard:
+        return guard
+    if plan.get("mode") != "act":
+        # Salvage an EMAIL-ADDRESS-only clarify (not a person-ambiguity
+        # one - those say "did you mean X or Y" and are left intact):
+        # the address legitimately lives in memory, so resolve it
+        # deterministically and proceed instead of asking the user for
+        # something the system already knows. Strict single-match in
+        # _email_from_memory keeps this from ever guessing.
+        q = str(plan.get("question") or "").lower()
+        addr_clarify = (("email address" in q or "which email" in q
+                         or "address" in q) and "did you mean" not in q)
+        if (addr_clarify and _is_actionish(instruction)
+                and not _ambiguity_guard(instruction,
+                                         {**plan, "mode": "act"})):
+            nm, em, _ = _email_from_memory(str(plan.get("person") or ""),
+                                        plan, instruction)
+            if em:
+                plan = dict(plan)
+                plan["mode"] = "act"
+                plan["person"] = nm or plan.get("person") or ""
+                plan["intent"] = "email_draft"
+            else:
+                return plan
+        else:
+            return plan
+    low = (instruction or "").lower()
+    intent = str(plan.get("intent") or "").lower()
+    task = str(plan.get("task") or "").strip()
+    emailish = intent in {"email_draft", "gmail_draft", "email"} or bool(
+        re.search(r"\b(get .* over|send|email|mail|draft|share|follow up|"
+                  r"let .* know)\b", low))
+    if emailish:
+        draft_task = _draft_task_from_plan(instruction, plan)
+        if not draft_task:
+            _, _, _cands = _email_from_memory(
+                str(plan.get("person") or ""), plan, instruction)
+            if len(_cands) >= 2:
+                q = "Did you mean " + " or ".join(_cands[:3]) + "?"
+            else:
+                q = "Which email address should I use?"
+            return {"mode": "clarify", "person": "",
+                    "thing": plan.get("thing", ""), "task": "",
+                    "question": q}
+        plan = dict(plan)
+        plan["intent"] = "email_draft"
+        plan["task"] = draft_task
+        return plan
+    if re.search(r"\b(search google|web search|no side effects|never requiring login)\b",
+                 task.lower()):
+        return {"mode": "clarify", "person": plan.get("person", ""),
+                "thing": plan.get("thing", ""), "task": "",
+                "question": "Do you want me to draft an email or create a calendar event?"}
+    return plan
+
+
+def _proposal_from_plan(plan: dict) -> str:
+    if plan.get("mode") == "clarify":
+        return str(plan.get("question") or "Which one did you mean?")
+    person = _person_label(str(plan.get("person") or ""))
+    thing = str(plan.get("thing") or "").strip()
+    if person and thing:
+        return f"Draft an email to {person} about {thing}."
+    if person:
+        return f"Draft an email to {person}."
+    return str(plan.get("task") or "Act on that.")
+
+
 def _process_utterance(text: str, rms: float, source: str) -> dict:
     """The ONE judged code path for a window of speech, used by both
     the real-microphone ASR loop (source="mic-asr") and the authorized
@@ -337,6 +730,20 @@ def _process_utterance(text: str, rms: float, source: str) -> dict:
                 _LISTEN["pending"] = {
                     "instruction": text, "proposal": proposal,
                     "ts": rec["ts"]}
+            elif _is_actionish(text):
+                plan = _compose_task_from_memory(text)
+                plan = _finalize_plan(text, plan)
+                rec["plan"] = plan
+                if plan.get("mode") == "clarify":
+                    _LISTEN["pending"] = {
+                        "instruction": text,
+                        "proposal": _proposal_from_plan(plan),
+                        "clarify": True, "plan": plan, "ts": rec["ts"]}
+                elif plan.get("mode") == "act" and plan.get("task"):
+                    _LISTEN["pending"] = {
+                        "instruction": text,
+                        "proposal": _proposal_from_plan(plan),
+                        "plan": plan, "ts": rec["ts"]}
         except Exception as e:
             rec["error"] = f"{type(e).__name__}: {e}"
     with _LISTEN["lock"]:
@@ -402,6 +809,7 @@ def listen_inject(i: Inject) -> JSONResponse:
                          "transcript": rec["transcript"],
                          "outcome": rec.get("outcome"),
                          "proposal": rec.get("proposal"),
+                         "plan": rec.get("plan"),
                          "memory": rec.get("memory"),
                          "pending": _LISTEN.get("pending")})
 
@@ -420,9 +828,19 @@ def listen_start() -> JSONResponse:
             _LISTEN["buf"].clear()
         _LISTEN["error"] = None
         try:
-            stream = sd.InputStream(samplerate=A.SR, channels=1,
-                                    dtype="float32", callback=_audio_cb)
-            stream.start()
+            allowed, mic_status = _mac_mic_permission()
+            if not allowed:
+                raise PermissionError(f"microphone permission {mic_status}")
+
+            def open_stream():
+                stream = sd.InputStream(samplerate=A.SR, channels=1,
+                                        dtype="float32",
+                                        callback=_audio_cb)
+                stream.start()
+                return stream
+
+            stream = _with_timeout("microphone stream start", 8.0,
+                                   open_stream)
         except Exception as e:
             _LISTEN["error"] = f"{type(e).__name__}: {e}"
             return JSONResponse({"on": False, "error": _LISTEN["error"]})
@@ -575,10 +993,10 @@ def _ensure_cdp_chrome() -> bool:
 _COMPOSE_SYS = """\
 You are the action planner of a wearable that has been listening to
 the user this session. The user just said something vague. You also
-have what they said EARLIER this session (their memory). Resolve any
-vague reference (it, that, them, him, her, "before they...", "by
-then") to the SPECIFIC person and thing from the earlier facts, then
-output the ONE concrete web-browser task to do now.
+have their onboarding profile and what they said EARLIER this session.
+Resolve any vague reference (it, that, them, him, her, "before they...",
+"by then") to the SPECIFIC person and thing from those earlier facts,
+then output the ONE concrete browser task to do now.
 
 DECISION PROCEDURE (follow exactly; this is a counting rule, not a
 feeling):
@@ -636,24 +1054,38 @@ Examples (apply the count):
     Frank's lathe restoration?". Resolving a generic person-less
     "the lathe restoration" here is a GUESS = the worst outcome.
 
-Both errors are equally bad and must both be avoided: (a) resolving
-to a WRONG or guessed referent when 2+ fit equally; (b) over-asking
-when exactly one candidate fits. The count in STEP 2 decides it -
-there is no "when in doubt" tiebreaker; do the count honestly.
+Both errors are equally bad and must both be avoided: (a) resolving to
+a WRONG or guessed referent when 2+ fit equally; (b) over-asking when
+exactly one candidate fits. The count in STEP 2 decides it - there is
+no "when in doubt" tiebreaker; do the count honestly.
 
-The task MUST be a single concrete web search that finishes in 2-3
-steps with a definite, on-screen answer and NO side effects. Phrase
-it EXACTLY as: "Search Google for '<concise query about the resolved
-thing/person>' and tell me <the one specific fact needed>". Pick a
-query whose answer is a public fact visible on a normal results page
-(hours, a phone number, a price range, a definition, what something
-is). Never a vague intention ("check on it"), never anything that
-sends, posts, buys, books, or changes state, never something
-requiring login. It must be answerable from a Google results page.
+ACTION POLICY:
+  - If the resolved intent is to get something over to someone, let
+    someone know, follow up, send, share, email, or draft: produce a
+    Gmail DRAFT task to the resolved person's email address. NEVER
+    send. The browser task must explicitly say "Do not send it; leave
+    it as a draft."
+  - If the resolved intent is a meeting/event and all title/time/guest
+    facts are clear: produce a Google Calendar create-event task. If
+    any fact is missing, clarify.
+  - If the user asks for a lookup, a lookup is allowed. Do NOT replace
+    an email/calendar/action intent with a harmless Google search.
+  - Never enter passwords, create accounts, buy, delete, archive, send,
+    post, book travel, change billing, or bypass a login wall.
+  - Obey the do-not-touch list. If the task conflicts with it, clarify.
+  - Email ADDRESS resolution is NOT your job and is NOT a reason to
+    clarify. For an email/draft intent ALWAYS return mode=act with the
+    resolved person (their name or their role/relation, e.g. "the
+    hardware and manufacturing advisor"); the system deterministically
+    fills the address from memory. Use mode=clarify ONLY when the
+    PERSON is genuinely ambiguous (2+ equally-fitting) or absent, or
+    the action conflicts with the do-not-touch list - never merely
+    because you do not see an "@" in the text.
 
 Return STRICT JSON only:
 {"mode":"act"|"clarify","person":"","thing":"",
- "task":"<one concrete completable web lookup, fully resolved>",
+ "intent":"email_draft|calendar_event|lookup|other",
+ "task":"<one concrete completable browser task, fully resolved>",
  "question":"<a short clarifying question, only if mode=clarify>"}
 """
 
@@ -672,7 +1104,11 @@ def _compose_task_from_memory(instruction: str) -> dict:
     except Exception:
         snap = []
     facts = "\n".join(f"- {e.get('value','')}" for e in snap) or "(none)"
-    user = (f"EARLIER THIS SESSION (memory):\n{facts}\n\n"
+    recent = "\n".join(f"- {t}" for t in _recent_transcripts(12)) or "(none)"
+    profile = json.dumps(_profile_json(), ensure_ascii=False, indent=2)
+    user = (f"ONBOARDING PROFILE:\n{profile}\n\n"
+            f"DURABLE MEMORY:\n{facts}\n\n"
+            f"RECENT TRANSCRIBED WINDOWS:\n{recent}\n\n"
             f"WHAT THEY JUST SAID: {instruction!r}\n\nReturn the JSON.")
     # Robust: under the session's burst of model calls OpenRouter can
     # return a transient empty/garbled completion. A transient infra
@@ -702,9 +1138,9 @@ def _compose_task_from_memory(instruction: str) -> dict:
                 "mean?", "person": "", "thing": "", "task": "",
                 "_infra_fallback": True}
     p.setdefault("mode", "clarify")
-    for k in ("person", "thing", "task", "question"):
+    for k in ("person", "thing", "intent", "task", "question"):
         p.setdefault(k, "")
-    return p
+    return _finalize_plan(instruction, p)
 
 
 class Act(BaseModel):
@@ -713,13 +1149,16 @@ class Act(BaseModel):
 
 @app.post("/api/act")
 def act(a: Act) -> JSONResponse:
+    pending = _LISTEN.get("pending") or {}
     instruction = (a.instruction
-                   or (_LISTEN.get("pending") or {}).get("instruction")
+                   or pending.get("instruction")
                    or "").strip()
     if not instruction:
         return JSONResponse({"ran": False,
                              "error": "no instruction to act on"})
-    plan = _compose_task_from_memory(instruction)
+    plan = pending.get("plan") if (not a.instruction and pending) else None
+    if not isinstance(plan, dict):
+        plan = _compose_task_from_memory(instruction)
     if plan.get("mode") != "act" or not plan.get("task"):
         # genuinely ambiguous / absent referent -> ASK, never guess
         return JSONResponse({
@@ -739,17 +1178,16 @@ def act(a: Act) -> JSONResponse:
                      "wired; the real-clone browser is the edge."})
     try:
         from app.anticipy.action_handoff import make_real_action_engine
-        # 5 iterations: a concrete web-search lookup completes in 2-3
-        # (navigate to the search URL, read the answer, done). 12 made
-        # vague tasks run ~20 min each. The frozen engine is unchanged;
-        # only this glue param is tuned.
-        eng = make_real_action_engine(cdp_port=CDP_PORT, max_iters=5)
+        # Gmail draft creation has to navigate authenticated UI, compose,
+        # fill fields, and verify the real draft. Keep the frozen engine
+        # unchanged; this glue layer only sets the product task budget.
+        eng = make_real_action_engine(cdp_port=CDP_PORT, max_iters=12)
         res = eng({"object": task, "time_window": ""}) or {}
         status = res.get("status", "?")
-        ran = status in ("SUCCESS", "PROCEEDED_ON_ASSUMPTION",
-                         "ITERATION_EXHAUSTED")
+        ran = status == "SUCCESS"
         out = {
             "ran": ran, "status": status, "task": task,
+            "intent": plan.get("intent", ""),
             "resolved_person": plan.get("person", ""),
             "resolved_thing": plan.get("thing", ""),
             "answer": str(res.get("answer", ""))[:600],
@@ -758,7 +1196,7 @@ def act(a: Act) -> JSONResponse:
             "error": res.get("error")}
         if ran:
             _LISTEN["acted"] = {"instruction": instruction, "task": task,
-                                "status": status, "ts": time.time()}
+                                 "status": status, "ts": time.time()}
             _LISTEN["pending"] = None
         return JSONResponse(out)
     except Exception as e:
@@ -985,6 +1423,17 @@ function scrMic(){stopPoll();setNav('listen');
 async function probeMic(){const b=document.getElementById('mb'),
  s=document.getElementById('ms');b.disabled=true;
  b.innerHTML='<span class=spin></span>';
+ try{if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+ const ms=await Promise.race([
+ navigator.mediaDevices.getUserMedia({audio:true}),
+ new Promise((_,rej)=>setTimeout(()=>rej(new Error('webview microphone prompt timed out')),3500))
+ ]);
+ ms.getTracks().forEach(t=>t.stop())}}catch(e){b.disabled=false;
+ if(!String(e.message||'').includes('timed out')){
+ b.textContent='Try again';
+ s.innerHTML=`<p class=sub style="margin:0 auto;color:var(--warn)">
+ ${esc(e.message||'Microphone permission was not granted')}. Grant
+ Anticipy microphone access and try again.</p>`;return}}
  const r=await J('/api/mic/probe');b.disabled=false;
  if(r.ok){b.style.display='none';
  s.innerHTML=`<div class=pill><span class="dot g"></span>
@@ -1029,14 +1478,21 @@ async function pollListen(){let st;try{st=await J('/api/listen/status')}
  if(lv&&!st.on)lv.innerHTML=`<span class=err>Listening stopped${
  st.error?': '+esc(st.error):''}</span>`;
  const pr=document.getElementById('prop');
- if(pr){if(st.pending){pr.innerHTML=`<div class=card>
- <div class=lab>Heard, worth acting on</div>
- <h2>${esc(st.pending.proposal)}</h2>
- <div class=meta>From: "${esc(st.pending.instruction)}"</div>
- <div class=row style="margin-top:18px">
- <button class=send id=yes onclick='doAct()'>Yes, do it</button>
- <button class=ghost onclick=dismiss()>Dismiss</button></div>
- <div id=act></div></div>`}
+	 if(pr){if(st.pending&&st.pending.clarify){pr.innerHTML=`<div class=card>
+	 <div class=lab>Need one detail</div>
+	 <h2>${esc(st.pending.proposal)}</h2>
+	 <div class=meta>From: "${esc(st.pending.instruction)}". Anticipy will not
+	 act until this is resolved.</div>
+	 <div class=row style="margin-top:18px">
+	 <button class=ghost onclick=dismiss()>Dismiss</button></div></div>`}
+	 else if(st.pending){pr.innerHTML=`<div class=card>
+	 <div class=lab>Heard, worth acting on</div>
+	 <h2>${esc(st.pending.proposal)}</h2>
+	 <div class=meta>From: "${esc(st.pending.instruction)}"</div>
+	 <div class=row style="margin-top:18px">
+	 <button class=send id=yes onclick='doAct()'>Yes, do it</button>
+	 <button class=ghost onclick=dismiss()>Dismiss</button></div>
+	 <div id=act></div></div>`}
  else if(st.acted){pr.innerHTML=`<div class=card>
  <div class=lab><span class=dot></span> Done in Chrome</div>
  <h2>${esc(st.acted.instruction)}</h2>
@@ -1059,8 +1515,8 @@ async function doAct(){const y=document.getElementById('yes'),
  if(r.ran){ac.innerHTML=`<div class=meta style="margin-top:14px">
  <span class=dot></span> ${esc(r.answer||r.status)}<br>
  ${esc(r.evidence||'')}</div>`}
- else{ac.innerHTML=`<div class="meta err" style="margin-top:14px">
- ${esc(r.error||('status '+(r.status||'?')))}</div>`}}
+	 else{ac.innerHTML=`<div class="meta err" style="margin-top:14px">
+	 ${esc(r.question||r.error||('status '+(r.status||'?')))}</div>`}}
 async function dismiss(){await J('/api/listen/dismiss',{method:'POST'});
  pollListen()}
 async function stopListen(){stopPoll();
