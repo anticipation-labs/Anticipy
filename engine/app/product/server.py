@@ -259,6 +259,81 @@ def _key_ok() -> bool:
     return False
 
 
+def _wearer_onboarding_answers() -> list[str]:
+    return [
+        str(x.get("text") or "").strip()
+        for x in _SESS.get("transcript", [])
+        if x.get("speaker_id") == "WEARER" and str(x.get("text") or "").strip()
+    ]
+
+
+def _repair_profile_from_onboarding(prof) -> None:
+    """Product-layer hardening around model extraction.
+
+    The frozen onboarding extractor sometimes normalizes people to
+    name-only values even when the user supplied contact emails. The
+    downstream Gmail composer is intentionally conservative and will
+    not act without an address, so keep the real transcript as the
+    source of truth for contact anchors before seeding memory.
+    """
+    answers = _wearer_onboarding_answers()
+    if not answers:
+        return
+    people = dict(getattr(prof, "people", {}) or {})
+    email_re = r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}"
+
+    for line in answers:
+        for email in re.findall(email_re, line):
+            before = line[:line.lower().find(email.lower())].strip(" .")
+            m = re.search(
+                r"(?:^|\b)(?:my|our)\s+(.+?)\s+is\s+(.+?)(?:\s+at)?$",
+                before,
+                re.IGNORECASE,
+            )
+            if m:
+                rel = re.sub(r"\s+", " ", m.group(1)).strip(" .,:;")
+                name = re.sub(r"\s+", " ", m.group(2)).strip(" .,:;")
+            else:
+                bits = before.rsplit(" at ", 1)[0].rsplit(" is ", 1)
+                rel = bits[0].strip(" .,:;") if len(bits) == 2 else ""
+                name = bits[-1].strip(" .,:;")
+            if not name:
+                continue
+            value = f"{name} <{email}>"
+            matched = False
+            for k, v in list(people.items()):
+                low_v = str(v).lower()
+                low_name = name.lower()
+                if low_name in low_v or low_v in low_name:
+                    people[k] = value
+                    matched = True
+            if rel and not matched:
+                people[rel] = value
+
+    if people:
+        prof.people = people
+
+    if not getattr(prof, "what_they_do", "") and len(answers) > 1:
+        prof.what_they_do = answers[1]
+    if not getattr(prof, "mandate", ""):
+        for line in answers:
+            if re.search(r"\b(do not|off limits|strictly off)\b",
+                         line, re.IGNORECASE):
+                prof.mandate = line
+                break
+    if not getattr(prof, "do_not_touch", None):
+        for line in answers:
+            if re.search(r"\bdo not\b", line, re.IGNORECASE):
+                tail = re.sub(r"^.*?\bdo not\b", "", line,
+                              flags=re.IGNORECASE).strip(" .")
+                if tail:
+                    prof.do_not_touch = [
+                        x.strip(" .") for x in re.split(r",| and ", tail)
+                        if x.strip(" .")
+                    ]
+                break
+
+
 class Key(BaseModel):
     key: str
 
@@ -420,6 +495,7 @@ def onb_answer(a: Answer) -> JSONResponse:
         time.sleep(2 + _att * 2)
     if prof is None:
         prof = asyncio.run(OB.run_intake(_SESS["transcript"], USER_ID))
+    _repair_profile_from_onboarding(prof)
     _SESS["profile_obj"] = prof
     pj = _profile_json()
     pj["well_populated"] = OB.profile_is_well_populated(prof)
