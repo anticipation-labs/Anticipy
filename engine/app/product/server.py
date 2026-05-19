@@ -283,32 +283,45 @@ def _repair_profile_from_onboarding(prof) -> None:
     email_re = r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}"
 
     for line in answers:
-        for email in re.findall(email_re, line):
-            before = line[:line.lower().find(email.lower())].strip(" .")
-            m = re.search(
-                r"(?:^|\b)(?:my|our)\s+(.+?)\s+is\s+(.+?)(?:\s+at)?$",
-                before,
-                re.IGNORECASE,
-            )
-            if m:
-                rel = re.sub(r"\s+", " ", m.group(1)).strip(" .,:;")
-                name = re.sub(r"\s+", " ", m.group(2)).strip(" .,:;")
-            else:
-                bits = before.rsplit(" at ", 1)[0].rsplit(" is ", 1)
-                rel = bits[0].strip(" .,:;") if len(bits) == 2 else ""
-                name = bits[-1].strip(" .,:;")
-            if not name:
-                continue
-            value = f"{name} <{email}>"
-            matched = False
-            for k, v in list(people.items()):
-                low_v = str(v).lower()
-                low_name = name.lower()
-                if low_name in low_v or low_v in low_name:
-                    people[k] = value
-                    matched = True
-            if rel and not matched:
-                people[rel] = value
+        clauses = re.split(r"(?<=[.!?])\s+|;\s+", line)
+        for clause in clauses:
+            for em in re.finditer(email_re, clause):
+                email = em.group(0)
+                before = clause[:em.start()].strip(" .,:;<>")
+                m = re.search(
+                    r"(?:^|\b)(?:my|our)\s+(.+?)\s+is\s+(.+?)"
+                    r"(?:\s+at)?$",
+                    before,
+                    re.IGNORECASE,
+                )
+                if m:
+                    rel = re.sub(r"\s+", " ", m.group(1)).strip(" .,:;")
+                    name = re.sub(r"\s+", " ", m.group(2)).strip(" .,:;")
+                else:
+                    m = re.search(
+                        r"^(.+?)\s+is\s+(?:my|our)\s+(.+?)(?:\s+at)?$",
+                        before,
+                        re.IGNORECASE,
+                    )
+                    if m:
+                        name = re.sub(r"\s+", " ", m.group(1)).strip(" .,:;")
+                        rel = re.sub(r"\s+", " ", m.group(2)).strip(" .,:;")
+                    else:
+                        bits = before.rsplit(" at ", 1)[0].rsplit(" is ", 1)
+                        rel = bits[0].strip(" .,:;") if len(bits) == 2 else ""
+                        name = bits[-1].strip(" .,:;")
+                if not name:
+                    continue
+                value = f"{name} <{email}>"
+                matched = False
+                for k, v in list(people.items()):
+                    low_v = str(v).lower()
+                    low_name = name.lower()
+                    if low_name in low_v or low_v in low_name:
+                        people[k] = value
+                        matched = True
+                if rel and not matched:
+                    people[rel] = value
 
     if people:
         prof.people = people

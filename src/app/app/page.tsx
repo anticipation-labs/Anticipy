@@ -39,7 +39,15 @@ type LocalEngine = {
   live: boolean;
   detail: string;
   health?: Record<string, unknown>;
+  state?: {
+    key_ok?: boolean;
+    onboarded?: boolean;
+    profile?: Record<string, unknown> | null;
+    total_questions?: number;
+  };
 };
+
+type OnboardingTurn = { question: string; answer?: string };
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -168,6 +176,13 @@ export default function AnticipyApp() {
     detail:
       "Local engine not connected yet. Install and start Anticipy, then this page connects to 127.0.0.1:8731 from your browser.",
   });
+  const [localKey, setLocalKey] = useState("");
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [setupMsg, setSetupMsg] = useState<string | null>(null);
+  const [onboardingTurns, setOnboardingTurns] = useState<OnboardingTurn[]>([]);
+  const [onboardingAnswer, setOnboardingAnswer] = useState("");
+  const [onboardingIndex, setOnboardingIndex] = useState(0);
+  const [onboardingTotal, setOnboardingTotal] = useState(0);
 
   // ── real Supabase auth ──────────────────────────────────────────
   const [session, setSession] = useState<Session | null>(null);
@@ -247,10 +262,18 @@ export default function AnticipyApp() {
       });
       if (!r.ok) throw new Error(`local engine ${r.status}`);
       const health = (await r.json()) as Record<string, unknown>;
+      const stateResp = await fetch(`${LOCAL_ENGINE}/api/state`, {
+        cache: "no-store",
+        mode: "cors",
+      });
+      const engineState = stateResp.ok
+        ? ((await stateResp.json()) as LocalEngine["state"])
+        : undefined;
       setLocalEngine({
         live: true,
         detail: `Connected to the local engine on ${LOCAL_ENGINE}.`,
         health,
+        state: engineState,
       });
     } catch (e) {
       setLocalEngine({
@@ -260,6 +283,94 @@ export default function AnticipyApp() {
       });
     }
   }, []);
+
+  const postLocal = useCallback(
+    async (path: string, body?: Record<string, unknown>) => {
+      const r = await fetch(`${LOCAL_ENGINE}${path}`, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body ?? {}),
+      });
+      return r.json();
+    },
+    []
+  );
+
+  const saveLocalKey = useCallback(async () => {
+    setSetupBusy(true);
+    setSetupMsg(null);
+    try {
+      const r = await postLocal("/api/key", { key: localKey.trim() });
+      if (!r.ok) {
+        setSetupMsg(r.error || "That key was not accepted.");
+        return;
+      }
+      setLocalKey("");
+      await probeLocalEngine();
+    } catch (e) {
+      setSetupMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSetupBusy(false);
+    }
+  }, [localKey, postLocal, probeLocalEngine]);
+
+  const startLocalOnboarding = useCallback(async () => {
+    setSetupBusy(true);
+    setSetupMsg(null);
+    try {
+      const r = await fetch(`${LOCAL_ENGINE}/api/onboarding/start`, {
+        cache: "no-store",
+        mode: "cors",
+      });
+      if (!r.ok) throw new Error(`onboarding ${r.status}`);
+      const j = await r.json();
+      setOnboardingTurns([{ question: String(j.question || "") }]);
+      setOnboardingIndex(Number(j.index || 0));
+      setOnboardingTotal(Number(j.total || 0));
+      setOnboardingAnswer("");
+    } catch (e) {
+      setSetupMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSetupBusy(false);
+    }
+  }, []);
+
+  const sendLocalOnboardingAnswer = useCallback(async () => {
+    const answer = onboardingAnswer.trim();
+    if (!answer || !onboardingTurns.length) return;
+    setSetupBusy(true);
+    setSetupMsg(null);
+    const nextTurns = onboardingTurns.map((t, i) =>
+      i === onboardingTurns.length - 1 ? { ...t, answer } : t
+    );
+    setOnboardingTurns(nextTurns);
+    setOnboardingAnswer("");
+    try {
+      const r = await postLocal("/api/onboarding/answer", { answer });
+      if (r.done) {
+        setOnboardingTurns([]);
+        await probeLocalEngine();
+        return;
+      }
+      setOnboardingTurns([
+        ...nextTurns,
+        { question: String(r.question || "") },
+      ]);
+      setOnboardingIndex(Number(r.index || nextTurns.length));
+      setOnboardingTotal(Number(r.total || onboardingTotal));
+    } catch (e) {
+      setSetupMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSetupBusy(false);
+    }
+  }, [
+    onboardingAnswer,
+    onboardingTurns,
+    onboardingTotal,
+    postLocal,
+    probeLocalEngine,
+  ]);
 
   const doListen = useCallback(async () => {
     setRunning(true);
@@ -542,30 +653,157 @@ export default function AnticipyApp() {
         {view === "onboarding" && (
           <div className="min-h-screen flex flex-col justify-center max-w-[820px]">
             <Label>Setup, once</Label>
-            <Statement>Three calm steps, then it disappears.</Statement>
-            <div
-              className="mt-12 grid gap-px bg-dark-border rounded-card overflow-hidden max-w-[560px] fade-up"
-              style={{ animationDelay: "180ms" }}
-            >
-              {[
-                ["Connect Chrome", state?.onboarding.chrome.detail],
-                ["Allow the microphone", state?.onboarding.microphone.detail],
-                ["First-run trust", state?.onboarding.autonomy.detail],
-              ].map(([t, d], i) => (
-                <div key={i} className="bg-dark-elevated px-6 py-5">
-                  <p className="text-[14px] text-cream/90 font-medium">{t}</p>
-                  <p className="mt-2 text-[12.5px] text-cream/45 leading-relaxed">
-                    {d}
+            {!localEngine.live ? (
+              <>
+                <Statement>Install the Mac engine first.</Statement>
+                <Sub>
+                  The public app is connected to your private local engine.
+                  Install Anticipy, then come back here and continue setup.
+                </Sub>
+                <div
+                  className="mt-8 rounded-card border border-dark-border bg-dark-elevated px-6 py-5 max-w-[600px] fade-up"
+                  style={{ animationDelay: "180ms" }}
+                >
+                  <p className="text-[13px] text-cream/55 leading-relaxed mb-2">
+                    Paste this into Terminal:
                   </p>
+                  <code className="block rounded-md bg-dark border border-dark-border px-4 py-3 text-[12.5px] text-gold/90 select-all break-all">
+                    curl -fsSL https://www.anticipy.ai/install.sh | bash
+                  </code>
                 </div>
-              ))}
-            </div>
-            <Sub>
-              The first days are deliberately conservative. It asks before it
-              acts and earns the right to act on its own. You are never working
-              for the software.
-            </Sub>
-            <Primary onClick={() => setView("listen")}>Start listening</Primary>
+                <Primary onClick={probeLocalEngine}>Check connection</Primary>
+              </>
+            ) : !localEngine.state?.key_ok ? (
+              <>
+                <Statement>Connect the reasoning key.</Statement>
+                <Sub>
+                  The key is stored only on this Mac and lets the local engine
+                  run onboarding, memory, and planning.
+                </Sub>
+                <div
+                  className="mt-10 grid gap-3 max-w-[520px] fade-up"
+                  style={{ animationDelay: "180ms" }}
+                >
+                  <input
+                    aria-label="OpenRouter key"
+                    type="password"
+                    value={localKey}
+                    onChange={(e) => setLocalKey(e.target.value)}
+                    placeholder="sk-or-..."
+                    className="rounded-card bg-dark-elevated border border-dark-border px-5 py-4 text-[14px] text-cream placeholder:text-cream/30 outline-none focus:border-gold/50 transition-colors"
+                  />
+                  {setupMsg && (
+                    <p className="text-[12.5px] text-gold/90 leading-relaxed">
+                      {setupMsg}
+                    </p>
+                  )}
+                  <button
+                    onClick={saveLocalKey}
+                    disabled={setupBusy || !localKey.trim()}
+                    className="rounded-pill px-8 py-4 text-[14px] font-medium bg-cream text-dark hover:bg-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {setupBusy ? "Saving" : "Save key"}
+                  </button>
+                </div>
+              </>
+            ) : !localEngine.state?.onboarded ? (
+              <>
+                <Statement>
+                  {onboardingTurns.length
+                    ? "Tell Anticipy what matters."
+                    : "Let's set you up."}
+                </Statement>
+                <Sub>
+                  This is the real local onboarding flow. Your answers become
+                  the profile Anticipy uses to resolve people, priorities, and
+                  the do-not-touch list.
+                </Sub>
+                {!onboardingTurns.length ? (
+                  <Primary onClick={startLocalOnboarding} disabled={setupBusy}>
+                    {setupBusy ? "Starting" : "Begin onboarding"}
+                  </Primary>
+                ) : (
+                  <div
+                    className="mt-10 max-w-[680px] fade-up"
+                    style={{ animationDelay: "180ms" }}
+                  >
+                    <div className="h-1 rounded-full bg-dark-border overflow-hidden mb-6">
+                      <div
+                        className="h-full bg-gold transition-all"
+                        style={{
+                          width: `${Math.max(
+                            8,
+                            Math.round(
+                              (100 * onboardingIndex) /
+                                Math.max(1, onboardingTotal)
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="grid gap-3">
+                      {onboardingTurns.map((turn, i) => (
+                        <div key={i} className="grid gap-2">
+                          <div className="rounded-card border border-dark-border bg-dark-elevated px-5 py-4 text-[14px] text-cream/85">
+                            {turn.question}
+                          </div>
+                          {turn.answer && (
+                            <div className="rounded-card bg-cream text-dark px-5 py-4 text-[14px] justify-self-end max-w-[88%]">
+                              {turn.answer}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <textarea
+                      aria-label="Onboarding answer"
+                      value={onboardingAnswer}
+                      onChange={(e) => setOnboardingAnswer(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendLocalOnboardingAnswer();
+                        }
+                      }}
+                      rows={3}
+                      placeholder="Type your answer"
+                      className="mt-5 w-full rounded-card bg-dark-elevated border border-dark-border px-5 py-4 text-[14px] text-cream placeholder:text-cream/30 outline-none focus:border-gold/50 transition-colors"
+                    />
+                    {setupMsg && (
+                      <p className="mt-3 text-[12.5px] text-gold/90 leading-relaxed">
+                        {setupMsg}
+                      </p>
+                    )}
+                    <button
+                      onClick={sendLocalOnboardingAnswer}
+                      disabled={setupBusy || !onboardingAnswer.trim()}
+                      className="mt-4 rounded-pill px-8 py-4 text-[14px] font-medium bg-cream text-dark hover:bg-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {setupBusy ? "Thinking" : "Send"}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <Statement>Anticipy knows the basics.</Statement>
+                <Sub>
+                  Your local profile is ready. Listening can now use that
+                  profile to resolve people, objects, and off-limits areas.
+                </Sub>
+                <div
+                  className="mt-10 rounded-card border border-dark-border bg-dark-elevated px-6 py-5 max-w-[620px] fade-up"
+                  style={{ animationDelay: "180ms" }}
+                >
+                  <pre className="whitespace-pre-wrap text-[12px] leading-relaxed text-cream/65 overflow-auto max-h-[260px]">
+                    {JSON.stringify(localEngine.state.profile, null, 2)}
+                  </pre>
+                </div>
+                <Primary onClick={() => setView("listen")}>
+                  Start listening
+                </Primary>
+              </>
+            )}
           </div>
         )}
 
@@ -604,6 +842,23 @@ export default function AnticipyApp() {
                   </Primary>
                   <Ghost onClick={probeLocalEngine}>Check again</Ghost>
                 </div>
+              </>
+            ) : !localEngine.state?.key_ok || !localEngine.state?.onboarded ? (
+              <>
+                <Orb live={false} />
+                <p className="mt-12 text-[13px] uppercase tracking-[0.24em] text-gold/70 fade-up">
+                  Finish setup first
+                </p>
+                <p
+                  className="mt-4 text-[14px] text-cream/50 fade-up max-w-[48ch]"
+                  style={{ animationDelay: "120ms" }}
+                >
+                  The local engine is connected, but it needs the reasoning key
+                  and real onboarding profile before listening can be useful.
+                </p>
+                <Primary onClick={() => setView("onboarding")}>
+                  Continue setup
+                </Primary>
               </>
             ) : run ? (
               <div className="w-full fade-up">
