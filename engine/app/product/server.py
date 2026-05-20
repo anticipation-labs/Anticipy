@@ -88,7 +88,16 @@ async def _private_network_headers(request: Request, call_next):
 _SESS: dict = {"i": 0, "transcript": [], "profile": None,
                "profile_obj": None}
 USER_ID = "anticipy-user"
-CDP_PORT = 9222
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+
+
+CDP_PORT = _env_int("ANTICIPY_CDP_PORT", 9222)
 # Shipped default: rolling 60s windows. Overridable for the proof so
 # continuous behaviour is observable quickly through the same code.
 WINDOW_SECONDS = float(os.environ.get("ANTICIPY_WINDOW_SECONDS", "60"))
@@ -161,6 +170,11 @@ def _ensure_clean_gmail_compose() -> int:
     except Exception:
         pass
     return closed
+
+
+def _chrome_user_data_dir() -> str:
+    return (os.environ.get("ANTICIPY_CHROME_USER_DATA_DIR", "").strip()
+            or os.path.expanduser("~/.anticipy/chrome-real-clone"))
 
 
 @app.get("/health")
@@ -491,6 +505,8 @@ def state() -> JSONResponse:
         "profile": _SESS["profile"],
         "total_questions": len(INTERVIEW_SCRIPT),
         "window_seconds": WINDOW_SECONDS,
+        "cdp_port": CDP_PORT,
+        "chrome_user_data_dir": _chrome_user_data_dir(),
     })
 
 
@@ -699,6 +715,37 @@ def _run_pipeline(text: str):
     outcome = res[0].outcome if res else "?"
     proposal = world.outbound[0].body if world.outbound else None
     return outcome, proposal
+
+
+def _load_upload_audio(path: Path):
+    """Decode user-uploaded audio to the same 16k mono ndarray ASR expects."""
+    from app.audiostack import audio as A
+
+    try:
+        return A.load_wav(path)
+    except Exception as first_error:
+        out = path.with_suffix(".asr.wav")
+        converters = []
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg:
+            converters.append([
+                ffmpeg, "-y", "-loglevel", "error", "-i", str(path),
+                "-ac", "1", "-ar", str(A.SR), str(out),
+            ])
+        afconvert = shutil.which("afconvert")
+        if afconvert:
+            converters.append([
+                afconvert, "-f", "WAVE", "-d", f"LEI16@{A.SR}",
+                "-c", "1", str(path), str(out),
+            ])
+        errors = [f"direct:{type(first_error).__name__}:{first_error}"]
+        for cmd in converters:
+            try:
+                subprocess.run(cmd, capture_output=True, check=True, timeout=30)
+                return A.load_wav(out)
+            except Exception as e:
+                errors.append(f"{Path(cmd[0]).name}:{type(e).__name__}:{e}")
+        raise RuntimeError("audio decode failed; " + " | ".join(errors))
 
 
 def _recent_transcripts(limit: int = 8) -> list[str]:
@@ -1078,6 +1125,53 @@ def listen_inject(i: Inject) -> JSONResponse:
                          "pending": _LISTEN.get("pending")})
 
 
+@app.post("/api/listen/upload")
+async def listen_upload(request: Request) -> JSONResponse:
+    """Audio-upload input mode: uploaded MP3/WAV/etc is decoded, transcribed
+    by the same local ASR, then handed to _process_utterance just like a
+    live microphone ASR window. This is not a transcript bypass.
+    """
+    if not _LISTEN["on"]:
+        return JSONResponse({"on": False, "error": "listening not started"})
+    raw = await request.body()
+    if not raw:
+        return JSONResponse({"ok": False, "error": "empty upload"},
+                            status_code=400)
+    ctype = (request.headers.get("content-type") or "").split(";", 1)[0]
+    suffix = {
+        "audio/mpeg": ".mp3", "audio/mp3": ".mp3",
+        "audio/wav": ".wav", "audio/x-wav": ".wav",
+        "audio/aiff": ".aiff", "audio/x-aiff": ".aiff",
+        "audio/mp4": ".m4a", "audio/x-m4a": ".m4a",
+    }.get(ctype, ".audio")
+    try:
+        import tempfile
+        import numpy as np
+
+        from app.audiostack import audio as A
+        with tempfile.TemporaryDirectory(prefix="anticipy-upload-") as td:
+            in_path = Path(td) / f"upload{suffix}"
+            in_path.write_bytes(raw)
+            wav = _load_upload_audio(in_path)
+            rms = float(np.sqrt(np.mean(wav ** 2)) or 0.0)
+            asr = A.asr_tokens(wav)
+        text = (asr.text or "").strip()
+        rec = _process_utterance(text, rms, "upload-asr")
+        return JSONResponse({
+            "ok": True, "source": "upload-asr", "bytes": len(raw),
+            "content_type": ctype or "application/octet-stream",
+            "transcript": rec["transcript"], "window": rec["window"],
+            "outcome": rec.get("outcome"), "proposal": rec.get("proposal"),
+            "plan": rec.get("plan"), "memory": rec.get("memory"),
+            "pending": _LISTEN.get("pending"),
+        })
+    except Exception as e:
+        return JSONResponse({
+            "ok": False, "error": f"{type(e).__name__}: {e}",
+            "source": "upload-asr",
+        }, status_code=500)
+
+
 @app.post("/api/listen/start")
 def listen_start() -> JSONResponse:
     import sounddevice as sd
@@ -1198,36 +1292,29 @@ def _cdp_up() -> bool:
         return False
 
 
-# The user's REAL Chrome: a clone of their real profile (real
-# cookies/sessions/open tabs), kept on :9222 by the launchd agent
-# com.anticipy.chrome. NEVER a blank isolated profile.
-_REAL_CLONE = os.path.expanduser("~/.anticipy/chrome-real-clone")
-
-
 def _ensure_cdp_chrome() -> bool:
-    """Ensure the user's REAL-profile-clone Chrome is reachable on
-    :9222. Uses the codebase's intended launchd agent first
-    (com.anticipy.chrome), then a direct launch of the SAME real-clone
-    profile. Never creates a blank isolated profile.
+    """Ensure the configured CDP Chrome is reachable.
+
+    Production keeps the historical real-clone default. Verification can
+    set ANTICIPY_CDP_PORT + ANTICIPY_CHROME_USER_DATA_DIR so the same
+    product path targets a pristine, explicitly launched test browser.
     """
     if _cdp_up():
         return True
-    # 1. The intended mechanism: kick the real-clone LaunchAgent.
-    try:
-        uid = os.getuid()
-        subprocess.run(
-            ["launchctl", "kickstart", "-k",
-             f"gui/{uid}/com.anticipy.chrome"],
-            capture_output=True, timeout=10)
-        for _ in range(40):
-            if _cdp_up():
-                return True
-            time.sleep(0.5)
-    except Exception:
-        pass
-    # 2. Fallback: launch Chrome directly on the SAME real-clone
-    # profile + flags the agent uses. Still the real profile clone,
-    # never blank.
+    user_data_dir = _chrome_user_data_dir()
+    if not os.environ.get("ANTICIPY_CHROME_USER_DATA_DIR"):
+        try:
+            uid = os.getuid()
+            subprocess.run(
+                ["launchctl", "kickstart", "-k",
+                 f"gui/{uid}/com.anticipy.chrome"],
+                capture_output=True, timeout=10)
+            for _ in range(40):
+                if _cdp_up():
+                    return True
+                time.sleep(0.5)
+        except Exception:
+            pass
     chrome = None
     for c in ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
               shutil.which("google-chrome"), shutil.which("chromium")):
@@ -1240,9 +1327,9 @@ def _ensure_cdp_chrome() -> bool:
         subprocess.Popen(
             [chrome, f"--remote-debugging-port={CDP_PORT}",
              "--remote-allow-origins=http://localhost:*",
-             f"--user-data-dir={_REAL_CLONE}",
+             f"--user-data-dir={user_data_dir}",
              "--profile-directory=Default", "--no-first-run",
-             "--no-default-browser-check", "--restore-last-session",
+             "--no-default-browser-check",
              "--disable-features=Translate"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:

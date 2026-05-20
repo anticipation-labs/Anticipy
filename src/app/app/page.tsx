@@ -245,6 +245,8 @@ export default function AnticipyApp() {
 
   // ── engine state + the real Listen round trip ───────────────────
   const [running, setRunning] = useState(false);
+  const [transcriptInput, setTranscriptInput] = useState("");
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [run, setRun] = useState<{
     proposal: string | null;
     transcript: string;
@@ -252,6 +254,16 @@ export default function AnticipyApp() {
     stages: { name: string; real: boolean; gated: boolean; detail: string }[];
     gated?: boolean;
     reason?: string;
+    pending?: Record<string, unknown> | null;
+    action?: {
+      status?: string;
+      error?: string;
+      question?: string;
+      ran?: boolean;
+      gated?: boolean;
+      clarify?: boolean;
+      evidence?: string;
+    } | null;
   } | null>(null);
 
   const probeLocalEngine = useCallback(async () => {
@@ -392,6 +404,7 @@ export default function AnticipyApp() {
         proposal: status?.pending?.proposal ?? null,
         transcript: status?.recent?.[0]?.transcript ?? "",
         engine_decision: status?.recent?.[0]?.outcome ?? "",
+        pending: status?.pending ?? null,
         stages: [
           {
             name: "localhost engine",
@@ -421,6 +434,131 @@ export default function AnticipyApp() {
       setRunning(false);
     }
   }, []);
+
+  const refreshLocalRun = useCallback(async (stageDetail: string) => {
+    const s = await fetch(`${LOCAL_ENGINE}/api/listen/status`, {
+      cache: "no-store",
+      mode: "cors",
+    });
+    const status = await s.json();
+    setRun({
+      proposal: status?.pending?.proposal ?? null,
+      transcript: status?.recent?.[0]?.transcript ?? "",
+      engine_decision: status?.recent?.[0]?.outcome ?? "",
+      pending: status?.pending ?? null,
+      action: status?.acted ?? null,
+      stages: [
+        {
+          name: "localhost engine",
+          real: Boolean(status?.on && !status?.error),
+          gated: Boolean(status?.error),
+          detail: stageDetail || `listening=${Boolean(status?.on)} windows=${status?.windows ?? 0}`,
+        },
+      ],
+      gated: Boolean(status?.error),
+      reason: status?.error
+        ? String(status.error)
+        : "The local engine accepted the input and routed it through the real post-ASR pipeline.",
+    });
+  }, []);
+
+  const doInjectTranscript = useCallback(async () => {
+    const text = transcriptInput.trim();
+    if (!text) return;
+    setRunning(true);
+    try {
+      const started = await postLocal("/api/listen/start");
+      if (started?.error) {
+        throw new Error(String(started.error));
+      }
+      const injected = await postLocal("/api/listen/inject", { text });
+      if (injected?.error) {
+        throw new Error(String(injected.error));
+      }
+      await refreshLocalRun(
+        `typed transcript -> ${String(injected?.source || "asr-transcript")} window=${injected?.window ?? "?"}`
+      );
+    } catch (e) {
+      setRun({
+        proposal: null,
+        transcript: text,
+        engine_decision: "",
+        stages: [],
+        gated: true,
+        reason: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setRunning(false);
+    }
+  }, [postLocal, refreshLocalRun, transcriptInput]);
+
+  const doUploadAudio = useCallback(async (file: File | null) => {
+    if (!file) return;
+    setUploadBusy(true);
+    setRunning(true);
+    try {
+      const started = await postLocal("/api/listen/start");
+      if (started?.error) {
+        throw new Error(String(started.error));
+      }
+      const r = await fetch(`${LOCAL_ENGINE}/api/listen/upload`, {
+        method: "POST",
+        mode: "cors",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: await file.arrayBuffer(),
+      });
+      const uploaded = await r.json();
+      if (!r.ok || uploaded?.error) {
+        throw new Error(String(uploaded?.error || `upload ${r.status}`));
+      }
+      await refreshLocalRun(
+        `audio upload -> ${String(uploaded?.source || "upload-asr")} bytes=${uploaded?.bytes ?? file.size}`
+      );
+    } catch (e) {
+      setRun({
+        proposal: null,
+        transcript: "",
+        engine_decision: "",
+        stages: [],
+        gated: true,
+        reason: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setRunning(false);
+      setUploadBusy(false);
+    }
+  }, [postLocal, refreshLocalRun]);
+
+  const doAct = useCallback(async () => {
+    setRunning(true);
+    try {
+      const acted = await postLocal("/api/act");
+      setRun((prev) => ({
+        proposal: prev?.proposal ?? null,
+        transcript: prev?.transcript ?? "",
+        engine_decision: prev?.engine_decision ?? "",
+        pending: prev?.pending ?? null,
+        action: acted,
+        stages: [
+          ...(prev?.stages ?? []),
+          {
+            name: "browser action",
+            real: Boolean(acted?.ran),
+            gated: Boolean(acted?.gated || acted?.error || acted?.clarify),
+            detail: acted?.ran
+              ? `status=${acted?.status || "SUCCESS"}`
+              : String(acted?.question || acted?.error || acted?.status || "not run"),
+          },
+        ],
+        gated: Boolean(acted?.gated || acted?.error || acted?.clarify),
+        reason: acted?.ran
+          ? String(acted?.evidence || "Action finished.")
+          : String(acted?.question || acted?.error || "Action did not run."),
+      }));
+    } finally {
+      setRunning(false);
+    }
+  }, [postLocal]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -870,27 +1008,41 @@ export default function AnticipyApp() {
                       Heard: {run.transcript || "(no transcript)"}. Reasoning
                       decision: {run.engine_decision || "n/a"}.
                     </p>
-                    <div className="mt-8 flex gap-3">
-                      <button className="rounded-pill bg-cream text-dark px-7 py-3 text-[13px] font-medium hover:bg-gold transition-colors">
-                        Yes, do it
-                      </button>
-                      <button className="rounded-pill border border-dark-border text-cream/70 px-7 py-3 text-[13px] hover:text-cream transition-colors">
-                        No
-                      </button>
+	                    <div className="mt-8 flex gap-3">
+	                      <button
+                          onClick={doAct}
+                          disabled={running}
+                          className="rounded-pill bg-cream text-dark px-7 py-3 text-[13px] font-medium hover:bg-gold transition-colors disabled:opacity-40"
+                        >
+	                        Yes, do it
+	                      </button>
+	                      <button className="rounded-pill border border-dark-border text-cream/70 px-7 py-3 text-[13px] hover:text-cream transition-colors">
+	                        No
+	                      </button>
                     </div>
                   </div>
-                ) : (
-                  <div className="rounded-card border border-dark-border bg-dark-elevated px-8 py-9 text-left">
-                    <p className="text-[13px] text-cream/80 font-medium">
-                      No proposal this run, honestly.
+	                ) : (
+	                  <div className="rounded-card border border-dark-border bg-dark-elevated px-8 py-9 text-left">
+	                    <p className="text-[13px] text-cream/80 font-medium">
+	                      No proposal this run, honestly.
                     </p>
-                    <p className="mt-3 text-[12.5px] text-cream/45 leading-relaxed">
-                      {run.reason ||
-                        "The pipeline ran but did not surface a proposal."}
+	                    <p className="mt-3 text-[12.5px] text-cream/45 leading-relaxed">
+	                      {run.reason ||
+	                        "The pipeline ran but did not surface a proposal."}
+	                    </p>
+                      {run.action && (
+                        <p className="mt-4 text-[12px] text-cream/45 leading-relaxed">
+                          Action: {String(run.action.status || run.action.error || run.action.question || "recorded")}.
+                        </p>
+                      )}
+	                  </div>
+	                )}
+                  {run.action && run.proposal && (
+                    <p className="mt-4 text-[12px] text-cream/45 leading-relaxed text-left">
+                      Action: {String(run.action.status || run.action.error || run.action.question || "recorded")}.
                     </p>
-                  </div>
-                )}
-                <div className="mt-8 grid gap-px bg-dark-border rounded-card overflow-hidden text-left">
+                  )}
+	                <div className="mt-8 grid gap-px bg-dark-border rounded-card overflow-hidden text-left">
                   {run.stages?.map((s, i) => (
                     <div
                       key={i}
@@ -925,17 +1077,50 @@ export default function AnticipyApp() {
                 <p className="mt-12 text-[13px] uppercase tracking-[0.24em] text-gold/70 fade-up">
                   {running ? "Listening, running the real pipeline" : "Engine live"}
                 </p>
-                <p
-                  className="mt-4 text-[14px] text-cream/50 fade-up max-w-[48ch]"
-                  style={{ animationDelay: "120ms" }}
-                >
-                  {running
-                    ? "Real audio is going through the real stack, the real reasoning engine, and the real browser action. This takes a minute; nothing is mocked."
-                    : "Press Listen. Real spoken audio runs the whole real pipeline and a real proposal returns here."}
-                </p>
-                {!running && <Primary onClick={doListen}>Listen</Primary>}
-              </>
-            )}
+	                <p
+	                  className="mt-4 text-[14px] text-cream/50 fade-up max-w-[48ch]"
+	                  style={{ animationDelay: "120ms" }}
+	                >
+	                  {running
+	                    ? "Real audio is going through the real stack, the real reasoning engine, and the real browser action. This takes a minute; nothing is mocked."
+	                    : "Press Listen. Real spoken audio runs the whole real pipeline and a real proposal returns here."}
+	                </p>
+	                {!running && (
+                    <div className="mt-10 w-full max-w-[560px] grid gap-3 fade-up">
+                      <Primary onClick={doListen}>Listen</Primary>
+                      <div className="grid gap-3 rounded-card border border-dark-border bg-dark-elevated p-4 text-left">
+                        <textarea
+                          value={transcriptInput}
+                          onChange={(e) => setTranscriptInput(e.target.value)}
+                          placeholder="Paste a transcript"
+                          className="min-h-[92px] rounded-md border border-dark-border bg-dark px-4 py-3 text-[13px] text-cream outline-none placeholder:text-cream/30"
+                        />
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            onClick={doInjectTranscript}
+                            disabled={!transcriptInput.trim()}
+                            className="rounded-pill bg-cream text-dark px-5 py-3 text-[13px] font-medium hover:bg-gold transition-colors disabled:opacity-40"
+                          >
+                            Run transcript
+                          </button>
+                          <label className="rounded-pill border border-dark-border text-cream/70 px-5 py-3 text-[13px] hover:text-cream transition-colors cursor-pointer">
+                            {uploadBusy ? "Uploading..." : "Upload audio"}
+                            <input
+                              type="file"
+                              accept="audio/*,.mp3,.wav,.m4a,.aiff"
+                              className="hidden"
+                              onChange={(e) => {
+                                void doUploadAudio(e.target.files?.[0] ?? null);
+                                e.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+	              </>
+	            )}
           </div>
         )}
 
