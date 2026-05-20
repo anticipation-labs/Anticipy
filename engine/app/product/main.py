@@ -7,10 +7,12 @@ does; small audio models local. No hardcoded /Users/ paths.
 from __future__ import annotations
 
 import argparse
+import html
+import json
 import os
-import socket
 import threading
 import time
+import urllib.request
 
 
 def _preflight_mic_permission(timeout_s: float = 20.0) -> None:
@@ -51,14 +53,6 @@ def _preflight_mic_permission(timeout_s: float = 20.0) -> None:
             Foundation.NSDate.dateWithTimeIntervalSinceNow_(0.1))
 
 
-def _free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    p = s.getsockname()[1]
-    s.close()
-    return p
-
-
 def _serve(port: int) -> None:
     import uvicorn
 
@@ -71,7 +65,75 @@ def _fixed_or_free_port(headless: bool) -> int:
     raw = os.environ.get("ANTICIPY_PORT")
     if raw:
         return int(raw)
-    return 8731 if headless else _free_port()
+    return 8731
+
+
+def _engine_healthy(port: int) -> bool:
+    try:
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/health", timeout=1.0) as res:
+            data = json.loads(res.read().decode("utf-8"))
+        return (
+            data.get("ok") is True
+            and data.get("service") == "anticipy-local-engine"
+        )
+    except Exception:
+        return False
+
+
+def _wait_until_healthy(port: int, seconds: float = 30.0) -> bool:
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if _engine_healthy(port):
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def _startup_error_html(port: int, errors: list[str]) -> str:
+    log_path = os.path.join(os.path.expanduser("~"), ".anticipy",
+                            "product-engine.log")
+    detail = "\n".join(errors) or "The local engine did not become healthy."
+    return f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      background: #080806;
+      color: #f4eee4;
+      font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: grid;
+      place-items: center;
+    }}
+    main {{ max-width: 560px; padding: 32px; }}
+    h1 {{ margin: 0 0 12px; font-size: 28px; }}
+    p {{ color: rgba(244, 238, 228, .78); line-height: 1.55; }}
+    code {{
+      display: block;
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid rgba(244, 238, 228, .16);
+      border-radius: 8px;
+      background: rgba(255,255,255,.05);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Anticipy could not start.</h1>
+    <p>The local engine on 127.0.0.1:{port} did not become healthy, so the app
+    is showing this diagnostic screen instead of a blank window.</p>
+    <code>{html.escape(detail)}</code>
+    <p>Log: {html.escape(log_path)}</p>
+  </main>
+</body>
+</html>"""
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -90,23 +152,29 @@ def main(argv: list[str] | None = None) -> None:
         _serve(port)
         return
 
-    threading.Thread(target=_serve, args=(port,), daemon=True).start()
-    _preflight_mic_permission()
-
     url = f"http://127.0.0.1:{port}/"
-    import urllib.request
+    server_errors: list[str] = []
+    if not _engine_healthy(port):
+        def start_server() -> None:
+            try:
+                _serve(port)
+            except BaseException as exc:
+                server_errors.append(f"{type(exc).__name__}: {exc}")
 
-    for _ in range(60):
-        try:
-            urllib.request.urlopen(url, timeout=1).read()
-            break
-        except Exception:
-            time.sleep(0.5)
+        threading.Thread(target=start_server, daemon=True).start()
+        _preflight_mic_permission()
 
     import webview
 
-    webview.create_window("Anticipy", url, width=820, height=720,
-                          min_size=(560, 560))
+    if _wait_until_healthy(port):
+        webview.create_window("Anticipy", url, width=820, height=720,
+                              min_size=(560, 560))
+    else:
+        webview.create_window("Anticipy",
+                              html=_startup_error_html(port, server_errors),
+                              width=820,
+                              height=720,
+                              min_size=(560, 560))
     webview.start()
 
 

@@ -111,7 +111,15 @@ _PROC_MEMWRITE = os.environ.get("ANTICIPY_PROC_MEMWRITE", "1") == "1"
 # the product level rather than via out-of-band cleanup.
 import fcntl as _fcntl
 import sys as _sys
-_SINGLETON_LOCK_PATH = "/tmp/anticipy_product_8731.lock"
+# The lock must be keyed by the PORT this server binds to. A machine can
+# legitimately run more than one engine on different ports (e.g. a
+# launchd-managed --server on 8731 plus the GUI app's in-process server
+# on a free port). The earlier machine-wide lock blocked the GUI app
+# from spawning its own server when launchd was already holding 8731,
+# which manifested as a blank-white app window. Per-port is the correct
+# invariant (one server per port), still kernel-released on death.
+_SINGLETON_PORT = os.environ.get("ANTICIPY_PORT") or "8731"
+_SINGLETON_LOCK_PATH = f"/tmp/anticipy_product_{_SINGLETON_PORT}.lock"
 _SINGLETON_FH = open(_SINGLETON_LOCK_PATH, "w")
 try:
     _fcntl.flock(_SINGLETON_FH, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
@@ -121,7 +129,7 @@ except OSError:
     _sys.stderr.write(
         "Anticipy: another engine instance already holds "
         f"{_SINGLETON_LOCK_PATH}; refusing to start a second instance "
-        "(single-instance enforced in-product).\n")
+        "on the same port (single-instance enforced per-port).\n")
     raise SystemExit(3)
 
 
