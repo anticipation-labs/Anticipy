@@ -345,34 +345,97 @@ def _repair_profile_from_onboarding(prof) -> None:
     people = dict(getattr(prof, "people", {}) or {})
     email_re = r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}"
 
+    def _name_relation_before_email(before: str) -> tuple[str, str]:
+        """Parse common onboarding contact phrasing like
+        "my launch boss Dana Bright at dana@example.com" without relying
+        on the model extractor to have mapped that sentence perfectly.
+        """
+        before = re.sub(r"\s+", " ", before or "").strip(" .,:;<>")
+        before = re.sub(r"\b(?:is|are)\s+$", "", before,
+                        flags=re.IGNORECASE).strip()
+        m = re.search(
+            r"(?:^|\b)(?:my|our)\s+(.+?)\s+is\s+(.+?)"
+            r"(?:\s+at)?$",
+            before,
+            re.IGNORECASE,
+        )
+        if m:
+            return (
+                re.sub(r"\s+", " ", m.group(2)).strip(" .,:;"),
+                re.sub(r"\s+", " ", m.group(1)).strip(" .,:;"),
+            )
+        m = re.search(
+            r"^(.+?)\s+is\s+(?:my|our)\s+(.+?)(?:\s+at)?$",
+            before,
+            re.IGNORECASE,
+        )
+        if m:
+            return (
+                re.sub(r"\s+", " ", m.group(1)).strip(" .,:;"),
+                re.sub(r"\s+", " ", m.group(2)).strip(" .,:;"),
+            )
+        before = re.sub(r"^(?:my|our)\s+", "", before,
+                        flags=re.IGNORECASE)
+        before = re.sub(r"\s+(?:at|email)$", "", before,
+                        flags=re.IGNORECASE).strip()
+        # In "launch boss Dana Bright", the name is the final
+        # capitalized run and the relation is everything before it.
+        m = re.search(
+            r"([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,3})$",
+            before,
+        )
+        if m:
+            name = m.group(1).strip()
+            rel = before[:m.start()].strip(" .,:;")
+            return name, rel
+        bits = before.rsplit(" at ", 1)[0].rsplit(" is ", 1)
+        rel = bits[0].strip(" .,:;") if len(bits) == 2 else ""
+        name = bits[-1].strip(" .,:;")
+        return name, rel
+
+    if not getattr(prof, "name", ""):
+        for line in answers[:2]:
+            m = re.search(
+                r"\bmy name is\s+([A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){0,3})",
+                line,
+                re.IGNORECASE,
+            )
+            if m:
+                prof.name = re.sub(r"\s+", " ", m.group(1)).strip(" .,:;")
+                break
+    if not getattr(prof, "role_title", ""):
+        for line in answers[:2]:
+            if re.search(r"\b(build|building|built)\s+Anticipy\b",
+                         line, re.IGNORECASE):
+                prof.role_title = "Anticipy builder and tester"
+                break
+        if not getattr(prof, "role_title", ""):
+            m = re.search(r"\bI am (?:a |an )?([^.;,]+)", answers[0],
+                          re.IGNORECASE)
+            if m:
+                prof.role_title = re.sub(r"\s+", " ", m.group(1)).strip()
+
     for line in answers:
         clauses = re.split(r"(?<=[.!?])\s+|;\s+", line)
         for clause in clauses:
             for em in re.finditer(email_re, clause):
                 email = em.group(0)
-                before = clause[:em.start()].strip(" .,:;<>")
-                m = re.search(
-                    r"(?:^|\b)(?:my|our)\s+(.+?)\s+is\s+(.+?)"
-                    r"(?:\s+at)?$",
-                    before,
-                    re.IGNORECASE,
-                )
-                if m:
-                    rel = re.sub(r"\s+", " ", m.group(1)).strip(" .,:;")
-                    name = re.sub(r"\s+", " ", m.group(2)).strip(" .,:;")
-                else:
-                    m = re.search(
-                        r"^(.+?)\s+is\s+(?:my|our)\s+(.+?)(?:\s+at)?$",
-                        before,
-                        re.IGNORECASE,
-                    )
-                    if m:
-                        name = re.sub(r"\s+", " ", m.group(1)).strip(" .,:;")
-                        rel = re.sub(r"\s+", " ", m.group(2)).strip(" .,:;")
-                    else:
-                        bits = before.rsplit(" at ", 1)[0].rsplit(" is ", 1)
-                        rel = bits[0].strip(" .,:;") if len(bits) == 2 else ""
-                        name = bits[-1].strip(" .,:;")
+                prefix = clause[:em.start()].strip(" .,:;<>")
+                # For clauses with several contacts joined by "and",
+                # bind each email to the closest preceding contact phrase.
+                starts = [
+                    prefix.lower().rfind(" and "),
+                    prefix.lower().rfind(";"),
+                    prefix.lower().rfind("."),
+                ]
+                start = max(starts)
+                if start >= 0:
+                    prefix = prefix[start + (5 if prefix.lower()[start:start + 5] == " and " else 1):]
+                my_pos = max(prefix.lower().rfind(" my "),
+                             prefix.lower().rfind(" our "))
+                if my_pos >= 0:
+                    prefix = prefix[my_pos + 1:]
+                name, rel = _name_relation_before_email(prefix)
                 if not name:
                     continue
                 value = f"{name} <{email}>"
@@ -391,6 +454,14 @@ def _repair_profile_from_onboarding(prof) -> None:
 
     if not getattr(prof, "what_they_do", "") and len(answers) > 1:
         prof.what_they_do = answers[1]
+    if not getattr(prof, "critical_software", None):
+        tools = {}
+        joined = "\n".join(answers).lower()
+        for tool in ("gmail", "google calendar", "calendar", "email"):
+            if tool in joined:
+                tools[tool] = True
+        if tools:
+            prof.critical_software = tools
     if not getattr(prof, "mandate", ""):
         for line in answers:
             if re.search(r"\b(do not|off limits|strictly off)\b",
@@ -570,6 +641,8 @@ def onb_answer(a: Answer) -> JSONResponse:
                                              USER_ID))
         except Exception:
             prof = None
+        if prof is not None:
+            _repair_profile_from_onboarding(prof)
         if prof is not None and OB.profile_is_well_populated(prof):
             break
         time.sleep(2 + _att * 2)
