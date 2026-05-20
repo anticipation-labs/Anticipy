@@ -10,9 +10,9 @@ fetched on first run into the user-writable data dir.
 
 No hardcoded /Users/ paths: the data dir comes from
 platform_adapter.data_dir() (env/HOME based) and bundle resources
-via sys._MEIPASS. The OpenRouter key is read from the user config
-~/.anticipy/.env (the exact file platform_adapter already loads);
-if missing, the window asks for it once and writes it there.
+via sys._MEIPASS. End users do not paste model-provider keys. The
+website provisions the local engine with the signed-in Anticipy session;
+developer builds may still use ~/.anticipy/.env as a local fallback.
 """
 
 from __future__ import annotations
@@ -26,6 +26,9 @@ CONFIG = Path(os.path.expanduser("~/.anticipy/.env"))
 
 
 def _have_key() -> bool:
+    if (os.environ.get("ANTICIPY_MODEL_BROKER_URL", "").strip()
+            and os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN", "").strip()):
+        return True
     if os.environ.get("OPENROUTER_API_KEY", "").startswith("sk-or-"):
         return True
     if CONFIG.exists():
@@ -79,23 +82,12 @@ def main() -> None:
         root.update_idletasks()
 
     def need_key_ui() -> None:
-        log("First run: paste your OpenRouter API key (sk-or-...).")
+        log("Anticipy is running locally.")
+        log("Open https://www.anticipy.ai/app, sign in, and let the web app")
+        log("connect this Mac engine to your Anticipy account. No provider")
+        log("API key is required from the user.")
         frm = tk.Frame(root, bg="#0C0C0C")
         frm.pack(pady=6)
-        ent = tk.Entry(frm, width=54, show="*")
-        ent.pack(side="left", padx=6)
-
-        def submit() -> None:
-            k = ent.get().strip()
-            if k.startswith("sk-or-"):
-                _save_key(k)
-                frm.destroy()
-                threading.Thread(target=run_pipeline,
-                                  daemon=True).start()
-            else:
-                log("That does not look like an sk-or- key.")
-        tk.Button(frm, text="Save and run", command=submit).pack(
-            side="left")
 
     def run_pipeline() -> None:
         log("Starting the real pipeline (this takes about a minute,")

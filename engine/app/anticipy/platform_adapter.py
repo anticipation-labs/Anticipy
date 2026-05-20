@@ -96,6 +96,7 @@ def user_data_dir(user_id: str) -> Path:
 # ---------------------------------------------------------------------------
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+_DEFAULT_MODEL_BROKER_URL = "https://www.anticipy.ai/api/engine/model"
 _TEXT_MODEL = "deepseek/deepseek-v4-flash"
 # A deliberately different model family for the adversarial grader check.
 # It must not be the decider model or the check is not independent.
@@ -179,6 +180,22 @@ def _estimate_cost(model: str, p_tok: int, c_tok: int) -> float:
     return (p_tok / 1_000_000.0) * rate["in"] + (c_tok / 1_000_000.0) * rate["out"]
 
 
+def _broker_url() -> str:
+    return os.environ.get("ANTICIPY_MODEL_BROKER_URL", "").strip()
+
+
+def _broker_token() -> str:
+    return os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN", "").strip()
+
+
+def model_provisioned() -> bool:
+    """Whether model calls can run without asking the user for provider keys."""
+    return (
+        os.environ.get("OPENROUTER_API_KEY", "").startswith("sk-or-")
+        or (bool(_broker_url()) and bool(_broker_token()))
+    )
+
+
 def model_call(
     system: str,
     user: str,
@@ -200,12 +217,6 @@ def model_call(
     import requests  # imported here so the dependency lives only in the adapter
 
     model = model or _TEXT_MODEL
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not api_key.startswith("sk-or-"):
-        result = ModelResult("", False, f"OPENROUTER_API_KEY missing or malformed (looked in {_ENV_PATH})", 0, 0, 0.0, 0.0)
-        _log_model_call({"ts": time.time(), "error": result.error, "ok": False})
-        return result
-
     max_tokens = max(max_tokens, _MIN_TOKENS)
     payload: dict[str, Any] = {
         "model": model,
@@ -238,6 +249,39 @@ def model_call(
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
 
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    broker_url = _broker_url()
+    broker_token = _broker_token()
+    if api_key.startswith("sk-or-"):
+        url = _OPENROUTER_URL
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://anticipy.ai",
+            "X-Title": "Anticipy System V1",
+        }
+        credential_mode = "direct_openrouter"
+    elif broker_url and broker_token:
+        url = broker_url or _DEFAULT_MODEL_BROKER_URL
+        headers = {
+            "Authorization": f"Bearer {broker_token}",
+            "Content-Type": "application/json",
+        }
+        credential_mode = "anticipy_broker"
+    else:
+        result = ModelResult(
+            "",
+            False,
+            "model broker not provisioned and OPENROUTER_API_KEY missing "
+            f"(looked in {_ENV_PATH})",
+            0,
+            0,
+            0.0,
+            0.0,
+        )
+        _log_model_call({"ts": time.time(), "error": result.error, "ok": False})
+        return result
+
     backoffs = [1.0, 2.0, 4.0, 8.0]
     attempt = 0
     t0 = time.monotonic()
@@ -245,13 +289,8 @@ def model_call(
     while attempt <= len(backoffs):
         try:
             r = requests.post(
-                _OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://anticipy.ai",
-                    "X-Title": "Anticipy System V1",
-                },
+                url,
+                headers=headers,
                 json=payload,
                 timeout=timeout_s,
             )
@@ -313,6 +352,7 @@ def model_call(
             {
                 "ts": time.time(),
                 "model": j.get("model", model),
+                "credential_mode": credential_mode,
                 "prompt_tokens": p_tok,
                 "completion_tokens": c_tok,
                 "cost_usd": round(cost, 6),

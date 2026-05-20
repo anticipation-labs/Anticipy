@@ -41,6 +41,7 @@ ENV_PATH = os.path.expanduser("~/.anticipy/.env")
 load_dotenv(ENV_PATH)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_MODEL_BROKER_URL = "https://www.anticipy.ai/api/engine/model"
 CALL_LOG = Path(os.path.expanduser("~/.anticipy/openrouter_calls.jsonl"))
 
 TEXT_MODEL = "deepseek/deepseek-v4-flash"
@@ -92,9 +93,13 @@ def _estimate_cost(model: str, p_tok: int, c_tok: int) -> float:
 class OpenRouterClient:
     def __init__(self, api_key: Optional[str] = None, timeout_s: float = 90.0):
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
-        if not self.api_key.startswith("sk-or-"):
+        self.broker_url = os.environ.get("ANTICIPY_MODEL_BROKER_URL", "").strip()
+        self.broker_token = os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN", "").strip()
+        if not self.api_key.startswith("sk-or-") and not (
+                self.broker_url and self.broker_token):
             raise RuntimeError(
-                f"OPENROUTER_API_KEY missing/malformed (looked in {ENV_PATH})"
+                "OPENROUTER_API_KEY missing/malformed and Anticipy model "
+                f"broker not provisioned (looked in {ENV_PATH})"
             )
         self.timeout_s = timeout_s
 
@@ -146,6 +151,23 @@ class OpenRouterClient:
         if response_format:
             payload["response_format"] = response_format
 
+        if self.api_key.startswith("sk-or-"):
+            url = OPENROUTER_URL
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://anticipy.ai",
+                "X-Title": "Anticipy Action Engine",
+            }
+            credential_mode = "direct_openrouter"
+        else:
+            url = self.broker_url or DEFAULT_MODEL_BROKER_URL
+            headers = {
+                "Authorization": f"Bearer {self.broker_token}",
+                "Content-Type": "application/json",
+            }
+            credential_mode = "anticipy_broker"
+
         backoffs = [1.0, 2.0, 4.0, 8.0, 15.0]
         attempt = 0
         t0 = time.monotonic()
@@ -153,13 +175,8 @@ class OpenRouterClient:
         while attempt <= len(backoffs):
             try:
                 r = requests.post(
-                    OPENROUTER_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                        "HTTP-Referer": "https://anticipy.ai",
-                        "X-Title": "Anticipy Action Engine",
-                    },
+                    url,
+                    headers=headers,
                     json=payload,
                     timeout=self.timeout_s,
                 )
@@ -213,6 +230,7 @@ class OpenRouterClient:
                 cost_usd=_estimate_cost(model, p_tok, c_tok),
                 raw=j,
             )
+            resp.raw["_credential_mode"] = credential_mode
 
             # Reasoning model starved the answer: retry once, 2x budget.
             if (not content and reasoning and finish == "length"

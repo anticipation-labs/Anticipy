@@ -253,7 +253,14 @@ def _cfg_path() -> Path:
     return Path(os.path.expanduser("~/.anticipy/.env"))
 
 
+def _broker_ok() -> bool:
+    return bool(os.environ.get("ANTICIPY_MODEL_BROKER_URL", "").strip()
+                and os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN", "").strip())
+
+
 def _key_ok() -> bool:
+    if _broker_ok():
+        return True
     if os.environ.get("OPENROUTER_API_KEY", "").startswith("sk-or-"):
         return True
     cfg = _cfg_path()
@@ -265,6 +272,32 @@ def _key_ok() -> bool:
                     os.environ["OPENROUTER_API_KEY"] = v
                     return True
     return False
+
+
+class Provision(BaseModel):
+    auth_token: str
+    site_url: str | None = None
+
+
+@app.post("/api/provision")
+def provision_engine(p: Provision) -> JSONResponse:
+    token = p.auth_token.strip()
+    if len(token) < 20 or "." not in token:
+        return JSONResponse({"ok": False, "error": "missing auth token"},
+                            status_code=400)
+
+    site = (p.site_url or "https://www.anticipy.ai").rstrip("/")
+    if site not in _ALLOWED_ORIGINS:
+        site = "https://www.anticipy.ai"
+
+    os.environ["ANTICIPY_MODEL_BROKER_URL"] = f"{site}/api/engine/model"
+    os.environ["ANTICIPY_CLOUD_AUTH_TOKEN"] = token
+    return JSONResponse({
+        "ok": True,
+        "provisioned": True,
+        "key_ok": _key_ok(),
+        "broker": os.environ["ANTICIPY_MODEL_BROKER_URL"],
+    })
 
 
 def _wearer_onboarding_answers() -> list[str]:
@@ -453,6 +486,7 @@ def state() -> JSONResponse:
     from app.anticipy.onboarding import INTERVIEW_SCRIPT
     return JSONResponse({
         "key_ok": _key_ok(),
+        "provisioned": _broker_ok(),
         "onboarded": _SESS["profile"] is not None,
         "profile": _SESS["profile"],
         "total_questions": len(INTERVIEW_SCRIPT),
@@ -1587,25 +1621,17 @@ function stopPoll(){if(POLL){clearInterval(POLL);POLL=null}}
 function setNav(active){if(!ST.onboarded){nav.innerHTML='';return}
  nav.innerHTML=['listen','history','settings'].map(s=>
  `<a class="${s==active?'on':''}" onclick="go('${s}')">${s}</a>`).join('')}
-async function boot(){stopPoll();ST=await J('/api/state');
- if(!ST.key_ok)return scrKey();
- if(!ST.onboarded)return scrWelcome();
- go('listen')}
-
-function scrKey(){setNav();app.innerHTML=`<div class=lab>Setup</div>
-<h1>Connect Anticipy.</h1><p class=sub>Anticipy thinks using a cloud
-reasoning model. Paste your OpenRouter key. It is stored only on this
-Mac, in your home folder.</p>
-<div class=row style="margin-top:32px;max-width:500px">
-<input id=k placeholder="sk-or-..." autocomplete=off />
-<button class=send onclick=saveKey()>Save</button></div>
-<div id=ke class=meta></div>`}
-async function saveKey(){const v=document.getElementById('k').value.trim();
- const r=await J('/api/key',{method:'POST',headers:{'Content-Type':
- 'application/json'},body:JSON.stringify({key:v})});
- if(r.ok){ST=await J('/api/state');scrWelcome()}
- else document.getElementById('ke').innerHTML=
- `<span class=err>${esc(r.error||'bad key')}</span>`}
+	async function boot(){stopPoll();ST=await J('/api/state');
+	 if(!ST.key_ok)return scrConnect();
+	 if(!ST.onboarded)return scrWelcome();
+	 go('listen')}
+	
+	function scrConnect(){setNav();app.innerHTML=`<div class=lab>Connect account</div>
+	<h1>Open Anticipy on the web.</h1><p class=sub>This Mac engine is running.
+	To finish setup without provider keys, sign in at anticipy.ai/app. The web
+	app will connect this local engine to your Anticipy account automatically.</p>
+	<a class=cta href="https://www.anticipy.ai/app">Continue on anticipy.ai/app</a>
+	<div class=meta style="margin-top:18px">No user API key is required.</div>`}
 
 function scrWelcome(){setNav();app.innerHTML=`<div class=lab>Welcome</div>
 <h1>Let's set you up.</h1><p class=sub>A short conversation so Anticipy

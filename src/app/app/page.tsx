@@ -39,11 +39,12 @@ type LocalEngine = {
   live: boolean;
   detail: string;
   health?: Record<string, unknown>;
-  state?: {
-    key_ok?: boolean;
-    onboarded?: boolean;
-    profile?: Record<string, unknown> | null;
-    total_questions?: number;
+	  state?: {
+	    key_ok?: boolean;
+	    provisioned?: boolean;
+	    onboarded?: boolean;
+	    profile?: Record<string, unknown> | null;
+	    total_questions?: number;
   };
 };
 
@@ -176,9 +177,8 @@ export default function AnticipyApp() {
     detail:
       "Local engine not connected yet. Install and start Anticipy, then this page connects to 127.0.0.1:8731 from your browser.",
   });
-  const [localKey, setLocalKey] = useState("");
-  const [setupBusy, setSetupBusy] = useState(false);
-  const [setupMsg, setSetupMsg] = useState<string | null>(null);
+	  const [setupBusy, setSetupBusy] = useState(false);
+	  const [setupMsg, setSetupMsg] = useState<string | null>(null);
   const [onboardingTurns, setOnboardingTurns] = useState<OnboardingTurn[]>([]);
   const [onboardingAnswer, setOnboardingAnswer] = useState("");
   const [onboardingIndex, setOnboardingIndex] = useState(0);
@@ -266,10 +266,30 @@ export default function AnticipyApp() {
         cache: "no-store",
         mode: "cors",
       });
-      const engineState = stateResp.ok
-        ? ((await stateResp.json()) as LocalEngine["state"])
-        : undefined;
-      setLocalEngine({
+	      let engineState = stateResp.ok
+	        ? ((await stateResp.json()) as LocalEngine["state"])
+	        : undefined;
+	      if (session?.access_token && !engineState?.key_ok) {
+	        const provision = await fetch(`${LOCAL_ENGINE}/api/provision`, {
+	          method: "POST",
+	          mode: "cors",
+	          headers: { "Content-Type": "application/json" },
+	          body: JSON.stringify({
+	            auth_token: session.access_token,
+	            site_url: window.location.origin,
+	          }),
+	        });
+	        if (provision.ok) {
+	          const refreshed = await fetch(`${LOCAL_ENGINE}/api/state`, {
+	            cache: "no-store",
+	            mode: "cors",
+	          });
+	          if (refreshed.ok) {
+	            engineState = (await refreshed.json()) as LocalEngine["state"];
+	          }
+	        }
+	      }
+	      setLocalEngine({
         live: true,
         detail: `Connected to the local engine on ${LOCAL_ENGINE}.`,
         health,
@@ -282,7 +302,7 @@ export default function AnticipyApp() {
           "No local engine answered on 127.0.0.1:8731. The deployed app shell is loaded, but the user-device server is not connected.",
       });
     }
-  }, []);
+	  }, [session]);
 
   const postLocal = useCallback(
     async (path: string, body?: Record<string, unknown>) => {
@@ -297,25 +317,7 @@ export default function AnticipyApp() {
     []
   );
 
-  const saveLocalKey = useCallback(async () => {
-    setSetupBusy(true);
-    setSetupMsg(null);
-    try {
-      const r = await postLocal("/api/key", { key: localKey.trim() });
-      if (!r.ok) {
-        setSetupMsg(r.error || "That key was not accepted.");
-        return;
-      }
-      setLocalKey("");
-      await probeLocalEngine();
-    } catch (e) {
-      setSetupMsg(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSetupBusy(false);
-    }
-  }, [localKey, postLocal, probeLocalEngine]);
-
-  const startLocalOnboarding = useCallback(async () => {
+	  const startLocalOnboarding = useCallback(async () => {
     setSetupBusy(true);
     setSetupMsg(null);
     try {
@@ -673,39 +675,32 @@ export default function AnticipyApp() {
                 </div>
                 <Primary onClick={probeLocalEngine}>Check connection</Primary>
               </>
-            ) : !localEngine.state?.key_ok ? (
-              <>
-                <Statement>Connect the reasoning key.</Statement>
-                <Sub>
-                  The key is stored only on this Mac and lets the local engine
-                  run onboarding, memory, and planning.
-                </Sub>
-                <div
-                  className="mt-10 grid gap-3 max-w-[520px] fade-up"
-                  style={{ animationDelay: "180ms" }}
-                >
-                  <input
-                    aria-label="OpenRouter key"
-                    type="password"
-                    value={localKey}
-                    onChange={(e) => setLocalKey(e.target.value)}
-                    placeholder="sk-or-..."
-                    className="rounded-card bg-dark-elevated border border-dark-border px-5 py-4 text-[14px] text-cream placeholder:text-cream/30 outline-none focus:border-gold/50 transition-colors"
-                  />
-                  {setupMsg && (
-                    <p className="text-[12.5px] text-gold/90 leading-relaxed">
-                      {setupMsg}
-                    </p>
-                  )}
-                  <button
-                    onClick={saveLocalKey}
-                    disabled={setupBusy || !localKey.trim()}
-                    className="rounded-pill px-8 py-4 text-[14px] font-medium bg-cream text-dark hover:bg-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {setupBusy ? "Saving" : "Save key"}
-                  </button>
-                </div>
-              </>
+	            ) : !localEngine.state?.key_ok ? (
+	              <>
+	                <Statement>Connecting your local engine.</Statement>
+	                <Sub>
+	                  Anticipy is signed in, but the browser has not finished
+	                  handing that session to the Mac engine yet. No provider key
+	                  is required from you.
+	                </Sub>
+	                <div
+	                  className="mt-10 grid gap-3 max-w-[520px] fade-up"
+	                  style={{ animationDelay: "180ms" }}
+	                >
+	                  {setupMsg && (
+	                    <p className="text-[12.5px] text-gold/90 leading-relaxed">
+	                      {setupMsg}
+	                    </p>
+	                  )}
+	                  <button
+	                    onClick={probeLocalEngine}
+	                    disabled={setupBusy}
+	                    className="rounded-pill px-8 py-4 text-[14px] font-medium bg-cream text-dark hover:bg-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+	                  >
+	                    {setupBusy ? "Connecting" : "Try again"}
+	                  </button>
+	                </div>
+	              </>
             ) : !localEngine.state?.onboarded ? (
               <>
                 <Statement>
@@ -843,7 +838,7 @@ export default function AnticipyApp() {
                   <Ghost onClick={probeLocalEngine}>Check again</Ghost>
                 </div>
               </>
-            ) : !localEngine.state?.key_ok || !localEngine.state?.onboarded ? (
+	            ) : !localEngine.state?.onboarded ? (
               <>
                 <Orb live={false} />
                 <p className="mt-12 text-[13px] uppercase tracking-[0.24em] text-gold/70 fade-up">
@@ -853,8 +848,9 @@ export default function AnticipyApp() {
                   className="mt-4 text-[14px] text-cream/50 fade-up max-w-[48ch]"
                   style={{ animationDelay: "120ms" }}
                 >
-                  The local engine is connected, but it needs the reasoning key
-                  and real onboarding profile before listening can be useful.
+	                  The local engine is connected to your Anticipy account, but
+	                  it needs your real onboarding profile before listening can be
+	                  useful.
                 </p>
                 <Primary onClick={() => setView("onboarding")}>
                   Continue setup
