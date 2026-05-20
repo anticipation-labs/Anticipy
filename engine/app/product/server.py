@@ -272,11 +272,19 @@ def _broker_ok() -> bool:
                 and os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN", "").strip())
 
 
+def _local_env_fallback_allowed() -> bool:
+    return os.environ.get("ANTICIPY_NO_LOCAL_ENV", "").strip().lower() not in {
+        "1", "true", "yes", "on"
+    }
+
+
 def _key_ok() -> bool:
     if _broker_ok():
         return True
     if os.environ.get("OPENROUTER_API_KEY", "").startswith("sk-or-"):
         return True
+    if not _local_env_fallback_allowed():
+        return False
     cfg = _cfg_path()
     if cfg.exists():
         for ln in cfg.read_text().splitlines():
@@ -507,6 +515,7 @@ def state() -> JSONResponse:
         "window_seconds": WINDOW_SECONDS,
         "cdp_port": CDP_PORT,
         "chrome_user_data_dir": _chrome_user_data_dir(),
+        "local_env_fallback": _local_env_fallback_allowed(),
     })
 
 
