@@ -281,7 +281,13 @@ export default function AnticipyApp() {
 	      let engineState = stateResp.ok
 	        ? ((await stateResp.json()) as LocalEngine["state"])
 	        : undefined;
-	      if (session?.access_token && !engineState?.key_ok) {
+	      // Supabase access tokens expire. The local Mac engine is the
+	      // model client for the real action chain, so a one-time
+	      // provision silently goes stale and the next Gmail/Calendar
+	      // action fails with broker 401. While the public app is open,
+	      // keep the localhost engine fresh with the current browser
+	      // session token on every probe.
+	      if (session?.access_token) {
 	        const provision = await fetch(`${LOCAL_ENGINE}/api/provision`, {
 	          method: "POST",
 	          mode: "cors",
