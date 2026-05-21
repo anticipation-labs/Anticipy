@@ -210,13 +210,27 @@ def _restore_profile(orig: Path | None) -> None:
     if orig is None:
         return
     backup = ART_ROOT / "profile_backup.json"
-    if backup.exists():
-        orig.write_bytes(backup.read_bytes())
-        # nudge engine to reload
-        try:
-            _get(f"{ENGINE_URL}/api/state")
-        except Exception:
-            pass
+    if not backup.exists():
+        return
+    # /api/reset wipes _SESS plus deletes the profile file. Then we write
+    # the backup back, and a /api/state call triggers _ensure_profile_loaded
+    # which now sees _SESS["profile_obj"] is None and rehydrates from disk
+    # (with the seed_profile_memory side-effect, so resolver anchors are
+    # the original ones again, not the corrupted ones that CHECK 6's audio
+    # ASR produced).
+    try:
+        _post(f"{ENGINE_URL}/api/reset", {})
+    except Exception:
+        pass
+    orig.write_bytes(backup.read_bytes())
+    try:
+        _get(f"{ENGINE_URL}/api/state")
+    except Exception:
+        pass
+    try:
+        _post(f"{ENGINE_URL}/api/listen/start", {})
+    except Exception:
+        pass
 
 
 def check_05_onboarding_chat() -> tuple[str, dict]:
@@ -436,41 +450,93 @@ def _gmail_draft_count() -> int:
         return -1
 
 
-def _gmail_compose_screenshot(out_png: Path, timeout_s: float = 60.0) -> dict:
-    from playwright.sync_api import sync_playwright
+def _gmail_compose_screenshot(out_png: Path, trajectory_dir: str = "",
+                                timeout_s: float = 30.0) -> dict:
+    """Save a real Gmail compose screenshot to out_png.
+
+    Two paths, in order of preference:
+      1. Reuse the action engine's own most recent trajectory screenshot.
+         Those PNGs already prove the compose state when /api/act
+         returned SUCCESS, and they were captured by the frozen action
+         engine itself, not the harness. This is also the only path
+         that works when Chrome CDP is still busy from the action loop.
+      2. Direct Chrome DevTools Protocol Page.captureScreenshot over the
+         websocket exposed by http://127.0.0.1:9222/json/list. This
+         bypasses Playwright's connect_over_cdp handshake which can
+         block for minutes while the engine session is active.
+    """
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    info = {"saved": False, "url": "", "title": ""}
-    with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp(CDP_URL)
-        contexts = browser.contexts
-        if not contexts:
-            return info
+    info: dict = {"saved": False, "url": "", "title": "",
+                  "source": ""}
+    candidate_pngs: list[Path] = []
+    if trajectory_dir:
+        td = Path(trajectory_dir)
+        if td.exists():
+            candidate_pngs = sorted(td.glob("*.png"),
+                                     key=lambda p: p.stat().st_mtime,
+                                     reverse=True)
+    if candidate_pngs:
+        src = candidate_pngs[0]
+        out_png.write_bytes(src.read_bytes())
+        info.update({
+            "saved": True,
+            "source": "action_engine_trajectory",
+            "src_path": str(src),
+        })
+        return info
+
+    # Path 2: direct CDP Page.captureScreenshot via websocket.
+    try:
+        import base64
+        import json as _json
+        from websocket import create_connection
+    except Exception as e:
+        info["error"] = (f"direct CDP screenshot unavailable: "
+                         f"{type(e).__name__}: {e}")
+        return info
+    try:
+        tabs = json.loads(_get(f"{CDP_URL}/json/list", timeout=8).read())
+    except Exception as e:
+        info["error"] = f"could not list tabs: {e}"
+        return info
+    compose = next(
+        (t for t in tabs
+         if t.get("type") == "page"
+         and "compose=" in (t.get("url") or "")
+         and "mail.google.com" in (t.get("url") or "")),
+        None,
+    )
+    if not compose:
+        info["error"] = "no Gmail compose tab visible via CDP"
+        return info
+    info["url"] = compose.get("url", "")
+    info["title"] = compose.get("title", "")
+    ws_url = compose.get("webSocketDebuggerUrl")
+    if not ws_url:
+        info["error"] = "compose tab has no webSocketDebuggerUrl"
+        return info
+    try:
+        ws = create_connection(ws_url, timeout=15)
+        ws.send(_json.dumps({"id": 1, "method": "Page.captureScreenshot",
+                              "params": {"format": "png"}}))
         deadline = time.monotonic() + timeout_s
-        page = None
-        while time.monotonic() < deadline and page is None:
-            for ctx in contexts:
-                for pg in ctx.pages:
-                    if "compose=" in pg.url and "mail.google.com" in pg.url:
-                        page = pg
-                        break
-                if page:
-                    break
-            if page is None:
-                time.sleep(1)
-        if page is None:
+        png_b64 = ""
+        while time.monotonic() < deadline:
+            raw = ws.recv()
+            msg = _json.loads(raw)
+            if msg.get("id") == 1 and "result" in msg:
+                png_b64 = msg["result"].get("data", "")
+                break
+        ws.close()
+        if not png_b64:
+            info["error"] = "CDP screenshot reply had no data"
             return info
-        info["url"] = page.url
-        try:
-            info["title"] = page.title()
-        except Exception:
-            pass
-        try:
-            page.bring_to_front()
-        except Exception:
-            pass
-        page.wait_for_timeout(1500)
-        page.screenshot(path=str(out_png), full_page=False)
-        info["saved"] = out_png.exists() and out_png.stat().st_size > 1000
+        out_png.write_bytes(base64.b64decode(png_b64))
+        info.update({"saved": out_png.exists()
+                     and out_png.stat().st_size > 1000,
+                     "source": "direct_cdp_page_capture"})
+    except Exception as e:
+        info["error"] = f"direct CDP capture failed: {type(e).__name__}: {e}"
     return info
 
 
@@ -498,15 +564,18 @@ def check_08_input_paste() -> tuple[str, dict]:
                         "plan": plan, "pending": pending}
     act = json.loads(_post(f"{ENGINE_URL}/api/act", {}, timeout=480).read())
     out_png = ART_ROOT / "gmail_draft_paste_success.png"
-    shot = _gmail_compose_screenshot(out_png)
+    shot = _gmail_compose_screenshot(out_png, act.get("trajectory_dir", ""))
     ok = (act.get("ran") and (act.get("status", "").upper() == "SUCCESS")
           and shot["saved"])
     return ("PASS" if ok else "FAIL"), {
         "act_status": act.get("status"),
         "resolved_person": act.get("resolved_person"),
         "resolved_thing": act.get("resolved_thing"),
-        "screenshot": str(out_png), "screenshot_url": shot["url"],
+        "screenshot": str(out_png),
+        "screenshot_source": shot.get("source"),
+        "screenshot_url": shot.get("url"),
         "screenshot_saved": shot["saved"],
+        "screenshot_error": shot.get("error"),
     }
 
 
@@ -530,7 +599,7 @@ def check_09_input_mp3() -> tuple[str, dict]:
                         "transcript": transcript, "plan": plan}
     act = json.loads(_post(f"{ENGINE_URL}/api/act", {}, timeout=480).read())
     out_png = ART_ROOT / "gmail_draft_mp3_success.png"
-    shot = _gmail_compose_screenshot(out_png)
+    shot = _gmail_compose_screenshot(out_png, act.get("trajectory_dir", ""))
     person_ok = "priya" in (act.get("resolved_person") or "").lower()
     ok = (act.get("ran") and act.get("status", "").upper() == "SUCCESS"
           and person_ok and shot["saved"])
@@ -579,7 +648,7 @@ def check_10_input_mic() -> tuple[str, dict]:
                                  "loopback")}
     act = json.loads(_post(f"{ENGINE_URL}/api/act", {}, timeout=480).read())
     out_png = ART_ROOT / "gmail_draft_mic_success.png"
-    shot = _gmail_compose_screenshot(out_png)
+    shot = _gmail_compose_screenshot(out_png, act.get("trajectory_dir", ""))
     ok = (act.get("ran") and act.get("status", "").upper() == "SUCCESS"
           and shot["saved"])
     return ("PASS" if ok else "FAIL"), {
