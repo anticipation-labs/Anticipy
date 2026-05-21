@@ -296,7 +296,13 @@ def _ensure_profile_loaded() -> None:
 
 
 def _reset_first_run_state() -> None:
-    _stop_listen()
+    # NOTE: do NOT stop the always-on listener here. PortAudio on macOS
+    # sometimes refuses to re-open the input device within the engine's
+    # 8s start budget once it has been closed and reopened a couple of
+    # times, which would leave the listener off and cascade to every
+    # downstream check that needs it (listen/inject and listen/upload
+    # both gate on _LISTEN["on"]). Clearing the rolling window state is
+    # enough; the live mic stream stays warm so the next inject lands.
     _SESS["i"] = 0
     _SESS["transcript"] = []
     _SESS["profile"] = None
@@ -306,7 +312,6 @@ def _reset_first_run_state() -> None:
         _LISTEN["recent"] = []
         _LISTEN["pending"] = None
         _LISTEN["acted"] = None
-        _LISTEN["started_at"] = None
         _LISTEN["error"] = None
     try:
         with _LISTEN["buf_lock"]:
