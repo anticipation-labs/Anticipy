@@ -225,15 +225,16 @@ def check_05_onboarding_chat() -> tuple[str, dict]:
         turns = [
             {"speaker_id": "AGENT", "text": "Tell me about yourself."},
             {"speaker_id": "WEARER",
-             "text": "I am Omar Ebrahim, founder of Anticipy. I run product."},
+             "text": "My name is Omar Ebrahim, founder of Anticipy. I run product."},
             {"speaker_id": "AGENT", "text": "Who do you work most closely with?"},
             {"speaker_id": "WEARER",
-             "text": ("My boss Dana Bright owns the roadmap. Her email is "
-                      "omarkebrahim+anticipy-dana@gmail.com. My strategy "
-                      "advisor Priya Shah at "
-                      "omarkebrahim+anticipy-priya@gmail.com helps with "
-                      "positioning. Maya Chen is my ops partner at "
-                      "omarkebrahim+anticipy-maya@gmail.com.")},
+             "text": ("My boss Dana Bright at "
+                      "omarkebrahim+anticipy-dana@gmail.com owns the roadmap. "
+                      "My strategy advisor Priya Shah at "
+                      "omarkebrahim+anticipy-priya@gmail.com helps me with "
+                      "positioning. My operations partner Maya Chen at "
+                      "omarkebrahim+anticipy-maya@gmail.com handles the ops "
+                      "side of the company.")},
             {"speaker_id": "AGENT",
              "text": "Anything Anticipy must never touch?"},
             {"speaker_id": "WEARER",
