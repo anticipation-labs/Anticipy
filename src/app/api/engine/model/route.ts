@@ -24,7 +24,13 @@ function safePayload(body: unknown) {
   if (!Array.isArray(src.messages)) return null;
 
   const serialized = JSON.stringify(src.messages);
-  if (serialized.length > 120_000) return null;
+  // The local action engine sends one compressed browser screenshot
+  // as a data URL for vision steps. Real desktop screenshots are
+  // commonly 500-900 KB before base64, so a 120 KB cap made the
+  // shipped broker reject the real Gmail/Calendar action path while
+  // text-only onboarding still worked. Keep a hard ceiling, but make
+  // it large enough for one normal vision frame.
+  if (serialized.length > 2_000_000) return null;
 
   const payload: Record<string, unknown> = {
     model,
