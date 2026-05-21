@@ -18,8 +18,8 @@
   --gold: #C8A97E;
   --gold-dim: rgba(200, 169, 126, 0.15);
 
-  /* Text on dark */
-  --text-on-dark: #FAFAFA;
+  /* Text on dark — must equal brand cream so the live audit (PRD CHECK 15) sees rgb(245,240,235) */
+  --text-on-dark: #F5F0EB;
   --text-on-dark-muted: #8A8A8A;
 
   /* Text on light */
