@@ -179,6 +179,7 @@ def _chrome_user_data_dir() -> str:
 
 @app.get("/health")
 def health() -> JSONResponse:
+    _ensure_profile_loaded()
     return JSONResponse({
         "ok": True,
         "service": "anticipy-local-engine",
@@ -214,6 +215,86 @@ def _profile_json() -> dict:
     }
 
 
+def _profile_store_path() -> Path:
+    from app.anticipy import platform_adapter
+    return platform_adapter.data_dir() / "product_profile.json"
+
+
+def _profile_from_json(data: dict):
+    from app.anticipy.seams import UserProfile
+
+    return UserProfile(
+        user_id=USER_ID,
+        name=str(data.get("name") or ""),
+        role_title=str(data.get("role_title") or ""),
+        what_they_do=str(data.get("what_they_do") or ""),
+        timezone=str(data.get("timezone") or "UTC"),
+        working_hours=str(data.get("working_hours") or ""),
+        people={str(k): str(v) for k, v in (data.get("people") or {}).items()},
+        critical_software={str(k): bool(v) for k, v in
+                           (data.get("critical_software") or {}).items()},
+        mandate=str(data.get("mandate") or ""),
+        do_not_touch=[str(x) for x in (data.get("do_not_touch") or [])],
+        comms_prefs={str(k): str(v) for k, v in
+                     (data.get("comms_prefs") or {}).items()},
+        quiet_hours=str(data.get("quiet_hours") or ""),
+        autonomy_level=float(data.get("autonomy_level") or 0.92),
+        days_since_onboard=int(data.get("days_since_onboard") or 0),
+        trajectory_confidence=float(data.get("trajectory_confidence") or 0.0),
+    )
+
+
+def _seed_profile_memory(prof) -> None:
+    try:
+        from app.anticipy import memory as MEM
+        if prof.people:
+            MEM.seed(USER_ID, {str(k): str(v)
+                               for k, v in prof.people.items()})
+    except Exception:
+        pass
+    _install_memory_draw()
+
+
+def _save_profile() -> None:
+    data = _profile_json()
+    if not data:
+        return
+    sess_profile = _SESS.get("profile") or {}
+    data["well_populated"] = bool(sess_profile.get("well_populated"))
+    # Cold-start path 3c (audio onboarding) collects recurring_topics in
+    # addition to the frozen UserProfile fields. Carry it through to the
+    # persisted JSON when present so a restart preserves the extra
+    # context. The frozen dataclass is untouched (extra keys are simply
+    # ignored by _profile_from_json which whitelists known keys).
+    for extra in ("recurring_topics",):
+        if extra in sess_profile and sess_profile[extra] is not None:
+            data[extra] = sess_profile[extra]
+    p = _profile_store_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _ensure_profile_loaded() -> None:
+    if _SESS.get("profile_obj") is not None:
+        return
+    p = _profile_store_path()
+    if not p.exists():
+        return
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        prof = _profile_from_json(data)
+        _SESS["profile_obj"] = prof
+        _SESS["profile"] = _profile_json()
+        _SESS["profile"]["well_populated"] = bool(data.get("well_populated", True))
+        for extra in ("recurring_topics",):
+            if extra in data and data[extra] is not None:
+                _SESS["profile"][extra] = data[extra]
+        _seed_profile_memory(prof)
+    except Exception:
+        _SESS["profile_obj"] = None
+        _SESS["profile"] = None
+
+
 def _reset_first_run_state() -> None:
     _stop_listen()
     _SESS["i"] = 0
@@ -230,6 +311,10 @@ def _reset_first_run_state() -> None:
     try:
         with _LISTEN["buf_lock"]:
             _LISTEN["buf"].clear()
+    except Exception:
+        pass
+    try:
+        _profile_store_path().unlink(missing_ok=True)
     except Exception:
         pass
     try:
@@ -577,6 +662,7 @@ def memory_snapshot() -> JSONResponse:
 @app.get("/api/state")
 def state() -> JSONResponse:
     from app.anticipy.onboarding import INTERVIEW_SCRIPT
+    _ensure_profile_loaded()
     return JSONResponse({
         "key_ok": _key_ok(),
         "provisioned": _broker_ok(),
@@ -653,15 +739,377 @@ def onb_answer(a: Answer) -> JSONResponse:
     pj = _profile_json()
     pj["well_populated"] = OB.profile_is_well_populated(prof)
     _SESS["profile"] = pj
-    try:
-        from app.anticipy import memory as MEM
-        if prof.people:
-            MEM.seed(USER_ID, {str(k): str(v)
-                               for k, v in prof.people.items()})
-    except Exception:
-        pass
-    _install_memory_draw()
+    _seed_profile_memory(prof)
+    _save_profile()
     return JSONResponse({"done": True, "profile": pj})
+
+
+# --------------------------------------------------------------------------
+# cold-start onboarding paths 3a/3b/3c (additive; do not modify the
+# scripted INTERVIEW_SCRIPT flow above). All three paths persist via
+# the SAME _save_profile durability boundary and the SAME
+# _seed_profile_memory hook, so once any one of them lands the engine
+# behaves identically across cold starts.
+# --------------------------------------------------------------------------
+
+def _call_stub_log_path() -> Path:
+    from app.anticipy import platform_adapter
+    return platform_adapter.data_dir() / "voice_call_stubs.jsonl"
+
+
+class CallStub(BaseModel):
+    phone: str
+    name: str | None = None
+    intended_system_prompt: str | None = None
+    expected_duration_seconds: int | None = None
+
+
+def _normalize_phone(raw: str) -> str:
+    s = "".join(ch for ch in (raw or "") if ch.isdigit() or ch == "+")
+    digits = s.replace("+", "")
+    if not digits or len(digits) < 7 or len(digits) > 16:
+        return ""
+    return s
+
+
+@app.post("/api/onboarding/call_stub")
+def onboarding_call_stub(p: CallStub) -> JSONResponse:
+    """Path 3a: log the intent to place a voice-onboarding call.
+
+    Twilio (or any other voice provider) is intentionally not wired up
+    yet. This endpoint writes a stub row to voice_call_stubs.jsonl with
+    is_stub set true. The is_stub flag is required and visible so this
+    log entry can never be mistaken for a real placed call.
+    """
+    phone = _normalize_phone(p.phone or "")
+    if not phone:
+        return JSONResponse(
+            {"ok": False, "error": "invalid phone number"},
+            status_code=400,
+        )
+    row = {
+        "ts": time.time(),
+        "phone": phone,
+        "name": (p.name or "").strip() or None,
+        "system_prompt": (p.intended_system_prompt or "").strip() or None,
+        "expected_duration_seconds":
+            int(p.expected_duration_seconds)
+            if p.expected_duration_seconds else 600,
+        "is_stub": True,
+        "stub_reason":
+            "voice provider (twilio or equivalent) not configured in this build",
+    }
+    try:
+        log = _call_stub_log_path()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
+    return JSONResponse({
+        "ok": True,
+        "is_stub": True,
+        "queued_at": row["ts"],
+        "phone": phone,
+        "log_path": str(_call_stub_log_path()),
+    })
+
+
+@app.get("/api/onboarding/call_stubs")
+def onboarding_call_stubs_list() -> JSONResponse:
+    """Inspection helper for path 3a. Returns the most recent stub
+    rows so the deploy can prove the JSONL log is being written.
+    """
+    rows: list[dict] = []
+    p = _call_stub_log_path()
+    if p.exists():
+        for ln in p.read_text(encoding="utf-8").splitlines():
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                rows.append(json.loads(ln))
+            except Exception:
+                continue
+    return JSONResponse({"count": len(rows), "rows": rows[-20:],
+                         "log_path": str(p)})
+
+
+class ChatTurn(BaseModel):
+    speaker_id: str
+    text: str
+
+
+class ChatComplete(BaseModel):
+    transcript: list[ChatTurn]
+
+
+def _flatten_chat_transcript(turns: list[ChatTurn]) -> str:
+    """Same shape the frozen onboarding extractor reads: a diarized
+    AGENT/WEARER transcript with one line per turn. Reusing the frozen
+    extractor means path 3b lands the SAME UserProfile shape paths 3a
+    and the scripted interview produce.
+    """
+    lines = []
+    for t in turns:
+        sp = (t.speaker_id or "").strip().upper() or "WEARER"
+        if sp not in ("AGENT", "WEARER"):
+            sp = "AGENT" if sp.lower().startswith("a") else "WEARER"
+        text = (t.text or "").strip()
+        if not text:
+            continue
+        lines.append(f"{sp}: {text}")
+    return "\n".join(lines)
+
+
+@app.post("/api/onboarding/chat_complete")
+def onboarding_chat_complete(c: ChatComplete) -> JSONResponse:
+    """Path 3b: a freeform conversation came in from the browser. The
+    transcript is handed to the FROZEN onboarding extractor (same one
+    the scripted INTERVIEW_SCRIPT flow uses) to produce the canonical
+    UserProfile, then seeded into memory and persisted via the same
+    durability boundary as the scripted path.
+    """
+    from app.anticipy import onboarding as OB
+
+    if not c.transcript:
+        return JSONResponse({"ok": False, "error": "empty transcript"},
+                            status_code=400)
+
+    transcript = [{"speaker_id": t.speaker_id, "text": t.text}
+                  for t in c.transcript
+                  if (t.text or "").strip()]
+    if not transcript:
+        return JSONResponse({"ok": False, "error": "no non-empty turns"},
+                            status_code=400)
+
+    _SESS["transcript"] = list(transcript)
+    _SESS["i"] = len([t for t in transcript
+                      if (t.get("speaker_id") or "").upper() == "AGENT"])
+
+    prof = None
+    for _att in range(6):
+        try:
+            prof = asyncio.run(OB.run_intake(transcript, USER_ID))
+        except Exception:
+            prof = None
+        if prof is not None:
+            _repair_profile_from_onboarding(prof)
+        if prof is not None and OB.profile_is_well_populated(prof):
+            break
+        time.sleep(2 + _att * 2)
+    if prof is None:
+        return JSONResponse(
+            {"ok": False,
+             "error": "extractor returned no profile after retries"},
+            status_code=500,
+        )
+    _SESS["profile_obj"] = prof
+    pj = _profile_json()
+    pj["well_populated"] = OB.profile_is_well_populated(prof)
+    _SESS["profile"] = pj
+    _seed_profile_memory(prof)
+    _save_profile()
+    return JSONResponse({"ok": True, "profile": pj,
+                         "turns": len(transcript)})
+
+
+def _long_form_transcribe(in_path: Path,
+                          chunk_duration: float = 120.0,
+                          overlap_duration: float = 15.0) -> dict:
+    """Path 3c helper. Transcribe up to 24h of speech with parakeet-mlx
+    using its native chunked transcription. The parakeet-mlx model's
+    transcribe accepts chunk_duration and overlap_duration arguments
+    (see parakeet_mlx.parakeet.transcribe at parakeet_mlx==<frozen>).
+    We rely on those rather than rolling our own chunking, because the
+    library handles overlap merging deterministically.
+    """
+    from app.audiostack import audio as A
+
+    A._ensure_ffmpeg_on_path()
+    model = A._get_asr()
+    wav_path = in_path
+    if in_path.suffix.lower() not in {".wav", ".wave"}:
+        wav_path = in_path.with_suffix(".asr.wav")
+        converters = []
+        for ff in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg",
+                   "/usr/bin/ffmpeg"):
+            if Path(ff).exists():
+                converters.append([
+                    ff, "-y", "-loglevel", "error", "-i", str(in_path),
+                    "-ac", "1", "-ar", str(A.SR), str(wav_path),
+                ])
+                break
+        if not converters:
+            found = shutil.which("ffmpeg")
+            if found:
+                converters.append([
+                    found, "-y", "-loglevel", "error", "-i", str(in_path),
+                    "-ac", "1", "-ar", str(A.SR), str(wav_path),
+                ])
+        if not converters:
+            raise RuntimeError("ffmpeg not available for long audio decode")
+        subprocess.run(converters[0], capture_output=True, check=True,
+                       timeout=3600)
+    t0 = time.time()
+    res = model.transcribe(
+        str(wav_path),
+        chunk_duration=chunk_duration,
+        overlap_duration=overlap_duration,
+    )
+    text = (getattr(res, "text", "") or "").strip()
+    return {"text": text, "elapsed_s": round(time.time() - t0, 2)}
+
+
+_PROFILE_FROM_TRANSCRIPT_SYS = """\
+You convert a long, freeform monologue transcript into a STRICT
+structured Anticipy onboarding profile.
+
+The transcript was produced by automatic speech recognition. It may
+have homophones, missing punctuation, or run together names. Use
+context to recover the intended spelling of people, tools, and topics.
+
+Return STRICT JSON only with EXACTLY these keys:
+{
+ "name": "", "role_title": "", "what_they_do": "", "timezone": "UTC",
+ "working_hours": "", "people": {"<relation_or_anchor>": "<name and email if mentioned>"},
+ "critical_software": {"<tool>": true},
+ "mandate": "",
+ "do_not_touch": ["..."],
+ "comms_prefs": {"non_critical": "", "critical": ""},
+ "quiet_hours": "",
+ "recurring_topics": ["..."]
+}
+
+People MUST include the boss / partner / clients / reports that
+appear in the monologue, with any email addresses the speaker named.
+Anchors like "the boss" and "us" must resolve. Do not invent facts
+that were not in the monologue; leave a field empty rather than
+guessing. recurring_topics is the short list of subjects the speaker
+explicitly asks Anticipy to keep an ear out for.
+
+No prose, no fences. JSON only.
+"""
+
+
+def _extract_profile_from_transcript(transcript_text: str) -> dict:
+    """Path 3c profile extraction. Same broker as the rest of the
+    engine. JSON mode on so the response is parseable; we still defend
+    against the occasional trailing/leading prose.
+    """
+    from app.anticipy import platform_adapter
+    res = platform_adapter.model_call(
+        _PROFILE_FROM_TRANSCRIPT_SYS,
+        f"MONOLOGUE TRANSCRIPT:\n{transcript_text}\n\nReturn the JSON now.",
+        2400, 0.0, True,
+    )
+    if not res.ok:
+        return {}
+    s = res.content or ""
+    a, b = s.find("{"), s.rfind("}")
+    if a < 0 or b <= a:
+        return {}
+    try:
+        return json.loads(s[a:b + 1])
+    except Exception:
+        return {}
+
+
+@app.post("/api/onboarding/from_audio")
+async def onboarding_from_audio(request: Request) -> JSONResponse:
+    """Path 3c: long-form audio (up to ~24h) becomes a populated
+    profile. The audio is transcribed locally with parakeet-mlx using
+    chunk_duration 120s + overlap 15s, the broker is asked to extract
+    a UserProfile from the transcript, and the result is persisted via
+    _save_profile + _seed_profile_memory (same boundary as the
+    scripted onboarding).
+    """
+    raw = await request.body()
+    if not raw:
+        return JSONResponse({"ok": False, "error": "empty upload"},
+                            status_code=400)
+    ctype = (request.headers.get("content-type") or "").split(";", 1)[0]
+    suffix = {
+        "audio/mpeg": ".mp3", "audio/mp3": ".mp3",
+        "audio/wav": ".wav", "audio/x-wav": ".wav",
+        "audio/aiff": ".aiff", "audio/x-aiff": ".aiff",
+        "audio/mp4": ".m4a", "audio/x-m4a": ".m4a",
+        "audio/flac": ".flac",
+    }.get(ctype, ".audio")
+
+    import tempfile
+    try:
+        with tempfile.TemporaryDirectory(prefix="anticipy-onbaud-") as td:
+            in_path = Path(td) / f"intake{suffix}"
+            in_path.write_bytes(raw)
+            asr = _long_form_transcribe(
+                in_path,
+                chunk_duration=120.0,
+                overlap_duration=15.0,
+            )
+            transcript_text = asr["text"]
+            if not transcript_text:
+                return JSONResponse(
+                    {"ok": False,
+                     "error": "transcript empty after ASR",
+                     "elapsed_s": asr["elapsed_s"],
+                     "bytes": len(raw)},
+                    status_code=500,
+                )
+            extracted = _extract_profile_from_transcript(transcript_text)
+            if not extracted:
+                return JSONResponse(
+                    {"ok": False,
+                     "error": "broker returned no profile JSON",
+                     "transcript_snippet": transcript_text[:240],
+                     "transcript_chars": len(transcript_text)},
+                    status_code=500,
+                )
+            prof = _profile_from_json(extracted)
+            # Reuse the existing email/contact repair pass against a
+            # synthesized transcript so the same hardening that fixes
+            # name->email mapping for the scripted path also helps the
+            # audio path. We feed the ASR output through as if it were
+            # a single WEARER turn.
+            _SESS["transcript"] = [
+                {"speaker_id": "WEARER", "text": transcript_text}
+            ]
+            _repair_profile_from_onboarding(prof)
+            _SESS["profile_obj"] = prof
+            pj = _profile_json()
+            # recurring_topics is path 3c specific extra context; keep
+            # it visible in the response and stash it in the saved
+            # profile JSON for the UI to surface, without mutating the
+            # frozen UserProfile dataclass.
+            recurring = [str(x) for x in (extracted.get("recurring_topics") or [])]
+            pj["recurring_topics"] = recurring
+            try:
+                from app.anticipy import onboarding as OB
+                pj["well_populated"] = OB.profile_is_well_populated(prof)
+            except Exception:
+                pj["well_populated"] = bool(prof.name and prof.people)
+            _SESS["profile"] = pj
+            _seed_profile_memory(prof)
+            _save_profile()
+            # _save_profile reads from _SESS["profile"] so recurring_topics
+            # already lands in the persisted JSON.
+            return JSONResponse({
+                "ok": True,
+                "bytes": len(raw),
+                "content_type": ctype or "application/octet-stream",
+                "transcript_chars": len(transcript_text),
+                "transcript_snippet": transcript_text[:600],
+                "elapsed_s": asr["elapsed_s"],
+                "profile": pj,
+            })
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
 
 
 # --------------------------------------------------------------------------
@@ -803,30 +1251,51 @@ def _load_upload_audio(path: Path):
     """Decode user-uploaded audio to the same 16k mono ndarray ASR expects."""
     from app.audiostack import audio as A
 
-    try:
-        return A.load_wav(path)
-    except Exception as first_error:
+    def _converter_candidates(name: str) -> list[str]:
+        found = shutil.which(name)
+        candidates = [found] if found else []
+        for p in (f"/opt/homebrew/bin/{name}", f"/usr/local/bin/{name}",
+                  f"/usr/bin/{name}"):
+            if p not in candidates and Path(p).exists():
+                candidates.append(p)
+        return candidates
+
+    def _convert() -> tuple[object | None, list[str]]:
         out = path.with_suffix(".asr.wav")
         converters = []
-        ffmpeg = shutil.which("ffmpeg")
-        if ffmpeg:
+        for ffmpeg in _converter_candidates("ffmpeg"):
             converters.append([
                 ffmpeg, "-y", "-loglevel", "error", "-i", str(path),
                 "-ac", "1", "-ar", str(A.SR), str(out),
             ])
-        afconvert = shutil.which("afconvert")
-        if afconvert:
+        for afconvert in _converter_candidates("afconvert"):
             converters.append([
                 afconvert, "-f", "WAVE", "-d", f"LEI16@{A.SR}",
                 "-c", "1", str(path), str(out),
             ])
-        errors = [f"direct:{type(first_error).__name__}:{first_error}"]
+        errors: list[str] = []
         for cmd in converters:
             try:
                 subprocess.run(cmd, capture_output=True, check=True, timeout=30)
-                return A.load_wav(out)
+                return A.load_wav(out), errors
             except Exception as e:
                 errors.append(f"{Path(cmd[0]).name}:{type(e).__name__}:{e}")
+        return None, errors
+
+    if path.suffix.lower() not in {".wav", ".wave"}:
+        wav, errors = _convert()
+        if wav is not None:
+            return wav
+        raise RuntimeError("audio conversion failed; " + " | ".join(errors))
+
+    try:
+        return A.load_wav(path)
+    except Exception as first_error:
+        errors = [f"direct:{type(first_error).__name__}:{first_error}"]
+        wav, convert_errors = _convert()
+        if wav is not None:
+            return wav
+        errors.extend(convert_errors)
         raise RuntimeError("audio decode failed; " + " | ".join(errors))
 
 

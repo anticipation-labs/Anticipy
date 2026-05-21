@@ -19,6 +19,7 @@ They are fetched on first real use only, into data_dir()/models.
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -120,6 +121,18 @@ _asr = None
 _ASR_MODEL = "mlx-community/parakeet-tdt-0.6b-v2"
 
 
+def _ensure_ffmpeg_on_path() -> None:
+    if shutil.which("ffmpeg"):
+        return
+    current = os.environ.get("PATH", "")
+    for p in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg",
+              "/usr/bin/ffmpeg"):
+        if Path(p).exists():
+            d = str(Path(p).parent)
+            os.environ["PATH"] = d if not current else f"{d}:{current}"
+            return
+
+
 def _get_asr():
     global _asr
     if _asr is None:
@@ -148,12 +161,30 @@ def asr_tokens(wav: np.ndarray) -> AsrResult:
         return AsrResult(text="", tokens=[])
     import tempfile
 
+    _ensure_ffmpeg_on_path()
     model = _get_asr()
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tf:
         write_wav(tf.name, np.asarray(wav, dtype=np.float32))
         try:
             res = model.transcribe(tf.name)
-        except Exception:
+        except Exception as e:
+            try:
+                import json
+                import time
+                import traceback
+
+                log = _models_dir().parent / "asr_errors.jsonl"
+                log.parent.mkdir(parents=True, exist_ok=True)
+                log.open("a", encoding="utf-8").write(json.dumps({
+                    "ts": time.time(),
+                    "model": _ASR_MODEL,
+                    "error": f"{type(e).__name__}: {e}",
+                    "traceback": traceback.format_exc(limit=5),
+                    "samples": int(len(wav)),
+                    "rms": float(np.sqrt(np.mean(np.asarray(wav) ** 2)) or 0.0),
+                }) + "\n")
+            except Exception:
+                pass
             return AsrResult(text="", tokens=[])
     toks: list[AsrToken] = []
     parts: list[str] = []

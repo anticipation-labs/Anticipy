@@ -31,7 +31,19 @@ export async function GET() {
       "the local engine.",
   } as Segment;
 
+  // Surface the deployed commit hash so an acceptance harness can prove
+  // the Vercel build actually reflects the source tree that produced it.
+  const commit =
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ||
+    process.env.GIT_COMMIT_SHA ||
+    "";
+
   return NextResponse.json({
+    build: {
+      commit,
+      commit_short: commit ? commit.slice(0, 7) : "",
+    },
     // The product is account-gated. Real account creation / OAuth /
     // payment are PROHIBITED to do on the user's behalf and are the
     // honest gated edge: the screen is real, activation is the
