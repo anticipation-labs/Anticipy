@@ -227,10 +227,20 @@ def _restore_profile(orig: Path | None) -> None:
         _get(f"{ENGINE_URL}/api/state")
     except Exception:
         pass
-    try:
-        _post(f"{ENGINE_URL}/api/listen/start", {})
-    except Exception:
-        pass
+    # /api/listen/start can flakily 8s-timeout on the mic stream when the
+    # device was just released. Retry up to 4 times so a single transient
+    # PortAudio start delay does not leave subsequent checks with
+    # listener=False (which makes /api/listen/upload return "listening not
+    # started" and inject paths short-circuit before producing a plan).
+    for _attempt in range(4):
+        try:
+            r = _post(f"{ENGINE_URL}/api/listen/start", {}, timeout=20)
+            data = json.loads(r.read())
+            if data.get("on"):
+                break
+        except Exception:
+            pass
+        time.sleep(2)
 
 
 def check_05_onboarding_chat() -> tuple[str, dict]:
@@ -402,52 +412,24 @@ def _cdp_pages():
 
 
 def _gmail_draft_count() -> int:
-    """Open the Gmail drafts URL via Playwright/CDP and read the count badge.
-    Returns -1 if unable to determine.
+    """Read the Gmail drafts count from the live Chrome tab titles via
+    pure CDP HTTP /json/list. No Playwright connect, no websocket. Gmail
+    titles open Drafts as "Drafts (N) - <email> - Gmail" so a regex on
+    the title is sufficient and never blocks against a busy CDP session.
+    Returns -1 if no Drafts-titled tab is currently open.
     """
-    from playwright.sync_api import sync_playwright
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.connect_over_cdp(CDP_URL)
-            context = browser.contexts[0] if browser.contexts else None
-            if not context:
-                return -1
-            target_url = "https://mail.google.com/mail/u/0/#drafts"
-            pages = context.pages
-            page = None
-            for pg in pages:
-                if "mail.google.com" in pg.url:
-                    page = pg
-                    break
-            if page is None:
-                page = context.new_page()
-            page.goto(target_url, wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(2000)
-            badge = page.locator(
-                "div.aim a[href*='#drafts'] .bsU").first
-            try:
-                txt = badge.text_content(timeout=5000)
-            except Exception:
-                txt = None
-            if txt and txt.strip().isdigit():
-                return int(txt.strip())
-            try:
-                title = page.title()
-                m = re.search(r"Drafts \((\d[\d,]*)\)", title)
-                if m:
-                    return int(m.group(1).replace(",", ""))
-            except Exception:
-                pass
-            try:
-                content = page.content()
-                m = re.search(r"Drafts.{0,40}?\((\d[\d,]*)\)", content)
-                if m:
-                    return int(m.group(1).replace(",", ""))
-            except Exception:
-                pass
-            return -1
+        tabs = json.loads(_get(f"{CDP_URL}/json/list", timeout=8).read())
     except Exception:
         return -1
+    for t in tabs:
+        if t.get("type") != "page":
+            continue
+        title = t.get("title") or ""
+        m = re.search(r"Drafts \((\d[\d,]*)\)", title)
+        if m:
+            return int(m.group(1).replace(",", ""))
+    return -1
 
 
 def _gmail_compose_screenshot(out_png: Path, trajectory_dir: str = "",
