@@ -168,6 +168,76 @@ function Orb({ live }: { live: boolean }) {
   );
 }
 
+function ProfileSummary({
+  profile,
+}: {
+  profile?: Record<string, unknown> | null;
+}) {
+  if (!profile || typeof profile !== "object") {
+    return (
+      <p className="text-[13px] text-cream/55 leading-relaxed">
+        Your profile is on this Mac. Listening will use it the moment a name
+        comes up.
+      </p>
+    );
+  }
+
+  const name = typeof profile.name === "string" ? profile.name : "";
+  const roleTitle =
+    typeof profile.role_title === "string" ? profile.role_title : "";
+  const peopleRaw = (profile.people && typeof profile.people === "object"
+    ? (profile.people as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+
+  const stripEmail = (value: string): string => {
+    const idx = value.indexOf("<");
+    return idx >= 0 ? value.slice(0, idx).trim() : value.trim();
+  };
+
+  const peopleEntries = Object.entries(peopleRaw)
+    .filter(([, v]) => typeof v === "string" && (v as string).trim().length > 0)
+    .map(([role, v]) => ({ role, person: stripEmail(v as string) }));
+
+  return (
+    <div className="space-y-4 text-[13.5px] leading-relaxed">
+      {(name || roleTitle) && (
+        <p className="text-cream/85">
+          {name && <span>{name}</span>}
+          {name && roleTitle && <span className="text-cream/45">, </span>}
+          {roleTitle && (
+            <span className="text-cream/70">{roleTitle}</span>
+          )}
+          {"."}
+        </p>
+      )}
+
+      {peopleEntries.length > 0 && (
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-cream/40 mb-2">
+            People Anticipy knows
+          </p>
+          <ul className="space-y-1.5">
+            {peopleEntries.map(({ role, person }) => (
+              <li key={role} className="flex gap-3 text-cream/85">
+                <span className="text-cream/45 min-w-[148px] capitalize">
+                  {role}
+                </span>
+                <span>{person}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {peopleEntries.length === 0 && !name && !roleTitle && (
+        <p className="text-cream/55">
+          Your profile is on this Mac, ready for listening to use.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AnticipyApp() {
   const [view, setView] = useState<View>("entry");
   const [state, setState] = useState<AppState | null>(null);
@@ -934,9 +1004,7 @@ export default function AnticipyApp() {
                   className="mt-10 rounded-card border border-dark-border bg-dark-elevated px-6 py-5 max-w-[620px] fade-up"
                   style={{ animationDelay: "180ms" }}
                 >
-                  <pre className="whitespace-pre-wrap text-[12px] leading-relaxed text-cream/65 overflow-auto max-h-[260px]">
-                    {JSON.stringify(localEngine.state.profile, null, 2)}
-                  </pre>
+                  <ProfileSummary profile={localEngine.state.profile} />
                 </div>
                 <Primary onClick={() => setView("listen")}>
                   Start listening

@@ -1,5 +1,17 @@
 # Anticipy — Project Guide
 
+## Directive: scale by distribution, not by centralization (2026-05-20)
+
+"Scale" for Anticipy means: any new user can download the Mac app from anticipy.ai/app and get the same working product Omar has — onboarding, RAG memory, hardware connection, polish. The local engine on each user's Mac IS the product. Privacy moat stays. The website at anticipy.ai is the scalable surface (download host, Supabase auth, model broker, public-facing pages). Do NOT centralize the engine to a cloud service: no Browserbase / Steel cloud browsers, no Groq Whisper / Deepgram server-side ASR, no Cloud Run / Fly.io engine hosts. The Codex handoff (`CLAUDE_CODE_HANDOFF.md`) describes the shipping architecture, not a transitional shape.
+
+What to watch for in code:
+
+- Local engine on `127.0.0.1:8731`, Chrome CDP on `:9222` against the user's own Chrome, `~/.anticipy/` data dir, `parakeet_mlx` ASR in the packaged app, `/Applications/Anticipy.app`, DMG distribution, `install.sh` — all CORRECT.
+- Hardcoded Omar-specific paths in shipped code (e.g. `/Users/omarebrahim/.anticipy/chrome-real-clone`, `/tmp/anticipy-omar-flow-home.*`) are scale bugs to fix. Test recipients like `omarkebrahim+anticipy-*@gmail.com` belong only in proof artifacts, never in shipped product code.
+- The website (`src/app/`) is the SCALABLE surface. Brand polish, /flash page, /onboarding/* pages, model broker (`/api/engine/model`), Supabase auth/session live here.
+
+---
+
 ## Overview
 Anticipy is an AI wearable product website (Next.js 14) with an integrated **Action Engine** — a browser-based AI agent that receives plain English instructions and completes real tasks on real websites autonomously.
 
