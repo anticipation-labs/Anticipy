@@ -2002,3 +2002,147 @@ boot();
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     return HTMLResponse(INDEX)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Flash log endpoint (appended by /flash builder).
+# Receives stub firmware-update records from the /flash page on
+# www.anticipy.ai, forwarded via /api/flash/log_stub on Next.js, and
+# appends them as JSON-Lines under data_dir() / "flash_stubs.jsonl".
+# Every appended row is forced to is_stub: true on this side too; the
+# stub label can never be stripped by the client.
+# ─────────────────────────────────────────────────────────────────────
+def _flash_log_path() -> Path:
+    from app.anticipy import platform_adapter
+    return platform_adapter.data_dir() / "flash_stubs.jsonl"
+
+
+def _coerce_flash_row(raw: dict) -> dict:
+    def _s(v, default=""):
+        if v is None:
+            return None
+        return str(v)
+
+    def _i(v, default=0):
+        try:
+            return int(v)
+        except Exception:
+            return default
+
+    def _b(v) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() in {"1", "true", "yes"}
+        return bool(v)
+
+    import datetime as _dt
+    row = {
+        "ts": _s(raw.get("ts")) or _dt.datetime.utcnow().isoformat(
+            timespec="seconds") + "Z",
+        "device_name": _s(raw.get("device_name")) or "unknown",
+        "device_id_redacted": _s(raw.get("device_id_redacted")) or "unknown",
+        "firmware_version_before": _s(raw.get("firmware_version_before")),
+        "firmware_version_after": _s(raw.get("firmware_version_after")),
+        "bytes_transferred": _i(raw.get("bytes_transferred")),
+        "duration_ms": _i(raw.get("duration_ms")),
+        "success": _b(raw.get("success")),
+        "error": _s(raw.get("error")),
+        # Stub label is forced server-side. Never let a stub look real.
+        "is_stub": True,
+    }
+    return row
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Audio input device enumeration (Settings -> Audio source dropdown).
+# Returns every CoreAudio input device sounddevice can see, including
+# the built-in mic and any system-paired Bluetooth audio input. The
+# response is structured so the brand UI never has to surface raw
+# device-index integers; the kind field tells the renderer how to
+# group entries (builtin / bluetooth / other).
+# ─────────────────────────────────────────────────────────────────────
+@app.get("/api/audio/devices")
+def api_audio_devices() -> JSONResponse:
+    try:
+        import sounddevice as sd
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"sounddevice unavailable: {exc}",
+             "devices": []},
+            status_code=500,
+        )
+    try:
+        raw = sd.query_devices()
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"query_devices failed: {exc}",
+             "devices": []},
+            status_code=500,
+        )
+    try:
+        default_in = sd.query_devices(kind="input")
+        default_name = str(default_in.get("name", "")) if isinstance(
+            default_in, dict) else ""
+    except Exception:
+        default_name = ""
+
+    def _classify(name: str) -> str:
+        low = (name or "").lower()
+        if "macbook" in low or "built-in" in low or "internal microphone" in low:
+            return "builtin"
+        if "airpods" in low or "bluetooth" in low or "beats" in low:
+            return "bluetooth"
+        if "blackhole" in low or "loopback" in low or "virtual" in low:
+            return "virtual"
+        return "other"
+
+    devices = []
+    for idx, d in enumerate(raw):
+        if not isinstance(d, dict):
+            continue
+        if int(d.get("max_input_channels") or 0) <= 0:
+            continue
+        name = str(d.get("name") or "")
+        devices.append({
+            "index": idx,
+            "name": name,
+            "max_input_channels": int(d.get("max_input_channels") or 0),
+            "default_sample_rate": float(d.get("default_samplerate") or 0.0),
+            "kind": _classify(name),
+            "is_default": bool(default_name and name == default_name),
+        })
+    return JSONResponse({
+        "ok": True,
+        "count": len(devices),
+        "default_input": default_name,
+        "devices": devices,
+    })
+
+
+@app.post("/api/flash/log")
+async def api_flash_log(request: Request) -> JSONResponse:
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"body must be JSON: {exc}"}, status_code=400
+        )
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            {"ok": False, "error": "body must be a JSON object"},
+            status_code=400,
+        )
+    row = _coerce_flash_row(payload)
+    try:
+        path = _flash_log_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(row, ensure_ascii=False)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+        return JSONResponse({"ok": True, "appended_to": str(path), "row": row})
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"could not append flash row: {exc}"},
+            status_code=500,
+        )
