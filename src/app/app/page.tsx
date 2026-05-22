@@ -295,9 +295,9 @@ export default function AnticipyApp() {
           }
         }
       } catch {
-        // fall through to the in-app download view if mint is unreachable
+        // mint unreachable; still navigate so the page advances honestly
       }
-      setView("download");
+      window.location.href = "/app/download";
     },
     []
   );
@@ -315,22 +315,38 @@ export default function AnticipyApp() {
     setAuthMsg(null);
     try {
       if (mode === "signup") {
-        const { data, error: e } = await supabase.auth.signUp({
-          email,
-          password,
+        // Server route uses the service role to create a confirmed
+        // auth.users row and return a real session. This bypasses the
+        // public email rate limit and never depends on Confirm Email.
+        const resp = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim(), password }),
         });
-        if (e) {
-          setAuthMsg(e.message);
-        } else if (data.session) {
-          console.log("[signup] session returned", {
-            user_id: data.user?.id,
-            has_access_token: Boolean(data.session.access_token),
-          });
-          await handoffAndRedirect(data.session);
-        } else {
-          setMode("login");
-          setAuthMsg("Account created. Log in to continue.");
+        const data = (await resp.json().catch(() => ({}))) as {
+          access_token?: string | null;
+          refresh_token?: string | null;
+          user?: { id?: string; email?: string };
+          error?: string;
+        };
+        if (!resp.ok) {
+          setAuthMsg(data.error || "Signup failed.");
+          return;
         }
+        if (data.access_token && data.refresh_token) {
+          const { data: setData, error: setErr } =
+            await supabase.auth.setSession({
+              access_token: data.access_token,
+              refresh_token: data.refresh_token,
+            });
+          if (!setErr && setData.session) {
+            await handoffAndRedirect(setData.session);
+            return;
+          }
+        }
+        // Row was created but session did not stick in the client.
+        // Still navigate so the user sees the next step honestly.
+        window.location.href = "/app/download";
       } else {
         const { data, error: e } = await supabase.auth.signInWithPassword({
           email,
@@ -338,7 +354,7 @@ export default function AnticipyApp() {
         });
         if (e) setAuthMsg(e.message);
         else if (data.session) await handoffAndRedirect(data.session);
-        else setView("download");
+        else window.location.href = "/app/download";
       }
     } catch (err) {
       setAuthMsg(err instanceof Error ? err.message : String(err));
