@@ -239,7 +239,7 @@ function ProfileSummary({
 }
 
 export default function AnticipyApp() {
-  const [view, setView] = useState<View>("entry");
+  const [view, setView] = useState<View>("account");
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [localEngine, setLocalEngine] = useState<LocalEngine>({
@@ -274,7 +274,43 @@ export default function AnticipyApp() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  const handoffAndRedirect = useCallback(
+    async (sessionData: Session) => {
+      try {
+        const mintResp = await fetch("/api/auth/handoff/mint", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionData.access_token}`,
+          },
+          body: JSON.stringify({ refresh_token: sessionData.refresh_token }),
+        });
+        if (mintResp.ok) {
+          const mint = (await mintResp.json()) as { token?: string };
+          if (mint.token) {
+            window.location.href = `/app/download?token=${encodeURIComponent(
+              mint.token
+            )}`;
+            return;
+          }
+        }
+      } catch {
+        // fall through to the in-app download view if mint is unreachable
+      }
+      setView("download");
+    },
+    []
+  );
+
   const submitAuth = useCallback(async () => {
+    if (!email.trim()) {
+      setAuthMsg("Enter your email to continue.");
+      return;
+    }
+    if (password.length < 8) {
+      setAuthMsg("Password must be at least 8 characters.");
+      return;
+    }
     setAuthBusy(true);
     setAuthMsg(null);
     try {
@@ -286,19 +322,22 @@ export default function AnticipyApp() {
         if (e) {
           setAuthMsg(e.message);
         } else if (data.session) {
-          setView("download");
+          console.log("[signup] session returned", {
+            user_id: data.user?.id,
+            has_access_token: Boolean(data.session.access_token),
+          });
+          await handoffAndRedirect(data.session);
         } else {
           setMode("login");
-          setAuthMsg(
-            "Account created. If your project requires email confirmation, confirm then log in. Otherwise log in now."
-          );
+          setAuthMsg("Account created. Log in to continue.");
         }
       } else {
-        const { error: e } = await supabase.auth.signInWithPassword({
+        const { data, error: e } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (e) setAuthMsg(e.message);
+        else if (data.session) await handoffAndRedirect(data.session);
         else setView("download");
       }
     } catch (err) {
@@ -306,7 +345,7 @@ export default function AnticipyApp() {
     } finally {
       setAuthBusy(false);
     }
-  }, [mode, email, password]);
+  }, [mode, email, password, handoffAndRedirect]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -654,12 +693,15 @@ export default function AnticipyApp() {
     return () => window.clearInterval(t);
   }, [load, probeLocalEngine]);
 
-  // session gate: a gated view with no real session sends you to auth
+  // session gate: a gated view with no real session sends you to auth,
+  // and a fresh first-visit lands directly on the signup form
   useEffect(() => {
     if (authReady && !session && GATED.includes(view)) setView("account");
+    if (authReady && !session && view === "entry") setView("account");
+    if (authReady && session && view === "account") setView("download");
   }, [authReady, session, view]);
 
-  if (error === "offline" && view !== "entry") {
+  if (error === "offline" && view !== "entry" && view !== "account") {
     return (
       <Shell>
         <div className="min-h-screen flex flex-col justify-center px-8 md:px-20 max-w-[760px]">
@@ -773,6 +815,7 @@ export default function AnticipyApp() {
               <input
                 aria-label="Email"
                 type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
@@ -781,6 +824,7 @@ export default function AnticipyApp() {
               <input
                 aria-label="Password"
                 type="password"
+                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password (8+ characters)"
@@ -792,14 +836,15 @@ export default function AnticipyApp() {
                 </p>
               )}
               <button
+                type="submit"
                 onClick={submitAuth}
-                disabled={authBusy || !email || password.length < 8}
+                disabled={authBusy}
                 className="mt-2 rounded-pill px-8 py-4 text-[14px] font-medium bg-cream text-dark hover:bg-gold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {authBusy
                   ? "One moment"
                   : mode === "signup"
-                  ? "Create account"
+                  ? "Get Anticipy"
                   : "Log in"}
               </button>
               <button
