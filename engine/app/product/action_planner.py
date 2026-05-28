@@ -27,11 +27,11 @@ from typing import Any
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 TEXT_CASCADE = [
-    "deepseek/deepseek-chat-v4-flash",
-    "moonshotai/kimi-k2.6-instruct",
-    "google/gemini-flash-2.5",
+    "deepseek/deepseek-v4-flash",
+    "moonshotai/kimi-k2.6",
+    "google/gemini-3.5-flash",
 ]
-VISION_MODEL = "moonshotai/kimi-k2.6-vision"
+VISION_MODEL = "moonshotai/kimi-k2.6"
 DEFAULT_TIMEOUT = 20.0
 
 
