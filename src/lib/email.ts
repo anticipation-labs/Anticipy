@@ -99,8 +99,60 @@ export async function sendWaitlistWelcome(email: string, name?: string | null) {
   <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0;" />
 
   <p style="font-size: 13px; color: #8a8a8a;">
-    Anticipy — The AI wearable that acts.<br/>
+    Anticipy. The AI wearable that acts.<br/>
     <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a>
+  </p>
+</div>
+    `.trim(),
+  });
+}
+
+// ─── PRE-ORDER CONFIRMATION (from /pre-orders/purchase Stripe Checkout) ────
+export async function sendPreorderConfirmation(
+  email: string,
+  opts: {
+    name?: string | null;
+    amount: number;
+    currency: string;
+    sessionId: string;
+  }
+) {
+  if (!SENDGRID_API_KEY) return;
+
+  const rawFirstName = sanitizeHeader(opts.name?.split(" ")[0] || "", 60);
+  const firstName = escapeHtml(rawFirstName);
+  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const amountDisplay = (opts.amount / 100).toFixed(2);
+  const currencyDisplay = (opts.currency || "usd").toUpperCase();
+
+  const sgMail = await getSgMail();
+  await sgMail.send({
+    to: email,
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: "Your Anticipy pre-order is confirmed",
+    html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.7;">
+  <p style="font-size: 16px;">${greeting}</p>
+
+  <p style="font-size: 16px;">Your Anticipy pendant pre-order is locked in at $${amountDisplay} ${currencyDisplay}. That is $50 off the $199 retail price, plus free shipping to the United States and Canada.</p>
+
+  <p style="font-size: 16px;"><strong>What happens next.</strong> We're targeting shipping for August 2026. When manufacturing finishes, we will email you for any final shipping address confirmation and then ship the pendant, chain, and wireless charging pad to the address you entered at checkout. Your first year of the Anticipy AI service is included.</p>
+
+  <p style="font-size: 16px;"><strong>Your receipt.</strong> Stripe sent a separate emailed receipt to this address. Keep it for your records.</p>
+
+  <p style="font-size: 16px;"><strong>Need to make changes.</strong> Reply to this email. We respond to every pre-order inquiry personally.</p>
+
+  <p style="font-size: 13px; color: #8a8a8a; margin-top: 24px;">Reference: ${escapeHtml(opts.sessionId)}</p>
+
+  <p style="font-size: 16px;">Thank you for being early.</p>
+
+  <p style="font-size: 16px;">Omar Ebrahim<br/>Founder, Anticipy</p>
+
+  <hr style="border: none; border-top: 1px solid #e8e2db; margin: 32px 0;" />
+
+  <p style="font-size: 13px; color: #8a8a8a;">
+    Anticipation Labs Inc. · <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a><br/>
+    Pre-order terms: <a href="https://anticipy.ai/pre-orders/agreement" style="color: #C9A227;">anticipy.ai/pre-orders/agreement</a>
   </p>
 </div>
     `.trim(),

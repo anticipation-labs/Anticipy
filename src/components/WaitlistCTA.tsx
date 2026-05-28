@@ -60,7 +60,7 @@ export function WaitlistCTA() {
 
         <ScrollReveal delay={0.1}>
           <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light mt-6 mb-10">
-            We&apos;re building it now. Drop your email — we&apos;ll let you know the moment it&apos;s ready.
+            We&apos;re building it now. Drop your email and we&apos;ll let you know the moment it&apos;s ready.
           </p>
         </ScrollReveal>
 

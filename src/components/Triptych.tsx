@@ -39,7 +39,7 @@ export function Triptych() {
       <div ref={imageRef} className="parallax-image">
         <Image
           src="/images/triptych.png"
-          alt="Anticipy pendant in daily life — charging, wearing, sleeping"
+          alt="Anticipy pendant in daily life. Charging, wearing, sleeping."
           width={1376}
           height={768}
           className="w-full h-auto object-cover"

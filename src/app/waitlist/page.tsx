@@ -80,7 +80,7 @@ export default function WaitlistPage() {
             </h1>
             <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light leading-[1.7] mb-8">
               We&apos;ll reach out when Anticipy is ready to ship. In the meantime,
-              you can close this tab and go live your life — that&apos;s kind of the whole point.
+              you can close this tab and go live your life. That is kind of the whole point.
             </p>
             <Link
               href="/"
@@ -96,7 +96,7 @@ export default function WaitlistPage() {
             </h1>
             <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light leading-[1.7] mb-3">
               Anticipy is an AI wearable that listens to your day and handles
-              what needs handling — booking, canceling, disputing, scheduling — without
+              what needs handling. Booking, canceling, disputing, scheduling. All without
               you lifting a finger.
             </p>
             <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light leading-[1.7] mb-10">
@@ -106,7 +106,7 @@ export default function WaitlistPage() {
 
             {state === "duplicate" ? (
               <div className="text-[var(--text-on-dark-muted)] text-[17px] mb-6">
-                <p>You&apos;re already on the list — we&apos;ve got your email.</p>
+                <p>You&apos;re already on the list. We&apos;ve got your email.</p>
                 <Link
                   href="/"
                   className="text-gold text-[15px] hover:underline mt-4 inline-block"
@@ -157,7 +157,10 @@ export default function WaitlistPage() {
             )}
 
             <p className="text-[13px] text-[var(--text-on-dark-muted)] font-light mt-8">
-              $149 · Brushed titanium · 8 grams · First year of service included · Specifications subject to change
+              $199 retail, $149.99 pre-order · Brushed titanium · 8 grams · First year of service included · Specifications subject to change
+            </p>
+            <p className="text-[13px] text-[var(--text-on-dark-muted)] font-light mt-3">
+              Want it sooner? <Link href="/pre-orders/purchase" className="text-gold hover:underline">Pre-order now and lock in $50 off</Link>.
             </p>
           </>
         )}

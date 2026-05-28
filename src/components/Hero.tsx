@@ -58,7 +58,7 @@ export function Hero() {
         >
           <Image
             src="/images/hero.png"
-            alt="Anticipy pendant — brushed titanium AI wearable"
+            alt="Anticipy pendant. Brushed titanium AI wearable."
             width={640}
             height={480}
             priority
@@ -72,18 +72,24 @@ export function Hero() {
           className="flex flex-col sm:flex-row gap-4"
         >
           <a
-            href="#waitlist"
+            href="/pre-orders/purchase"
             className="px-8 py-3.5 rounded-pill bg-[var(--text-on-dark)] text-[var(--dark)] text-[15px] font-medium hover:bg-gold transition-colors duration-300"
           >
-            Join the Waitlist
+            Pre-order for $149.99
           </a>
           <a
-            href="#how-it-works"
+            href="#waitlist"
             className="px-8 py-3.5 rounded-pill border border-[rgba(255,255,255,0.2)] text-[var(--text-on-dark)] text-[15px] font-medium hover:border-gold hover:text-gold transition-colors duration-300"
           >
-            See How It Works
+            Or join the waitlist
           </a>
         </motion.div>
+        <motion.p
+          variants={childVariants}
+          className="text-[12px] uppercase tracking-[0.15em] text-[var(--text-on-dark-muted)] mt-6"
+        >
+          $50 off retail &middot; Ships August 2026 &middot; Free shipping in the US and Canada
+        </motion.p>
       </motion.div>
     </section>
   );

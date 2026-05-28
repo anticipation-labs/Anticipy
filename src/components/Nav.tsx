@@ -8,7 +8,7 @@ const navLinks = [
   { label: "How It Works", href: "#how-it-works" },
   { label: "Privacy", href: "#privacy" },
   { label: "Pricing", href: "#pricing" },
-  { label: "Compare", href: "/compare" },
+  { label: "Pre-order", href: "/pre-orders/purchase" },
 ];
 
 export function Nav() {
@@ -102,16 +102,16 @@ export function Nav() {
               </button>
             )
           )}
-          <button
-            onClick={() => scrollToSection("#waitlist")}
+          <a
+            href="/pre-orders/purchase"
             className="text-[15px] font-medium px-6 py-2.5 rounded-pill transition-all duration-300"
             style={{
               backgroundColor: isLight ? "var(--text-on-light)" : "var(--text-on-dark)",
               color: isLight ? "var(--cream)" : "var(--dark)",
             }}
           >
-            Join Waitlist
-          </button>
+            Pre-order
+          </a>
         </div>
 
         {/* Mobile hamburger */}

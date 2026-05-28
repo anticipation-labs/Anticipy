@@ -314,7 +314,7 @@ export default function ForDoctorsPage() {
               Reclaim the personal time your schedule took.
             </p>
             <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light mb-8">
-              Anticipy is $149 with the first year of service included.
+              Anticipy retails at $199. Pre-order now for $149.99 with the first year of AI service included.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link

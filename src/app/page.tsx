@@ -39,8 +39,8 @@ export default function Home() {
         imageSrc="/images/mirror.png"
         imageAlt="Woman putting on Anticipy pendant in mirror"
         headline="You put it on.<br/>You forget it's there."
-        body="Brushed titanium. 8 grams. Lighter than a house key. It comes in silver or gold, and it looks like something you'd actually wear — because it is. The difference is what happens in the background."
-        body2="It charges wirelessly from up to 15 feet away. Leave the charging pad on your nightstand — by morning, you're full. No cables. No placement. No thinking about it."
+        body="Brushed titanium. 8 grams. Lighter than a house key. It comes in silver or gold, and it looks like something you'd actually wear, because it is. The difference is what happens in the background."
+        body2="It charges wirelessly from up to 15 feet away. Leave the charging pad on your nightstand. By morning, you're full. No cables. No placement. No thinking about it."
         imageLeft={true}
         theme="cream"
       />
@@ -57,7 +57,7 @@ export default function Home() {
       {/* Section 7: Macro Beauty Shot (Dark, full-bleed) */}
       <FullBleedImage
         src="/images/macro.png"
-        alt="Extreme close-up of Anticipy pendant — brushed titanium surface and LED"
+        alt="Extreme close-up of Anticipy pendant. Brushed titanium surface and LED."
         overlayText="Brushed titanium. A single LED. Nothing else."
         ledPosition={{ top: "35%", left: "48%" }}
       />
@@ -74,7 +74,7 @@ export default function Home() {
       {/* Section 11: Sleeping Shot (Dark, full-bleed) */}
       <FullBleedImage
         src="/images/sleeping.png"
-        alt="Woman sleeping peacefully — Anticipy pendant charging on nightstand"
+        alt="Woman sleeping peacefully. Anticipy pendant charging on nightstand."
         parallaxSpeed={0.9}
       />
 

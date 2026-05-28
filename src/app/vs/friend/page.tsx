@@ -57,7 +57,7 @@ const comparisonSchema = {
 };
 
 const rows = [
-  { feature: "Price", anticipy: "$149 (first year of service included)", competitor: "$99" },
+  { feature: "Price", anticipy: "$149.99 pre-order ($199 retail). First year of service included", competitor: "$99" },
   { feature: "Weight", anticipy: "8 grams", competitor: "Per public listing, lightweight pendant form factor" },
   { feature: "Material", anticipy: "Brushed titanium", competitor: "Per public listing, plastic housing" },
   { feature: "Core function", anticipy: "Detects intent, completes tasks autonomously", competitor: "AI companion: listens and responds conversationally" },

@@ -2,11 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Refund Policy — Anticipy",
+  title: "Refund Policy. Anticipy",
   description:
     "Refund and cancellation policy for Anticipy pre-orders and subscriptions. Clear terms, no surprises.",
   openGraph: {
-    title: "Refund Policy — Anticipy",
+    title: "Refund Policy. Anticipy",
     description:
       "Refund and cancellation policy for Anticipy pre-orders and subscriptions.",
     url: "https://www.anticipy.ai/refund",
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Refund Policy — Anticipy",
+    title: "Refund Policy. Anticipy",
     description:
       "Refund and cancellation policy for Anticipy pre-orders and subscriptions.",
   },
@@ -62,7 +62,7 @@ export default function RefundPolicy() {
                 1. Our Commitment
               </h2>
               <p>
-                At Anticipy, built by Anticipation Labs Inc., we believe you should love every product and service we offer. If for any reason you&apos;re not completely satisfied with your purchase, we&apos;re committed to making it right&mdash;whether that means a replacement, a credit, or a full refund.
+                At Anticipy, built by Anticipation Labs Inc., we believe you should love every product and service we offer. If for any reason you&apos;re not completely satisfied with your purchase, we&apos;re committed to making it right, whether that means a replacement, a credit, or a full refund.
               </p>
               <p className="mt-4">
                 This Refund Policy outlines your rights and the process for returns, cancellations, and refunds. Where local consumer protection laws provide greater rights than those described here, those laws take precedence. We will always honour the option most favourable to you.
@@ -75,27 +75,49 @@ export default function RefundPolicy() {
                 2. Pre-Order &amp; Waitlist Cancellations
               </h2>
               <p>
-                If you have placed a pre-order or joined our waitlist with a deposit, you may cancel and receive a <strong className="text-[var(--text-on-dark)]">full refund at any time before the product ships</strong>. No questions asked. No fees. No hoops.
+                Pre-order refunds are governed by the{" "}
+                <Link href="/pre-orders/agreement" className="text-gold hover:underline">
+                  Pre-Order Agreement
+                </Link>
+                . In summary, <strong className="text-[var(--text-on-dark)]">pre-order
+                refunds are at the sole discretion of Anticipation Labs Inc. except where
+                required by applicable law</strong>. We do not offer no-questions-asked refunds
+                during the pre-order period. We may grant a refund, or decline one, in our
+                sole discretion, and we will always honour rights granted to you by your local
+                consumer protection statute.
               </p>
               <p className="mt-4">
-                This right is guaranteed under the U.S. Federal Trade Commission&apos;s Mail, Internet, or Telephone Order Merchandise Rule (FTC Rule 16 CFR Part 435), which requires sellers to offer cancellation and a full refund if they are unable to ship within the timeframe stated at the time of order. Equivalent consumer protection statutes in the European Union, United Kingdom, Canada, and other jurisdictions provide similar or stronger protections.
+                Where the U.S. Federal Trade Commission&apos;s Mail, Internet, or Telephone Order
+                Merchandise Rule (FTC Rule 16 CFR Part 435) applies, sellers must offer
+                cancellation and a full refund if they are unable to ship within the timeframe
+                stated at the time of order. The Competition Act of Canada and provincial
+                consumer protection statutes, the EU Consumer Rights Directive, the UK
+                Consumer Rights Act, and other mandatory consumer-protection laws may grant
+                similar or stronger statutory rights. Those rights are preserved in full.
               </p>
               <p className="mt-4">
-                To cancel a pre-order or waitlist deposit, simply email{" "}
+                Joining the free waitlist is not a purchase and does not require a deposit.
+                Removing yourself from the waitlist creates no obligation on either side and
+                no refund is needed.
+              </p>
+              <p className="mt-4">
+                To request consideration of a pre-order refund, email{" "}
                 <a
                   href="mailto:support@anticipy.ai"
                   className="text-gold hover:underline"
                 >
                   support@anticipy.ai
                 </a>{" "}
-                with your order confirmation or email address. Your refund will be processed within 5 business days.
+                with the email used at checkout and the reason for the request. We respond
+                within seven business days. If approved, refunds are issued through Stripe
+                to the original payment method and can take up to ten business days to clear.
               </p>
             </section>
 
-            {/* 3. Hardware Returns — 30-Day Satisfaction Guarantee */}
+            {/* 3. Hardware Returns . 30-Day Satisfaction Guarantee */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                3. Hardware Returns &mdash; 30-Day Satisfaction Guarantee
+                3. Hardware Returns  30-Day Satisfaction Guarantee
               </h2>
               <p>
                 We offer a <strong className="text-[var(--text-on-dark)]">30-day satisfaction guarantee</strong> on all Anticipy hardware. If you&apos;re not completely happy with your device, you may return it within 30 calendar days of the delivery date for a full refund of the purchase price.
@@ -128,7 +150,7 @@ export default function RefundPolicy() {
                   >
                     support@anticipy.ai
                   </a>{" "}
-                  with your order number and reason for return. No justification is required&mdash;we simply appreciate the feedback.
+                  with your order number and reason for return. No justification is required, we simply appreciate the feedback.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">Receive your prepaid return label.</strong> We will email you a prepaid shipping label within 2 business days of your request. <strong className="text-[var(--text-on-dark)]">We cover all return shipping costs.</strong>
@@ -254,7 +276,7 @@ export default function RefundPolicy() {
                 Japan
               </h3>
               <p>
-                Under Japanese consumer protection law, consumers have an 8-day return right if no specific return policy was clearly stated at the time of purchase. As we do state our return policy, our 30-day satisfaction guarantee applies&mdash;which exceeds this statutory minimum.
+                Under Japanese consumer protection law, consumers have an 8-day return right if no specific return policy was clearly stated at the time of purchase. As we do state our return policy, our 30-day satisfaction guarantee applies, which exceeds this statutory minimum.
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
@@ -323,7 +345,7 @@ export default function RefundPolicy() {
                 9. Changes to This Policy
               </h2>
               <p>
-                We may update this Refund Policy from time to time to reflect changes in our practices, legal requirements, or product offerings. Any changes will be posted on this page with an updated effective date. Changes to this policy <strong className="text-[var(--text-on-dark)]">will not apply retroactively</strong>&mdash;the policy in effect at the time of your purchase will govern your return and refund rights for that transaction.
+                We may update this Refund Policy from time to time to reflect changes in our practices, legal requirements, or product offerings. Any changes will be posted on this page with an updated effective date. Changes to this policy <strong className="text-[var(--text-on-dark)]">will not apply retroactively</strong>, the policy in effect at the time of your purchase will govern your return and refund rights for that transaction.
               </p>
             </section>
 

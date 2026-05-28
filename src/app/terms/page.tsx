@@ -2,11 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Anticipy",
+  title: "Terms of Service. Anticipy",
   description:
     "Terms of service for Anticipy, the AI wearable pendant by Anticipation Labs Inc. Read before joining the waitlist.",
   openGraph: {
-    title: "Terms of Service — Anticipy",
+    title: "Terms of Service. Anticipy",
     description:
       "Terms of service for Anticipy by Anticipation Labs Inc.",
     url: "https://www.anticipy.ai/terms",
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Terms of Service — Anticipy",
+    title: "Terms of Service. Anticipy",
     description:
       "Terms of service for Anticipy by Anticipation Labs Inc.",
   },
@@ -68,7 +68,7 @@ export default function TermsOfService() {
                 operated by <strong className="text-[var(--text-on-dark)]">Anticipation Labs Inc.</strong>
                 (&ldquo;Company,&rdquo; &ldquo;we,&rdquo; &ldquo;us,&rdquo;
                 or &ldquo;our&rdquo;). These Terms of Service (&ldquo;Terms&rdquo;) govern your access to
-                and use of our website, waitlist, pre-order system, and&mdash;once available&mdash;the Anticipy
+                and use of our website, waitlist, pre-order system, and, once available, the Anticipy
                 hardware device, mobile application, cloud action engine, and all related services
                 (collectively, the &ldquo;Service&rdquo;).
               </p>
@@ -155,8 +155,8 @@ export default function TermsOfService() {
                 You must be at least <strong className="text-[var(--text-on-dark)]">eighteen (18) years
                 of age</strong> to use the Service, join the waitlist, place a pre-order, or operate
                 the Anticipy device. This age requirement exists because the Anticipy device captures
-                ambient audio, and the legal landscape surrounding audio recording&mdash;including
-                wiretapping and eavesdropping statutes&mdash;is complex and varies significantly
+                ambient audio, and the legal landscape surrounding audio recording, including
+                wiretapping and eavesdropping statutes, is complex and varies significantly
                 across jurisdictions. Minors may lack the legal capacity to understand and comply with
                 the consent and disclosure obligations associated with audio recording.
               </p>
@@ -183,28 +183,28 @@ export default function TermsOfService() {
               </p>
               <ul className="list-disc pl-6 mt-3 space-y-2">
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Anticipy Pendant</strong> &mdash;
+                  <strong className="text-[var(--text-on-dark)]">Anticipy Pendant</strong> , 
                   A wearable hardware device equipped with a microphone array and Bluetooth Low Energy
                   (BLE) connectivity. The pendant captures ambient audio in your environment and
                   transmits it to the companion mobile application. An LED indicator on the pendant
                   is active whenever audio recording is in progress.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Anticipy Mobile Application</strong> &mdash;
+                  <strong className="text-[var(--text-on-dark)]">Anticipy Mobile Application</strong> , 
                   A companion app for iOS and Android that receives audio streams from the pendant,
                   performs on-device processing (including transcription and intent extraction), manages
                   device settings and preferences, and communicates with the cloud action engine.
                   Audio is processed locally on your phone to maximize privacy.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Anticipy Action Engine</strong> &mdash;
+                  <strong className="text-[var(--text-on-dark)]">Anticipy Action Engine</strong> , 
                   A cloud-based AI system that receives structured intent data from the mobile app,
                   interprets your needs, and executes actions on your behalf through integrations
                   with third-party services (e.g., calendar management, messaging, task creation,
                   online orders, and more).
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Charging Pad</strong> &mdash;
+                  <strong className="text-[var(--text-on-dark)]">Charging Pad</strong> , 
                   A wireless charging accessory included with each Anticipy pendant for convenient
                   daily charging.
                 </li>
@@ -228,11 +228,22 @@ export default function TermsOfService() {
                 4.1 Hardware Pricing
               </h3>
               <p>
-                The Anticipy pendant (including charging pad) is available for a one-time purchase
-                price of <strong className="text-[var(--text-on-dark)]">$149 USD</strong>. This price
-                is subject to change prior to final product release. Any price change will be
-                communicated to pre-order customers before their order is charged, and they will be
-                given the option to cancel.
+                The Anticipy pendant (including chain and wireless charging pad) is offered at a
+                projected retail price of <strong className="text-[var(--text-on-dark)]">$199 USD</strong>.
+                During the pre-order period, the same pendant, chain, and charging pad are available
+                at the pre-order price of <strong className="text-[var(--text-on-dark)]">$149.99 USD</strong>,
+                charged in full at the time of pre-order. Pre-order customers also receive the first
+                year of the Anticipy Service at no additional charge.
+              </p>
+              <p className="mt-4">
+                Pricing is subject to change prior to final product release. Pre-order pricing is
+                locked at the price displayed at the moment your pre-order is charged. Any subsequent
+                price change does not retroactively apply to completed pre-orders. The full pre-order
+                terms are set out in the{" "}
+                <Link href="/pre-orders/agreement" className="text-gold hover:underline">
+                  Pre-Order Agreement
+                </Link>
+                .
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
@@ -268,11 +279,15 @@ export default function TermsOfService() {
                 4.4 Payment Processing
               </h3>
               <p>
-                Payments are processed through third-party payment processors. By providing your
-                payment information, you represent that you are authorized to use the designated
-                payment method and authorize us (or our payment processor) to charge your payment
-                method for the total amount of your purchase, including applicable taxes and fees.
-                We do not store your full credit card or payment details on our servers.
+                Payments are processed by <strong className="text-[var(--text-on-dark)]">Stripe,
+                Inc.</strong> Stripe collects and handles your full payment card details under its
+                own privacy and security framework, which is PCI DSS Level 1 certified. We receive
+                only a non-card identifier, the last four digits of your card, the card brand, the
+                country of issuance, and a payment intent reference. We do not see, transmit, or
+                store full payment card numbers on our servers. By providing your payment
+                information at checkout, you represent that you are authorized to use the
+                designated payment method and authorize Stripe to charge your payment method for
+                the total amount of your purchase, including applicable taxes and fees.
               </p>
             </section>
 
@@ -305,7 +320,7 @@ export default function TermsOfService() {
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                5.2 United States &mdash; All-Party (Two-Party) Consent States
+                5.2 United States ,  All-Party (Two-Party) Consent States
               </h3>
               <p>
                 Several U.S. states require the consent of <strong className="text-[var(--text-on-dark)]">all
@@ -315,53 +330,53 @@ export default function TermsOfService() {
               </p>
               <ul className="list-disc pl-6 mt-3 space-y-2">
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">California</strong> &mdash; Cal. Penal
+                  <strong className="text-[var(--text-on-dark)]">California</strong> ,  Cal. Penal
                   Code &sect; 632. Violation is punishable as a misdemeanor or felony.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Connecticut</strong> &mdash; Conn. Gen.
+                  <strong className="text-[var(--text-on-dark)]">Connecticut</strong> ,  Conn. Gen.
                   Stat. &sect; 52-570d.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Delaware</strong> &mdash; Del. Code Ann.
+                  <strong className="text-[var(--text-on-dark)]">Delaware</strong> ,  Del. Code Ann.
                   tit. 11, &sect; 2402.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Florida</strong> &mdash; Fla. Stat.
+                  <strong className="text-[var(--text-on-dark)]">Florida</strong> ,  Fla. Stat.
                   &sect; 934.03. <strong className="text-[var(--text-on-dark)]">Violation is a
                   third-degree felony.</strong>
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Illinois</strong> &mdash; 720 ILCS
+                  <strong className="text-[var(--text-on-dark)]">Illinois</strong> ,  720 ILCS
                   5/14-2 (Illinois Eavesdropping Act).
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Maryland</strong> &mdash; Md. Code Ann.,
+                  <strong className="text-[var(--text-on-dark)]">Maryland</strong> ,  Md. Code Ann.,
                   Cts. &amp; Jud. Proc. &sect; 10-402.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Massachusetts</strong> &mdash; Mass. Gen.
+                  <strong className="text-[var(--text-on-dark)]">Massachusetts</strong> ,  Mass. Gen.
                   Laws ch. 272, &sect; 99. One of the strictest wiretapping statutes in the U.S.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Montana</strong> &mdash; Mont. Code Ann.
+                  <strong className="text-[var(--text-on-dark)]">Montana</strong> ,  Mont. Code Ann.
                   &sect; 45-8-213.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Nevada</strong> &mdash; Nev. Rev. Stat.
+                  <strong className="text-[var(--text-on-dark)]">Nevada</strong> ,  Nev. Rev. Stat.
                   &sect; 200.620.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">New Hampshire</strong> &mdash; N.H. Rev.
+                  <strong className="text-[var(--text-on-dark)]">New Hampshire</strong> ,  N.H. Rev.
                   Stat. Ann. &sect; 570-A:2.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Pennsylvania</strong> &mdash; 18 Pa.
+                  <strong className="text-[var(--text-on-dark)]">Pennsylvania</strong> ,  18 Pa.
                   Cons. Stat. &sect; 5703. <strong className="text-[var(--text-on-dark)]">Violation is
                   a third-degree felony.</strong>
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Washington</strong> &mdash; Wash. Rev.
+                  <strong className="text-[var(--text-on-dark)]">Washington</strong> ,  Wash. Rev.
                   Code &sect; 9.73.030.
                 </li>
               </ul>
@@ -379,42 +394,42 @@ export default function TermsOfService() {
               </p>
               <ul className="list-disc pl-6 mt-3 space-y-2">
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Germany</strong> &mdash; &sect;201 of
+                  <strong className="text-[var(--text-on-dark)]">Germany</strong> ,  &sect;201 of
                   the German Criminal Code (Strafgesetzbuch, StGB) criminalizes the unauthorized
                   recording of private speech. Violations can result in imprisonment of up to three
                   years or a fine.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">European Union (GDPR)</strong> &mdash;
+                  <strong className="text-[var(--text-on-dark)]">European Union (GDPR)</strong> , 
                   The General Data Protection Regulation imposes strict requirements on the processing
                   of personal data, including voice recordings. A lawful basis (such as explicit consent)
                   is required for any processing of audio data that can identify individuals.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Saudi Arabia</strong> &mdash; The
+                  <strong className="text-[var(--text-on-dark)]">Saudi Arabia</strong> ,  The
                   Anti-Cybercrime Law (Royal Decree No. M/17, 2007) prohibits unauthorized recording
                   of conversations. Violations may result in imprisonment of up to one year and/or
                   fines of up to 500,000 SAR.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">United Arab Emirates</strong> &mdash;
+                  <strong className="text-[var(--text-on-dark)]">United Arab Emirates</strong> , 
                   Federal Decree-Law No. 34 of 2021 on combating rumors and cybercrime prohibits
                   recording or disclosing conversations without consent. Violations carry significant
                   penalties including imprisonment and fines.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Canada</strong> &mdash; The Criminal
+                  <strong className="text-[var(--text-on-dark)]">Canada</strong> ,  The Criminal
                   Code of Canada (&sect;184) allows one-party consent recording, meaning you may record
                   a conversation you are a party to. However, intercepting private communications to
                   which you are not a party is a criminal offense.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Australia</strong> &mdash; Recording
+                  <strong className="text-[var(--text-on-dark)]">Australia</strong> ,  Recording
                   laws vary by state and territory. Some jurisdictions (e.g., Queensland, Victoria)
                   require all-party consent for recording private conversations.
                 </li>
                 <li>
-                  <strong className="text-[var(--text-on-dark)]">Japan</strong> &mdash; While one-party
+                  <strong className="text-[var(--text-on-dark)]">Japan</strong> ,  While one-party
                   consent is generally recognized, recording without the knowledge of other parties may
                   have civil liability implications.
                 </li>
@@ -484,9 +499,9 @@ export default function TermsOfService() {
                 6.2 High-Stakes Action Confirmations
               </h3>
               <p>
-                For actions that the system classifies as high-stakes&mdash;including but not limited
+                For actions that the system classifies as high-stakes, including but not limited
                 to financial transactions, sending messages to contacts, scheduling commitments,
-                making purchases, or modifying important data&mdash;Anticipy will request your
+                making purchases, or modifying important data, Anticipy will request your
                 explicit confirmation via the mobile application before proceeding. You are
                 responsible for reviewing and approving these confirmation requests carefully.
               </p>

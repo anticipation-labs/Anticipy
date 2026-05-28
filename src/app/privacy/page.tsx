@@ -2,11 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Anticipy",
+  title: "Privacy Policy. Anticipy",
   description:
     "How Anticipy collects, uses, and protects your data. Our commitment to privacy-first AI wearable technology.",
   openGraph: {
-    title: "Privacy Policy — Anticipy",
+    title: "Privacy Policy. Anticipy",
     description:
       "How Anticipy collects, uses, and protects your data.",
     url: "https://www.anticipy.ai/privacy",
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Privacy Policy — Anticipy",
+    title: "Privacy Policy. Anticipy",
     description:
       "How Anticipy collects, uses, and protects your data.",
   },
@@ -115,7 +115,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 2 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                2. Our Privacy Architecture — On-Device Processing &amp; No Audio
+                2. Our Privacy Architecture . On-Device Processing &amp; No Audio
                 Storage
               </h2>
               <p>
@@ -154,7 +154,7 @@ export default function PrivacyPolicy() {
                 </strong>{" "}
                 by our proprietary AI inference engine running locally on the
                 phone&apos;s processor. The AI model analyzes the audio stream
-                to extract actionable intent &mdash; that is, it determines
+                to extract actionable intent ,  that is, it determines
                 whether the audio contains a request, task, reminder, or other
                 actionable information that the user would want Anticipy to act
                 upon.
@@ -262,11 +262,30 @@ export default function PrivacyPolicy() {
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
-                    Payment Information:
+                    Payment Information (Stripe):
                   </strong>{" "}
-                  Billing address, payment card details (processed via our
-                  PCI-DSS-compliant payment processor; we do not store full card
-                  numbers on our servers), and transaction history.
+                  Pre-order and renewal payments are processed by{" "}
+                  <strong className="text-[var(--text-on-dark)]">Stripe, Inc.</strong>{" "}
+                  Stripe collects your full payment card number, expiry date,
+                  CVC, billing address, and any 3D Secure authentication data
+                  under its own PCI DSS Level 1 framework. Anticipation Labs
+                  Inc. never receives or stores your full card number. From
+                  Stripe we receive a payment intent identifier, the card
+                  brand, the last four digits of the card, the country of
+                  issuance, the customer email, the shipping address you
+                  entered at checkout, and the amount charged. Stripe&apos;s
+                  privacy notice is available at{" "}
+                  <a
+                    href="https://stripe.com/privacy"
+                    className="text-gold hover:underline"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    stripe.com/privacy
+                  </a>
+                  . We retain pre-order records in Supabase for accounting,
+                  fulfillment, and statutory tax-record purposes for the
+                  retention periods stated below.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
@@ -346,28 +365,28 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     Audio recordings
                   </strong>{" "}
-                  &mdash; We do not store, record, or retain ambient audio in any
+                  ,  We do not store, record, or retain ambient audio in any
                   form.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Voice biometrics
                   </strong>{" "}
-                  &mdash; We do not create voiceprints, speaker models, or any
+                  ,  We do not create voiceprints, speaker models, or any
                   biometric identifiers.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Location data
                   </strong>{" "}
-                  &mdash; The Device does not contain GPS hardware. The App does
+                  ,  The Device does not contain GPS hardware. The App does
                   not request or access location permissions.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Contacts, photos, or files
                   </strong>{" "}
-                  &mdash; The App does not access your phone&apos;s contacts,
+                  ,  The App does not access your phone&apos;s contacts,
                   photo library, file system, or any other on-device data beyond
                   what is necessary for Bluetooth pairing and audio processing.
                 </li>
@@ -375,7 +394,7 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     Third-party advertising identifiers
                   </strong>{" "}
-                  &mdash; We do not collect or use IDFA, GAID, or any advertising
+                  ,  We do not collect or use IDFA, GAID, or any advertising
                   identifiers.
                 </li>
               </ul>
@@ -404,7 +423,7 @@ export default function PrivacyPolicy() {
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                4.1 United States — Two-Party and All-Party Consent States
+                4.1 United States . Two-Party and All-Party Consent States
               </h3>
               <p>
                 The United States does not have a uniform federal standard for
@@ -422,7 +441,7 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     California
                   </strong>{" "}
-                  (Cal. Penal Code &sect;632) &mdash; All-party consent required.
+                  (Cal. Penal Code &sect;632) ,  All-party consent required.
                   Violation is a criminal offense and may carry civil liability
                   of up to $5,000 per violation.
                 </li>
@@ -430,21 +449,21 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     Florida
                   </strong>{" "}
-                  (Fla. Stat. &sect;934.03) &mdash; All-party consent required.
+                  (Fla. Stat. &sect;934.03) ,  All-party consent required.
                   Violation is a third-degree felony.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Pennsylvania
                   </strong>{" "}
-                  (18 Pa. Cons. Stat. &sect;5704) &mdash; All-party consent
+                  (18 Pa. Cons. Stat. &sect;5704) ,  All-party consent
                   required. Violation is a felony of the third degree.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Illinois
                   </strong>{" "}
-                  (720 ILCS 5/14-2) &mdash; All-party consent required.
+                  (720 ILCS 5/14-2) ,  All-party consent required.
                   Additionally, the Illinois Biometric Information Privacy Act
                   (BIPA, 740 ILCS 14) may apply if any biometric data is
                   processed; however, Anticipy does not create biometric data.
@@ -453,49 +472,49 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     Washington
                   </strong>{" "}
-                  (RCW &sect;9.73.030) &mdash; All-party consent required for
+                  (RCW &sect;9.73.030) ,  All-party consent required for
                   private conversations.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Maryland
                   </strong>{" "}
-                  (Md. Code, Cts. &amp; Jud. Proc. &sect;10-402) &mdash;
+                  (Md. Code, Cts. &amp; Jud. Proc. &sect;10-402) , 
                   All-party consent required.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Massachusetts
                   </strong>{" "}
-                  (Mass. Gen. Laws ch. 272, &sect;99) &mdash; All-party consent
+                  (Mass. Gen. Laws ch. 272, &sect;99) ,  All-party consent
                   required. One of the strictest recording statutes in the U.S.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Montana
                   </strong>{" "}
-                  (Mont. Code Ann. &sect;45-8-213) &mdash; All-party consent
+                  (Mont. Code Ann. &sect;45-8-213) ,  All-party consent
                   required.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     New Hampshire
                   </strong>{" "}
-                  (N.H. Rev. Stat. Ann. &sect;570-A:2) &mdash; All-party consent
+                  (N.H. Rev. Stat. Ann. &sect;570-A:2) ,  All-party consent
                   required.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Connecticut
                   </strong>{" "}
-                  (Conn. Gen. Stat. &sect;52-570d) &mdash; All-party consent
+                  (Conn. Gen. Stat. &sect;52-570d) ,  All-party consent
                   required.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">
                     Michigan, Nevada, Oregon, Vermont, Hawaii
                   </strong>{" "}
-                  &mdash; Various all-party or two-party consent requirements
+                  ,  Various all-party or two-party consent requirements
                   apply. Consult local statutes for details.
                 </li>
               </ul>
@@ -537,19 +556,19 @@ export default function PrivacyPolicy() {
               <ul className="list-disc pl-6 space-y-2 mt-2">
                 <li>
                   <strong className="text-[var(--text-on-dark)]">Germany</strong>{" "}
-                  &mdash; &sect;201 Strafgesetzbuch (StGB) criminalizes the
+                  ,  &sect;201 Strafgesetzbuch (StGB) criminalizes the
                   unauthorized recording of the spoken word. All-party consent is
                   required. Violations may result in imprisonment of up to three
                   years or a fine.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">France</strong>{" "}
-                  &mdash; Article 226-1 of the Code p&eacute;nal prohibits the
+                  ,  Article 226-1 of the Code p&eacute;nal prohibits the
                   recording of private conversations without consent.
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">Spain</strong>{" "}
-                  &mdash; One-party consent is generally permitted, but
+                  ,  One-party consent is generally permitted, but
                   dissemination of recordings may violate privacy rights under
                   Ley Org&aacute;nica 1/1982.
                 </li>
@@ -557,7 +576,7 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     United Kingdom
                   </strong>{" "}
-                  &mdash; The Regulation of Investigatory Powers Act 2000 (RIPA)
+                  ,  The Regulation of Investigatory Powers Act 2000 (RIPA)
                   and the Telecommunications (Lawful Business Practice)
                   (Interception of Communications) Regulations 2000 govern
                   interception. One-party consent generally applies for personal
@@ -601,7 +620,7 @@ export default function PrivacyPolicy() {
               <ul className="list-disc pl-6 space-y-2 mt-2">
                 <li>
                   <strong className="text-[var(--text-on-dark)]">Japan</strong>{" "}
-                  &mdash; While Japan&apos;s Wiretapping Act (Act No. 137 of
+                  ,  While Japan&apos;s Wiretapping Act (Act No. 137 of
                   1999) primarily targets law enforcement, unauthorized recording
                   may infringe privacy rights under the Japanese Constitution
                   (Article 13) and Civil Code tort provisions.
@@ -610,7 +629,7 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     South Korea
                   </strong>{" "}
-                  &mdash; The Protection of Communications Secrets Act (Act No.
+                  ,  The Protection of Communications Secrets Act (Act No.
                   4650) requires one-party consent for recording but prohibits
                   recording of communications to which you are not a party.
                   Violation may result in imprisonment of up to ten years.
@@ -619,7 +638,7 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     Singapore
                   </strong>{" "}
-                  &mdash; While Singapore does not have a specific wiretapping
+                  ,  While Singapore does not have a specific wiretapping
                   statute, unauthorized recording may constitute an offence under
                   the Computer Misuse Act or a tort of intrusion upon seclusion.
                   The PDPA also requires consent for the collection of personal
@@ -627,7 +646,7 @@ export default function PrivacyPolicy() {
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">India</strong>{" "}
-                  &mdash; The Indian Telegraph Act, 1885 (&sect;26) and the
+                  ,  The Indian Telegraph Act, 1885 (&sect;26) and the
                   Information Technology Act, 2000 (&sect;69) govern
                   interception. One-party consent is generally accepted, but the
                   DPDP Act 2023 requires a lawful purpose and consent for
@@ -635,7 +654,7 @@ export default function PrivacyPolicy() {
                 </li>
                 <li>
                   <strong className="text-[var(--text-on-dark)]">China</strong>{" "}
-                  &mdash; Article 253(a) of the Criminal Law, the Cybersecurity
+                  ,  Article 253(a) of the Criminal Law, the Cybersecurity
                   Law, and the Personal Information Protection Law (PIPL) all
                   impose strict requirements on the collection of personal
                   information, including audio data. Consent of the data subject
@@ -1029,7 +1048,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 10 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                10. Canada — PIPEDA, BC PIPA &amp; CASL
+                10. Canada . PIPEDA, BC PIPA &amp; CASL
               </h2>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
@@ -1161,7 +1180,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 11 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                11. United States — CCPA/CPRA &amp; State Privacy Laws
+                11. United States . CCPA/CPRA &amp; State Privacy Laws
               </h2>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
@@ -1319,7 +1338,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 12 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                12. European Union — GDPR &amp; ePrivacy Directive
+                12. European Union . GDPR &amp; ePrivacy Directive
               </h2>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
@@ -1442,7 +1461,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 12B */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                13. United Kingdom — UK GDPR, Data Protection Act 2018 &amp; PECR
+                13. United Kingdom . UK GDPR, Data Protection Act 2018 &amp; PECR
               </h2>
               <p>
                 If you are located in the United Kingdom, your personal data is
@@ -1493,7 +1512,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 13 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                14. Saudi Arabia — PDPL (Royal Decree No. M/19)
+                14. Saudi Arabia . PDPL (Royal Decree No. M/19)
               </h2>
               <p>
                 If you are located in the Kingdom of Saudi Arabia, your personal
@@ -1572,7 +1591,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 14 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                15. UAE &amp; Middle East — UAE PDPL (Federal Decree-Law No. 45/2021)
+                15. UAE &amp; Middle East . UAE PDPL (Federal Decree-Law No. 45/2021)
               </h2>
               <p>
                 If you are located in the United Arab Emirates, your personal
@@ -1657,11 +1676,11 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 15 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                16. Asia-Pacific — APPI, PIPA, PDPA, DPDP Act &amp; PIPL
+                16. Asia-Pacific . APPI, PIPA, PDPA, DPDP Act &amp; PIPL
               </h2>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                16.1 Japan — Act on Protection of Personal Information (APPI)
+                16.1 Japan . Act on Protection of Personal Information (APPI)
               </h3>
               <p>
                 If you are located in Japan, your personal information is
@@ -1682,7 +1701,7 @@ export default function PrivacyPolicy() {
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                16.2 South Korea — Personal Information Protection Act (PIPA)
+                16.2 South Korea . Personal Information Protection Act (PIPA)
               </h3>
               <p>
                 If you are located in South Korea, your personal information is
@@ -1710,7 +1729,7 @@ export default function PrivacyPolicy() {
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                16.3 Singapore — Personal Data Protection Act 2012 (PDPA)
+                16.3 Singapore . Personal Data Protection Act 2012 (PDPA)
               </h3>
               <p>
                 If you are located in Singapore, your personal data is processed
@@ -1729,7 +1748,7 @@ export default function PrivacyPolicy() {
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                16.4 India — Digital Personal Data Protection Act 2023 (DPDP Act)
+                16.4 India . Digital Personal Data Protection Act 2023 (DPDP Act)
               </h3>
               <p>
                 If you are located in India, your personal data is processed in
@@ -1784,7 +1803,7 @@ export default function PrivacyPolicy() {
               </p>
 
               <h3 className="font-serif text-[18px] text-[var(--text-on-dark)] mb-2 mt-6">
-                16.5 China — Personal Information Protection Law (PIPL)
+                16.5 China . Personal Information Protection Law (PIPL)
               </h3>
               <p>
                 If you are located in the People&apos;s Republic of China, your
@@ -2093,7 +2112,7 @@ export default function PrivacyPolicy() {
             {/* ───────────────────────────────────────────── 19 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
-                20. Your Rights — Summary by Jurisdiction
+                20. Your Rights . Summary by Jurisdiction
               </h2>
               <p>
                 The following table summarizes your key privacy rights depending
@@ -2130,7 +2149,7 @@ export default function PrivacyPolicy() {
               <p>
                 Available under: GDPR (Art. 17), UK GDPR, CCPA/CPRA, PIPEDA,
                 BC PIPA, PDPL (Saudi Arabia), UAE PDPL, PIPL, APPI, PIPA
-                (South Korea), PDPA (Singapore — via withdrawal of consent),
+                (South Korea), PDPA (Singapore . via withdrawal of consent),
                 and DPDP Act (India).
               </p>
 

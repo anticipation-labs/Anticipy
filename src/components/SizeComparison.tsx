@@ -36,7 +36,7 @@ export function SizeComparison() {
         >
           <Image
             src="/images/size-compare.png"
-            alt="Size comparison — pendant next to quarter, AirPod, and key"
+            alt="Size comparison. Pendant next to a quarter, AirPod, and key."
             width={800}
             height={500}
             className="w-full h-auto rounded-image"

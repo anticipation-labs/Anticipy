@@ -25,7 +25,7 @@ export function ChargingSection() {
           <ScrollReveal delay={0.15}>
             <p className="text-[17px] leading-[1.7] font-light mb-4 text-[var(--text-on-dark-muted)]">
               No base. No cables. No alignment. The pendant charges wirelessly
-              as long as you&apos;re within 15 feet of the charging pad — so it tops
+              as long as you&apos;re within 15 feet of the charging pad, so it tops
               up while you sleep, watch TV, or sit at your desk.
             </p>
           </ScrollReveal>

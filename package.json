@@ -11,6 +11,7 @@
   "dependencies": {
     "@playwright/test": "^1.59.1",
     "@sendgrid/mail": "^8.1.6",
+    "@stripe/stripe-js": "^9.7.0",
     "@studio-freight/lenis": "^1.0.42",
     "@supabase/supabase-js": "^2.100.1",
     "crc-32": "^1.2.2",
@@ -23,6 +24,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "resend": "^6.9.4",
+    "stripe": "^22.2.0",
     "styled-jsx": "5.1.7",
     "web-bluetooth-dfu": "^1.2.1",
     "xlsx": "^0.18.5"

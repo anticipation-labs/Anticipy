@@ -123,18 +123,30 @@ export default function ForPage() {
               See yourself here?
             </p>
             <p className="text-[17px] text-[var(--text-on-dark-muted)] font-light mb-8">
-              Anticipy is currently accepting waitlist signups. $149, first year included.
+              Pre-order for $149.99 ($50 off the $199 retail price) or join the free waitlist. First year of AI service included either way.
             </p>
-            <Link
-              href="/waitlist"
-              className="inline-block px-8 py-4 rounded-full text-[15px] font-medium transition-all duration-300 hover:opacity-90"
-              style={{
-                backgroundColor: "var(--text-on-dark)",
-                color: "var(--dark)",
-              }}
-            >
-              Join the Waitlist
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/pre-orders/purchase"
+                className="inline-block px-8 py-4 rounded-full text-[15px] font-medium transition-all duration-300 hover:opacity-90"
+                style={{
+                  backgroundColor: "var(--text-on-dark)",
+                  color: "var(--dark)",
+                }}
+              >
+                Pre-order for $149.99
+              </Link>
+              <Link
+                href="/waitlist"
+                className="inline-block px-8 py-4 rounded-full text-[15px] font-medium transition-all duration-300 hover:opacity-90"
+                style={{
+                  border: "1px solid var(--dark-border)",
+                  color: "var(--text-on-dark)",
+                }}
+              >
+                Join the waitlist
+              </Link>
+            </div>
           </div>
         </div>
       </main>
