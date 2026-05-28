@@ -48,11 +48,34 @@ if [ -f state/builds/manifest.json ]; then
   manifest_commit="$(jq -r '.latest_commit // empty' state/builds/manifest.json)"
 fi
 if [ -n "$manifest_sha" ]; then
-  # Pull from R2 direct (bypassing Vercel) for reliable SHA check.
-  # The /dl/ route just 302s here anyway; doing it ourselves dodges Vercel timeouts.
-  # 900s timeout handles slow networks for the 2.5 GB file.
+  # Cloudflare/R2 bandwidth conservation: don't download the full 2.5GB DMG
+  # on every check. Use HEAD to verify the file exists with the right size,
+  # then ONLY download the body if the cached SHA file is missing or stale.
+  # The cache file stores {sha,etag,bytes,ts} so subsequent checks reuse it
+  # as long as R2's ETag matches.
   R2_PUBLIC="https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/Anticipy_1.0.0_aarch64.dmg"
-  public_dmg_sha="$(curl --max-time 900 -fsSL "$R2_PUBLIC" | shasum -a 256 | awk '{print $1}' || echo "")"
+  CACHE="state/v7/r2_dmg_sha_cache.json"
+  # Cheap HEAD probe (no body) to read the current ETag from R2.
+  head_resp="$(curl -sI --max-time 30 "$R2_PUBLIC" 2>/dev/null)"
+  cur_etag="$(printf '%s' "$head_resp" | grep -i '^etag:' | head -1 | awk '{print $2}' | tr -d '\r"')"
+  cur_bytes="$(printf '%s' "$head_resp" | grep -i '^content-length:' | head -1 | awk '{print $2}' | tr -d '\r')"
+  cached_etag=""
+  cached_sha=""
+  if [ -f "$CACHE" ]; then
+    cached_etag="$(jq -r '.etag // empty' "$CACHE" 2>/dev/null)"
+    cached_sha="$(jq -r '.sha // empty' "$CACHE" 2>/dev/null)"
+  fi
+  if [ -n "$cur_etag" ] && [ "$cur_etag" = "$cached_etag" ] && [ -n "$cached_sha" ]; then
+    public_dmg_sha="$cached_sha"
+  else
+    # ETag changed (or no cache): one-time 2.5GB download + recompute SHA + cache it.
+    public_dmg_sha="$(curl --max-time 900 -fsSL "$R2_PUBLIC" | shasum -a 256 | awk '{print $1}' || echo "")"
+    if [ -n "$public_dmg_sha" ] && [ -n "$cur_etag" ]; then
+      jq -n --arg sha "$public_dmg_sha" --arg etag "$cur_etag" --arg bytes "$cur_bytes" \
+        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{sha:$sha,etag:$etag,bytes:$bytes,ts:$ts}' > "$CACHE"
+    fi
+  fi
   [ "$public_dmg_sha" = "$manifest_sha" ] && public_dmg_ok=true
 fi
 if [ -n "$manifest_commit" ] && [ "${manifest_commit:0:7}" = "${live_head:0:7}" ]; then
