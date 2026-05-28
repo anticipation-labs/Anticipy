@@ -454,6 +454,63 @@ def step_signup_via_browser(
                 f"navigate did not open as background: {json.dumps(data)[:200]}"
             )
 
+    # CDP-level wipe of ALL cookies / localStorage / IndexedDB / service
+    # workers for https://www.anticipy.ai. Scoped to this origin only;
+    # other tabs (Gmail, your real accounts) are untouched. Without this,
+    # accumulated Supabase session cookies from prior test runs cause
+    # /app to render the logged-in dashboard instead of the signup view.
+    try:
+        from websockets.sync.client import connect as _ws_clear
+        _cw_url = f"ws://localhost:9222/devtools/page/{target_id}"
+        _cw = _ws_clear(_cw_url, max_size=1024 * 1024, open_timeout=5.0)
+        try:
+            # Network.clearBrowserCookies wipes ALL cookies for the
+            # browser instance. Scope it tighter with Storage.clearDataForOrigin
+            # which clears only the named origin.
+            _cw.send(json.dumps({
+                "id": 1, "method": "Storage.clearDataForOrigin",
+                "params": {
+                    "origin": "https://www.anticipy.ai",
+                    "storageTypes": "cookies,local_storage,indexeddb,"
+                                    "service_workers,websql,cache_storage",
+                },
+            }))
+            _deadline = time.time() + 4.0
+            while time.time() < _deadline:
+                try:
+                    _raw = _cw.recv(timeout=max(0.5, _deadline - time.time()))
+                except Exception:
+                    break
+                try:
+                    _msg = json.loads(_raw)
+                except Exception:
+                    continue
+                if _msg.get("id") == 1:
+                    break
+        finally:
+            try:
+                _cw.close()
+            except Exception:
+                pass
+    except Exception:
+        pass  # best-effort; the JS clear below is the fallback
+
+    # If the page already shows a logged-in dashboard from a prior session
+    # (Log out button visible), click Log out FIRST. localStorage.removeItem
+    # only clears JS-readable session keys; the app may also retain HTTP-only
+    # cookies or server-rendered session state that only proper logout clears.
+    logout_js = (
+        "(()=>{const all=Array.from(document.querySelectorAll('button,a'));"
+        "for(const b of all){const t=(b.textContent||'').toLowerCase();"
+        "if(t==='log out'||t==='logout'||t==='sign out'){"
+        "b.click();return 'LOGGED_OUT:'+t;}}return 'NO_LOGOUT';})()"
+    )
+    logged_out = _bridge_command(secret, "eval_js", code=logout_js,
+                                  url_prefix=ANTICIPY_APP_URL)
+    logged_out_result = str((logged_out.get("data") or {}).get("result") or "")
+    if logged_out_result.startswith("LOGGED_OUT"):
+        time.sleep(2.0)  # let signout complete + redirect settle
+
     # Hard-reset any cached Supabase session so the page truly starts
     # the new-user flow. Browser may carry a prior session in
     # localStorage from earlier interactive use. This is scoped to
