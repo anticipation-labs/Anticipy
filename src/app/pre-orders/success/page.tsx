@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { stripe } from "@/lib/stripe";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
