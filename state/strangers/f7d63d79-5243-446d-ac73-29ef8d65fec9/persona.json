@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "f7d63d79-5243-446d-ac73-29ef8d65fec9",
+  "created_at": "2025-04-05T19:30:00Z",
+  "name": "Ethan Caldwell",
+  "age": 34,
+  "occupation": "Product Manager",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "ambient",
+  "hard_category_focus": "Ambient browser and app surface",
+  "primary_real_surface": {
+    "surface": "macOS Desktop",
+    "chrome_requirement": "User's real Chrome profile signed in",
+    "acceptable_state": "Visible tabs and active app windows"
+  },
+  "daily_tools": [
+    "Chrome",
+    "Slack",
+    "Notion",
+    "Figma",
+    "Spotify"
+  ],
+  "contacts": [
+    {
+      "name": "Jenna Reyes",
+      "relationship": "coworker",
+      "context": "product team"
+    },
+    {
+      "name": "Marcus Liu",
+      "relationship": "friend",
+      "context": "catching up"
+    },
+    {
+      "name": "Dr. Sarah Kim",
+      "relationship": "therapist",
+      "context": "weekly sessions"
+    }
+  ]
+}

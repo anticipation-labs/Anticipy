@@ -1,0 +1,2744 @@
+{
+  "summary": {
+    "total": 60,
+    "voice_passed": 34,
+    "action_passed": 54,
+    "passed": 34,
+    "by_category": {
+      "ambient_zero": {
+        "total": 2,
+        "voice": 2,
+        "action": 2,
+        "full": 2
+      },
+      "ambient_buried": {
+        "total": 2,
+        "voice": 2,
+        "action": 2,
+        "full": 2
+      },
+      "brainstorm": {
+        "total": 2,
+        "voice": 1,
+        "action": 2,
+        "full": 1
+      },
+      "brutal_concealed_delegation": {
+        "total": 2,
+        "voice": 2,
+        "action": 2,
+        "full": 2
+      },
+      "brutal_brainstorm_buried": {
+        "total": 2,
+        "voice": 1,
+        "action": 2,
+        "full": 1
+      },
+      "brutal_compound_retraction": {
+        "total": 2,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "browser_doable": {
+        "total": 2,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "brutal_conditional_stale": {
+        "total": 2,
+        "voice": 0,
+        "action": 2,
+        "full": 0
+      },
+      "brutal_implicit_pressure": {
+        "total": 2,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "brutal_customer_roleplay": {
+        "total": 2,
+        "voice": 0,
+        "action": 2,
+        "full": 0
+      },
+      "brutal_meaning_vs_deciding": {
+        "total": 2,
+        "voice": 1,
+        "action": 2,
+        "full": 1
+      },
+      "brutal_multi_language": {
+        "total": 2,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "brutal_negation_deferral": {
+        "total": 2,
+        "voice": 1,
+        "action": 2,
+        "full": 1
+      },
+      "brutal_memory_pronoun": {
+        "total": 2,
+        "voice": 1,
+        "action": 2,
+        "full": 1
+      },
+      "brutal_multi_speaker_named": {
+        "total": 2,
+        "voice": 1,
+        "action": 2,
+        "full": 1
+      },
+      "brutal_past_completion": {
+        "total": 2,
+        "voice": 2,
+        "action": 2,
+        "full": 2
+      },
+      "brutal_pronoun_chain": {
+        "total": 1,
+        "voice": 0,
+        "action": 0,
+        "full": 0
+      },
+      "brutal_recall_negation": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "brutal_quotes_in_quotes": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "brutal_roleplay_perf": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "brutal_retraction_rephrase": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "brutal_sarcasm": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "cross_session": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "conditional": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "delegation": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "family_mixed": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "foreign_language": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "missing_slots": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "memory_followup": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "multi_speaker_family": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "multi_intent": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "negated": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "phone_half_listening": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "pleasantry_specific": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "production_hard": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "real_action": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "retraction": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "pronoun_temporal": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "sensitive": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "many_intents": {
+        "total": 1,
+        "voice": 0,
+        "action": 0,
+        "full": 0
+      },
+      "zero_intent": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "all_pleasantries_zero_intent": {
+        "total": 1,
+        "voice": 1,
+        "action": 1,
+        "full": 1
+      },
+      "sensitive_financial": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      },
+      "sensitive_medical": {
+        "total": 1,
+        "voice": 0,
+        "action": 1,
+        "full": 0
+      }
+    }
+  },
+  "runs": [
+    {
+      "name": "ambient_baby_crying_comfort",
+      "category": "ambient_zero",
+      "difficulty": "easy",
+      "expected_n": 0,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Wearer comforting the baby",
+        "Partner's offer to grab the dummy (not a commitment by wearer)",
+        "Baby crying and whimpering"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "ambient_buried_one_milk_run",
+      "category": "ambient_buried",
+      "difficulty": "medium",
+      "expected_n": 1,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Find a decent and funny birthday card for Sarah, as her birthday is today."
+      ],
+      "expected": [
+        "Buy birthday card for Sarah today"
+      ],
+      "noise": [
+        "Wearer's immediate grocery list (milk, eggs)",
+        "Bystander's phone conversation about a report and meeting time",
+        "Bystander's talk with child about cereal",
+        "Intercom announcement about deli counter closing"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Buy birthday card for Sarah today",
+          "extracted": "Find a decent and funny birthday card for Sarah, as her birthday is today."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "brainstorm_whistler_offsite",
+      "category": "brainstorm",
+      "difficulty": "hard",
+      "expected_n": 0,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Focus research for the winter offsite on locations in the Squamish/Sunshine Coast area, keeping budget-friendliness in mind."
+      ],
+      "expected": [],
+      "noise": [
+        "what if we did something totally different? Like, a proper winter getaway, maybe Whistler?",
+        "It would be more of a team building, fun-focused trip",
+        "Sounds like a dream for a top-performing team bonus, maybe, if we crush our Q4 targets?",
+        "More of a 'stretch goal' reward idea, or maybe even just a fun hypothetical.",
+        "Whistler's probably a bit too ambitious for the current brief"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "spurious",
+          "extracted": "Focus research for the winter offsite on locations in the Squamish/Sunshine Coast area, keeping budget-friendliness in mind."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "concealed_delegation_report_due",
+      "category": "brutal_concealed_delegation",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Wearer's initial statement 'I really want to make sure that report goes out today'",
+        "Wearer's delegation 'Chloe, you're on it, right? To get it finalized and out the door?'",
+        "Chloe's commitment to send the report",
+        "Wearer's general concern about things slipping"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "restaurant_brainstorm_buried_decision",
+      "category": "brutal_brainstorm_buried",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 6,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Book a dinner reservation at Seoul Fire for tomorrow at 7:30 PM."
+      ],
+      "expected": [
+        "Book Seoul Fire restaurant for tomorrow at 7:30 PM"
+      ],
+      "noise": [
+        "Suggestion: Italian restaurant",
+        "Suggestion: La Trattoria",
+        "Suggestion (from Lena): Lemongrass Thai spot",
+        "Suggestion: Kaito Ramen pop-up",
+        "Wearer's musing: \"Is it... is it really good?\"",
+        "Decision to not book for \"tonight\""
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Book Seoul Fire restaurant for tomorrow at 7:30 PM",
+          "extracted": "Book a dinner reservation at Seoul Fire for tomorrow at 7:30 PM."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "event_invite_list_compound_retraction",
+      "category": "brutal_compound_retraction",
+      "difficulty": "brutal",
+      "expected_n": 2,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": false,
+      "action_reason": "no_intents but expected some",
+      "error": null,
+      "extracted": [],
+      "expected": [
+        "Invite Solstice Corp to the Q3 innovation showcase",
+        "Invite Ascent Dynamics to the Q3 innovation showcase"
+      ],
+      "noise": [
+        "Add Chronos Systems to the Q3 innovation showcase invitees (initial statement)",
+        "Add Octagon Solutions to the Q3 innovation showcase invitees (initial statement)",
+        "Scratch Octagon Solutions (command to modify previous intent)",
+        "Forget Chronos Systems for this one (command to modify previous intent)"
+      ],
+      "voice_score": {
+        "expected_n": 2,
+        "matched": 0,
+        "missed": 2,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Invite Solstice Corp to the Q3 innovation showcase"
+        },
+        {
+          "kind": "missed",
+          "expected": "Invite Ascent Dynamics to the Q3 innovation showcase"
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "python_3_13_release_notes_headline",
+      "category": "browser_doable",
+      "difficulty": "easy",
+      "expected_n": 1,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Search python.org for 'Python 3.13 release notes'.",
+        "Report the headline feature from the Python 3.13 release notes once found."
+      ],
+      "expected": [
+        "Search python.org for 'Python 3.13 release notes' and identify the headline feature."
+      ],
+      "noise": [
+        "Memory recall about past conversation",
+        "Statement of current lack of knowledge",
+        "Rhetorical question about new announcements"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Search python.org for 'Python 3.13 release notes' and identify the headline feature.",
+          "extracted": "Search python.org for 'Python 3.13 release notes'."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "conditional_stale_legal_redline",
+      "category": "brutal_conditional_stale",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Reschedule the dentist appointment you missed last week."
+      ],
+      "expected": [],
+      "noise": [
+        "\"If Ambrose calls back today, I'll need to send him the final redline.\" (Conditional, condition not met)",
+        "\"I just finished uploading it to the shared drive about twenty minutes ago.\" (Past-completed action)",
+        "\"I keep meaning to follow up on that vendor proposal.\" (Non-committal, 'keep meaning to')",
+        "\"I still have to remember to reschedule that dentist appointment I missed last week.\" (Future personal task, not agent-actionable)",
+        "\"I'll let her know.\" (Omar's commitment, not Wearer's)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "\"I still have to remember to reschedule that dentist appointment I missed last week.\" (Future personal task, not agent-actionable)",
+          "extracted": "Reschedule the dentist appointment you missed last week."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "overdue_property_tax_commitment",
+      "category": "brutal_implicit_pressure",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 8,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Pay the city property tax bill to avoid late fees."
+      ],
+      "expected": [
+        "Pay the city property tax notice today"
+      ],
+      "noise": [
+        "Maya's recollection of Wearer's past unfulfilled intent to pay tax last week",
+        "Maya's assumption of Wearer's past unfulfilled intent to pay tax with utilities",
+        "Wearer's acknowledgement of past unfulfilled intent to pay tax",
+        "Wearer's past completed action of setting up auto-pay for the water bill",
+        "Maya's story about her cousin Elara getting late fees",
+        "Quoted third-party advice from Elara to not procrastinate",
+        "Wearer's general statement \"I'm not going to let that happen\"",
+        "Maya's potential task to double check the internet bill"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Pay the city property tax notice today",
+          "extracted": "Pay the city property tax bill to avoid late fees."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "customer_refund_training_session",
+      "category": "brutal_customer_roleplay",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 8,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Follow up on customer refund inquiries that Lena escalates to you."
+      ],
+      "expected": [],
+      "noise": [
+        "Instruction to Lena: 'tell them we issue store credit only'",
+        "Instruction to Lena: 'tell them we'll need to review it further'",
+        "Instruction to Lena: 'get their full name, their contact details, and a brief, brief description of the issue'",
+        "Instruction to Lena: 'forward their info to me'",
+        "Instruction to Lena: 'put it in a quick email or a Slack message'",
+        "Instruction to Lena: 'Don't promise anything beyond the store credit policy'",
+        "Wearer's past action: 'I actually just finished handling a similar case yesterday'",
+        "Wearer's general procedural statement, not a specific task: 'I'll take it from there for follow-up'"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Wearer's general procedural statement, not a specific task: 'I'll take it from there for follow-up'",
+          "extracted": "Follow up on customer refund inquiries that Lena escalates to you."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "wearer_mortgage_refi_meaning_not_deciding",
+      "category": "brutal_meaning_vs_deciding",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Look into refinancing your mortgage."
+      ],
+      "expected": [],
+      "noise": [
+        "Wearer expresses general intent to look into refinancing without committing: \"I keep meaning to just sit down and actually look into refinancing ours.\"",
+        "Wearer's comment about past experience: \"Never again.\"",
+        "Liam's reading plan: \"It's next up after I finish 'The Silent Patient'.\""
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Wearer expresses general intent to look into refinancing without committing: \"I keep meaning to just sit down and actually look into refinancing ours.\"",
+          "extracted": "Look into refinancing your mortgage."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "bilingual_doctor_appointment_code_switch",
+      "category": "brutal_multi_language",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 6,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": false,
+      "action_reason": "no_intents but expected some",
+      "error": null,
+      "extracted": [],
+      "expected": [
+        "Call the doctor for an appointment"
+      ],
+      "noise": [
+        "\"I keep meaning to\" - not a concrete commitment",
+        "\"I *should* really get that checked out\" - vague intention, not a firm commitment",
+        "\"ma\u00f1ana voy a...\" - retracted statement",
+        "\"I already sent that email to their office about the referral last night\" - past completed action",
+        "\"Maybe I'll finally tackle that stack of paperwork on my desk today\" - Leo's potential task, not Wearer's",
+        "\"You do that\" - delegation/acknowledgement, not a Wearer task"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 0,
+        "missed": 1,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Call the doctor for an appointment"
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "flight_booking_deferred_hr_confirm",
+      "category": "brutal_negation_deferral",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Follow up with Elara in HR next Tuesday to confirm the final dates for the ethics compliance workshop."
+      ],
+      "expected": [
+        "Ping Elara in HR next Tuesday if I haven't heard anything about the ethics compliance workshop dates."
+      ],
+      "noise": [
+        "Should I go ahead and book the flights for us?",
+        "Don't book any flights for Seattle yet.",
+        "Elara from HR still needs to confirm the final dates for the ethics compliance workshop.",
+        "Project Atlas is a bit behind, so the training department can't lock down their schedule.",
+        "Just give me a shout when it's a go to proceed with bookings."
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Ping Elara in HR next Tuesday if I haven't heard anything about the ethics compliance workshop dates.",
+          "extracted": "Follow up with Elara in HR next Tuesday to confirm the final dates for the ethics compliance workshop."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "ambiguous_pronoun_late_message",
+      "category": "brutal_memory_pronoun",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": true,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Inform the stand-up meeting attendees that you will be late due to traffic."
+      ],
+      "expected": [],
+      "noise": [
+        "Wearer's hypothetical 'I could just call them'",
+        "Wearer's initial thought 'I'll handle it' (retracted by subsequent 'tell them')",
+        "Elara's offer to text Liam (delegated to Elara, not wearer's intent, and also not accepted)",
+        "Wearer's ambiguous 'tell them I'll be late' (antecedent 'them' is missing in transcript)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Wearer's ambiguous 'tell them I'll be late' (antecedent 'them' is missing in transcript)",
+          "extracted": "Inform the stand-up meeting attendees that you will be late due to traffic."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "john_friend_suggests_flight_no_agreement",
+      "category": "brutal_multi_speaker_named",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 7,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Book your flight to Phoenix for the conference between the 14th and 17th."
+      ],
+      "expected": [],
+      "noise": [
+        "Liam's suggestion 'You should probably book your flight soon, John.'",
+        "John's acknowledgement 'Yeah, I know, I know.'",
+        "John's vague commitment 'I'll take a look.'",
+        "Liam's insistence 'Don't just 'look', mate. You gotta hit that 'buy' button!'",
+        "John's deferral 'I've got a busy afternoon, but I'll definitely keep it in mind.'",
+        "Liam's reiteration 'Seriously, though, just get it done.'",
+        "John's passive agreement 'Right. Thanks for the nudge.'"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Liam's suggestion 'You should probably book your flight soon, John.'",
+          "extracted": "Book your flight to Phoenix for the conference between the 14th and 17th."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "finance_meeting_already_booked_report",
+      "category": "brutal_past_completion",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Wearer's statement about having already booked the 11 AM Thursday finance meeting.",
+        "Wearer's confirmation of Elara circulating APAC figures (delegated task).",
+        "Wearer's hypothetical suggestion to review Q4 projections, which is also deferred by Elara."
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "pronoun_chain_cross_turn_watch_gift",
+      "category": "brutal_pronoun_chain",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": false,
+      "action_reason": "no_intents but expected some",
+      "error": null,
+      "extracted": [],
+      "expected": [
+        "Buy a new Meridian smartwatch for Chloe"
+      ],
+      "noise": [
+        "Leo's idea to get Chloe a rare orchid for her office",
+        "Leo's idea to book a surprise weekend getaway to a B&B near Seabrook for Chloe",
+        "Chloe's statement that 'the second one was best' (this is her preference, not Leo's commitment)"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 0,
+        "missed": 1,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Buy a new Meridian smartwatch for Chloe"
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "past_journaling_commitment_reversed",
+      "category": "brutal_recall_negation",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 1,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "I vowed to myself I'd journal for thirty minutes, every single morning, no excuses."
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "recounting_quoted_third_party_commitment",
+      "category": "brutal_quotes_in_quotes",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Monitor the status of the Vega launch doc from Chloe and flag Liam if there are any changes to the Thursday deadline."
+      ],
+      "expected": [],
+      "noise": [
+        "\"I'll have the summary deck finalized and ready for your team by end of day Thursday.\" (Chloe's quoted commitment)",
+        "I'll have the summary deck finalized and ready for your team by end of day Thursday (Chloe's commitment, not wearer's)",
+        "I *could* try to ping her again (hypothetical, not a firm commitment)",
+        "I did send out the first draft of the user guide already (past-completed action)",
+        "I'll flag it if anything changes (conditional statement, not a concrete task for the agent)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 3,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "\"I'll have the summary deck finalized and ready for your team by end of day Thursday.\" (Chloe's quoted commitment)",
+          "extracted": "Monitor the status of the Vega launch doc from Chloe and flag Liam if there are any changes to the Thursday deadline."
+        },
+        {
+          "kind": "false_positive",
+          "noise": "I'll have the summary deck finalized and ready for your team by end of day Thursday (Chloe's commitment, not wearer's)",
+          "extracted": "Monitor the status of the Vega launch doc from Chloe and flag Liam if there are any changes to the Thursday deadline."
+        },
+        {
+          "kind": "false_positive",
+          "noise": "I'll flag it if anything changes (conditional statement, not a concrete task for the agent)",
+          "extracted": "Monitor the status of the Vega launch doc from Chloe and flag Liam if there are any changes to the Thursday deadline."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "car_karaoke_paris_dream",
+      "category": "brutal_roleplay_perf",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Wearer's singing of the lyric: 'I'm gonna fly to Paris and never come back, baby! Yeah, never coming back!'",
+        "Hypothetical statement: 'Just hop on a plane.'",
+        "Wearer's rhetorical question: 'who'd water my succulents?'"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "retraction_by_rephrase_attendee_time",
+      "category": "brutal_retraction_rephrase",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 1,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Schedule a post-mortem debrief call with Elara and David for 10 AM tomorrow."
+      ],
+      "expected": [
+        "Schedule a call with Elara and David at 10 AM."
+      ],
+      "noise": [
+        "Initial request to schedule a call with Elara at 3 PM."
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Schedule a call with Elara and David at 10 AM.",
+          "extracted": "Schedule a post-mortem debrief call with Elara and David for 10 AM tomorrow."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "sarcastic_pipeline_rebuild_no_intent",
+      "category": "brutal_sarcasm",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Kai's sarcastic statement about rebuilding the entire deployment pipeline tonight",
+        "Omar's observation about the setup being held together with baling wire",
+        "Omar's commitment to stay till midnight untangling the mess",
+        "Kai's request to Omar to let them know if he finds the root cause"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "dentist_reschedule_today_pull_forward",
+      "category": "cross_session",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Reschedule your dentist appointment for the molar cleaning today."
+      ],
+      "expected": [
+        "Reschedule dentist appointment today"
+      ],
+      "noise": [
+        "Wearer's past complaint about dentist appointment",
+        "Wearer's past statement about calling to move the appointment",
+        "Alex's bystander comment about 'classic'",
+        "Alex's bystander comment about 'a lot on your plate'",
+        "Wearer's self-reflection 'Too much!'"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Reschedule dentist appointment today",
+          "extracted": "Reschedule your dentist appointment for the molar cleaning today."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "conditional_picnic_cancellation_unresolved",
+      "category": "conditional",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Check tomorrow's weather forecast for Finn's birthday picnic."
+      ],
+      "expected": [],
+      "noise": [
+        "If it rains tomorrow, definitely cancel the picnic.",
+        "We can always do the indoor play cafe instead.",
+        "I was actually wondering if we should just book the play cafe anyway, just as a backup?",
+        "Nah, I really want to try for the park first."
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "spurious",
+          "extracted": "Check tomorrow's weather forecast for Finn's birthday picnic."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "wearer_delegates_room_booking_to_sarah",
+      "category": "delegation",
+      "difficulty": "hard",
+      "expected_n": 0,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Book the big conference room for the Q3 review on Thursday at 2 PM."
+      ],
+      "expected": [],
+      "noise": [
+        "Alex's delegation to Sarah to book the conference room",
+        "Sarah's commitment to book the room",
+        "Ben's task to finalize the presentation"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Alex's delegation to Sarah to book the conference room",
+          "extracted": "Book the big conference room for the Q3 review on Thursday at 2 PM."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "family_dinner_milk_run",
+      "category": "family_mixed",
+      "difficulty": "medium",
+      "expected_n": 1,
+      "noise_n": 6,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Buy 2% milk from the grocery store on your way home from work tomorrow evening."
+      ],
+      "expected": [
+        "Buy 2% milk on the way home from work tomorrow evening."
+      ],
+      "noise": [
+        "Child's observation about milk",
+        "Spouse's clarification about milk type",
+        "Spouse's reminder not to forget",
+        "Child's request for chocolate chip pancakes",
+        "Wearer's conditional response to child's request",
+        "Spouse's condition for pancakes"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Buy 2% milk on the way home from work tomorrow evening.",
+          "extracted": "Buy 2% milk from the grocery store on your way home from work tomorrow evening."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "oktoberfest_munich_planning_hbf",
+      "category": "foreign_language",
+      "difficulty": "hard",
+      "expected_n": 3,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Secure a table at the Hofbr\u00e4u-Festzelt for Oktoberfest's opening Saturday.",
+        "Book a stay at the Hilton M\u00fcnchen Park.",
+        "Figure out the best S-Bahn route from Flughafen M\u00fcnchen to the Hilton M\u00fcnchen Park."
+      ],
+      "expected": [
+        "Secure a table reservation at Hofbr\u00e4u-Festzelt for Oktoberfest opening Saturday.",
+        "Book a room at the Hilton M\u00fcnchen Park hotel.",
+        "Find S-Bahn routes and information from Flughafen M\u00fcnchen to the Hilton M\u00fcnchen Park."
+      ],
+      "noise": [
+        "Liam's question about who Maya is going with.",
+        "Liam's comment about a sketchy pension.",
+        "Liam's question about Maya's lederhosen.",
+        "Maya's thought about checking lederhosen options later (not a firm commitment)."
+      ],
+      "voice_score": {
+        "expected_n": 3,
+        "matched": 3,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Secure a table reservation at Hofbr\u00e4u-Festzelt for Oktoberfest opening Saturday.",
+          "extracted": "Secure a table at the Hofbr\u00e4u-Festzelt for Oktoberfest's opening Saturday."
+        },
+        {
+          "kind": "matched",
+          "expected": "Book a room at the Hilton M\u00fcnchen Park hotel.",
+          "extracted": "Book a stay at the Hilton M\u00fcnchen Park."
+        },
+        {
+          "kind": "matched",
+          "expected": "Find S-Bahn routes and information from Flughafen M\u00fcnchen to the Hilton M\u00fcnchen Park.",
+          "extracted": "Figure out the best S-Bahn route from Flughafen M\u00fcnchen to the Hilton M\u00fcnchen Park."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "message_david_missing_details",
+      "category": "missing_slots",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 2,
+      "expects_clarification": true,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Send a message to David about the Q3 projection discrepancies."
+      ],
+      "expected": [
+        "Message David"
+      ],
+      "noise": [
+        "Sarah's offer to review the executive summary (delegation)",
+        "Alex's statement about finishing the report section (current task, not an agent task)"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Message David",
+          "extracted": "Send a message to David about the Q3 projection discrepancies."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "memory_followup_appointment_status",
+      "category": "memory_followup",
+      "difficulty": "hard",
+      "expected_n": 0,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Check your sent items to confirm if the final revised slides were sent to Sarah for the new client pitch."
+      ],
+      "expected": [],
+      "noise": [
+        "Did I ever manage to send over those final revised slides to Sarah?",
+        "I can quickly double check my inbox for her reply if you want.",
+        "I'll just, uh, pop into my sent items later."
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "I'll just, uh, pop into my sent items later.",
+          "extracted": "Check your sent items to confirm if the final revised slides were sent to Sarah for the new client pitch."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "saturday_soccer_logistics_rush",
+      "category": "multi_speaker_family",
+      "difficulty": "hard",
+      "expected_n": 3,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Get gas for the car, as it's running low.",
+        "Call Jamie's mom (Grandma Sue) to discuss dinner plans for Sunday."
+      ],
+      "expected": [
+        "Take Leo to soccer practice at 9 AM today.",
+        "Get gas for the car after soccer.",
+        "Call Grandma Sue about Sunday dinner plans."
+      ],
+      "noise": [
+        "Leo's demand for fruit snacks.",
+        "Jamie's initial request to call her mom (the commitment is the intent).",
+        "Alex's request for a reminder.",
+        "Alex's instruction to Leo to get a banana."
+      ],
+      "voice_score": {
+        "expected_n": 3,
+        "matched": 2,
+        "missed": 1,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 0.67,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Get gas for the car after soccer.",
+          "extracted": "Get gas for the car, as it's running low."
+        },
+        {
+          "kind": "matched",
+          "expected": "Call Grandma Sue about Sunday dinner plans.",
+          "extracted": "Call Jamie's mom (Grandma Sue) to discuss dinner plans for Sunday."
+        },
+        {
+          "kind": "missed",
+          "expected": "Take Leo to soccer practice at 9 AM today."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "post_meeting_triple_task",
+      "category": "multi_intent",
+      "difficulty": "hard",
+      "expected_n": 3,
+      "noise_n": 6,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Send an email to Sarah about the Q3 budget adjustment.",
+        "Ping John about the updated client deck.",
+        "Call your mom this evening about her appointment tomorrow."
+      ],
+      "expected": [
+        "Email Sarah regarding the Q3 budget adjustment.",
+        "Ping John about the updated client deck.",
+        "Set a reminder to call my mom this evening about her appointment tomorrow."
+      ],
+      "noise": [
+        "Chloe's question about next steps",
+        "Chloe's comment about budget adjustments being critical",
+        "Marcus's status about waiting on a number from Ben",
+        "Marcus noting Sarah can start looking at the structure",
+        "Chloe's observation that John is usually quick",
+        "Marcus stating he needs to make sure John has the latest version (detail of ping)"
+      ],
+      "voice_score": {
+        "expected_n": 3,
+        "matched": 3,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Email Sarah regarding the Q3 budget adjustment.",
+          "extracted": "Send an email to Sarah about the Q3 budget adjustment."
+        },
+        {
+          "kind": "matched",
+          "expected": "Ping John about the updated client deck.",
+          "extracted": "Ping John about the updated client deck."
+        },
+        {
+          "kind": "matched",
+          "expected": "Set a reminder to call my mom this evening about her appointment tomorrow.",
+          "extracted": "Call your mom this evening about her appointment tomorrow."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "negated_no_more_doordash",
+      "category": "negated",
+      "difficulty": "medium",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Set a reminder about your commitment not to order DoorDash for the next seven days, triggered if you consider opening the app."
+      ],
+      "expected": [],
+      "noise": [
+        "Wearer's self-promise not to order DoorDash again this week",
+        "Request for Alex to remind them",
+        "Hypothetical action ('if I even *think* about opening that app')",
+        "Alex's offer to buy dinner"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 2,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Request for Alex to remind them",
+          "extracted": "Set a reminder about your commitment not to order DoorDash for the next seven days, triggered if you consider opening the app."
+        },
+        {
+          "kind": "false_positive",
+          "noise": "Hypothetical action ('if I even *think* about opening that app')",
+          "extracted": "Set a reminder about your commitment not to order DoorDash for the next seven days, triggered if you consider opening the app."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "phone_half_listen_voicemail_doctor_email",
+      "category": "phone_half_listening",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Email Drew about the presentation for Friday."
+      ],
+      "expected": [
+        "Email Drew about the presentation for Friday."
+      ],
+      "noise": [
+        "Voicemail menu options",
+        "Wearer's frustrated muttering about the phone system",
+        "Voicemail system instructions"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Email Drew about the presentation for Friday.",
+          "extracted": "Email Drew about the presentation for Friday."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "eleven_madison_park_dinner_pleasantry",
+      "category": "pleasantry_specific",
+      "difficulty": "hard",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Ping Leo in a couple of weeks to plan a visit to Eleven Madison Park."
+      ],
+      "expected": [],
+      "noise": [
+        "We absolutely have to go sometime soon.",
+        "Like, maybe when things calm down with work next month?",
+        "So, let's keep that in mind. We'll find a window.",
+        "I'll ping you then (referring to initiating planning for a vague future event)."
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "I'll ping you then (referring to initiating planning for a vague future event).",
+          "extracted": "Ping Leo in a couple of weeks to plan a visit to Eleven Madison Park."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "standup_task_ownership_clarified",
+      "category": "production_hard",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Draft the full rollback documentation for the old system, including required procedural backups, with a first draft ready for review by end of day Thursday."
+      ],
+      "expected": [
+        "Draft rollback documentation for the old system by Thursday"
+      ],
+      "noise": [
+        "Maya waiting for API keys",
+        "Priya finishing user data sanitation script",
+        "Priya pushing script to staging branch",
+        "Wearer delegating task to Priya ('you actually just focus on the sanitation for now')"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Draft rollback documentation for the old system by Thursday",
+          "extracted": "Draft the full rollback documentation for the old system, including required procedural backups, with a first draft ready for review by end of day Thursday."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "search_wikipedia_einstein_birth_year",
+      "category": "real_action",
+      "difficulty": "easy",
+      "expected_n": 1,
+      "noise_n": 1,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Search Wikipedia for Albert Einstein's birth year."
+      ],
+      "expected": [
+        "Search Wikipedia for Albert Einstein's birth year"
+      ],
+      "noise": [
+        "Maya's stated intention to look it up later"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Search Wikipedia for Albert Einstein's birth year",
+          "extracted": "Search Wikipedia for Albert Einstein's birth year."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "proposal_contact_method_pivot",
+      "category": "retraction",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 1,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Call Emily about the merger proposal first thing after lunch."
+      ],
+      "expected": [
+        "Call Emily about the merger proposal after lunch"
+      ],
+      "noise": [
+        "Email Emily about the merger proposal"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Call Emily about the merger proposal after lunch",
+          "extracted": "Call Emily about the merger proposal first thing after lunch."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "follow_up_q3_projections_ambiguous",
+      "category": "pronoun_temporal",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 6,
+      "expects_clarification": true,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Text Mark after tomorrow's big meeting about the revised numbers."
+      ],
+      "expected": [
+        "Text [ambiguous person] after [ambiguous meeting tomorrow] about [ambiguous topic]."
+      ],
+      "noise": [
+        "Wearer frustration about budget report",
+        "Bystander question about Q3 projections",
+        "Wearer's memory prompt",
+        "Bystander clarifying who was present in past chat",
+        "Bystander suggesting possible meetings",
+        "Bystander acknowledgment of request"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 0,
+        "missed": 1,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Text [ambiguous person] after [ambiguous meeting tomorrow] about [ambiguous topic]."
+        },
+        {
+          "kind": "spurious",
+          "extracted": "Text Mark after tomorrow's big meeting about the revised numbers."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "back_pain_doctor_visit",
+      "category": "sensitive",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Schedule an appointment with Dr. Chen to get your lower back checked out."
+      ],
+      "expected": [
+        "Schedule a doctor's appointment with Dr. Chen for back pain."
+      ],
+      "noise": [
+        "Liam's suggestion of stretches",
+        "Liam recommending Dr. Patel",
+        "Liam offering to find Dr. Patel's number",
+        "Liam asking about Saturday movie plans"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Schedule a doctor's appointment with Dr. Chen for back pain.",
+          "extracted": "Schedule an appointment with Dr. Chen to get your lower back checked out."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "many_intents_grocery_dump",
+      "category": "many_intents",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": false,
+      "action_reason": null,
+      "error": "judge: JSONDecodeError: Expecting ',' delimiter: line 11 column 6 (char 454)",
+      "extracted": [],
+      "expected": [
+        "Add milk, artisanal bread, a dozen eggs, two ripe avocados, salmon for tomorrow night, good quality fresh basil, a block of parmesan (not grated), a couple of lemons, big jugs of sparkling water, and a big bag of dog kibble to the grocery list."
+      ],
+      "noise": [
+        "Bystander asking if wearer is heading out.",
+        "Wearer's statement of internal state.",
+        "Bystander's request for oat milk.",
+        "Wearer explicitly rejecting adding Alex's item to their list.",
+        "Wearer's concluding statement about their list."
+      ],
+      "voice_score": {},
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "wearer_alone_morning_desk_sounds",
+      "category": "zero_intent",
+      "difficulty": "easy",
+      "expected_n": 0,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "keyboard clicks",
+        "sips from a mug",
+        "soft hum",
+        "paper rustling",
+        "sigh"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "neighbor_chat_pleasantries",
+      "category": null,
+      "difficulty": "easy",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Wearer's general statement about needing to go to the park later (not a firm, actionable command)",
+        "Olivia's pleasantry about grabbing coffee sometime soon",
+        "Wearer's agreement to a pleasantry about grabbing coffee sometime",
+        "Olivia's comment about her son's soccer practice (third-party commitment)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "tax_prep_underspecified_wearer",
+      "category": "sensitive_financial",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 4,
+      "expects_clarification": true,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Block out time in your calendar to prepare your taxes."
+      ],
+      "expected": [
+        "Prepare my taxes"
+      ],
+      "noise": [
+        "Maya's suggestion about TaxEase software",
+        "Wearer's internal monologue about procrastination habits",
+        "Wearer's vague, conditional plan to block out time ('Maybe next weekend')",
+        "Maya's conditional offer of help with TaxEase"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 0,
+        "missed": 1,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Prepare my taxes"
+        },
+        {
+          "kind": "false_positive",
+          "noise": "Wearer's vague, conditional plan to block out time ('Maybe next weekend')",
+          "extracted": "Block out time in your calendar to prepare your taxes."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "medical_oncologist_consult_prep",
+      "category": "sensitive_medical",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 4,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Schedule an oncologist consult for early next week.",
+        "Check the status of the referral paperwork from Dr. Evans."
+      ],
+      "expected": [
+        "Schedule oncologist consultation for next week."
+      ],
+      "noise": [
+        "Calling sister if biopsy results are bad",
+        "Checking on Dr. Evans' referral paperwork (memory recall)",
+        "Sarah picking up groceries (delegated task to third party)",
+        "Grabbing coffee with Dr. Chen next month (vague, future, hypothetical)"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.5,
+        "recall": 1.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Schedule oncologist consultation for next week.",
+          "extracted": "Schedule an oncologist consult for early next week."
+        },
+        {
+          "kind": "false_positive",
+          "noise": "Checking on Dr. Evans' referral paperwork (memory recall)",
+          "extracted": "Check the status of the referral paperwork from Dr. Evans."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "ambient_subway_dentist_next_wednesday",
+      "category": "ambient_buried",
+      "difficulty": "hard",
+      "expected_n": 1,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Schedule a dentist appointment for next Wednesday."
+      ],
+      "expected": [
+        "Schedule a dentist appointment for next Wednesday."
+      ],
+      "noise": [
+        "Subway public address announcements",
+        "Bystander conversation about sports team performance",
+        "Busker's musical performance"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Schedule a dentist appointment for next Wednesday.",
+          "extracted": "Schedule a dentist appointment for next Wednesday."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "cafe_background_noise_only",
+      "category": "ambient_zero",
+      "difficulty": "easy",
+      "expected_n": 0,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Barista calling out orders for other customers",
+        "Olivia's commitment to finalize a proposal by end of day (not wearer's task)",
+        "Olivia's plan to send a follow-up email (not wearer's task)",
+        "Max's suggestion to Olivia for dinner (not wearer's task)",
+        "Olivia's commitment to text Max later (not wearer's task)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "brainstorm_graphql_exploration",
+      "category": "brainstorm",
+      "difficulty": "hard",
+      "expected_n": 0,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "\"What if we actually, for *this* service, explored using GraphQL?\" (A suggestion for discussion, not a personal commitment to execute the exploration.)",
+        "\"We *should* probably do a proper tech deep dive.\" (Marcus's general statement about what 'we' should do, not a direct task for Lena.)",
+        "\"Let's put a pin in it for a deeper discussion in our next architecture review, maybe map out some of the initial research points.\" (Marcus's suggestion for a shared action, not a commitment Lena takes on herself.)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "github_trending_top_repo_today",
+      "category": "browser_doable",
+      "difficulty": "easy",
+      "expected_n": 2,
+      "noise_n": 3,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": false,
+      "action_reason": "no_intents but expected some",
+      "error": null,
+      "extracted": [],
+      "expected": [
+        "Navigate to GitHub trending page for today.",
+        "Identify and report the number one repository from that page."
+      ],
+      "noise": [
+        "General query about what's hot in dev world.",
+        "Statement of needing a quick overview.",
+        "Negative constraint reinforcing 'today'."
+      ],
+      "voice_score": {
+        "expected_n": 2,
+        "matched": 0,
+        "missed": 2,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Navigate to GitHub trending page for today."
+        },
+        {
+          "kind": "missed",
+          "expected": "Identify and report the number one repository from that page."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "concealed_delegation_dashboard_deployment_huddle",
+      "category": "brutal_concealed_delegation",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Wearer: \"I really need to get the user feedback dashboard deployed this week.\" (first-person framed desire, immediately delegated)",
+        "Wearer: \"That's still on you to push to prod, right, Kavya?\" (explicit delegation)",
+        "Wearer: \"I wanted to circle back on the database schema issues as well.\" (first-person framed desire/past intent, but then clarified as someone else's responsibility or a general topic)",
+        "Wearer: \"Nikhil promised me he'd wrap up his review of those schema changes by end of day Wednesday.\" (quoted third-party commitment)",
+        "Wearer: \"I *should* probably send him a reminder.\" (vague self-admonition, explicitly deferred/delegated)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "compound_retraction_partial_scratch_budget_summary",
+      "category": "brutal_compound_retraction",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 2,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Email the final Q3 budget summary to John and Liam."
+      ],
+      "expected": [
+        "email John and Liam about the Q3 budget summary"
+      ],
+      "noise": [
+        "Email Sarah about the Q3 budget summary (retracted)",
+        "Email Mark about the Q3 budget summary (retracted)"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "email John and Liam about the Q3 budget summary",
+          "extracted": "Email the final Q3 budget summary to John and Liam."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "candidate_brainstorm_buried_offer",
+      "category": "brutal_brainstorm_buried",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 9,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Follow up on the contact Omar mentioned for the product launch."
+      ],
+      "expected": [
+        "Send offer letter to Priya by Tuesday"
+      ],
+      "noise": [
+        "Discussion of Kaito as a candidate",
+        "Discussion of Liam as a candidate",
+        "Discussion of Maya as a candidate",
+        "Discussion of Omar as a candidate",
+        "Wearer statement \"I really should follow up on that contact he mentioned for the product launch\" (no firm commitment)",
+        "Wearer thought \"we should probably loop back on her experience at Helix more\" (not a firm commitment)",
+        "Wearer's retraction \"no, that's what Ben said we'd do.\"",
+        "Ben's commitment to reach out to Priya's former manager",
+        "Wearer's delegation to Ben \"Can you send me the template for that, Ben?\""
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 0,
+        "missed": 1,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Send offer letter to Priya by Tuesday"
+        },
+        {
+          "kind": "false_positive",
+          "noise": "Wearer statement \"I really should follow up on that contact he mentioned for the product launch\" (no firm commitment)",
+          "extracted": "Follow up on the contact Omar mentioned for the product launch."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "conditional_stale_offsite_breakout",
+      "category": "brutal_conditional_stale",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 10,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Review the Q3 numbers presentation before the afternoon session."
+      ],
+      "expected": [],
+      "noise": [
+        "Conditional task: 'If Kaelen ends up making it to the Summit tomorrow, ... block out that small conference room by the kitchen' (stale, conditional, and tomorrow has passed without Kaelen being mentioned)",
+        "Lena's commitment: 'I'll put a placeholder in my calendar.'",
+        "Wearer's question about past action: 'Did you manage to get that data from Operations?'",
+        "Quoted third-party commitment: 'Xyla just pinged me, she said she'd upload the last batch by lunch.'",
+        "Lena's commitment: 'So I'll incorporate it as soon as it's there.'",
+        "Wearer's statement of need: 'I really need to review the whole thing before I go up there.'",
+        "Negated action and self-assigned action: 'Don't worry about printing anything, I'll just use the projector.'",
+        "Delegation to Lena: 'Just focus on getting that data in.'",
+        "Lena's question: 'Should we head over?'",
+        "Wearer's internal thought/retraction: 'I had a thought earlier about adding a slide on market penetration, but... nah, too much detail for this crowd.'"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Wearer's statement of need: 'I really need to review the whole thing before I go up there.'",
+          "extracted": "Review the Q3 numbers presentation before the afternoon session."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "wearer_means_but_never_decides_french",
+      "category": "brutal_meaning_vs_deciding",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 6,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "\"This is the year I finally learn to juggle.\" (past, unfulfilled resolution)",
+        "\"I *mean* to learn French.\" (explicitly stating meaning, not deciding)",
+        "\"I *should* have done it.\" (past regret, not current action)",
+        "\"I *really need* to get better at organizing my photos.\" (expressed desire immediately negated by inaction)",
+        "\"I constantly *tell myself* I'll start next month, then next quarter...\" (description of a recurring, unfulfilled intention)",
+        "\"I keep *meaning* to.\" (explicitly stating meaning, not deciding)"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "overdue_stripe_invoice_delegated_check",
+      "category": "brutal_implicit_pressure",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": false,
+      "action_reason": "no_intents but expected some",
+      "error": null,
+      "extracted": [],
+      "expected": [
+        "Handle the overdue Stripe invoice"
+      ],
+      "noise": [
+        "Lena's statement about meaning to reconcile QuickBooks (not wearer, not commitment)",
+        "Wearer's sarcastic/hypothetical remark about outsourcing brain to an AI (sarcasm, hypothetical)",
+        "Quoted third-party commitment from Octavia to send a presentation deck (not wearer's task)",
+        "Wearer's mention of Octavia having just emailed the deck (past-completed item)",
+        "Delegation to Lena to ping Kaelen about the Stripe invoice (not wearer's task)"
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 0,
+        "missed": 1,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "missed",
+          "expected": "Handle the overdue Stripe invoice"
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "kid_phone_manners_grandma_call",
+      "category": "brutal_customer_roleplay",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Call Grandma Elsie back after dinner."
+      ],
+      "expected": [],
+      "noise": [
+        "Instruction to Leo: tell Aunt Lily 'I'll catch up with her tomorrow'",
+        "Past action: 'I already put it in my calendar to ping her'",
+        "Instruction to Leo: tell Grandma Elsie 'I'll give her a ring back probably sometime after dinner'",
+        "Negated instruction to Leo: 'Don't tell her I \"should\" have called her earlier'",
+        "Negated instruction to Leo about a past intention: 'don't tell her I was going to email her that scone recipe first'"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 1,
+        "spurious_extra": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "false_positive",
+          "noise": "Instruction to Leo: tell Grandma Elsie 'I'll give her a ring back probably sometime after dinner'",
+          "extracted": "Call Grandma Elsie back after dinner."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "maya_soft_deferral_landlord_leak",
+      "category": "brutal_multi_speaker_named",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 7,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Chloe's instruction for Maya to call the landlord",
+        "Maya's soft deferral 'maybe later, I'm just not really in the mood'",
+        "Maya's 'I keep meaning to just try tightening it myself'",
+        "Chloe quoting the landlord's past commitment 'He told me last week he'd send someone over for the fridge'",
+        "Maya's non-committal 'I'll get to it. Eventually.'",
+        "Maya's 'It's on my mental list.'",
+        "Chloe's hypothetical 'if you don't, I'm just going to text him myself'"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "memory_dependent_pronoun_unresolved_session_antecedent",
+      "category": "brutal_memory_pronoun",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 4,
+      "expects_clarification": true,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Priya's commitment to re-do slides for Zola",
+        "Wearer's past-completed action of updating dashboard for Mr. Henderson",
+        "Wearer's unresolvable statement 'email her about it'",
+        "Wearer's explicit retraction and deferral of action 'No, not Zola. Someone else. Never mind, I'll figure it out.'"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    },
+    {
+      "name": "mandarin_english_slip_deadline",
+      "category": "brutal_multi_language",
+      "difficulty": "brutal",
+      "expected_n": 1,
+      "noise_n": 5,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Return Jia's school field trip permission slip for the science museum by tomorrow morning before 9 AM. Remember to sign and scan it."
+      ],
+      "expected": [
+        "Send the school field trip permission slip tomorrow before 9am."
+      ],
+      "noise": [
+        "Mrs. Lee's commitment to remind about aquarium forms (third-party, different trip).",
+        "Wearer's vague intent 'I keep meaning to do it' (not a concrete commitment).",
+        "Wearer's retracted plan 'I was going to do it tonight'.",
+        "Wearer's retracted plan 'I should probably just do it right now'.",
+        "Dad's completed action 'Dad already put it in your backpack' (delegated, past-completed)."
+      ],
+      "voice_score": {
+        "expected_n": 1,
+        "matched": 1,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [
+        {
+          "kind": "matched",
+          "expected": "Send the school field trip permission slip tomorrow before 9am.",
+          "extracted": "Return Jia's school field trip permission slip for the science museum by tomorrow morning before 9 AM. Remember to sign and scan it."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "zephyr_proposal_deferral_email",
+      "category": "brutal_negation_deferral",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 1,
+      "expects_clarification": false,
+      "passed": false,
+      "voice_passed": false,
+      "action_passed": true,
+      "action_reason": "skipped (voice-only mode, action n/a)",
+      "error": null,
+      "extracted": [
+        "Add an addendum to the compliance section of the Zephyr Group proposal tonight."
+      ],
+      "expected": [],
+      "noise": [
+        "sending the proposal email to Zephyr's legal department"
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "passed": false
+      },
+      "judgment_details": [
+        {
+          "kind": "spurious",
+          "extracted": "Add an addendum to the compliance section of the Zephyr Group proposal tonight."
+        }
+      ],
+      "action_message": ""
+    },
+    {
+      "name": "past_completion_credit_card_bill",
+      "category": "brutal_past_completion",
+      "difficulty": "brutal",
+      "expected_n": 0,
+      "noise_n": 6,
+      "expects_clarification": false,
+      "passed": true,
+      "voice_passed": true,
+      "action_passed": true,
+      "action_reason": "no_intents (correct for zero-expected)",
+      "error": null,
+      "extracted": [],
+      "expected": [],
+      "noise": [
+        "Wearer's statement: \"I actually just finished up with all the bills this morning\"",
+        "Wearer's statement: \"Yep, paid it, and the utilities too.\"",
+        "Wearer's statement: \"Even got the rent transfer set for tomorrow\"",
+        "Liam's vague intention: \"I keep meaning to check if that new subscription for the streaming service went through correctly\"",
+        "Wearer's conditional offer: \"I can double-check later if you want?\"",
+        "Liam's commitment: \"I'll take a look later tonight.\""
+      ],
+      "voice_score": {
+        "expected_n": 0,
+        "matched": 0,
+        "missed": 0,
+        "false_positives_on_noise": 0,
+        "spurious_extra": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "passed": true
+      },
+      "judgment_details": [],
+      "action_message": ""
+    }
+  ]
+}

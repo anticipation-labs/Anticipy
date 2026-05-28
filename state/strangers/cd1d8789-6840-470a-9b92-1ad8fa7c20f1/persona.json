@@ -1,0 +1,48 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "cd1d8789-6840-470a-9b92-1ad8fa7c20f1",
+  "created_at": "2025-04-10T14:32:00Z",
+  "name": "James Forrester",
+  "age": 42,
+  "occupation": "Account Executive",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot contact and deal management",
+  "primary_real_surface": {
+    "surface": "HubSpot contacts list page in signed-in Chrome",
+    "chrome_requirement": "User's real Chrome profile with HubSpot signed in",
+    "acceptable_state": "Sorted by most recent activity, one contact selected"
+  },
+  "daily_tools": [
+    "HubSpot",
+    "Gmail",
+    "Google Chrome",
+    "Slack",
+    "Zoom"
+  ],
+  "contacts": [
+    {
+      "name": "Susan Park",
+      "relationship": "Sales Manager",
+      "context": "Direct supervisor, reviews all deal updates and decline emails"
+    },
+    {
+      "name": "Marcus Lee",
+      "relationship": "Client (VP of Operations at Apex Logistics)",
+      "context": "Potential deal that fell through; drafting a decline email to him"
+    },
+    {
+      "name": "Emily Tran",
+      "relationship": "Colleague (Sales Operations Analyst)",
+      "context": "Helps with HubSpot reporting and data accuracy"
+    },
+    {
+      "name": "David Chen",
+      "relationship": "Former Lead (Prospect)",
+      "context": "Example contact used for testing email drafts"
+    }
+  ]
+}

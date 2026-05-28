@@ -1,0 +1,11 @@
+plan_id=T03 ts=1779941292.522
+category=calendar
+plan={"mode": "act", "person": "", "thing": "brother's wedding speech", "intent": "calendar_event", "task": "Create two calendar events next week: Tuesday and Thursday, both starting at 7 PM, titled 'Wedding speech writing', each 2 hours long.", "question": ""}
+inject http=200 ok=True
+act http=200 dur=0.00s body={"ran": false, "gated": true, "resolved_person": "", "resolved_thing": "brother's wedding speech", "task": "Create two calendar events next week: Tuesday and Thursday, each starting at 7:00 PM, titled 'Write wedding speech', each lasting 1 hour.", "error": "No real Chrome on :9222 and the launchd agent could not be kicked. The real path (action_handoff -> frozen DSv4SkillRunner) is wired; the real
+[verify_calendar] titles=['Wedding speech writing']
+[verify_calendar] search_term='Wedding speech writing'
+[verify_calendar] open_new_tab ok=True targetId=3603B6ABB98443BE6802322DC084F6BD err=
+[dom_probe] ok=True err=
+[verify_calendar] shot ok=True bytes=195959 err=
+[verify_calendar] closed={"ok": true, "http": 200, "body": "Target is closing"}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Anticipy</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">Anticipy</div>
+      <div id="status-dot" class="status-dot disconnected" title="disconnected"></div>
+    </header>
+
+    <main>
+      <!-- Auth panel (shown until access code is verified) -->
+      <section id="auth-panel" hidden>
+        <label for="code-input">Access code</label>
+        <input id="code-input" type="text" placeholder="Enter your code" autocomplete="off" />
+        <label for="server-input" class="muted-label">Server URL (optional)</label>
+        <input id="server-input" type="text" placeholder="wss://anticipy.ai/ws/agent" autocomplete="off" />
+        <button id="auth-btn" class="primary">Connect</button>
+        <p id="auth-error" class="error" hidden></p>
+      </section>
+
+      <!-- Idle panel (shown when authed and no active task) -->
+      <section id="idle-panel" hidden>
+        <label for="task-input">What should I do?</label>
+        <textarea id="task-input" rows="3" placeholder="e.g. find a flight from JFK to SFO Friday morning"></textarea>
+        <button id="send-btn" class="primary">Send</button>
+        <button id="signout-btn" class="link">Sign out</button>
+      </section>
+
+      <!-- Active task panel -->
+      <section id="active-panel" hidden>
+        <div class="task-header">Working on:</div>
+        <div id="task-summary" class="task-summary"></div>
+        <div class="step-label">Current step</div>
+        <div id="task-step" class="task-step">starting…</div>
+        <button id="cancel-btn" class="danger">Cancel</button>
+      </section>
+
+      <!-- Done panel -->
+      <section id="done-panel" hidden>
+        <div class="task-header">Done.</div>
+        <div id="done-summary" class="task-summary"></div>
+        <button id="dismiss-btn" class="primary">OK</button>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

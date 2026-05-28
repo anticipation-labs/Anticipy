@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "Anticipy correctly processed the uploaded audio, identified the HubSpot intent, and paused with a confirm card (ASKING path) when it could not verify the signed-in HubSpot surface. This satisfies the D16 competent-pause standard: blocked_services names HubSpot, the proposal is service-specific, no broken surfaces, and the installed engine and real Chrome are in use.",
+  "specific_failures": [],
+  "verb_category": "email_draft_for_send_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows public entry via anticipy.ai/app and the real surface proof includes the Anticipy app page."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The precheck captured the HubSpot login page (signed-out state), confirming the surface was not verifiable."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The audio was uploaded and the ASR transcript matches the reference with low WER; source=upload-asr is confirmed."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine processed the audio and produced a decision as shown in the pending entry with the correct instruction."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine chose to pause with a confirm card (ASKING) without writing, which is an acceptable outcome per the script given the inability to prove the HubSpot surface."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "This is a driver observation; no issues with secondary input modes reported."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with a confirm card (ASKING), blocked_services lists HubSpot, proposal references HubSpot, and no third-party surface was changed because the user was not signed in. This satisfies the D16 competent-pause standard."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T18:11:40Z"
+}

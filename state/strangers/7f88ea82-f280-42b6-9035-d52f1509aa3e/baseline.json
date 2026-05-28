@@ -1,0 +1,2096 @@
+{
+  "schema": "anticipy.v6.trace",
+  "created_at": "2026-05-27T05:03:28Z",
+  "cdp_port": 9222,
+  "browser": "Chrome/148.0.7778.179",
+  "chrome_surface_path": "cdp",
+  "extension_surface_proof": {
+    "applescript_surface_probe": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "ee3a6364c86aa583359eed2d50509c6ea56ae99ea877228f4696378e1f7caa56",
+      "requested_url": "",
+      "screenshot_bytes": 1108293,
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "64ba1116b005c04436ae3dff2c71d0d38a5583940ac10d6d03471d0e15eff68e",
+      "title": "Higgsfield CLI | AI Image & Video Generation for Any Agent",
+      "url": "https://higgsfield.ai/cli",
+      "visible_surface": false,
+      "visible_text_bytes": 7503,
+      "visible_text_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "585579afbf7d2ccb02542e2635f26fa553944d05af80b29791535c030b88a9c4"
+    },
+    "blocker": {
+      "chrome_profiles_checked": [
+        {
+          "exists": true,
+          "profiles": [
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [
+                {
+                  "disable_reasons": {},
+                  "enabled": true,
+                  "has_native_messaging": false,
+                  "id": "npnpagopediecennpleihemoochikggb",
+                  "name": "",
+                  "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                  "permissions": [],
+                  "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                  "source": "Secure Preferences",
+                  "state": null
+                }
+              ],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+            }
+          ],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+        },
+        {
+          "exists": true,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+        }
+      ],
+      "extension_candidates": [
+        {
+          "disable_reasons": {},
+          "enabled": true,
+          "has_native_messaging": false,
+          "id": "npnpagopediecennpleihemoochikggb",
+          "name": "",
+          "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+          "permissions": [],
+          "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+          "source": "Secure Preferences",
+          "state": null
+        }
+      ],
+      "kind": "extension_missing_or_unauthorized",
+      "native_host_manifest": {
+        "authorized": true,
+        "authorized_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ],
+        "checked": [
+          {
+            "allowed_origins": [
+              "chrome-extension://__EXTENSION_ID__/"
+            ],
+            "authorized_extension_ids": [],
+            "exists": true,
+            "host_path": "__LAUNCHER_PATH__",
+            "name": "com.anticipy.agent",
+            "path": "native_host/com.anticipy.agent.json",
+            "uses_placeholder_origin": true
+          },
+          {
+            "allowed_origins": [
+              "chrome-extension://npnpagopediecennpleihemoochikggb/"
+            ],
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "exists": true,
+            "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+            "name": "com.anticipy.agent",
+            "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          }
+        ]
+      },
+      "reason": "V7.10 Anticipy Chrome extension/native bridge did not expose a fresh authorized proof channel that produced both visible DOM and screenshot artifacts without CDP."
+    },
+    "chrome": {
+      "app": "Google Chrome",
+      "hidden_browser": false,
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "profile": {
+        "extension_candidates": [
+          {
+            "disable_reasons": {},
+            "enabled": true,
+            "has_native_messaging": false,
+            "id": "npnpagopediecennpleihemoochikggb",
+            "name": "",
+            "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+            "permissions": [],
+            "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "source": "Secure Preferences",
+            "state": null
+          }
+        ],
+        "kind": "real_user",
+        "profiles_checked": [
+          {
+            "exists": true,
+            "profiles": [
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [
+                  {
+                    "disable_reasons": {},
+                    "enabled": true,
+                    "has_native_messaging": false,
+                    "id": "npnpagopediecennpleihemoochikggb",
+                    "name": "",
+                    "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                    "permissions": [],
+                    "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                    "source": "Secure Preferences",
+                    "state": null
+                  }
+                ],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+              }
+            ],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+          },
+          {
+            "exists": true,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+          }
+        ],
+        "proof_extension_id": "",
+        "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+        "proof_profile_source": "inspected_real_chrome_profile",
+        "source_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ]
+      }
+    },
+    "direct_browser_cdp": false,
+    "engine": {
+      "installed_process": {
+        "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "health": {
+          "listening": false,
+          "ok": true,
+          "onboarded": true,
+          "pid": 16479,
+          "port": 8731,
+          "profile_error": "",
+          "service": "anticipy-local-engine",
+          "version": "product-3"
+        },
+        "ok": true,
+        "pid": 16479,
+        "port": 8731
+      },
+      "url": "http://127.0.0.1:8731"
+    },
+    "generated_at": "2026-05-27T05:03:25Z",
+    "native_host": {
+      "authorized": true,
+      "authorized_extension_ids": [
+        "npnpagopediecennpleihemoochikggb"
+      ],
+      "checked": [
+        {
+          "allowed_origins": [
+            "chrome-extension://__EXTENSION_ID__/"
+          ],
+          "authorized_extension_ids": [],
+          "exists": true,
+          "host_path": "__LAUNCHER_PATH__",
+          "name": "com.anticipy.agent",
+          "path": "native_host/com.anticipy.agent.json",
+          "uses_placeholder_origin": true
+        },
+        {
+          "allowed_origins": [
+            "chrome-extension://npnpagopediecennpleihemoochikggb/"
+          ],
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "exists": true,
+          "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+          "name": "com.anticipy.agent",
+          "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        }
+      ]
+    },
+    "pass": false,
+    "proof_request": {
+      "error": "",
+      "ok": false,
+      "status": 0
+    },
+    "proofs": {
+      "acquired_via": "chrome_extension_native_messaging",
+      "dom_path": "",
+      "screenshot_path": "",
+      "visible_surface": false
+    },
+    "public_extension": {
+      "download_path": "public/anticipy-extension.zip",
+      "entries": [
+        "anticipy-v6/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/test_injection_fallback.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+        "anticipy-v6/README.txt",
+        "anticipy-v6/DAEMON-INSTALLER/",
+        "anticipy-v6/DAEMON-INSTALLER/install.command",
+        "anticipy-v6/DAEMON-INSTALLER/install.sh",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py"
+      ],
+      "entry_count": 192,
+      "exists": true,
+      "manifest": {
+        "has_key": true,
+        "has_native_messaging": true,
+        "manifest_version": 3,
+        "name": "Anticipy Bridge v6",
+        "permissions": [
+          "tabs",
+          "tabGroups",
+          "scripting",
+          "storage",
+          "activeTab",
+          "nativeMessaging"
+        ],
+        "version": "6.0.0"
+      },
+      "sha256": "1cd2a020919489c396588de4464fb003b138c0e49dde6323ca6261de5410538c"
+    },
+    "schema": "anticipy.real_surface_proof.v7",
+    "surface_path": "chrome_extension_native_messaging",
+    "uses_chrome_real_clone": false,
+    "probe_stdout": "{\"pass\": false, \"surface_path\": \"chrome_extension_native_messaging\", \"blocker\": \"V7.10 Anticipy Chrome extension/native bridge did not expose a fresh authorized proof channel that produced both visible DOM and screenshot artifacts without CDP.\", \"out\": \"/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/real_surface_proof.json\"}\n",
+    "probe_stderr": "",
+    "probe_exit_code": 1,
+    "proof_json_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/real_surface_proof.json"
+  },
+  "real_surface_proof": {
+    "applescript_surface_probe": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "ee3a6364c86aa583359eed2d50509c6ea56ae99ea877228f4696378e1f7caa56",
+      "requested_url": "",
+      "screenshot_bytes": 1108293,
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "64ba1116b005c04436ae3dff2c71d0d38a5583940ac10d6d03471d0e15eff68e",
+      "title": "Higgsfield CLI | AI Image & Video Generation for Any Agent",
+      "url": "https://higgsfield.ai/cli",
+      "visible_surface": false,
+      "visible_text_bytes": 7503,
+      "visible_text_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "585579afbf7d2ccb02542e2635f26fa553944d05af80b29791535c030b88a9c4"
+    },
+    "blocker": {
+      "chrome_profiles_checked": [
+        {
+          "exists": true,
+          "profiles": [
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [
+                {
+                  "disable_reasons": {},
+                  "enabled": true,
+                  "has_native_messaging": false,
+                  "id": "npnpagopediecennpleihemoochikggb",
+                  "name": "",
+                  "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                  "permissions": [],
+                  "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                  "source": "Secure Preferences",
+                  "state": null
+                }
+              ],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+            }
+          ],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+        },
+        {
+          "exists": true,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+        }
+      ],
+      "extension_candidates": [
+        {
+          "disable_reasons": {},
+          "enabled": true,
+          "has_native_messaging": false,
+          "id": "npnpagopediecennpleihemoochikggb",
+          "name": "",
+          "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+          "permissions": [],
+          "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+          "source": "Secure Preferences",
+          "state": null
+        }
+      ],
+      "kind": "extension_missing_or_unauthorized",
+      "native_host_manifest": {
+        "authorized": true,
+        "authorized_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ],
+        "checked": [
+          {
+            "allowed_origins": [
+              "chrome-extension://__EXTENSION_ID__/"
+            ],
+            "authorized_extension_ids": [],
+            "exists": true,
+            "host_path": "__LAUNCHER_PATH__",
+            "name": "com.anticipy.agent",
+            "path": "native_host/com.anticipy.agent.json",
+            "uses_placeholder_origin": true
+          },
+          {
+            "allowed_origins": [
+              "chrome-extension://npnpagopediecennpleihemoochikggb/"
+            ],
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "exists": true,
+            "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+            "name": "com.anticipy.agent",
+            "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          }
+        ]
+      },
+      "reason": "V7.10 Anticipy Chrome extension/native bridge did not expose a fresh authorized proof channel that produced both visible DOM and screenshot artifacts without CDP."
+    },
+    "chrome": {
+      "app": "Google Chrome",
+      "hidden_browser": false,
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "profile": {
+        "extension_candidates": [
+          {
+            "disable_reasons": {},
+            "enabled": true,
+            "has_native_messaging": false,
+            "id": "npnpagopediecennpleihemoochikggb",
+            "name": "",
+            "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+            "permissions": [],
+            "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "source": "Secure Preferences",
+            "state": null
+          }
+        ],
+        "kind": "real_user",
+        "profiles_checked": [
+          {
+            "exists": true,
+            "profiles": [
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [
+                  {
+                    "disable_reasons": {},
+                    "enabled": true,
+                    "has_native_messaging": false,
+                    "id": "npnpagopediecennpleihemoochikggb",
+                    "name": "",
+                    "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                    "permissions": [],
+                    "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                    "source": "Secure Preferences",
+                    "state": null
+                  }
+                ],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+              }
+            ],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+          },
+          {
+            "exists": true,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+          }
+        ],
+        "proof_extension_id": "",
+        "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+        "proof_profile_source": "inspected_real_chrome_profile",
+        "source_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ]
+      }
+    },
+    "direct_browser_cdp": false,
+    "engine": {
+      "installed_process": {
+        "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "health": {
+          "listening": false,
+          "ok": true,
+          "onboarded": true,
+          "pid": 16479,
+          "port": 8731,
+          "profile_error": "",
+          "service": "anticipy-local-engine",
+          "version": "product-3"
+        },
+        "ok": true,
+        "pid": 16479,
+        "port": 8731
+      },
+      "url": "http://127.0.0.1:8731"
+    },
+    "generated_at": "2026-05-27T05:03:25Z",
+    "native_host": {
+      "authorized": true,
+      "authorized_extension_ids": [
+        "npnpagopediecennpleihemoochikggb"
+      ],
+      "checked": [
+        {
+          "allowed_origins": [
+            "chrome-extension://__EXTENSION_ID__/"
+          ],
+          "authorized_extension_ids": [],
+          "exists": true,
+          "host_path": "__LAUNCHER_PATH__",
+          "name": "com.anticipy.agent",
+          "path": "native_host/com.anticipy.agent.json",
+          "uses_placeholder_origin": true
+        },
+        {
+          "allowed_origins": [
+            "chrome-extension://npnpagopediecennpleihemoochikggb/"
+          ],
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "exists": true,
+          "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+          "name": "com.anticipy.agent",
+          "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        }
+      ]
+    },
+    "pass": false,
+    "proof_request": {
+      "error": "",
+      "ok": false,
+      "status": 0
+    },
+    "proofs": {
+      "acquired_via": "chrome_extension_native_messaging",
+      "dom_path": "",
+      "screenshot_path": "",
+      "visible_surface": false
+    },
+    "public_extension": {
+      "download_path": "public/anticipy-extension.zip",
+      "entries": [
+        "anticipy-v6/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/test_injection_fallback.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+        "anticipy-v6/README.txt",
+        "anticipy-v6/DAEMON-INSTALLER/",
+        "anticipy-v6/DAEMON-INSTALLER/install.command",
+        "anticipy-v6/DAEMON-INSTALLER/install.sh",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py"
+      ],
+      "entry_count": 192,
+      "exists": true,
+      "manifest": {
+        "has_key": true,
+        "has_native_messaging": true,
+        "manifest_version": 3,
+        "name": "Anticipy Bridge v6",
+        "permissions": [
+          "tabs",
+          "tabGroups",
+          "scripting",
+          "storage",
+          "activeTab",
+          "nativeMessaging"
+        ],
+        "version": "6.0.0"
+      },
+      "sha256": "1cd2a020919489c396588de4464fb003b138c0e49dde6323ca6261de5410538c"
+    },
+    "schema": "anticipy.real_surface_proof.v7",
+    "surface_path": "chrome_extension_native_messaging",
+    "uses_chrome_real_clone": false,
+    "probe_stdout": "{\"pass\": false, \"surface_path\": \"chrome_extension_native_messaging\", \"blocker\": \"V7.10 Anticipy Chrome extension/native bridge did not expose a fresh authorized proof channel that produced both visible DOM and screenshot artifacts without CDP.\", \"out\": \"/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/real_surface_proof.json\"}\n",
+    "probe_stderr": "",
+    "probe_exit_code": 1,
+    "proof_json_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/real_surface_proof.json"
+  },
+  "tabs": [
+    {
+      "id": "7D6FEC484A3D91DF4DF6EA118C5D548C",
+      "type": "page",
+      "url": "https://higgsfield.ai/cli",
+      "title": "Higgsfield CLI | AI Image &amp; Video Generation for Any Agent"
+    },
+    {
+      "id": "867614651709CC3C680B1EBDCC873E2C",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-ef18aa287f17",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "1D73144AC95BF390EB819A1C1A07D755",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=1710&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=1710&amp;isDark=true"
+    },
+    {
+      "id": "16B1CF87341D87F60E4C16A781346463",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "F484D6E05C4E9DB822F0A84813D4FD0F",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "C90D3A6A68352AEAC5CE3EB91E5C52DE",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "ED6EAB143DFB69D1082E23FC4068DB25",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "2BFF0B48AC0D11C1942D30B0CA7FB47E",
+      "type": "page",
+      "url": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+      "title": "Expenses | Default view | Notion"
+    },
+    {
+      "id": "C6FE1CECE864574A3EB989C1F731D120",
+      "type": "page",
+      "url": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+      "title": "Expenses | Default view | Notion"
+    },
+    {
+      "id": "6B1FB2F675C50D751B166501FCA97E79",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-67b24e98bfff",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "D0BEE97EAD5B45133CDA8FC303A6C7DF",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "8191D217A2E436EFFD26542128FA366F",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "D41F98ED5D0AD0DBFE5C8E88A40007A5",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "19CB388BA71950FACD08E7EA401B98C1",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "190A2C4968552B8DE5EB6954D3ED14AF",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "C25CB6DBFF674AA527EB8FC75461F8A2",
+      "type": "page",
+      "url": "https://linear.app/login",
+      "title": "Linear"
+    },
+    {
+      "id": "3A347F15AE21B5544308AA1A3EC3895D",
+      "type": "page",
+      "url": "https://linear.app/",
+      "title": "Linear \u2013 The system for product development"
+    },
+    {
+      "id": "E6298AB50A37577F5FAF09461308D960",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "D137358336B9A4E91C4F5158AE092E0E",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-c87e0e50e6ae",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "1C5A26344DBD1F1EEBC43E837F52C12F",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "2CBA046B4C7028A1743D61C503075F0A",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "B7ABDA27AE6F240EA4858D9D8131E739",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "5E0CC55686BCC58AD4AEF2C26C0D7722",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "9C7B6C252D978A18E957EA483396569E",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "3E48852F4880C1395E8E22189E552098",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "10AF202AA39C4A3C0343D6B9DA5850A0",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-bcc55a8ea5a7",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "7EB3E6BE065BE0BD70C30DC3A5AF3F97",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "421D2C341AED2E9B9F715870D97CE56C",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "9C1DCCA98125A7ABA6C58BE967344A62",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "01F86C2877BC0AEC95A88F67D090510D",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "779BF059DC43A83B5127A3D7D74BE670",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "9E1E13B482F02F1CB16B130AAE16D714",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "9F177B36894264B0AC2C81574C71545F",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "72199D70F2F16BADCF264C16A98C60EB",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "82519356C3313552CE1A2D1D796778BB",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-5e79a4c8629d",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "840106C6740E422AD73ACC7636C122DE",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "570D98C931E431C704DFE2D510D1E348",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "2401B36356FF266489AE82AC6396CD82",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "348261FF0FA4C5A53A1A444117701F0C",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "D7F68B2E542670D8569329BCD9CE2984",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "A5AD1354F2A4FC8BE1D77EBA9CF2AF5C",
+      "type": "page",
+      "url": "https://app.hubspot.com/login",
+      "title": "HubSpot Login and Sign in"
+    },
+    {
+      "id": "78DBC31EE9E605789F7750F58164923E",
+      "type": "page",
+      "url": "https://app.hubspot.com/login",
+      "title": "HubSpot Login and Sign in"
+    },
+    {
+      "id": "32323A8670D7968B92C66E6DAB932EFB",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "E33DADA07E579AE38BB291EBDCC2F3F0",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-b748b0503f9b",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "3B3B8C10599383DE2ADCC46A415BFAFA",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "13F34FC8256FABDB46AA15227CCC4949",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "89CDDBC450C6FDDD2E0E434E1C6BA948",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "57A298FEAC3FA2901DA3B66392424173",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "BDA4580D9D111DE479A9F6C692C1A474",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "B77CB87E2A6210F0D631E5868CAD4DBF",
+      "type": "page",
+      "url": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+      "title": "Expenses | Default view | Notion"
+    },
+    {
+      "id": "7856E40D5119C6D723C96283D315480F",
+      "type": "page",
+      "url": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+      "title": "Expenses | Default view | Notion"
+    },
+    {
+      "id": "E22EECB0FFB45FEAABC58AE7EE4C6E47",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-a4032e80059b",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "46418FDB33E6CA5CD650DE6BC6F0418E",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "E6D8AA587669C64C22A089EFA4E615DF",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "9D51ACDAEE44D48F7B9E4DF28F7DB33E",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-d90997f28e91",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "A8041AE1C56CA75E93B25C10546F6122",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "E144574B8ACB9CDF367EE2FDF3F61AB6",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "B78A66B0053851226B9F9802C38605FF",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "12605DEB29E533210F1FE3A3ABDE02D1",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-2bab0b2713f4",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "C5EB81961751255985DC727E65AC37D2",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "AED6207675C31F848AD0D62A6DDE119B",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-ed3e19a9b9fc",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "473E41909CED42175C6B6ABEEB503DC8",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "BEADA7FB226A900AC64032CEA3AA1719",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "A4943A31B05FED16E76B2605414B9BCF",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=0&screenY=34&effectiveWindowWidth=855&isDark=true",
+      "title": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&amp;colorScheme=&amp;screenX=0&amp;screenY=34&amp;effectiveWindowWidth=855&amp;isDark=true"
+    },
+    {
+      "id": "72D51FBD484051D7427672B84E8F96CC",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-ad5f01b2ec15",
+      "title": "Anticipy App"
+    },
+    {
+      "id": "A78C25966E316A779F8DE1B51F0723AC",
+      "type": "page",
+      "url": "https://www.google.com/?zx=1779856268428",
+      "title": "Google"
+    },
+    {
+      "id": "6BDD60CE4A60C4398A1F9AD865D5A0C8",
+      "type": "iframe",
+      "url": "https://accounts.google.com/RotateCookiesPage?og_pid=538&rot=3&origin=https%3A%2F%2Fwww.google.com&exp_id=0",
+      "title": "https://accounts.google.com/RotateCookiesPage?og_pid=538&amp;rot=3&amp;origin=https%3A%2F%2Fwww.google.com&amp;exp_id=0"
+    },
+    {
+      "id": "5594A0AA9C56F3D4CA420408291161CE",
+      "type": "iframe",
+      "url": "https://accounts.google.com/RotateCookiesPage?og_pid=538&rot=3&origin=https%3A%2F%2Fwww.google.com&exp_id=0",
+      "title": "https://accounts.google.com/RotateCookiesPage?og_pid=538&amp;rot=3&amp;origin=https%3A%2F%2Fwww.google.com&amp;exp_id=0"
+    },
+    {
+      "id": "1717B71DE0D7E9BC6C07C9CF01C9E24C",
+      "type": "page",
+      "url": "https://www.google.com/?zx=1779856208412",
+      "title": "Google"
+    },
+    {
+      "id": "142B08B9F5F284AA5A2DF665EEF2662F",
+      "type": "iframe",
+      "url": "https://accounts.google.com/RotateCookiesPage?og_pid=538&rot=3&origin=https%3A%2F%2Fwww.google.com&exp_id=0",
+      "title": "https://accounts.google.com/RotateCookiesPage?og_pid=538&amp;rot=3&amp;origin=https%3A%2F%2Fwww.google.com&amp;exp_id=0"
+    },
+    {
+      "id": "0F96D426079940129119D241D4B33E58",
+      "type": "page",
+      "url": "https://www.google.com/?zx=1779856190186",
+      "title": "Google"
+    },
+    {
+      "id": "43A067DB5D81A06E868C5B0AF43F7F03",
+      "type": "page",
+      "url": "https://example.com/",
+      "title": "Example Domain"
+    },
+    {
+      "id": "CCAA1B9FC9B238A97ADFF72858C585A3",
+      "type": "page",
+      "url": "https://www.google.com/?zx=1779855805943",
+      "title": "Google"
+    },
+    {
+      "id": "21C93C87DA337BCB85D4D4844764A83D",
+      "type": "iframe",
+      "url": "https://accounts.google.com/RotateCookiesPage?og_pid=538&rot=3&origin=https%3A%2F%2Fwww.google.com&exp_id=0",
+      "title": "https://accounts.google.com/RotateCookiesPage?og_pid=538&amp;rot=3&amp;origin=https%3A%2F%2Fwww.google.com&amp;exp_id=0"
+    },
+    {
+      "id": "BCA6233CF9D13BFAF5ECC112D8D9DABC",
+      "type": "page",
+      "url": "https://www.toddleapp.com/",
+      "title": "LMS (Learning Management System) for K12 Schools | Toddle"
+    },
+    {
+      "id": "1B66DAF83F93AD8551D6BDA8661B52D9",
+      "type": "iframe",
+      "url": "https://app.hubspot.com/conversations-visitor/5219685/threads/utk/923672b2e90c49feaa5bf5a11cfa9525?uuid=19d28da4fedb479fa69f0a79418a34bd&mobile=false&mobileSafari=false&hideWelcomeMessage=false&hstc=109199642.3daee419a477c1fb3146b230c8e452d1.1771783259272.1779461278084.1779514623809.28&domain=toddleapp.com&inApp53=false&messagesUtk=923672b2e90c49feaa5bf5a11cfa9525&url=https%3A%2F%2Fwww.toddleapp.com%2F&inline=false&isFullscreen=false&globalCookieOptOut=&isFirstVisitorSession=false&isAttachmentDisabled=false&isInitialInputFocusDisabled=false&enableWidgetCookieBanner=false&isInCMS=false&hideScrollToButton=true&isIOSMobile=false&hubspotUtk=3daee419a477c1fb3146b230c8e452d1",
+      "title": "https://app.hubspot.com/conversations-visitor/5219685/threads/utk/923672b2e90c49feaa5bf5a11cfa9525?uuid=19d28da4fedb479fa69f0a79418a34bd&amp;mobile=false&amp;mobileSafari=false&amp;hideWelcomeMessage=false&amp;hstc=109199642.3daee419a477c1fb3146b230c8e452d1.1771783259272.1779461278084.1779514623809.28&amp;domain=toddleapp.com&amp;inApp53=false&amp;messagesUtk=923672b2e90c49feaa5bf5a11cfa9525&amp;url=https%3A%2F%2Fwww.toddleapp.com%2F&amp;inline=false&amp;isFullscreen=false&amp;globalCookieOptOut=&amp;isFirstVisitorSession=false&amp;isAttachmentDisabled=false&amp;isInitialInputFocusDisabled=false&amp;enableWidgetCookieBanner=false&amp;isInCMS=false&amp;hideScrollToButton=true&amp;isIOSMobile=false&amp;hubspotUtk=3daee419a477c1fb3146b230c8e452d1"
+    },
+    {
+      "id": "64ACA86E7F3348DBEACBA9FBE51B773B",
+      "type": "iframe",
+      "url": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/snaps/index.html",
+      "title": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/snaps/index.html"
+    },
+    {
+      "id": "F952A3B020D8A94ABE3365E47862EE24",
+      "type": "background_page",
+      "url": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/offscreen.html",
+      "title": "MetaMask Offscreen Page"
+    },
+    {
+      "id": "CEA585A48BB93E3FD9F35A678BD6D7B0",
+      "type": "iframe",
+      "url": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/snaps/index.html",
+      "title": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/snaps/index.html"
+    },
+    {
+      "id": "7D9DBDC2040649B2A2837C1960BE797C",
+      "type": "iframe",
+      "url": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/snaps/index.html",
+      "title": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/snaps/index.html"
+    },
+    {
+      "id": "DF832792AC561CD7C1AAB962773E83A1",
+      "type": "background_page",
+      "url": "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/offscreen.html",
+      "title": "Offscreen Audio Player &amp; GIF Generator"
+    },
+    {
+      "id": "4D63F8D6C6EAB3A7446C1A297D752570",
+      "type": "page",
+      "url": "about:blank",
+      "title": "about:blank"
+    },
+    {
+      "id": "69E98EEB32B7B2998310460A3E14E920",
+      "type": "page",
+      "url": "about:blank",
+      "title": "about:blank"
+    },
+    {
+      "id": "91DDF82732EAD992E760074AE1849352",
+      "type": "shared_worker",
+      "url": "https://www.notion.so/_assets/experimental/wasm-sqlite-shared-worker-29431b8b9a75a62b.js",
+      "title": ""
+    },
+    {
+      "id": "C74CCB19A632046607E0099A57BF1952",
+      "type": "shared_worker",
+      "url": "https://www.notion.so/_assets/experimental/opfs-page-cache-worker-87685a84da351960.js",
+      "title": ""
+    },
+    {
+      "id": "CEC6DA76AFD5A314EBDB7533F872884E",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "AFC34E8C6534189B0829460620B6AB29",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "F4386B560A41A0F2E74FDC4F4973FB2D",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "D480363CC2135A1789951FBCBF757056",
+      "type": "service_worker",
+      "url": "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/service-worker-loader.js",
+      "title": "Service Worker chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/service-worker-loader.js"
+    },
+    {
+      "id": "2E1A20F88A3D9387C3AA20534152DBD4",
+      "type": "service_worker",
+      "url": "https://higgsfield.ai/auxiliary/notifications-sw.js",
+      "title": "Service Worker https://higgsfield.ai/auxiliary/notifications-sw.js"
+    },
+    {
+      "id": "1F86B8B99752820B44276BEBA4EE1519",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "4B662E46306A8F853599050660B69595",
+      "type": "service_worker",
+      "url": "https://github.com/assets-cdn/worker/service-worker-903af37fa7e2d38b.js?current_user=omize10&errors_url=https%3A%2F%2Fapi.github.com%2F_private%2Fbrowser%2Ferrors&release=d81e5ef035ea5218d2be3322c4950b97e6bd21fd&actor_id=87214684&is_staff=false&analytics_collector_url=https%3A%2F%2Fcollector.github.com%2Fgithub%2Fcollect&module=true",
+      "title": "Service Worker https://github.com/assets-cdn/worker/service-worker-903af37fa7e2d38b.js?current_user=omize10&amp;errors_url=https%3A%2F%2Fapi.github.com%2F_private%2Fbrowser%2Ferrors&amp;release=d81e5ef035ea5218d2be3322c4950b97e6bd21fd&amp;actor_id=87214684&amp;is_staff=false&amp;analytics_collector_url=https%3A%2F%2Fcollector.github.com%2Fgithub%2Fcollect&amp;module=true"
+    },
+    {
+      "id": "24BE515F950E1131EE507D63FC3CC40A",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "5B474A7399332FDCA99D26B5E6B59721",
+      "type": "service_worker",
+      "url": "chrome-extension://hehggadaopoacecdllhhajmbjkdcmajg/background.js",
+      "title": "Service Worker chrome-extension://hehggadaopoacecdllhhajmbjkdcmajg/background.js"
+    },
+    {
+      "id": "FEC8624D16EA1F3DEF181B595DFE3A9E",
+      "type": "service_worker",
+      "url": "chrome-extension://ndnaehgpjlnokgebbaldlmgkapkpjkkb/background.bundle.js",
+      "title": "Service Worker chrome-extension://ndnaehgpjlnokgebbaldlmgkapkpjkkb/background.bundle.js"
+    },
+    {
+      "id": "3861C096A30EEAA63FBFDFE13489A2FB",
+      "type": "service_worker",
+      "url": "chrome-extension://majdfhpaihoncoakbjgbdhglocklcgno/service-worker-loader.js",
+      "title": "Service Worker chrome-extension://majdfhpaihoncoakbjgbdhglocklcgno/service-worker-loader.js"
+    },
+    {
+      "id": "FE02EAAE4FE73690A05F5D1F5EA4FF2A",
+      "type": "service_worker",
+      "url": "chrome-extension://jfcmjbboehfdmgbhheahjlnoimbgfdbn/service-worker.js",
+      "title": "Service Worker chrome-extension://jfcmjbboehfdmgbhheahjlnoimbgfdbn/service-worker.js"
+    },
+    {
+      "id": "BE176F5CDF832FC73CE7D26CB83C891F",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "ED02DBF2D63652D036E6C154DD7E849E",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "F759BA28AFD58E7235E2DE02496BC287",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "65EC53E34AA507E96922818A2B0C6F0A",
+      "type": "service_worker",
+      "url": "chrome-extension://phkbamefinggmakgklpkljjmgibohnba/service-worker-loader.js",
+      "title": "Service Worker chrome-extension://phkbamefinggmakgklpkljjmgibohnba/service-worker-loader.js"
+    },
+    {
+      "id": "69A5C6D6140748A9A51B4905B450B89B",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "F209254E53BA116E619A7CE4ACF73BC2",
+      "type": "service_worker",
+      "url": "chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/background/serviceWorker.js",
+      "title": "Service Worker chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/background/serviceWorker.js"
+    },
+    {
+      "id": "F805C1F5362E369A47E1997978200935",
+      "type": "service_worker",
+      "url": "chrome-extension://ejkiikneibegknkgimmihdpcbcedgmpo/service-worker.js",
+      "title": "Service Worker chrome-extension://ejkiikneibegknkgimmihdpcbcedgmpo/service-worker.js"
+    },
+    {
+      "id": "33994BC92FECBFDAD4147E15F4489932",
+      "type": "service_worker",
+      "url": "chrome-extension://dmkamcknogkgcdfhhbddcghachkejeap/background.bundle.js",
+      "title": "Service Worker chrome-extension://dmkamcknogkgcdfhhbddcghachkejeap/background.bundle.js"
+    },
+    {
+      "id": "A61D6CAF8B63F2EFD26BF4CA9AF6D2D9",
+      "type": "service_worker",
+      "url": "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/app-init.js",
+      "title": "Service Worker chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/app-init.js"
+    },
+    {
+      "id": "FA28791AEED7E27895E2735E4729ADC5",
+      "type": "service_worker",
+      "url": "https://www.notion.so/sw.js",
+      "title": "Service Worker https://www.notion.so/sw.js"
+    },
+    {
+      "id": "56B3EAFD28F4A6F44767D4F393665896",
+      "type": "service_worker",
+      "url": "chrome-extension://ilehaonighjijnmpnagapkhpcdbhclfg/src/background.js",
+      "title": "Service Worker chrome-extension://ilehaonighjijnmpnagapkhpcdbhclfg/src/background.js"
+    },
+    {
+      "id": "4897A926A51FA8EDE4AD125000A4A4B5",
+      "type": "service_worker",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/background.js",
+      "title": "Service Worker chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/background.js"
+    },
+    {
+      "id": "63D2B0C1BD797ACEA56DCCA0FCAA7B43",
+      "type": "worker",
+      "url": "",
+      "title": ""
+    },
+    {
+      "id": "94C6CB0C455C1FFE4C516D65CF94EEF9",
+      "type": "page",
+      "url": "about:blank",
+      "title": "about:blank"
+    },
+    {
+      "id": "4B00DE453F0C944B9AA22F5A397EAB2B",
+      "type": "page",
+      "url": "about:blank",
+      "title": "about:blank"
+    },
+    {
+      "id": "44DA9840FCB577B16C7D8E720788962F",
+      "type": "page",
+      "url": "about:blank",
+      "title": "about:blank"
+    }
+  ],
+  "pages": [
+    {
+      "target_id": "867614651709CC3C680B1EBDCC873E2C",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-ef18aa287f17",
+      "title": "Anticipy App",
+      "surface": "anticipy",
+      "visible_text": "Anticipy Listen History Settings CREATE ACCOUNT Create your Anticipy account. EMAIL PASSWORD Get Anticipy Already have an account? Log in Real account, real Supabase. We never use your Google or personal credentials and never auto-create third-party accounts. Mac install note: Gatekeeper may show an unverified developer warning because this build is not Apple-notarized yet. The download step explains the one-time Open Anyway path.",
+      "focused": false,
+      "inputs": [
+        {
+          "tag": "INPUT",
+          "aria": "Email",
+          "role": "",
+          "text": ""
+        },
+        {
+          "tag": "INPUT",
+          "aria": "Password",
+          "role": "",
+          "text": ""
+        }
+      ],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/anticipy-867614651709CC3C680B1EBDCC873E2C.png"
+    },
+    {
+      "target_id": "2BFF0B48AC0D11C1942D30B0CA7FB47E",
+      "type": "page",
+      "url": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+      "title": "Expenses | Default view | Notion",
+      "surface": "notion",
+      "visible_text": "Skip to content O Omize Ten\u2019s Space Home Chat Meetings Inbox Meetings Connect your calendar See all your events and start meeting notes for them. New AI meeting note Recents Expenses \u2705 To-Do List Create and link to-do list To Do List \ud83d\udfe7 Anticipy HQ Meeting @Yesterday 9:31 PM \u2705 To-Do Tasks \ud83d\udcc1 Notes & Docs \ud83d\udc65 Team More Agents New agent Private \ud83d\udfe7 Anticipy HQ Meeting @Yesterday 9:31 PM To Do List \ud83d\udc4b Getting Started Teamspaces Omize Ten\u2019s Space HQ Add new Notion apps Notion Mail Notion Calendar Notion Desktop Library My Tasks Marketplace Help Trash Invite members Collaborate with your team. New chat \u2318O \ud83d\udfe7 Anticipy HQ Expenses Share Add icon Add cover Hide description Expenses Every dollar Anticipy spends. Manual entries plus AI-logged receipts from email. Recurring subscriptions are tracked here too. Default view New Vendor Amount Amount USD Category Currency Date Paid Expense ID Frequency Method Next Charge Notes Receipt Link Recurring Status Tax Deductible Hollyland Lark A1 Combo $159.00 159 Hardware USD Codex (lower tier $20/mo) $20.00 20 SaaS USD Codex ($100/mo plan) $100.00 100 SaaS USD Claude ($280/mo plan) $280.00 280 SaaS USD Porkbun (4 new mailboxes) $96.00 96 Domains USD Apple Developer Program $99.00 99 SaaS USD Porkbun (Domains) $165.40 165.4 Domains USD Alibaba (Winnie Wu) $62.22 62.22 Hardware USD Grok xAI $5.00 5 SaaS USD Railway $0.00 0 Compute USD Twilio $1.41 1.41 Compute USD GitHub (Subscription) $0.00 0 SaaS USD Wispr Flow (Rumur LLC) $9.99 9.99 SaaS USD Retell AI $0.00 0 Compute USD Moonshot AI (Kimi) $0.00 0 Compute USD GitHub Codespaces $32.31 32.31 Compute USD Porkbun (Email Hosting) $24.00 24 Domains USD OpenRouter $10.80 10.8 Compute USD ChatGPT Plus $20.00 20 SaaS USD Alibaba (Leyun Wu) $0.00 0 Hardware USD Cerebras Systems $0.00 0 Compute USD Anthropic (Claude Max 5x) $156.80 114.46 SaaS CAD OpenRouter $10.80 10.8 Compute USD New page Recurring Subscriptions",
+      "focused": false,
+      "inputs": [
+        {
+          "tag": "H1",
+          "aria": "",
+          "role": "textbox",
+          "text": "Expenses"
+        },
+        {
+          "tag": "DIV",
+          "aria": "",
+          "role": "textbox",
+          "text": "Every dollar Anticipy spends. Manual entries plus AI-logged receipts from email. Recurring subscriptions are tracked here too."
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        }
+      ],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/notion-2BFF0B48AC0D11C1942D30B0CA7FB47E.png"
+    },
+    {
+      "target_id": "C25CB6DBFF674AA527EB8FC75461F8A2",
+      "type": "page",
+      "url": "https://linear.app/login",
+      "title": "Linear",
+      "surface": "linear",
+      "visible_text": "Log in to Linear Continue with Google Continue with email Continue with SAML SSO Log in with passkey Don\u2019t have an account? Sign up or learn more",
+      "focused": false,
+      "inputs": [],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/linear-C25CB6DBFF674AA527EB8FC75461F8A2.png"
+    },
+    {
+      "target_id": "7D6FEC484A3D91DF4DF6EA118C5D548C",
+      "type": "page",
+      "url": "https://higgsfield.ai/cli",
+      "title": "Higgsfield CLI | AI Image &amp; Video Generation for Any Agent",
+      "surface": "browser",
+      "visible_text": "Explore Image Video Audio Supercomputer New MCP & CLI New Collab Marketing Studio Cinema Studio AI Influencer Canvas Apps Pricing 30% OFF Login Sign up TURN CHATGPT INTO A CREATIVE ENGINE Connect Higgsfield to Claude, OpenClaw, Hermes, NemoClaw and generate cinematic images and videos right from your conversations. MCP CLI Skill Github 1 Install the CLI One line \u2014 auth, uploads, and polling are handled for you. npm install -g @higgsfield/cli 2 Sign in Opens a browser, takes 5 seconds. Run higgsfield auth login and you're authenticated. higgsfield auth login 3 Plug skills into your agent Works with Claude Code, Cursor, Codex, and 12+ other agents. Then just say: \"Generate an image with Higgsfield.\" npx skills add higgsfield-ai/skills THE COMMAND SET auth \u00b7 account Device-code OAuth, credit balance, transactions, and team-workspace switching. auth account workspace version model Live catalog of all 35+ models. Inspect parameter schemas, defaults, and enums. list get generate The workhorse. Submit, estimate cost, wait, fetch, and list jobs across every model. create cost wait get list upload Push an image, video, or audio file. Returns a UUID to plug into any generation. image video audio soul-id Train a face-faithful identity from 3\u20135 reference photos. create wait list marketing-studio Score engagement, hook strength, retention risk, and creative performance. virality_predictor A COMPLETE CREATIVE STUDIO INSIDE CLAUDE Image generation, video creation, character training, and asset management in a single connection GENERATIVE MEDIA IMAGE & VIDEO GENERATION From static stills to full cinematic video - choose your model, set the parameters, and generate. Soul and Nano Banana for images. Seedance, Kling, Veo for video. Up to 4K, any aspect ratio, any duration. AD ENGINE ONE PROMPT REPLACES YOUR ENTIRE AGENCY Finds top-spending niches, generates videos across formats UGC, TV spot, Wild Card - writes outreach, and delivers a weekly report. Replaces a $5K/mo retainer - from one brief. MODES PICK A FORMAT, SKIP THE SETUP Choose from 10+ ready-made modes - product shots, lifestyle scenes, hero banners, Pinterest pins, ad packs and more. Claude picks the right preset and passes it into generation automatically. BRAND BUILDER FROM ZERO TO A PROFITABLE BRAND Finds an underserved product, sources a factory, generates listing photos and hero video, mines reviews for counter-narrative ads, builds the D2C site. A COMPLETE CREATIVE STUDIO INSIDE YOUR AGENT Image generation, video creation, character training, and asset management in a single connection Every marketing asset Turn any product into a campaign in seconds. Drop a URL or photo, pick a format - Marketing Studio handles the rest. Posters, ads, lifestyle shots, social posts - whatever the channel needs. Your brand, inside every prompt Connect Marketing Studio to Claude or any MCP client. Your brand kit - colors, fonts, tone of voice - loads automatically with every generation. No re-uploading, no drift. On-brand by default. Automated content for any niche Pulls listings or trends, generates a polished video per item, and distributes via WhatsApp, YouTube, or wherever your audience lives. A full channel on autopilot - zero agency fees. Engagement score One number for how long people will actually watch. Not a guess, not a vibe check - a modeled read on whether your clip earns the scroll or loses it. The closest thing to a test screening before you hit publish. FROM CONCEPT TO CONTENT IN ONE CONVERSATION Tell Claude what you're working on. It picks the right models and delivers production-ready results E-COMMERCE & PRODUCT Generate lifestyle product shots, swap backgrounds, and create promotional videos without a photo studio. Describe your product and scene, and Claude delivers ready-to-publish visuals. SOCIAL MEDIA & CONTENT CREATION Produce scroll-stopping images and short-form videos for Instagram, TikTok, and YouTube. Go from idea to post in a single conversation. MARKETING AGENCIES Scale campaign visuals across formats, styles, and models in minutes. Generate dozens of variations, compare outputs, and deliver client-ready assets from one conversation. FILMMAKING Storyboard scenes, generate concept art, previsualize shots, and produce cinematic video clips. Use Soul Characters to maintain cast consistency across every frame. INFOGRAPHICS & VISUAL DATA Turn dry numbers into compelling visuals. Generate custom illustrations, icons, and supporting imagery that bring your data stories to life. FROM IDEA TO CAMPAIGN IN ONE CONVERSATION Start small with a quick generation, or go deep with multi-model comparisons, character training, and full campaign workflows. Claude handles the complexity Asset Creation Generate one asset in seconds Describe what you need and Claude picks the best model, sets the parameters, and delivers the result. Images, videos, or both. Generate a cinematic wide shot of a neon-lit Tokyo alley at night Full Production Build a visual system from a conversation Train a character, generate scenes across locations and styles, produce videos, and manage everything from your generation history. Train a Soul Character from these photos, then generate a 10-image lookbook Multi-Model Compare the best AI models side by side Run the same prompt through Flux, Soul, Cinema Studio, and Seedream in one go. Pick the winner and iterate from there. Generate this scene on 4 different models and show me the results GOT ANY QUESTIONS LEFT? We\u2019ve answered the most frequently asked questions How does Higgsfield connect to AI agents? Which agents are supported? What models are available? What can I create? Do I need an API key? How does pricing work? How long does generation take? Can I use previous generations as input? Can I use Higgsfield with my own agent setup? YOUR AI STACK JUST LEVELED UP Connect Claude, OpenClaw, Hermes, or NemoClaw to Higgsfield in seconds. Videos, images, characters \u2014 on demand. Get started EXPLORE MORE AI FEATURES Manus Cursor Claude MCP Claude Skills Claude AI Image Generator Claude AI Video Generator AI Image Generator AI Video Generator Cinematic Video Generator Image Editing Enterprise Team Plan Soul Intro Mixed Media Intro AI Ad Generator AI Avatar Generator Marketing Automation Marketing Studio Intro Soul Community Chat Intro Trending Templates Kling 3.0 Seedance 2.0 GPT 2 Wan 2.6 Nano Banana Pro Intro Grok Imagine THE ULTIMATE AI-POWERED CAMERA CONTROL FOR FILMMAKERS & CREATORS Higgsfield AI About Trust Careers Contact Pricing Apps Supercomputer Cinema Studio Marketing Studio Higgsfield Canvas Higgsfield Collab Higgsfield MCP AI Influencer Community Enterprise Team Copilot Reference Extension Blog Contests Discord Image AI Image Soul ID Character Draw to Edit Fashion Factory Edit Image Image Upscale Photodump Studio Higgsfield Popcorn Nano Banana Prompt Guide Flux 2 Seedream 5 GPT Image 2 Inpaint Soul 2.0 Soul Cinema Soul Cast Video AI Video Mixed media Sora 2 Introduction Veo 3.1 Introduction Create Video Lipsync Studio Talking Avatar Draw to Video UGC Factory Video Upscale Kling 3.0 WAN 2.6 Seedance 2.0 Edit Banana Placement Product Placement Edit Image Multi Reference Upscale Sora 2 Upscale 535 Mission St, 14th floor, San Francisco, CA, 94105 X / Twitter Youtube Instagram LinkedIn Tiktok \u00a9 2026 Higgsfield AI\u2122. All rights reserved. Press Creative Challenge Privacy Terms Cookie Notice Cookie Settings \u00d7 This website uses cookies Our website uses cookies and similar technologies to improve our service, analyze usage, and personalize content and advertising. We only use non-essential cookies if you enable them. By choosing Accept, you agree to our Privacy Policy, Terms of Use, and Cookie Policy. Manage your preferences at any time. Accept all Reject all Customize",
+      "focused": true,
+      "inputs": [],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/browser-7D6FEC484A3D91DF4DF6EA118C5D548C.png"
+    },
+    {
+      "target_id": "A5AD1354F2A4FC8BE1D77EBA9CF2AF5C",
+      "type": "page",
+      "url": "https://app.hubspot.com/login",
+      "title": "HubSpot Login and Sign in",
+      "surface": "crm",
+      "visible_text": "\u00d7 close We use cookies to improve HubSpot\u2019s site. Some cookies are necessary for our website and services to function properly. Other cookies are optional and help personalize your experience, including advertising and analytics. You can consent to all cookies, decline all optional cookies, or manage optional cookies. Without a selection, our default cookie settings will apply. You can change your preferences at any time. To learn more, check out our Cookie Policy. Accept All Decline All Manage Cookies Sign in or create an account Email Continue See how HubSpot can help you achieve your growth goals. Get a demo \u00a92026 HubSpot, Inc. All Rights Reserved.Privacy PolicyManage Cookies",
+      "focused": false,
+      "inputs": [
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": ""
+        }
+      ],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/crm-A5AD1354F2A4FC8BE1D77EBA9CF2AF5C.png"
+    },
+    {
+      "target_id": "F484D6E05C4E9DB822F0A84813D4FD0F",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App",
+      "surface": "anticipy",
+      "visible_text": "Anticipy Listen History Settings CREATE ACCOUNT Create your Anticipy account. EMAIL PASSWORD Get Anticipy Already have an account? Log in Real account, real Supabase. We never use your Google or personal credentials and never auto-create third-party accounts. Mac install note: Gatekeeper may show an unverified developer warning because this build is not Apple-notarized yet. The download step explains the one-time Open Anyway path.",
+      "focused": false,
+      "inputs": [
+        {
+          "tag": "INPUT",
+          "aria": "Email",
+          "role": "",
+          "text": ""
+        },
+        {
+          "tag": "INPUT",
+          "aria": "Password",
+          "role": "",
+          "text": ""
+        }
+      ],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/anticipy-F484D6E05C4E9DB822F0A84813D4FD0F.png"
+    },
+    {
+      "target_id": "C90D3A6A68352AEAC5CE3EB91E5C52DE",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy App",
+      "surface": "anticipy",
+      "visible_text": "Anticipy Listen History Settings CREATE ACCOUNT Create your Anticipy account. EMAIL PASSWORD Get Anticipy Already have an account? Log in Real account, real Supabase. We never use your Google or personal credentials and never auto-create third-party accounts. Mac install note: Gatekeeper may show an unverified developer warning because this build is not Apple-notarized yet. The download step explains the one-time Open Anyway path.",
+      "focused": false,
+      "inputs": [
+        {
+          "tag": "INPUT",
+          "aria": "Email",
+          "role": "",
+          "text": ""
+        },
+        {
+          "tag": "INPUT",
+          "aria": "Password",
+          "role": "",
+          "text": ""
+        }
+      ],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/anticipy-C90D3A6A68352AEAC5CE3EB91E5C52DE.png"
+    },
+    {
+      "target_id": "C6FE1CECE864574A3EB989C1F731D120",
+      "type": "page",
+      "url": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+      "title": "Expenses | Default view | Notion",
+      "surface": "notion",
+      "visible_text": "Skip to content O Omize Ten\u2019s Space Home Chat Meetings Inbox Meetings Connect your calendar See all your events and start meeting notes for them. New AI meeting note Recents Expenses \u2705 To-Do List Create and link to-do list To Do List \ud83d\udfe7 Anticipy HQ Meeting @Yesterday 9:31 PM \u2705 To-Do Tasks \ud83d\udcc1 Notes & Docs \ud83d\udc65 Team More Agents New agent Private \ud83d\udfe7 Anticipy HQ Meeting @Yesterday 9:31 PM To Do List \ud83d\udc4b Getting Started Teamspaces Omize Ten\u2019s Space HQ Add new Notion apps Notion Mail Notion Calendar Notion Desktop Library My Tasks Marketplace Help Trash Invite members Collaborate with your team. New chat \u2318O \ud83d\udfe7 Anticipy HQ Expenses Share Add icon Add cover Hide description Expenses Every dollar Anticipy spends. Manual entries plus AI-logged receipts from email. Recurring subscriptions are tracked here too. Default view New Vendor Amount Amount USD Category Currency Date Paid Expense ID Frequency Method Next Charge Notes Receipt Link Recurring Status Tax Deductible Hollyland Lark A1 Combo $159.00 159 Hardware USD Codex (lower tier $20/mo) $20.00 20 SaaS USD Codex ($100/mo plan) $100.00 100 SaaS USD Claude ($280/mo plan) $280.00 280 SaaS USD Porkbun (4 new mailboxes) $96.00 96 Domains USD Apple Developer Program $99.00 99 SaaS USD Porkbun (Domains) $165.40 165.4 Domains USD Alibaba (Winnie Wu) $62.22 62.22 Hardware USD Grok xAI $5.00 5 SaaS USD Railway $0.00 0 Compute USD Twilio $1.41 1.41 Compute USD GitHub (Subscription) $0.00 0 SaaS USD Wispr Flow (Rumur LLC) $9.99 9.99 SaaS USD Retell AI $0.00 0 Compute USD Moonshot AI (Kimi) $0.00 0 Compute USD GitHub Codespaces $32.31 32.31 Compute USD Porkbun (Email Hosting) $24.00 24 Domains USD OpenRouter $10.80 10.8 Compute USD ChatGPT Plus $20.00 20 SaaS USD Alibaba (Leyun Wu) $0.00 0 Hardware USD Cerebras Systems $0.00 0 Compute USD Anthropic (Claude Max 5x) $156.80 114.46 SaaS CAD OpenRouter $10.80 10.8 Compute USD New page Recurring Subscriptions",
+      "focused": false,
+      "inputs": [
+        {
+          "tag": "H1",
+          "aria": "",
+          "role": "textbox",
+          "text": "Expenses"
+        },
+        {
+          "tag": "DIV",
+          "aria": "",
+          "role": "textbox",
+          "text": "Every dollar Anticipy spends. Manual entries plus AI-logged receipts from email. Recurring subscriptions are tracked here too."
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        },
+        {
+          "tag": "INPUT",
+          "aria": "",
+          "role": "",
+          "text": "on"
+        }
+      ],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/screenshots/baseline/notion-C6FE1CECE864574A3EB989C1F731D120.png"
+    }
+  ],
+  "native_ax": {
+    "ok": true,
+    "summary": "Terminal windows=1 title=omarebrahim \u2014 \u2733 Claude Code \u2014 node \u25c2 claude --effort max \u2014 80\u00d724\nClaude windows=0\nGoogle Chrome windows=0\nCode windows=0\nWispr Flow windows=1 title=Status\nMessages windows=1 title=+1 (604) 724-5161\nFinder windows=0\nGoogle Chrome windows=1 title=Higgsfield CLI | AI Image & Video Generation for Any Agent - Google Chrome - Omar\nCodex windows=0\nCalendar windows=1 title=Calendar\nReminders windows=0\nNotes windows=0"
+  },
+  "terminal": {
+    "ok": true,
+    "text": "System Events got an error: Can\u2019t get text area 1 of window 1 of process \"Terminal\". Invalid index.\n"
+  },
+  "engine_logs": {
+    "/Users/omarebrahim/.anticipy/declined_actions/latest.jsonl": "he security review, and update the stage. If you cannot prove the visible Salesforce record or my signed-in workspace, decline without writing anything.\", \"ts\": 1779857679.5020149, \"unchanged\": [\"salesforce records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"salesforce records; source context; field/note/status/owner state; no extra visible changes\"}\n{\"blocked_services\": [\"Zendesk\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"decline\": true, \"ingest_id\": \"asr-transcript-1a157182c2824e67aea32b851f4780a0\", \"instruction\": \"Please add a comment to the Zendesk ticket for Lina about the refund and update the status to pending. If you cannot prove the visible Zendesk ticket or my signed-in workspace, decline without writing anything.\", \"intent\": \"crm_saas_write\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Zendesk\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"intent\": \"crm_saas_write\", \"mode\": \"decline\", \"prohibited_actions\": [\"email\", \"post\", \"close\", \"promise\", \"write\"], \"proposal\": \"I can't safely update Zendesk or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a comment to the Zendesk ticket for Lina about the refund and update the status to pending. If you cannot prove the visible Zendesk ticket or my signed-in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"Zendesk\", \"unchanged\": [\"Zendesk records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Zendesk records; source context; field/note/status/owner state; no extra visible changes\"}, \"proposal\": \"I can't safely update Zendesk or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a comment to the Zendesk ticket for Lina about the refund and update the status to pending. If you cannot prove the visible Zendesk ticket or my signed-in workspace, decline without writing anything.\", \"source\": \"asr-transcript\", \"text\": \"Please add a comment to the Zendesk ticket for Lina about the refund and update the status to pending. If you cannot prove the visible Zendesk ticket or my signed-in workspace, decline without writing anything.\", \"ts\": 1779857681.9927292, \"unchanged\": [\"Zendesk records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Zendesk records; source context; field/note/status/owner state; no extra visible changes\"}\n{\"blocked_services\": [\"Figma\"], \"competent_decline\": true, \"d16_receipt\": \"no-action canvas edit decline\", \"decline\": true, \"ingest_id\": \"asr-transcript-8317c0c138654a2eac8dedefc6fb9518\", \"instruction\": \"In Figma, please change the dashboard mockup headline to Q1 metrics instead of Q4 metrics, and add a comment for Maya. If you cannot prove the visible Figma design or my signed-in account, decline without editing anything.\", \"intent\": \"canvas_edit\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Figma\"], \"competent_decline\": true, \"d16_receipt\": \"no-action canvas edit decline\", \"intent\": \"canvas_edit\", \"mode\": \"decline\", \"prohibited_actions\": [\"edit design\", \"export\", \"publish\", \"share\", \"email\"], \"proposal\": \"I can't safely edit that visible Figma mockup yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In Figma, please change the dashboard mockup headline to Q1 metrics instead of Q4 metrics, and add a comment for Maya. If you cannot prove the visible Figma design or my signed-in account, decline without editing anything.\", \"task\": \"\", \"thing\": \"mockup\", \"unchanged\": [\"Figma mockup\", \"source context\", \"export/share/email state\", \"surrounding design\"], \"unchanged_state_boundary\": \"Figma mockup; source context; export/share/email state; no extra visible changes\"}, \"proposal\": \"I can't safely edit that visible Figma mockup yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In Figma, please change the dashboard mockup headline to Q1 metrics instead of Q4 metrics, and add a comment for Maya. If you cannot prove the visible Figma design or my signed-in account, decline without editing anything.\", \"source\": \"asr-transcript\", \"text\": \"In Figma, please change the dashboard mockup headline to Q1 metrics instead of Q4 metrics, and add a comment for Maya. If you cannot prove the visible Figma design or my signed-in account, decline without editing anything.\", \"ts\": 1779857684.6339562, \"unchanged\": [\"Figma mockup\", \"source context\", \"export/share/email state\", \"surrounding design\"], \"unchanged_state_boundary\": \"Figma mockup; source context; export/share/email state; no extra visible changes\"}\n{\"blocked_services\": [\"Amazon\"], \"competent_decline\": true, \"d16_receipt\": \"no-action e-commerce admin decline\", \"decline\": true, \"ingest_id\": \"asr-transcript-990e407765d94ca6acb1ed374a3d556e\", \"instruction\": \"On the Amazon order page for the laptop stand I bought last week, please verify the return window and draft a customer message to support about a refund. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"intent\": \"ecommerce_admin_surface_missing\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Amazon\"], \"competent_decline\": true, \"d16_receipt\": \"no-action e-commerce admin decline\", \"intent\": \"ecommerce_admin_surface_missing\", \"mode\": \"decline\", \"prohibited_actions\": [\"change address\", \"void label\", \"buy label\", \"refund\", \"update inventory\", \"open checkout\", \"send mail\", \"draft customer reply without visible receipts\"], \"proposal\": \"I can't safely handle that Amazon order or customer reply yet. I cannot prove the real signed-in order page, buyer, item, shipping address, customer message, label, checkout, payment, inventory, or mail state from the visible user surface. I will not change an address, void or buy labels, refund, update inventory, open checkout, send mail, or draft a customer reply without those receipts. Requested e-commerce work to preserve: On the Amazon order page for the laptop stand I bought last week, please verify the return window and draft a customer message to support about a refund. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"task\": \"\", \"thing\": \"Amazon order/customer reply\", \"unchanged\": [\"order page\", \"customer message\", \"shipping address\", \"shipping labels\", \"checkout state\", \"payment state\", \"inventory state\", \"mail drafts and sends\"], \"unchanged_state_boundary\": \"Amazon order, customer message, shipping label, checkout, payment, inventory, and mail state; no extra visible changes\"}, \"proposal\": \"I can't safely handle that Amazon order or customer reply yet. I cannot prove the real signed-in order page, buyer, item, shipping address, customer message, label, checkout, payment, inventory, or mail state from the visible user surface. I will not change an address, void or buy labels, refund, update inventory, open checkout, send mail, or draft a customer reply without those receipts. Requested e-commerce work to preserve: On the Amazon order page for the laptop stand I bought last week, please verify the return window and draft a customer message to support about a refund. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"source\": \"asr-transcript\", \"text\": \"On the Amazon order page for the laptop stand I bought last week, please verify the return window and draft a customer message to support about a refund. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"ts\": 1779857687.500101, \"unchanged\": [\"order page\", \"customer message\", \"shipping address\", \"shipping labels\", \"checkout state\", \"payment state\", \"inventory state\", \"mail drafts and sends\"], \"unchanged_state_boundary\": \"Amazon order, customer message, shipping label, checkout, payment, inventory, and mail state; no extra visible changes\"}\n{\"blocked_services\": [\"Shopify\"], \"competent_decline\": true, \"d16_receipt\": \"no-action e-commerce admin decline\", \"decline\": true, \"ingest_id\": \"asr-transcript-9fdca23a40d14b3bb9cec290fdda4e09\", \"instruction\": \"On the Shopify order page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed-in admin account, decline without changing anything.\", \"intent\": \"ecommerce_admin_surface_missing\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Shopify\"], \"competent_decline\": true, \"d16_receipt\": \"no-action e-commerce admin decline\", \"intent\": \"ecommerce_admin_surface_missing\", \"mode\": \"decline\", \"prohibited_actions\": [\"change address\", \"void label\", \"buy label\", \"refund\", \"update inventory\", \"open checkout\", \"send mail\", \"draft customer reply without visible receipts\"], \"proposal\": \"I can't safely handle that Shopify order or customer reply yet. I cannot prove the real signed-in order page, buyer, item, shipping address, customer message, label, checkout, payment, inventory, or mail state from the visible user surface. I will not change an address, void or buy labels, refund, update inventory, open checkout, send mail, or draft a customer reply without those receipts. Requested e-commerce work to preserve: On the Shopify order page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed-in admin account, decline without changing anything.\", \"task\": \"\", \"thing\": \"Shopify order/customer reply\", \"unchanged\": [\"order page\", \"customer message\", \"shipping address\", \"shipping labels\", \"checkout state\", \"payment state\", \"inventory state\", \"mail drafts and sends\"], \"unchanged_state_boundary\": \"Shopify order, customer message, shipping label, checkout, payment, inventory, and mail state; no extra visible changes\"}, \"proposal\": \"I can't safely handle that Shopify order or customer reply yet. I cannot prove the real signed-in order page, buyer, item, shipping address, customer message, label, checkout, payment, inventory, or mail state from the visible user surface. I will not change an address, void or buy labels, refund, update inventory, open checkout, send mail, or draft a customer reply without those receipts. Requested e-commerce work to preserve: On the Shopify order page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed-in admin account, decline without changing anything.\", \"source\": \"asr-transcript\", \"text\": \"On the Shopify order page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed-in admin account, decline without changing anything.\", \"ts\": 1779857690.7194922, \"unchanged\": [\"order page\", \"customer message\", \"shipping address\", \"shipping labels\", \"checkout state\", \"payment state\", \"inventory state\", \"mail drafts and sends\"], \"unchanged_state_boundary\": \"Shopify order, customer message, shipping label, checkout, payment, inventory, and mail state; no extra visible changes\"}\n{\"blocked_services\": null, \"competent_decline\": true, \"d16_receipt\": null, \"decline\": true, \"ingest_id\": \"upload-asr-763655fbfafa4f87bc38be7f02742b3f\", \"instruction\": \"Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"intent\": \"native_calendar_reminder\", \"outcome\": \"DECLINED\", \"plan\": {\"intent\": \"native_calendar_reminder\", \"mode\": \"decline\", \"proposal\": \"I can't safely create native Calendar events or Reminders yet. I cannot prove the Apple Mail source thread, Preview/PDF source, event, time, location, reminder, or unchanged no-invite state on your visible Mac Calendar/Reminders surfaces. If the source is missing, unreadable, blocked, conflicting, or ambiguous, I must decline. I will not create anything, not contact anyone, and not edit the PDF. Requested Calendar/Reminder work to preserve: Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"task\": \"\", \"thing\": \"Calendar/Reminders\"}, \"proposal\": \"I can't safely create native Calendar events or Reminders yet. I cannot prove the Apple Mail source thread, Preview/PDF source, event, time, location, reminder, or unchanged no-invite state on your visible Mac Calendar/Reminders surfaces. If the source is missing, unreadable, blocked, conflicting, or ambiguous, I must decline. I will not create anything, not contact anyone, and not edit the PDF. Requested Calendar/Reminder work to preserve: Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"source\": \"upload-asr\", \"text\": \"Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"ts\": 1779857823.7046819, \"unchanged\": null, \"unchanged_state_boundary\": null}\n{\"blocked_services\": [\"Linear\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"decline\": true, \"ingest_id\": \"upload-asr-f6ccdd973e9b4d0b9c4913280bf2170e\", \"instruction\": \"Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"intent\": \"crm_saas_write\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Linear\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"intent\": \"crm_saas_write\", \"mode\": \"decline\", \"prohibited_actions\": [\"email\", \"post\", \"close\", \"promise\", \"write\"], \"proposal\": \"I can't safely update Linear or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"Linear\", \"unchanged\": [\"Linear records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Linear records; source context; field/note/status/owner state; no extra visible changes\"}, \"proposal\": \"I can't safely update Linear or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"source\": \"upload-asr\", \"text\": \"Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"ts\": 1779857935.573792, \"unchanged\": [\"Linear records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Linear records; source context; field/note/status/owner state; no extra visible changes\"}\n{\"blocked_services\": [\"canvas\"], \"competent_decline\": true, \"d16_receipt\": \"no-action canvas edit decline\", \"decline\": true, \"ingest_id\": \"upload-asr-03ec7dd1cdac401796bf44616e1cfe0e\", \"instruction\": \"Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"intent\": \"canvas_edit\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"canvas\"], \"competent_decline\": true, \"d16_receipt\": \"no-action canvas edit decline\", \"intent\": \"canvas_edit\", \"mode\": \"decline\", \"prohibited_actions\": [\"edit design\", \"export\", \"publish\", \"share\", \"email\"], \"proposal\": \"I can't safely edit that visible canvas design yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"design\", \"unchanged\": [\"canvas design\", \"source context\", \"export/share/email state\", \"surrounding design\"], \"unchanged_state_boundary\": \"canvas design; source context; export/share/email state; no extra visible changes\"}, \"proposal\": \"I can't safely edit that visible canvas design yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"source\": \"upload-asr\", \"text\": \"Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"ts\": 1779858053.5131662, \"unchanged\": [\"canvas design\", \"source context\", \"export/share/email state\", \"surrounding design\"], \"unchanged_state_boundary\": \"canvas design; source context; export/share/email state; no extra visible changes\"}\n"
+  },
+  "driver_result": null,
+  "v7_artifacts": {
+    "ingest_id": "",
+    "paths": {},
+    "records": {},
+    "present": false
+  },
+  "transcript_quality": null,
+  "cost_breakdown": null,
+  "script": {
+    "path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/script.json",
+    "loaded": true,
+    "surface_scope": [
+      "notion"
+    ]
+  },
+  "surface_receipts_present": false,
+  "baseline": {
+    "path": "",
+    "loaded": false,
+    "created_at": null
+  },
+  "diff": {
+    "changed_surfaces": [],
+    "all_changed_surfaces": [],
+    "unrelated_changed_surfaces": [],
+    "script_surface_scope": [
+      "notion"
+    ],
+    "scoped_to_script": true,
+    "broken_script_surfaces": [],
+    "missing_script_surfaces": [],
+    "added_pages": [],
+    "removed_pages": [],
+    "changed_pages": [],
+    "native_ax_changed": false,
+    "terminal_changed": false
+  }
+}

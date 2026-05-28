@@ -1,0 +1,33 @@
+[05:35:42Z] run dir: state/v7/integration_runs/orangehrm_20260527T053542Z
+[05:35:42Z] bridge: http://127.0.0.1:7777  base: https://opensource-demo.orangehrmlive.com
+[05:35:43Z] bridge acquired_via: chrome_applescript_loopback_bridge
+[05:35:43Z] STEPS 1-5: login + dashboard
+[05:36:04Z] post-login url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login title=OrangeHRM
+[05:36:04Z] retry: different tab count
+[05:36:24Z] retry post-login url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login title=OrangeHRM
+[05:36:24Z] STEPS 6-7: Admin users table
+[05:36:32Z] admin url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[05:36:32Z] STEPS 8-9: search Admin
+[05:36:42Z] search url=https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-b6dd7d924c0f
+[05:36:42Z] STEP 10: reset filter
+[05:36:50Z] reset url=https://example.cypress.io/
+[05:36:50Z] STEPS 11-12: PIM Add Employee form
+[05:36:58Z] pim add url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[05:36:58Z] STEPS 13-15: fill name + Save + verify
+[05:37:12Z] after-save url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[05:37:12Z] no redirect yet, polling 10s more
+[05:37:26Z] final url=https://www.tldraw.com/
+[05:37:26Z] STEP 16: final screenshot
+[05:37:27Z] final url=https://www.tldraw.com/
+[05:37:27Z] 
+[05:37:27Z] AGGREGATE RESULTS
+[05:37:27Z] =================
+[05:37:27Z] login_to_dashboard         FAIL  expected match //dashboard/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[05:37:27Z] admin_users_table          FAIL  expected match /viewSystemUsers/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[05:37:27Z] admin_search               FAIL  expected match /viewSystemUsers/ in 'https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-b6dd7d924c0f'
+[05:37:27Z] reset_filter               FAIL  expected match /viewSystemUsers/ in 'https://example.cypress.io/'
+[05:37:27Z] pim_add_employee_form      FAIL  expected match /addEmployee/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[05:37:27Z] employee_saved             FAIL  expected match /viewPersonalDetails|empNumber/ in 'https://www.tldraw.com/'
+[05:37:27Z] final_screenshot           PASS  https://www.tldraw.com/
+[05:37:27Z] 
+[05:37:27Z] Passed: 1  Failed: 6  Total: 7

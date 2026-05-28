@@ -1,0 +1,7 @@
+{
+  "name": "com.anticipy.agent",
+  "description": "Anticipy local agent daemon",
+  "path": "__LAUNCHER_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__EXTENSION_ID__/"]
+}

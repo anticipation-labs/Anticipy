@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/",
+  "expected": "ESC sent to close Continue Shopping modal",
+  "name": "modal_dismissed",
+  "passed": true,
+  "primitive_used": "System Events key code 53 (ESC)"
+}

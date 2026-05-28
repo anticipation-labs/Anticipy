@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/view_cart",
+  "expected": "url contains /view_cart",
+  "name": "cart_view",
+  "passed": true,
+  "primitive_used": "bridge navigate (cart icon fallback)"
+}

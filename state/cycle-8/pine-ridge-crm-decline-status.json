@@ -1,0 +1,92 @@
+{
+  "inject": {
+    "on": false,
+    "window": 1,
+    "ingest_id": "asr-transcript-564a50c4b397485f8671da3f37de6df6",
+    "transcript": "Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+    "outcome": "DECLINED",
+    "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+    "plan": {
+      "mode": "decline",
+      "intent": "crm_saas_write",
+      "thing": "salesforce",
+      "task": "",
+      "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message."
+    },
+    "memory": {
+      "op": "ADD",
+      "reason": "New actionable intent with specific constraints and next steps."
+    },
+    "resolution_trace_sync": {
+      "ok": false,
+      "skipped": true,
+      "reason": "not provisioned"
+    },
+    "pending": {
+      "instruction": "Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+      "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "crm_saas_write",
+        "thing": "salesforce",
+        "task": "",
+        "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message."
+      },
+      "ts": 1779621174.494956
+    },
+    "scheduled": null
+  },
+  "status": {
+    "on": false,
+    "window_seconds": 60.0,
+    "windows": 1,
+    "level": 0.0,
+    "uptime": 2.9,
+    "recent": [
+      {
+        "ts": 1779621174.494956,
+        "rms": 0.0,
+        "ingest_id": "asr-transcript-564a50c4b397485f8671da3f37de6df6",
+        "transcript": "Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+        "outcome": "DECLINED",
+        "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+        "memory": {
+          "op": "ADD",
+          "reason": "New actionable intent with specific constraints and next steps."
+        },
+        "source": "asr-transcript",
+        "window": 1,
+        "plan": {
+          "mode": "decline",
+          "intent": "crm_saas_write",
+          "thing": "salesforce",
+          "task": "",
+          "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message."
+        },
+        "resolution_trace_sync": {
+          "ok": false,
+          "skipped": true,
+          "reason": "not provisioned"
+        }
+      }
+    ],
+    "pending": {
+      "instruction": "Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+      "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "crm_saas_write",
+        "thing": "salesforce",
+        "task": "",
+        "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Please clean up Pine Ridge in Salesforce. Finance cleared it. The next step should be the vendor packet and legal redline before Wednesday's procurement review, and create the follow-up task. Do not move the stage, change the amount, or send anyone a message."
+      },
+      "ts": 1779621174.494956
+    },
+    "acted": null,
+    "error": null
+  }
+}

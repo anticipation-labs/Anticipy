@@ -1,0 +1,7 @@
+{
+  "actual": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-0705ebf22c71 first=1",
+  "expected": "search URL + matching product id",
+  "name": "search_results",
+  "passed": false,
+  "primitive_used": "bridge navigate (form GET)"
+}

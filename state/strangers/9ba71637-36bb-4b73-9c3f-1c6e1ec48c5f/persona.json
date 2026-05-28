@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "9ba71637-36bb-4b73-9c3f-1c6e1ec48c5f",
+  "created_at": "2025-04-10T14:23:00Z",
+  "name": "Elena Vasquez",
+  "age": 34,
+  "occupation": "Registered Dietitian",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion meal-planning database",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": "signed-in Chrome profile with Notion workspace open",
+    "acceptable_state": "Notion sidebar visible, at least one database page loaded"
+  },
+  "daily_tools": [
+    "Notion",
+    "Google Calendar",
+    "MyFitnessPal",
+    "Slack",
+    "Spotify"
+  ],
+  "contacts": [
+    {
+      "name": "Dr. Sarah Chen",
+      "relationship": "Clinical supervisor",
+      "context": "Collaborates on patient meal plans and dietary protocols"
+    },
+    {
+      "name": "Marcus Webb",
+      "relationship": "Husband",
+      "context": "Coordinates weekly family meal prep and grocery lists"
+    },
+    {
+      "name": "Priya Nair",
+      "relationship": "Fellow dietitian",
+      "context": "Shares recipe ideas and Notion template tips"
+    }
+  ]
+}

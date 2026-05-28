@@ -1,0 +1,268 @@
+"""The day pipeline orchestrator.
+
+P0 ships the structure and the SAFE asymmetric default; the seven
+layers are filled in dependency order (DIL-P1..P7). The contract
+that never changes: an event becomes ACTED only when every layer
+agrees it is a real, resolved, current, non-cancelled wearer
+instruction; otherwise it is CONFIRM, DEFER, KILL, CANCEL, or
+LIFE_LOG. Over-action and double-action are the disasters, so the
+P0 default (before the layers exist) is the safest one: nothing is
+ACTED. P1..P7 earn true-positives WITHOUT ever breaching the hard
+binding metrics (chatter false-action, double-action,
+cancel-after-execute, flood).
+"""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from app.proactive_day import metrics as M
+from app.proactive_day.world import SimWorld
+
+
+# MH-P3: an OPTIONAL durable-memory draw. Default None == OFF, so
+# every DIL gate path is byte-identical (zero regression). Only the
+# MH-P3 gate sets it. Signature: (event_text) -> (obj_hint|None,
+# person_hint|None). It is consulted ONLY after the frozen
+# instruction gate has already passed, so chatter (IGNOREd upstream)
+# can never reach it: no context-rot.
+_MEMORY_DRAW = None
+
+
+# --- layer hook points. P0 ships safe stubs; P1..P7 replace each. ---
+
+def frozen_is_instruction(event: dict) -> str:
+    """Reuse the FROZEN reasoning engine (read-only, via its public
+    decide over the existing seam shape) to decide whether this
+    utterance is an actionable wearer instruction at all. This is the
+    validated hedge/demand/addressee brain (0.0 over-action on hard
+    negatives in the reasoning build); chatter / hypothetical /
+    3rd-party -> IGNORE/STORE -> not an instruction. The frozen
+    engine is NOT modified. Returns the raw decision string.
+    """
+    import asyncio
+
+    from app.anticipy.proactive_engine import ProactiveEngine
+    from app.anticipy.seams import UserContext, UserProfile
+
+    spk = event.get("speaker", "WEARER")
+    line = [{"speaker_id": "WEARER" if spk == "WEARER" else "S1",
+             "text": event.get("text", ""), "ts": float(event.get("ts", 0))}]
+    ctx = UserContext.from_profile(UserProfile(
+        user_id="dil-wearer", name="Omar", role_title="Founder",
+        what_they_do="runs an AI hardware startup",
+        mandate="Handle scheduling, dinner and email proactively. "
+                "Do not touch payroll or legal.",
+        people={"the boss": "Dana", "us": "Omar and Priya"},
+        trajectory_confidence=0.0, days_since_onboard=3))
+    try:
+        r = asyncio.run(ProactiveEngine().decide(line, ctx, "mac_mic"))
+        return getattr(r, "decision", "IGNORE")
+    except Exception:
+        return "IGNORE"   # fail SAFE: not an instruction
+
+
+def layer_resolve(event: dict, world: SimWorld,
+                  trusted_instruction: bool = False):
+    """DIL-P1 (Layer A). Returns (ResolvedAction|None, all_confident).
+    Normally only resolves if the FROZEN engine judged this an
+    actionable instruction; chatter -> (None, False) -> LIFE_LOG.
+    `trusted_instruction` skips that gate ONLY for a wearer-confirmed
+    LEARNED shorthand expansion (DIL-P5): the wearer explicitly
+    taught that exact shorthand via a confirmation earlier today, so
+    its standing meaning is a known instruction, not ambient speech
+    to re-filter; re-judging it would let frozen-engine variance
+    silently DROP a known instruction. This is strongly gated (only
+    fires on a previously-confirmed learned key) so chatter can never
+    reach it. An unresolved reference is still NEVER guessed.
+    """
+    from app.proactive_day import resolve as _R
+
+    if not trusted_instruction:
+        decision = frozen_is_instruction(event)
+        if decision not in ("ACT", "ASK"):
+            return None, False, "not_instruction"  # -> LIFE_LOG
+    nt = event.get("slots", {}).get("thing")
+    np_ = event.get("slots", {}).get("name")
+    # MH-P3: only when explicitly enabled, and only as a FALLBACK for
+    # a slot the utterance itself did not carry. A durable wearer
+    # fact may resolve an alias the live world cannot; an unresolved
+    # reference is still never guessed (the draw returns nothing on
+    # ambiguity, so the resolver still CONFIRMs).
+    if _MEMORY_DRAW is not None and (nt is None or np_ is None):
+        try:
+            d_obj, d_per = _MEMORY_DRAW(event.get("text", ""))
+            nt = nt or d_obj
+            np_ = np_ or d_per
+        except Exception:
+            pass
+    ra = _R.resolve(event.get("text", ""), world,
+                    named_thing=nt, named_person=np_)
+    return ra, ra.all_confident, ("ok" if ra.all_confident
+                                  else f"unresolved:{ra.unresolved}")
+
+
+def layer_timing(event: dict, action, world: SimWorld) -> str:
+    """DIL-P2 (Layer B). now | deferred | scheduled | standing | hold.
+    A time-conditioned action is never 'now' (never executed
+    immediately) and is never dropped; an uninferable condition
+    becomes 'hold' (surface one-line now-or-later), not a guess.
+    """
+    from app.proactive_day import timing as _T
+
+    return _T.classify(action, event, world).when
+
+
+def layer_completed(action, world: SimWorld) -> bool:
+    """DIL-P3 (the world helper is live from P1). True if the world
+    already satisfied this action by ANY means -> kill it, zero
+    double-act. Accepts a ResolvedAction or a dict.
+    """
+    if action is None:
+        return False
+    a = action if isinstance(action, dict) else {
+        "kind": getattr(action, "kind", None),
+        "target": getattr(action, "target", None),
+        "object": getattr(action, "object", None)}
+    return world.already_satisfied(a)
+
+
+def layer_cancelled(event: dict, queued: dict) -> Optional[str]:
+    """DIL-P3. If this event ambiently cancels a live queued action,
+    return its ev_id. P0 stub: detect the scripted cancel link.
+    """
+    return event.get("cancels_ev")
+
+
+def layer_comms(pending: list, world: SimWorld) -> list:
+    """DIL-P4 (Layers E+F). Decide channel/timing, debounce+compose,
+    rate-limit, surface ONE proposal per batch. Simulated sink only.
+    """
+    from app.proactive_day import comms as _CM
+
+    return _CM.decide_and_send(pending, world)
+
+
+# --- the per-day run ---------------------------------------------------
+
+def run_day(manifest: dict, world: SimWorld) -> list:
+    """Process the scripted day in sim-clock order, applying the world
+    hooks (a task done by other means; an ambient cancel), and emit
+    one ItemResult per event. P0: safe default (nothing ACTED) so the
+    plumbing and the hard binding metrics are exercised before any
+    layer can earn a true-positive.
+    """
+    from app.proactive_day import completion as _C
+
+    events = sorted(manifest["events"], key=lambda e: e["ts"])
+    queued: dict[str, dict] = {}      # ev_id -> live queued action
+    order: list[str] = []             # event order for the output
+    pre: dict[str, M.ItemResult] = {}  # immediate (non-executing) outcomes
+
+    for ev in events:
+        world.tick(ev["ts"])
+        world.hear(ev.get("speaker", "WEARER"), ev["text"],
+                   ev.get("place", "home"))
+        if ev.get("world_done_at") is not None and ev.get("world_done"):
+            world.tick(ev["world_done_at"])
+            world.world_did(ev["world_done"]["kind"], ev["world_done"])
+
+        cat, label, eid = ev["category"], ev["label"], ev["ev_id"]
+        order.append(eid)
+        spk = ev.get("speaker", "WEARER")
+
+        # Layer D: an ambient cancel retracts the most recent LIVE
+        # queued action by the same speaker (frozen NEVERMIND signal
+        # + cue backstop). The cancel utterance itself is recorded.
+        fr_dec = frozen_is_instruction(ev) if _C._CANCEL_CUE.search(
+            ev["text"]) else None
+        if _C.is_cancel(ev["text"], fr_dec):
+            tgt = _C.cancel_target(spk, queued)
+            if tgt:
+                queued[tgt]["retracted"] = True
+            pre[eid] = M.ItemResult(eid, cat, label, "CANCELLED")
+            continue
+
+        # Layer G: wearer shorthand. Unknown the first time -> CONFIRM
+        # (and the reply teaches the mapping). Known -> resolve on the
+        # learned expansion. Memory-driven, never label-driven.
+        from app.proactive_day import personalize as _P
+
+        pstat, pval = _P.personalize(ev, world)
+        if pstat == "confirm_learn":
+            pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
+            continue
+        ev_eff = ev
+        trusted = False
+        if pstat == "resolved":
+            ev_eff = dict(ev)
+            ev_eff["text"] = pval                # the learned expansion
+            trusted = True                       # wearer-confirmed standing
+
+        # Layer I (DIL-P7): a loud-restaurant line is not heard
+        # cleanly. Model the corruption (the only transcript the
+        # system actually has; the clean slot oracle is NOT
+        # available in noise) BEFORE any decision, then harden the
+        # resolved action against it. A strict no-op for clean tiers
+        # (guarded), so no other category can regress.
+        from app.proactive_day import loudroom as _LR
+
+        loud = ev_eff.get("snr_tier") == _LR.LOUD_TIER
+        asr_conf = 1.0
+        if loud:
+            ev_eff = dict(ev_eff)
+            g, asr_conf = _LR.degrade(ev_eff.get("text", ""),
+                                      _LR.LOUD_TIER)
+            ev_eff["text"] = g
+            ev_eff["slots"] = {}                 # no clean oracle in noise
+
+        action, refs_ok, why = layer_resolve(ev_eff, world, trusted)
+        if loud and action is not None:
+            action, refs_ok = _LR.harden(
+                action, refs_ok, asr_conf, world,
+                ev_eff.get("text", ""))
+        if action is None:                       # not an instruction
+            pre[eid] = M.ItemResult(eid, cat, label, "LIFE_LOG")
+            continue
+        if not refs_ok:                          # unresolved -> ask once
+            pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
+            continue
+
+        when = layer_timing(ev_eff, action, world)
+        if when == "hold":
+            pre[eid] = M.ItemResult(eid, cat, label, "CONFIRMED")
+            continue
+        content_ok = (action.verb != "" and not (
+            action.kind == "send_email" and action.target is None))
+        queued[eid] = {"action": vars(action), "when": when,
+                       "queued_at": ev["ts"], "speaker": spk,
+                       "cat": cat, "label": label,
+                       "content_ok": content_ok,
+                       "urgency": ev.get("urgency", "hours"),
+                       "reach": ev.get("reach", "free")}
+
+    # --- reconciliation: nothing executes until completion + cancel
+    # have had their say. Order of precedence is the safe one:
+    # a RETRACTED action is never executed; a WORLD-SATISFIED action
+    # is killed (zero double-action); otherwise deferred or acted.
+    surfaceable: list = []
+    for eid, q in queued.items():
+        if q.get("retracted"):
+            outcome = "CANCELLED"
+        elif _C.world_satisfied(q["action"], world):
+            outcome = "KILLED"               # the world already did it
+        elif q["when"] in ("deferred", "scheduled", "standing"):
+            outcome = "DEFERRED"
+            surfaceable.append({"ev_id": eid, **q})
+        else:
+            outcome = "ACTED"
+            surfaceable.append({"ev_id": eid, **q})
+        pre[eid] = M.ItemResult(
+            eid, q["cat"], q["label"], outcome,
+            content_ok=q["content_ok"])
+
+    # Layers E+F: only surface ACTED/DEFERRED items (never a
+    # retracted or world-satisfied one). The rate limiter composes
+    # and debounces inside decide_and_send.
+    layer_comms(surfaceable, world)
+    return [pre[e] for e in order if e in pre]

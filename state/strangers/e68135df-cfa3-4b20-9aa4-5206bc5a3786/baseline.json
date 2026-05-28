@@ -1,0 +1,1016 @@
+{
+  "schema": "anticipy.v6.trace",
+  "created_at": "2026-05-27T05:11:07Z",
+  "cdp_port": 9222,
+  "browser": "chrome_extension_native_messaging",
+  "chrome_surface_path": "real_chrome_applescript_visible_surface",
+  "extension_surface_proof": {
+    "applescript_surface_probe": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "c3965745c7103ef74cf156bd80721fde49af7be51750d11fa560afcebadce738",
+      "requested_url": "",
+      "screenshot_bytes": 3424455,
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "6b540d68512fe94239392a4b8776d752d745344c15144b6d6d441493aab0f23f",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-29e6e86dac92",
+      "visible_surface": true,
+      "visible_text_bytes": 427,
+      "visible_text_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "001ddf02243b9172640eca0ba222ae27adc603fd7849d745b777159c6853fafa"
+    },
+    "blocker": {
+      "chrome_profiles_checked": [
+        {
+          "exists": true,
+          "profiles": [
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [
+                {
+                  "disable_reasons": {},
+                  "enabled": true,
+                  "has_native_messaging": false,
+                  "id": "npnpagopediecennpleihemoochikggb",
+                  "name": "",
+                  "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                  "permissions": [],
+                  "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                  "source": "Secure Preferences",
+                  "state": null
+                }
+              ],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+            }
+          ],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+        },
+        {
+          "exists": true,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+        }
+      ],
+      "extension_candidates": [
+        {
+          "disable_reasons": {},
+          "enabled": true,
+          "has_native_messaging": false,
+          "id": "npnpagopediecennpleihemoochikggb",
+          "name": "",
+          "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+          "permissions": [],
+          "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+          "source": "Secure Preferences",
+          "state": null
+        }
+      ],
+      "kind": "",
+      "native_host_manifest": {
+        "authorized": true,
+        "authorized_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ],
+        "checked": [
+          {
+            "allowed_origins": [
+              "chrome-extension://__EXTENSION_ID__/"
+            ],
+            "authorized_extension_ids": [],
+            "exists": true,
+            "host_path": "__LAUNCHER_PATH__",
+            "name": "com.anticipy.agent",
+            "path": "native_host/com.anticipy.agent.json",
+            "uses_placeholder_origin": true
+          },
+          {
+            "allowed_origins": [
+              "chrome-extension://npnpagopediecennpleihemoochikggb/"
+            ],
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "exists": true,
+            "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+            "name": "com.anticipy.agent",
+            "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          }
+        ]
+      },
+      "reason": ""
+    },
+    "chrome": {
+      "app": "Google Chrome",
+      "hidden_browser": false,
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "profile": {
+        "extension_candidates": [
+          {
+            "disable_reasons": {},
+            "enabled": true,
+            "has_native_messaging": false,
+            "id": "npnpagopediecennpleihemoochikggb",
+            "name": "",
+            "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+            "permissions": [],
+            "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "source": "Secure Preferences",
+            "state": null
+          }
+        ],
+        "kind": "real_user",
+        "profiles_checked": [
+          {
+            "exists": true,
+            "profiles": [
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [
+                  {
+                    "disable_reasons": {},
+                    "enabled": true,
+                    "has_native_messaging": false,
+                    "id": "npnpagopediecennpleihemoochikggb",
+                    "name": "",
+                    "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                    "permissions": [],
+                    "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                    "source": "Secure Preferences",
+                    "state": null
+                  }
+                ],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+              }
+            ],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+          },
+          {
+            "exists": true,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+          }
+        ],
+        "proof_extension_id": "",
+        "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+        "proof_profile_source": "inspected_real_chrome_profile",
+        "source_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ]
+      }
+    },
+    "direct_browser_cdp": false,
+    "engine": {
+      "installed_process": {
+        "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "health": {
+          "listening": false,
+          "ok": true,
+          "onboarded": true,
+          "pid": 16479,
+          "port": 8731,
+          "profile_error": "",
+          "service": "anticipy-local-engine",
+          "version": "product-3"
+        },
+        "ok": true,
+        "pid": 16479,
+        "port": 8731
+      },
+      "url": "http://127.0.0.1:8731"
+    },
+    "generated_at": "2026-05-27T05:11:07Z",
+    "native_host": {
+      "authorized": true,
+      "authorized_extension_ids": [
+        "npnpagopediecennpleihemoochikggb"
+      ],
+      "checked": [
+        {
+          "allowed_origins": [
+            "chrome-extension://__EXTENSION_ID__/"
+          ],
+          "authorized_extension_ids": [],
+          "exists": true,
+          "host_path": "__LAUNCHER_PATH__",
+          "name": "com.anticipy.agent",
+          "path": "native_host/com.anticipy.agent.json",
+          "uses_placeholder_origin": true
+        },
+        {
+          "allowed_origins": [
+            "chrome-extension://npnpagopediecennpleihemoochikggb/"
+          ],
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "exists": true,
+          "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+          "name": "com.anticipy.agent",
+          "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        }
+      ]
+    },
+    "pass": true,
+    "proof_request": {
+      "error": "",
+      "ok": false,
+      "status": 0
+    },
+    "proofs": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "c3965745c7103ef74cf156bd80721fde49af7be51750d11fa560afcebadce738",
+      "requested_url": "",
+      "screenshot_bytes": 3424455,
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "6b540d68512fe94239392a4b8776d752d745344c15144b6d6d441493aab0f23f",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-29e6e86dac92",
+      "visible_surface": true,
+      "visible_text_bytes": 427,
+      "visible_text_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "001ddf02243b9172640eca0ba222ae27adc603fd7849d745b777159c6853fafa"
+    },
+    "public_extension": {
+      "download_path": "public/anticipy-extension.zip",
+      "entries": [
+        "anticipy-v6/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/test_injection_fallback.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+        "anticipy-v6/README.txt",
+        "anticipy-v6/DAEMON-INSTALLER/",
+        "anticipy-v6/DAEMON-INSTALLER/install.command",
+        "anticipy-v6/DAEMON-INSTALLER/install.sh",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py"
+      ],
+      "entry_count": 192,
+      "exists": true,
+      "manifest": {
+        "has_key": true,
+        "has_native_messaging": true,
+        "manifest_version": 3,
+        "name": "Anticipy Bridge v6",
+        "permissions": [
+          "tabs",
+          "tabGroups",
+          "scripting",
+          "storage",
+          "activeTab",
+          "nativeMessaging"
+        ],
+        "version": "6.0.0"
+      },
+      "sha256": "1cd2a020919489c396588de4464fb003b138c0e49dde6323ca6261de5410538c"
+    },
+    "schema": "anticipy.real_surface_proof.v7",
+    "surface_path": "real_chrome_applescript_visible_surface",
+    "uses_chrome_real_clone": false,
+    "probe_stdout": "{\"pass\": true, \"surface_path\": \"real_chrome_applescript_visible_surface\", \"blocker\": \"\", \"out\": \"/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/real_surface_proof.json\"}\n",
+    "probe_stderr": "",
+    "probe_exit_code": 0,
+    "proof_json_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/real_surface_proof.json"
+  },
+  "real_surface_proof": {
+    "applescript_surface_probe": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "c3965745c7103ef74cf156bd80721fde49af7be51750d11fa560afcebadce738",
+      "requested_url": "",
+      "screenshot_bytes": 3424455,
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "6b540d68512fe94239392a4b8776d752d745344c15144b6d6d441493aab0f23f",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-29e6e86dac92",
+      "visible_surface": true,
+      "visible_text_bytes": 427,
+      "visible_text_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "001ddf02243b9172640eca0ba222ae27adc603fd7849d745b777159c6853fafa"
+    },
+    "blocker": {
+      "chrome_profiles_checked": [
+        {
+          "exists": true,
+          "profiles": [
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [
+                {
+                  "disable_reasons": {},
+                  "enabled": true,
+                  "has_native_messaging": false,
+                  "id": "npnpagopediecennpleihemoochikggb",
+                  "name": "",
+                  "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                  "permissions": [],
+                  "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                  "source": "Secure Preferences",
+                  "state": null
+                }
+              ],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+            }
+          ],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+        },
+        {
+          "exists": true,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+        }
+      ],
+      "extension_candidates": [
+        {
+          "disable_reasons": {},
+          "enabled": true,
+          "has_native_messaging": false,
+          "id": "npnpagopediecennpleihemoochikggb",
+          "name": "",
+          "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+          "permissions": [],
+          "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+          "source": "Secure Preferences",
+          "state": null
+        }
+      ],
+      "kind": "",
+      "native_host_manifest": {
+        "authorized": true,
+        "authorized_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ],
+        "checked": [
+          {
+            "allowed_origins": [
+              "chrome-extension://__EXTENSION_ID__/"
+            ],
+            "authorized_extension_ids": [],
+            "exists": true,
+            "host_path": "__LAUNCHER_PATH__",
+            "name": "com.anticipy.agent",
+            "path": "native_host/com.anticipy.agent.json",
+            "uses_placeholder_origin": true
+          },
+          {
+            "allowed_origins": [
+              "chrome-extension://npnpagopediecennpleihemoochikggb/"
+            ],
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "exists": true,
+            "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+            "name": "com.anticipy.agent",
+            "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          }
+        ]
+      },
+      "reason": ""
+    },
+    "chrome": {
+      "app": "Google Chrome",
+      "hidden_browser": false,
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "profile": {
+        "extension_candidates": [
+          {
+            "disable_reasons": {},
+            "enabled": true,
+            "has_native_messaging": false,
+            "id": "npnpagopediecennpleihemoochikggb",
+            "name": "",
+            "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+            "permissions": [],
+            "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "source": "Secure Preferences",
+            "state": null
+          }
+        ],
+        "kind": "real_user",
+        "profiles_checked": [
+          {
+            "exists": true,
+            "profiles": [
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [
+                  {
+                    "disable_reasons": {},
+                    "enabled": true,
+                    "has_native_messaging": false,
+                    "id": "npnpagopediecennpleihemoochikggb",
+                    "name": "",
+                    "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                    "permissions": [],
+                    "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                    "source": "Secure Preferences",
+                    "state": null
+                  }
+                ],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+              }
+            ],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+          },
+          {
+            "exists": true,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+          }
+        ],
+        "proof_extension_id": "",
+        "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+        "proof_profile_source": "inspected_real_chrome_profile",
+        "source_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ]
+      }
+    },
+    "direct_browser_cdp": false,
+    "engine": {
+      "installed_process": {
+        "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "health": {
+          "listening": false,
+          "ok": true,
+          "onboarded": true,
+          "pid": 16479,
+          "port": 8731,
+          "profile_error": "",
+          "service": "anticipy-local-engine",
+          "version": "product-3"
+        },
+        "ok": true,
+        "pid": 16479,
+        "port": 8731
+      },
+      "url": "http://127.0.0.1:8731"
+    },
+    "generated_at": "2026-05-27T05:11:07Z",
+    "native_host": {
+      "authorized": true,
+      "authorized_extension_ids": [
+        "npnpagopediecennpleihemoochikggb"
+      ],
+      "checked": [
+        {
+          "allowed_origins": [
+            "chrome-extension://__EXTENSION_ID__/"
+          ],
+          "authorized_extension_ids": [],
+          "exists": true,
+          "host_path": "__LAUNCHER_PATH__",
+          "name": "com.anticipy.agent",
+          "path": "native_host/com.anticipy.agent.json",
+          "uses_placeholder_origin": true
+        },
+        {
+          "allowed_origins": [
+            "chrome-extension://npnpagopediecennpleihemoochikggb/"
+          ],
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "exists": true,
+          "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+          "name": "com.anticipy.agent",
+          "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        }
+      ]
+    },
+    "pass": true,
+    "proof_request": {
+      "error": "",
+      "ok": false,
+      "status": 0
+    },
+    "proofs": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "c3965745c7103ef74cf156bd80721fde49af7be51750d11fa560afcebadce738",
+      "requested_url": "",
+      "screenshot_bytes": 3424455,
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "6b540d68512fe94239392a4b8776d752d745344c15144b6d6d441493aab0f23f",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-29e6e86dac92",
+      "visible_surface": true,
+      "visible_text_bytes": 427,
+      "visible_text_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "001ddf02243b9172640eca0ba222ae27adc603fd7849d745b777159c6853fafa"
+    },
+    "public_extension": {
+      "download_path": "public/anticipy-extension.zip",
+      "entries": [
+        "anticipy-v6/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/test_injection_fallback.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+        "anticipy-v6/README.txt",
+        "anticipy-v6/DAEMON-INSTALLER/",
+        "anticipy-v6/DAEMON-INSTALLER/install.command",
+        "anticipy-v6/DAEMON-INSTALLER/install.sh",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py"
+      ],
+      "entry_count": 192,
+      "exists": true,
+      "manifest": {
+        "has_key": true,
+        "has_native_messaging": true,
+        "manifest_version": 3,
+        "name": "Anticipy Bridge v6",
+        "permissions": [
+          "tabs",
+          "tabGroups",
+          "scripting",
+          "storage",
+          "activeTab",
+          "nativeMessaging"
+        ],
+        "version": "6.0.0"
+      },
+      "sha256": "1cd2a020919489c396588de4464fb003b138c0e49dde6323ca6261de5410538c"
+    },
+    "schema": "anticipy.real_surface_proof.v7",
+    "surface_path": "real_chrome_applescript_visible_surface",
+    "uses_chrome_real_clone": false,
+    "probe_stdout": "{\"pass\": true, \"surface_path\": \"real_chrome_applescript_visible_surface\", \"blocker\": \"\", \"out\": \"/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/real_surface_proof.json\"}\n",
+    "probe_stderr": "",
+    "probe_exit_code": 0,
+    "proof_json_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/real_surface_proof.json"
+  },
+  "tabs": [],
+  "pages": [
+    {
+      "target_id": "chrome-extension-native-messaging",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-29e6e86dac92",
+      "title": "Anticipy real Chrome extension surface",
+      "surface": "anticipy",
+      "visible_text": "CLI\nSkill\nGithub\n1\nInstall the CLI\nOne line \u2014 auth, uploads, and polling are handled for you.\n\nnpm install -g @higgsfield/cli\n2\nSign in\nOpens a browser, takes 5 seconds. Run higgsfield auth login and you're authenticated.\n\nhiggsfield auth login\n3\nPlug skills into your agent\nWorks with Claude Code, Cursor, Codex, and 12+ other agents. Then just say: \"Generate an image with Higgsfield.\"\n\nnpx skills add higgsfield-ai/skills\n",
+      "focused": true,
+      "inputs": [],
+      "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png",
+      "dom_path": "",
+      "visible_text_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt",
+      "dom_sha256": "",
+      "dom_bytes": 0,
+      "screenshot_bytes": 3424455,
+      "acquired_via": "real_chrome_applescript_visible_surface"
+    }
+  ],
+  "native_ax": {
+    "ok": true,
+    "summary": "Terminal windows=1 title=omarebrahim \u2014 \u2802 Claude Code \u2014 caffeinate \u25c2 claude --effort max \u2014 80\u00d724\nClaude windows=0\nGoogle Chrome windows=0\nCode windows=0\nWispr Flow windows=1 title=Status\nMessages windows=1 title=+1 (604) 724-5161\nFinder windows=0\nGoogle Chrome windows=1 title=Anticipy App - Google Chrome - Omar\nCodex windows=0\nCalendar windows=1 title=Calendar\nReminders windows=0\nNotes windows=1 title=All iCloud \u2013 69 notes"
+  },
+  "terminal": {
+    "ok": true,
+    "text": "System Events got an error: Can\u2019t get window 1 of process \"Terminal\". Invalid index.\n"
+  },
+  "engine_logs": {
+    "/Users/omarebrahim/.anticipy/declined_actions/latest.jsonl": "der page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed-in admin account, decline without changing anything.\", \"ts\": 1779857690.7194922, \"unchanged\": [\"order page\", \"customer message\", \"shipping address\", \"shipping labels\", \"checkout state\", \"payment state\", \"inventory state\", \"mail drafts and sends\"], \"unchanged_state_boundary\": \"Shopify order, customer message, shipping label, checkout, payment, inventory, and mail state; no extra visible changes\"}\n{\"blocked_services\": null, \"competent_decline\": true, \"d16_receipt\": null, \"decline\": true, \"ingest_id\": \"upload-asr-763655fbfafa4f87bc38be7f02742b3f\", \"instruction\": \"Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"intent\": \"native_calendar_reminder\", \"outcome\": \"DECLINED\", \"plan\": {\"intent\": \"native_calendar_reminder\", \"mode\": \"decline\", \"proposal\": \"I can't safely create native Calendar events or Reminders yet. I cannot prove the Apple Mail source thread, Preview/PDF source, event, time, location, reminder, or unchanged no-invite state on your visible Mac Calendar/Reminders surfaces. If the source is missing, unreadable, blocked, conflicting, or ambiguous, I must decline. I will not create anything, not contact anyone, and not edit the PDF. Requested Calendar/Reminder work to preserve: Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"task\": \"\", \"thing\": \"Calendar/Reminders\"}, \"proposal\": \"I can't safely create native Calendar events or Reminders yet. I cannot prove the Apple Mail source thread, Preview/PDF source, event, time, location, reminder, or unchanged no-invite state on your visible Mac Calendar/Reminders surfaces. If the source is missing, unreadable, blocked, conflicting, or ambiguous, I must decline. I will not create anything, not contact anyone, and not edit the PDF. Requested Calendar/Reminder work to preserve: Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"source\": \"upload-asr\", \"text\": \"Reschedule my Thursday meeting with Felix and Calendar app to Friday at the same time. And set a reminder and reminders app for Friday at 8.30am. Do not send invites or email anyone yet. If you cannot prove the visible Mac calendar and reminder surfaces, decline without changing anything.\", \"ts\": 1779857823.7046819, \"unchanged\": null, \"unchanged_state_boundary\": null}\n{\"blocked_services\": [\"Linear\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"decline\": true, \"ingest_id\": \"upload-asr-f6ccdd973e9b4d0b9c4913280bf2170e\", \"instruction\": \"Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"intent\": \"crm_saas_write\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Linear\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"intent\": \"crm_saas_write\", \"mode\": \"decline\", \"prohibited_actions\": [\"email\", \"post\", \"close\", \"promise\", \"write\"], \"proposal\": \"I can't safely update Linear or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"Linear\", \"unchanged\": [\"Linear records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Linear records; source context; field/note/status/owner state; no extra visible changes\"}, \"proposal\": \"I can't safely update Linear or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"source\": \"upload-asr\", \"text\": \"Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.\", \"ts\": 1779857935.573792, \"unchanged\": [\"Linear records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Linear records; source context; field/note/status/owner state; no extra visible changes\"}\n{\"blocked_services\": [\"canvas\"], \"competent_decline\": true, \"d16_receipt\": \"no-action canvas edit decline\", \"decline\": true, \"ingest_id\": \"upload-asr-03ec7dd1cdac401796bf44616e1cfe0e\", \"instruction\": \"Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"intent\": \"canvas_edit\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"canvas\"], \"competent_decline\": true, \"d16_receipt\": \"no-action canvas edit decline\", \"intent\": \"canvas_edit\", \"mode\": \"decline\", \"prohibited_actions\": [\"edit design\", \"export\", \"publish\", \"share\", \"email\"], \"proposal\": \"I can't safely edit that visible canvas design yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"design\", \"unchanged\": [\"canvas design\", \"source context\", \"export/share/email state\", \"surrounding design\"], \"unchanged_state_boundary\": \"canvas design; source context; export/share/email state; no extra visible changes\"}, \"proposal\": \"I can't safely edit that visible canvas design yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"source\": \"upload-asr\", \"text\": \"Could you update the Mariposa design brief record in Notion to market ready for review? And add a note that I have shared the PDF. If you cannot prove the visible Notion surface or my sign in workspace, decline without writing anything.\", \"ts\": 1779858053.5131662, \"unchanged\": [\"canvas design\", \"source context\", \"export/share/email state\", \"surrounding design\"], \"unchanged_state_boundary\": \"canvas design; source context; export/share/email state; no extra visible changes\"}\n{\"blocked_services\": [\"Notion\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"decline\": true, \"ingest_id\": \"upload-asr-991c6e50078d458a8ec4f0575fe5d5bd\", \"instruction\": \"Please create a new record in MyNotion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"intent\": \"crm_saas_write\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Notion\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"intent\": \"crm_saas_write\", \"mode\": \"decline\", \"prohibited_actions\": [\"email\", \"post\", \"close\", \"promise\", \"write\"], \"proposal\": \"I can't safely update Notion or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please create a new record in MyNotion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"Notion\", \"unchanged\": [\"Notion records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Notion records; source context; field/note/status/owner state; no extra visible changes\"}, \"proposal\": \"I can't safely update Notion or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please create a new record in MyNotion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"source\": \"upload-asr\", \"text\": \"Please create a new record in MyNotion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"ts\": 1779858219.9950988, \"unchanged\": [\"Notion records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Notion records; source context; field/note/status/owner state; no extra visible changes\"}\n{\"blocked_services\": [\"Zendesk\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"decline\": true, \"ingest_id\": \"upload-asr-96798a8e5caa41fcbee3adf2c0eeb8e1\", \"instruction\": \"Please add a comment to the Zendesk ticket for Hugo from this morning saying I am running 15 minutes late to the dinner, and will follow up after, if you cannot prove the visible Zendesk ticket, or my signed in workspace, decline without writing anything.\", \"intent\": \"crm_saas_write\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Zendesk\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"intent\": \"crm_saas_write\", \"mode\": \"decline\", \"prohibited_actions\": [\"email\", \"post\", \"close\", \"promise\", \"write\"], \"proposal\": \"I can't safely update Zendesk or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a comment to the Zendesk ticket for Hugo from this morning saying I am running 15 minutes late to the dinner, and will follow up after, if you cannot prove the visible Zendesk ticket, or my signed in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"Zendesk\", \"unchanged\": [\"Zendesk records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Zendesk records; source context; field/note/status/owner state; no extra visible changes\"}, \"proposal\": \"I can't safely update Zendesk or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a comment to the Zendesk ticket for Hugo from this morning saying I am running 15 minutes late to the dinner, and will follow up after, if you cannot prove the visible Zendesk ticket, or my signed in workspace, decline without writing anything.\", \"source\": \"upload-asr\", \"text\": \"Please add a comment to the Zendesk ticket for Hugo from this morning saying I am running 15 minutes late to the dinner, and will follow up after, if you cannot prove the visible Zendesk ticket, or my signed in workspace, decline without writing anything.\", \"ts\": 1779858328.919692, \"unchanged\": [\"Zendesk records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Zendesk records; source context; field/note/status/owner state; no extra visible changes\"}\n{\"blocked_services\": [\"Amazon\"], \"competent_decline\": true, \"d16_receipt\": \"no-action e-commerce admin decline\", \"decline\": true, \"ingest_id\": \"upload-asr-0abb7b51496249fda8795620f1d1c4f0\", \"instruction\": \"On the Amazon order page for the running shoes I bought last month, please check the return window and draft a customer message to support to refund the order. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"intent\": \"ecommerce_admin_surface_missing\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Amazon\"], \"competent_decline\": true, \"d16_receipt\": \"no-action e-commerce admin decline\", \"intent\": \"ecommerce_admin_surface_missing\", \"mode\": \"decline\", \"prohibited_actions\": [\"change address\", \"void label\", \"buy label\", \"refund\", \"update inventory\", \"open checkout\", \"send mail\", \"draft customer reply without visible receipts\"], \"proposal\": \"I can't safely handle that Amazon order or customer reply yet. I cannot prove the real signed-in order page, buyer, item, shipping address, customer message, label, checkout, payment, inventory, or mail state from the visible user surface. I will not change an address, void or buy labels, refund, update inventory, open checkout, send mail, or draft a customer reply without those receipts. Requested e-commerce work to preserve: On the Amazon order page for the running shoes I bought last month, please check the return window and draft a customer message to support to refund the order. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"task\": \"\", \"thing\": \"Amazon order/customer reply\", \"unchanged\": [\"order page\", \"customer message\", \"shipping address\", \"shipping labels\", \"checkout state\", \"payment state\", \"inventory state\", \"mail drafts and sends\"], \"unchanged_state_boundary\": \"Amazon order, customer message, shipping label, checkout, payment, inventory, and mail state; no extra visible changes\"}, \"proposal\": \"I can't safely handle that Amazon order or customer reply yet. I cannot prove the real signed-in order page, buyer, item, shipping address, customer message, label, checkout, payment, inventory, or mail state from the visible user surface. I will not change an address, void or buy labels, refund, update inventory, open checkout, send mail, or draft a customer reply without those receipts. Requested e-commerce work to preserve: On the Amazon order page for the running shoes I bought last month, please check the return window and draft a customer message to support to refund the order. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"source\": \"upload-asr\", \"text\": \"On the Amazon order page for the running shoes I bought last month, please check the return window and draft a customer message to support to refund the order. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.\", \"ts\": 1779858441.0080209, \"unchanged\": [\"order page\", \"customer message\", \"shipping address\", \"shipping labels\", \"checkout state\", \"payment state\", \"inventory state\", \"mail drafts and sends\"], \"unchanged_state_boundary\": \"Amazon order, customer message, shipping label, checkout, payment, inventory, and mail state; no extra visible changes\"}\n{\"blocked_services\": [\"Notion\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"decline\": true, \"ingest_id\": \"upload-asr-d6e1213826d944399152e23f9ef1251a\", \"instruction\": \"Please add a new record to my Notion Recipes database for the Miso eggplant Avery sent me, and tag it weeknight, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"intent\": \"crm_saas_write\", \"outcome\": \"DECLINED\", \"plan\": {\"blocked_services\": [\"Notion\"], \"competent_decline\": true, \"d16_receipt\": \"no-action CRM/SaaS write decline\", \"intent\": \"crm_saas_write\", \"mode\": \"decline\", \"prohibited_actions\": [\"email\", \"post\", \"close\", \"promise\", \"write\"], \"proposal\": \"I can't safely update Notion or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a new record to my Notion Recipes database for the Miso eggplant Avery sent me, and tag it weeknight, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"task\": \"\", \"thing\": \"Notion\", \"unchanged\": [\"Notion records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Notion records; source context; field/note/status/owner state; no extra visible changes\"}, \"proposal\": \"I can't safely update Notion or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: Please add a new record to my Notion Recipes database for the Miso eggplant Avery sent me, and tag it weeknight, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"source\": \"upload-asr\", \"text\": \"Please add a new record to my Notion Recipes database for the Miso eggplant Avery sent me, and tag it weeknight, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\", \"ts\": 1779858550.74133, \"unchanged\": [\"Notion records\", \"source context\", \"field/note/status/owner state\", \"no-extra-change visible state\"], \"unchanged_state_boundary\": \"Notion records; source context; field/note/status/owner state; no extra visible changes\"}\n"
+  },
+  "driver_result": null,
+  "v7_artifacts": {
+    "ingest_id": "",
+    "paths": {},
+    "records": {},
+    "present": false
+  },
+  "transcript_quality": null,
+  "cost_breakdown": null,
+  "script": {
+    "path": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/script.json",
+    "loaded": true,
+    "surface_scope": [
+      "anticipy",
+      "browser"
+    ]
+  },
+  "surface_receipts_present": true,
+  "baseline": {
+    "path": "",
+    "loaded": false,
+    "created_at": null
+  },
+  "diff": {
+    "changed_surfaces": [],
+    "all_changed_surfaces": [],
+    "unrelated_changed_surfaces": [],
+    "script_surface_scope": [
+      "anticipy",
+      "browser"
+    ],
+    "scoped_to_script": true,
+    "broken_script_surfaces": [],
+    "missing_script_surfaces": [
+      "browser"
+    ],
+    "added_pages": [],
+    "removed_pages": [],
+    "changed_pages": [],
+    "native_ax_changed": false,
+    "terminal_changed": false
+  }
+}

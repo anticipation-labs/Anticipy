@@ -1,0 +1,21 @@
+{
+  "evidence": {
+    "input_mode": "transcript_paste",
+    "origin": "driver_result.json",
+    "path": "transcript_boundary",
+    "source": "transcript-upload",
+    "source_mode": "transcript_upload"
+  },
+  "generated_at": "2026-05-26T14:09:55Z",
+  "hypothesis": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+  "input_fidelity": [
+    "uploaded_text_transcript"
+  ],
+  "reference": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "transcript-upload",
+  "stranger_id": "8ee08723-ad73-4016-bf0e-fc48f742d78a",
+  "transcript_boundary_chars": 260,
+  "transcript_boundary_sha256": "3811fc57c24eea01a27d53b9f238afe71e6b7e66c14bdac61e75b8b308cc576c",
+  "wer": 0.0
+}

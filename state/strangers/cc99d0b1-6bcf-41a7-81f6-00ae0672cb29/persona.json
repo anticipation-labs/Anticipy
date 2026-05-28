@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "cc99d0b1-6bcf-41a7-81f6-00ae0672cb29",
+  "created_at": "2025-04-13T01:22:00Z",
+  "name": "Jordan Chen",
+  "age": 34,
+  "occupation": "Product Manager",
+  "location": "San Francisco, CA",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Linear task management",
+  "primary_real_surface": {
+    "surface": "Linear web app",
+    "chrome_requirement": "signed-in Chrome profile with Linear tab open",
+    "acceptable_state": "viewing issue list or creating new issue"
+  },
+  "daily_tools": [
+    "Linear",
+    "Slack",
+    "Notion",
+    "VS Code",
+    "Arc Browser"
+  ],
+  "contacts": [
+    {
+      "name": "Alice Kim",
+      "relationship": "colleague",
+      "context": "works on same product team"
+    },
+    {
+      "name": "Mark Rivera",
+      "relationship": "engineering lead",
+      "context": "assigns tasks and reviews progress"
+    },
+    {
+      "name": "Sarah Liu",
+      "relationship": "designer",
+      "context": "collaborates on issue creation and workflow"
+    }
+  ]
+}

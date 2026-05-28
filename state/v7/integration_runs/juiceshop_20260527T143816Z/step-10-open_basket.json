@@ -1,0 +1,7 @@
+{
+  "name": "open_basket",
+  "ok": false,
+  "detail": "click=CLICKED:button[aria-label*=\"basket\" i] url=https://preview.owasp-juice.shop/#/search?q=apple",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143816Z/step-10-open_basket.png",
+  "receipt": "CLICKED:button[aria-label*=\"basket\" i]"
+}

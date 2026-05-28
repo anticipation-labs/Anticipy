@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "7a240edb-4141-452b-97db-4931ddeaaa2d",
+  "created_at": "2025-04-10T12:00:00Z",
+  "name": "Elena Vasquez",
+  "age": 34,
+  "occupation": "Marketing Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Amazon product purchase history lookup",
+  "primary_real_surface": {
+    "surface": "Amazon.com signed-in Chrome",
+    "chrome_requirement": "user signed in to Amazon",
+    "acceptable_state": "logged in and on order history page"
+  },
+  "daily_tools": [
+    "Chrome",
+    "Slack",
+    "Google Workspace",
+    "Trello",
+    "Zoom"
+  ],
+  "contacts": [
+    {
+      "name": "James Chen",
+      "relationship": "colleague",
+      "context": "works in same marketing team"
+    },
+    {
+      "name": "Sofia Reyes",
+      "relationship": "friend",
+      "context": "tech-savvy friend who recommends tools"
+    },
+    {
+      "name": "Mike O'Brien",
+      "relationship": "spouse",
+      "context": "shares Amazon account for household purchases"
+    }
+  ]
+}

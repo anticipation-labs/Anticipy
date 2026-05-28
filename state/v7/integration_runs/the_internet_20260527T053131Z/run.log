@@ -1,0 +1,26 @@
+[05:31:31Z] run dir: state/v7/integration_runs/the_internet_20260527T053131Z
+[05:31:31Z] bridge: http://127.0.0.1:7777  base: https://the-internet.herokuapp.com
+[05:31:31Z] bridge acquired_via: chrome_applescript_loopback_bridge
+[05:31:31Z] TEST 1: Form Authentication (/login)
+[05:31:44Z] T1 url=https://www.anticipy.ai/app title=Anticipy App
+[05:31:44Z] TEST 2: Dynamic Loading 2 (/dynamic_loading/2)
+[05:32:02Z] T2 url=https://www.anticipy.ai/app title=Anticipy App
+[05:32:02Z] TEST 3: JavaScript Alerts (/javascript_alerts, render-only)
+[05:32:06Z] T3 url=https://the-internet.herokuapp.com/javascript_alerts title=The Internet
+[05:32:06Z] TEST 4: Dropdown (/dropdown)
+[05:32:18Z] T4 url=https://the-internet.herokuapp.com/dropdown title=The Internet
+[05:32:18Z] TEST 5: Nested Frames (/nested_frames)
+[05:32:22Z] T5 url=https://the-internet.herokuapp.com/nested_frames title=
+[05:32:23Z] TEST 6: Key Presses (/key_presses)
+[05:32:31Z] T6 url=https://the-internet.herokuapp.com/key_presses title=The Internet
+[05:32:31Z] 
+[05:32:31Z] AGGREGATE RESULTS
+[05:32:31Z] =================
+[05:32:31Z] form_authentication    FAIL  SE keystroke into form fields (no DOM read to confirm focus path)
+[05:32:31Z] dynamic_loading        FAIL  bridge navigate or surface-proof
+[05:32:31Z] javascript_alerts      PASS  render-only per rules; no alert click
+[05:32:31Z] dropdown_option_2      PASS  screenshot captured; manual audit of Option 2
+[05:32:31Z] nested_frames_loaded   PASS  parent loaded; frame interaction logged as limitation
+[05:32:31Z] key_press_X            PASS  screenshot captured; manual audit of You entered: X
+[05:32:31Z] 
+[05:32:31Z] Passed: 4  Failed: 2  Total: 6

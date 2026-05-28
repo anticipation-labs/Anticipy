@@ -1,0 +1,9 @@
+[15:18:16] launching dry-run bridge: scripts/v7/anticipy_bridge_fallback_cdp.py on port 7779
+[15:18:16] dry-run bridge pid=95962, waiting up to 6s for HTTP up
+[15:18:17] PASS status_cdp_primary :: bridge_kind=cdp_primary cdp_alive=True
+[15:18:21] frontmost URL after navigate: https://abrahamjuliot.github.io/creepjs/
+[15:18:21] navigate response: in_place=True url=https://example.com/?anticipy_cdp_test=20260527T151816Z via=chrome_cdp_loopback_bridge
+[15:18:21] PASS navigate_background :: tab navigated to https://example.com/?anticipy_cdp_test=20260527T151816Z; frontmost is https://abrahamjuliot.github.io/creepjs/ (no foreground steal)
+[15:18:22] PASS eval_js_title :: result='Example Domain' via=chrome_cdp_loopback_bridge (no Apple Events permission needed)
+[15:18:23] PASS click_selector :: selector=a -> result=OK
+[15:18:23] PASS steps=4

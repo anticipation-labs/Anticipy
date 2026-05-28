@@ -1,0 +1,52 @@
+{
+  "intent_goal": "Find the year the Python programming language was first released. Navigate Wikipedia to find it.",
+  "skill_id": "wiki_python_year",
+  "setup_url": "https://en.wikipedia.org/wiki/Python_(programming_language)",
+  "model": "qwen3:8b",
+  "max_iters": 6,
+  "final_verdict": "STUCK",
+  "final_evidence": "",
+  "error": null,
+  "n_iterations": 3,
+  "iterations": [
+    {
+      "iteration": 0,
+      "completion_verdict": "NOT_DONE",
+      "completion_evidence": "verifier indeterminate: ",
+      "action_raw": "",
+      "action_kind": "unknown",
+      "dispatch_ok": false,
+      "dispatch_stderr": "unparseable action: ''",
+      "latency_decide_s": 33.704,
+      "latency_verify_s": 33.837,
+      "latency_dispatch_s": 0.0,
+      "screenshot": "step_00.png"
+    },
+    {
+      "iteration": 1,
+      "completion_verdict": "NOT_DONE",
+      "completion_evidence": "verifier indeterminate: ",
+      "action_raw": "",
+      "action_kind": "unknown",
+      "dispatch_ok": false,
+      "dispatch_stderr": "unparseable action: ''",
+      "latency_decide_s": 12.513,
+      "latency_verify_s": 12.153,
+      "latency_dispatch_s": 0.0,
+      "screenshot": "step_01.png"
+    },
+    {
+      "iteration": 2,
+      "completion_verdict": "NOT_DONE",
+      "completion_evidence": "verifier indeterminate: ",
+      "action_raw": "",
+      "action_kind": "unknown",
+      "dispatch_ok": false,
+      "dispatch_stderr": "unparseable action: ''",
+      "latency_decide_s": 15.502,
+      "latency_verify_s": 14.717,
+      "latency_dispatch_s": 0.0,
+      "screenshot": "step_02.png"
+    }
+  ]
+}

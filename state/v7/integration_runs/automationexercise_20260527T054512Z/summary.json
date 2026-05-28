@@ -1,0 +1,87 @@
+{
+  "failed": 2,
+  "passed": 9,
+  "run_dir": "state/v7/integration_runs/automationexercise_20260527T054512Z",
+  "site": "automationexercise.com",
+  "steps": [
+    {
+      "actual": "https://automationexercise.com/login",
+      "expected": "/login with login form (no real signup)",
+      "name": "login_wall",
+      "passed": true,
+      "primitive_used": "bridge navigate (Register/Login fallback)"
+    },
+    {
+      "actual": "https://automationexercise.com/login",
+      "expected": "final login-wall screenshot",
+      "name": "final_screenshot",
+      "passed": true,
+      "primitive_used": "bridge surface-proof"
+    },
+    {
+      "actual": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-eafe8520c6f9",
+      "expected": "host is automationexercise.com",
+      "name": "home_loaded",
+      "passed": false,
+      "primitive_used": "bridge navigate"
+    },
+    {
+      "actual": "https://automationexercise.com/products",
+      "expected": "url contains /products",
+      "name": "products_page",
+      "passed": true,
+      "primitive_used": "bridge navigate (top-nav fallback)"
+    },
+    {
+      "actual": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-0705ebf22c71 first=1",
+      "expected": "search URL + matching product id",
+      "name": "search_results",
+      "passed": false,
+      "primitive_used": "bridge navigate (form GET)"
+    },
+    {
+      "actual": "https://automationexercise.com/product_details/1",
+      "expected": "URL on product_details + HTML has price + cart",
+      "name": "product_details_page",
+      "passed": true,
+      "primitive_used": "bridge navigate + curl HTML"
+    },
+    {
+      "actual": "https://automationexercise.com/product_details/1",
+      "expected": "still on product_details (modal expected)",
+      "name": "add_to_cart_clicked",
+      "passed": true,
+      "primitive_used": "cliclick on (880,372)"
+    },
+    {
+      "actual": "https://bot.sannysoft.com/",
+      "expected": "ESC sent to close Continue Shopping modal",
+      "name": "modal_dismissed",
+      "passed": true,
+      "primitive_used": "System Events key code 53 (ESC)"
+    },
+    {
+      "actual": "https://automationexercise.com/view_cart",
+      "expected": "url contains /view_cart",
+      "name": "cart_view",
+      "passed": true,
+      "primitive_used": "bridge navigate (cart icon fallback)"
+    },
+    {
+      "actual": "https://automationexercise.com/view_cart",
+      "expected": "cart screenshot captured",
+      "name": "cart_screenshot",
+      "passed": true,
+      "primitive_used": "bridge surface-proof"
+    },
+    {
+      "actual": "https://automationexercise.com/view_cart",
+      "expected": "click issued; expect login wall or modal",
+      "name": "proceed_to_checkout_clicked",
+      "passed": true,
+      "primitive_used": "cliclick on (1100,560)"
+    }
+  ],
+  "total": 11,
+  "wall_seconds": 72
+}

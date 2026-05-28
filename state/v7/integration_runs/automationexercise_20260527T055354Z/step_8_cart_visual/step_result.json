@@ -1,0 +1,7 @@
+{
+  "actual": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-89433d63d993",
+  "expected": "cart screenshot captured",
+  "name": "cart_screenshot",
+  "passed": true,
+  "primitive_used": "bridge surface-proof"
+}

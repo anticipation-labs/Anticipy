@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "b91091ff-777c-41b8-8819-3f336a7766fc",
+  "created_at": "2025-04-04T12:00:00Z",
+  "name": "Marcus Webb",
+  "age": 34,
+  "occupation": "Sales Operations Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion-based CRM for client tracking",
+  "primary_real_surface": {
+    "surface": "Notion web app",
+    "chrome_requirement": "signed into Notion in Chrome",
+    "acceptable_state": "notion.so page with database view"
+  },
+  "daily_tools": [
+    "Notion",
+    "Slack",
+    "Gmail",
+    "Calendly",
+    "Zoom"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Liu",
+      "relationship": "colleague",
+      "context": "Sales team lead"
+    },
+    {
+      "name": "Tom Harrison",
+      "relationship": "client",
+      "context": "Key account manager"
+    },
+    {
+      "name": "Emily Park",
+      "relationship": "manager",
+      "context": "VP of Sales"
+    }
+  ]
+}

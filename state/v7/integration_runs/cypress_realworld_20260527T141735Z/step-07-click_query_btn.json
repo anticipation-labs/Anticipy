@@ -1,0 +1,7 @@
+{
+  "name": "click_query_btn",
+  "ok": true,
+  "detail": "CDP click #query-btn ok",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-07-click_query_btn.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

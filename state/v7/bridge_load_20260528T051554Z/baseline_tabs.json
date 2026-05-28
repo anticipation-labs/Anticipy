@@ -1,0 +1,296 @@
+{
+  "ts": "20260528T051554Z",
+  "total": 58,
+  "pages": [
+    {
+      "id": "8A9F5AD8961406BA6B43DC852FF3B347",
+      "type": "page",
+      "url": "https://example.com/"
+    },
+    {
+      "id": "978C22051C21A326AE9F18449DADF774",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-42b58e516e8e"
+    },
+    {
+      "id": "0B937F2B00B1F235C73F0E5FC5DA20FB",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-f7ad672d250f"
+    },
+    {
+      "id": "6719543A0580979219D1A86E167A8B1A",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app/download?token=4d4ced968a03a173f39f23806b0c9d447123ba2bc84171ffd793294bc05f08c1"
+    },
+    {
+      "id": "19229B0007AE2E5935DC84CA32B4CD9D",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "ACA3497E2806DB4A5FC85D4C48E769CA",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "532D428866BE3DC00BA30DE7D057E1A8",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=66&screenY=100&e"
+    },
+    {
+      "id": "84DC7BC43CB8B1ADFE4FBC2D0F7C1503",
+      "type": "iframe",
+      "url": "https://c.salesforce.com/login-messages/promos.html"
+    },
+    {
+      "id": "7FB6962E6EDF4A24E280E3AA20C6B822",
+      "type": "page",
+      "url": "https://login.salesforce.com/"
+    },
+    {
+      "id": "4304ADA6CC5318C9889FEBBB3873AAAC",
+      "type": "page",
+      "url": "https://login.salesforce.com/"
+    },
+    {
+      "id": "4DABE577D6009F1CE9F1F004D405F328",
+      "type": "iframe",
+      "url": "https://c.salesforce.com/login-messages/promos.html"
+    },
+    {
+      "id": "396ADDBFED5226E3FCE067879D30ABC3",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=66&screenY=100&e"
+    },
+    {
+      "id": "EBD52D67236C96AD7FB3F19CA2E37BE5",
+      "type": "iframe",
+      "url": "https://www.zndsk.com/hub.html"
+    },
+    {
+      "id": "B657790885370B375EE82D8D0C177078",
+      "type": "page",
+      "url": "https://www.zendesk.com/login/"
+    },
+    {
+      "id": "CEB95BCA3E01E07F42BF00D447AAE6BD",
+      "type": "iframe",
+      "url": "https://www.zndsk.com/hub.html"
+    },
+    {
+      "id": "33A28579B80F909E0786505100BA8598",
+      "type": "page",
+      "url": "https://www.zendesk.com/login/"
+    },
+    {
+      "id": "F79B8B7C0F0AD48A24EDB72CB23605E8",
+      "type": "page",
+      "url": "https://app.notion.com/login?assetsVersion=23.13.20260527.2159&__dm_a=1"
+    },
+    {
+      "id": "FD15956A68C56B656DE6F5ABD4FA3154",
+      "type": "page",
+      "url": "https://app.notion.com/login?assetsVersion=23.13.20260527.2159&__dm_a=1"
+    },
+    {
+      "id": "F6E782A80A2FC7D5B4E00C088978F0B4",
+      "type": "page",
+      "url": "https://calendar.google.com/calendar/u/0/r/search?q=Dentist%20appointment"
+    },
+    {
+      "id": "0D7CED6DEFBC42EEE52E36C7CBE26D71",
+      "type": "page",
+      "url": "https://www.canva.com/"
+    },
+    {
+      "id": "ECC81B4E482666B07CF81F15B2D469C0",
+      "type": "page",
+      "url": "https://www.canva.com/"
+    },
+    {
+      "id": "122DD828DE3E163156AB03782F578ECF",
+      "type": "page",
+      "url": "https://abrahamjuliot.github.io/creepjs/"
+    },
+    {
+      "id": "E136B929A50A8AFDA0D2E617130D3FF8",
+      "type": "page",
+      "url": "https://arh.antoinevastel.com/bots/areyouheadless"
+    },
+    {
+      "id": "2D3D1CB409D0774A4E9DB956D9441370",
+      "type": "page",
+      "url": "https://bot.sannysoft.com/"
+    },
+    {
+      "id": "498148928BA8FB9E948FF3750D3B0871",
+      "type": "page",
+      "url": "https://app.notion.com/login?assetsVersion=23.13.20260527.2159&__dm_a=1"
+    },
+    {
+      "id": "FC573C034F58BCEAD39F5F107942E20E",
+      "type": "page",
+      "url": "https://app.notion.com/login?assetsVersion=23.13.20260527.2159&__dm_a=1"
+    },
+    {
+      "id": "3D9728E13801D3BB9FC1F23750675087",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "835F74610A442951CB561C4E8E4F580F",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "36F9CD2E080BDF9735FCBCC44E21DD31",
+      "type": "page",
+      "url": "https://www.zendesk.com/login/"
+    },
+    {
+      "id": "2F015293FBC55D47E17AC0C33301D12F",
+      "type": "page",
+      "url": "https://www.zendesk.com/login/"
+    },
+    {
+      "id": "4943462286D1998D7D05CDC414E268D7",
+      "type": "page",
+      "url": "https://www.ebay.com/itm/188423328149"
+    },
+    {
+      "id": "87768E1B6CD611F12DF2D1AC72F89192",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "016B5F6DE711E751E55943A3C2BE9097",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "FEE45C82663291C8B7A68F01BA74CAD6",
+      "type": "page",
+      "url": "https://id.atlassian.com/login?application=trello&continue=https%3A%2F%2Ftrello.com%2Fauth%2Fatlassian%2Fcallback%3Fretu"
+    },
+    {
+      "id": "0BD9E8683A6EA59F231846A4ED2AD279",
+      "type": "page",
+      "url": "https://id.atlassian.com/login?application=trello&continue=https%3A%2F%2Ftrello.com%2Fauth%2Fatlassian%2Fcallback%3Fretu"
+    },
+    {
+      "id": "055E67252CEEB4FAB74410085D44382D",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "99D7214274FA63F0D3680834A850029C",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "F6195691FD1209993A7F462784638B23",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "49FD039CF0252562F1EB2917A4E3CBC9",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "AFD9AC636118F72461012B139CC8CC5E",
+      "type": "page",
+      "url": "https://claude.ai/new"
+    },
+    {
+      "id": "48DE87A73C7A647045F31CA7133B5FEC",
+      "type": "background_page",
+      "url": "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/offscreen.html"
+    },
+    {
+      "id": "F6F03AD59992EDC1DF662685EB52527C",
+      "type": "page",
+      "url": "chrome://newtab/"
+    },
+    {
+      "id": "8C24481B04DC30D0994A8C234247CD66",
+      "type": "page",
+      "url": "https://frontend-iota-gray-49.vercel.app/signup"
+    },
+    {
+      "id": "8832124850602E63ED884DEAC9083486",
+      "type": "page",
+      "url": "https://linear.app/login"
+    },
+    {
+      "id": "9308330889D2DE1E3EF2D711B069D6B2",
+      "type": "page",
+      "url": "https://linear.app/login"
+    },
+    {
+      "id": "B93D91C6F291BD00A645CB717A13A90F",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "E892621F30CCC711F1B5EC78492DB00B",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "6DEF60A72F8FFE042466217D2353AD89",
+      "type": "service_worker",
+      "url": "chrome-extension://ndnaehgpjlnokgebbaldlmgkapkpjkkb/background.bundle.js"
+    },
+    {
+      "id": "9FBF807FBBEC4199C7BA4DFA14D665E6",
+      "type": "service_worker",
+      "url": "chrome-extension://majdfhpaihoncoakbjgbdhglocklcgno/service-worker-loader.js"
+    },
+    {
+      "id": "5486AB1BF0046023DE5D0CF592F37EC7",
+      "type": "service_worker",
+      "url": "chrome-extension://jfcmjbboehfdmgbhheahjlnoimbgfdbn/service-worker.js"
+    },
+    {
+      "id": "65A9155F365315C10B59354FE69D2E8E",
+      "type": "service_worker",
+      "url": "chrome-extension://phkbamefinggmakgklpkljjmgibohnba/service-worker-loader.js"
+    },
+    {
+      "id": "B24FFD65AD9DF5B303EBD06CDEBDD56F",
+      "type": "service_worker",
+      "url": "chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/background/serviceWorker.js"
+    },
+    {
+      "id": "3FC8680647BD0B8CAFDD46F2C34FEFDA",
+      "type": "service_worker",
+      "url": "chrome-extension://ejkiikneibegknkgimmihdpcbcedgmpo/service-worker.js"
+    },
+    {
+      "id": "4566F6AE67421C0885079096AFECFD71",
+      "type": "service_worker",
+      "url": "chrome-extension://dmkamcknogkgcdfhhbddcghachkejeap/background.bundle.js"
+    },
+    {
+      "id": "F31EBEC0F1851AE23C018FACFAB6AC71",
+      "type": "service_worker",
+      "url": "chrome-extension://ilehaonighjijnmpnagapkhpcdbhclfg/src/background.js"
+    },
+    {
+      "id": "BF3261E826392C17B143D02DD10C1365",
+      "type": "service_worker",
+      "url": "chrome-extension://hehggadaopoacecdllhhajmbjkdcmajg/background.js"
+    },
+    {
+      "id": "B23AE3C82B5284B915684CB07E19D785",
+      "type": "service_worker",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/background.js"
+    },
+    {
+      "id": "B8EB0188BD96BDEF416FB68ACD810D11",
+      "type": "service_worker",
+      "url": "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/service-worker-loader.js"
+    }
+  ]
+}

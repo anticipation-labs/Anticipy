@@ -1,0 +1,7 @@
+{
+  "name": "dismiss_banners",
+  "ok": true,
+  "detail": "welcome banner + cookie bar dismissed (best-effort)",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143114Z/step-02-dismiss_banners.png",
+  "receipt": "defensive close"
+}

@@ -1,0 +1,9 @@
+# Anticipy Pendant — OTA-capable partition table
+# 8MB flash on XIAO ESP32-S3 (W25Q64)
+# Two app slots (3MB each) + NVS + SPIFFS
+# Name,   Type, SubType,  Offset,   Size,    Flags
+nvs,      data, nvs,      0x9000,   0x5000,
+otadata,  data, ota,      0xe000,   0x2000,
+app0,     app,  ota_0,    0x10000,  0x300000,
+app1,     app,  ota_1,    0x310000, 0x300000,
+spiffs,   data, spiffs,   0x610000, 0x1F0000,

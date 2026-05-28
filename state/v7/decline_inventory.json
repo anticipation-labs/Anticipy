@@ -1,0 +1,127 @@
+{
+  "schema": "anticipy.v7.decline_inventory.v1",
+  "generated_at_utc": "2026-05-26T22:30:00Z",
+  "directive": "Omar 2026-05-26: 'It should never decline anything. If it does, our whole system breaks.' Re-route every competent-decline template to the universal action dispatcher OR an ask_user confirm-card surface. Money/irreversibility carve-out: pause for confirmation, never flat-decline.",
+  "scope_searched": [
+    "engine/app/product/server.py",
+    "engine/app/product/surface_runtime.py",
+    "engine/app/product/scheduler.py",
+    "engine/app/product/main.py",
+    "engine/app/anticipy/proactive_engine.py",
+    "engine/app/action_engine/*.py",
+    "engine/app/proactive_day/*.py",
+    "src/lib/intent-prompt.ts",
+    "src/lib/intent-extract.ts",
+    "src/lib/intent-gates.ts",
+    "src/lib/execute-action.ts",
+    "src/app/api/engine/analyze/route.ts",
+    "src/app/api/engine/confirm/route.ts"
+  ],
+  "templates": [
+    {
+      "id": "canvas_edit_decline",
+      "file": "engine/app/product/server.py",
+      "function": "_unsupported_canvas_decline",
+      "line_after_rewrite": 2682,
+      "frozen": false,
+      "money_or_irreversible": false,
+      "classification": "safe_to_rewrite",
+      "before": "I can't safely edit that visible {surface_text} {target} yet. I cannot prove the design is editable...",
+      "after_mode": "act (auto-attempt via dispatcher) OR ask_user (if instruction trips _IRREVERSIBLE_VERB_TRIGGERS)",
+      "after_helper_call": "_ask_user_plan_from_template({'intent': 'canvas_edit', ...}, text)",
+      "rewritten_in_place": true
+    },
+    {
+      "id": "ecommerce_admin_decline",
+      "file": "engine/app/product/server.py",
+      "function": "_unsafe_ecommerce_decline (admin branch)",
+      "line_after_rewrite": 2755,
+      "frozen": false,
+      "money_or_irreversible": true,
+      "carve_out_subtypes": [
+        "refund", "void label", "buy label", "send mail to customer",
+        "change shipping address", "open checkout", "update inventory"
+      ],
+      "classification": "safe_to_rewrite",
+      "before": "I can't safely handle that {surface_text} order or customer reply yet. ...",
+      "after_mode": "ask_user with require_confirm=True (irreversible intent kind)",
+      "after_helper_call": "_ask_user_plan_from_template({'intent': 'ecommerce_admin_surface_missing', ...}, text)",
+      "rewritten_in_place": true
+    },
+    {
+      "id": "ecommerce_cart_prep_decline",
+      "file": "engine/app/product/server.py",
+      "function": "_unsafe_ecommerce_decline (cart-prep branch)",
+      "line_after_rewrite": "approx 2862-2888",
+      "frozen": false,
+      "money_or_irreversible": true,
+      "carve_out_subtypes": ["start checkout", "change payment", "buy"],
+      "classification": "safe_to_rewrite",
+      "before": "I can't safely prepare that {thing} yet. Retail bot protection...",
+      "after_mode": "ask_user with require_confirm=True (irreversible intent kind ecommerce_cart_prep)",
+      "after_helper_call": "_ask_user_plan_from_template({'intent': 'ecommerce_cart_prep', ...}, text)",
+      "rewritten_in_place": true
+    },
+    {
+      "id": "crm_saas_write_decline",
+      "file": "engine/app/product/server.py",
+      "function": "_unsupported_crm_saas_write_decline",
+      "line_after_rewrite": 2891,
+      "frozen": false,
+      "money_or_irreversible": false,
+      "carve_out_subtypes": ["external email", "external post"],
+      "classification": "safe_to_rewrite",
+      "before": "I can't safely update {surface_text} or enterprise SaaS records yet. ...",
+      "after_mode": "act (auto-attempt) OR ask_user (when verb triggers irreversibility)",
+      "after_helper_call": "_ask_user_plan_from_template({'intent': 'crm_saas_write', ...}, text)",
+      "rewritten_in_place": true
+    },
+    {
+      "id": "native_calendar_reminder_decline",
+      "file": "engine/app/product/server.py",
+      "function": "_unsupported_native_calendar_reminder_decline",
+      "line_after_rewrite": 3108,
+      "frozen": false,
+      "money_or_irreversible": false,
+      "classification": "safe_to_rewrite",
+      "before": "I can't safely create native Calendar events or Reminders yet. ...",
+      "after_mode": "act (auto-attempt via dispatcher)",
+      "after_helper_call": "_ask_user_plan_from_template({'intent': 'native_calendar_reminder', ...}, text)",
+      "rewritten_in_place": true
+    },
+    {
+      "id": "act_endpoint_pending_decline_path",
+      "file": "engine/app/product/server.py",
+      "function": "act endpoint (POST /api/act)",
+      "line_after_rewrite": 5554,
+      "frozen": false,
+      "money_or_irreversible": false,
+      "classification": "safe_to_rewrite",
+      "before": "{'ran': False, 'status': 'declined', 'decline': True, 'competent_decline': True, 'question': pending.get('proposal') or 'I cannot safely perform that action.', ...}",
+      "after_mode": "ask_user (returns 'status': 'ask_user', 'ask_user': True, decline=False, with re-prompt and options=['proceed','cancel'])",
+      "rewritten_in_place": true
+    }
+  ],
+  "frozen_path_findings": {
+    "engine/app/anticipy/proactive_engine.py": "Contains a REFUSE branch (~line 212) for sarcasm / retraction / third-party recap. This is a 'user did not actually want it' classification, NOT a competent-decline of a real intent. Out of scope; no patch needed. (Wearer never said 'do X'; recording it as a decline would be wrong.)",
+    "engine/app/action_engine/*.py": "No user-facing decline templates found. All 'cannot' instances are comments.",
+    "engine/app/proactive_day/*.py": "No user-facing decline templates found. All 'cannot' / 'refuse' instances are comments."
+  },
+  "non_decline_findings": {
+    "src/lib/intent-prompt.ts": "Contains LLM-prompt instructions teaching the extractor to skip delegations, future-tense pleasantries, and aspirations. These are extraction-time filters that decide what counts as a real intent, NOT user-facing decline templates. The directive explicitly targets surface declines like 'I cannot safely X'. No rewrite needed.",
+    "src/app/api/engine/analyze/route.ts": "Returns 401 / 404 / 409 / 429 / 500 on auth / rate / validation paths. No user-facing decline templates.",
+    "src/app/api/engine/confirm/route.ts": "Returns expired / invalid token messages and error pages. No 'cannot safely' templates."
+  },
+  "infra_added": {
+    "_IRREVERSIBLE_VERB_TRIGGERS": "engine/app/product/server.py around line 2425 — verb-level safety net for confirm-card routing.",
+    "_IRREVERSIBLE_INTENT_KINDS": "engine/app/product/server.py around line 2432 — intent-kind whitelist of money/irreversible classifications.",
+    "_intent_requires_confirm": "engine/app/product/server.py around line 2447 — boolean classifier used by dispatcher routing.",
+    "_ask_user_plan_from_template": "engine/app/product/server.py around line 2460 — converts a legacy decline template to an ask_user / act plan.",
+    "_dispatch_via_universal_runtime": "engine/app/product/server.py around line 2496 — calls into app.product.action_dispatcher.ActionDispatcher.execute() with the planned action; returns DispatchOutcome dict or None on failure (fallback path also avoids flat-decline)."
+  },
+  "total_templates_found": 6,
+  "rewritten_in_place": 6,
+  "patches_for_frozen": 0,
+  "money_carve_outs_preserved": 3,
+  "money_carve_out_strategy": "For purchase / transfer / payment / subscription / send-external-email / irreversible-delete the rewritten code stores the planned action in _LISTEN['pending'] with mode='ask_user' (NOT mode='decline') and require_confirm=True, sets a confirm_card_id, and the dispatcher pauses on the user's yes/no via app.product.confirm_card.needs_confirmation(). User-yes proceeds. User-no records the refusal as the only point where decline=True/competent_decline=True flags can ever flip. No flat-decline ever ships."
+}

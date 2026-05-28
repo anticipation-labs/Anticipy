@@ -1,0 +1,7 @@
+{
+  "name": "type_username",
+  "ok": true,
+  "detail": "CDP fill #user-name (bridge type unsupported)",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061425Z/step-02-type_username.png",
+  "receipt": "{\"value\": \"standard_user\", \"type\": \"string\", \"exception\": null}"
+}

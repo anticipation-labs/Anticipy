@@ -1,0 +1,143 @@
+{
+  "pass": true,
+  "reasoning": "Pass under V7 stranger-gate rules and the D16 competent-decline standard. The script-scoped changed surface set is trace.diff.changed_surfaces, which contains anticipy and canvas_design. The changed Anticipy surface shows a user-visible Canva-specific decline card, and trace.engine_logs contains a matching service-specific decline for Canva with prohibited actions and an unchanged-state boundary. A competent person would not edit the Canva flyer because the real Chrome Canva receipt only shows canva.com/Home rather than a readable, editable Solace Studio spring pop-up design or Early Bird target. The trace uses a public Anticipy app URL, an installed /Applications/Anticipy.app user-device engine, real visible Chrome surface proof, and uses_chrome_real_clone is false. There are no broken or missing script surfaces, no unrelated changed surfaces, and the terminal/native diffs do not provide credit for the work.",
+  "specific_failures": [],
+  "verb_category": "canvas_design_edit_or_comment",
+  "hard_category": "canvas",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "result": "public_app_and_installed_engine_visible",
+      "evidence": "The Anticipy page receipt is https://www.anticipy.ai/app with visible logged-in app text, and engine proof shows /Applications/Anticipy.app/Contents/MacOS/anticipy-engine listening on 127.0.0.1:8731 with health ok/onboarded/version product-3."
+    },
+    {
+      "id": "m02_real_canvas_surface_precheck",
+      "pass": true,
+      "result": "real_canva_surface_checked_but_target_not_verified",
+      "evidence": "trace.diff.added_pages includes canvas_design at https://www.canva.com/. The real Chrome Canva proof is visible and not cloned, but it only establishes Canva Home/list state, not an editable Solace Studio flyer or Early Bird target; declining before editing is competent."
+    },
+    {
+      "id": "m03_transcript_upload_primary",
+      "pass": true,
+      "result": "transcript_text_reached_engine_boundary",
+      "evidence": "driver_result records source_mode transcript_upload, source_detail text_file, submitted_through_public_app_ui true, and transcript_boundary_sha256 3811fc57c24eea01a27d53b9f238afe71e6b7e66c14bdac61e75b8b308cc576c. transcript_quality reports WER 0.0 against the script text."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "result": "normalized_text_input_and_decision_artifacts_present",
+      "evidence": "trace.v7_artifacts contains matching normalized_inputs, inference_events, and decisions for ingest_id asr-transcript-d0a006c3c45c4fb5a3ba2e2f0121fb29 with device_engine user-device and input_mode text_transcript."
+    },
+    {
+      "id": "m05_decision_on_canva",
+      "pass": true,
+      "result": "competent_canva_decline_visible",
+      "evidence": "The changed Anticipy card says 'Cannot safely act' and states it cannot safely edit the visible Canva flyer, will not export/publish/share/email, and preserves the requested sponsor-logo note. The service-specific decline log names Canva, intent canvas_edit, mode decline, prohibited actions, and unchanged_state_boundary."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "result": "secondary_controls_observed_as_non_primary_gap",
+      "evidence": "The public Anticipy visible text shows Listen/Listen again and no MP3 or external microphone selector on the captured surface. This moment is secondary_only and does not replace the transcript-upload primary input or the D16 Canva decline."
+    }
+  ],
+  "d16_competent_decline": {
+    "satisfied": true,
+    "changed_anticipy_decline_surface_present": true,
+    "service_specific_decline_log_present": true,
+    "broken_third_party_surface_diff": false,
+    "decline_names_blocked_service": true,
+    "decline_names_source_surface_or_boundary": true,
+    "reason": "The Anticipy changed page is a visible decline card, and the log names Canva as the blocked service with a no-action canvas edit decline and unchanged-state boundary. No third-party script surface is broken."
+  },
+  "audit_evidence": {
+    "trace_diff": {
+      "changed_surfaces": [
+        "anticipy",
+        "canvas_design"
+      ],
+      "all_changed_surfaces": [
+        "anticipy",
+        "canvas_design"
+      ],
+      "unrelated_changed_surfaces": [],
+      "script_surface_scope": [
+        "anticipy",
+        "canvas_design"
+      ],
+      "scoped_to_script": true,
+      "broken_script_surfaces": [],
+      "missing_script_surfaces": [],
+      "added_pages": [
+        {
+          "surface": "canvas_design",
+          "url": "https://www.canva.com/",
+          "title": "Anticipy real Chrome extension surface"
+        }
+      ],
+      "removed_pages": [],
+      "changed_pages": [
+        {
+          "surface": "anticipy",
+          "url": "https://www.anticipy.ai/app",
+          "title": "Anticipy real Chrome extension surface",
+          "before_hash": "5444523eaaf6b54534431fdb8e4ec5ae0703f1369bf2a4435be5cc8b2004346c",
+          "after_hash": "1dddb56dc1701bc0a135292f598106f01aca401f2d4ac202672b09d1a7e8e48d"
+        }
+      ],
+      "native_ax_changed": false,
+      "terminal_changed": false
+    },
+    "page_diff_audit": {
+      "changed_pages": [
+        {
+          "surface": "anticipy",
+          "url": "https://www.anticipy.ai/app",
+          "evidence": "Visible text includes Cannot safely act and a Canva-specific decline."
+        }
+      ],
+      "added_pages": [
+        {
+          "surface": "canvas_design",
+          "url": "https://www.canva.com/",
+          "evidence": "Visible real Chrome Canva receipt exists, but does not show a readable editable target."
+        }
+      ],
+      "unrelated_changed_surfaces": []
+    },
+    "native_ax_diff_audit": {
+      "native_ax_changed": false,
+      "native_ax_ok": false,
+      "summary": "Native AX collection timed out and is not credited as proof of work."
+    },
+    "terminal_diff_audit": {
+      "terminal_changed": false,
+      "terminal_ok": true,
+      "text": ""
+    },
+    "v7_proof_rules": {
+      "surface_receipts_present": true,
+      "public_user_device_engine": true,
+      "real_chrome_user_surface": true,
+      "uses_chrome_real_clone": false,
+      "backend_only_shortcut": false,
+      "log_only_proof": false,
+      "generated_receipt_pages_counted_as_proof": false,
+      "input_receipts_present": true
+    },
+    "input_receipts": {
+      "primary_source_mode": "transcript_upload",
+      "primary_source_detail": "text_file",
+      "driver_input_mode": "transcript_paste",
+      "normalized_input_mode": "text_transcript",
+      "ingest_id": "asr-transcript-d0a006c3c45c4fb5a3ba2e2f0121fb29",
+      "transcript_boundary_sha256": "3811fc57c24eea01a27d53b9f238afe71e6b7e66c14bdac61e75b8b308cc576c",
+      "transcript_quality_wer": 0.0
+    },
+    "notes": [
+      "The public_build_commit field is empty in the V7 artifacts, but the interaction is judged here on the script-scoped user-visible surfaces and D16 decline proof, not as a full V7 completion claim.",
+      "The Canva surface was not edited; that is the correct outcome because the requested design/target was not surface-readable."
+    ]
+  }
+}

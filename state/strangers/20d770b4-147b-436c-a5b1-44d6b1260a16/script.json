@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "20d770b4-147b-436c-a5b1-44d6b1260a16",
+  "created_at": "2025-04-05T19:00:00Z",
+  "title": "Add Linear Task via Audio Upload",
+  "category": "linear_task_add",
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "hard_category_focus": "Linear task management in signed-in Chrome",
+  "breadth_reason": "This script tests Anticipy's ability to process an audio upload of a task creation request and act on the user's signed-in Linear surface, covering the upload audio ASR path and real surface proof.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on user's computer",
+    "surface_rule": "Only act on user's actual signed-in Chrome profile with Linear open; decline if surface not verifiable.",
+    "proof_rule": "Proof must show a visible Linear task creation record or signed-in workspace; if not, decline without writing anything."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "This script focuses on the uploaded audio ASR coverage path to ensure that users can upload an MP3 file containing a task request and have Anticipy process the speech-to-text to extract intent, rather than relying on manual transcript pasting or live microphone input."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Linear Workspace",
+      "kind": "web_app",
+      "surface": "Linear web app in signed-in Chrome",
+      "proof_needed": "Visible Linear task creation modal or workspace showing account"
+    },
+    {
+      "name": "Chrome Browser Profile",
+      "kind": "browser_profile",
+      "surface": "Signed-in Chrome profile with Linear tab",
+      "proof_needed": "Chrome profile visible with Linear open"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User visits anticipy.ai/app, downloads and installs the user-device engine, and signs in."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "User ensures Linear is open in signed-in Chrome profile with task creation modal accessible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a task in Linear for the Brentwood deal to review the contract redlines by Wednesday and tag it priority. If you cannot prove the visible Linear record or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "The audio file is played via the 'say' command for each run, generating a fresh MP3 that Anticipy processes through /api/listen/upload.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine verifies that the transcribed text matches the spoken reference and that the intent is to add a task in Linear."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": {
+        "act": "Add the task to Linear with the specified details and show proof of creation.",
+        "ask": "If ambiguous, ask user for clarification.",
+        "decline": "If Linear surface not verifiable, decline without writing anything."
+      }
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver notes that the script could also be executed via transcript paste or live mic, but this test focuses on uploaded audio."
+    }
+  ],
+  "success_criteria": [
+    "Anticipy processes the uploaded MP3 and correctly transcribes the task request.",
+    "Anticipy identifies the intent to add a Linear task.",
+    "Anticipy acts on the user's signed-in Linear surface to create the task.",
+    "A visible proof of the created task is provided.",
+    "If Linear surface is not signed in, Anticipy declines without writing anything."
+  ],
+  "failure_triggers": [
+    "Transcription fails or produces incorrect text.",
+    "Anticipy attempts to act on a non-signed-in Linear surface.",
+    "Proof cannot be generated because the task creation fails.",
+    "Anticipy writes to Linear without checking signed-in state.",
+    "Anticipy asks for clarification when it should act directly."
+  ]
+}

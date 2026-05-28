@@ -1,0 +1,3 @@
+[05:38:26] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T053826Z
+[05:38:27] dedicated window id: 1285463281
+[05:38:35] FAIL 0 navigate_login :: url=chrome://newtab/ resp={"ok": true, "command": "navigate", "data": {"navigatedTo": "https://www.saucedemo.com/", "url": "https://www.saucedemo.com/", "title": "Swag Labs"}, "acquired_via": "chrome_applescript_loopback_bridg

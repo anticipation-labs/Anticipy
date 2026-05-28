@@ -1,0 +1,107 @@
+{
+  "ok": true,
+  "engine": "http://127.0.0.1:8731",
+  "account_id": "e2e_rich_test_2026_05_28",
+  "device_id": "macbook_e2e_rich_2026_05_28",
+  "dossier_source": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/test_dossier_rich.json",
+  "counts": {
+    "people": 10,
+    "projects": 5,
+    "recurring_patterns": 3,
+    "preferences": 5,
+    "named_places": 3,
+    "frequented_locations": 2,
+    "do_not_touch": 5,
+    "aliases": 14,
+    "recent_topics": 8
+  },
+  "steps": [
+    {
+      "step": "health",
+      "result": {
+        "ok": true,
+        "status": 200,
+        "body": {
+          "ok": true,
+          "service": "anticipy-local-engine",
+          "version": "product-3",
+          "pid": 17978,
+          "port": 8731,
+          "onboarded": true,
+          "listening": false,
+          "profile_error": ""
+        }
+      }
+    },
+    {
+      "step": "pre_dossier_active",
+      "result": {
+        "ok": false,
+        "status": 404,
+        "body": {
+          "detail": "Not Found"
+        },
+        "error": "HTTP Error 404: Not Found"
+      }
+    },
+    {
+      "step": "memory_provision",
+      "result": {
+        "ok": false,
+        "status": 404,
+        "body": {
+          "detail": "Not Found"
+        },
+        "error": "HTTP Error 404: Not Found"
+      }
+    },
+    {
+      "step": "memory_seed",
+      "result": {
+        "ok": false,
+        "status": 404,
+        "body": {
+          "detail": "Not Found"
+        },
+        "error": "HTTP Error 404: Not Found"
+      }
+    },
+    {
+      "step": "legacy_dossier_write",
+      "result": {
+        "ok": false,
+        "status": 410,
+        "body": {
+          "ok": false,
+          "error": "legacy_endpoint_retired",
+          "reason": "/api/dossier/write was superseded by the M1 dossier loader. Use /api/dossier/active, /api/dossier/refresh, and /api/dossier/context.",
+          "replacement": "/api/dossier/active"
+        },
+        "error": "HTTP Error 410: Gone"
+      }
+    },
+    {
+      "step": "disk_fallback",
+      "result": {
+        "ok": true,
+        "written": [
+          "/Users/omarebrahim/.anticipy/v7/dossiers/e2e_rich_test_2026_05_28/dossier.json",
+          "/Users/omarebrahim/.anticipy/v7/dossiers/e2e_rich_test_2026_05_28/rich_dossier.json"
+        ]
+      }
+    },
+    {
+      "step": "post_dossier_active",
+      "result": {
+        "ok": false,
+        "status": 404,
+        "body": {
+          "detail": "Not Found"
+        },
+        "error": "HTTP Error 404: Not Found"
+      }
+    }
+  ],
+  "elapsed_s": 0.02,
+  "readback_loaded": false
+}

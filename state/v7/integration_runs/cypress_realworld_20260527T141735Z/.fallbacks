@@ -1,0 +1,6 @@
+CDP fallback: click via Runtime.evaluate(el.click()) because bridge applescript_loopback_fallback rejects 'click'
+CDP fallback: in-place location.assign navigate because bridge navigate spawns a new tab and breaks TAB binding
+CDP fallback: type via Runtime.evaluate + native HTMLInputElement.value setter because bridge applescript_loopback_fallback rejects 'type'
+CDP fallback: click via Runtime.evaluate(el.click()) because bridge applescript_loopback_fallback rejects 'click'
+CDP fallback: in-place location.assign navigate because bridge navigate spawns a new tab and breaks TAB binding
+CDP fallback: type via Runtime.evaluate + native HTMLInputElement.value setter because bridge applescript_loopback_fallback rejects 'type'

@@ -1,0 +1,469 @@
+{
+  "labeled_screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/canvas_vision_20260527T053832Z/labeled/20260527T053904Z_labeled.png",
+  "elements": [
+    {
+      "label_id": 1,
+      "bbox": [
+        0,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Black color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 2,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Gray color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 3,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Pink color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 4,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Purple color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 5,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Blue color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 6,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Light blue color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 7,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Yellow color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 8,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Orange color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 9,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Green color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 10,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Light green color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 11,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Red color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 12,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Dark red color swatch",
+      "role": "button"
+    },
+    {
+      "label_id": 13,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Stroke width slider",
+      "role": "input"
+    },
+    {
+      "label_id": 14,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Stroke width handle",
+      "role": "other"
+    },
+    {
+      "label_id": 15,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Solid fill style",
+      "role": "button"
+    },
+    {
+      "label_id": 16,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Hatched fill style",
+      "role": "button"
+    },
+    {
+      "label_id": 17,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Crosshatched fill style",
+      "role": "button"
+    },
+    {
+      "label_id": 18,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Pattern fill style",
+      "role": "button"
+    },
+    {
+      "label_id": 19,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Solid stroke style",
+      "role": "button"
+    },
+    {
+      "label_id": 20,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Dashed stroke style",
+      "role": "button"
+    },
+    {
+      "label_id": 21,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Dotted stroke style",
+      "role": "button"
+    },
+    {
+      "label_id": 22,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Double stroke style",
+      "role": "button"
+    },
+    {
+      "label_id": 23,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Small size",
+      "role": "button"
+    },
+    {
+      "label_id": 24,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Medium size",
+      "role": "button"
+    },
+    {
+      "label_id": 25,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Large size",
+      "role": "button"
+    },
+    {
+      "label_id": 26,
+      "bbox": [
+        3,
+        0,
+        3,
+        2
+      ],
+      "hint_text": "Extra large size",
+      "role": "button"
+    },
+    {
+      "label_id": 27,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Undo button",
+      "role": "button"
+    },
+    {
+      "label_id": 28,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Redo button",
+      "role": "button"
+    },
+    {
+      "label_id": 29,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Delete button",
+      "role": "button"
+    },
+    {
+      "label_id": 30,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Duplicate button",
+      "role": "button"
+    },
+    {
+      "label_id": 31,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "More options menu",
+      "role": "menu"
+    },
+    {
+      "label_id": 32,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Select tool",
+      "role": "button"
+    },
+    {
+      "label_id": 33,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Hand/pan tool",
+      "role": "button"
+    },
+    {
+      "label_id": 34,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Pencil/draw tool",
+      "role": "button"
+    },
+    {
+      "label_id": 35,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Eraser tool",
+      "role": "button"
+    },
+    {
+      "label_id": 36,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Arrow tool",
+      "role": "button"
+    },
+    {
+      "label_id": 37,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Text tool",
+      "role": "button"
+    },
+    {
+      "label_id": 38,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Sticky note tool",
+      "role": "button"
+    },
+    {
+      "label_id": 39,
+      "bbox": [
+        0,
+        2,
+        1,
+        2
+      ],
+      "hint_text": "Image tool",
+      "role": "button"
+    },
+    {
+      "label_id": 40,
+      "bbox": [
+        3,
+        2,
+        3,
+        2
+      ],
+      "hint_text": "Shape tool",
+      "role": "button"
+    },
+    {
+      "label_id": 41,
+      "bbox": [
+        3,
+        2,
+        3,
+        2
+      ],
+      "hint_text": "More tools",
+      "role": "menu"
+    }
+  ],
+  "call": {
+    "ok": true,
+    "model": "moonshotai/kimi-k2.6",
+    "latency_s": 22.06,
+    "prompt_tokens": 4322,
+    "completion_tokens": 1295,
+    "cost_usd": 0.005831,
+    "error": ""
+  },
+  "image_size": [
+    2907,
+    1816
+  ]
+}

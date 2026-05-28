@@ -1,0 +1,7 @@
+{
+  "actual": "https://the-internet.herokuapp.com/key_presses",
+  "expected": "screenshot proof after X keystroke; URL stable",
+  "name": "key_press_X",
+  "passed": true,
+  "primitive_used": "navigate + SE keystroke X"
+}

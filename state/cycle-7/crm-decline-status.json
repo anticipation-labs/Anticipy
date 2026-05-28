@@ -1,0 +1,92 @@
+{
+  "inject": {
+    "on": false,
+    "window": 1,
+    "ingest_id": "asr-transcript-4e0d6685d435469ca399327ec5780395",
+    "transcript": "Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+    "outcome": "DECLINED",
+    "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+    "plan": {
+      "mode": "decline",
+      "intent": "crm_saas_write",
+      "thing": "salesforce",
+      "task": "",
+      "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet."
+    },
+    "memory": {
+      "op": "ADD",
+      "reason": "New actionable intent with specific constraints not previously stored."
+    },
+    "resolution_trace_sync": {
+      "ok": false,
+      "skipped": true,
+      "reason": "not provisioned"
+    },
+    "pending": {
+      "instruction": "Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+      "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "crm_saas_write",
+        "thing": "salesforce",
+        "task": "",
+        "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet."
+      },
+      "ts": 1779617675.095169
+    },
+    "scheduled": null
+  },
+  "status": {
+    "on": false,
+    "window_seconds": 60.0,
+    "windows": 1,
+    "level": 0.0,
+    "uptime": 2.0,
+    "recent": [
+      {
+        "ts": 1779617675.095169,
+        "rms": 0.0,
+        "ingest_id": "asr-transcript-4e0d6685d435469ca399327ec5780395",
+        "transcript": "Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+        "outcome": "DECLINED",
+        "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+        "memory": {
+          "op": "ADD",
+          "reason": "New actionable intent with specific constraints not previously stored."
+        },
+        "source": "asr-transcript",
+        "window": 1,
+        "plan": {
+          "mode": "decline",
+          "intent": "crm_saas_write",
+          "thing": "salesforce",
+          "task": "",
+          "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet."
+        },
+        "resolution_trace_sync": {
+          "ok": false,
+          "skipped": true,
+          "reason": "not provisioned"
+        }
+      }
+    ],
+    "pending": {
+      "instruction": "Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+      "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "crm_saas_write",
+        "thing": "salesforce",
+        "task": "",
+        "proposal": "I can't safely update salesforce or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, or no-extra-change state on your real signed-in surface, so I will not write to it. Requested SaaS change to preserve: Update the Salesforce renewal note for Acme so the Monday follow-up is logged, but do not email the customer or change the opportunity stage yet."
+      },
+      "ts": 1779617675.095169
+    },
+    "acted": null,
+    "error": null
+  }
+}

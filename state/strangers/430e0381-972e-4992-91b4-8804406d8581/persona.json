@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "430e0381-972e-4992-91b4-8804406d8581",
+  "created_at": "2025-04-03T12:00:00Z",
+  "name": "Alex Chen",
+  "age": 32,
+  "occupation": "Senior Software Engineer",
+  "location": "San Francisco, CA",
+  "tech_savviness": 8,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Linear issue tracking and task management",
+  "primary_real_surface": {
+    "surface": "Linear web app",
+    "chrome_requirement": "signed-in Chrome profile with Linear workspace",
+    "acceptable_state": "logged in and viewing a project or issue list"
+  },
+  "daily_tools": [
+    "Linear",
+    "Slack",
+    "VS Code",
+    "GitHub",
+    "Notion"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Kim",
+      "relationship": "Product Manager",
+      "context": "collaborates on sprint planning"
+    },
+    {
+      "name": "Mike Johnson",
+      "relationship": "Tech Lead",
+      "context": "reviews my PRs"
+    },
+    {
+      "name": "Emily Davis",
+      "relationship": "Designer",
+      "context": "coordinates on features"
+    }
+  ]
+}

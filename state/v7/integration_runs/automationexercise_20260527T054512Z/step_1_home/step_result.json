@@ -1,0 +1,7 @@
+{
+  "actual": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-eafe8520c6f9",
+  "expected": "host is automationexercise.com",
+  "name": "home_loaded",
+  "passed": false,
+  "primitive_used": "bridge navigate"
+}

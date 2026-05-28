@@ -1,0 +1,7 @@
+{
+  "name": "verify_apple_results",
+  "ok": true,
+  "detail": "apple-matching mat-cards=3",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144127Z/step-06-verify_results.png",
+  "receipt": "count=3"
+}

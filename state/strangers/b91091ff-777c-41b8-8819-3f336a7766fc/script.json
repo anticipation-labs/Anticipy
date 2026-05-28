@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "b91091ff-777c-41b8-8819-3f336a7766fc",
+  "created_at": "2025-04-10T12:00:00Z",
+  "title": "Create Notion Memo via Audio Upload",
+  "category": "notion_memo_create_audio",
+  "verb_category": "notes_or_memo_create_act",
+  "hard_category": "crm",
+  "hard_category_focus": "Notion-based CRM for client tracking",
+  "breadth_reason": "This script extends breadth by requiring the public product path to handle a real Notion surface with a fresh audio upload, proving that the user-device engine can interpret spoken intent and act against a live signed-in browser surface.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on user's computer after onboarding",
+    "surface_rule": "Anticipy must read the user's actual signed-in Notion web app in their Chrome profile; no cloned or fixture browser allowed.",
+    "proof_rule": "Proof must come from the public build via a fresh audio upload at /api/listen/upload, with the resulting ASR output and a visible Notion surface capture."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage is required to prove the end-to-end pipeline from audio file to action, avoiding any alternative input path that bypasses the audio upload mechanism."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Notion Web App",
+      "kind": "real_browser_surface",
+      "surface": "notion.so with a database view and user signed in",
+      "proof_needed": "Screenshot or DOM snapshot showing notion.so URL and visible database."
+    },
+    {
+      "name": "Chrome Profile",
+      "kind": "real_chrome_profile",
+      "surface": "Chrome with user's signed-in Notion session",
+      "proof_needed": "Proof of Chrome profile active with Notion cookie state."
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to anticipy.ai/app, completes onboarding, downloads installer, and launches the engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that Chrome is open with the user's signed-in Notion tab visible and accessible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a new record in my Notion Memos database titled Office relocation checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "Per run, the driver will simulate the audio artifact by using the 'say' command to speak the reference text through the uploaded audio file. The file must be an MP3 uploaded via /api/listen/upload. The engine receives the ASR output and proceeds to check the surface.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "After ASR, the engine checks that the audio input matches the expected spoken intent and that the Notion surface is still accessible."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: Create the memo in Notion if surface is verifiable.",
+        "ask: Prompt user to confirm action if surface is ambiguous.",
+        "decline: Do not write anything if the Notion surface cannot be proven (e.g., no active Notion tab, user not signed in)."
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that no alternative input modes (transcript paste, live mic) are active; the only input path is the uploaded audio."
+    }
+  ],
+  "success_criteria": [
+    "The engine receives the MP3 upload via /api/listen/upload and performs ASR, extracting the spoken reference text correctly.",
+    "The engine identifies the user's signed-in Notion workspace and the 'Memos' database.",
+    "The engine creates a new record with title 'Office relocation checklist' and the specified items as properties or body text.",
+    "A clear proof (screenshot/DOM) shows the new record inside the user's real Notion database.",
+    "If the Notion surface is not available, the engine declines with no write action, and a log message explains the decline."
+  ],
+  "failure_triggers": [
+    "The uploaded audio file is not received or ASR fails to transcribe the audio.",
+    "The Chrome profile does not contain a valid Notion session (e.g., user not signed in or Notion tab missing).",
+    "The engine attempts to create a record using a fake or test surface instead of the user's real browser.",
+    "The engine writes a record even though the surface is not verifiable (violates decline rule).",
+    "Any proof provided is stale, mocked, or from a non-public build."
+  ]
+}

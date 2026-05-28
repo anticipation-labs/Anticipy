@@ -1,0 +1,1 @@
+{"ok": true, "command": "click", "data": {"selector": "a", "result": "OK"}, "acquired_via": "chrome_cdp_loopback_bridge", "bridge_kind": "cdp_primary", "error": ""}

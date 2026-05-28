@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "20d770b4-147b-436c-a5b1-44d6b1260a16",
+  "created_at": "2025-04-05T18:30:00Z",
+  "name": "Nathan Chen",
+  "age": 32,
+  "occupation": "Product Manager",
+  "location": "San Francisco, CA",
+  "tech_savviness": 8,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Linear task management in signed-in Chrome",
+  "primary_real_surface": {
+    "surface": "Linear web app",
+    "chrome_requirement": "signed-in Chrome profile with Linear open",
+    "acceptable_state": "task creation modal visible"
+  },
+  "daily_tools": [
+    "Linear",
+    "Slack",
+    "Notion",
+    "VS Code",
+    "Figma"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Kim",
+      "relationship": "colleague",
+      "context": "works on same product team"
+    },
+    {
+      "name": "Mike Johnson",
+      "relationship": "manager",
+      "context": "direct supervisor"
+    },
+    {
+      "name": "Emily Liu",
+      "relationship": "designer",
+      "context": "collaborates on feature specs"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "5bfc3483-4200-4921-ac2a-2ad4939b686f",
+  "created_at": "2025-04-09T15:30:00Z",
+  "name": "James Chen",
+  "age": 34,
+  "occupation": "Sales Operations Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "Slack workspace exposed inside HubSpot",
+  "primary_real_surface": {
+    "surface": "HubSpot CRM with Slack integration",
+    "chrome_requirement": "Chrome browser with HubSpot and Slack signed in",
+    "acceptable_state": "User is viewing a Slack message thread within HubSpot's sidebar"
+  },
+  "daily_tools": [
+    "HubSpot",
+    "Slack",
+    "Google Workspace",
+    "Zoom",
+    "Salesforce"
+  ],
+  "contacts": [
+    {
+      "name": "Emily Torres",
+      "relationship": "colleague",
+      "context": "Sales team lead"
+    },
+    {
+      "name": "Mike O'Brien",
+      "relationship": "manager",
+      "context": "Director of Sales Operations"
+    },
+    {
+      "name": "Lisa Kim",
+      "relationship": "client",
+      "context": "Key account contact at Acme Corp"
+    }
+  ]
+}

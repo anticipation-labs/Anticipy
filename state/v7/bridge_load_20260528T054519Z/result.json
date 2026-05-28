@@ -1,0 +1,42 @@
+{
+  "run_id": "6eeccf3a",
+  "verdict": "PASS",
+  "reason": "all 50 ok, 0 leaks, bridge alive",
+  "bridge_alive_after": true,
+  "tab_leak_count": 0,
+  "leaked_target_ids": [],
+  "stats": {
+    "n": 50,
+    "success": 50,
+    "wall_total_s": 5.449,
+    "latency_ms": {
+      "all_count": 50,
+      "median": 3493.9,
+      "mean": 3872.6,
+      "p95": 5432.6,
+      "p99": 5435.7,
+      "min": 2455.9,
+      "max": 5435.7
+    },
+    "success_only_latency_ms": {
+      "count": 50,
+      "median": 3493.9,
+      "p95": 5432.6,
+      "p99": 5435.7
+    },
+    "hang_detected": false,
+    "started": "20260528T054519Z",
+    "finished": "20260528T054524Z",
+    "target_ids_received": 50
+  },
+  "cleanup": {
+    "n_attempted": 50,
+    "n_succeeded": 50,
+    "n_failed": 0
+  },
+  "baseline_total_tabs": 74,
+  "after_total_tabs": 72,
+  "bridge_kind_before": "cdp_primary",
+  "bridge_kind_after": "cdp_primary",
+  "cdp_alive_after": true
+}

@@ -1,0 +1,7 @@
+{
+  "name": "navigate",
+  "ok": false,
+  "detail": "url=about:blank resp={\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://juice-shop.herokuapp.com/\", \"url\": \"https://juice-shop.herokuapp.com/\", \"title\": \"\"}, \"acquired_via\": \"chrome_applescript_loopback_",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143420Z/step-01-navigate.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://juice-shop.herokuapp.com/\", \"url\": \"https://juice-shop.herokuapp.com/\", \"title\": \"\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

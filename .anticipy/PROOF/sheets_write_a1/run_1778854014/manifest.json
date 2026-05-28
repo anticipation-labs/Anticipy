@@ -1,0 +1,25 @@
+{
+  "skill_id": "sheets_write_a1",
+  "goal": "A new Google Sheet is open. Click cell A1 and type the text 'Anticipy proof'. Then press Enter to commit. Then terminate with success.",
+  "setup_url": "https://sheets.new",
+  "run_ts": 1778854014,
+  "final_verdict": "PARTIAL",
+  "completion_status": "failed:dispatch:no_action_in_fara_response",
+  "n_steps": 1,
+  "n_diverged": 0,
+  "steps": [
+    {
+      "index": 0,
+      "fara_action": null,
+      "fara_coordinate": null,
+      "fara_text": null,
+      "fara_refusal": false,
+      "fara_latency_ms": 26635,
+      "dispatch_ok": false,
+      "verifier_verdict": "SKIPPED",
+      "verifier_reason": "verifier_disabled",
+      "screenshot_before": "step_00_before.png",
+      "screenshot_after": "step_00_after.png"
+    }
+  ]
+}

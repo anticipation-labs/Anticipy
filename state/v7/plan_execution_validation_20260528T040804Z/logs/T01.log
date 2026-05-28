@@ -1,0 +1,12 @@
+plan_id=T01 ts=1779941284.526
+category=calendar
+plan={"mode": "act", "person": "", "thing": "dentist appointment booking", "intent": "other", "task": "Open Google Calendar and create an event titled 'Dentist appointment' for a date within the next few weeks (based on the user being overdue since November), set a reminder to call the dentist by the marina to book before summer slots fill up. Do not send or book anything; just create the calendar placeholder.", "question": ""}
+inject http=200 ok=True
+act http=200 dur=0.00s body={"ran": false, "clarify": true, "question": "What is the name of the dentist office by the marina?", "resolved_person": "", "resolved_thing": ""}
+[verify_calendar] titles=['Dentist appointment']
+[verify_calendar] search_term='Dentist appointment'
+[verify_calendar] open_new_tab ok=True targetId=7E153BD1483BCF4CDC1261010858821E err=
+[dom_probe] ok=True err=
+[dom_probe] ok=True err=
+[verify_calendar] shot ok=True bytes=128795 err=
+[verify_calendar] closed={"ok": true, "http": 200, "body": "Target is closing"}

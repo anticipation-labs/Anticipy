@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "b501f884-3db0-4434-88aa-eeeb8aa66cb2",
+  "created_at": "2025-04-09T14:30:00Z",
+  "name": "James Mitchell",
+  "age": 34,
+  "occupation": "Senior Software Engineer",
+  "location": "Portland, Oregon",
+  "tech_savviness": 8,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 7,
+  "hard_category": "crm",
+  "hard_category_focus": "Jira issue management",
+  "primary_real_surface": {
+    "surface": "jira_issues",
+    "chrome_requirement": "signed into Jira at https://*.atlassian.net",
+    "acceptable_state": "viewing an issue detail page"
+  },
+  "daily_tools": [
+    "Jira",
+    "Slack",
+    "VS Code",
+    "Terminal",
+    "Git"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Chen",
+      "relationship": "Technical Lead",
+      "context": "Reviews my sprint tasks and resolves Jira blockers"
+    },
+    {
+      "name": "Mike Rodriguez",
+      "relationship": "Product Manager",
+      "context": "Assigns issues and prioritizes backlog in Jira"
+    },
+    {
+      "name": "Lisa Kim",
+      "relationship": "QA Engineer",
+      "context": "Coordinates test cases linked to Jira tickets"
+    }
+  ]
+}

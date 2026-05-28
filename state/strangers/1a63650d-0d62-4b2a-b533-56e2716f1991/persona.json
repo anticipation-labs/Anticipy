@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "1a63650d-0d62-4b2a-b533-56e2716f1991",
+  "created_at": "2025-04-10T14:22:00Z",
+  "name": "Elena Vasquez",
+  "age": 34,
+  "occupation": "Fitness Coach & Nutrition Consultant",
+  "location": "Portland, Oregon",
+  "tech_savviness": 6,
+  "patience_level": 7,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Client workout & nutrition log management in Notion",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": "User must be signed into their personal Chrome profile where Notion is authenticated",
+    "acceptable_state": "Any Notion page or database view is open in a Chrome tab"
+  },
+  "daily_tools": [
+    "Notion",
+    "Google Calendar",
+    "MyFitnessPal",
+    "Zoom",
+    "Apple Health"
+  ],
+  "contacts": [
+    {
+      "name": "Marco Reyes",
+      "relationship": "Client",
+      "context": "Weekly check-ins for marathon training and meal prep"
+    },
+    {
+      "name": "Dr. Lisa Tran",
+      "relationship": "Referral partner",
+      "context": "Local sports medicine clinic; shares client progress notes via Notion"
+    },
+    {
+      "name": "Jenna Kim",
+      "relationship": "Virtual assistant",
+      "context": "Helps update client workout logs and schedule appointments"
+    }
+  ]
+}

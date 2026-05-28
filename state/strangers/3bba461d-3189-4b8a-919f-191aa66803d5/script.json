@@ -1,0 +1,114 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "3bba461d-3189-4b8a-919f-191aa66803d5",
+  "created_at": "2025-04-09T12:00:00Z",
+  "title": "Add Miso Eggplant Recipe to Notion via Audio Upload",
+  "category": "notion_recipe_add_audio",
+  "verb_category": "recipe_or_meal_plan_act",
+  "hard_category": "crm",
+  "hard_category_focus": "Notion meal planning database",
+  "breadth_reason": "This script extends breadth by testing the full public product path for CRM recipe addition via uploaded audio ASR, using the user's real signed-in Notion surface and requiring proof from the user-device engine.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device installed engine from public download",
+    "surface_rule": "User's signed-in Chrome profile with Notion workspace open in a visible tab",
+    "proof_rule": "Fresh screenshot of Notion database showing the added recipe record, captured by the public engine build on the user's computer"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Testing uploaded audio ASR coverage for CRM actions ensures the pipeline from /api/listen/upload through ASR to surface action works end-to-end without relying on live mic or pasted transcripts."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Notion Recipe Database",
+      "kind": "web_app",
+      "surface": "Notion in signed-in Chrome profile",
+      "proof_needed": "Visible database view with columns: Name, Tags, Source, Notes; user must have at least one recipe entry present"
+    },
+    {
+      "name": "Chrome Browser Profile",
+      "kind": "browser_profile",
+      "surface": "Signed-in Chrome profile with Notion workspace",
+      "proof_needed": "Chrome profile indicator showing @elena.vasquez or similar, and Notion tab open"
+    },
+    {
+      "name": "Audio Upload API",
+      "kind": "api_endpoint",
+      "surface": "/api/listen/upload",
+      "proof_needed": "Confirmation of successful upload and ASR transcription returning the spoken request text"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "Driver navigates to https://www.anticipy.ai/app, signs in as Elena Vasquez, completes onboarding, downloads the public installer, and installs the engine on the local machine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver ensures the real Notion workspace is open in a signed-in Chrome profile, with the Recipes database visible and editable. Confirms user is logged in and database exists."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "description": "Stranger records an MP3 file saying the spoken reference text, uploads it to /api/listen/upload on the user-device engine, and receives the ASR result.",
+      "spoken_reference_text": "Please add a new record to my Notion Recipes database for the miso eggplant Avery sent me and tag it weeknight. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "The stranger must produce the audio file fresh per run via a 'say' command or text-to-speech tool, ensuring it is an MP3 with sample rate 16kHz, mono. Upload the file using the /api/listen/upload endpoint. Do not reuse previous audio artifacts.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine applies the ASR transcript to the Notion surface. Checks that the recognized text matches the spoken request and that the surface is still visible and signed-in. If ASR fails or surface is not provable, engine prepares to decline."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "description": "Engine decides to act (add record), ask (request confirmation), or decline (if surface unreadable).",
+      "acceptable_outcomes": [
+        "act: Engine adds a new Notion record with Name 'Miso Eggplant', Tags 'weeknight', Source 'Avery'.",
+        "ask: Engine prompts user to confirm the database and tag before writing.",
+        "decline: Engine responds with a clear decline message explaining that the Notion surface or signed-in workspace could not be verified."
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that the audio upload input mode is the primary path, but notes that other input modes (transcript paste, live mic) are not used. No regression expected from those modes; this observation confirms the script's focus on uploaded audio only."
+    }
+  ],
+  "success_criteria": [
+    "The engine successfully adds a new entry to the Notion Recipes database with the name 'Miso Eggplant', tag 'weeknight', and source 'Avery' using the ASR result from the uploaded MP3.",
+    "The engine provides a proof screenshot of the updated Notion database captured from the user's real signed-in Chrome profile.",
+    "The entire public product path (app sign-in, download, install, audio upload, ASR, surface action) completes without errors or fallbacks to other input modes.",
+    "The engine declines gracefully with an explanation if the Notion surface is not visible or the workspace is not signed-in, and does not write any partial data.",
+    "All six moments are executed in order and produce verifiable artifacts (upload confirmation, ASR transcript, action log, proof screenshot, decline message if applicable)."
+  ],
+  "failure_triggers": [
+    "The user's Notion surface is not open or not signed in at the time of action, causing the engine to decline without writing.",
+    "The uploaded MP3 file is corrupted or silent, resulting in empty or garbled ASR transcript.",
+    "The engine attempts to use a stale proof (e.g., previous session screenshot) instead of a fresh capture from the current surface.",
+    "The public app onboarding or download step fails (e.g., expired session, download error) before the engine can be installed.",
+    "The audio upload endpoint returns an error or the engine does not properly route the ASR result to the Notion surface action."
+  ]
+}

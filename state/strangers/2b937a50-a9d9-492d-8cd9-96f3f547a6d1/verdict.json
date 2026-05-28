@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly declined to act on the Airtable expense record because the visible surface was the Airtable login page, not a signed-in workspace. The decline was service-specific (naming Airtable), logged with competent_decline, and no third-party surface change occurred, satisfying D16. The installed engine path, real Chrome usage, and audio upload proof are all valid.",
+  "specific_failures": [],
+  "verb_category": "expense_or_budget_track_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows surface proof of https://www.anticipy.ai/app, indicating the public entry point was reached."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Surface proof captured https://airtable.com/login \u2013 the driver verified the Airtable tab state."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Trace shows uploaded audio processed via upload-asr with transcript matching the reference text (WER 0.028)."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR transcript matches spoken reference and source is upload-asr, confirming correct endpoint."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined with competent decline for Airtable, which is an acceptable outcome per script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Driver can observe that primary input was audio upload; this is a secondary-only observation."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine declined because Airtable surface was not verifiable (login page), logged blocked_services: ['Airtable'], and added anticipy surface page as decline card. No third-party surface changed."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:32:40Z"
+}

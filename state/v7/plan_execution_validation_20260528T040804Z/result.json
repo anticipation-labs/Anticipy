@@ -1,0 +1,135 @@
+{
+  "schema": "anticipy.plan_execution_validation.v7",
+  "ts_utc": "20260528T040804Z",
+  "engine": "http://127.0.0.1:8731",
+  "bridge": "http://127.0.0.1:7777",
+  "source_run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/e2e_hard_transcripts_20260528T031414Z",
+  "totals": {
+    "plans": 5,
+    "executed": 0,
+    "skipped": 1,
+    "tabs_opened": 4,
+    "tabs_closed": 4,
+    "tab_leakage": 0,
+    "tabs_before": 86,
+    "tabs_after": 76,
+    "new_tabs_remaining": [
+      "130E05DE6B5E2DFD75BEDA9DBE2A97DD"
+    ]
+  },
+  "runs": [
+    {
+      "plan_id": "T01",
+      "executed": false,
+      "evidence": {
+        "url": "https://calendar.google.com/calendar/u/0/r/search?q=Dentist%20appointment",
+        "page_title": "Google Calendar - Search",
+        "title_probed": "Dentist appointment",
+        "search_term": "Dentist appointment",
+        "calendar_event_count": 0,
+        "calendar_no_results": true,
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/plan_execution_validation_20260528T040804Z/screenshots/T01_calendar.png",
+        "dom_excerpt": "Search results. No events found.\nNo results found",
+        "dom_read_ok": true,
+        "dom_error": ""
+      },
+      "reason": "calendar_search_returned_no_events",
+      "category": "calendar",
+      "engine_intent": "other",
+      "engine_ran": false,
+      "engine_status": "",
+      "engine_path": "",
+      "engine_act_duration_s": 0.002,
+      "tabs_opened": 1,
+      "tabs_closed": 1
+    },
+    {
+      "plan_id": "T03",
+      "executed": false,
+      "evidence": {
+        "url": "https://calendar.google.com/calendar/u/0/r/search?q=Wedding%20speech%20writing",
+        "page_title": "Google Calendar - Search",
+        "title_probed": "Wedding speech writing",
+        "search_term": "Wedding speech writing",
+        "calendar_event_count": 0,
+        "calendar_no_results": true,
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/plan_execution_validation_20260528T040804Z/screenshots/T03_calendar.png",
+        "dom_excerpt": "Search results. No events found.\nNo results found",
+        "dom_read_ok": true,
+        "dom_error": ""
+      },
+      "reason": "calendar_search_returned_no_events",
+      "category": "calendar",
+      "engine_intent": "calendar_event",
+      "engine_ran": false,
+      "engine_status": "No real Chrome on :9222 and the launchd agent could not be kicked. The real path (action_handoff -> frozen DSv4SkillRunner) is wired; the real-clone browser is the edge.",
+      "engine_path": "",
+      "engine_act_duration_s": 0.002,
+      "tabs_opened": 1,
+      "tabs_closed": 1
+    },
+    {
+      "plan_id": "T04",
+      "executed": false,
+      "evidence": {
+        "url": "https://calendar.google.com/calendar/u/0/r/search?q=Q3%20review%20working%20sessions",
+        "page_title": "Google Calendar - Search",
+        "title_probed": "Q3 review working sessions",
+        "search_term": "Q3 review working sessions",
+        "calendar_event_count": 0,
+        "calendar_no_results": true,
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/plan_execution_validation_20260528T040804Z/screenshots/T04_calendar.png",
+        "dom_excerpt": "Search results. No events found.\nSearching for Q3 review working sessions",
+        "dom_read_ok": true,
+        "dom_error": ""
+      },
+      "reason": "calendar_search_returned_no_events",
+      "category": "calendar",
+      "engine_intent": "calendar_event",
+      "engine_ran": false,
+      "engine_status": "No real Chrome on :9222 and the launchd agent could not be kicked. The real path (action_handoff -> frozen DSv4SkillRunner) is wired; the real-clone browser is the edge.",
+      "engine_path": "",
+      "engine_act_duration_s": 0.004,
+      "tabs_opened": 1,
+      "tabs_closed": 1
+    },
+    {
+      "plan_id": "T20",
+      "executed": false,
+      "evidence": {
+        "url": "https://calendar.google.com/calendar/u/0/r/search?q=Ask%20Casey%20if%20they%20want%20to",
+        "page_title": "Google Calendar - Search",
+        "title_probed": "Ask Casey if they want to set up the screen time lock Priya mentioned",
+        "search_term": "Ask Casey if they want to",
+        "calendar_event_count": 0,
+        "calendar_no_results": true,
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/plan_execution_validation_20260528T040804Z/screenshots/T20_calendar.png",
+        "dom_excerpt": "Search results. No events found.\nSearching for Ask Casey if they want to",
+        "dom_read_ok": true,
+        "dom_error": ""
+      },
+      "reason": "calendar_search_returned_no_events",
+      "category": "calendar",
+      "engine_intent": "other",
+      "engine_ran": false,
+      "engine_status": "No real Chrome on :9222 and the launchd agent could not be kicked. The real path (action_handoff -> frozen DSv4SkillRunner) is wired; the real-clone browser is the edge.",
+      "engine_path": "",
+      "engine_act_duration_s": 0.001,
+      "tabs_opened": 1,
+      "tabs_closed": 1
+    },
+    {
+      "plan_id": "T05",
+      "executed": false,
+      "evidence": {
+        "plan_mode": "clarify",
+        "plan_question": "Which email address should I use?"
+      },
+      "reason": "plan_mode_not_act: clarify",
+      "category": "unknown",
+      "tabs_opened": 0,
+      "tabs_closed": 0,
+      "engine_skipped": true
+    }
+  ]
+}

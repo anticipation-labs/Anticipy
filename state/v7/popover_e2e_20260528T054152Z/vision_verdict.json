@@ -1,0 +1,9 @@
+{
+  "now_header_visible": false,
+  "next_header_visible": false,
+  "past_header_visible": false,
+  "three_columns_layout": false,
+  "visible_text_summary": "Anticipy\nWhat should Anticipy do?\ne.g. Open Gmail and tell me the subject of the most recent\nemail\nRun\nRuns against your real signed-in Chrome in an isolated Anticipy\nwindow. It stops at password and payment walls.",
+  "verdict": "FAIL",
+  "notes": "The image does not display the 'Now', 'Next', and 'Past' column headers. It shows a prompt for user input and a description of the app's functionality."
+}

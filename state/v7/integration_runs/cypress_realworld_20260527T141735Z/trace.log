@@ -1,0 +1,15 @@
+[14:17:35] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z
+[14:17:40] cypress CDP tab=1226019A528E033EE4F5C5828DBE2837 url=https://example.cypress.io/
+[14:17:41] PASS step 1 navigate_home :: url=https://example.cypress.io/ via BRIDGE /surface-command navigate
+[14:17:41] PASS step 2 verify_kitchen_sink :: h1/title contains Kitchen Sink: Kitchen Sink
+[14:17:43] PASS step 3 click_commands :: Commands dropdown revealed 17 command links
+[14:17:44] PASS step 4 nav_querying :: url=https://example.cypress.io/commands/querying
+[14:17:45] PASS step 5 verify_query_btn :: #query-btn text=Button
+[14:17:46] PASS step 6 type_query_form :: typed into .query-form input#inputEmail value={"value": "cypress-demo@example.com", "type": "string", "exception": null}
+[14:17:47] PASS step 7 click_query_btn :: CDP click #query-btn ok
+[14:17:47] PASS step 8 verify_query_list :: .query-list contains apples/oranges/bananas: apples oranges bananas more apples
+[14:17:49] PASS step 9 nav_actions :: url=https://example.cypress.io/commands/actions
+[14:17:49] PASS step 10 fill_action_email :: filled .action-email value={"value": "fake@email.com", "type": "string", "exception": null}
+[14:17:50] PASS step 11 verify_action_email_value :: .action-email DOM value=fake@email.com
+[14:17:51] PASS step 12 final_screenshot :: actions page title=Cypress.io: Kitchen Sink url=https://example.cypress.io/commands/actions
+[14:17:51] PASS steps=12 elapsed=15.66s final=/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-12-final.png

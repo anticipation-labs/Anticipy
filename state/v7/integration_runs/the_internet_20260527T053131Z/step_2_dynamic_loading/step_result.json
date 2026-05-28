@@ -1,0 +1,7 @@
+{
+  "actual": "https://www.anticipy.ai/app",
+  "expected": "screenshot proof after Start; URL stable",
+  "name": "dynamic_loading",
+  "passed": false,
+  "primitive_used": "navigate + SE Space (button activation)"
+}

@@ -1,0 +1,7 @@
+{
+  "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+  "expected": "actual matches: viewPersonalDetails|empNumber",
+  "name": "employee_saved",
+  "passed": false,
+  "primitive_used": "navigate + System Events Tab/type/Enter (form submit)"
+}

@@ -1,0 +1,40 @@
+# Anticipy
+
+> AI wearable pendant that listens to your life and handles what needs handling.
+
+Anticipy is a brushed-titanium AI wearable pendant (8 grams, $149) that captures ambient conversation and autonomously completes real-world tasks — booking restaurants, scheduling appointments, canceling subscriptions, disputing charges — without the wearer lifting a finger.
+
+## Company
+
+- Name: Anticipation Labs Inc.
+- Founded: 2025
+- Location: Vancouver, BC, Canada
+- Website: https://www.anticipy.ai
+
+## Product
+
+- Name: Anticipy
+- Category: AI wearable
+- Form factor: Brushed titanium pendant, 8 grams
+- Price: $149 (first year of AI service included)
+- Colorways: Silver, Gold
+- Charging: Wireless, up to 15 feet via charging pad
+- Status: Pre-order (waitlist open)
+
+## Key Pages
+
+- Homepage: https://www.anticipy.ai
+- Join Waitlist: https://www.anticipy.ai/waitlist
+- Invest: https://www.anticipy.ai/funded
+- Action Engine Demo: https://www.anticipy.ai/engine
+- Privacy Policy: https://www.anticipy.ai/privacy
+- Terms of Service: https://www.anticipy.ai/terms
+- Refund Policy: https://www.anticipy.ai/refund
+
+## How It Works
+
+Anticipy's pendant listens to your day through ambient audio. When it detects intent — "I need to book a table," "Cancel that subscription," "Dispute that charge" — it uses an AI action engine to complete the task on real websites autonomously. No app interaction required. The user wears the pendant, speaks naturally, and tasks get done in the background.
+
+## What Makes Anticipy Different
+
+Unlike voice assistants that answer questions, Anticipy acts. It doesn't tell you how to cancel a subscription — it cancels it. It doesn't suggest a restaurant — it books it. The action engine operates a real browser, navigating real websites, filling real forms, and completing real transactions on the user's behalf.

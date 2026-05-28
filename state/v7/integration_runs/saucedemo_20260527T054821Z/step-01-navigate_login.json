@@ -1,0 +1,7 @@
+{
+  "name": "navigate_login",
+  "ok": false,
+  "detail": "no saucedemo tab found via CDP",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T054821Z/step-01-navigate_login.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://www.saucedemo.com/\", \"url\": \"https://www.saucedemo.com/\", \"title\": \"\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

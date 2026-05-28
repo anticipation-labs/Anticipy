@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly transcribed the uploaded audio and, upon failing to verify the Canva design surface, paused with a confirm card naming Canva as the blocked service. This satisfies the D16 competent-pause standard, and no actual edit or email was performed, so the run passes despite the missing Gmail surface.",
+  "specific_failures": [],
+  "verb_category": "canvas_design_edit_decline",
+  "hard_category": "canvas",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the user reached anticipy.ai/app and the installed engine is running at /Applications/Anticipy.app/Contents/MacOS/anticipy-engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The driver provided a surface proof for Canva showing the home page, which is not a signed-in design, correctly setting up the decline scenario."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The uploaded MP3 was transcribed with 0% WER, and the transcript matches the reference exactly."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": false,
+      "reasoning": "The engine did not perform a proper boundary check; it entered a cascade failure loop due to an invalid model ID before eventually pausing."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine ultimately produced an ASKING outcome with a confirm card naming Canva, which is an acceptable outcome per the script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Only the audio upload input mode was used, as expected."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine identified Canva and paused with confirm card naming the service, satisfying D16 competent-decline path."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T17:44:53Z"
+}

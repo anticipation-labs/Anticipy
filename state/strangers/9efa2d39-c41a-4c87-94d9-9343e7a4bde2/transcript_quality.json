@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T17:22:29Z",
+  "hypothesis": "Please add a follow-up note in Salesforce on the Aspen Capital lead saying I confirm the security review, and update the stage. If you cannot prove the visible Salesforce record or my signed in workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please add a follow-up note in Salesforce on the Aspen Capital lead saying I confirmed the security review, and update the stage. If you cannot prove the visible Salesforce record or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "9efa2d39-c41a-4c87-94d9-9343e7a4bde2",
+  "transcript_boundary_chars": 238,
+  "transcript_boundary_sha256": "5eee8a335fe8f17b6c0aae8551ea0ef4613910469d0260308c0c62225dce6493",
+  "wer": 0.025
+}

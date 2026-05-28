@@ -1,0 +1,7 @@
+{
+  "name": "navigate_login",
+  "ok": false,
+  "detail": "url= resp={\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://www.saucedemo.com/\", \"url\": \"https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-eafe8520c6f9\", \"title\": \"Anticipy App\"},",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T055106Z/step-01-navigate_login.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://www.saucedemo.com/\", \"url\": \"https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-eafe8520c6f9\", \"title\": \"Anticipy App\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

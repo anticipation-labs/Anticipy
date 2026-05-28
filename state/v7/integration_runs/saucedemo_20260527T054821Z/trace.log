@@ -1,0 +1,2 @@
+[05:48:24] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T054821Z
+[05:48:33] FAIL step 1 navigate_login :: no saucedemo tab found via CDP

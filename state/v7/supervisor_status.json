@@ -1,0 +1,652 @@
+{
+  "ts": "2026-05-28T05:46:57Z",
+  "engine_pid": "94896",
+  "bridge_pid": "9795",
+  "chrome_9222": "Chrome/148.0.7778.179",
+  "strangers_alive": 39,
+  "ralph_alive": 18,
+  "supervisor_alive": 7,
+  "breadth": {
+    "total_interactions": 53,
+    "successful_interactions": 40,
+    "demoted_uuids": [
+      "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+      "7d25a993-ad89-4a30-b2f2-2f4badde7cb4",
+      "8ee08723-ad73-4016-bf0e-fc48f742d78a"
+    ],
+    "demoted_count": 3,
+    "verb_categories": [
+      "airtable_record_edit_decline",
+      "amazon_order_refund_decline",
+      "ambient_buried_intent",
+      "calendar_event_create_clarify",
+      "canvas_design_edit_decline",
+      "code_or_terminal_run_decline",
+      "email_draft_for_send_decline",
+      "expense_or_budget_track_decline",
+      "health_or_workout_log_ack",
+      "news_or_message_summary_decline",
+      "notes_or_memo_create_act",
+      "phone_text_message_draft_decline",
+      "purchase_lookup_decline",
+      "recipe_or_meal_plan_act",
+      "salesforce_lead_log_decline",
+      "shopify_admin_reply_decline",
+      "task_or_todo_add_ack",
+      "travel_research_compare_decline",
+      "web_research_summarize_decline"
+    ],
+    "verb_category_count": 19,
+    "hard_categories": [
+      "ambient",
+      "canvas",
+      "crm",
+      "e-commerce",
+      "native"
+    ],
+    "hard_category_count": 5,
+    "last20_count": 20,
+    "last20_failures": [
+      "a02504fd-d205-48fa-9420-a4386b597258",
+      "201da362-05ee-4203-8bf9-0b2328bc05de",
+      "329f03b4-5294-4968-9ab6-5f767206164c",
+      "43f8c831-8520-4463-8c07-f7c68e39cac2",
+      "589df30f-e3a5-4c4b-a3d9-ee2331d03934",
+      "38e65b12-eb43-4ae3-8e45-80e92a117a9d",
+      "f118a327-6c15-4092-b2c3-f9d8882ff7e7",
+      "8ae5c8ce-ec1e-44ee-b9e2-5ed0d2309e68",
+      "f1652e23-37f7-4b4b-894e-fa11e6c71765",
+      "a5aba1fe-7398-4262-b148-c219432aeda9"
+    ],
+    "rows": [
+      {
+        "uuid": "b91091ff-777c-41b8-8819-3f336a7766fc",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "notes_or_memo_create_act",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "d8a8404d-ec77-4b78-b4c9-921e0aa0498f",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "email_draft_for_send_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "5bd1d73b-a1b8-4350-bb34-8fa4d676a098",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "calendar_event_create_clarify",
+        "hard_category": "native",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "20d770b4-147b-436c-a5b1-44d6b1260a16",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "task_or_todo_add_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "7f88ea82-f280-42b6-9035-d52f1509aa3e",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "web_research_summarize_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "bb5a7022-a906-408f-9483-d09d99946a25",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "phone_text_message_draft_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "f80c86c5-91ec-4c6d-b26d-86a6c79c811a",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "purchase_lookup_decline",
+        "hard_category": "e-commerce",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "3bba461d-3189-4b8a-919f-191aa66803d5",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "recipe_or_meal_plan_act",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "e68135df-cfa3-4b20-9aa4-5206bc5a3786",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "expense_or_budget_track_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "1beade1d-0317-449c-8144-7dd8eb615e22",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "travel_research_compare_decline",
+        "hard_category": "e-commerce",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "5bfc3483-4200-4921-ac2a-2ad4939b686f",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "news_or_message_summary_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "cd1d8789-6840-470a-9b92-1ad8fa7c20f1",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "email_draft_for_send_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "430e0381-972e-4992-91b4-8804406d8581",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "task_or_todo_add_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "bfc1ff3d-ea4d-4111-8225-e2dfdc4c0c23",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "notes_or_memo_create_act",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "90b69e54-8ad6-4225-ae1e-a699e480f2ce",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "recipe_or_meal_plan_act",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "f15d7af0-aa46-4964-b047-bcc20f261751",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "health_or_workout_log_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "2b937a50-a9d9-492d-8cd9-96f3f547a6d1",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "expense_or_budget_track_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "a6f9bb1f-d3b5-4f12-8bf9-1cf8d2e71500",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "web_research_summarize_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "02ecef44-54b9-43a8-9b96-01963d2abb1b",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "task_or_todo_add_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "24f86230-fc4c-42a5-a611-11ef7bcc0d64",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "email_draft_for_send_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "bb829f6c-f974-4ada-ac40-5a81b633db9b",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "task_or_todo_add_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "af52442a-19e6-4b17-8741-d112aad2da93",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "recipe_or_meal_plan_act",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "1a63650d-0d62-4b2a-b533-56e2716f1991",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "health_or_workout_log_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "ccb50a84-1b2c-4be3-a641-63e21618cdee",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "expense_or_budget_track_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "f40f9a07-357f-4d80-aed3-8366d1bf1f24",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "web_research_summarize_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "5d2cce7a-e856-4aa3-8197-3d3f62782355",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "news_or_message_summary_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "8b200433-7bdc-4a77-88ff-a53ca7ca32d5",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "phone_text_message_draft_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "b501f884-3db0-4434-88aa-eeeb8aa66cb2",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "code_or_terminal_run_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "8afcd693-1511-4c6c-8f15-1f42dba102bb",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "airtable_record_edit_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "9efa2d39-c41a-4c87-94d9-9343e7a4bde2",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "salesforce_lead_log_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "f7d63d79-5243-446d-ac73-29ef8d65fec9",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "ambient_buried_intent",
+        "hard_category": "ambient",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "9b33f731-e484-4ade-9c68-1655149f9731",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "canvas_design_edit_decline",
+        "hard_category": "canvas",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "34e9e417-460b-4146-80fb-d3c6b4d0f822",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "amazon_order_refund_decline",
+        "hard_category": "e-commerce",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "207da1c8-64ee-4fbd-90c8-841cebbbe5ca",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "shopify_admin_reply_decline",
+        "hard_category": "e-commerce",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "7a240edb-4141-452b-97db-4931ddeaaa2d",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "purchase_lookup_decline",
+        "hard_category": "e-commerce",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "b7ba64e9-4048-43b9-8582-34e2e8be1645",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "travel_research_compare_decline",
+        "hard_category": "e-commerce",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "ba605816-fee2-4c6d-9087-a21a0e59b24c",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "email_draft_for_send_decline",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "cc99d0b1-6bcf-41a7-81f6-00ae0672cb29",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "task_or_todo_add_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "9ba71637-36bb-4b73-9c3f-1c6e1ec48c5f",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "recipe_or_meal_plan_act",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "a1307179-eabe-4765-b825-ca15432db527",
+        "pass": true,
+        "verified_pass": true,
+        "verification_failures": [],
+        "demoted": false,
+        "category": "health_or_workout_log_ack",
+        "hard_category": "crm",
+        "has_trace": true,
+        "has_verdict": true
+      },
+      {
+        "uuid": "a02504fd-d205-48fa-9420-a4386b597258",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "email_draft_for_send_decline",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "201da362-05ee-4203-8bf9-0b2328bc05de",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "notes_or_memo_create_act",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "329f03b4-5294-4968-9ab6-5f767206164c",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "recipe_or_meal_plan_act",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "43f8c831-8520-4463-8c07-f7c68e39cac2",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "email_draft_for_send_decline",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "589df30f-e3a5-4c4b-a3d9-ee2331d03934",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "notes_or_memo_create_act",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "38e65b12-eb43-4ae3-8e45-80e92a117a9d",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "email_draft_for_send_decline",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "f118a327-6c15-4092-b2c3-f9d8882ff7e7",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "zendesk_ticket_comment_decline",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "8ae5c8ce-ec1e-44ee-b9e2-5ed0d2309e68",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "health_or_workout_log_ack",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "f1652e23-37f7-4b4b-894e-fa11e6c71765",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "health_or_workout_log_ack",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      },
+      {
+        "uuid": "a5aba1fe-7398-4262-b148-c219432aeda9",
+        "pass": false,
+        "verified_pass": false,
+        "verification_failures": [
+          "verdict is not pass"
+        ],
+        "demoted": false,
+        "category": "recipe_or_meal_plan_act",
+        "hard_category": "crm",
+        "has_trace": false,
+        "has_verdict": false
+      }
+    ]
+  },
+  "gates": {
+    "green": 15,
+    "red": [
+      "V7.2_public_dmg_installs",
+      "V7.5_public_dmg_sha_green",
+      "V7.11_100_stranger_successes",
+      "V7.12_20_successful_verb_categories",
+      "V7.14_last_20_interactions_pass"
+    ]
+  },
+  "live": {
+    "commit": "3429ea176ded8f604717bca828219dad6d0e1f34",
+    "sha": "d3b48063e6fa32d12c13943a5041a27b34284001e1a4cc0f717780ce1b2d5da2"
+  },
+  "repo": {
+    "local": "8546ec080a5fcfa38296a02dca36a6db9fb37f2a",
+    "origin": "351f5003b6e35fdd6b1e2eff48a659a8874f676b"
+  }
+}

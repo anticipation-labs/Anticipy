@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "af52442a-19e6-4b17-8741-d112aad2da93",
+  "created_at": "2025-04-03T14:22:00Z",
+  "name": "Carlos Mendez",
+  "age": 34,
+  "occupation": "Meal Prep Business Owner",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion-based client management for meal planning",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": "signed-in Chrome profile with Notion workspace open",
+    "acceptable_state": "Notion page with client meal plan records"
+  },
+  "daily_tools": [
+    "Notion",
+    "Google Calendar",
+    "Gmail",
+    "MyFitnessPal",
+    "Slack"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Chen",
+      "relationship": "Client",
+      "context": "Weekly meal plan updates"
+    },
+    {
+      "name": "Mike Torres",
+      "relationship": "Supplier",
+      "context": "Ingredient orders"
+    },
+    {
+      "name": "Lisa Nguyen",
+      "relationship": "Collaborator",
+      "context": "Recipe development"
+    }
+  ]
+}

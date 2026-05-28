@@ -1,0 +1,117 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "1beade1d-0317-449c-8144-7dd8eb615e22",
+  "created_at": "2025-04-10T12:00:00Z",
+  "title": "Etsy travel pouch order reply",
+  "category": "etsy-travel-order-reply",
+  "verb_category": "travel_research_compare_decline",
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Etsy order page for travel accessories",
+  "breadth_reason": "This script extends breadth by testing the stranger's ability to process a travel-related e-commerce task via uploaded audio, manipulating a real signed-in Etsy surface for a custom reply, and declining if surface is unverifiable.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine (public downloadable installer)",
+    "surface_rule": "only user's actual signed-in Chrome profile with Etsy order page visible",
+    "proof_rule": "fresh screen capture of the Etsy order page showing order details and signed-in state, taken by the public build"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures the spoken intent is captured precisely, avoiding transcription errors from paste or live mic."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Etsy order page",
+      "kind": "browser_tab",
+      "surface": "Chrome profile with signed-in Etsy session",
+      "proof_needed": "visible order page with travel pouch order details and signed-in indicator"
+    },
+    {
+      "name": "Chrome installation",
+      "kind": "native_app",
+      "surface": "user's local Chrome browser",
+      "proof_needed": "Chrome is installed and user is signed into their profile"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to anticipy.ai/app and completes onboarding to reach the public product entry."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that user's signed-in Chrome profile has the Etsy order page accessible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "On the Etsy order page for the travel pouch I bought for the Lisbon trip next month, please verify the shipping address and draft a customer reply to the seller about late delivery. If you cannot prove the visible Etsy order surface or my signed-in account, decline without changing anything.",
+      "delivery_instruction": "The stranger must produce a per-run audio artifact via the 'say' command, mimicking the exact spoken text for ASR processing.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg",
+      "description": "User uploads an MP3 recording of the spoken request to /api/listen/upload."
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the ASR transcript matches the expected intent and that the user's real surface is still verifiable before proceeding."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        {
+          "action": "act",
+          "condition": "Surface proven and ASR transcript matches; produce draft reply and verify shipping address."
+        },
+        {
+          "action": "ask",
+          "condition": "Surface partially proven but missing order detail; ask user for specific confirmation."
+        },
+        {
+          "action": "decline",
+          "condition": "Surface unverifiable or ASR mismatch; decline with explanation and do not change anything."
+        }
+      ],
+      "description": "Engine produces one of three acceptable outcomes based on surface proof and audio fidelity."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that no secondary input mode (e.g., transcript paste, live mic) was used, confirming primary audio upload path."
+    }
+  ],
+  "success_criteria": [
+    "The uploaded MP3 is successfully processed through ASR and the transcript matches the spoken reference text.",
+    "The stranger receives a visible, signed-in Etsy order page for the travel pouch and can verify the shipping address.",
+    "A draft customer reply regarding late delivery is generated and presented to the user.",
+    "If the surface or account is not verifiable, the stranger declines without making any changes.",
+    "All moments are executed in order and the engine's decision falls within acceptable outcomes."
+  ],
+  "failure_triggers": [
+    "The uploaded audio cannot be decoded or ASR produces an unrecognizable transcript.",
+    "The user's Chrome profile does not show an active Etsy session or the order page is not accessible.",
+    "The stranger attempts to act without a fresh proof of the real surface (e.g., using a stale screenshot).",
+    "The engine changes any content on the Etsy page or order without explicit permission or when declining.",
+    "A secondary input mode such as transcript paste is used in place of the required audio upload."
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z",
+  "site": "example.cypress.io",
+  "elapsed_seconds": 15.66,
+  "steps_passed": 12,
+  "steps_failed": 0,
+  "failed_step": "",
+  "final_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-12-final.png",
+  "results": [
+    {
+      "name": "navigate_home",
+      "ok": true
+    },
+    {
+      "name": "verify_kitchen_sink",
+      "ok": true
+    },
+    {
+      "name": "click_commands",
+      "ok": true
+    },
+    {
+      "name": "nav_querying",
+      "ok": true
+    },
+    {
+      "name": "verify_query_btn",
+      "ok": true
+    },
+    {
+      "name": "type_query_form",
+      "ok": true
+    },
+    {
+      "name": "click_query_btn",
+      "ok": true
+    },
+    {
+      "name": "verify_query_list",
+      "ok": true
+    },
+    {
+      "name": "nav_actions",
+      "ok": true
+    },
+    {
+      "name": "fill_action_email",
+      "ok": true
+    },
+    {
+      "name": "verify_action_email_value",
+      "ok": true
+    },
+    {
+      "name": "final_screenshot",
+      "ok": true
+    }
+  ],
+  "bridge_fallbacks_used": [
+    "CDP fallback: click via Runtime.evaluate(el.click()) because bridge applescript_loopback_fallback rejects 'click'",
+    "CDP fallback: in-place location.assign navigate because bridge navigate spawns a new tab and breaks TAB binding",
+    "CDP fallback: type via Runtime.evaluate + native HTMLInputElement.value setter because bridge applescript_loopback_fallback rejects 'type'"
+  ],
+  "verdict": "PASS"
+}

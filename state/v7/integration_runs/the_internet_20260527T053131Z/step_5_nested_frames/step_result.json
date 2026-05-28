@@ -1,0 +1,7 @@
+{
+  "actual": "https://the-internet.herokuapp.com/nested_frames",
+  "expected": "parent frameset loaded; nested traversal logged as limitation",
+  "name": "nested_frames_loaded",
+  "passed": true,
+  "primitive_used": "navigate + surface-proof"
+}

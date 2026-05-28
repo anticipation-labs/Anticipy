@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The trace shows the public product path was used, the installed user-device engine ran, and real Chrome surfaces were probed. The engine correctly declined the HubSpot follow-up request because the user was not signed into HubSpot (the surface showed the login page), and the decline was competent, naming HubSpot as the blocked service with a changed Anticipy decline card and no broken script surfaces.",
+  "specific_failures": [],
+  "verb_category": "email_draft_for_send_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows navigation to https://www.anticipy.ai/app and the installed engine at /Applications/Anticipy.app/Contents/MacOS/anticipy-engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver surface proofs show real Chrome with HubSpot login page visible, confirming the precheck was performed."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Transcript quality confirms audio was uploaded via /api/listen/upload, ASR produced a transcript with 1.85% WER matching the spoken reference."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Engine logs show the pending instruction matches the transcribed request and the HubSpot surface was checked (login page, not signed-in record)."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined with a competent decline naming HubSpot as the blocked service, and the diff shows a changed Anticipy decline card surface with no broken script surfaces."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The trace confirms audio upload was the input mode; other modes are not required for this script."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine log records a competent decline naming HubSpot as the blocked service, the diff includes a changed Anticipy decline card surface, and broken_script_surfaces is empty."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T04:52:07Z"
+}

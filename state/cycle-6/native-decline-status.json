@@ -1,0 +1,92 @@
+{
+  "inject": {
+    "on": false,
+    "window": 1,
+    "ingest_id": "asr-transcript-0b2cec6f171e41b68f4b316f7f02eb5e",
+    "transcript": "Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+    "outcome": "DECLINED",
+    "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+    "plan": {
+      "mode": "decline",
+      "intent": "native_calendar_reminder",
+      "thing": "Calendar/Reminders",
+      "task": "",
+      "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet."
+    },
+    "memory": {
+      "op": "ADD",
+      "reason": "New actionable intent with specific date, time, location, and reminder instruction."
+    },
+    "resolution_trace_sync": {
+      "ok": false,
+      "skipped": true,
+      "reason": "not provisioned"
+    },
+    "pending": {
+      "instruction": "Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+      "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "native_calendar_reminder",
+        "thing": "Calendar/Reminders",
+        "task": "",
+        "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet."
+      },
+      "ts": 1779613937.2878668
+    },
+    "scheduled": null
+  },
+  "status": {
+    "on": false,
+    "window_seconds": 60.0,
+    "windows": 1,
+    "level": 0.0,
+    "uptime": 2.5,
+    "recent": [
+      {
+        "ts": 1779613937.2878668,
+        "rms": 0.0,
+        "ingest_id": "asr-transcript-0b2cec6f171e41b68f4b316f7f02eb5e",
+        "transcript": "Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+        "outcome": "DECLINED",
+        "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+        "memory": {
+          "op": "ADD",
+          "reason": "New actionable intent with specific date, time, location, and reminder instruction."
+        },
+        "source": "asr-transcript",
+        "window": 1,
+        "plan": {
+          "mode": "decline",
+          "intent": "native_calendar_reminder",
+          "thing": "Calendar/Reminders",
+          "task": "",
+          "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet."
+        },
+        "resolution_trace_sync": {
+          "ok": false,
+          "skipped": true,
+          "reason": "not provisioned"
+        }
+      }
+    ],
+    "pending": {
+      "instruction": "Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+      "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "native_calendar_reminder",
+        "thing": "Calendar/Reminders",
+        "task": "",
+        "proposal": "I can't safely create native Calendar events or Reminders yet. I cannot prove the event, time, location, reminder, or no-invite state on your visible Mac Calendar/Reminders surfaces, so I will not create anything or contact anyone. Requested Calendar/Reminder work to preserve: Set up the Marcus lobby shutoff for Tuesday, May 26, 2026 from 8:30 to 10 at 31-18 Steinway, and remind me at 7:45 to text Ari before it starts. Don't email anyone or invite anyone yet."
+      },
+      "ts": 1779613937.2878668
+    },
+    "acted": null,
+    "error": null
+  }
+}

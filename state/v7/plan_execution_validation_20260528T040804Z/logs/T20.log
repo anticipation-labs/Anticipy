@@ -1,0 +1,11 @@
+plan_id=T20 ts=1779941322.328
+category=calendar
+plan={"mode": "act", "person": "", "thing": "screen time lock nudge", "intent": "other", "task": "Set a reminder in Google Calendar for Friday at 10:00 AM titled 'Ask Casey if they want to set up the screen time lock Priya mentioned' with a notification.", "question": ""}
+inject http=200 ok=True
+act http=200 dur=0.00s body={"ran": false, "gated": true, "resolved_person": "", "resolved_thing": "screen time lock nudge", "task": "Set a reminder for Friday evening to ask the user if they want to set up a screen time lock for after 10 PM.", "error": "No real Chrome on :9222 and the launchd agent could not be kicked. The real path (action_handoff -> frozen DSv4SkillRunner) is wired; the real-clone browser is the edge."}
+[verify_calendar] titles=['Ask Casey if they want to set up the screen time lock Priya mentioned']
+[verify_calendar] search_term='Ask Casey if they want to'
+[verify_calendar] open_new_tab ok=True targetId=130E05DE6B5E2DFD75BEDA9DBE2A97DD err=
+[dom_probe] ok=True err=
+[verify_calendar] shot ok=True bytes=132331 err=
+[verify_calendar] closed={"ok": true, "http": 200, "body": "Target is closing"}

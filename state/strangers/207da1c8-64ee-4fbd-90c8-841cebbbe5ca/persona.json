@@ -1,0 +1,38 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "207da1c8-64ee-4fbd-90c8-841cebbbe5ca",
+  "created_at": "2025-04-08T15:23:00Z",
+  "name": "Jordan Patel",
+  "age": 35,
+  "occupation": "e-commerce manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 4,
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Shopify order management",
+  "primary_real_surface": {
+    "surface": "Shopify admin dashboard",
+    "chrome_requirement": "user's signed-in Chrome profile",
+    "acceptable_state": "logged in and viewing orders"
+  },
+  "daily_tools": [
+    "Shopify",
+    "Gmail",
+    "Slack",
+    "QuickBooks",
+    "Chrome"
+  ],
+  "contacts": [
+    {
+      "name": "Aisha Chen",
+      "relationship": "operations lead",
+      "context": "handles order fulfillment"
+    },
+    {
+      "name": "Marcus Lee",
+      "relationship": "Shopify specialist",
+      "context": "manages store customizations"
+    }
+  ]
+}

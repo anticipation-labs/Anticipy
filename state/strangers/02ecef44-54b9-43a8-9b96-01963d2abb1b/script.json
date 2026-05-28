@@ -1,0 +1,107 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "02ecef44-54b9-43a8-9b96-01963d2abb1b",
+  "created_at": "2025-04-11T12:00:00Z",
+  "title": "Add Linear task via audio upload",
+  "category": "linear_task_add_audio",
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "hard_category_focus": "Linear task creation",
+  "breadth_reason": "This script extends breadth by testing the complete audio upload path for task creation in Linear, ensuring the engine can transcribe uploaded audio and act on the user's signed-in Linear surface.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "User-device engine installed on user's computer after onboarding",
+    "surface_rule": "Anticipy must interact with the user's actual signed-in Chrome browser with Linear tab open; no cloned profiles or hidden browsers.",
+    "proof_rule": "Proof must be a fresh screenshot or screen capture of the Linear task created (or the declined state) taken by the public build, with visible timestamps and user's workspace."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage is required to validate the engine's ability to transcribe and interpret user intent from an audio file, as opposed to live mic or text paste."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Linear Web App",
+      "kind": "web_app",
+      "surface": "Linear web application open in user's signed-in Chrome browser",
+      "proof_needed": "Visible Linear workspace with project view or task creation dialog"
+    },
+    {
+      "name": "Chrome Browser Profile",
+      "kind": "browser_profile",
+      "surface": "User's Google Chrome browser with signed-in profile",
+      "proof_needed": "Chrome window showing user's account avatar or signed-in indicator"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to https://www.anticipy.ai/app and completes onboarding to download the engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that the user's real Chrome browser with signed-in Linear tab is accessible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a task in Linear for the Brentwood deal to review the contract redlines by Wednesday and tag it priority. If you cannot prove the visible Linear record or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "The stranger must generate an audio artifact (mp3) by speaking the reference text aloud using the 'say' command or text-to-speech, then upload it via /api/listen/upload. This ensures a fresh per-run audio file.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the transcribed text matches the expected intent and that the surface boundary (signed-in Linear) is still valid."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act",
+        "ask",
+        "decline"
+      ],
+      "description": "Engine decides to act (create task), ask for clarification, or decline if surface is not verifiable."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that secondary input modes (transcript paste, live mic) are not used, confirming the audio upload path is primary."
+    }
+  ],
+  "success_criteria": [
+    "The engine successfully transcribes the uploaded audio and extracts the task details: project 'Brentwood deal', action 'review contract redlines', deadline 'Wednesday', priority tag.",
+    "The engine creates a new task in the user's Linear workspace with the correct title and description derived from the transcription.",
+    "The engine provides a visible proof of the created task, such as a screenshot of the Linear task view or a confirmation message.",
+    "If the Linear surface is not signed in, the engine declines the action and provides a clear reason without writing anything.",
+    "The entire flow uses the user's real Chrome profile and Linear workspace, not a test or cloned environment."
+  ],
+  "failure_triggers": [
+    "The engine fails to transcribe the audio accurately, leading to incorrect task creation or missing details.",
+    "The engine attempts to create a task without verifying the user's signed-in Linear surface, resulting in an error or unauthorized action.",
+    "The engine uses a stale or cloned browser profile instead of the user's real Chrome session, violating the proof requirement.",
+    "The engine writes a task even when the Linear surface is not visible or signed in, instead of declining.",
+    "The engine does not produce a fresh proof (screenshot) of the action taken, relying on logs or old captures."
+  ]
+}

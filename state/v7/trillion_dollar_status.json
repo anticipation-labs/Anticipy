@@ -1,0 +1,13 @@
+{
+  "ts": "2026-05-28T05:41:42Z",
+  "verdict": "NOT_DONE",
+  "missing": [
+    "gates:[\"V7.2_public_dmg_installs\",\"V7.5_public_dmg_sha_green\",\"V7.11_100_stranger_successes\",\"V7.12_20_successful_verb_categories\",\"V7.14_last_20_interactions_pass\"]",
+    "precision:composite=0 need=0.75",
+    "z001:0/9",
+    "bridge_load:0/50",
+    "m3_sync:no_run",
+    "verb_categories:19 need=20",
+    "deploy_parity:local=8f608da origin=8f608da live=496de5a"
+  ]
+}

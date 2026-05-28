@@ -1,0 +1,1 @@
+{"slug": "areyouheadless", "verdict": "REAL_HUMAN_BROWSER", "reason": "site says headless=false", "hits": {"match_false": false, "match_true": false, "you_are_not_headless": true, "you_are_headless": false}, "text_chars": 1072}

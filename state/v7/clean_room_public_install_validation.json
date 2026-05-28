@@ -1,0 +1,46 @@
+{
+  "distinct_passing_identities": 1,
+  "engine_quality": {
+    "evaluator_pass_in": [
+      "cleanroom-20260528T001847Z",
+      "cleanroom-20260528T005951Z",
+      "cleanroom-20260528T011032Z"
+    ],
+    "input_modes_pass_in": [
+      "cleanroom-20260528T001847Z",
+      "cleanroom-20260528T005951Z"
+    ],
+    "real_surface_proof_pass_in": [
+      "cleanroom-20260528T001847Z",
+      "cleanroom-20260528T005951Z",
+      "cleanroom-20260528T011032Z"
+    ]
+  },
+  "failures": [],
+  "pass": true,
+  "passing_runs": 3,
+  "runs": [
+    {
+      "failures": [],
+      "identity": "556CB66E-61DB-515B-970D-356A39E87350|MAC-3.local|omarebrahim|501",
+      "index": 0,
+      "pass": true,
+      "run_id": "cleanroom-20260528T001847Z"
+    },
+    {
+      "failures": [],
+      "identity": "556CB66E-61DB-515B-970D-356A39E87350|MAC-3.local|omarebrahim|501",
+      "index": 1,
+      "pass": true,
+      "run_id": "cleanroom-20260528T005951Z"
+    },
+    {
+      "failures": [],
+      "identity": "556CB66E-61DB-515B-970D-356A39E87350|MAC-3.local|omarebrahim|501",
+      "index": 2,
+      "pass": true,
+      "run_id": "cleanroom-20260528T011032Z"
+    }
+  ],
+  "schema": "anticipy.clean_room_public_install.validation.v7"
+}

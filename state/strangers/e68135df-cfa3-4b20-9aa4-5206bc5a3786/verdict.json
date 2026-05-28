@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly declined to update Airtable because the visible surface was the Airtable login page, not a signed-in workspace, satisfying the D16 competent-decline standard. The trace shows the installed user-device engine, real Chrome usage, a service-specific decline naming Airtable, and no broken or missing script surfaces.",
+  "specific_failures": [],
+  "verb_category": "expense_or_budget_track_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the driver navigated to https://www.anticipy.ai/app and the installed engine at /Applications/Anticipy.app/Contents/MacOS/anticipy-engine is running, indicating the public product path was followed."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The surface proof shows the Airtable login page (https://airtable.com/login) was captured via real Chrome AppleScript, confirming the precheck identified the user was not signed in."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The engine_logs show an upload-asr ingest with source=upload-asr, a non-empty transcript matching the reference, and the transcript_quality confirms the audio was delivered via /api/listen/upload."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The ASR output matches the spoken reference text with a WER of 0.0286, and the surface proof shows the same Airtable login page, confirming the boundary check."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine declined with a service-specific message naming Airtable, citing the inability to prove the visible record or signed-in workspace, which matches the acceptable decline outcome."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The trace confirms the input mode was uploaded_audio with no secondary input modes used, as the engine_logs show only upload-asr ingests for this script."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine declined with a service-specific message naming Airtable, the decline card appears in trace.diff.added_pages, the engine_logs contain a competent_decline entry with blocked_services: [Airtable], and no broken script surfaces exist."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:12:06Z"
+}

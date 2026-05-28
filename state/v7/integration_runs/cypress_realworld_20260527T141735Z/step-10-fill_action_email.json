@@ -1,0 +1,7 @@
+{
+  "name": "fill_action_email",
+  "ok": true,
+  "detail": "filled .action-email value={\"value\": \"fake@email.com\", \"type\": \"string\", \"exception\": null}",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-10-fill_action_email.png",
+  "receipt": "{\"value\": \"fake@email.com\", \"type\": \"string\", \"exception\": null}"
+}

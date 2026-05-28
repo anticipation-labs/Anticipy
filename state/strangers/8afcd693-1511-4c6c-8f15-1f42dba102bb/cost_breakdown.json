@@ -1,0 +1,12 @@
+{
+  "calls": [],
+  "ceiling_per_task_usd": 0.002,
+  "generated_at": "2026-05-27T17:19:02Z",
+  "schema": "anticipy.v6.cost_breakdown",
+  "source": "runtime-ledger-no-llm-calls",
+  "stranger_id": "8afcd693-1511-4c6c-8f15-1f42dba102bb",
+  "total_usd": 0.0,
+  "totals": [],
+  "transcript_boundary_sha256": "24cda5b65b975c30d43a736e041f6039f6adeaab2dbfe5cff452fe5b08fee11b",
+  "within_ceiling": true
+}

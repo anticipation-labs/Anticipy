@@ -1,0 +1,60 @@
+{
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144449Z",
+  "elapsed_seconds": 29.3,
+  "steps_passed": 11,
+  "steps_failed": 0,
+  "failed_step": "",
+  "final_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144449Z/step-10-final.png",
+  "results": [
+    {
+      "name": "navigate",
+      "ok": true
+    },
+    {
+      "name": "click_forms_card",
+      "ok": true
+    },
+    {
+      "name": "click_practice_form",
+      "ok": true
+    },
+    {
+      "name": "type_name",
+      "ok": true
+    },
+    {
+      "name": "type_email",
+      "ok": true
+    },
+    {
+      "name": "click_gender_other",
+      "ok": true
+    },
+    {
+      "name": "type_phone",
+      "ok": true
+    },
+    {
+      "name": "click_submit",
+      "ok": true
+    },
+    {
+      "name": "verify_modal",
+      "ok": true
+    },
+    {
+      "name": "verify_modal_body",
+      "ok": true
+    },
+    {
+      "name": "close_modal",
+      "ok": true
+    }
+  ],
+  "bridge_fallbacks_used": [
+    "CDP fallback: click via Runtime.evaluate(el.click()) because bridge rejects 'click'",
+    "CDP fallback: click via Runtime.evaluate(label.click()) because bridge rejects 'click'",
+    "CDP fallback: type via native HTMLInputElement.value setter because bridge rejects 'type'"
+  ],
+  "verdict": "PASS"
+}

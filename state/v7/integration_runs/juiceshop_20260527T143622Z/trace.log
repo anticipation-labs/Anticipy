@@ -1,0 +1,10 @@
+[14:36:22] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143622Z
+[14:36:30] juice-shop CDP tab=34428F071984FE1F57FB8F9FBD0F18BA url=https://juice-shop.herokuapp.com/
+[14:36:30] PASS step 1 navigate :: url=https://juice-shop.herokuapp.com/ via BRIDGE /surface-command navigate
+[14:36:35] Heroku Juice Shop is down (http=503 size=567); falling back to preview.owasp-juice.shop
+[14:36:43] PASS step 2 fallback_navigate :: primary down; falling back to preview.owasp-juice.shop title='OWASP Juice Shop' url=https://preview.owasp-juice.shop/#/
+[14:36:43] PASS step 2 target_health :: page title='OWASP Juice Shop' url=https://preview.owasp-juice.shop/#/
+[14:36:45] PASS step 3 dismiss_banners :: welcome banner + cookie bar dismissed (best-effort)
+[14:36:48] PASS step 4 open_search :: visible text inputs=1 after Open search click
+[14:36:51] PASS step 5 type_apple :: typed 'apple' into search; submitted via Enter
+[14:37:03] FAIL step 6 verify_apple_results :: no apple tiles after 8s

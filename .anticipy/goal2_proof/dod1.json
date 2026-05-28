@@ -1,0 +1,16 @@
+{
+  "real_supabase_signup": {
+    "production_host": "https://ogbxpqkmsdrcuilafycn.supabase.co",
+    "fresh_user_id": "c583f8c0-792a-468b-aa7c-b2185d59951a",
+    "email": "anticipy.proof+1779171729@gmail.com",
+    "http": 200,
+    "key_used": "NEXT_PUBLIC anon key only (service-role never used)",
+    "login_gate": "email_not_confirmed (real production email-confirmation config, reported honestly)"
+  },
+  "anticipy_ai_app": {
+    "url": "https://www.anticipy.ai/app",
+    "loads": true,
+    "screenshot": "/tmp/anticipy_proof/dod1_signup.png",
+    "note": "deployed app has no separate email/password signup FORM; account creation is the Supabase auth signUp call the page uses (proven above). Screenshot shows the real deployed app loading as a new user (captured in an incognito CDP context)."
+  }
+}

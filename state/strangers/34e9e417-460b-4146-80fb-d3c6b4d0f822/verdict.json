@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly received the uploaded audio, performed ASR with 0% WER, identified the Amazon sign-in surface (not the order page), and paused with a confirm card (ASKING) naming Amazon as the blocked service. This satisfies the D16 competent-pause standard: the engine declined to act on an unverifiable surface without making any changes, using real Chrome and the installed user-device engine.",
+  "specific_failures": [],
+  "verb_category": "amazon_order_refund_decline",
+  "hard_category": "e-commerce",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Driver accessed the public Anticipy app page (https://www.anticipy.ai/app) as shown in the surface proof."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver checked the real Chrome surface and captured the Amazon sign-in page, confirming the user was not signed in."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Uploaded audio was processed via /api/listen/upload, ASR succeeded with 0% WER and exact transcript match."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine's post-ASR boundary check correctly routed to a confirm card without writing to the service."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine decided to pause with a confirm card (ASKING) indicating it could not verify the Amazon order surface, which is an acceptable outcome per the script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The driver observed that input mode was uploaded audio, satisfying the secondary observation."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine emitted a confirm card (ASKING) with blocked_services=['Amazon'] and a service-specific proposal, changed an Anticipy surface, and did not write to any third-party surface."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T17:53:24Z"
+}

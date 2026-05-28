@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly identified that the user was not signed into Shopify (login page visible) and paused with a service-specific confirm card naming Shopify via blocked_services and proposal, satisfying the D16 competent-pause standard. No broken script surfaces, installed user-device engine, and real Chrome were used.",
+  "specific_failures": [],
+  "verb_category": "shopify_admin_reply_decline",
+  "hard_category": "e-commerce",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows surface proof of anticipy.ai/app, confirming driver navigated to public entry."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver surface proof shows Shopify login page (not signed in), verifying the precheck correctly identified the user's actual surface state."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio uploaded successfully, ASR transcript matches reference with WER 0.024, within acceptable boundary."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR output matches spoken reference within boundary (WER 2.4%)."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine paused with confirm card naming Shopify (blocked_services), functionally a decline as surface not signed in, which is an acceptable outcome."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Secondary input modes are visible and not used as primary as per driver observation."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with confirm card naming Shopify via blocked_services and proposal, no third-party surface change needed because user not signed in."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T17:57:15Z"
+}

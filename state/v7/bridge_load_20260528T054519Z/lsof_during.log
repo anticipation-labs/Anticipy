@@ -1,0 +1,5 @@
+# lsof -i :7777 sampled every 1.0s from 20260528T054519Z
+[22:45:19] tcp_total=101 listen=1 established=100 close_wait=0
+[22:45:21] tcp_total=95 listen=1 established=94 close_wait=0
+[22:45:22] tcp_total=43 listen=1 established=42 close_wait=0
+[22:45:23] tcp_total=19 listen=1 established=18 close_wait=0

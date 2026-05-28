@@ -1,0 +1,7 @@
+{
+  "name": "type_apple",
+  "ok": false,
+  "detail": "type failed: {\"value\": \"NOTFOUND\", \"type\": \"string\", \"exception\": null}",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143459Z/step-05-type_apple.png",
+  "receipt": "{\"value\": \"NOTFOUND\", \"type\": \"string\", \"exception\": null}"
+}

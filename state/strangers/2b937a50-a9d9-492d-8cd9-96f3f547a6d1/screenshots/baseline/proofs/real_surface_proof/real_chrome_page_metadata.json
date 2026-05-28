@@ -1,0 +1,17 @@
+{
+  "active_title": "Anticipy App",
+  "active_url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-222278013ac5",
+  "app": "Google Chrome",
+  "javascript_from_apple_events_enabled": false,
+  "javascript_stderr": "36:118: execution error: Google Chrome got an error: Executing JavaScript through AppleScript is turned off. To turn it on, from the menu bar, go to View > Developer > Allow JavaScript from Apple Events. For more information: https://support.google.com/chrome/?p=applescript (12)",
+  "marker": "v7-surface-222278013ac5",
+  "open_returncode": 0,
+  "open_stderr": "",
+  "probe_url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-222278013ac5",
+  "screenshot_returncode": 0,
+  "screenshot_stderr": "",
+  "surface": "real user Chrome via Apple Events",
+  "visible_text_returncode": 0,
+  "visible_text_stderr": "",
+  "window_id": "1285463072"
+}

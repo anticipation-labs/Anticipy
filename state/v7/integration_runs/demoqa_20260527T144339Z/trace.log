@@ -1,0 +1,13 @@
+[14:43:39] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144339Z
+[14:43:46] demoqa CDP tab=A2E63EF53DE0CCC7B2EDD4A9EA58FD07 url=https://demoqa.com/
+[14:43:46] PASS step 1 navigate :: url=https://demoqa.com/ via BRIDGE /surface-command navigate
+[14:43:51] PASS step 2 click_forms_card :: forms page url=https://demoqa.com/forms via CLICKED:Forms
+[14:43:56] PASS step 3 click_practice_form :: practice-form url=https://demoqa.com/automation-practice-form via CLICKED:a.router-link:Practice Form
+[14:43:56] PASS step 4 type_name :: first=Anticipy last=Test via CDP
+[14:43:57] PASS step 5 type_email :: email=anticipy@test.dev via CDP
+[14:43:58] PASS step 6 click_gender_other :: gender=Other radio checked via CDP
+[14:43:59] PASS step 7 type_phone :: phone=5551234567 via CDP
+[14:44:02] PASS step 8 click_submit :: clicked #submit via CDP
+[14:44:02] PASS step 9 verify_modal :: modal title='Thanks for submitting the form'
+[14:44:03] PASS step 9 verify_modal_body :: modal body sample: LabelValuesStudent NameAnticipy TestStudent Emailanticipy@test.devGenderOtherMobile5551234567Date of Birth27 May,2026SubjectsHobbiesPictureAddressState and City
+[14:44:05] FAIL step 10 close_modal :: modal still present (closed=False)

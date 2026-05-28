@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "02ecef44-54b9-43a8-9b96-01963d2abb1b",
+  "created_at": "2025-04-07T18:30:00Z",
+  "name": "Alexandra Chen",
+  "age": 34,
+  "occupation": "Product Manager",
+  "location": "San Francisco, CA",
+  "tech_savviness": 8,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Linear task creation",
+  "primary_real_surface": {
+    "surface": "Linear web app",
+    "chrome_requirement": "signed-in Chrome with Linear tab open",
+    "acceptable_state": "logged in and viewing a project"
+  },
+  "daily_tools": [
+    "Linear",
+    "Slack",
+    "Notion",
+    "Google Chrome",
+    "macOS Mail"
+  ],
+  "contacts": [
+    {
+      "name": "Jordan Lee",
+      "relationship": "Engineering Lead",
+      "context": "Assigns tasks and reviews progress in Linear"
+    },
+    {
+      "name": "Morgan Patel",
+      "relationship": "Design Lead",
+      "context": "Coordinates feature specs and task dependencies"
+    },
+    {
+      "name": "Taylor Singh",
+      "relationship": "Product Designer",
+      "context": "Creates design tickets and requests feedback"
+    }
+  ]
+}

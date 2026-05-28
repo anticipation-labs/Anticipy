@@ -1,0 +1,2319 @@
+{
+  "schema": "anticipy.v6.trace",
+  "created_at": "2026-05-26T14:05:34Z",
+  "cdp_port": 9222,
+  "browser": "chrome_extension_native_messaging",
+  "chrome_surface_path": "real_chrome_applescript_visible_surface",
+  "extension_surface_proof": {
+    "applescript_surface_probe": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+      "requested_url": "https://www.anticipy.ai/app",
+      "screenshot_bytes": 4183516,
+      "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app",
+      "visible_surface": true,
+      "visible_text_bytes": 731,
+      "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+    },
+    "blocker": {
+      "chrome_profiles_checked": [
+        {
+          "exists": true,
+          "profiles": [
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [
+                {
+                  "disable_reasons": {},
+                  "enabled": true,
+                  "has_native_messaging": false,
+                  "id": "npnpagopediecennpleihemoochikggb",
+                  "name": "",
+                  "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                  "permissions": [],
+                  "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                  "source": "Secure Preferences",
+                  "state": null
+                }
+              ],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+            }
+          ],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+        },
+        {
+          "exists": true,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+        }
+      ],
+      "extension_candidates": [
+        {
+          "disable_reasons": {},
+          "enabled": true,
+          "has_native_messaging": false,
+          "id": "npnpagopediecennpleihemoochikggb",
+          "name": "",
+          "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+          "permissions": [],
+          "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+          "source": "Secure Preferences",
+          "state": null
+        }
+      ],
+      "kind": "",
+      "native_host_manifest": {
+        "authorized": true,
+        "authorized_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ],
+        "checked": [
+          {
+            "allowed_origins": [
+              "chrome-extension://__EXTENSION_ID__/"
+            ],
+            "authorized_extension_ids": [],
+            "exists": true,
+            "host_path": "__LAUNCHER_PATH__",
+            "name": "com.anticipy.agent",
+            "path": "native_host/com.anticipy.agent.json",
+            "uses_placeholder_origin": true
+          },
+          {
+            "allowed_origins": [
+              "chrome-extension://npnpagopediecennpleihemoochikggb/"
+            ],
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "exists": true,
+            "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+            "name": "com.anticipy.agent",
+            "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          }
+        ]
+      },
+      "reason": ""
+    },
+    "chrome": {
+      "app": "Google Chrome",
+      "hidden_browser": false,
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "profile": {
+        "extension_candidates": [
+          {
+            "disable_reasons": {},
+            "enabled": true,
+            "has_native_messaging": false,
+            "id": "npnpagopediecennpleihemoochikggb",
+            "name": "",
+            "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+            "permissions": [],
+            "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "source": "Secure Preferences",
+            "state": null
+          }
+        ],
+        "kind": "real_user",
+        "profiles_checked": [
+          {
+            "exists": true,
+            "profiles": [
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [
+                  {
+                    "disable_reasons": {},
+                    "enabled": true,
+                    "has_native_messaging": false,
+                    "id": "npnpagopediecennpleihemoochikggb",
+                    "name": "",
+                    "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                    "permissions": [],
+                    "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                    "source": "Secure Preferences",
+                    "state": null
+                  }
+                ],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+              }
+            ],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+          },
+          {
+            "exists": true,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+          }
+        ],
+        "proof_extension_id": "",
+        "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+        "proof_profile_source": "inspected_real_chrome_profile",
+        "source_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ]
+      }
+    },
+    "direct_browser_cdp": false,
+    "engine": {
+      "installed_process": {
+        "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "health": {
+          "listening": true,
+          "ok": true,
+          "onboarded": true,
+          "pid": 25156,
+          "port": 8731,
+          "profile_error": "",
+          "service": "anticipy-local-engine",
+          "version": "product-3"
+        },
+        "ok": true,
+        "pid": 25156,
+        "port": 8731
+      },
+      "url": "http://127.0.0.1:8731"
+    },
+    "generated_at": "2026-05-26T13:44:44Z",
+    "native_host": {
+      "authorized": true,
+      "authorized_extension_ids": [
+        "npnpagopediecennpleihemoochikggb"
+      ],
+      "checked": [
+        {
+          "allowed_origins": [
+            "chrome-extension://__EXTENSION_ID__/"
+          ],
+          "authorized_extension_ids": [],
+          "exists": true,
+          "host_path": "__LAUNCHER_PATH__",
+          "name": "com.anticipy.agent",
+          "path": "native_host/com.anticipy.agent.json",
+          "uses_placeholder_origin": true
+        },
+        {
+          "allowed_origins": [
+            "chrome-extension://npnpagopediecennpleihemoochikggb/"
+          ],
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "exists": true,
+          "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+          "name": "com.anticipy.agent",
+          "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        }
+      ]
+    },
+    "pass": true,
+    "proof_request": {
+      "error": "",
+      "ok": false,
+      "status": 0
+    },
+    "proofs": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+      "requested_url": "https://www.anticipy.ai/app",
+      "screenshot_bytes": 4183516,
+      "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app",
+      "visible_surface": true,
+      "visible_text_bytes": 731,
+      "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+    },
+    "public_extension": {
+      "download_path": "public/anticipy-extension.zip",
+      "entries": [
+        "anticipy-v6/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+        "anticipy-v6/README.txt",
+        "anticipy-v6/DAEMON-INSTALLER/",
+        "anticipy-v6/DAEMON-INSTALLER/install.command",
+        "anticipy-v6/DAEMON-INSTALLER/install.sh",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/harness.py"
+      ],
+      "entry_count": 191,
+      "exists": true,
+      "manifest": {
+        "has_key": true,
+        "has_native_messaging": true,
+        "manifest_version": 3,
+        "name": "Anticipy Bridge v6",
+        "permissions": [
+          "tabs",
+          "tabGroups",
+          "scripting",
+          "storage",
+          "activeTab",
+          "nativeMessaging"
+        ],
+        "version": "6.0.0"
+      },
+      "sha256": "0879001551317757b6216c39930df89a91c2041eaa591cce680832c03e444cde"
+    },
+    "schema": "anticipy.real_surface_proof.v7",
+    "surface_path": "real_chrome_applescript_visible_surface",
+    "uses_chrome_real_clone": false,
+    "proof_json_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/manual_computer_use_decline_proof.json",
+    "driver_surface_proofs": [
+      {
+        "applescript_surface_probe": {
+          "acquired_via": "real_chrome_applescript_visible_surface",
+          "dom_bytes": 0,
+          "dom_path": "",
+          "dom_sha256": "",
+          "javascript_from_apple_events_enabled": false,
+          "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+          "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+          "requested_url": "https://www.anticipy.ai/app",
+          "screenshot_bytes": 4183516,
+          "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+          "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+          "title": "Anticipy App",
+          "url": "https://www.anticipy.ai/app",
+          "visible_surface": true,
+          "visible_text_bytes": 731,
+          "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+          "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+        },
+        "blocker": {
+          "chrome_profiles_checked": [
+            {
+              "exists": true,
+              "profiles": [
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [
+                    {
+                      "disable_reasons": {},
+                      "enabled": true,
+                      "has_native_messaging": false,
+                      "id": "npnpagopediecennpleihemoochikggb",
+                      "name": "",
+                      "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                      "permissions": [],
+                      "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                      "source": "Secure Preferences",
+                      "state": null
+                    }
+                  ],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+                }
+              ],
+              "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+            },
+            {
+              "exists": false,
+              "profiles": [],
+              "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+            },
+            {
+              "exists": false,
+              "profiles": [],
+              "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+            },
+            {
+              "exists": true,
+              "profiles": [],
+              "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+            }
+          ],
+          "extension_candidates": [
+            {
+              "disable_reasons": {},
+              "enabled": true,
+              "has_native_messaging": false,
+              "id": "npnpagopediecennpleihemoochikggb",
+              "name": "",
+              "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+              "permissions": [],
+              "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+              "source": "Secure Preferences",
+              "state": null
+            }
+          ],
+          "kind": "",
+          "native_host_manifest": {
+            "authorized": true,
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "checked": [
+              {
+                "allowed_origins": [
+                  "chrome-extension://__EXTENSION_ID__/"
+                ],
+                "authorized_extension_ids": [],
+                "exists": true,
+                "host_path": "__LAUNCHER_PATH__",
+                "name": "com.anticipy.agent",
+                "path": "native_host/com.anticipy.agent.json",
+                "uses_placeholder_origin": true
+              },
+              {
+                "allowed_origins": [
+                  "chrome-extension://npnpagopediecennpleihemoochikggb/"
+                ],
+                "authorized_extension_ids": [
+                  "npnpagopediecennpleihemoochikggb"
+                ],
+                "exists": true,
+                "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+                "name": "com.anticipy.agent",
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              },
+              {
+                "allowed_origins": [],
+                "authorized_extension_ids": [],
+                "exists": false,
+                "host_path": "",
+                "name": "",
+                "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              },
+              {
+                "allowed_origins": [],
+                "authorized_extension_ids": [],
+                "exists": false,
+                "host_path": "",
+                "name": "",
+                "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              },
+              {
+                "allowed_origins": [],
+                "authorized_extension_ids": [],
+                "exists": false,
+                "host_path": "",
+                "name": "",
+                "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              }
+            ]
+          },
+          "reason": ""
+        },
+        "chrome": {
+          "app": "Google Chrome",
+          "hidden_browser": false,
+          "platform": "macOS-26.3-arm64-arm-64bit",
+          "profile": {
+            "extension_candidates": [
+              {
+                "disable_reasons": {},
+                "enabled": true,
+                "has_native_messaging": false,
+                "id": "npnpagopediecennpleihemoochikggb",
+                "name": "",
+                "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                "permissions": [],
+                "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                "source": "Secure Preferences",
+                "state": null
+              }
+            ],
+            "kind": "real_user",
+            "profiles_checked": [
+              {
+                "exists": true,
+                "profiles": [
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [
+                      {
+                        "disable_reasons": {},
+                        "enabled": true,
+                        "has_native_messaging": false,
+                        "id": "npnpagopediecennpleihemoochikggb",
+                        "name": "",
+                        "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                        "permissions": [],
+                        "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                        "source": "Secure Preferences",
+                        "state": null
+                      }
+                    ],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+                  }
+                ],
+                "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+              },
+              {
+                "exists": false,
+                "profiles": [],
+                "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+              },
+              {
+                "exists": false,
+                "profiles": [],
+                "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+              },
+              {
+                "exists": true,
+                "profiles": [],
+                "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+              }
+            ],
+            "proof_extension_id": "",
+            "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "proof_profile_source": "inspected_real_chrome_profile",
+            "source_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ]
+          }
+        },
+        "direct_browser_cdp": false,
+        "engine": {
+          "installed_process": {
+            "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+            "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+            "health": {
+              "listening": true,
+              "ok": true,
+              "onboarded": true,
+              "pid": 25156,
+              "port": 8731,
+              "profile_error": "",
+              "service": "anticipy-local-engine",
+              "version": "product-3"
+            },
+            "ok": true,
+            "pid": 25156,
+            "port": 8731
+          },
+          "url": "http://127.0.0.1:8731"
+        },
+        "generated_at": "2026-05-26T13:44:44Z",
+        "native_host": {
+          "authorized": true,
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "checked": [
+            {
+              "allowed_origins": [
+                "chrome-extension://__EXTENSION_ID__/"
+              ],
+              "authorized_extension_ids": [],
+              "exists": true,
+              "host_path": "__LAUNCHER_PATH__",
+              "name": "com.anticipy.agent",
+              "path": "native_host/com.anticipy.agent.json",
+              "uses_placeholder_origin": true
+            },
+            {
+              "allowed_origins": [
+                "chrome-extension://npnpagopediecennpleihemoochikggb/"
+              ],
+              "authorized_extension_ids": [
+                "npnpagopediecennpleihemoochikggb"
+              ],
+              "exists": true,
+              "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+              "name": "com.anticipy.agent",
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            },
+            {
+              "allowed_origins": [],
+              "authorized_extension_ids": [],
+              "exists": false,
+              "host_path": "",
+              "name": "",
+              "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            },
+            {
+              "allowed_origins": [],
+              "authorized_extension_ids": [],
+              "exists": false,
+              "host_path": "",
+              "name": "",
+              "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            },
+            {
+              "allowed_origins": [],
+              "authorized_extension_ids": [],
+              "exists": false,
+              "host_path": "",
+              "name": "",
+              "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            }
+          ]
+        },
+        "pass": true,
+        "proof_request": {
+          "error": "",
+          "ok": false,
+          "status": 0
+        },
+        "proofs": {
+          "acquired_via": "real_chrome_applescript_visible_surface",
+          "dom_bytes": 0,
+          "dom_path": "",
+          "dom_sha256": "",
+          "javascript_from_apple_events_enabled": false,
+          "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+          "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+          "requested_url": "https://www.anticipy.ai/app",
+          "screenshot_bytes": 4183516,
+          "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+          "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+          "title": "Anticipy App",
+          "url": "https://www.anticipy.ai/app",
+          "visible_surface": true,
+          "visible_text_bytes": 731,
+          "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+          "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+        },
+        "public_extension": {
+          "download_path": "public/anticipy-extension.zip",
+          "entries": [
+            "anticipy-v6/",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+            "anticipy-v6/README.txt",
+            "anticipy-v6/DAEMON-INSTALLER/",
+            "anticipy-v6/DAEMON-INSTALLER/install.command",
+            "anticipy-v6/DAEMON-INSTALLER/install.sh",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/harness.py"
+          ],
+          "entry_count": 191,
+          "exists": true,
+          "manifest": {
+            "has_key": true,
+            "has_native_messaging": true,
+            "manifest_version": 3,
+            "name": "Anticipy Bridge v6",
+            "permissions": [
+              "tabs",
+              "tabGroups",
+              "scripting",
+              "storage",
+              "activeTab",
+              "nativeMessaging"
+            ],
+            "version": "6.0.0"
+          },
+          "sha256": "0879001551317757b6216c39930df89a91c2041eaa591cce680832c03e444cde"
+        },
+        "schema": "anticipy.real_surface_proof.v7",
+        "surface_path": "real_chrome_applescript_visible_surface",
+        "uses_chrome_real_clone": false,
+        "proof_json_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/manual_computer_use_decline_proof.json"
+      }
+    ]
+  },
+  "real_surface_proof": {
+    "applescript_surface_probe": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+      "requested_url": "https://www.anticipy.ai/app",
+      "screenshot_bytes": 4183516,
+      "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app",
+      "visible_surface": true,
+      "visible_text_bytes": 731,
+      "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+    },
+    "blocker": {
+      "chrome_profiles_checked": [
+        {
+          "exists": true,
+          "profiles": [
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [
+                {
+                  "disable_reasons": {},
+                  "enabled": true,
+                  "has_native_messaging": false,
+                  "id": "npnpagopediecennpleihemoochikggb",
+                  "name": "",
+                  "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                  "permissions": [],
+                  "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                  "source": "Secure Preferences",
+                  "state": null
+                }
+              ],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+            },
+            {
+              "banned_clone_path": false,
+              "exists": true,
+              "extension_candidates": [],
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+            }
+          ],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+        },
+        {
+          "exists": false,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+        },
+        {
+          "exists": true,
+          "profiles": [],
+          "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+        }
+      ],
+      "extension_candidates": [
+        {
+          "disable_reasons": {},
+          "enabled": true,
+          "has_native_messaging": false,
+          "id": "npnpagopediecennpleihemoochikggb",
+          "name": "",
+          "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+          "permissions": [],
+          "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+          "source": "Secure Preferences",
+          "state": null
+        }
+      ],
+      "kind": "",
+      "native_host_manifest": {
+        "authorized": true,
+        "authorized_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ],
+        "checked": [
+          {
+            "allowed_origins": [
+              "chrome-extension://__EXTENSION_ID__/"
+            ],
+            "authorized_extension_ids": [],
+            "exists": true,
+            "host_path": "__LAUNCHER_PATH__",
+            "name": "com.anticipy.agent",
+            "path": "native_host/com.anticipy.agent.json",
+            "uses_placeholder_origin": true
+          },
+          {
+            "allowed_origins": [
+              "chrome-extension://npnpagopediecennpleihemoochikggb/"
+            ],
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "exists": true,
+            "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+            "name": "com.anticipy.agent",
+            "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          },
+          {
+            "allowed_origins": [],
+            "authorized_extension_ids": [],
+            "exists": false,
+            "host_path": "",
+            "name": "",
+            "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+            "uses_placeholder_origin": false
+          }
+        ]
+      },
+      "reason": ""
+    },
+    "chrome": {
+      "app": "Google Chrome",
+      "hidden_browser": false,
+      "platform": "macOS-26.3-arm64-arm-64bit",
+      "profile": {
+        "extension_candidates": [
+          {
+            "disable_reasons": {},
+            "enabled": true,
+            "has_native_messaging": false,
+            "id": "npnpagopediecennpleihemoochikggb",
+            "name": "",
+            "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+            "permissions": [],
+            "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "source": "Secure Preferences",
+            "state": null
+          }
+        ],
+        "kind": "real_user",
+        "profiles_checked": [
+          {
+            "exists": true,
+            "profiles": [
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [
+                  {
+                    "disable_reasons": {},
+                    "enabled": true,
+                    "has_native_messaging": false,
+                    "id": "npnpagopediecennpleihemoochikggb",
+                    "name": "",
+                    "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                    "permissions": [],
+                    "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                    "source": "Secure Preferences",
+                    "state": null
+                  }
+                ],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+              },
+              {
+                "banned_clone_path": false,
+                "exists": true,
+                "extension_candidates": [],
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+              }
+            ],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+          },
+          {
+            "exists": false,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+          },
+          {
+            "exists": true,
+            "profiles": [],
+            "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+          }
+        ],
+        "proof_extension_id": "",
+        "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+        "proof_profile_source": "inspected_real_chrome_profile",
+        "source_extension_ids": [
+          "npnpagopediecennpleihemoochikggb"
+        ]
+      }
+    },
+    "direct_browser_cdp": false,
+    "engine": {
+      "installed_process": {
+        "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+        "health": {
+          "listening": true,
+          "ok": true,
+          "onboarded": true,
+          "pid": 25156,
+          "port": 8731,
+          "profile_error": "",
+          "service": "anticipy-local-engine",
+          "version": "product-3"
+        },
+        "ok": true,
+        "pid": 25156,
+        "port": 8731
+      },
+      "url": "http://127.0.0.1:8731"
+    },
+    "generated_at": "2026-05-26T13:44:44Z",
+    "native_host": {
+      "authorized": true,
+      "authorized_extension_ids": [
+        "npnpagopediecennpleihemoochikggb"
+      ],
+      "checked": [
+        {
+          "allowed_origins": [
+            "chrome-extension://__EXTENSION_ID__/"
+          ],
+          "authorized_extension_ids": [],
+          "exists": true,
+          "host_path": "__LAUNCHER_PATH__",
+          "name": "com.anticipy.agent",
+          "path": "native_host/com.anticipy.agent.json",
+          "uses_placeholder_origin": true
+        },
+        {
+          "allowed_origins": [
+            "chrome-extension://npnpagopediecennpleihemoochikggb/"
+          ],
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "exists": true,
+          "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+          "name": "com.anticipy.agent",
+          "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        },
+        {
+          "allowed_origins": [],
+          "authorized_extension_ids": [],
+          "exists": false,
+          "host_path": "",
+          "name": "",
+          "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+          "uses_placeholder_origin": false
+        }
+      ]
+    },
+    "pass": true,
+    "proof_request": {
+      "error": "",
+      "ok": false,
+      "status": 0
+    },
+    "proofs": {
+      "acquired_via": "real_chrome_applescript_visible_surface",
+      "dom_bytes": 0,
+      "dom_path": "",
+      "dom_sha256": "",
+      "javascript_from_apple_events_enabled": false,
+      "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+      "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+      "requested_url": "https://www.anticipy.ai/app",
+      "screenshot_bytes": 4183516,
+      "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+      "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+      "title": "Anticipy App",
+      "url": "https://www.anticipy.ai/app",
+      "visible_surface": true,
+      "visible_text_bytes": 731,
+      "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+      "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+    },
+    "public_extension": {
+      "download_path": "public/anticipy-extension.zip",
+      "entries": [
+        "anticipy-v6/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+        "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+        "anticipy-v6/README.txt",
+        "anticipy-v6/DAEMON-INSTALLER/",
+        "anticipy-v6/DAEMON-INSTALLER/install.command",
+        "anticipy-v6/DAEMON-INSTALLER/install.sh",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+        "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py",
+        "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/harness.py"
+      ],
+      "entry_count": 191,
+      "exists": true,
+      "manifest": {
+        "has_key": true,
+        "has_native_messaging": true,
+        "manifest_version": 3,
+        "name": "Anticipy Bridge v6",
+        "permissions": [
+          "tabs",
+          "tabGroups",
+          "scripting",
+          "storage",
+          "activeTab",
+          "nativeMessaging"
+        ],
+        "version": "6.0.0"
+      },
+      "sha256": "0879001551317757b6216c39930df89a91c2041eaa591cce680832c03e444cde"
+    },
+    "schema": "anticipy.real_surface_proof.v7",
+    "surface_path": "real_chrome_applescript_visible_surface",
+    "uses_chrome_real_clone": false,
+    "proof_json_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/manual_computer_use_decline_proof.json",
+    "driver_surface_proofs": [
+      {
+        "applescript_surface_probe": {
+          "acquired_via": "real_chrome_applescript_visible_surface",
+          "dom_bytes": 0,
+          "dom_path": "",
+          "dom_sha256": "",
+          "javascript_from_apple_events_enabled": false,
+          "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+          "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+          "requested_url": "https://www.anticipy.ai/app",
+          "screenshot_bytes": 4183516,
+          "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+          "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+          "title": "Anticipy App",
+          "url": "https://www.anticipy.ai/app",
+          "visible_surface": true,
+          "visible_text_bytes": 731,
+          "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+          "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+        },
+        "blocker": {
+          "chrome_profiles_checked": [
+            {
+              "exists": true,
+              "profiles": [
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [
+                    {
+                      "disable_reasons": {},
+                      "enabled": true,
+                      "has_native_messaging": false,
+                      "id": "npnpagopediecennpleihemoochikggb",
+                      "name": "",
+                      "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                      "permissions": [],
+                      "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                      "source": "Secure Preferences",
+                      "state": null
+                    }
+                  ],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+                },
+                {
+                  "banned_clone_path": false,
+                  "exists": true,
+                  "extension_candidates": [],
+                  "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+                }
+              ],
+              "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+            },
+            {
+              "exists": false,
+              "profiles": [],
+              "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+            },
+            {
+              "exists": false,
+              "profiles": [],
+              "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+            },
+            {
+              "exists": true,
+              "profiles": [],
+              "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+            }
+          ],
+          "extension_candidates": [
+            {
+              "disable_reasons": {},
+              "enabled": true,
+              "has_native_messaging": false,
+              "id": "npnpagopediecennpleihemoochikggb",
+              "name": "",
+              "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+              "permissions": [],
+              "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+              "source": "Secure Preferences",
+              "state": null
+            }
+          ],
+          "kind": "",
+          "native_host_manifest": {
+            "authorized": true,
+            "authorized_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ],
+            "checked": [
+              {
+                "allowed_origins": [
+                  "chrome-extension://__EXTENSION_ID__/"
+                ],
+                "authorized_extension_ids": [],
+                "exists": true,
+                "host_path": "__LAUNCHER_PATH__",
+                "name": "com.anticipy.agent",
+                "path": "native_host/com.anticipy.agent.json",
+                "uses_placeholder_origin": true
+              },
+              {
+                "allowed_origins": [
+                  "chrome-extension://npnpagopediecennpleihemoochikggb/"
+                ],
+                "authorized_extension_ids": [
+                  "npnpagopediecennpleihemoochikggb"
+                ],
+                "exists": true,
+                "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+                "name": "com.anticipy.agent",
+                "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              },
+              {
+                "allowed_origins": [],
+                "authorized_extension_ids": [],
+                "exists": false,
+                "host_path": "",
+                "name": "",
+                "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              },
+              {
+                "allowed_origins": [],
+                "authorized_extension_ids": [],
+                "exists": false,
+                "host_path": "",
+                "name": "",
+                "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              },
+              {
+                "allowed_origins": [],
+                "authorized_extension_ids": [],
+                "exists": false,
+                "host_path": "",
+                "name": "",
+                "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+                "uses_placeholder_origin": false
+              }
+            ]
+          },
+          "reason": ""
+        },
+        "chrome": {
+          "app": "Google Chrome",
+          "hidden_browser": false,
+          "platform": "macOS-26.3-arm64-arm-64bit",
+          "profile": {
+            "extension_candidates": [
+              {
+                "disable_reasons": {},
+                "enabled": true,
+                "has_native_messaging": false,
+                "id": "npnpagopediecennpleihemoochikggb",
+                "name": "",
+                "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                "permissions": [],
+                "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                "source": "Secure Preferences",
+                "state": null
+              }
+            ],
+            "kind": "real_user",
+            "profiles_checked": [
+              {
+                "exists": true,
+                "profiles": [
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [
+                      {
+                        "disable_reasons": {},
+                        "enabled": true,
+                        "has_native_messaging": false,
+                        "id": "npnpagopediecennpleihemoochikggb",
+                        "name": "",
+                        "path": "/private/tmp/anticipy-mp3-clarify/extension_v4",
+                        "permissions": [],
+                        "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+                        "source": "Secure Preferences",
+                        "state": null
+                      }
+                    ],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 1"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 10"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 13"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 3"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 6"
+                  },
+                  {
+                    "banned_clone_path": false,
+                    "exists": true,
+                    "extension_candidates": [],
+                    "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Profile 9"
+                  }
+                ],
+                "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome"
+              },
+              {
+                "exists": false,
+                "profiles": [],
+                "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Beta"
+              },
+              {
+                "exists": false,
+                "profiles": [],
+                "root": "/Users/omarebrahim/Library/Application Support/Google/Chrome Canary"
+              },
+              {
+                "exists": true,
+                "profiles": [],
+                "root": "/Users/omarebrahim/Library/Application Support/Chromium"
+              }
+            ],
+            "proof_extension_id": "",
+            "proof_profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+            "proof_profile_source": "inspected_real_chrome_profile",
+            "source_extension_ids": [
+              "npnpagopediecennpleihemoochikggb"
+            ]
+          }
+        },
+        "direct_browser_cdp": false,
+        "engine": {
+          "installed_process": {
+            "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+            "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+            "health": {
+              "listening": true,
+              "ok": true,
+              "onboarded": true,
+              "pid": 25156,
+              "port": 8731,
+              "profile_error": "",
+              "service": "anticipy-local-engine",
+              "version": "product-3"
+            },
+            "ok": true,
+            "pid": 25156,
+            "port": 8731
+          },
+          "url": "http://127.0.0.1:8731"
+        },
+        "generated_at": "2026-05-26T13:44:44Z",
+        "native_host": {
+          "authorized": true,
+          "authorized_extension_ids": [
+            "npnpagopediecennpleihemoochikggb"
+          ],
+          "checked": [
+            {
+              "allowed_origins": [
+                "chrome-extension://__EXTENSION_ID__/"
+              ],
+              "authorized_extension_ids": [],
+              "exists": true,
+              "host_path": "__LAUNCHER_PATH__",
+              "name": "com.anticipy.agent",
+              "path": "native_host/com.anticipy.agent.json",
+              "uses_placeholder_origin": true
+            },
+            {
+              "allowed_origins": [
+                "chrome-extension://npnpagopediecennpleihemoochikggb/"
+              ],
+              "authorized_extension_ids": [
+                "npnpagopediecennpleihemoochikggb"
+              ],
+              "exists": true,
+              "host_path": "/Users/omarebrahim/.anticipy/anticipy-agent",
+              "name": "com.anticipy.agent",
+              "path": "/Users/omarebrahim/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            },
+            {
+              "allowed_origins": [],
+              "authorized_extension_ids": [],
+              "exists": false,
+              "host_path": "",
+              "name": "",
+              "path": "/Users/omarebrahim/Library/Application Support/Chromium/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            },
+            {
+              "allowed_origins": [],
+              "authorized_extension_ids": [],
+              "exists": false,
+              "host_path": "",
+              "name": "",
+              "path": "/Library/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            },
+            {
+              "allowed_origins": [],
+              "authorized_extension_ids": [],
+              "exists": false,
+              "host_path": "",
+              "name": "",
+              "path": "/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json",
+              "uses_placeholder_origin": false
+            }
+          ]
+        },
+        "pass": true,
+        "proof_request": {
+          "error": "",
+          "ok": false,
+          "status": 0
+        },
+        "proofs": {
+          "acquired_via": "real_chrome_applescript_visible_surface",
+          "dom_bytes": 0,
+          "dom_path": "",
+          "dom_sha256": "",
+          "javascript_from_apple_events_enabled": false,
+          "page_metadata_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_page_metadata.json",
+          "page_metadata_sha256": "892b0d5f3c6a08ae98de85d9e70c993c5e90549a1145bc2fa1a71e6a8c4eb2ec",
+          "requested_url": "https://www.anticipy.ai/app",
+          "screenshot_bytes": 4183516,
+          "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+          "screenshot_sha256": "8cba10e1f840489c8689f4f9460964a6189e757224f2c9fc2dcb99542ade8d27",
+          "title": "Anticipy App",
+          "url": "https://www.anticipy.ai/app",
+          "visible_surface": true,
+          "visible_text_bytes": 731,
+          "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+          "visible_text_sha256": "2ca942704e2cd24fc3406a26e41b30434dce95801cb0a2f0edef9edc9e954bf3"
+        },
+        "public_extension": {
+          "download_path": "public/anticipy-extension.zip",
+          "entries": [
+            "anticipy-v6/",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.js",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.html",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon16.png",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon48.png",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/icons/icon128.png",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/manifest.json",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/popup.css",
+            "anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js",
+            "anticipy-v6/README.txt",
+            "anticipy-v6/DAEMON-INSTALLER/",
+            "anticipy-v6/DAEMON-INSTALLER/install.command",
+            "anticipy-v6/DAEMON-INSTALLER/install.sh",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/test_protocol.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/protocol.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/com.anticipy.agent.json",
+            "anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/desktop_app.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/auth.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/dispatcher.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/policy.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/slot_resolver.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/middle/skill_router.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/planner.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/trace.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/observ/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/ceiling.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/safetyx/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/write.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/__init__.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/memory_v2/draw.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/server.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/harness.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/durable.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/hedge.py",
+            "anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy/harness.py"
+          ],
+          "entry_count": 191,
+          "exists": true,
+          "manifest": {
+            "has_key": true,
+            "has_native_messaging": true,
+            "manifest_version": 3,
+            "name": "Anticipy Bridge v6",
+            "permissions": [
+              "tabs",
+              "tabGroups",
+              "scripting",
+              "storage",
+              "activeTab",
+              "nativeMessaging"
+            ],
+            "version": "6.0.0"
+          },
+          "sha256": "0879001551317757b6216c39930df89a91c2041eaa591cce680832c03e444cde"
+        },
+        "schema": "anticipy.real_surface_proof.v7",
+        "surface_path": "real_chrome_applescript_visible_surface",
+        "uses_chrome_real_clone": false,
+        "proof_json_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/manual_computer_use_decline_proof.json"
+      }
+    ]
+  },
+  "tabs": [],
+  "pages": [
+    {
+      "target_id": "chrome-extension-native-messaging",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app",
+      "title": "Anticipy real Chrome extension surface",
+      "surface": "anticipy",
+      "visible_text": "\nAnticipy\nListen\nHistory\nSettings\nLog out\nCannot safely act\n\nI can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.\n\nHeard: (no transcript). Reasoning decision: n/a.\n\nDismiss\nreal\nlocalhost engine\n\npending=mic-asr windows=3\n\nListen again\n",
+      "focused": true,
+      "inputs": [],
+      "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+      "dom_path": "",
+      "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt",
+      "dom_sha256": "",
+      "dom_bytes": 0,
+      "screenshot_bytes": 4183516,
+      "acquired_via": "real_chrome_applescript_visible_surface"
+    }
+  ],
+  "native_ax": {
+    "ok": false,
+    "summary": "Command '['osascript', '-e', '\\ntell application \"System Events\"\\n  set axSummary to \"\"\\n  repeat with p in (processes whose background only is false)\\n    try\\n      set appName to name of p\\n      set winCount to count of windows of p\\n      set windowNames to \"\"\\n      repeat with w in windows of p\\n        try\\n          set winName to name of w as text\\n          if winName is not \"\" then set windowNames to windowNames & \" title=\" & winName\\n        end try\\n      end repeat\\n      set axSummary to axSummary & appName & \" windows=\" & (winCount as text) & windowNames & linefeed\\n    end try\\n  end repeat\\n  return axSummary\\nend tell\\n']' timed out after 10 seconds"
+  },
+  "terminal": {
+    "ok": true,
+    "text": "\n"
+  },
+  "engine_logs": {},
+  "driver_result": {
+    "driver_exit_code": 0,
+    "driver_failed": false,
+    "failure_phase": "",
+    "generated_at": "2026-05-26T13:45:08Z",
+    "input_mode": "transcript_upload",
+    "manual_actions": [
+      "Computer Use set value on real Chrome transcript textarea",
+      "Computer Use clicked real Run transcript button",
+      "Captured visible Cannot safely act card from real Chrome page"
+    ],
+    "ok": true,
+    "post_transcript_boundary_source": "asr-transcript",
+    "runtime_model_cost_usd": 0.0,
+    "schema": "anticipy.v7.manual_computer_use_transcript_driver",
+    "source": "asr-transcript",
+    "source_mode": "transcript_upload",
+    "status_after_sanitized": {
+      "matching_recent": {
+        "competent_decline": true,
+        "d16_receipt": "no-action canvas edit decline",
+        "decline": true,
+        "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+        "intent": "canvas_edit",
+        "memory": {
+          "op": "ADD",
+          "reason": "New latent intent about a specific Canva task for Solace Studio's spring pop-up; no existing entry covers this exact instruction."
+        },
+        "outcome": "DECLINED",
+        "plan": {
+          "blocked_services": [
+            "Canva"
+          ],
+          "competent_decline": true,
+          "d16_receipt": "no-action canvas edit decline",
+          "intent": "canvas_edit",
+          "mode": "decline",
+          "prohibited_actions": [
+            "edit design",
+            "export",
+            "publish",
+            "share",
+            "email"
+          ],
+          "proposal": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+          "task": "",
+          "thing": "flyer",
+          "unchanged": [
+            "Canva flyer",
+            "source context",
+            "export/share/email state",
+            "surrounding design"
+          ],
+          "unchanged_state_boundary": "Canva flyer; source context; export/share/email state; no extra visible changes"
+        },
+        "proactive_due": {
+          "fired": [],
+          "fired_count": 0,
+          "now": 1779803027.5798059,
+          "ok": true
+        },
+        "profile_loaded": true,
+        "proposal": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+        "resolution_trace_sync": {
+          "ok": true,
+          "payload": {
+            "candidates": [],
+            "confidence": 0.0,
+            "confirm_card_surfaced": false,
+            "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+            "layer_used": 0,
+            "plan": {
+              "blocked_services": [
+                "Canva"
+              ],
+              "competent_decline": true,
+              "d16_receipt": "no-action canvas edit decline",
+              "intent": "canvas_edit",
+              "mode": "decline",
+              "prohibited_actions": [
+                "edit design",
+                "export",
+                "publish",
+                "share",
+                "email"
+              ],
+              "proposal": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+              "task": "",
+              "thing": "flyer",
+              "unchanged": [
+                "Canva flyer",
+                "source context",
+                "export/share/email state",
+                "surrounding design"
+              ],
+              "unchanged_state_boundary": "Canva flyer; source context; export/share/email state; no extra visible changes"
+            },
+            "reference": "",
+            "resolved_to": null,
+            "source": "asr-transcript",
+            "transcript": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything."
+          },
+          "response": {
+            "id": "a7166c51-6261-4a3a-9bef-7339d25fbbb6",
+            "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+            "ok": true
+          },
+          "status": 200
+        },
+        "rms": 0.0,
+        "source": "asr-transcript",
+        "transcript": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+        "ts": 1779803020.4962502,
+        "v7_artifacts": {
+          "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+          "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+          "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+        },
+        "v7_decision": {
+          "decision": {
+            "message": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+            "mode": "decline"
+          },
+          "device_engine": "user-device",
+          "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+          "input_mode": "text_transcript",
+          "outcome": "DECLINED",
+          "plan": {
+            "blocked_services": [
+              "Canva"
+            ],
+            "competent_decline": true,
+            "d16_receipt": "no-action canvas edit decline",
+            "intent": "canvas_edit",
+            "mode": "decline",
+            "prohibited_actions": [
+              "edit design",
+              "export",
+              "publish",
+              "share",
+              "email"
+            ],
+            "proposal": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+            "task": "",
+            "thing": "flyer",
+            "unchanged": [
+              "Canva flyer",
+              "source context",
+              "export/share/email state",
+              "surrounding design"
+            ],
+            "unchanged_state_boundary": "Canva flyer; source context; export/share/email state; no extra visible changes"
+          },
+          "public_build_commit": "",
+          "schema": "anticipy.decision.v7",
+          "source": "asr-transcript",
+          "surface_proof_required": true,
+          "ts": 1779803020.4962502
+        },
+        "v7_normalized_input": {
+          "capture": {
+            "asr_normalizations": [],
+            "asr_normalized": null,
+            "audio_device": null,
+            "bytes": null,
+            "content_type": null,
+            "filename": null,
+            "raw_asr_transcript": null
+          },
+          "device_engine": "user-device",
+          "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+          "input_mode": "text_transcript",
+          "public_build_commit": "",
+          "schema": "anticipy.normalized_input.v7",
+          "source": "asr-transcript",
+          "ts": 1779803020.4962502,
+          "window": {
+            "turns": [
+              {
+                "asr_confidence": null,
+                "end_ms": 0,
+                "speaker": "user",
+                "start_ms": 0,
+                "text": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything."
+              }
+            ]
+          }
+        },
+        "window": 1
+      },
+      "pending": {
+        "blocked_services": [
+          "Canva"
+        ],
+        "competent_decline": true,
+        "decline": true,
+        "intent": "canvas_edit",
+        "proposal": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything."
+      },
+      "recent_count": 4
+    },
+    "stranger_id": "8ee08723-ad73-4016-bf0e-fc48f742d78a",
+    "submitted_through_public_app_ui": true,
+    "transcript": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+    "transcript_boundary": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+    "transcript_boundary_chars": 260,
+    "transcript_boundary_sha256": "3811fc57c24eea01a27d53b9f238afe71e6b7e66c14bdac61e75b8b308cc576c",
+    "visible_surface_proof": {
+      "direct_browser_cdp": false,
+      "pass": true,
+      "screenshot_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_screenshot.png",
+      "surface_path": "real_chrome_applescript_visible_surface",
+      "url": "https://www.anticipy.ai/app",
+      "uses_chrome_real_clone": false,
+      "visible_text_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/manual_computer_use_decline_proof/real_chrome_visible_text.txt"
+    },
+    "visible_surface_proof_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/manual_computer_use_decline_proof.json",
+    "visible_ui_driver": "codex_computer_use_real_chrome_visible_page"
+  },
+  "v7_artifacts": {
+    "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+    "paths": {
+      "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+      "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+      "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+    },
+    "records": {
+      "decisions": [
+        {
+          "decision": {
+            "message": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+            "mode": "decline"
+          },
+          "device_engine": "user-device",
+          "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+          "input_mode": "text_transcript",
+          "outcome": "DECLINED",
+          "plan": {
+            "blocked_services": [
+              "Canva"
+            ],
+            "competent_decline": true,
+            "d16_receipt": "no-action canvas edit decline",
+            "intent": "canvas_edit",
+            "mode": "decline",
+            "prohibited_actions": [
+              "edit design",
+              "export",
+              "publish",
+              "share",
+              "email"
+            ],
+            "proposal": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+            "task": "",
+            "thing": "flyer",
+            "unchanged": [
+              "Canva flyer",
+              "source context",
+              "export/share/email state",
+              "surrounding design"
+            ],
+            "unchanged_state_boundary": "Canva flyer; source context; export/share/email state; no extra visible changes"
+          },
+          "public_build_commit": "",
+          "schema": "anticipy.decision.v7",
+          "source": "asr-transcript",
+          "surface_proof_required": true,
+          "ts": 1779803020.4962502
+        }
+      ],
+      "inference_events": [
+        {
+          "actionable_probability": 1.0,
+          "device_engine": "user-device",
+          "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+          "input_mode": "text_transcript",
+          "public_build_commit": "",
+          "risk": {
+            "reason": "no-action canvas edit decline",
+            "tier": 3
+          },
+          "schema": "anticipy.inference_event.v7",
+          "source": "asr-transcript",
+          "ts": 1779803020.4962502,
+          "want": {
+            "description": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+            "evidence_spans": [
+              "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything."
+            ],
+            "slots": {
+              "blocked_services": [
+                "Canva"
+              ],
+              "competent_decline": true,
+              "d16_receipt": "no-action canvas edit decline",
+              "intent": "canvas_edit",
+              "mode": "decline",
+              "prohibited_actions": [
+                "edit design",
+                "export",
+                "publish",
+                "share",
+                "email"
+              ],
+              "proposal": "I can't safely edit that visible Canva flyer yet. I cannot prove the design is editable, the requested text changes are applied, or the rest of the design is unchanged on your real surface. I will not export, not publish, not share, and not email anything. Requested change to preserve: In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+              "task": "",
+              "thing": "flyer",
+              "unchanged": [
+                "Canva flyer",
+                "source context",
+                "export/share/email state",
+                "surrounding design"
+              ],
+              "unchanged_state_boundary": "Canva flyer; source context; export/share/email state; no extra visible changes"
+            },
+            "type": "canvas_edit"
+          }
+        }
+      ],
+      "normalized_inputs": [
+        {
+          "capture": {
+            "asr_normalizations": [],
+            "asr_normalized": null,
+            "audio_device": null,
+            "bytes": null,
+            "content_type": null,
+            "filename": null,
+            "raw_asr_transcript": null
+          },
+          "device_engine": "user-device",
+          "ingest_id": "asr-transcript-5090c5c21ce24e0191337d98d55221a4",
+          "input_mode": "text_transcript",
+          "public_build_commit": "",
+          "schema": "anticipy.normalized_input.v7",
+          "source": "asr-transcript",
+          "ts": 1779803020.4962502,
+          "window": {
+            "turns": [
+              {
+                "asr_confidence": null,
+                "end_ms": 0,
+                "speaker": "user",
+                "start_ms": 0,
+                "text": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "present": true
+  },
+  "transcript_quality": {
+    "evidence": {
+      "input_mode": "transcript_upload",
+      "origin": "driver_result.json",
+      "path": "transcript_boundary",
+      "source": "asr-transcript",
+      "source_mode": "transcript_upload"
+    },
+    "generated_at": "2026-05-26T14:01:19Z",
+    "hypothesis": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+    "input_fidelity": [
+      "uploaded_text_transcript"
+    ],
+    "reference": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+    "schema": "anticipy.v6.transcript_quality",
+    "source": "asr-transcript",
+    "stranger_id": "8ee08723-ad73-4016-bf0e-fc48f742d78a",
+    "transcript_boundary_chars": 260,
+    "transcript_boundary_sha256": "3811fc57c24eea01a27d53b9f238afe71e6b7e66c14bdac61e75b8b308cc576c",
+    "wer": 0.0
+  },
+  "cost_breakdown": {
+    "calls": [],
+    "ceiling_per_task_usd": 0.002,
+    "generated_at": "2026-05-26T14:01:19Z",
+    "schema": "anticipy.v6.cost_breakdown",
+    "source": "runtime-ledger-no-llm-calls",
+    "stranger_id": "8ee08723-ad73-4016-bf0e-fc48f742d78a",
+    "total_usd": 0.0,
+    "totals": [],
+    "transcript_boundary_sha256": "3811fc57c24eea01a27d53b9f238afe71e6b7e66c14bdac61e75b8b308cc576c",
+    "within_ceiling": true
+  },
+  "script": {
+    "path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/script.json",
+    "loaded": true,
+    "surface_scope": [
+      "anticipy",
+      "canvas_design"
+    ]
+  },
+  "surface_receipts_present": true,
+  "baseline": {
+    "path": "",
+    "loaded": false,
+    "created_at": null
+  },
+  "diff": {
+    "changed_surfaces": [],
+    "all_changed_surfaces": [],
+    "unrelated_changed_surfaces": [],
+    "script_surface_scope": [
+      "anticipy",
+      "canvas_design"
+    ],
+    "scoped_to_script": true,
+    "broken_script_surfaces": [],
+    "missing_script_surfaces": [
+      "canvas_design"
+    ],
+    "added_pages": [],
+    "removed_pages": [],
+    "changed_pages": [],
+    "native_ax_changed": false,
+    "terminal_changed": false
+  }
+}

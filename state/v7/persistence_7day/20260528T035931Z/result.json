@@ -1,0 +1,962 @@
+{
+  "schema": "anticipy.v7.persistence_sim.7day.v1",
+  "account_id": "persistence_sim_2026_05_28_b",
+  "engine": "http://127.0.0.1:8731",
+  "engine_health": {
+    "ok": true,
+    "service": "anticipy-local-engine",
+    "version": "product-3",
+    "pid": 37580,
+    "port": 8731,
+    "onboarded": false,
+    "listening": false,
+    "profile_error": ""
+  },
+  "started_at": "2026-05-28T03:59:31.640378Z",
+  "finished_at": "2026-05-28T04:09:10.359784Z",
+  "duration_s": 578.72,
+  "dossier_path": "/Users/omarebrahim/.anticipy/v7/dossiers/persistence_sim_2026_05_28_b/dossier.json",
+  "days": [
+    {
+      "day": 1,
+      "transcripts": [
+        {
+          "id": "D1_T1",
+          "text": "Solange is leading the new client onboarding at the studio.",
+          "new_entities": [
+            {
+              "name": "Solange",
+              "role": "onboarding lead",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-9afdd1c7cc274cf0913e3b32c57cc8a2",
+          "elapsed_ms": 11341,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D1_T2",
+          "text": "Add a calendar block tomorrow at 10am for the studio standup.",
+          "new_entities": [],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-18d9d4f4380c4251bf19f8b848c43de6",
+          "elapsed_ms": 20580,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D1_T3",
+          "text": "Konstantin owes me a draft of the Q3 roadmap by Friday.",
+          "new_entities": [
+            {
+              "name": "Konstantin",
+              "role": "strategist",
+              "pronouns": "he/him"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-ca8b1e724e594864aa90eb4604b02b89",
+          "elapsed_ms": 11036,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D1_T4",
+          "text": "Email Yumi about the supplier change on the Maple project.",
+          "new_entities": [
+            {
+              "name": "Yumi",
+              "role": "procurement",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-82b694e2c1cc456e86a864932e5de87b",
+          "elapsed_ms": 20527,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D1_T5",
+          "text": "Cyprien is the new freelance illustrator I want to bring in.",
+          "new_entities": [
+            {
+              "name": "Cyprien",
+              "role": "illustrator",
+              "pronouns": "he/him"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-dcc28c90be2c424292308ed17043d72b",
+          "elapsed_ms": 8914,
+          "ref_resolved": null,
+          "extract": {}
+        }
+      ],
+      "people_count_before": 0,
+      "people_count_after": 4,
+      "new_people_added": 4,
+      "people_names_after": [
+        "Solange",
+        "Konstantin",
+        "Yumi",
+        "Cyprien"
+      ],
+      "reference_attempts": 0,
+      "references_resolved": 0,
+      "reference_resolution_pct": null
+    },
+    {
+      "day": 2,
+      "transcripts": [
+        {
+          "id": "D2_T1",
+          "text": "Follow up with Solange on the onboarding handoff this afternoon.",
+          "new_entities": [],
+          "reference_entity": "Solange",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "DECLINED",
+          "memory_op": null,
+          "ingest_id": "asr-transcript-timeout-3c0f4b27cefd",
+          "elapsed_ms": 30008,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Follow up with Solange regarding the onboarding handoff this afternoon.",
+            "target_person_refs": [
+              "Solange"
+            ],
+            "confidence": 0.9,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D2_T2",
+          "text": "Tatiana is joining as a part time designer next month.",
+          "new_entities": [
+            {
+              "name": "Tatiana",
+              "role": "designer",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-09449e9085bd48549599a454217f5144",
+          "elapsed_ms": 4200,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D2_T3",
+          "text": "Ask Konstantin to share the roadmap doc with me by end of day.",
+          "new_entities": [],
+          "reference_entity": "Konstantin",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "NOOP",
+          "ingest_id": "asr-transcript-bd27d4bdff964b7895c44cc8f8082d59",
+          "elapsed_ms": 17457,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Ask Konstantin to share the roadmap document with the user by the end of the day.",
+            "target_person_refs": [
+              "Konstantin"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D2_T4",
+          "text": "Book a thirty minute call with Cyprien next Tuesday afternoon.",
+          "new_entities": [],
+          "reference_entity": "Cyprien",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "DEFERRED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-4d8fe113b46343fb8f5ca136213c4a02",
+          "elapsed_ms": 27741,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Book a 30-minute call with Cyprien next Tuesday afternoon.",
+            "target_person_refs": [
+              "Cyprien"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D2_T5",
+          "text": "Rashid is the new account manager we are interviewing tomorrow.",
+          "new_entities": [
+            {
+              "name": "Rashid",
+              "role": "account manager",
+              "pronouns": "he/him"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-5f704c4d0e68498da60157eff4aeeb6f",
+          "elapsed_ms": 5288,
+          "ref_resolved": null,
+          "extract": {}
+        }
+      ],
+      "people_count_before": 4,
+      "people_count_after": 6,
+      "new_people_added": 2,
+      "people_names_after": [
+        "Solange",
+        "Konstantin",
+        "Yumi",
+        "Cyprien",
+        "Tatiana",
+        "Rashid"
+      ],
+      "reference_attempts": 3,
+      "references_resolved": 3,
+      "reference_resolution_pct": 100.0
+    },
+    {
+      "day": 3,
+      "transcripts": [
+        {
+          "id": "D3_T1",
+          "text": "Send Tatiana the brand guidelines and her onboarding checklist.",
+          "new_entities": [],
+          "reference_entity": "Tatiana",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "ACTED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-702513e6998447029d19f252a1978c59",
+          "elapsed_ms": 15894,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Send Tatiana the brand guidelines and her onboarding checklist.",
+            "target_person_refs": [
+              "Tatiana"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D3_T2",
+          "text": "Imre is the contractor for the new office buildout starting next week.",
+          "new_entities": [
+            {
+              "name": "Imre",
+              "role": "contractor",
+              "pronouns": "he/him"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-78e2fba70ee5412995b988b8112d0003",
+          "elapsed_ms": 5146,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D3_T3",
+          "text": "Rashid wants to know our take home offer range before the second round.",
+          "new_entities": [],
+          "reference_entity": "Rashid",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-80274f3a80264fe6b66bbd6838d45549",
+          "elapsed_ms": 17056,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "ignore",
+            "summary": "Rashid wants to know our take home offer range before the second round.",
+            "target_person_refs": [
+              "Rashid"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D3_T4",
+          "text": "Anouk is the journalist covering the launch piece for the magazine.",
+          "new_entities": [
+            {
+              "name": "Anouk",
+              "role": "journalist",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-e0dfe2eeca8749ec919bd431f8fd77aa",
+          "elapsed_ms": 4448,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D3_T5",
+          "text": "Confirm with Tatiana that she got the calendar invite for next Monday.",
+          "new_entities": [],
+          "reference_entity": "Tatiana",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "NOOP",
+          "ingest_id": "asr-transcript-fd19ac618af849eaab489080e6b322df",
+          "elapsed_ms": 18356,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Confirm with Tatiana about the calendar invite for next Monday.",
+            "target_person_refs": [
+              "Tatiana"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        }
+      ],
+      "people_count_before": 6,
+      "people_count_after": 8,
+      "new_people_added": 2,
+      "people_names_after": [
+        "Solange",
+        "Konstantin",
+        "Yumi",
+        "Cyprien",
+        "Tatiana",
+        "Rashid",
+        "Imre",
+        "Anouk"
+      ],
+      "reference_attempts": 3,
+      "references_resolved": 3,
+      "reference_resolution_pct": 100.0
+    },
+    {
+      "day": 4,
+      "transcripts": [
+        {
+          "id": "D4_T1",
+          "text": "Email Imre the floor plan and ask when his crew can start.",
+          "new_entities": [],
+          "reference_entity": "Imre",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "ACTED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-3def856edea34b32b79efee8a4b46003",
+          "elapsed_ms": 16835,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Email Imre the floor plan and ask when his crew can start.",
+            "target_person_refs": [
+              "Imre"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D4_T2",
+          "text": "Penelope from the gallery wants to schedule a walkthrough.",
+          "new_entities": [
+            {
+              "name": "Penelope",
+              "role": "gallery curator",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-c92b7e76d9da49f484719d3fda1e6067",
+          "elapsed_ms": 18253,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D4_T3",
+          "text": "Schedule a follow up interview with Anouk about the launch piece.",
+          "new_entities": [],
+          "reference_entity": "Anouk",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "ACTED",
+          "memory_op": "NOOP",
+          "ingest_id": "asr-transcript-0d423800c7434b42abc029e238077643",
+          "elapsed_ms": 29612,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Schedule a follow up interview with Anouk about the launch piece.",
+            "target_person_refs": [
+              "Anouk"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D4_T4",
+          "text": "Imre needs final sign off on the floor plan before Wednesday.",
+          "new_entities": [],
+          "reference_entity": "Imre",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "DECLINED",
+          "memory_op": null,
+          "ingest_id": "asr-transcript-timeout-02f371a56c1f",
+          "elapsed_ms": 30007,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "ignore",
+            "summary": "Imre needs final sign off on the floor plan before Wednesday.",
+            "target_person_refs": [
+              "Imre"
+            ],
+            "confidence": 0.9,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D4_T5",
+          "text": "Mikael is the photographer we want for the studio shoot in June.",
+          "new_entities": [
+            {
+              "name": "Mikael",
+              "role": "photographer",
+              "pronouns": "he/him"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-5d3b2015c5db4e0390cefd304ccadac0",
+          "elapsed_ms": 5269,
+          "ref_resolved": null,
+          "extract": {}
+        }
+      ],
+      "people_count_before": 8,
+      "people_count_after": 10,
+      "new_people_added": 2,
+      "people_names_after": [
+        "Solange",
+        "Konstantin",
+        "Yumi",
+        "Cyprien",
+        "Tatiana",
+        "Rashid",
+        "Imre",
+        "Anouk",
+        "Penelope",
+        "Mikael"
+      ],
+      "reference_attempts": 3,
+      "references_resolved": 3,
+      "reference_resolution_pct": 100.0
+    },
+    {
+      "day": 5,
+      "transcripts": [
+        {
+          "id": "D5_T1",
+          "text": "Confirm the walkthrough date with Penelope at the gallery for Thursday.",
+          "new_entities": [],
+          "reference_entity": "Penelope",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-4b8425456c284382970398820e719b57",
+          "elapsed_ms": 17165,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Confirm the walkthrough date with Penelope at the gallery for Thursday.",
+            "target_person_refs": [
+              "Penelope"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D5_T2",
+          "text": "Send Mikael the shot list and lighting notes for the June shoot.",
+          "new_entities": [],
+          "reference_entity": "Mikael",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "ACTED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-6f20591e02ed4cc8bf88c50b2151d699",
+          "elapsed_ms": 18938,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "The user wants to send Mikael the shot list and lighting notes for the June shoot.",
+            "target_person_refs": [
+              "Mikael"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D5_T3",
+          "text": "Roksana is the new operations analyst starting in three weeks.",
+          "new_entities": [
+            {
+              "name": "Roksana",
+              "role": "operations analyst",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-c5a83bf0a5464a14b2abd3976898feb6",
+          "elapsed_ms": 13423,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D5_T4",
+          "text": "Ask Mikael which Tuesday in June works best for the studio shoot.",
+          "new_entities": [],
+          "reference_entity": "Mikael",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "NOOP",
+          "ingest_id": "asr-transcript-5eec120fdf9c40b492d50c53df3bb423",
+          "elapsed_ms": 18145,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Ask Mikael about his availability for a studio shoot in June.",
+            "target_person_refs": [
+              "Mikael"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D5_T5",
+          "text": "Soren wants to set up a call about a possible partnership.",
+          "new_entities": [
+            {
+              "name": "Soren",
+              "role": "partnership prospect",
+              "pronouns": "he/him"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-4ac15dc9f9a1430491294b8928ee1b4e",
+          "elapsed_ms": 14677,
+          "ref_resolved": null,
+          "extract": {}
+        }
+      ],
+      "people_count_before": 10,
+      "people_count_after": 12,
+      "new_people_added": 2,
+      "people_names_after": [
+        "Solange",
+        "Konstantin",
+        "Yumi",
+        "Cyprien",
+        "Tatiana",
+        "Rashid",
+        "Imre",
+        "Anouk",
+        "Penelope",
+        "Mikael",
+        "Roksana",
+        "Soren"
+      ],
+      "reference_attempts": 3,
+      "references_resolved": 3,
+      "reference_resolution_pct": 100.0
+    },
+    {
+      "day": 6,
+      "transcripts": [
+        {
+          "id": "D6_T1",
+          "text": "Roksana needs her work laptop ordered before her start date.",
+          "new_entities": [],
+          "reference_entity": "Roksana",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "NOOP",
+          "ingest_id": "asr-transcript-892844e09479405bba3c65965aac13c5",
+          "elapsed_ms": 20924,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Order a work laptop for Roksana.",
+            "target_person_refs": [
+              "Roksana"
+            ],
+            "confidence": 0.9,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D6_T2",
+          "text": "Caspian is consulting on the new pricing model for Q4.",
+          "new_entities": [
+            {
+              "name": "Caspian",
+              "role": "pricing consultant",
+              "pronouns": "he/him"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-18cda8f90a7144edb57cb021a1110d27",
+          "elapsed_ms": 6712,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D6_T3",
+          "text": "Set up a fifteen minute intro call with Soren on Friday morning.",
+          "new_entities": [],
+          "reference_entity": "Soren",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-049c4c8be2a748f5b8ded9522f5d0c6f",
+          "elapsed_ms": 15874,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Schedule a 15-minute intro call with Soren for Friday morning.",
+            "target_person_refs": [
+              "Soren"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D6_T4",
+          "text": "Annika is the legal counsel reviewing the partnership terms.",
+          "new_entities": [
+            {
+              "name": "Annika",
+              "role": "legal counsel",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-cc634f2f02054e828351b9818cf3a553",
+          "elapsed_ms": 6860,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D6_T5",
+          "text": "Email Roksana the welcome packet and the first day agenda.",
+          "new_entities": [],
+          "reference_entity": "Roksana",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-ce32b74b5aef4102a7b4b89150369f70",
+          "elapsed_ms": 27361,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Email Roksana the welcome packet and the first day agenda.",
+            "target_person_refs": [
+              "Roksana"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        }
+      ],
+      "people_count_before": 12,
+      "people_count_after": 14,
+      "new_people_added": 2,
+      "people_names_after": [
+        "Solange",
+        "Konstantin",
+        "Yumi",
+        "Cyprien",
+        "Tatiana",
+        "Rashid",
+        "Imre",
+        "Anouk",
+        "Penelope",
+        "Mikael",
+        "Roksana",
+        "Soren",
+        "Caspian",
+        "Annika"
+      ],
+      "reference_attempts": 3,
+      "references_resolved": 3,
+      "reference_resolution_pct": 100.0
+    },
+    {
+      "day": 7,
+      "transcripts": [
+        {
+          "id": "D7_T1",
+          "text": "Schedule a deep dive with Caspian on the pricing tier decisions.",
+          "new_entities": [],
+          "reference_entity": "Caspian",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "ACTED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-005d07a25b4642b2a1cfe8e96c68fb64",
+          "elapsed_ms": 17465,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Schedule a meeting with Caspian to discuss pricing tier decisions.",
+            "target_person_refs": [
+              "Caspian"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D7_T2",
+          "text": "Send Annika the latest draft of the partnership memo for review.",
+          "new_entities": [],
+          "reference_entity": "Annika",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "ACTED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-cab07b1b59a54e089e74ea7c30fc23df",
+          "elapsed_ms": 19353,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Send Annika the latest draft of the partnership memo for review.",
+            "target_person_refs": [
+              "Annika"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D7_T3",
+          "text": "Hyacinth is the new junior designer joining the team in July.",
+          "new_entities": [
+            {
+              "name": "Hyacinth",
+              "role": "junior designer",
+              "pronouns": "she/her"
+            }
+          ],
+          "reference_entity": null,
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "LIFE_LOG",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-9e8b01e49d534bce9b1b9ef7369f0232",
+          "elapsed_ms": 4891,
+          "ref_resolved": null,
+          "extract": {}
+        },
+        {
+          "id": "D7_T4",
+          "text": "Ask Caspian for the comparison sheet on competitor pricing models.",
+          "new_entities": [],
+          "reference_entity": "Caspian",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-3abd7a87b0be4dfca8a93f78afb34e4a",
+          "elapsed_ms": 15378,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "act",
+            "summary": "Ask Caspian for the comparison sheet on competitor pricing models.",
+            "target_person_refs": [
+              "Caspian"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        },
+        {
+          "id": "D7_T5",
+          "text": "Annika wants to know when the call with Soren is scheduled.",
+          "new_entities": [],
+          "reference_entity": "Annika",
+          "inject_ok": true,
+          "inject_status": 200,
+          "inject_outcome": "CONFIRMED",
+          "memory_op": "ADD",
+          "ingest_id": "asr-transcript-6e7fcf52f8a1476f80ed49b0b2e88fe5",
+          "elapsed_ms": 17923,
+          "ref_resolved": true,
+          "extract": {
+            "intent_type": "ask",
+            "summary": "Annika wants to know when the call with Soren is scheduled.",
+            "target_person_refs": [
+              "Annika",
+              "Soren"
+            ],
+            "confidence": 1.0,
+            "model": "google/gemini-2.5-flash",
+            "extract_ok": true,
+            "extract_status": 200
+          }
+        }
+      ],
+      "people_count_before": 14,
+      "people_count_after": 15,
+      "new_people_added": 1,
+      "people_names_after": [
+        "Solange",
+        "Konstantin",
+        "Yumi",
+        "Cyprien",
+        "Tatiana",
+        "Rashid",
+        "Imre",
+        "Anouk",
+        "Penelope",
+        "Mikael",
+        "Roksana",
+        "Soren",
+        "Caspian",
+        "Annika",
+        "Hyacinth"
+      ],
+      "reference_attempts": 4,
+      "references_resolved": 4,
+      "reference_resolution_pct": 100.0
+    }
+  ],
+  "final_dossier_people_count": 15,
+  "summary": {
+    "days_completed": 7,
+    "total_transcripts": 35,
+    "total_reference_attempts": 19,
+    "total_references_resolved": 19,
+    "overall_reference_resolution_pct": 100.0,
+    "dossier_monotonic_growth": true
+  },
+  "pass": true
+}

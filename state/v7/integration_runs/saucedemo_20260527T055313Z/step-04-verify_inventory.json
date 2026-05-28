@@ -1,0 +1,7 @@
+{
+  "name": "verify_inventory",
+  "ok": true,
+  "detail": "title=Swag Labs url=https://www.saucedemo.com/inventory.html",
+  "screenshot": "",
+  "receipt": "URL+title check via CDP"
+}

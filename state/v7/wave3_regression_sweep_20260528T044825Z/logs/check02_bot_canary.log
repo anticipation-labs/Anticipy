@@ -1,0 +1,14 @@
+
+=== sannysoft -> https://bot.sannysoft.com ===
+waiting 12s for detection scripts...
+  verdict: REAL_HUMAN_BROWSER (passed=4 failed=0) text_chars=15338
+
+=== areyouheadless -> https://arh.antoinevastel.com/bots/areyouheadless ===
+curl: (28) Operation timed out after 30006 milliseconds with 0 bytes received
+
+=== creepjs -> https://abrahamjuliot.github.io/creepjs ===
+waiting 12s for detection scripts...
+  verdict: REAL_HUMAN_BROWSER (headless=0% stealth=0%) text_chars=4722
+
+Wrote state/v7/bot_detection_20260528T044957Z/summary.md
+Headline: REAL HUMAN BROWSER (real=2 bot=0 inconclusive=1)

@@ -1,0 +1,7 @@
+{
+  "name": "type_query_form",
+  "ok": true,
+  "detail": "typed into .query-form input#inputEmail value={\"value\": \"cypress-demo@example.com\", \"type\": \"string\", \"exception\": null}",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-06-type_query_form.png",
+  "receipt": "{\"value\": \"cypress-demo@example.com\", \"type\": \"string\", \"exception\": null}"
+}

@@ -1,0 +1,101 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "7f88ea82-f280-42b6-9035-d52f1509aa3e",
+  "created_at": "2025-04-14T12:00:00Z",
+  "title": "Notion Research Summary via Audio Upload",
+  "category": "notion_research_audio",
+  "verb_category": "web_research_summarize_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Notion CRM pipeline management",
+  "breadth_reason": "This script extends breadth by testing audio upload as primary input for CRM actions, covering a new input modality for Notion surface verification.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on user's computer",
+    "surface_rule": "Notion in signed-in Chrome profile",
+    "proof_rule": "Uploaded audio ASR transcript must match spoken reference text and be verifiable against the public build"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures the spoken command is captured accurately and provides a fresh, non-replayable proof path tied to the user's device."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Notion",
+      "kind": "web_app",
+      "surface": "Notion web app in signed-in Chrome profile",
+      "proof_needed": "Visible Notion database with a 'Research' view"
+    },
+    {
+      "name": "Chrome Profile",
+      "kind": "browser_profile",
+      "surface": "Signed-in Chrome profile with Notion session",
+      "proof_needed": "Chrome tab showing Notion workspace"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver"
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver"
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please create a new record in my Notion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "Per-run audio artifact: the stranger must say the spoken reference text aloud and upload the resulting mp3 via the /api/listen/upload endpoint. The audio file must be fresh each run and not reused.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine"
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: create record in Notion Research database",
+        "ask: request user confirmation before writing",
+        "decline: refuse if Notion surface is not visible or signed-in workspace cannot be proven"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true
+    }
+  ],
+  "success_criteria": [
+    "The engine successfully transcribes the uploaded audio and extracts the intent to create a Notion record.",
+    "The engine verifies that the user's signed-in Notion surface is visible in Chrome and that a 'Research' database exists.",
+    "The engine either creates a new record with the summarized content and weekly tag, or explicitly declines if the surface is not provable.",
+    "The decision (act/ask/decline) is backed by a fresh proof that references the uploaded audio artifact and the visible browser state."
+  ],
+  "failure_triggers": [
+    "The engine attempts to act without verifying the Notion surface, leading to a write to an unproven workspace.",
+    "The engine uses a stale or cloned Chrome profile instead of the user's actual signed-in session.",
+    "The engine accepts a transcript paste or live mic input as primary instead of the required uploaded audio.",
+    "The engine declines incorrectly when the Notion surface is actually visible and signed-in.",
+    "The engine fails to produce a proof that ties the action back to the uploaded audio and the public build."
+  ]
+}

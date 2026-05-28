@@ -1,0 +1,7 @@
+{
+  "name": "open_search",
+  "ok": true,
+  "detail": "search input present=False after click '{\"value\": \"NOTFOUND\", \"type\": \"string\", \"exception\": null}'",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143114Z/step-03-open_search.png",
+  "receipt": "{\"value\": \"NOTFOUND\", \"type\": \"string\", \"exception\": null}"
+}

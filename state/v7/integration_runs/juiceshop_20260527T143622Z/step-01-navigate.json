@@ -1,0 +1,7 @@
+{
+  "name": "navigate",
+  "ok": true,
+  "detail": "url=https://juice-shop.herokuapp.com/ via BRIDGE /surface-command navigate",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143622Z/step-01-navigate.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://juice-shop.herokuapp.com/\", \"url\": \"https://juice-shop.herokuapp.com/\", \"title\": \"\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

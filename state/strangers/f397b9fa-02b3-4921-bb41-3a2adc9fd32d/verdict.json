@@ -1,0 +1,126 @@
+{
+  "pass": false,
+  "reasoning": "The script asked Anticipy to create a Linear task from an uploaded MP3, or decline without writing anything if the visible Linear record or signed-in workspace could not be proven. The audio upload and ASR path are evidenced, and the trace claims a real installed engine and real Chrome surface. However, trace.diff.missing_script_surfaces contains \"linear\", and trace.diff.changed_surfaces contains only \"anticipy\" and \"native_ax\". There is no Linear screenshot, DOM capture, visible task record, visible Linear login/workspace proof, or changed third-party action surface. The D16 exception does not save the run because the outcome is ASKING, with decline=false and competent_decline=false, and the visible Anticipy receipt is not a service-specific decline card. The pending proof also points at an unrelated ExShield signup page, so logs and generated receipts cannot substitute for the missing user-visible Linear proof.",
+  "specific_failures": [
+    "trace.diff.missing_script_surfaces is non-empty: [\"linear\"]. Under the requested V7 rule, this is a failure unless D16 competent-decline is satisfied.",
+    "No Linear action proof exists: service_surface is {}, tabs is [], and the only visible proof path is the Anticipy proof, not a Linear task/workspace receipt.",
+    "D16 competent-decline is not satisfied: driver_result outcome is ASKING, plan.competent_decline is false, pending.competent_decline is false, and decline is false.",
+    "The changed Anticipy surface does not show a service-specific decline card; its visible text is only \"https://frontend-iota-gray-49.vercel.app\".",
+    "The pending dispatcher proof references an unrelated page, https://frontend-iota-gray-49.vercel.app/signup, titled \"ExShield - Workforce digital exposure platform\", not Linear or a visible Anticipy decline card.",
+    "The engine tried 20 active-tab reads after planner cascade failures and did not produce a competent ask to sign into or confirm the Linear workspace.",
+    "Top-level trace.v7_artifacts.present is false, so the trace does not expose inspectable V7 artifact records at the top level despite upload_response paths."
+  ],
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows https://www.anticipy.ai/app and an installed engine at /Applications/Anticipy.app/Contents/MacOS/anticipy-engine. This is enough for the entry/engine portion, but it does not prove the Linear outcome."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": false,
+      "reasoning": "The required Linear real-surface precheck is missing. trace.diff.missing_script_surfaces includes linear, service_surface is empty, and there is no Linear page receipt showing a signed-in board/backlog or login boundary."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The MP3 was delivered through /api/listen/upload via the public app UI, audio_delivered is true, and transcript_quality reports WER 0.026316 with the intended Linear task request preserved."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": false,
+      "reasoning": "After ASR, the engine did not verify that the Linear surface was accessible. The dispatcher history shows repeated active-tab reads and model errors, with proof summaries on Anticipy, Google search, and ExShield pages rather than Linear."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": false,
+      "reasoning": "A competent result here required creating the Linear task with visible proof, asking specifically for missing Linear workspace/sign-in confirmation, or issuing a competent decline. The trace instead ends in ASKING with a generic \"Help me succeed?\" pending card and no visible Linear or decline proof."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "This script only required uploaded audio as the primary input mode. The trace records uploaded_audio/mp3 and does not need secondary input-mode action for this moment."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": false,
+    "public_installed_user_device_engine": {
+      "pass": true,
+      "evidence": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine, health.ok=true, onboarded=true"
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface",
+      "hidden_browser": false
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": false,
+    "no_log_only_proof": false,
+    "d16_competent_decline": {
+      "satisfied": false,
+      "changed_anticipy_decline_card": false,
+      "service_specific_decline_log": false,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The logs name Linear as blocked, but the run does not produce a decline. The plan and pending state both set competent_decline=false and decline=false, and the visible Anticipy receipt is not a decline card naming Linear and the unchanged-state boundary."
+    }
+  },
+  "audit_evidence": {
+    "diff": {
+      "changed_surfaces": [
+        "anticipy",
+        "native_ax"
+      ],
+      "all_changed_surfaces": [
+        "anticipy",
+        "native_ax"
+      ],
+      "unrelated_changed_surfaces": [],
+      "script_surface_scope": [
+        "anticipy",
+        "linear",
+        "native_ax"
+      ],
+      "broken_script_surfaces": [],
+      "missing_script_surfaces": [
+        "linear"
+      ],
+      "added_pages": [
+        {
+          "surface": "anticipy",
+          "url": "https://www.anticipy.ai/app",
+          "title": "Anticipy real Chrome extension surface"
+        }
+      ],
+      "removed_pages": [
+        {
+          "surface": "anticipy",
+          "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-e3d1dfa73a68",
+          "title": "Anticipy real Chrome extension surface"
+        }
+      ],
+      "changed_pages": [],
+      "native_ax_changed": true,
+      "terminal_changed": false
+    },
+    "page_diff_summary": {
+      "baseline_visible_text": "status indicator plus https://frontend-iota-gray-49.vercel.app",
+      "final_visible_text": "https://frontend-iota-gray-49.vercel.app",
+      "linear_page_present": false
+    },
+    "native_ax_diff_summary": {
+      "changed": true,
+      "baseline_summary": "Google Chrome windows included ExShield - Workforce digital exposure platform - Part of group with an in-progress Claude (MCP) marker and Anticipy App.",
+      "final_summary": "Google Chrome windows included ExShield - Workforce digital exposure platform - Part of group with a completed Claude (MCP) marker and Anticipy App."
+    },
+    "terminal_diff_summary": {
+      "changed": false,
+      "baseline_text": "System Events got an error: Can't get window 1 of process \"Terminal\". Invalid index.",
+      "final_text": "System Events got an error: Can't get window 1 of process \"Terminal\". Invalid index."
+    }
+  },
+  "evaluator_generated_at": "2026-05-28T00:24:40Z"
+}

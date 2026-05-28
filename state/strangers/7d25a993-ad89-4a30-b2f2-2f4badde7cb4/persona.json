@@ -1,0 +1,25 @@
+{
+  "uuid": "7d25a993-ad89-4a30-b2f2-2f4badde7cb4",
+  "name": "Mina Torres",
+  "age": 31,
+  "occupation": "operations manager for a small retail brand",
+  "location": "Seattle, WA",
+  "tech_savviness": 6,
+  "patience": 5,
+  "skepticism": 7,
+  "primary_surfaces": [
+    "Amazon",
+    "Gmail",
+    "Google Calendar",
+    "Shopify admin"
+  ],
+  "hard_category_focus": "e-commerce",
+  "accounts": [
+    "Amazon",
+    "Gmail",
+    "Google Calendar"
+  ],
+  "current_life_context": "Mina is preparing for a pop-up booth and needs supplies, but she does not want software to buy anything without explicit permission.",
+  "verbal_style": "quick, practical, direct",
+  "communication_preferences": "prefers the assistant to prepare carts or ask before purchases"
+}

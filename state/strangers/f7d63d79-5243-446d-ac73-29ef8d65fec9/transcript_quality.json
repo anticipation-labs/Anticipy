@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T17:39:25Z",
+  "hypothesis": "Yeah. The kids were a handful this morning. Oh, before I forget. I really should set up Saturday brunch with Dana at the new place on Hawthorne. She wanted to catch up before her trip. Anyway, please add a follow-up note in HubSpot under the brunch outreach record so I don't lose track. If you cannot prove the visible HubSpot surface, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Yeah, the kids were a handful this morning. Oh, before I forget, I really should set up Saturday brunch with Dana at the new place on Hawthorne, she wanted to catch up before her trip. Anyway, please add a follow-up note in HubSpot under the Brunch outreach record so I don't lose track. If you cannot prove the visible HubSpot surface, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "f7d63d79-5243-446d-ac73-29ef8d65fec9",
+  "transcript_boundary_chars": 370,
+  "transcript_boundary_sha256": "54addef04ecb309e8bf8e41c6e08be81a64a6e13b0fb08db20961e2b49ee6e4f",
+  "wer": 0.0
+}

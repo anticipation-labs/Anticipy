@@ -1,0 +1,20 @@
+{
+  "name": "Omar Ebrahim",
+  "role_title": "founder and CEO",
+  "people": {
+    "lead investor": "Priya Nair",
+    "hardware and manufacturing advisor": "Dr. Sam Whitfield",
+    "go to market advisor": "Renu Castellanos",
+    "co-founder and CTO": "Marcus Lindqvist",
+    "contract recruiter": "Elena Park",
+    "the boss": "Omar Ebrahim",
+    "us": "Omar Ebrahim and Marcus Lindqvist"
+  },
+  "do_not_touch": [
+    "never contact our board or any investor without my explicit approval",
+    "never actually send anything, only ever leave drafts"
+  ],
+  "mandate": "draft emails and create calendar events for me when I think out loud",
+  "well_populated": true,
+  "note": "Real profile produced by the 7-question onboarding earlier this session (proven via /api/state at capture time); recorded here because the DoD4-mode server restart cleared in-memory _SESS."
+}

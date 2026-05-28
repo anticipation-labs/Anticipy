@@ -1,0 +1,1506 @@
+[
+  {
+    "category": "search_extract_news",
+    "summary_for_user": "What is the main headline on the BBC News homepage today?",
+    "action_type": "search_extract",
+    "parameters": {
+      "query": "main headline"
+    },
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "headline",
+        "main",
+        "story"
+      ],
+      "min_steps": 0,
+      "min_message_len": 30
+    },
+    "expected_capability": "navigate_extract",
+    "fail_modes": [
+      "difficulty identifying the main headline element",
+      "reporting irrelevant text",
+      "parsing error"
+    ]
+  },
+  {
+    "category": "search_extract_news",
+    "summary_for_user": "What is the main headline of the top story on the NPR.org homepage today?",
+    "action_type": "search_extract",
+    "parameters": {
+      "query": "main headline of top story",
+      "source": "NPR.org homepage"
+    },
+    "starting_url": "https://www.npr.org/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "headline",
+        "story",
+        "npr"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "fail_modes": [
+      "failed to identify the top story",
+      "extracted an incorrect element",
+      "website layout changes prevented extraction"
+    ]
+  },
+  {
+    "category": "search_extract_news",
+    "summary_for_user": "What is the main section or category of the top news story displayed on the BBC News homepage?",
+    "action_type": "search_extract",
+    "parameters": {
+      "query": "main section or category of the top news story"
+    },
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "news",
+        "section",
+        "category",
+        "headline",
+        "story"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "navigate_extract",
+    "fail_modes": [
+      "misinterprets 'main section'",
+      "fails to extract correct text",
+      "website layout changes"
+    ]
+  },
+  {
+    "category": "search_extract_news",
+    "summary_for_user": "Go to npr.org and tell me one of the main navigation section names visible on the homepage (e.g., Politics, Business, Health, etc.).",
+    "action_type": "search_extract",
+    "parameters": {
+      "query": "npr.org main navigation section name"
+    },
+    "starting_url": "https://www.npr.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "politics",
+        "business",
+        "health",
+        "science",
+        "culture",
+        "world",
+        "us news"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "fail_modes": [
+      "Fails to identify a section name",
+      "Extracts irrelevant text",
+      "Site loads slowly or fails to render"
+    ]
+  },
+  {
+    "category": "search_extract_news",
+    "summary_for_user": "What is the section or category of the lead story on the BBC News homepage?",
+    "action_type": "search_extract",
+    "parameters": {
+      "target_information": "the section or category of the lead story"
+    },
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "section",
+        "category",
+        "world",
+        "politics",
+        "business",
+        "technology",
+        "science",
+        "health",
+        "sport"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "fail_modes": [
+      "Fails to identify the lead story area",
+      "Extracts headline text instead of section name",
+      "Incorrectly identifies the section"
+    ]
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary_for_user": "Find the current population of Tokyo from both Wikipedia and World Population Review, and report both figures along with their respective sources.",
+    "action_type": "search_extract",
+    "parameters": {
+      "city": "Tokyo",
+      "data_point": "population",
+      "source1_name": "Wikipedia",
+      "source1_url": "https://en.wikipedia.org/wiki/Tokyo",
+      "source2_name": "World Population Review",
+      "source2_url": "https://worldpopulationreview.com/world-cities/tokyo-population"
+    },
+    "starting_url": "https://en.wikipedia.org/wiki/Tokyo",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "wikipedia",
+        "tokyo",
+        "13 million",
+        "14 million",
+        "13.9 million",
+        "14.1 million"
+      ],
+      "patterns_b": [
+        "world population review",
+        "37 million",
+        "38 million",
+        "37.2 million",
+        "38.5 million"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "multi_tab",
+    "fail_modes": [
+      "only extracts from one source",
+      "fails to navigate to the second URL",
+      "extracts incorrect population figures",
+      "does not mention both sources"
+    ]
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary_for_user": "Find the current population of Tokyo according to Wikipedia and World Population Review, and report both values.",
+    "action_type": "compare_extract",
+    "parameters": {
+      "city": "Tokyo",
+      "facts": [
+        "population"
+      ],
+      "sources": [
+        "Wikipedia",
+        "World Population Review"
+      ]
+    },
+    "starting_url": "https://en.wikipedia.org/wiki/Tokyo",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "wikipedia",
+        "tokyo",
+        "population",
+        "million"
+      ],
+      "patterns_b": [
+        "world population review",
+        "tokyo",
+        "population",
+        "million"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "multi_tab",
+    "fail_modes": [
+      "misinterprets population definition (city vs metro)",
+      "fails to open second tab",
+      "fails to extract from one site",
+      "reports only one source",
+      "extracts incorrect population figures"
+    ]
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary_for_user": "Find the estimated metropolitan population of Tokyo from Wikipedia and compare it with the figure from World Population Review. Report both findings.",
+    "action_type": "compare_facts",
+    "parameters": {
+      "entity": "Tokyo",
+      "fact_type": "metropolitan population",
+      "source_1": "Wikipedia",
+      "source_2": "World Population Review"
+    },
+    "starting_url": "https://www.google.com",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "wikipedia",
+        "tokyo",
+        "million",
+        "37",
+        "38",
+        "metro",
+        "metropolitan"
+      ],
+      "patterns_b": [
+        "world population review",
+        "tokyo",
+        "million",
+        "37",
+        "38",
+        "metro",
+        "metropolitan"
+      ],
+      "min_steps": 5,
+      "min_message_len": 60
+    },
+    "expected_capability": "multi_tab",
+    "fail_modes": [
+      "Fails to open second tab/site",
+      "Extracts city proper population instead of metropolitan",
+      "Fails to synthesize information from both sources",
+      "Incorrectly identifies or reports population figures"
+    ]
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary_for_user": "Find the current population of Berlin and the current population of Hamburg. Report both figures in your final answer.",
+    "action_type": "search_extract",
+    "parameters": {
+      "city1": "Berlin",
+      "city2": "Hamburg",
+      "info_to_extract": "population"
+    },
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "berlin",
+        "population",
+        "3.7 million",
+        "3,700,000"
+      ],
+      "patterns_b": [
+        "hamburg",
+        "population",
+        "1.9 million",
+        "1,900,000"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "multi_tab",
+    "fail_modes": [
+      "Fails to open a second tab/page for the second city",
+      "Extracts only one city's population",
+      "Reports incorrect population figures",
+      "Gets lost on Wikipedia navigation"
+    ]
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary_for_user": "Find the current CEO of Apple Inc. on Wikipedia and its latest stock price on Yahoo Finance. Report both pieces of information.",
+    "action_type": "search_extract",
+    "parameters": {
+      "company_name": "Apple Inc.",
+      "fact1_source": "Wikipedia",
+      "fact1_query": "CEO",
+      "fact2_source": "Yahoo Finance",
+      "fact2_query": "stock price"
+    },
+    "starting_url": "https://en.wikipedia.org/wiki/Apple_Inc.",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "tim cook",
+        "ceo",
+        "wikipedia"
+      ],
+      "patterns_b": [
+        "aapl",
+        "stock",
+        "price",
+        "yahoo finance"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_tab",
+    "fail_modes": [
+      "Failed to navigate to or extract from the second site (Yahoo Finance).",
+      "Incorrectly identified the CEO or stock information.",
+      "Difficulty parsing dynamic stock price data.",
+      "Failed to aggregate information from both sources."
+    ]
+  },
+  {
+    "category": "canvas_typing",
+    "summary_for_user": "Go to Excalidraw and type the phrase 'Anticipy is a powerful browser agent.' onto the canvas.",
+    "action_type": "canvas_type",
+    "parameters": {
+      "text_to_type": "Anticipy is a powerful browser agent."
+    },
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "anticipy",
+        "powerful browser agent",
+        "typed"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "canvas_type",
+    "fail_modes": [
+      "failed to locate canvas",
+      "typed incorrect phrase",
+      "did not confirm typing"
+    ]
+  },
+  {
+    "category": "canvas_typing",
+    "summary_for_user": "Go to Excalidraw.com and type 'Anticipy is an advanced browser agent.' into the main drawing canvas.",
+    "action_type": "type_text",
+    "parameters": {
+      "text_to_type": "Anticipy is an advanced browser agent."
+    },
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "typed",
+        "anticipy",
+        "browser agent"
+      ],
+      "min_steps": 1,
+      "min_message_len": 20
+    },
+    "expected_capability": "canvas_type",
+    "fail_modes": [
+      "canvas element not detected",
+      "typing misplacement",
+      "text not entered correctly or completely"
+    ]
+  },
+  {
+    "category": "canvas_typing",
+    "summary_for_user": "Navigate to Excalidraw and type the phrase 'This is a test of the Anticipy browser agent's canvas typing capabilities.' into the canvas.",
+    "action_type": "type_text",
+    "parameters": {
+      "text_to_type": "This is a test of the Anticipy browser agent's canvas typing capabilities."
+    },
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "typed",
+        "anticipy",
+        "capabilities"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "canvas_type",
+    "fail_modes": [
+      "unable to identify canvas text input",
+      "text not fully typed",
+      "agent reports success but did not type"
+    ]
+  },
+  {
+    "category": "canvas_typing",
+    "summary_for_user": "On the Excalidraw drawing canvas, type the phrase 'Anticipy is an innovative browser agent for web automation.'",
+    "action_type": "canvas_type",
+    "parameters": {
+      "text_to_type": "Anticipy is an innovative browser agent for web automation."
+    },
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "typed",
+        "anticipy",
+        "innovative",
+        "browser agent",
+        "automation"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "canvas_type",
+    "fail_modes": [
+      "Unable to locate a text input area on the canvas",
+      "Text typed incorrectly or partially",
+      "Agent gets stuck on initial canvas load",
+      "Agent fails to interact with the canvas"
+    ]
+  },
+  {
+    "category": "canvas_typing",
+    "summary_for_user": "Navigate to Excalidraw, select the text tool, and type the phrase 'Anticipy AI is revolutionizing browser automation!' onto the canvas.",
+    "action_type": "type_text",
+    "parameters": {
+      "text_to_type": "Anticipy AI is revolutionizing browser automation!"
+    },
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "anticipy ai is revolutionizing browser automation!",
+        "typed",
+        "text",
+        "successfully"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "canvas_type",
+    "fail_modes": [
+      "Unable to locate/activate text tool",
+      "Text not typed correctly or completely",
+      "Agent fails to report success"
+    ]
+  },
+  {
+    "category": "webgl_pointer",
+    "summary_for_user": "Using OpenStreetMap, find the Eiffel Tower in Paris and show me its location.",
+    "action_type": "search_click_extract",
+    "parameters": {
+      "location": "Eiffel Tower, Paris"
+    },
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "eiffel tower",
+        "paris",
+        "found",
+        "location"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "webgl_pointer",
+    "fail_modes": [
+      "map navigation/interaction failure",
+      "search functionality not recognized",
+      "unable to pinpoint correct landmark"
+    ]
+  },
+  {
+    "category": "webgl_pointer",
+    "summary_for_user": "Find the Eiffel Tower on OpenStreetMap and tell me its approximate location or coordinates.",
+    "action_type": "search_click_extract",
+    "parameters": {},
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "eiffel tower",
+        "paris",
+        "48.85",
+        "2.29"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "webgl_pointer",
+    "fail_modes": [
+      "Failed to interact with map search input",
+      "Incorrect location identified",
+      "Map rendering issues prevented interaction"
+    ]
+  },
+  {
+    "category": "webgl_pointer",
+    "summary_for_user": "Find the Eiffel Tower on OpenStreetMap and tell me its approximate location or coordinates.",
+    "action_type": "search_click_extract",
+    "parameters": {
+      "location": "Eiffel Tower, Paris"
+    },
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "eiffel",
+        "tower",
+        "paris",
+        "latitude",
+        "longitude"
+      ],
+      "min_steps": 0,
+      "min_message_len": 30
+    },
+    "expected_capability": "webgl_pointer",
+    "fail_modes": [
+      "map_navigation_failure",
+      "location_pin_unreachable",
+      "incorrect_info_extraction",
+      "webgl_rendering_issues"
+    ]
+  },
+  {
+    "category": "webgl_pointer",
+    "summary_for_user": "Find the Eiffel Tower on OpenStreetMap and show me its location.",
+    "action_type": "search_click_extract",
+    "parameters": {
+      "location": "Eiffel Tower"
+    },
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "eiffel",
+        "tower",
+        "paris"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "webgl_pointer",
+    "fail_modes": [
+      "map interaction failure",
+      "incorrect search result",
+      "failure to zoom/pan correctly"
+    ]
+  },
+  {
+    "category": "webgl_pointer",
+    "summary_for_user": "Find the Eiffel Tower on OpenStreetMap. Once located, tell me the city and country it is in.",
+    "action_type": "navigate_extract",
+    "parameters": {
+      "location": "Eiffel Tower",
+      "map_service": "OpenStreetMap"
+    },
+    "starting_url": "https://www.openstreetmap.org",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "eiffel tower",
+        "paris",
+        "france"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "webgl_pointer",
+    "fail_modes": [
+      "difficulty with map interaction/panning",
+      "failure to correctly identify location",
+      "issues with search functionality on map"
+    ]
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary_for_user": "Search for 'Anticipy Chrome Extension' on YouTube and confirm you've reached the search results page.",
+    "action_type": "search_extract",
+    "parameters": {
+      "query": "Anticipy Chrome Extension"
+    },
+    "starting_url": "https://www.youtube.com/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "search_query=Anticipy+Chrome+Extension"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "fail_modes": [
+      "Failed to locate or interact with the search bar inside shadow DOM",
+      "Search query not submitted correctly",
+      "Page navigation failure after search"
+    ]
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary_for_user": "Search for 'Anticipy AI' on YouTube and report the full URL of the search results page.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "Anticipy AI",
+      "extract_url": "true"
+    },
+    "starting_url": "https://www.youtube.com/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "youtube.com/results?search_query=anticipy+ai"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "fail_modes": [
+      "Failed to locate or interact with shadow DOM search bar",
+      "Failed to navigate to search results page",
+      "Stuck on consent dialog"
+    ]
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary_for_user": "Find the documentation for the 'Alert' component on the Ionic Framework website.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "alert"
+    },
+    "starting_url": "https://ionicframework.com/docs/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "api/alert",
+        "alert"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "fail_modes": [
+      "Failed to interact with shadow DOM search input",
+      "Failed to submit search query",
+      "Navigated to incorrect documentation page"
+    ]
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary_for_user": "Search YouTube for 'how to make sourdough bread' and navigate to the search results page.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "how to make sourdough bread"
+    },
+    "starting_url": "https://www.youtube.com/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "search_query=how+to+make+sourdough+bread",
+        "search_query=how%20to%20make%20sourdough%20bread"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "fail_modes": [
+      "Fails to locate search input within shadow DOM",
+      "Types query but does not submit search",
+      "Gets stuck on homepage recommendations"
+    ]
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary_for_user": "Find information about the 'Modal' component in the Ionic Framework documentation and briefly describe its purpose.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "Modal component",
+      "extract_summary_of_first_result": true
+    },
+    "starting_url": "https://ionicframework.com/docs/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "modal",
+        "dialog",
+        "component"
+      ],
+      "min_steps": 0,
+      "min_message_len": 50
+    },
+    "expected_capability": "shadow_dom",
+    "fail_modes": [
+      "Fails to find or interact with the search input due to shadow DOM",
+      "Fails to extract information from the search results overlay",
+      "Gets stuck in the search dialog without extracting a summary"
+    ]
+  },
+  {
+    "category": "multi_field_form",
+    "summary_for_user": "Fill out the website feedback form with your name as 'Anticipy User', email as 'test@example.com', select 'Excellent' for overall experience, and in 'What did you like best?' write 'The clear layout and easy navigation.' Do not submit the form.",
+    "action_type": "fill_form",
+    "parameters": {
+      "fill_data": {
+        "Your Name": "Anticipy User",
+        "Your Email": "test@example.com",
+        "Overall experience": "Excellent",
+        "What did you like best?": "The clear layout and easy navigation."
+      }
+    },
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLScXQ-Xw_hT5h9c_G2_g1J_Y5_Q1g_X0m_N6_oA4/viewform",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "filled",
+        "anticipy user",
+        "test@example.com",
+        "excellent",
+        "clear layout"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_field",
+    "fail_modes": [
+      "Incorrectly identifies form fields",
+      "Fails to select radio button option",
+      "Does not fill all specified fields",
+      "Attempts to submit the form"
+    ]
+  },
+  {
+    "category": "multi_field_form",
+    "summary_for_user": "Fill out the contact form on Jotform with the following details: First Name: John, Last Name: Doe, Email: john.doe@example.com, Phone Number: 555-123-4567, Message: Inquiry about product pricing. Do NOT submit the form.",
+    "action_type": "fill_form",
+    "parameters": {
+      "fields_to_fill": [
+        {
+          "field_name": "First Name",
+          "value": "John"
+        },
+        {
+          "field_name": "Last Name",
+          "value": "Doe"
+        },
+        {
+          "field_name": "E-mail",
+          "value": "john.doe@example.com"
+        },
+        {
+          "field_name": "Phone Number",
+          "value": "555-123-4567"
+        },
+        {
+          "field_name": "Message",
+          "value": "Inquiry about product pricing."
+        }
+      ],
+      "should_submit": false
+    },
+    "starting_url": "https://form.jotform.com/241604169641052",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "form",
+        "filled",
+        "john",
+        "doe",
+        "example.com",
+        "inquiry"
+      ],
+      "min_steps": 3,
+      "min_message_len": 50
+    },
+    "expected_capability": "multi_field",
+    "fail_modes": [
+      "Incorrectly identifies fields",
+      "Fails to type into fields",
+      "Attempts to submit the form",
+      "Struggles with dynamic form elements"
+    ]
+  },
+  {
+    "category": "multi_field_form",
+    "summary_for_user": "Fill out the feedback form with the name 'Anticipy User', email 'user@example.com', select 'Suggestion' for Feedback Type, and write 'This is a test suggestion for the Anticipy agent.' in the feedback message field. Do not submit the form.",
+    "action_type": "fill_form",
+    "parameters": {
+      "fields": [
+        {
+          "label": "Your Name",
+          "value": "Anticipy User"
+        },
+        {
+          "label": "Your Email",
+          "value": "user@example.com"
+        },
+        {
+          "label": "Feedback Type",
+          "value": "Suggestion"
+        },
+        {
+          "label": "Your Feedback",
+          "value": "This is a test suggestion for the Anticipy agent."
+        }
+      ]
+    },
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLSclK-P8dKzQz2Z2y0Y9J5F-q7t3q2k-y7q-z9v8w0y5p7Q/viewform",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "form",
+        "filled",
+        "feedback",
+        "suggestion",
+        "anticipy"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_field",
+    "fail_modes": [
+      "unable to locate fields",
+      "incorrectly types into fields",
+      "attempts to submit form"
+    ]
+  },
+  {
+    "category": "multi_field_form",
+    "summary_for_user": "Fill out the 'User Feedback Survey' form on Google Forms. Provide 'Anticipy User' as the name, 'test@example.com' as the email, rate the overall experience as 'Good', and suggest 'Consider adding more customization options.' in the suggestions field. Do not submit the form.",
+    "action_type": "fill_form",
+    "parameters": {
+      "fields": [
+        {
+          "label": "Your Name",
+          "value": "Anticipy User"
+        },
+        {
+          "label": "Email Address",
+          "value": "test@example.com"
+        },
+        {
+          "label": "How would you rate your overall experience?",
+          "value": "Good"
+        },
+        {
+          "label": "Do you have any suggestions for improvement?",
+          "value": "Consider adding more customization options."
+        }
+      ]
+    },
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLSdp5Q2-G0n69V6qR6Fp_t_Q3K3J7X7C7E7F7G7H7I7J7K7L7M7N7O7P7/viewform",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "form",
+        "filled",
+        "anticipy",
+        "test@example.com",
+        "good",
+        "customization"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "multi_field",
+    "fail_modes": [
+      "Incorrect field identification",
+      "Failure to input specific values",
+      "Accidental form submission",
+      "Page loading issues"
+    ]
+  },
+  {
+    "category": "multi_field_form",
+    "summary_for_user": "Fill out the 'Simple Survey Form' with the following details: Name as 'Anticipy User', Email as 'user@example.com', Phone Number as '555-123-4567', and Comments as 'This is a test submission for the Anticipy extension'. Do not submit the form.",
+    "action_type": "fill_form",
+    "parameters": {
+      "fields": [
+        {
+          "label": "Name",
+          "value": "Anticipy User"
+        },
+        {
+          "label": "Email",
+          "value": "user@example.com"
+        },
+        {
+          "label": "Phone Number",
+          "value": "555-123-4567"
+        },
+        {
+          "label": "Comments",
+          "value": "This is a test submission for the Anticipy extension."
+        }
+      ]
+    },
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLSd1L-9p9v8rQ5q-3F0G5z7P2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z/viewform",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "form filled",
+        "anticipy user",
+        "user@example.com",
+        "555-123-4567",
+        "test submission"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_field",
+    "fail_modes": [
+      "incorrect field identification",
+      "failed to enter all data",
+      "attempted to submit form"
+    ]
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary_for_user": "Search for the height of Mount Everest and tell me its official measurement in meters.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "Mount Everest height",
+      "extract_what": "official height in meters"
+    },
+    "starting_url": "https://duckduckgo.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "8848",
+        "8,848",
+        "8848.86",
+        "8,848.86",
+        "meters"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "fail_modes": [
+      "misinterprets search results",
+      "fails to extract specific data",
+      "navigation error after search",
+      "extracts incorrect unit"
+    ]
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary_for_user": "Search for the height of the Eiffel Tower and tell me the measurement.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "Eiffel Tower height",
+      "extraction_target": "height"
+    },
+    "starting_url": "https://www.google.com",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "330 meters",
+        "330m",
+        "324 meters",
+        "324m",
+        "1,083 feet",
+        "1083 feet",
+        "1,063 feet",
+        "1063 feet"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "fail_modes": [
+      "Failed to click the correct search result",
+      "Extracted incorrect measurement",
+      "Did not navigate past search results page"
+    ]
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary_for_user": "Search for 'Berlin Wall' on Wikipedia, click the most relevant link, and tell me the year it fell.",
+    "action_type": "search_click_extract",
+    "parameters": {
+      "search_query": "Berlin Wall",
+      "extract_target": "year the Berlin Wall fell"
+    },
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "1989",
+        "november 9",
+        "nov 9",
+        "nineteen eighty nine"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "fail_modes": [
+      "Failed to use Wikipedia's internal search",
+      "Clicked a less relevant link",
+      "Extracted an incorrect year",
+      "Failed to extract the year at all"
+    ]
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary_for_user": "Find the current population of Paris, France, and tell me the number.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "current population of Paris France",
+      "extract_what": "population number"
+    },
+    "starting_url": "https://www.google.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "2 million",
+        "2.1 million",
+        "2,100,000",
+        "2,130,000",
+        "2,140,000",
+        "2,145,000",
+        "2,133,000"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "fail_modes": [
+      "Extracts metropolitan population instead of city proper",
+      "Fails to parse the number correctly",
+      "Clicks on an irrelevant search result"
+    ]
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary_for_user": "Search for 'oldest university in the world' on Google, click the first relevant result, and tell me the name of the university.",
+    "action_type": "search_click_extract",
+    "parameters": {
+      "search_query": "oldest university in the world",
+      "extract_what": "the name of the university"
+    },
+    "starting_url": "https://www.google.com",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "al-qarawiyyin",
+        "f\u00e8s",
+        "fez",
+        "859 ad",
+        "university of bologna"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "fail_modes": [
+      "misinterpreting search results",
+      "failure to extract specific information",
+      "navigation errors"
+    ]
+  },
+  {
+    "category": "retry_after_fail",
+    "summary_for_user": "Search for 'Nintendo Switch' on Walmart.com and tell me if it's currently available and its approximate price.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "Nintendo Switch",
+      "site": "Walmart.com",
+      "extract_info": "availability and price"
+    },
+    "starting_url": "https://www.walmart.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "nintendo switch",
+        "available",
+        "in stock",
+        "price",
+        "dollars",
+        "$"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "fail_modes": [
+      "Initial search input or button selector fails due to dynamic page loading.",
+      "Extraction of availability/price fails on product page.",
+      "Agent gets stuck on an interstitial or pop-up."
+    ]
+  },
+  {
+    "category": "retry_after_fail",
+    "summary_for_user": "Search for 'handmade ceramic mug' on Etsy and confirm the search was successful by describing the results.",
+    "action_type": "search_extract",
+    "parameters": {
+      "query": "handmade ceramic mug",
+      "site": "Etsy"
+    },
+    "starting_url": "https://www.etsy.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "ceramic mug",
+        "results",
+        "etsy"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "fail_modes": [
+      "Search input element not found on first attempt",
+      "Search button click failed due to dynamic rendering",
+      "Page not fully loaded before interaction",
+      "Anti-bot detection blocking search",
+      "Stuck in a loading state"
+    ]
+  },
+  {
+    "category": "retry_after_fail",
+    "summary_for_user": "On Walmart.com, search for 'gaming laptop' and find the price of the first result displayed.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "gaming laptop",
+      "extract_info": "price of the first listed item"
+    },
+    "starting_url": "https://www.walmart.com/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "gaming laptop",
+        "price",
+        "$",
+        "dollar",
+        "cost"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "retry",
+    "fail_modes": [
+      "dynamic search input fails",
+      "anti-bot blocks search",
+      "price element not found",
+      "slow loading of results"
+    ]
+  },
+  {
+    "category": "retry_after_fail",
+    "summary_for_user": "On BestBuy.com, search for 'Dyson V11 Animal cordless vacuum' and report its general price range or if it's currently unavailable.",
+    "action_type": "search_extract",
+    "parameters": {
+      "query": "Dyson V11 Animal cordless vacuum",
+      "extract_what": "price range or availability"
+    },
+    "starting_url": "https://www.bestbuy.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "dyson v11 animal",
+        "cordless vacuum",
+        "price",
+        "available",
+        "unavailable"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "fail_modes": [
+      "Search input element not found on first attempt",
+      "Dynamic content loading delays causing element not found",
+      "Anti-bot detection blocking initial search",
+      "Incorrect parsing of search results or product details"
+    ]
+  },
+  {
+    "category": "retry_after_fail",
+    "summary_for_user": "Search for 'Sony WH-1000XM5 headphones' on Best Buy and tell me its current price.",
+    "action_type": "search_extract",
+    "parameters": {
+      "search_query": "Sony WH-1000XM5 headphones",
+      "extract_what": "price"
+    },
+    "starting_url": "https://www.bestbuy.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "sony wh-1000xm5",
+        "price",
+        "$"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "fail_modes": [
+      "anti-bot detection",
+      "dynamic content loading issues",
+      "search bar not immediately interactable"
+    ]
+  },
+  {
+    "category": "graceful_decline",
+    "summary_for_user": "Post a public update on Facebook saying 'Hello world from Anticipy!'",
+    "action_type": "post_update",
+    "parameters": {
+      "post_content": "Hello world from Anticipy!"
+    },
+    "starting_url": "https://www.facebook.com/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "fail_modes": [
+      "login_required",
+      "authentication_failure"
+    ]
+  },
+  {
+    "category": "graceful_decline",
+    "summary_for_user": "Post a short update on LinkedIn about recent advancements in AI.",
+    "action_type": "post_update",
+    "parameters": {
+      "platform": "LinkedIn",
+      "topic": "recent advancements in AI"
+    },
+    "starting_url": "https://www.linkedin.com/feed/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "fail_modes": [
+      "Login wall",
+      "Authentication required"
+    ]
+  },
+  {
+    "category": "graceful_decline",
+    "summary_for_user": "Create a new post on LinkedIn about the latest trends in artificial intelligence.",
+    "action_type": "create_post",
+    "parameters": {},
+    "starting_url": "https://www.linkedin.com/feed/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "fail_modes": [
+      "login wall encountered",
+      "cannot access content without authentication"
+    ]
+  },
+  {
+    "category": "graceful_decline",
+    "summary_for_user": "Post a photo of a sunset to Instagram.",
+    "action_type": "post_social_media",
+    "parameters": {
+      "content": "a photo of a sunset",
+      "platform": "Instagram"
+    },
+    "starting_url": "https://www.instagram.com/create/post/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "fail_modes": [
+      "Agent attempts to create an account",
+      "Agent doesn't recognize the login requirement",
+      "Agent gets stuck on the login page without declining"
+    ]
+  },
+  {
+    "category": "graceful_decline",
+    "summary_for_user": "Post a short update on LinkedIn about the importance of continuous learning.",
+    "action_type": "fill_form",
+    "parameters": {
+      "text_to_post": "Continuous learning is key to professional growth in today's dynamic world."
+    },
+    "starting_url": "https://www.linkedin.com/feed",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "fail_modes": [
+      "login_wall",
+      "authentication_required"
+    ]
+  },
+  {
+    "category": "long_task",
+    "summary_for_user": "Find the base clock speed for the AMD Ryzen 5 5600X, Ryzen 7 5800X, and Ryzen 9 5900X CPUs on TechPowerUp and tell me which one has the highest base clock speed.",
+    "action_type": "search_extract",
+    "parameters": {
+      "item1": "AMD Ryzen 5 5600X",
+      "item2": "AMD Ryzen 7 5800X",
+      "item3": "AMD Ryzen 9 5900X",
+      "spec_to_find": "base clock speed",
+      "comparison_type": "highest",
+      "site": "TechPowerUp"
+    },
+    "starting_url": "https://www.techpowerup.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "5600x",
+        "5800x",
+        "5900x",
+        "3.8",
+        "ghz",
+        "highest"
+      ],
+      "min_steps": 20,
+      "min_message_len": 50
+    },
+    "expected_capability": "long_task",
+    "fail_modes": [
+      "Navigation or search failure on TechPowerUp",
+      "Incorrect extraction of base clock speed for one or more CPUs",
+      "Failure to correctly identify the CPU with the highest base clock speed",
+      "Getting distracted by ads or irrelevant content"
+    ]
+  },
+  {
+    "category": "long_task",
+    "summary_for_user": "Find the initial release year for Python, Java, and C++ programming languages from Wikipedia and list all three years in your final message.",
+    "action_type": "search_extract",
+    "parameters": {},
+    "starting_url": "https://www.wikipedia.org/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "python",
+        "java",
+        "c++",
+        "1991",
+        "1995",
+        "1979"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "long_task",
+    "fail_modes": [
+      "Failed to navigate and search on Wikipedia for one or more languages",
+      "Extracted an incorrect release year for one or more languages",
+      "Did not list all three languages and their years in the final message"
+    ]
+  },
+  {
+    "category": "long_task",
+    "summary_for_user": "Compare the current price of the Sony WH-1000XM5 noise-canceling headphones on Amazon, Best Buy, and Target, and report which retailer offers the lowest price.",
+    "action_type": "search_compare_extract",
+    "parameters": {
+      "item": "Sony WH-1000XM5 headphones",
+      "retailers": [
+        {
+          "name": "Amazon",
+          "url": "https://www.amazon.com"
+        },
+        {
+          "name": "Best Buy",
+          "url": "https://www.bestbuy.com"
+        },
+        {
+          "name": "Target",
+          "url": "https://www.target.com"
+        }
+      ]
+    },
+    "starting_url": "https://www.amazon.com",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "wh-1000xm5",
+        "sony",
+        "amazon",
+        "best buy",
+        "target",
+        "lowest",
+        "cheapest"
+      ],
+      "min_steps": 20,
+      "min_message_len": 50
+    },
+    "expected_capability": "long_task",
+    "fail_modes": [
+      "Failed to navigate between multiple retail sites",
+      "Inaccurate price extraction",
+      "Incorrect price comparison",
+      "Site layout changes preventing search or extraction"
+    ]
+  },
+  {
+    "category": "long_task",
+    "summary_for_user": "Find the capital cities of Brazil, Canada, and Australia. Then, for each capital, find its population. Finally, tell me which of these three capital cities has the largest population.",
+    "action_type": "search_extract_compare",
+    "parameters": {
+      "countries": [
+        "Brazil",
+        "Canada",
+        "Australia"
+      ],
+      "comparison_metric": "population",
+      "comparison_type": "largest"
+    },
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "brazil",
+        "canada",
+        "australia",
+        "brasilia",
+        "ottawa",
+        "canberra",
+        "population",
+        "largest"
+      ],
+      "min_steps": 20,
+      "min_message_len": 100
+    },
+    "expected_capability": "long_task",
+    "fail_modes": [
+      "Failed to navigate to all country pages.",
+      "Failed to identify capital cities for all countries.",
+      "Failed to navigate to capital city pages.",
+      "Failed to extract population data for capital cities.",
+      "Failed to perform the population comparison correctly.",
+      "Wikipedia page structure changes affecting data extraction."
+    ]
+  },
+  {
+    "category": "long_task",
+    "summary_for_user": "Find the current estimated population for Brazil, Nigeria, and Pakistan from Wikipedia, and tell me which country has the largest population.",
+    "action_type": "search_extract_compare",
+    "parameters": {
+      "items_to_compare": [
+        "Brazil",
+        "Nigeria",
+        "Pakistan"
+      ],
+      "comparison_metric": "population",
+      "source": "Wikipedia",
+      "comparison_type": "largest"
+    },
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "brazil",
+        "nigeria",
+        "pakistan",
+        "population",
+        "largest"
+      ],
+      "min_steps": 25,
+      "min_message_len": 70
+    },
+    "expected_capability": "long_task",
+    "fail_modes": [
+      "Failed to navigate to all country pages",
+      "Incorrect population extraction",
+      "Failed to identify the largest population",
+      "Did not provide a comparative answer"
+    ]
+  }
+]

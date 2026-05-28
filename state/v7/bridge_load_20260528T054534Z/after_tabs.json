@@ -1,0 +1,9 @@
+{
+  "ts": "20260528T054553Z",
+  "total": 72,
+  "new_since_baseline": [
+    "C36495727AD17ABF9A5102303A715953",
+    "DC37AC498CA114F559AB8709B030F898"
+  ],
+  "leaks_from_this_test": []
+}

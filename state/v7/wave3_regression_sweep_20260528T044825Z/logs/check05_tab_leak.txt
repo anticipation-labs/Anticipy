@@ -1,0 +1,10 @@
+Bridge status:
+{"ok": true, "current_task_running": false, "bridge_closed": false, "pid": 15290, "bridge_kind": "cdp_primary", "cdp_alive": true}
+
+Tab leak test (Target.createTarget via /json/new + /json/close):
+  Baseline tab count: 42
+  After PUT /json/new: 43 (delta=+1, expected)
+  Target id created: 16B94A35AECE2C4368674C0582AB471D
+  Close: "Target is closing"
+  Final count after close: 42 (delta from baseline: 0)
+LEAK_OK: TRUE (0 tab leak)

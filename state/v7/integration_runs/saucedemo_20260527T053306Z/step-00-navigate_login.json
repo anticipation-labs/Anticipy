@@ -1,0 +1,7 @@
+{
+  "name": "navigate_login",
+  "ok": false,
+  "detail": "url=https://example.cypress.io/ resp={\"ok\":false,\"error\":\"bad secret\"}",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T053306Z/step-01-navigate_login.png",
+  "receipt": "{\"ok\":false,\"error\":\"bad secret\"}"
+}

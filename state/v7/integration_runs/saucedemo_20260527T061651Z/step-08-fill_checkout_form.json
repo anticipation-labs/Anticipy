@@ -1,0 +1,7 @@
+{
+  "name": "fill_checkout_form",
+  "ok": true,
+  "detail": "CDP fill first=Anticipy last=Test zip=12345",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061651Z/step-08-fill_checkout_form.png",
+  "receipt": "{\"value\": \"Anticipy\", \"type\": \"string\", \"exception\": null}|{\"value\": \"Test\", \"type\": \"string\", \"exception\": null}|{\"value\": \"12345\", \"type\": \"string\", \"exception\": null}"
+}

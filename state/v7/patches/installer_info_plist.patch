@@ -1,0 +1,18 @@
+diff --git a/desktop/src-tauri/Info.plist b/desktop/src-tauri/Info.plist
+--- a/desktop/src-tauri/Info.plist
++++ b/desktop/src-tauri/Info.plist
+@@ -10,6 +10,14 @@
+     <true/>
+     <key>NSMicrophoneUsageDescription</key>
+     <string>Anticipy listens for ambient conversational intent. Microphone access is required for the product to work.</string>
++    <key>NSAccessibilityUsageDescription</key>
++    <string>Anticipy reads the on-screen contents of your active app so it can act on what you mention out loud.</string>
++    <key>NSAppleEventsUsageDescription</key>
++    <string>Anticipy uses Calendar, Reminders, Notes, and Messages on your behalf so reminders, drafts, and events appear without you switching apps.</string>
++    <key>NSScreenCaptureUsageDescription</key>
++    <string>Anticipy captures the visible part of your screen only when it needs to read a canvas app like Figma or a PDF you reference out loud.</string>
++    <key>NSUserNotificationsUsageDescription</key>
++    <string>Anticipy sends a Confirm Card a few seconds before any irreversible action so you can quietly cancel without picking up your phone.</string>
+     <key>CFBundleURLTypes</key>
+     <array>
+         <dict>

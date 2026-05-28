@@ -1,0 +1,7 @@
+{
+  "actual": "url=https://automationexercise.com/view_cart empty=false has_product=false",
+  "expected": "visible text shows a Rs.NNN cart line",
+  "name": "cart_view",
+  "passed": false,
+  "primitive_used": "bridge navigate + cmd+a/cmd+c text harvest"
+}

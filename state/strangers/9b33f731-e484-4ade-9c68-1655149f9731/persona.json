@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "9b33f731-e484-4ade-9c68-1655149f9731",
+  "created_at": "2025-04-04T12:00:00Z",
+  "name": "Jordan Alvarez",
+  "age": 34,
+  "occupation": "Freelance Graphic Designer",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 4,
+  "hard_category": "canvas",
+  "hard_category_focus": "Canva design editing",
+  "primary_real_surface": {
+    "surface": "Canva editor",
+    "chrome_requirement": "user signed in to Canva",
+    "acceptable_state": "design open for editing"
+  },
+  "daily_tools": [
+    "Figma",
+    "Adobe Illustrator",
+    "Slack",
+    "Google Drive",
+    "Canva"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Jenkins",
+      "relationship": "Client",
+      "context": "Boutique coffee shop owner"
+    },
+    {
+      "name": "Mike Chen",
+      "relationship": "Colleague",
+      "context": "Fellow designer at shared studio"
+    },
+    {
+      "name": "Rachel O'Brien",
+      "relationship": "Friend",
+      "context": "Recommends new design tools"
+    }
+  ]
+}

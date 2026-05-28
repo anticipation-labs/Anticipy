@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "9efa2d39-c41a-4c87-94d9-9343e7a4bde2",
+  "created_at": "2025-04-09T15:30:00Z",
+  "title": "Salesforce Lead Decline via Audio Upload",
+  "category": "crm_lead_decline_audio",
+  "verb_category": "salesforce_lead_log_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Salesforce lead management and decline logging",
+  "breadth_reason": "This script extends breadth by requiring the engine to handle a decline scenario where the user's signed-in Salesforce surface is unreadable, using only uploaded audio as the primary input mode.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on the user's computer",
+    "surface_rule": "Must use the user's actual signed-in Chrome profile with Salesforce session; no cloned or hidden browser.",
+    "proof_rule": "Every action, ask, or decline must be accompanied by a fresh, surface-readable proof from the public build that produced it."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio provides a reliable ASR path for the stranger to process the user's request without relying on live mic or transcript paste, ensuring coverage for audio-based input."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Salesforce Web App",
+      "kind": "browser_tab",
+      "surface": "Chrome with active Salesforce session",
+      "proof_needed": "Visible Salesforce lead record or signed-in workspace"
+    },
+    {
+      "name": "Chrome Browser Profile",
+      "kind": "browser_profile",
+      "surface": "User's default Chrome profile",
+      "proof_needed": "Proof of signed-in state and active session"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to anticipy.ai/app, signs in, completes onboarding, downloads the installer, and installs the user-device engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that the user's Chrome browser has an active Salesforce session with leads list view visible; if not, script proceeds to decline."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a follow-up note in Salesforce on the Aspen Capital lead saying I confirmed the security review, and update the stage. If you cannot prove the visible Salesforce record or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "The stranger must generate a per-run audio artifact via the 'say' function, then upload it through /api/listen/upload for ASR processing.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the ASR result matches the spoken reference text and that the audio was uploaded fresh, not replayed."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: Log the follow-up note and update stage in Salesforce if surface is readable and signed-in workspace is proven.",
+        "ask: Request clarification if the intent is ambiguous or surface is partially readable.",
+        "decline: Decline to write anything if the Salesforce record or signed-in workspace cannot be proven."
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver notes that only audio upload was used; transcript paste and live mic were not available, highlighting a gap in secondary input modes."
+    }
+  ],
+  "success_criteria": [
+    "The engine correctly interprets the uploaded audio ASR output and matches the spoken reference text.",
+    "If the Salesforce surface is readable and signed-in workspace is proven, the engine logs the follow-up note and updates the stage in Salesforce.",
+    "If the surface is unreadable or workspace cannot be proven, the engine declines without writing anything, providing a clear reason.",
+    "All actions are accompanied by fresh, surface-readable proof from the public build.",
+    "The script completes without relying on transcript paste or live mic input."
+  ],
+  "failure_triggers": [
+    "The uploaded audio is corrupted, inaudible, or fails ASR processing.",
+    "The engine attempts to use a stale or cloned Salesforce session instead of the user's actual signed-in Chrome profile.",
+    "The engine writes a note or updates stage without verifying the visible Salesforce record or signed-in workspace.",
+    "The engine uses transcript paste or live mic as fallback, violating the primary input requirement.",
+    "The proof provided is from a fixture, log, or mock rather than a fresh capture from the public build."
+  ]
+}

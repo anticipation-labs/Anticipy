@@ -1,0 +1,58 @@
+{
+  "failed": 6,
+  "passed": 1,
+  "run_dir": "state/v7/integration_runs/orangehrm_20260527T054649Z",
+  "site": "opensource-demo.orangehrmlive.com",
+  "steps": [
+    {
+      "actual": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+      "expected": "actual matches: /dashboard",
+      "name": "login_to_dashboard",
+      "passed": false,
+      "primitive_used": "navigate + System Events Tab/keystroke/Enter"
+    },
+    {
+      "actual": "https://www.anticipy.ai/app",
+      "expected": "actual matches: viewSystemUsers",
+      "name": "admin_users_table",
+      "passed": false,
+      "primitive_used": "bridge navigate (sidebar click fallback)"
+    },
+    {
+      "actual": "https://automationexercise.com/product_details/1",
+      "expected": "actual matches: viewSystemUsers",
+      "name": "admin_search",
+      "passed": false,
+      "primitive_used": "navigate + System Events Tab/type/Enter"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: viewSystemUsers",
+      "name": "reset_filter",
+      "passed": false,
+      "primitive_used": "bridge navigate (Reset button click fallback)"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: addEmployee",
+      "name": "pim_add_employee_form",
+      "passed": false,
+      "primitive_used": "bridge navigate (sidebar click fallback)"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: viewPersonalDetails|empNumber",
+      "name": "employee_saved",
+      "passed": false,
+      "primitive_used": "navigate + System Events Tab/type/Enter (form submit)"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: orangehrm",
+      "name": "final_screenshot",
+      "passed": true,
+      "primitive_used": "bridge surface-proof"
+    }
+  ],
+  "total": 7
+}

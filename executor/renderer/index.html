@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Anticipy</title>
+  <style>
+    body { font: 13px -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px;
+      background: #0C0C0C; color: #F5F0EB; margin: 0; }
+    h1 { font-size: 16px; margin: 0 0 12px; color: #C8A97E; }
+    .status { font-size: 12px; opacity: 0.7; line-height: 1.6; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: #C8A97E; margin-right: 6px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <h1>Anticipy</h1>
+  <div class="status">
+    <div><span class="dot"></span>Listening for tasks…</div>
+    <div style="margin-top: 6px; font-size: 11px; opacity: 0.5;">
+      Chrome :9222 • Supabase Realtime
+    </div>
+  </div>
+  <script>
+    console.log('Anticipy renderer ready, version', window.anticipy?.version);
+  </script>
+</body>
+</html>

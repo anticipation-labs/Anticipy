@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T18:01:02Z",
+  "hypothesis": "On the Amazon order page for the running shoes I bought last month, please check the return window and draft a customer message to support to refund the order. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "On the Amazon order page for the running shoes I bought last month, please check the return window and draft a customer message to support to refund the order. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "7a240edb-4141-452b-97db-4931ddeaaa2d",
+  "transcript_boundary_chars": 272,
+  "transcript_boundary_sha256": "603637f62912c954ec97456d96040470dd08ea3fe43bed6a6dd84bd521ab5ba7",
+  "wer": 0.0
+}

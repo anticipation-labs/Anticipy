@@ -1,0 +1,9 @@
+{
+  "actionable_threshold": 0.65,
+  "ask_threshold": 0.5,
+  "decline_when_surface_missing": true,
+  "examples": 5,
+  "negatives": 2,
+  "positives": 3,
+  "schema": "anticipy.v7.inference_calibration"
+}

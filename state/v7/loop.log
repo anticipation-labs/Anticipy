@@ -1,0 +1,923 @@
+[ralph_v7 2026-05-27T15:09:47Z] ralph_v7 starting (PID 90102). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T15:09:47Z] ----- cycle 1 start -----
+[ralph_v7 2026-05-27T15:09:47Z] check_done.sh
+[ralph_v7 2026-05-27T15:11:47Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:11:47Z] red gates after first check: V7.3_installed_user_device_engine_current,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:11:47Z] first actionable red: V7.3_installed_user_device_engine_current
+[ralph_v7 2026-05-27T15:11:47Z] no fixer mapped for gate V7.3; skipping
+[ralph_v7 2026-05-27T15:11:47Z] check_done.sh
+[ralph_v7 2026-05-27T15:14:52Z] ralph_v7 starting (PID 93080). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T15:14:52Z] ----- cycle 2 start -----
+[ralph_v7 2026-05-27T15:14:52Z] check_done.sh
+[ralph_v7 2026-05-27T15:16:39Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:16:39Z] red gates after first check: V7.3_installed_user_device_engine_current,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:16:39Z] first actionable red: V7.3_installed_user_device_engine_current
+[ralph_v7 2026-05-27T15:16:39Z] no fixer mapped for gate V7.3; skipping
+[ralph_v7 2026-05-27T15:16:39Z] check_done.sh
+[ralph_v7 2026-05-27T15:18:31Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:18:31Z] red gates after fixer:      V7.3_installed_user_device_engine_current,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:18:31Z] ----- cycle 2 end (sleep 30s) -----
+[ralph_v7 2026-05-27T15:19:01Z] ----- cycle 3 start -----
+[ralph_v7 2026-05-27T15:19:01Z] check_done.sh
+[ralph_v7 2026-05-27T15:23:14Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:23:14Z] red gates after first check: V7.2_public_dmg_installs,V7.3_installed_user_device_engine_current,V7.5_public_dmg_sha_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:23:14Z] first actionable red: V7.2_public_dmg_installs
+[ralph_v7 2026-05-27T15:23:14Z] dispatch ship.sh
+[ralph_v7 2026-05-27T15:23:14Z] fixer for V7.2 exit=1
+[ralph_v7 2026-05-27T15:23:14Z] check_done.sh
+[ralph_v7 2026-05-27T15:25:24Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:25:24Z] red gates after fixer:      V7.3_installed_user_device_engine_current,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:25:24Z] ----- cycle 3 end (sleep 30s) -----
+[ralph_v7 2026-05-27T15:25:54Z] ----- cycle 4 start -----
+[ralph_v7 2026-05-27T15:25:54Z] check_done.sh
+[ralph_v7 2026-05-27T15:28:45Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:28:45Z] red gates after first check: V7.3_installed_user_device_engine_current,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:28:45Z] first actionable red: V7.3_installed_user_device_engine_current
+[ralph_v7 2026-05-27T15:28:45Z] no fixer mapped for gate V7.3; skipping
+[ralph_v7 2026-05-27T15:28:45Z] check_done.sh
+[ralph_v7 2026-05-27T15:30:42Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:30:42Z] red gates after fixer:      V7.3_installed_user_device_engine_current,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:30:42Z] ----- cycle 4 end (sleep 30s) -----
+[ralph_v7 2026-05-27T15:31:12Z] ----- cycle 5 start -----
+[ralph_v7 2026-05-27T15:31:12Z] check_done.sh
+[ralph_v7 2026-05-27T15:35:47Z] ralph_v7 starting (PID 11585). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T15:35:47Z] ----- cycle 6 start -----
+[ralph_v7 2026-05-27T15:35:47Z] check_done.sh
+[ralph_v7 2026-05-27T15:42:51Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T15:42:51Z] red gates after fixer:      V7.3_installed_user_device_engine_current,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T15:42:51Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T16:17:20Z] ralph_v7 starting (PID 70686). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T16:17:20Z] ----- cycle 7 start -----
+[ralph_v7 2026-05-27T16:17:20Z] check_done.sh
+[ralph_v7 2026-05-27T16:20:16Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:20:16Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:20:16Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:20:16Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:20:16Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:20:16Z] check_done.sh
+[ralph_v7 2026-05-27T16:21:49Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:21:49Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:21:49Z] ----- cycle 7 end (sleep 30s) -----
+[ralph_v7 2026-05-27T16:22:19Z] ----- cycle 8 start -----
+[ralph_v7 2026-05-27T16:22:19Z] check_done.sh
+[ralph_v7 2026-05-27T16:23:51Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:23:51Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:23:51Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:23:51Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:23:51Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:23:51Z] check_done.sh
+[ralph_v7 2026-05-27T16:25:19Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:25:19Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:25:19Z] ----- cycle 8 end (sleep 30s) -----
+[ralph_v7 2026-05-27T16:25:21Z] ralph_v7 starting (PID 76994). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T16:25:21Z] ----- cycle 9 start -----
+[ralph_v7 2026-05-27T16:25:21Z] check_done.sh
+[ralph_v7 2026-05-27T16:25:49Z] ----- cycle 10 start -----
+[ralph_v7 2026-05-27T16:25:49Z] check_done.sh
+[ralph_v7 2026-05-27T16:27:36Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:27:36Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:27:36Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:27:36Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:27:37Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:27:37Z] check_done.sh
+[ralph_v7 2026-05-27T16:29:24Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:29:24Z] red gates after first check: V7.2_public_dmg_installs,V7.4_deploy_parity_green,V7.5_public_dmg_sha_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:29:24Z] first actionable red: V7.2_public_dmg_installs
+[ralph_v7 2026-05-27T16:29:24Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:29:25Z] fixer for V7.2 exit=1
+[ralph_v7 2026-05-27T16:29:25Z] check_done.sh
+[ralph_v7 2026-05-27T16:29:49Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:29:49Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:29:49Z] ----- cycle 10 end (sleep 30s) -----
+[ralph_v7 2026-05-27T16:30:19Z] ----- cycle 11 start -----
+[ralph_v7 2026-05-27T16:30:19Z] check_done.sh
+[ralph_v7 2026-05-27T16:31:35Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T16:31:36Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:31:36Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:31:36Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:31:36Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:31:36Z] check_done.sh
+[ralph_v7 2026-05-27T16:32:43Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:32:43Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:32:43Z] ----- cycle 9 end (sleep 30s) -----
+[ralph_v7 2026-05-27T16:33:13Z] ----- cycle 12 start -----
+[ralph_v7 2026-05-27T16:33:13Z] check_done.sh
+[ralph_v7 2026-05-27T16:35:15Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:35:15Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:35:15Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T16:36:43Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:36:43Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:36:43Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:36:44Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:36:44Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:36:44Z] check_done.sh
+[ralph_v7 2026-05-27T16:38:17Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:38:17Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:38:17Z] ----- cycle 12 end (sleep 30s) -----
+[ralph_v7 2026-05-27T16:38:48Z] ----- cycle 13 start -----
+[ralph_v7 2026-05-27T16:38:48Z] check_done.sh
+[ralph_v7 2026-05-27T16:40:03Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T16:40:03Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:40:03Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:40:03Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:40:04Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:40:04Z] check_done.sh
+[ralph_v7 2026-05-27T16:42:48Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:42:48Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:42:48Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T16:43:48Z] ralph_v7 starting (PID 90616). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T16:43:48Z] ----- cycle 14 start -----
+[ralph_v7 2026-05-27T16:43:48Z] check_done.sh
+[ralph_v7 2026-05-27T16:45:19Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:45:19Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:45:19Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:45:19Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:45:20Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:45:20Z] check_done.sh
+[ralph_v7 2026-05-27T16:46:51Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:46:51Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:46:51Z] ----- cycle 14 end (sleep 30s) -----
+[ralph_v7 2026-05-27T16:47:21Z] ----- cycle 15 start -----
+[ralph_v7 2026-05-27T16:47:21Z] check_done.sh
+[ralph_v7 2026-05-27T16:48:55Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:48:55Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:48:55Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:48:55Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:48:56Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:48:56Z] check_done.sh
+[ralph_v7 2026-05-27T16:50:29Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:50:29Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:50:29Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T16:51:29Z] ralph_v7 starting (PID 96590). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T16:51:29Z] ----- cycle 16 start -----
+[ralph_v7 2026-05-27T16:51:29Z] check_done.sh
+[ralph_v7 2026-05-27T16:52:57Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:52:57Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:52:57Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:52:57Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:52:57Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:52:57Z] check_done.sh
+[ralph_v7 2026-05-27T16:54:27Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:54:28Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:54:28Z] ----- cycle 16 end (sleep 30s) -----
+[ralph_v7 2026-05-27T16:54:58Z] ----- cycle 17 start -----
+[ralph_v7 2026-05-27T16:54:58Z] check_done.sh
+[ralph_v7 2026-05-27T16:56:41Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:56:42Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:56:42Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T16:56:42Z] dispatch ship.sh
+[ralph_v7 2026-05-27T16:56:43Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T16:56:43Z] check_done.sh
+[ralph_v7 2026-05-27T16:58:21Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T16:58:21Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T16:58:21Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T16:59:21Z] ralph_v7 starting (PID 2168). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T16:59:21Z] ----- cycle 18 start -----
+[ralph_v7 2026-05-27T16:59:21Z] check_done.sh
+[ralph_v7 2026-05-27T17:00:53Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:00:53Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:00:53Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:00:53Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:00:53Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:00:53Z] check_done.sh
+[ralph_v7 2026-05-27T17:02:22Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:02:22Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:02:22Z] ----- cycle 18 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:02:52Z] ----- cycle 19 start -----
+[ralph_v7 2026-05-27T17:02:52Z] check_done.sh
+[ralph_v7 2026-05-27T17:04:26Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:04:26Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:04:26Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:04:26Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:04:26Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:04:27Z] check_done.sh
+[ralph_v7 2026-05-27T17:06:08Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:06:08Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:06:08Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T17:07:08Z] ralph_v7 starting (PID 7128). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T17:07:08Z] ----- cycle 20 start -----
+[ralph_v7 2026-05-27T17:07:08Z] check_done.sh
+[ralph_v7 2026-05-27T17:08:23Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T17:08:24Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:08:24Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:08:24Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:08:24Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:08:24Z] check_done.sh
+[ralph_v7 2026-05-27T17:10:06Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:10:06Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:10:06Z] ----- cycle 20 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:10:36Z] ----- cycle 21 start -----
+[ralph_v7 2026-05-27T17:10:36Z] check_done.sh
+[ralph_v7 2026-05-27T17:12:16Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:12:16Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:12:16Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:12:16Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:12:16Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:12:16Z] check_done.sh
+[ralph_v7 2026-05-27T17:13:46Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:13:46Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:13:46Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T17:14:46Z] ralph_v7 starting (PID 11365). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T17:14:46Z] ----- cycle 22 start -----
+[ralph_v7 2026-05-27T17:14:46Z] check_done.sh
+[ralph_v7 2026-05-27T17:16:13Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:16:13Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:16:13Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:16:13Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:16:14Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:16:14Z] check_done.sh
+[ralph_v7 2026-05-27T17:17:46Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:17:46Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:17:46Z] ----- cycle 22 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:18:16Z] ----- cycle 23 start -----
+[ralph_v7 2026-05-27T17:18:16Z] check_done.sh
+[ralph_v7 2026-05-27T17:19:06Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:19:06Z] red gates after first check: V7.2_public_dmg_installs,V7.4_deploy_parity_green,V7.5_public_dmg_sha_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:19:06Z] first actionable red: V7.2_public_dmg_installs
+[ralph_v7 2026-05-27T17:19:06Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:19:07Z] fixer for V7.2 exit=1
+[ralph_v7 2026-05-27T17:19:07Z] check_done.sh
+[ralph_v7 2026-05-27T17:20:22Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T17:20:22Z] red gates after fixer:      V7.2_public_dmg_installs,V7.4_deploy_parity_green,V7.5_public_dmg_sha_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:20:22Z] ----- cycle 23 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:20:52Z] ----- cycle 24 start -----
+[ralph_v7 2026-05-27T17:20:52Z] check_done.sh
+[ralph_v7 2026-05-27T17:22:26Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:22:26Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:22:26Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:22:27Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:22:27Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:22:27Z] check_done.sh
+[ralph_v7 2026-05-27T17:23:57Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:23:57Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:23:57Z] ----- cycle 24 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:24:27Z] ----- cycle 25 start -----
+[ralph_v7 2026-05-27T17:24:27Z] check_done.sh
+[ralph_v7 2026-05-27T17:25:55Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:25:55Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:25:55Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:25:56Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:25:57Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:25:57Z] check_done.sh
+[ralph_v7 2026-05-27T17:27:25Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:27:25Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:27:25Z] ----- cycle 25 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:27:55Z] ----- cycle 26 start -----
+[ralph_v7 2026-05-27T17:27:55Z] check_done.sh
+[ralph_v7 2026-05-27T17:29:27Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:29:27Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:29:27Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:29:27Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:29:27Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:29:27Z] check_done.sh
+[ralph_v7 2026-05-27T17:31:02Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:31:02Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:31:02Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T17:32:02Z] ralph_v7 starting (PID 21266). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T17:32:03Z] ----- cycle 27 start -----
+[ralph_v7 2026-05-27T17:32:03Z] check_done.sh
+[ralph_v7 2026-05-27T17:33:34Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:33:34Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:33:34Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:33:34Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:33:34Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:33:34Z] check_done.sh
+[ralph_v7 2026-05-27T17:35:04Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:35:04Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:35:04Z] ----- cycle 27 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:35:34Z] ----- cycle 28 start -----
+[ralph_v7 2026-05-27T17:35:34Z] check_done.sh
+[ralph_v7 2026-05-27T17:37:05Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:37:06Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:37:06Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:37:06Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:37:06Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:37:06Z] check_done.sh
+[ralph_v7 2026-05-27T17:38:22Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T17:38:22Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.13_5_hard_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:38:22Z] ----- cycle 28 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:38:52Z] ----- cycle 29 start -----
+[ralph_v7 2026-05-27T17:38:52Z] check_done.sh
+[ralph_v7 2026-05-27T17:40:25Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:40:25Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:40:25Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:40:25Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:40:26Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:40:26Z] check_done.sh
+[ralph_v7 2026-05-27T17:41:53Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:41:53Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:41:53Z] ----- cycle 29 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:42:23Z] ----- cycle 30 start -----
+[ralph_v7 2026-05-27T17:42:23Z] check_done.sh
+[ralph_v7 2026-05-27T17:43:54Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:43:54Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.12_20_successful_verb_categories,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:43:54Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:43:54Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:43:54Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:43:54Z] check_done.sh
+[ralph_v7 2026-05-27T17:45:25Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:45:25Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:45:25Z] ----- cycle 30 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:45:55Z] ----- cycle 31 start -----
+[ralph_v7 2026-05-27T17:45:55Z] check_done.sh
+[ralph_v7 2026-05-27T17:47:31Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:47:31Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:47:31Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:47:32Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:47:32Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:47:32Z] check_done.sh
+[ralph_v7 2026-05-27T17:48:59Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:48:59Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:48:59Z] ----- cycle 31 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:49:29Z] ----- cycle 32 start -----
+[ralph_v7 2026-05-27T17:49:29Z] check_done.sh
+[ralph_v7 2026-05-27T17:51:11Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:51:11Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:51:11Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:51:11Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:51:11Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:51:11Z] check_done.sh
+[ralph_v7 2026-05-27T17:52:48Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:52:48Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:52:48Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T17:53:48Z] ralph_v7 starting (PID 33567). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T17:53:48Z] ----- cycle 33 start -----
+[ralph_v7 2026-05-27T17:53:48Z] check_done.sh
+[ralph_v7 2026-05-27T17:55:21Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:55:21Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:55:21Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:55:21Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:55:21Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:55:21Z] check_done.sh
+[ralph_v7 2026-05-27T17:57:17Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:57:18Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:57:18Z] ----- cycle 33 end (sleep 30s) -----
+[ralph_v7 2026-05-27T17:57:48Z] ----- cycle 34 start -----
+[ralph_v7 2026-05-27T17:57:48Z] check_done.sh
+[ralph_v7 2026-05-27T17:59:20Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T17:59:20Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T17:59:20Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T17:59:20Z] dispatch ship.sh
+[ralph_v7 2026-05-27T17:59:20Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T17:59:20Z] check_done.sh
+[ralph_v7 2026-05-27T18:00:51Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:00:51Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:00:51Z] ----- cycle 34 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:01:21Z] ----- cycle 35 start -----
+[ralph_v7 2026-05-27T18:01:21Z] check_done.sh
+[ralph_v7 2026-05-27T18:02:49Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:02:49Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:02:49Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:02:49Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:02:49Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:02:49Z] check_done.sh
+[ralph_v7 2026-05-27T18:04:24Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:04:24Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:04:24Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T18:05:24Z] ralph_v7 starting (PID 40342). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T18:05:24Z] ----- cycle 36 start -----
+[ralph_v7 2026-05-27T18:05:24Z] check_done.sh
+[ralph_v7 2026-05-27T18:06:39Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T18:06:39Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:06:39Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:06:40Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:06:40Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:06:40Z] check_done.sh
+[ralph_v7 2026-05-27T18:08:08Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:08:08Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:08:08Z] ----- cycle 36 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:08:38Z] ----- cycle 37 start -----
+[ralph_v7 2026-05-27T18:08:38Z] check_done.sh
+[ralph_v7 2026-05-27T18:09:54Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T18:09:54Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:09:54Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:09:54Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:09:54Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:09:54Z] check_done.sh
+[ralph_v7 2026-05-27T18:11:28Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:11:28Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:11:28Z] ----- cycle 37 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:11:58Z] ----- cycle 38 start -----
+[ralph_v7 2026-05-27T18:11:58Z] check_done.sh
+[ralph_v7 2026-05-27T18:13:33Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:13:33Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:13:33Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:13:34Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:13:34Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:13:34Z] check_done.sh
+[ralph_v7 2026-05-27T18:15:10Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:15:10Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:15:10Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T18:16:10Z] ralph_v7 starting (PID 45592). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T18:16:10Z] ----- cycle 39 start -----
+[ralph_v7 2026-05-27T18:16:10Z] check_done.sh
+[ralph_v7 2026-05-27T18:17:43Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:17:43Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:17:43Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:17:43Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:17:44Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:17:44Z] check_done.sh
+[ralph_v7 2026-05-27T18:19:12Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:19:12Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:19:12Z] ----- cycle 39 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:19:42Z] ----- cycle 40 start -----
+[ralph_v7 2026-05-27T18:19:42Z] check_done.sh
+[ralph_v7 2026-05-27T18:21:13Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:21:13Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:21:13Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:21:13Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:21:14Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:21:14Z] check_done.sh
+[ralph_v7 2026-05-27T18:22:45Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:22:45Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:22:45Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T18:23:45Z] ralph_v7 starting (PID 50020). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T18:23:45Z] ----- cycle 41 start -----
+[ralph_v7 2026-05-27T18:23:45Z] check_done.sh
+[ralph_v7 2026-05-27T18:25:18Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:25:18Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:25:18Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:25:18Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:25:19Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:25:19Z] check_done.sh
+[ralph_v7 2026-05-27T18:26:52Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:26:52Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:26:52Z] ----- cycle 41 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:27:22Z] ----- cycle 42 start -----
+[ralph_v7 2026-05-27T18:27:22Z] check_done.sh
+[ralph_v7 2026-05-27T18:28:50Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:28:50Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:28:50Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:28:50Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:28:50Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:28:50Z] check_done.sh
+[ralph_v7 2026-05-27T18:31:02Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:31:02Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:31:02Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T18:32:02Z] ralph_v7 starting (PID 60729). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T18:32:02Z] ----- cycle 43 start -----
+[ralph_v7 2026-05-27T18:32:02Z] check_done.sh
+[ralph_v7 2026-05-27T18:33:42Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:33:42Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:33:42Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:33:43Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:33:43Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:33:43Z] check_done.sh
+[ralph_v7 2026-05-27T18:35:28Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:35:28Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:35:28Z] ----- cycle 43 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:35:58Z] ----- cycle 44 start -----
+[ralph_v7 2026-05-27T18:35:58Z] check_done.sh
+[ralph_v7 2026-05-27T18:37:43Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:37:43Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:37:43Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:37:44Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:37:44Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:37:44Z] check_done.sh
+[ralph_v7 2026-05-27T18:39:00Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T18:39:00Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:39:00Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T18:40:00Z] ralph_v7 starting (PID 75694). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T18:40:00Z] ----- cycle 45 start -----
+[ralph_v7 2026-05-27T18:40:00Z] check_done.sh
+[ralph_v7 2026-05-27T18:45:15Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:45:15Z] red gates after first check: V7.2_public_dmg_installs,V7.4_deploy_parity_green,V7.5_public_dmg_sha_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:45:15Z] first actionable red: V7.2_public_dmg_installs
+[ralph_v7 2026-05-27T18:45:16Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:45:16Z] fixer for V7.2 exit=1
+[ralph_v7 2026-05-27T18:45:16Z] check_done.sh
+[ralph_v7 2026-05-27T18:47:13Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:47:13Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:47:13Z] ----- cycle 45 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:47:43Z] ----- cycle 46 start -----
+[ralph_v7 2026-05-27T18:47:43Z] check_done.sh
+[ralph_v7 2026-05-27T18:49:31Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:49:31Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:49:31Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:49:31Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:49:32Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:49:32Z] check_done.sh
+[ralph_v7 2026-05-27T18:51:14Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:51:14Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:51:14Z] ----- cycle 46 end (sleep 30s) -----
+[ralph_v7 2026-05-27T18:51:44Z] ----- cycle 47 start -----
+[ralph_v7 2026-05-27T18:51:44Z] check_done.sh
+[ralph_v7 2026-05-27T18:53:41Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:53:41Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:53:41Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:53:41Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:53:42Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:53:42Z] check_done.sh
+[ralph_v7 2026-05-27T18:56:39Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:56:39Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:56:39Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T18:57:39Z] ralph_v7 starting (PID 19404). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T18:57:39Z] ----- cycle 48 start -----
+[ralph_v7 2026-05-27T18:57:39Z] check_done.sh
+[ralph_v7 2026-05-27T18:59:18Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T18:59:19Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T18:59:19Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T18:59:19Z] dispatch ship.sh
+[ralph_v7 2026-05-27T18:59:20Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T18:59:20Z] check_done.sh
+[ralph_v7 2026-05-27T19:01:03Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:01:04Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:01:04Z] ----- cycle 48 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:01:34Z] ----- cycle 49 start -----
+[ralph_v7 2026-05-27T19:01:34Z] check_done.sh
+[ralph_v7 2026-05-27T19:03:18Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:03:18Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:03:18Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:03:19Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:03:19Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:03:19Z] check_done.sh
+[ralph_v7 2026-05-27T19:05:11Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:05:11Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:05:11Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T19:06:12Z] ralph_v7 starting (PID 34728). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T19:06:12Z] ----- cycle 50 start -----
+[ralph_v7 2026-05-27T19:06:12Z] check_done.sh
+[ralph_v7 2026-05-27T19:08:02Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:08:02Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:08:02Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:08:02Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:08:03Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:08:03Z] check_done.sh
+[ralph_v7 2026-05-27T19:09:43Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:09:43Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:09:43Z] ----- cycle 50 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:10:13Z] ----- cycle 51 start -----
+[ralph_v7 2026-05-27T19:10:13Z] check_done.sh
+[ralph_v7 2026-05-27T19:11:59Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:11:59Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:11:59Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:11:59Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:12:00Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:12:00Z] check_done.sh
+[ralph_v7 2026-05-27T19:13:53Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:13:53Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:13:53Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T19:14:53Z] ralph_v7 starting (PID 52502). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T19:14:53Z] ----- cycle 52 start -----
+[ralph_v7 2026-05-27T19:14:53Z] check_done.sh
+[ralph_v7 2026-05-27T19:16:30Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:16:30Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:16:30Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:16:30Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:16:31Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:16:31Z] check_done.sh
+[ralph_v7 2026-05-27T19:18:01Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:18:01Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:18:01Z] ----- cycle 52 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:18:31Z] ----- cycle 53 start -----
+[ralph_v7 2026-05-27T19:18:31Z] check_done.sh
+[ralph_v7 2026-05-27T19:20:05Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:20:05Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:20:05Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:20:05Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:20:06Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:20:06Z] check_done.sh
+[ralph_v7 2026-05-27T19:21:43Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:21:43Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:21:43Z] ----- cycle 53 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:22:13Z] ----- cycle 54 start -----
+[ralph_v7 2026-05-27T19:22:13Z] check_done.sh
+[ralph_v7 2026-05-27T19:23:49Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:23:49Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:23:49Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:23:49Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:23:50Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:23:50Z] check_done.sh
+[ralph_v7 2026-05-27T19:25:27Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:25:27Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:25:27Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T19:26:27Z] ralph_v7 starting (PID 70300). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T19:26:27Z] ----- cycle 55 start -----
+[ralph_v7 2026-05-27T19:26:27Z] check_done.sh
+[ralph_v7 2026-05-27T19:27:43Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T19:27:43Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:27:43Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:27:43Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:27:44Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:27:44Z] check_done.sh
+[ralph_v7 2026-05-27T19:29:19Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:29:20Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:29:20Z] ----- cycle 55 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:29:50Z] ----- cycle 56 start -----
+[ralph_v7 2026-05-27T19:29:50Z] check_done.sh
+[ralph_v7 2026-05-27T19:31:44Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:31:45Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:31:45Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:31:45Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:31:46Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:31:46Z] check_done.sh
+[ralph_v7 2026-05-27T19:33:20Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:33:20Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:33:20Z] ----- cycle 56 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:33:50Z] ----- cycle 57 start -----
+[ralph_v7 2026-05-27T19:33:50Z] check_done.sh
+[ralph_v7 2026-05-27T19:35:27Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:35:27Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:35:27Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:35:27Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:35:28Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:35:28Z] check_done.sh
+[ralph_v7 2026-05-27T19:37:10Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:37:11Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:37:11Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T19:38:11Z] ralph_v7 starting (PID 92776). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T19:38:11Z] ----- cycle 58 start -----
+[ralph_v7 2026-05-27T19:38:11Z] check_done.sh
+[ralph_v7 2026-05-27T19:39:26Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T19:39:27Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:39:27Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:39:27Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:39:28Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:39:28Z] check_done.sh
+[ralph_v7 2026-05-27T19:40:56Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:40:57Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:40:57Z] ----- cycle 58 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:41:27Z] ----- cycle 59 start -----
+[ralph_v7 2026-05-27T19:41:27Z] check_done.sh
+[ralph_v7 2026-05-27T19:43:28Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:43:29Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:43:29Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:43:29Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:43:30Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:43:30Z] check_done.sh
+[ralph_v7 2026-05-27T19:45:04Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:45:05Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:45:05Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T19:46:05Z] ralph_v7 starting (PID 5791). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T19:46:05Z] ----- cycle 60 start -----
+[ralph_v7 2026-05-27T19:46:05Z] check_done.sh
+[ralph_v7 2026-05-27T19:47:39Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:47:39Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:47:39Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:47:39Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:47:40Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:47:40Z] check_done.sh
+[ralph_v7 2026-05-27T19:49:13Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:49:13Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:49:13Z] ----- cycle 60 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:49:43Z] ----- cycle 61 start -----
+[ralph_v7 2026-05-27T19:49:43Z] check_done.sh
+[ralph_v7 2026-05-27T19:51:17Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:51:17Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:51:17Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:51:18Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:51:18Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:51:18Z] check_done.sh
+[ralph_v7 2026-05-27T19:52:45Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:52:45Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:52:45Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T19:53:45Z] ralph_v7 starting (PID 13073). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T19:53:45Z] ----- cycle 62 start -----
+[ralph_v7 2026-05-27T19:53:45Z] check_done.sh
+[ralph_v7 2026-05-27T19:55:12Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:55:13Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:55:13Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:55:13Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:55:13Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:55:13Z] check_done.sh
+[ralph_v7 2026-05-27T19:56:45Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:56:45Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:56:45Z] ----- cycle 62 end (sleep 30s) -----
+[ralph_v7 2026-05-27T19:57:15Z] ----- cycle 63 start -----
+[ralph_v7 2026-05-27T19:57:15Z] check_done.sh
+[ralph_v7 2026-05-27T19:58:54Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T19:58:54Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T19:58:54Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T19:58:54Z] dispatch ship.sh
+[ralph_v7 2026-05-27T19:58:55Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T19:58:55Z] check_done.sh
+[ralph_v7 2026-05-27T20:00:29Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:00:30Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:00:30Z] ----- cycle 63 end (sleep 30s) -----
+[ralph_v7 2026-05-27T20:01:00Z] ----- cycle 64 start -----
+[ralph_v7 2026-05-27T20:01:00Z] check_done.sh
+[ralph_v7 2026-05-27T20:02:15Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T20:02:15Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:02:15Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:02:15Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:02:16Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:02:16Z] check_done.sh
+[ralph_v7 2026-05-27T20:03:47Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:03:47Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:03:47Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T20:04:47Z] ralph_v7 starting (PID 20020). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:04:48Z] ----- cycle 65 start -----
+[ralph_v7 2026-05-27T20:04:48Z] check_done.sh
+[ralph_v7 2026-05-27T20:06:22Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:06:22Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:06:22Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:06:22Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:06:23Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:06:23Z] check_done.sh
+[ralph_v7 2026-05-27T20:07:58Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:07:58Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:07:58Z] ----- cycle 65 end (sleep 30s) -----
+[ralph_v7 2026-05-27T20:08:28Z] ----- cycle 66 start -----
+[ralph_v7 2026-05-27T20:08:28Z] check_done.sh
+[ralph_v7 2026-05-27T20:09:58Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:09:58Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:09:58Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:09:58Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:09:58Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:09:58Z] check_done.sh
+[ralph_v7 2026-05-27T20:11:32Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:11:32Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:11:32Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T20:12:32Z] ralph_v7 starting (PID 29594). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:12:32Z] ----- cycle 67 start -----
+[ralph_v7 2026-05-27T20:12:32Z] check_done.sh
+[ralph_v7 2026-05-27T20:14:26Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:14:27Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:14:27Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:14:28Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:14:29Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:14:29Z] check_done.sh
+[ralph_v7 2026-05-27T20:16:02Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:16:03Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:16:03Z] ----- cycle 67 end (sleep 30s) -----
+[ralph_v7 2026-05-27T20:16:33Z] ----- cycle 68 start -----
+[ralph_v7 2026-05-27T20:16:33Z] check_done.sh
+[ralph_v7 2026-05-27T20:18:11Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:18:11Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:18:11Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:18:12Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:18:12Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:18:12Z] check_done.sh
+[ralph_v7 2026-05-27T20:19:47Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:19:47Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:19:47Z] ----- cycle 68 end (sleep 30s) -----
+[ralph_v7 2026-05-27T20:20:17Z] ----- cycle 69 start -----
+[ralph_v7 2026-05-27T20:20:17Z] check_done.sh
+[ralph_v7 2026-05-27T20:21:49Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:21:49Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:21:49Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:21:49Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:21:50Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:21:50Z] check_done.sh
+[ralph_v7 2026-05-27T20:23:18Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:23:18Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:23:18Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T20:24:18Z] ralph_v7 starting (PID 46355). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:24:18Z] ----- cycle 70 start -----
+[ralph_v7 2026-05-27T20:24:18Z] check_done.sh
+[ralph_v7 2026-05-27T20:25:52Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:25:52Z] red gates after first check: 
+[ralph_v7 2026-05-27T20:25:52Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T20:25:52Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T20:26:52Z] ralph_v7 starting (PID 48300). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:26:52Z] ----- cycle 71 start -----
+[ralph_v7 2026-05-27T20:28:23Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:28:23Z] red gates after first check: V7.1_public_app_loads,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:28:23Z] first actionable red: V7.1_public_app_loads
+[ralph_v7 2026-05-27T20:28:23Z] no fixer mapped for gate V7.1; skipping
+[ralph_v7 2026-05-27T20:28:23Z] check_done.sh
+[ralph_v7 2026-05-27T20:29:47Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:29:47Z] red gates after fixer:      
+[ralph_v7 2026-05-27T20:29:47Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T20:30:48Z] ralph_v7 starting (PID 53046). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:30:48Z] ----- cycle 71 start -----
+[ralph_v7 2026-05-27T20:30:48Z] check_done.sh
+[ralph_v7 2026-05-27T20:32:11Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:32:11Z] red gates after first check: 
+[ralph_v7 2026-05-27T20:32:11Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T20:32:11Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T20:33:11Z] ralph_v7 starting (PID 55552). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:33:11Z] ----- cycle 71 start -----
+[ralph_v7 2026-05-27T20:33:11Z] check_done.sh
+[ralph_v7 2026-05-27T20:34:38Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:34:38Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:34:38Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:34:39Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:34:39Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:34:39Z] check_done.sh
+[ralph_v7 2026-05-27T20:36:26Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:36:26Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:36:26Z] ----- cycle 71 end (sleep 30s) -----
+[ralph_v7 2026-05-27T20:36:56Z] ----- cycle 72 start -----
+[ralph_v7 2026-05-27T20:36:56Z] check_done.sh
+[ralph_v7 2026-05-27T20:38:32Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:38:32Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:38:32Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:38:33Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:38:34Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:38:34Z] check_done.sh
+[ralph_v7 2026-05-27T20:40:09Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:40:10Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:40:10Z] wrote state/v7/loop_stuck.md
+[ralph_v7 2026-05-27T20:41:10Z] ralph_v7 starting (PID 68635). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:41:10Z] ----- cycle 73 start -----
+[ralph_v7 2026-05-27T20:41:10Z] check_done.sh
+[ralph_v7 2026-05-27T20:42:45Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:42:45Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:42:45Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:42:45Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:42:46Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:42:46Z] check_done.sh
+[ralph_v7 2026-05-27T20:44:01Z] check_done.sh exit=128
+[ralph_v7 2026-05-27T20:44:02Z] red gates after fixer:      V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:44:02Z] ----- cycle 73 end (sleep 30s) -----
+[ralph_v7 2026-05-27T20:44:32Z] ----- cycle 74 start -----
+[ralph_v7 2026-05-27T20:44:32Z] check_done.sh
+[ralph_v7 2026-05-27T20:46:00Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:46:00Z] red gates after first check: V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.14_last_20_interactions_pass,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:46:00Z] first actionable red: V7.4_deploy_parity_green
+[ralph_v7 2026-05-27T20:46:01Z] dispatch ship.sh
+[ralph_v7 2026-05-27T20:46:01Z] fixer for V7.4 exit=1
+[ralph_v7 2026-05-27T20:46:01Z] check_done.sh
+[ralph_v7 2026-05-27T20:47:33Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:47:33Z] red gates after fixer:      
+[ralph_v7 2026-05-27T20:47:33Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T20:48:33Z] ralph_v7 starting (PID 81312). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:48:33Z] ----- cycle 75 start -----
+[ralph_v7 2026-05-27T20:48:33Z] check_done.sh
+[ralph_v7 2026-05-27T20:50:14Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:50:15Z] red gates after first check: V7.1_public_app_loads,V7.4_deploy_parity_green,V7.6_mp3_input_passes,V7.7_text_transcript_input_passes,V7.8_computer_mic_input_passes,V7.9_external_mic_input_passes,V7.10_real_chrome_user_surface_no_clone,V7.11_100_stranger_successes,V7.15_3_consecutive_mp3_evals_pass,V7.18_3_clean_room_public_installs
+[ralph_v7 2026-05-27T20:50:15Z] first actionable red: V7.1_public_app_loads
+[ralph_v7 2026-05-27T20:50:15Z] no fixer mapped for gate V7.1; skipping
+[ralph_v7 2026-05-27T20:50:15Z] check_done.sh
+[ralph_v7 2026-05-27T20:51:43Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:51:43Z] red gates after fixer:      
+[ralph_v7 2026-05-27T20:51:43Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T20:52:43Z] ralph_v7 starting (PID 85891). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:52:43Z] ----- cycle 75 start -----
+[ralph_v7 2026-05-27T20:52:43Z] check_done.sh
+[ralph_v7 2026-05-27T20:54:10Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:54:10Z] red gates after first check: 
+[ralph_v7 2026-05-27T20:54:10Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T20:54:10Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T20:55:10Z] ralph_v7 starting (PID 91002). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:55:10Z] ----- cycle 75 start -----
+[ralph_v7 2026-05-27T20:55:10Z] check_done.sh
+[ralph_v7 2026-05-27T20:56:41Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T20:56:41Z] red gates after first check: 
+[ralph_v7 2026-05-27T20:56:41Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T20:56:41Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T20:57:41Z] ralph_v7 starting (PID 96202). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T20:57:41Z] ----- cycle 75 start -----
+[ralph_v7 2026-05-27T21:00:10Z] ralph_v7 starting (PID 504). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:00:10Z] ----- cycle 75 start -----
+[ralph_v7 2026-05-27T21:00:10Z] check_done.sh
+[ralph_v7 2026-05-27T21:01:38Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:01:38Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:01:38Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:01:38Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:02:38Z] ralph_v7 starting (PID 1550). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:02:38Z] ----- cycle 76 start -----
+[ralph_v7 2026-05-27T21:02:38Z] check_done.sh
+[ralph_v7 2026-05-27T21:04:17Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:04:17Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:04:17Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:04:17Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:05:17Z] ralph_v7 starting (PID 3008). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:05:17Z] ----- cycle 76 start -----
+[ralph_v7 2026-05-27T21:05:17Z] check_done.sh
+[ralph_v7 2026-05-27T21:06:41Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:06:41Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:06:41Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:06:41Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:07:41Z] ralph_v7 starting (PID 5532). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:07:41Z] ----- cycle 76 start -----
+[ralph_v7 2026-05-27T21:07:41Z] check_done.sh
+[ralph_v7 2026-05-27T21:09:18Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:09:18Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:09:18Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:09:18Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:10:19Z] ralph_v7 starting (PID 10675). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:10:19Z] ----- cycle 76 start -----
+[ralph_v7 2026-05-27T21:10:19Z] check_done.sh
+[ralph_v7 2026-05-27T21:11:54Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:11:54Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:11:54Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:11:54Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:12:54Z] ralph_v7 starting (PID 15470). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:12:54Z] ----- cycle 76 start -----
+[ralph_v7 2026-05-27T21:12:54Z] check_done.sh
+[ralph_v7 2026-05-27T21:14:25Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:14:25Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:14:25Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:14:25Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:15:26Z] ralph_v7 starting (PID 20373). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:15:26Z] ----- cycle 76 start -----
+[ralph_v7 2026-05-27T21:15:26Z] check_done.sh
+[ralph_v7 2026-05-27T21:17:03Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:17:03Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:17:03Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:17:03Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:18:03Z] ralph_v7 starting (PID 24060). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:18:03Z] ----- cycle 76 start -----
+[ralph_v7 2026-05-27T21:18:03Z] check_done.sh
+[ralph_v7 2026-05-27T21:20:02Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:20:02Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:20:02Z] all gates green; writing COMPLETE.md if not already
+[ralph_v7 2026-05-27T21:20:02Z] wrote state/v7/COMPLETE_ENGINEERING.md
+[ralph_v7 2026-05-27T21:21:02Z] ralph_v7 starting (PID 25943). cycle_sleep=30s fixer_max=300s
+[ralph_v7 2026-05-27T21:21:02Z] ----- cycle 77 start -----
+[ralph_v7 2026-05-27T21:21:02Z] check_done.sh
+[ralph_v7 2026-05-27T21:22:40Z] check_done.sh exit=1
+[ralph_v7 2026-05-27T21:22:40Z] red gates after first check: 
+[ralph_v7 2026-05-27T21:23:41Z] check_done.sh

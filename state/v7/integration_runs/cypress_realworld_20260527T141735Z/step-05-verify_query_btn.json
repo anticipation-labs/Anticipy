@@ -1,0 +1,7 @@
+{
+  "name": "verify_query_btn",
+  "ok": true,
+  "detail": "#query-btn text=Button",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-05-verify_query_btn.png",
+  "receipt": "Button"
+}

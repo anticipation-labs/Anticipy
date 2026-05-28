@@ -1,0 +1,7 @@
+{
+  "name": "add_to_basket",
+  "ok": true,
+  "detail": "clicked: CLICKED:add_shopping_cart add to basket",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143816Z/step-08-add_to_basket.png",
+  "receipt": "CLICKED:add_shopping_cart add to basket"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "nav_actions",
+  "ok": true,
+  "detail": "url=https://example.cypress.io/commands/actions",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-09-nav_actions.png",
+  "receipt": "CDP location.assign"
+}

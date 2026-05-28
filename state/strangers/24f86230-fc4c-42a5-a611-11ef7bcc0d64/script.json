@@ -1,0 +1,121 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "24f86230-fc4c-42a5-a611-11ef7bcc0d64",
+  "created_at": "2025-04-11T16:45:00Z",
+  "title": "HubSpot Follow-up from Audio with Surface Decline",
+  "category": "hubspot_followup_audio",
+  "verb_category": "email_draft_for_send_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot deal pipeline and contact management",
+  "breadth_reason": "This script extends breadth by proving Anticipy can process an uploaded audio command for a HubSpot action while requiring real signed-in surface proof before executing, and declining if the surface is unverifiable.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "public downloadable user-device engine",
+    "surface_rule": "user's actual signed-in Chrome profile with active HubSpot session",
+    "proof_rule": "fresh, surface-readable proof tied to the public build that produced it"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Using uploaded audio ASR coverage ensures the command originates from a static file rather than a live mic, avoiding microphone permission complexity while testing the ASR pipeline end-to-end."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "HubSpot Web App in Chrome",
+      "kind": "browser_tab",
+      "surface": "https://app.hubspot.com/",
+      "proof_needed": "visible logged-in HubSpot UI with a contact or deal record"
+    },
+    {
+      "name": "Chrome Profile",
+      "kind": "browser_profile",
+      "surface": "user's primary Chrome profile",
+      "proof_needed": "Chrome profile identity matching signed-in user"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "Navigate to https://www.anticipy.ai/app and complete onboarding/download to obtain the user-device engine.",
+      "required_proof": "screenshot of the public app page and successful download confirmation"
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "actor": "driver",
+      "kind": "real_surface_precheck",
+      "description": "Verify that the user's Chrome browser is open and logged into HubSpot with a visible contact or deal record. If not, the script cannot proceed.",
+      "required_proof": "screenshot showing the HubSpot web app in the user's signed-in Chrome window"
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "actor": "stranger",
+      "kind": "upload_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "input_fidelity": "uploaded_audio",
+      "media_type": "audio/mpeg",
+      "spoken_reference_text": "After the partner sync with Daria, please add a follow-up note in HubSpot for the Jordan account saying I promised to send the renewal terms and ask if Friday morning works for a follow-up call. If you cannot prove the visible HubSpot record or my signed-in surface, decline without writing anything.",
+      "delivery_instruction": "The stranger must generate a fresh .mp3 audio file containing the spoken_reference_text using the `say` command at runtime, then upload it via /api/listen/upload. The audio artifact must be produced per run and not reused from a previous test.",
+      "required_proof": "screenshot of the upload success response and the generated audio file metadata"
+    },
+    {
+      "id": "m04_same_boundary",
+      "actor": "engine",
+      "kind": "post_asr_boundary_check",
+      "description": "After ASR transcription, the engine verifies that the transcript matches the expected intent and that the action target (HubSpot) is within the same boundary as the verified surface. If the surface is not verified, proceed to decline.",
+      "required_proof": "transcript output and boundary check log"
+    },
+    {
+      "id": "m05_decision_on_service",
+      "actor": "engine",
+      "kind": "expected_decision",
+      "acceptable_outcomes": [
+        {
+          "outcome": "act",
+          "description": "If the HubSpot surface is verified, the engine drafts the email follow-up in the user's HubSpot account and provides proof of the draft."
+        },
+        {
+          "outcome": "ask",
+          "description": "If the surface is ambiguous (e.g., logged in but not viewing a record), the engine asks the user to navigate to a specific record."
+        },
+        {
+          "outcome": "decline",
+          "description": "If the surface cannot be verified (no sign-in or no visible HubSpot record), the engine declines to write anything, documenting the reason."
+        }
+      ],
+      "required_proof": "screenshot or log of the decision output"
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "actor": "driver",
+      "kind": "input_mode_surface_gap_observation",
+      "secondary_only": true,
+      "description": "Observe that the primary input mode (uploaded audio) is the only working path; all other input modes (transcript paste, live mic, etc.) are excluded as per the primary_user_input.not_primary list. Record any gaps or errors if those modes are accidentally enabled.",
+      "required_proof": "list of disabled input modes and confirmation they are not used"
+    }
+  ],
+  "success_criteria": [
+    "The uploaded audio is transcribed correctly, matching the spoken_reference_text.",
+    "The engine correctly verifies whether the user's real signed-in HubSpot surface is visible and logged in.",
+    "If the surface is verified, a follow-up note draft is created in HubSpot and proof is captured.",
+    "If the surface is not verified, the engine declines with a clear reason and no action is taken.",
+    "All proofs are fresh, surface-readable, and tied to the public build used."
+  ],
+  "failure_triggers": [
+    "The uploaded audio fails to transcribe or the transcript does not match the expected command.",
+    "The surface precheck shows no HubSpot sign-in or no record visible, but the engine attempts to act anyway.",
+    "The engine performs an action without fresh surface proof (e.g., reuses old screenshots).",
+    "The engine accepts a non-primary input mode (e.g., transcript paste) when the primary is defined as uploaded audio.",
+    "Any proof is stale, mocked, or from a non-public build."
+  ]
+}

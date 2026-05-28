@@ -1,0 +1,7 @@
+{
+  "actual": "url=https://automationexercise.com/login login_form=true signup_form=true",
+  "expected": "/login with login form (no real signup)",
+  "name": "login_wall",
+  "passed": true,
+  "primitive_used": "bridge navigate + curl HTML"
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "d8a8404d-ec77-4b78-b4c9-921e0aa0498f",
+  "created_at": "2025-04-12T14:30:00Z",
+  "name": "Marcus Chen",
+  "age": 35,
+  "occupation": "Sales Operations Manager",
+  "location": "Austin, TX",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot contact management",
+  "primary_real_surface": {
+    "surface": "HubSpot contact record page",
+    "chrome_requirement": "User must be signed into HubSpot in Chrome",
+    "acceptable_state": "Contact record visible with email field"
+  },
+  "daily_tools": [
+    "HubSpot",
+    "Outlook",
+    "Slack",
+    "Salesforce",
+    "Google Sheets"
+  ],
+  "contacts": [
+    {
+      "name": "Jessica Liu",
+      "relationship": "Sales Director",
+      "context": "Direct supervisor, reviews all declined deal emails"
+    },
+    {
+      "name": "Tom Reeves",
+      "relationship": "Client",
+      "context": "Prospect for follow-up after decline"
+    },
+    {
+      "name": "Aisha Patel",
+      "relationship": "Colleague",
+      "context": "Shared lead pipeline coordination"
+    }
+  ]
+}

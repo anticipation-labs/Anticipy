@@ -1,0 +1,1 @@
+{"ok": true, "command": "navigate", "data": {"navigatedTo": "https://bot.sannysoft.com", "url": "https://bot.sannysoft.com/", "title": "Antibot", "targetId": "3FCA1085EDFCE493AB4F0BB80FAFD582", "in_place": false, "background_tab": true}, "acquired_via": "chrome_cdp_loopback_bridge", "bridge_kind": "cdp_primary", "error": ""}

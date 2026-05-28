@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "1a63650d-0d62-4b2a-b533-56e2716f1991",
+  "created_at": "2025-04-10T20:00:00Z",
+  "title": "Workout Log via Audio Upload",
+  "category": "workout_log",
+  "verb_category": "health_or_workout_log_ack",
+  "hard_category": "crm",
+  "hard_category_focus": "Notion workout log",
+  "breadth_reason": "This script extends breadth by testing the audio upload path for real-world Notion CRM logging, requiring ASR and surface proof.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine",
+    "surface_rule": "User's real signed-in Chrome profile with Notion authenticated and visible",
+    "proof_rule": "Fresh proof from public build on user's own device, no stale sources or mocked data"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures speech-to-text works on recorded files, expanding beyond live mic scenarios."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Notion Web App",
+      "kind": "web_app",
+      "surface": "Notion database page open in Chrome",
+      "proof_needed": "Visible Notion page or database view in a Chrome tab with user's workspace signed in"
+    },
+    {
+      "name": "Chrome Profile",
+      "kind": "browser_profile",
+      "surface": "Signed-in Chrome profile",
+      "proof_needed": "Chrome profile with Notion authentication cookies present"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to https://www.anticipy.ai/app, completes onboarding, downloads the public installer, and installs the user-device engine on their computer."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver confirms that the user has a Notion workspace open in their signed-in Chrome profile and that the surface is accessible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a new record to my Notion Workout Log database for today's morning run, forty five minutes, four point two miles, and tag it long-run. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "Stranger speaks the above text aloud, which is recorded as an MP3 file using the user's device. The file is then uploaded via /api/listen/upload for ASR processing.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the ASR output matches the spoken reference text and that the boundary condition (same upload, same session) is preserved."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: Log the workout into the Notion Workout Log database with correct fields (duration, distance, tag).",
+        "ask: Request user confirmation or additional details if the surface is ambiguous or if the database schema requires clarification.",
+        "decline: If the Notion surface cannot be verified as the user's signed-in workspace, decline without making any changes."
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that no secondary input modes (transcript paste, live mic, etc.) are involved; the entire interaction relies solely on the uploaded audio and Notion surface verification."
+    }
+  ],
+  "success_criteria": [
+    "The user uploads an MP3 audio file containing the workout request.",
+    "The engine correctly transcribes the audio and parses the intent to add a record to the Notion Workout Log.",
+    "The engine verifies that the Notion surface is present and signed in, then writes the record with the specified fields.",
+    "If the surface is not verifiable, the engine declines without writing any data and provides a clear reason.",
+    "The entire flow uses the public product path and the user's own device, with no mocked surfaces or stale proofs."
+  ],
+  "failure_triggers": [
+    "The ASR fails to understand the spoken reference text, leading to incorrect or missing fields.",
+    "The engine cannot verify the Notion surface (e.g., no Chrome tab with Notion open, user not signed in, or workspace inaccessible).",
+    "The engine attempts to write to Notion without proper surface proof, violating the proof_rule.",
+    "The audio upload fails due to file format issues or network errors during upload.",
+    "The engine uses a secondary input mode (e.g., transcript paste) instead of the uploaded audio, bypassing the primary input path."
+  ]
+}

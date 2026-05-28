@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "a02504fd-d205-48fa-9420-a4386b597258",
+  "created_at": "2025-04-08T12:00:00Z",
+  "name": "James O'Connell",
+  "age": 42,
+  "occupation": "Sales Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot deal management and email outreach",
+  "primary_real_surface": {
+    "surface": "HubSpot web app in Chrome",
+    "chrome_requirement": "Chrome browser with active HubSpot session",
+    "acceptable_state": "User is logged into HubSpot and viewing a contact or deal record"
+  },
+  "daily_tools": [
+    "HubSpot",
+    "Outlook",
+    "Slack",
+    "Zoom",
+    "LinkedIn Sales Navigator"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Chen",
+      "relationship": "Sales Rep",
+      "context": "Works on my team, often collaborates on deals"
+    },
+    {
+      "name": "Mike Torres",
+      "relationship": "Customer",
+      "context": "Prospect in negotiation phase"
+    },
+    {
+      "name": "Lisa Park",
+      "relationship": "Manager",
+      "context": "VP of Sales, reports to her"
+    }
+  ]
+}

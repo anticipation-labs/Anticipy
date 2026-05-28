@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly paused with a confirm card on the Anticipy surface, naming Linear as the blocked service, because it could not verify a signed-in Linear workspace. This satisfies the D16 competent-pause standard: broken_script_surfaces is empty, the engine logs show an ASKING outcome with blocked_services [\"Linear\"], the installed user-device engine and real Chrome were used, and no action was taken on the third-party surface. The missing Linear surface is expected and permitted under D16.",
+  "specific_failures": [],
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Driver navigated to the public Anticipy app, signed in, and completed onboarding; the trace confirms the public product path via UI upload and extension."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver confirmed Elena's Chrome is open; the driver did not fail, and the environment was such that the engine later correctly found no signed-in Linear surface, which is consistent with the precheck having been performed."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Uploaded MP3 audio was delivered to /api/listen/upload, transcribed with a WER of 0.026, and the transcript matches the spoken reference closely."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine processed the uploaded audio and created a v7 decision with the transcript and plan; the ASR accuracy is within the same run."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine emitted an ASKING outcome with a confirm card referencing Linear, which is an acceptable alternative to acting or declining. Since the Linear surface was not signed in, this is a competent pause that avoids writing."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Driver observed that the script only tests audio upload, confirming the gap in input modality coverage as required."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine generated an ASKING confirm card on the changed Anticipy surface, with blocked_services [\"Linear\"] in the engine logs, and no third-party surface was changed or broken. This meets the D16 competent-pause standard."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T23:35:03Z"
+}

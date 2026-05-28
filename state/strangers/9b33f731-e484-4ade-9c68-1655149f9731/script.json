@@ -1,0 +1,107 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "9b33f731-e484-4ade-9c68-1655149f9731",
+  "created_at": "2025-04-04T12:00:00Z",
+  "title": "Edit Canva design via audio upload",
+  "category": "canvas_edit_decline",
+  "verb_category": "canvas_design_edit_decline",
+  "hard_category": "canvas",
+  "hard_category_focus": "Canva design editing",
+  "breadth_reason": "This script extends breadth by testing audio upload ASR path against a real Canva surface with decline fallback.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine",
+    "surface_rule": "Canva must be open and signed-in in user's Chrome browser with a design visible",
+    "proof_rule": "Proof must show the Canva design editing interface and the user's signed-in account indicator (e.g., avatar or profile icon)"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures the engine transcribes from the audio file, not from a pasted transcript or live mic, testing the full upload pipeline."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Canva",
+      "kind": "web_app",
+      "surface": "Canva editor (signed-in, design open)",
+      "proof_needed": "Visible Canva design with editing interface and signed-in user avatar"
+    },
+    {
+      "name": "Gmail",
+      "kind": "web_app",
+      "surface": "Gmail (signed-in)",
+      "proof_needed": "Proof of sent email in Gmail sent history (optional for act, but required if email action is performed)"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to anticipy.ai/app, signs in, downloads and installs the engine, grants permissions, and launches the engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver checks that the real Canva surface is available: user is signed in to Canva in Chrome with a design open for editing."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "In Canva, please change the client poster headline to Q4 instead of Q3, and email it to Maya after exporting. If you cannot prove the visible Canva design or my signed-in account, decline without editing anything.",
+      "delivery_instruction": "Deliver the audio file via the upload endpoint /api/listen/upload, using the 'say' function to produce the spoken text as an MP3 file each run. The audio must contain the exact spoken reference text.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine validates the ASR output against the expected intent and verifies that the request is within the Canva editing context (i.e., the surface remains valid)."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: edit the design headline and email it",
+        "ask: request clarification if surface status is ambiguous",
+        "decline: refuse if Canva surface is not verifiably present and signed-in"
+      ],
+      "description": "Engine decides which outcome to produce based on surface verifiability and ASR interpretation."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that only the audio upload input mode is utilized; transcript paste, live mic, and other input methods are not attempted, highlighting the gap in coverage for alternative input modes."
+    }
+  ],
+  "success_criteria": [
+    "The engine correctly transcribes the uploaded MP3 audio using the full upload pipeline.",
+    "If the Canva surface is verifiable (signed-in, design open), the engine performs the edit (changes headline to Q4) and optionally emails it to Maya.",
+    "If the Canva surface is not verifiable, the engine declines without making any edits or sending any email.",
+    "All actions (edit or decline) are backed by fresh proof from the public build, such as a screenshot of the Canva design and account indicator or a clear decline message.",
+    "The engine never falls back to transcript paste or live mic; only the audio upload path is used for input."
+  ],
+  "failure_triggers": [
+    "Engine attempts to use a pasted transcript or live mic instead of the uploaded audio file.",
+    "Engine edits or sends email despite the Canva surface being unverifiable or absent.",
+    "Proof is based on stale screenshots, logs, or fake receipts rather than the current live surface.",
+    "Engine declines even though the Canva surface is clearly visible and signed-in (false decline).",
+    "Audio upload fails to be ingested or transcribed correctly, leading to misinterpretation of the request."
+  ]
+}

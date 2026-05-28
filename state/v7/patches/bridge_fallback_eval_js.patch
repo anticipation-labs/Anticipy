@@ -1,0 +1,75 @@
+Proposed patch: add `eval_js` command to ~/.anticipy/anticipy_bridge_fallback.py
+Reason: the DOM extractor in engine/app/product/surface_dom_extractor.py
+needs to run a small JS snippet inside the active tab to walk the
+accessibility tree. The current fallback only supports `navigate`, so the
+extractor falls back to a heuristic DOM-string parse and the search-node
+hard check downgrades to soft. Adding `eval_js` makes the extractor
+exercise its preferred path.
+
+Prerequisite once per user Chrome:
+  View > Developer > Allow JavaScript from Apple Events  (must be ON)
+
+Apply by hand to ~/.anticipy/anticipy_bridge_fallback.py. The diff is
+intentionally minimal so it composes with the real native-messaging
+bridge, which already supports an `eval_js` shape via chrome.scripting.
+
+--- a/anticipy_bridge_fallback.py
++++ b/anticipy_bridge_fallback.py
+@@ -120,6 +120,30 @@ def _chrome_navigate(url: str) -> dict:
+     return {"ok": True, "window_id": (result.stdout or "").strip(), "navigatedTo": url}
+
+
++def _chrome_eval_js(code: str) -> dict:
++    # Quote the user code for AppleScript: backslashes, then double-quotes.
++    safe = code.replace("\\", "\\\\").replace('"', '\\"')
++    script = (
++        'tell application "Google Chrome"\n'
++        '  if (count of windows) = 0 then return "NO_WINDOWS"\n'
++        '  set t to active tab of front window\n'
++        f'  set r to execute t javascript "{safe}"\n'
++        '  if r is missing value then return ""\n'
++        '  return r as text\n'
++        'end tell'
++    )
++    result = _run_osascript(script, timeout=20.0)
++    if result.returncode != 0:
++        msg = (result.stderr or "eval_js failed").strip()
++        hint = ""
++        if "Allow JavaScript from Apple Events" in msg or "(12)" in msg:
++            hint = " (enable Chrome > View > Developer > Allow JavaScript from Apple Events)"
++        return {"ok": False, "error": msg + hint, "result": ""}
++    raw = (result.stdout or "").rstrip()
++    if raw == "NO_WINDOWS":
++        return {"ok": False, "error": "no chrome windows open", "result": ""}
++    return {"ok": True, "result": raw}
++
++
+ def _screencapture(out_path: Path) -> dict:
+     out_path.parent.mkdir(parents=True, exist_ok=True)
+     result = subprocess.run(
+@@ -210,6 +234,17 @@ async def _handle(reader, writer):
+         if method == "POST" and path.startswith("/surface-command"):
+             command = str(payload_in.get("command") or "").strip()
+             url = str(payload_in.get("url") or "").strip()
++            if command == "eval_js":
++                code = str(payload_in.get("code") or "")
++                if not code:
++                    writer.write(_resp("400 Bad Request", b'{"ok":false,"error":"missing code"}'))
++                    await writer.drain(); writer.close(); return
++                ev = _chrome_eval_js(code)
++                response = {"ok": bool(ev.get("ok")), "command": "eval_js",
++                            "data": {"result": ev.get("result") or ""},
++                            "acquired_via": ACQUIRED_VIA, "error": ev.get("error") or ""}
++                writer.write(_resp("200 OK", json.dumps(response).encode()))
++                await writer.drain(); writer.close(); return
+             if command == "navigate":
+
+Acceptance after applying:
+  curl -s -X POST http://127.0.0.1:7777/surface-command \
+    -H 'Content-Type: application/json' \
+    -d '{"secret":"local-dev","command":"eval_js","code":"JSON.stringify({u:location.href,t:document.title})"}'
+  --> {"ok":true,"command":"eval_js","data":{"result":"{\"u\":\"...\",\"t\":\"...\"}"},...}
+
+When this lands, scripts/v7/test_dom_extractor.py will flip
+search_node_present from false (soft) to true (hard) and source will
+read bridge_eval_js instead of bridge_surface_proof_fallback.

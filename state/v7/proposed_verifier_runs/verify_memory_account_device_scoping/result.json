@@ -1,0 +1,142 @@
+{
+  "schema": "anticipy.v7.proposed_verifier.memory_account_device_scoping",
+  "pass": false,
+  "generated_at": "2026-05-27T04:40:03Z",
+  "completed_at": "2026-05-27T04:41:40Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "assertions": [
+    {
+      "name": "S1_memory_entries_have_all_scoping_fields",
+      "pass": false,
+      "evidence": {
+        "sampled": 20,
+        "required_fields": [
+          "account_id",
+          "device_id",
+          "source",
+          "timestamp",
+          "confidence",
+          "kind",
+          "active",
+          "provenance"
+        ],
+        "first_entry_keys": [
+          "kind",
+          "ts",
+          "value"
+        ],
+        "missing_per_entry": [
+          {
+            "kind": "fact",
+            "missing_fields": [
+              "account_id",
+              "device_id",
+              "source",
+              "timestamp",
+              "confidence",
+              "active",
+              "provenance"
+            ]
+          },
+          {
+            "kind": "latent_intent",
+            "missing_fields": [
+              "account_id",
+              "device_id",
+              "source",
+              "timestamp",
+              "confidence",
+              "active",
+              "provenance"
+            ]
+          },
+          {
+            "kind": "latent_intent",
+            "missing_fields": [
+              "account_id",
+              "device_id",
+              "source",
+              "timestamp",
+              "confidence",
+              "active",
+              "provenance"
+            ]
+          },
+          {
+            "kind": "latent_intent",
+            "missing_fields": [
+              "account_id",
+              "device_id",
+              "source",
+              "timestamp",
+              "confidence",
+              "active",
+              "provenance"
+            ]
+          },
+          {
+            "kind": "latent_intent",
+            "missing_fields": [
+              "account_id",
+              "device_id",
+              "source",
+              "timestamp",
+              "confidence",
+              "active",
+              "provenance"
+            ]
+          }
+        ]
+      },
+      "failure": "At least one memory entry is missing required scoping fields"
+    },
+    {
+      "name": "S2_account_isolation",
+      "pass": false,
+      "evidence": {
+        "a_status": 404,
+        "b_status": 404,
+        "endpoint_present": false
+      },
+      "failure": "/api/memory/read scoped endpoint is not wired"
+    },
+    {
+      "name": "S3_pronoun_her_resolves_from_account_a_dossier",
+      "pass": false,
+      "evidence": {
+        "outcome": "DECLINED",
+        "status": 200,
+        "resolved_substring_check": "maya in body"
+      },
+      "failure": "Engine did not resolve 'her' to Maya for account A"
+    },
+    {
+      "name": "S4_do_not_touch_blocks_action",
+      "pass": true,
+      "evidence": {
+        "outcome": "CONFIRMED",
+        "status": 200
+      },
+      "failure": null
+    }
+  ],
+  "passed_count": 1,
+  "failed_count": 3,
+  "cleanup": {
+    "deleted_via": [],
+    "removed": [
+      "V7_PROPOSED_VERIFIER_PROBE_A_PERSON_13d5015acb",
+      "V7_PROPOSED_VERIFIER_PROBE_A_DNT_41dc2460e0"
+    ],
+    "remaining": [
+      "V7_PROPOSED_VERIFIER_PROBE_B_PREF_54c81d7b93"
+    ],
+    "ok": false
+  },
+  "frozen_paths_unlocked": [
+    "engine/app/anticipy/memory.py",
+    "engine/app/product/server.py"
+  ],
+  "v7_gate_guarded": "V7.20_no_fake_receipts_backdoors_stale_proofs",
+  "spec_cite": "ANTICIPY_V7.md PART 0, PART 1A item 4, PART 4, PART 6 item 7"
+}

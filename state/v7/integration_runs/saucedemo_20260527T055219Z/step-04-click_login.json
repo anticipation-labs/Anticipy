@@ -1,0 +1,7 @@
+{
+  "name": "click_login",
+  "ok": false,
+  "detail": "expected /inventory.html got https://www.saucedemo.com/",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T055219Z/step-04-click_login.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

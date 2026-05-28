@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/product_details/1",
+  "expected": "actual matches: viewSystemUsers",
+  "name": "admin_search",
+  "passed": false,
+  "primitive_used": "navigate + System Events Tab/type/Enter"
+}

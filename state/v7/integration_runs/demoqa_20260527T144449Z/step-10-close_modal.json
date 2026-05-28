@@ -1,0 +1,7 @@
+{
+  "name": "close_modal",
+  "ok": true,
+  "detail": "modal closed (after fallbacks)",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144449Z/step-10-final.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}; fallback=EVENTS_DISPATCHED"
+}

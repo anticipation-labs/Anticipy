@@ -1,0 +1,8 @@
+PASS  G1 Chrome 9222 alive
+PASS  G2 Bridge 7777 cdp_primary
+PASS  G3 Navigate background ok (targetId=8A9F5AD8961406BA6B43DC852FF3B347)
+PASS  G4 DOM read (title=Example Domain)
+PASS  G5 Tab delta 0 (baseline=43 -> after=43)
+PASS  G6 Sannysoft REAL_HUMAN_BROWSER (bot_detection_20260528T040200Z)
+
+Result: PASS=6 FAIL=0

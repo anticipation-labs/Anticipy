@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/view_cart",
+  "expected": "click issued; expect login wall or modal",
+  "name": "proceed_to_checkout_clicked",
+  "passed": true,
+  "primitive_used": "cliclick on (1100,560) after Page Down"
+}

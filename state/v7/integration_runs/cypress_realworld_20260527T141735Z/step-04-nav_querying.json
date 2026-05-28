@@ -1,0 +1,7 @@
+{
+  "name": "nav_querying",
+  "ok": true,
+  "detail": "url=https://example.cypress.io/commands/querying",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-04-nav_querying.png",
+  "receipt": "CDP location.assign"
+}

@@ -1,0 +1,51 @@
+{
+  "failed": 2,
+  "passed": 4,
+  "run_dir": "state/v7/integration_runs/the_internet_20260527T053131Z",
+  "site": "the-internet.herokuapp.com",
+  "steps": [
+    {
+      "actual": "https://www.anticipy.ai/app",
+      "expected": "url contains /secure",
+      "name": "form_authentication",
+      "passed": false,
+      "primitive_used": "navigate + SE Tab/type/Enter"
+    },
+    {
+      "actual": "https://www.anticipy.ai/app",
+      "expected": "screenshot proof after Start; URL stable",
+      "name": "dynamic_loading",
+      "passed": false,
+      "primitive_used": "navigate + SE Space (button activation)"
+    },
+    {
+      "actual": "https://the-internet.herokuapp.com/javascript_alerts",
+      "expected": "page rendered without invoking alert triggers",
+      "name": "javascript_alerts",
+      "passed": true,
+      "primitive_used": "navigate + surface-proof"
+    },
+    {
+      "actual": "https://the-internet.herokuapp.com/dropdown",
+      "expected": "screenshot proof after select sequence",
+      "name": "dropdown_option_2",
+      "passed": true,
+      "primitive_used": "navigate + SE Down/Enter"
+    },
+    {
+      "actual": "https://the-internet.herokuapp.com/nested_frames",
+      "expected": "parent frameset loaded; nested traversal logged as limitation",
+      "name": "nested_frames_loaded",
+      "passed": true,
+      "primitive_used": "navigate + surface-proof"
+    },
+    {
+      "actual": "https://the-internet.herokuapp.com/key_presses",
+      "expected": "screenshot proof after X keystroke; URL stable",
+      "name": "key_press_X",
+      "passed": true,
+      "primitive_used": "navigate + SE keystroke X"
+    }
+  ],
+  "total": 6
+}

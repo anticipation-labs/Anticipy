@@ -1,0 +1,184 @@
+{
+  "pass": true,
+  "reasoning": "Pass under the V7 stranger-gate rules. A competent person would not create the HubSpot follow-up because the script-relevant CRM surface proved by the trace is a real visible Chrome HubSpot login page, not a signed-in Nora Vega or Alder Works contact/deal. Anticipy changed the public app surface with a HubSpot/enterprise-SaaS-specific decline card, named the missing real signed-in surface and unchanged-state boundary, and did not claim a HubSpot write. The trace has fresh visible receipts for the public Anticipy app and CRM surfaces, an MP3 upload-asr ingest, V7 normalized-input/inference/decision artifacts for the same ingest id, an installed user-device engine process, real Chrome AppleScript surface proof, no cloned Chrome, no missing or broken script surfaces, and no unrelated changed surfaces counted as work.",
+  "specific_failures": [],
+  "verb_category": "crm_followup_task_or_note",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The public app was visible at https://www.anticipy.ai/app. The pre-upload public app surface showed Engine live and upload controls, and trace.real_surface_proof reports the installed user-device engine at /Applications/Anticipy.app/Contents/MacOS/anticipy-engine with health ok and onboarded."
+    },
+    {
+      "id": "m02_real_crm_surface_precheck",
+      "pass": true,
+      "reasoning": "The CRM proof used real visible Chrome via real_chrome_applescript_visible_surface with direct_browser_cdp=false, hidden_browser=false, and uses_chrome_real_clone=false. The proved CRM URL is https://app.hubspot.com/login, so HubSpot was not verified as a writable signed-in Nora Vega or Alder Works record."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The primary input was delivered as uploaded audio through the public app UI using a real file picker. The artifact is uploaded_audio.mp3, content_type is audio/mpeg, source is upload-asr, ingest id is upload-asr-c70997ff06ef4f13a89cab09969b4383, and transcript_quality.json records uploaded_audio with WER 0.047619."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The uploaded-audio ASR transcript produced anticipy.normalized_input.v7, anticipy.inference_event.v7, and anticipy.decision.v7 records for the same ingest id and source upload-asr. The decision is represented as the normal V7 decision artifact rather than a backend-only HubSpot shortcut."
+    },
+    {
+      "id": "m05_decision_on_hubspot",
+      "pass": true,
+      "reasoning": "Decline is a competent outcome for the visible HubSpot login surface. The Anticipy card says it cannot safely update HubSpot or enterprise SaaS records, names the exact missing visible record/source-context proof, preserves the requested change text, and the engine decline log has blocked_services=[\"HubSpot\"] plus the unchanged-state boundary."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The public app before upload visibly exposed Audio source, MacBook Air Microphone (builtin), Listen, Run transcript, and Upload audio. The run kept uploaded audio as the primary input and did not substitute transcript paste or live microphone capture."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "script_scoped_changed_surfaces": [
+      "anticipy",
+      "crm"
+    ],
+    "relevant_changed_surface_present": true,
+    "broken_script_surfaces": [],
+    "missing_script_surfaces": [],
+    "public_installed_user_device_engine": {
+      "pass": true,
+      "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+      "version": "product-3",
+      "health_ok": true,
+      "onboarded": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface",
+      "profile_kind": "real_user",
+      "profile": "/Users/omarebrahim/Library/Application Support/Google/Chrome/Default",
+      "hidden_browser": false,
+      "direct_browser_cdp": false
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "primary_input_receipts": {
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "input_mode": "uploaded_audio",
+      "content_type": "audio/mpeg",
+      "submitted_through_public_app_ui": true,
+      "visible_ui_driver": "real_chrome_visible_file_picker_upload",
+      "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+      "v7_artifacts_present": true
+    }
+  },
+  "d16_competent_decline": {
+    "satisfied": true,
+    "changed_anticipy_decline_card": true,
+    "service_specific_decline_log": true,
+    "no_broken_third_party_surface_diff": true,
+    "generic_decline": false,
+    "reasoning": "The changed Anticipy card names HubSpot/enterprise SaaS and the missing real signed-in surface proof. trace.engine_logs contains a matching HubSpot no-action CRM/SaaS write decline for ingest id upload-asr-c70997ff06ef4f13a89cab09969b4383, and trace.diff.broken_script_surfaces is empty."
+  },
+  "audit_evidence": {
+    "trace_diff": {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "all_changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "unrelated_changed_surfaces": [],
+      "script_surface_scope": [
+        "anticipy",
+        "crm"
+      ],
+      "scoped_to_script": true,
+      "broken_script_surfaces": [],
+      "missing_script_surfaces": [],
+      "added_pages": [
+        {
+          "surface": "anticipy",
+          "url": "https://www.anticipy.ai/app",
+          "title": "Anticipy real Chrome extension surface"
+        },
+        {
+          "surface": "crm",
+          "url": "https://app.hubspot.com/login",
+          "title": "Anticipy real Chrome extension surface"
+        }
+      ],
+      "removed_pages": [
+        {
+          "surface": "anticipy",
+          "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-dd198ccefb5c",
+          "title": "Anticipy real Chrome extension surface"
+        }
+      ],
+      "changed_pages": [],
+      "native_ax_changed": false,
+      "terminal_changed": false
+    },
+    "page_native_terminal_diffs": {
+      "pages_after": [
+        {
+          "surface": "anticipy",
+          "url": "https://www.anticipy.ai/app",
+          "visible_result": "Changed public app surface shows 'Cannot safely act' and a HubSpot/enterprise SaaS-specific decline.",
+          "visible_text_excerpt": "Cannot safely act. I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface.",
+          "acquired_via": "real_chrome_applescript_visible_surface",
+          "visible_surface": true,
+          "dom_bytes": 0,
+          "screenshot_bytes": 3904409
+        },
+        {
+          "surface": "crm",
+          "url": "https://app.hubspot.com/login",
+          "visible_result": "HubSpot login surface in real Chrome; no verified signed-in Nora Vega or Alder Works contact/deal.",
+          "visible_text_excerpt": "list:",
+          "acquired_via": "real_chrome_applescript_visible_surface",
+          "visible_surface": true,
+          "dom_bytes": 0,
+          "screenshot_bytes": 2281491
+        }
+      ],
+      "native_ax": {
+        "ok": false,
+        "changed": false,
+        "summary": "System Events AX summary timed out; trace.diff.native_ax_changed=false."
+      },
+      "terminal": {
+        "ok": true,
+        "changed": false,
+        "text": ""
+      }
+    },
+    "engine_and_browser": {
+      "engine_command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+      "engine_version": "product-3",
+      "engine_health_ok": true,
+      "engine_onboarded": true,
+      "chrome_surface_path": "real_chrome_applescript_visible_surface",
+      "hidden_browser": false,
+      "uses_chrome_real_clone": false,
+      "direct_browser_cdp": false
+    },
+    "input_and_artifact_receipts": {
+      "source": "upload-asr",
+      "source_mode": "audio_upload",
+      "input_mode": "uploaded_audio",
+      "artifact_path": "state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/audio/uploaded_audio.mp3",
+      "upload_content_type": "audio/mpeg",
+      "submitted_through_public_app_ui": true,
+      "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+      "normalized_input_schema": "anticipy.normalized_input.v7",
+      "inference_event_schema": "anticipy.inference_event.v7",
+      "decision_schema": "anticipy.decision.v7",
+      "transcript_quality_wer": 0.047619
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly paused with a confirm card naming Linear (blocked_services: [\"Linear\"]) after detecting the user was not signed in, satisfying the D16 competent-pause standard. The installed user-device engine and real Chrome were used, no broken surfaces, and the audio upload and transcription were successful.",
+  "specific_failures": [],
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows user navigated to anticipy.ai/app and engine is installed public build."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver verified real Chrome with Linear tab (surface proof shows linear.app/login)."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Transcript quality shows uploaded audio source with accurate transcription (WER 0.026)."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Engine checked surface boundary and found Linear login page, leading to correct pause."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine chose acceptable 'ask' path via confirm card, satisfying the script's acceptable outcomes."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Only audio upload mode was used; no secondary input modes detected."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with confirm card naming Linear via blocked_services, no write occurred, surface shows login page."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T16:23:09Z"
+}

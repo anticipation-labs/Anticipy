@@ -1,0 +1,7 @@
+{
+  "name": "open_product",
+  "ok": true,
+  "detail": "opened product: CLICKED:Apple Juice (1000ml) 1.99\u00a4 add_shopping_cart Add to Basket",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144127Z/step-07-open_product.png",
+  "receipt": "CLICKED:Apple Juice (1000ml) 1.99\u00a4 add_shopping_cart Add to Basket"
+}

@@ -1,0 +1,202 @@
+{
+  "total": 22,
+  "passed": 22,
+  "failed": 0,
+  "results": [
+    {
+      "test": 1,
+      "label": "OpenTable availability search",
+      "passed": true,
+      "elapsed": 259.6,
+      "response": "I was unable to change the number of guests from 2 to 4. However, I have successfully navigated to the Cactus Club Cafe Bentall reservation page and selected April 20, 2026. For 2 guests, the available times around 7pm are: 6:45 PM (Dining Room, Lounge, Patio), 7:00 PM (Dining Room, Lounge, Patio), 7:15 PM (Dining Room, Lounge, Patio), 7:30 PM (Dining Room, Lounge, Patio), 7:45 PM (Dining Room, Lounge, Patio).",
+      "message_count": 41,
+      "leak": null
+    },
+    {
+      "test": 2,
+      "label": "Amazon search",
+      "passed": true,
+      "elapsed": 36.3,
+      "response": "Here are the name and price of the top 3 non-sponsored USB-C cables from Amazon.ca:\n1. **Anker USB C to USB C Cable (6FT, 2Pack), 100W USB C Charger Cord Fast Charging for iPhone 17/16 Series,MacBook Pro 2020,Pixel and More**: $17.99\n2. **Anker USB C Cable, [2-Pack, 6 ft] Type C Charger Premium Nylon USB Cable, USB A to Type C Charging Cable Fast Charge for Samsung Galaxy S10 S10+ / Note 8, LG V20 and Other USB C Charger (Black)**: $13.49\n3. **INIU USB A to USB C Cable, [3 Pack] QC 3.0 Fast Char",
+      "message_count": 6,
+      "leak": null
+    },
+    {
+      "test": 3,
+      "label": "Google search and click",
+      "passed": true,
+      "elapsed": 35.7,
+      "response": "Anticipy is an AI-powered wearable that learns routines, preferences, and context to anticipate user needs proactively. It is being developed by Anticipation Labs, which focuses on on-device ML, privacy-first design, and contextual intelligence. Anticipy is pre-seed, based in Vancouver, and is preparing for accelerator applications.",
+      "message_count": 7,
+      "leak": null
+    },
+    {
+      "test": 4,
+      "label": "SauceDemo checkout",
+      "passed": true,
+      "elapsed": 224.2,
+      "response": "I have navigated to the checkout overview page. However, the cart appears to be empty, and the total amount shown is $0.00. Despite multiple attempts, the item was not successfully retained in the cart throughout the checkout process. Therefore, I cannot provide a total amount for the 'Sauce Labs Backpack'.",
+      "message_count": 41,
+      "leak": null
+    },
+    {
+      "test": 5,
+      "label": "GitHub trending deep dive",
+      "passed": true,
+      "elapsed": 33.2,
+      "response": "The top trending repository is 'Fincept-Corporation / FinceptTerminal'. Its description is 'FinceptTerminal is a modern finance application offering advanced market analytics, investment research, and economic data tools, designed for interactive exploration and data-driven decision-making in a user-friendly environment.'. It has 6.8k stars and 15 open issues.",
+      "message_count": 6,
+      "leak": null
+    },
+    {
+      "test": 6,
+      "label": "Bot detection fingerprint",
+      "passed": true,
+      "elapsed": 24.9,
+      "response": "The following tests failed on bot.sannysoft.com:\n- WebGL Vendor: Canvas has no webgl context\n- WebGL Renderer: Canvas has no webgl context\n- PHANTOM_OVERFLOW: ok (with error message: \"Maximum call stack size exceeded\")",
+      "message_count": 5,
+      "leak": null
+    },
+    {
+      "test": 7,
+      "label": "Cloudflare-protected site",
+      "passed": true,
+      "elapsed": 48.1,
+      "response": "I am unable to access the content of https://nowsecure.nl because the Cloudflare CAPTCHA is not resolving. I have waited multiple times, but the page remains blocked. Therefore, I cannot tell you what the page says.",
+      "message_count": 7,
+      "leak": null
+    },
+    {
+      "test": 8,
+      "label": "reCAPTCHA demo",
+      "passed": true,
+      "elapsed": 251.4,
+      "response": "I was unable to solve the reCAPTCHA challenge automatically, and repeated attempts to interact with the form fields were unsuccessful. The CAPTCHA challenge kept expiring, and I could not identify the correct elements to input text into the form fields. Therefore, I could not complete the task of solving the CAPTCHA and filling the form.",
+      "message_count": 40,
+      "leak": null
+    },
+    {
+      "test": 9,
+      "label": "Login form \u2014 the-internet",
+      "passed": true,
+      "elapsed": 15.3,
+      "response": "The secure page says: \"You logged into a secure area! Secure Area Welcome to the Secure Area. When you are done click logout below.\"",
+      "message_count": 5,
+      "leak": null
+    },
+    {
+      "test": 10,
+      "label": "Technical leakage audit",
+      "passed": true,
+      "leak": null
+    },
+    {
+      "test": 11,
+      "label": "Intent: pure social statement",
+      "passed": true,
+      "elapsed": 1.7,
+      "category": "chat",
+      "response": "Sounds good! I'm free to help you find a restaurant if you'd like.",
+      "leak": null
+    },
+    {
+      "test": 12,
+      "label": "Intent: embedded reminder request",
+      "passed": true,
+      "elapsed": 0.7,
+      "category": "action",
+      "response": "[action detected \u2014 would launch browser]",
+      "leak": null
+    },
+    {
+      "test": 13,
+      "label": "Intent: implied send-task from social context",
+      "passed": true,
+      "elapsed": 0.7,
+      "category": "ambiguous",
+      "response": "Could you be more specific? I can browse the web and complete tasks for you. What would you like me to do?",
+      "leak": null
+    },
+    {
+      "test": 14,
+      "label": "Wikipedia article extraction",
+      "passed": true,
+      "elapsed": 29.9,
+      "response": "The first sentence of the 'Large language model' article is: \"A large language model (LLM) is a computational model designed to perform natural language processing tasks, especially language generation, using contextual relationships derived from a large set of training data.\"",
+      "message_count": 7,
+      "leak": null
+    },
+    {
+      "test": 15,
+      "label": "books.toscrape \u2014 cheapest book",
+      "passed": true,
+      "elapsed": 39.1,
+      "response": "The cheapest book on the first page is 'Starving Hearts (Triangular Trade ...' with a price of \u00a313.99.",
+      "message_count": 9,
+      "leak": null
+    },
+    {
+      "test": 16,
+      "label": "DuckDuckGo search",
+      "passed": true,
+      "elapsed": 37.9,
+      "response": "Here are the first three search results for 'best programming languages 2025':\n1. Search Assist (URL: Not available)\n2. The 10 Best Programming Languages to Learn in 2025 (URL: https://www.sciencenewstoday.org/the-10-best-programming-languages-to-learn-in-2025)\n3. The Top Programming Languages 2025 - IEEE Spectrum (URL: https://spectrum.ieee.org/top-programming-languages-2025)",
+      "message_count": 9,
+      "leak": null
+    },
+    {
+      "test": 17,
+      "label": "Cross-site: HackerNews \u2192 Wikipedia",
+      "passed": true,
+      "elapsed": 92.1,
+      "response": "Hacker News Story Title: Show HN: TRELLIS.2 image-to-3D running on Mac Silicon \u2013 no Nvidia GPU needed\nWikipedia First Sentence: Trellis coded modulation (TCM) is a modulation scheme that transmits information with high efficiency over band-limited channels such as telephone lines.\n\nAttachments:\n\nhn_story.txt:\nTitle: Show HN: TRELLIS.2 image-to-3D running on Mac Silicon \u2013 no Nvidia GPU needed\nPoints: 47",
+      "message_count": 19,
+      "leak": null
+    },
+    {
+      "test": 18,
+      "label": "Multi-site price comparison: BestBuy vs Amazon",
+      "passed": true,
+      "elapsed": 111.0,
+      "response": "I was able to find the price for 'Sony WH-1000XM5' headphones on Amazon Canada, which is $358.76. Unfortunately, I was unable to access Best Buy Canada despite multiple attempts (direct navigation and searching via DuckDuckGo), as I consistently received an \"Access Denied\" error. Therefore, I cannot provide a price comparison between the two stores.",
+      "message_count": 14,
+      "leak": null
+    },
+    {
+      "test": 19,
+      "label": "Paginated nav: quotes.toscrape page 5",
+      "passed": true,
+      "elapsed": 53.8,
+      "response": "Here are the first 3 quotes and their authors from page 5:\n1. \"A reader lives a thousand lives before he dies, said Jojen. The man who never reads lives only one.\" by George R.R. Martin\n2. \"You can never get a cup of tea large enough or a book long enough to suit me.\" by C.S. Lewis\n3. \"You believe lies so you eventually learn to trust no one but yourself.\" by Marilyn Monroe",
+      "message_count": 11,
+      "leak": null
+    },
+    {
+      "test": 20,
+      "label": "Ambiguous: 'What's trending right now?'",
+      "passed": true,
+      "elapsed": 0.7,
+      "category": "question",
+      "response": "I'd need to look that up on the web for current, live information. Would you like me to do that?",
+      "leak": null
+    },
+    {
+      "test": 21,
+      "label": "Google Trends \u2014 top US searches",
+      "passed": true,
+      "elapsed": 16.5,
+      "response": "The top 3 trending searches in the United States right now are:\n1. louisiana shooting\n2. magic vs pistons\n3. bruins",
+      "message_count": 5,
+      "leak": null
+    },
+    {
+      "test": 22,
+      "label": "Challenging DOM: table extraction",
+      "passed": true,
+      "elapsed": 18.5,
+      "response": "The value in the 3rd row of the first column is 'Iuvaret2'. The text of the first row's action link is 'edit'.",
+      "message_count": 6,
+      "leak": null
+    }
+  ]
+}

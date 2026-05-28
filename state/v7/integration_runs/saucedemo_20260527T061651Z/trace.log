@@ -1,0 +1,17 @@
+[06:16:52] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061651Z
+[06:17:04] saucedemo CDP tab=656AA965F6B1B3A6B76287C0E14B2BF2 url=https://www.saucedemo.com/
+[06:17:05] PASS step 1 navigate_login :: url=https://www.saucedemo.com/ via BRIDGE /surface-command navigate
+[06:17:08] PASS step 2 type_username :: CDP fill #user-name (bridge type unsupported)
+[06:17:11] PASS step 3 type_password :: CDP fill #password
+[06:17:16] PASS step 4 click_login :: url=https://www.saucedemo.com/inventory.html
+[06:17:18] PASS step 4 verify_inventory :: title=Swag Labs url contains /inventory.html
+[06:17:26] PASS step 5 add_to_cart :: badge=1 after CDP click first .btn_primary (Add to cart)
+[06:17:31] PASS step 6 open_cart :: url=https://www.saucedemo.com/cart.html
+[06:17:32] PASS step 6 verify_cart_item :: .cart_item count=1 via CDP
+[06:17:37] PASS step 7 click_checkout :: url=https://www.saucedemo.com/checkout-step-one.html
+[06:17:42] PASS step 8 fill_checkout_form :: CDP fill first=Anticipy last=Test zip=12345
+[06:17:46] PASS step 9 click_continue :: url=https://www.saucedemo.com/checkout-step-two.html
+[06:17:48] PASS step 9 verify_summary :: .summary_info present
+[06:17:53] PASS step 10 click_cancel :: url=https://www.saucedemo.com/inventory.html
+[06:17:57] PASS step 11 final_verify :: back on inventory title=Swag Labs
+[06:17:59] PASS steps=14 elapsed=65.49s final=/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061651Z/step-11-final.png

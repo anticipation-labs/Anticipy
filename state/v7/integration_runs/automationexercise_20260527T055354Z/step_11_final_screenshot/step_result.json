@@ -1,0 +1,7 @@
+{
+  "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+  "expected": "final login-wall screenshot",
+  "name": "final_screenshot",
+  "passed": true,
+  "primitive_used": "bridge surface-proof"
+}

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 340px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0C0C0C;
+      color: #FAFAFA;
+    }
+
+    /* ── Header ──────────────────────────────────────────────── */
+    .header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .logo { font-family: Georgia, serif; font-size: 17px; color: #C8A97E; }
+    .status-area { display: flex; align-items: center; gap: 8px; }
+    .status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: #8A8A8A;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #5A5A5A; transition: background 0.3s;
+    }
+    .status-dot.connected { background: #4CAF50; }
+    .status-dot.disconnected { background: #FF5252; }
+    .reconnect-btn {
+      background: none; border: 1px solid rgba(200,169,126,0.3);
+      color: #C8A97E; font-size: 10px; padding: 2px 7px;
+      border-radius: 4px; cursor: pointer; display: none;
+    }
+    .reconnect-btn.show { display: block; }
+    .reconnect-btn:hover { background: rgba(200,169,126,0.1); }
+
+    /* ── Auth panel ──────────────────────────────────────────── */
+    #authPanel {
+      padding: 20px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .auth-title {
+      font-size: 13px; font-weight: 600; color: #FAFAFA;
+      margin-bottom: 4px;
+    }
+    .auth-subtitle {
+      font-size: 11px; color: #5A5A5A; margin-bottom: 16px;
+    }
+    .field { margin-bottom: 10px; }
+    .field label {
+      display: block; font-size: 10px; color: #8A8A8A;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .field input {
+      width: 100%; padding: 8px 10px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px; color: #FAFAFA; font-size: 12px;
+      outline: none; transition: border-color 0.2s;
+    }
+    .field input:focus { border-color: rgba(200,169,126,0.4); }
+    .field input::placeholder { color: #3A3A3A; }
+    .auth-btn {
+      width: 100%; padding: 9px;
+      background: #C8A97E; color: #0C0C0C;
+      border: none; border-radius: 6px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .auth-btn:hover { opacity: 0.88; }
+    .auth-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .auth-error {
+      margin-top: 8px; font-size: 11px; color: #ef4444;
+      display: none;
+    }
+    .auth-error.show { display: block; }
+
+    /* ── Signed-in banner ────────────────────────────────────── */
+    #signedInBanner {
+      display: none;
+      padding: 10px 18px;
+      background: rgba(76,175,80,0.07);
+      border-bottom: 1px solid rgba(76,175,80,0.12);
+      align-items: center; justify-content: space-between;
+    }
+    #signedInBanner.show { display: flex; }
+    .signed-in-label {
+      font-size: 11px; color: #4CAF50;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .signout-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.1);
+      color: #8A8A8A; font-size: 10px; padding: 2px 8px;
+      border-radius: 4px; cursor: pointer;
+    }
+    .signout-btn:hover { color: #FAFAFA; border-color: rgba(255,255,255,0.2); }
+
+    /* ── Agent status banner ──────────────────────────────────── */
+    #agentBanner {
+      display: none;
+      padding: 10px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      align-items: center; gap: 10px;
+    }
+    #agentBanner.show { display: flex; }
+    #agentBanner.running { background: rgba(200,169,126,0.07); }
+    #agentBanner.done    { background: rgba(76,175,80,0.07); }
+    #agentBanner.failed  { background: rgba(239,68,68,0.07); }
+    .agent-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0; background: #C8A97E;
+    }
+    .agent-dot.running { animation: pulse 1.2s infinite; }
+    .agent-dot.done { background: #4CAF50; }
+    .agent-dot.failed { background: #ef4444; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+    .agent-msg { font-size: 11px; color: #FAFAFA; line-height: 1.4; }
+    .agent-label { font-size: 9px; color: #5A5A5A; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ── Actions list ─────────────────────────────────────────── */
+    .actions {
+      padding: 10px 18px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .actions-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .actions-label {
+      font-size: 9px; color: #5A5A5A;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .clear-btn {
+      background: none; border: none;
+      color: #5A5A5A; font-size: 10px; cursor: pointer;
+    }
+    .clear-btn:hover { color: #8A8A8A; }
+    .action-item {
+      padding: 9px 11px; margin-bottom: 5px;
+      border-radius: 7px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .action-item:hover { border-color: rgba(200,169,126,0.18); }
+    .action-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+    .action-badge {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 1px 5px; border-radius: 8px; display: inline-block;
+    }
+    .badge-critical  { background: rgba(239,68,68,0.15);    color: #ef4444; }
+    .badge-important { background: rgba(251,146,60,0.15);   color: #fb923c; }
+    .badge-standard  { background: rgba(200,169,126,0.15);  color: #C8A97E; }
+    .badge-low       { background: rgba(138,138,138,0.10);  color: #8A8A8A; }
+    .action-confidence { font-size: 9px; color: #5A5A5A; }
+    .action-summary { font-size: 12px; line-height: 1.4; color: #FAFAFA; }
+    .action-meta { display: flex; justify-content: space-between; margin-top: 3px; }
+    .action-type { font-size: 10px; color: #C8A97E; opacity: 0.6; }
+    .action-time { font-size: 10px; color: #5A5A5A; }
+    .empty {
+      text-align: center; padding: 28px 16px;
+      color: #5A5A5A; font-size: 12px; line-height: 1.5;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────── */
+    .footer {
+      padding: 10px 18px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .open-engine {
+      display: block; width: 100%; padding: 8px;
+      background: #C8A97E; color: #0C0C0C;
+      border: none; border-radius: 100px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      text-align: center;
+    }
+    .open-engine:hover { opacity: 0.88; }
+  </style>
+</head>
+<body>
+
+  <!-- Header: logo + connection status -->
+  <div class="header">
+    <span class="logo">Anticipy</span>
+    <div class="status-area">
+      <button class="reconnect-btn" id="reconnectBtn">Reconnect</button>
+      <div class="status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Ready</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Signed-in banner (shown when authenticated) -->
+  <div id="signedInBanner">
+    <span class="signed-in-label">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <circle cx="5" cy="5" r="5" fill="#4CAF50" opacity="0.3"/>
+        <path d="M3 5l1.5 1.5L7 3.5" stroke="#4CAF50" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Agent active
+    </span>
+    <button class="signout-btn" id="signOutBtn">Sign out</button>
+  </div>
+
+  <!-- Agent status (shows when agent is running/done/failed) -->
+  <div id="agentBanner">
+    <div class="agent-dot" id="agentDot"></div>
+    <div>
+      <div class="agent-label" id="agentLabel">Agent</div>
+      <div class="agent-msg" id="agentMsg">—</div>
+    </div>
+  </div>
+
+  <!-- Sign-in form (shown when not authenticated) -->
+  <div id="authPanel">
+    <div class="auth-title">Sign in to enable automation</div>
+    <div class="auth-subtitle">
+      Get your access code at
+      <a href="https://www.anticipy.ai/engine" id="getCodeLink" style="color:#C8A97E;text-decoration:none;">anticipy.ai/engine</a>
+      after creating an account.
+    </div>
+    <div class="field">
+      <label>Access code</label>
+      <input type="password" id="accessCode" placeholder="Paste your access code" autocomplete="off">
+    </div>
+    <button class="auth-btn" id="signInBtn">Connect</button>
+    <div class="auth-error" id="authError"></div>
+  </div>
+
+  <!-- Recent intents -->
+  <div class="actions" id="actionsContainer">
+    <div class="empty" id="emptyState">
+      No recent actions.<br>
+      <span style="font-size:10px;color:#3A3A3A;">Wear your device and have a conversation to get started.</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <button class="open-engine" id="openEngine">Open Engine</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

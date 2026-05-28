@@ -1,0 +1,10 @@
+{
+  "accuracy": 1.0,
+  "data_path_exists": true,
+  "eval_exercised": true,
+  "examples": 5,
+  "generated_at": "2026-05-28T01:17:44Z",
+  "offline_eval_path": "state/inference_eval/offline_latest.json",
+  "schema": "anticipy.v7.inference_eval",
+  "schema_exists": true
+}

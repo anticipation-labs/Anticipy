@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "Anticipy received the uploaded mp3, transcribed it accurately, and correctly declined because the Notion surface was a login page rather than a signed-in workspace with a visible database. The decline names Notion explicitly, preserves the unchanged state boundary, uses the installed engine on real Chrome, and satisfies the D16 competent-decline standard.",
+  "specific_failures": [],
+  "verb_category": "recipe_or_meal_plan_act",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the driver navigated to anticipy.ai/app and the surface proof confirms the Anticipy app page was visible, indicating successful sign-in and onboarding."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The surface proof shows the driver verified the Notion tab (though it was the login page, not the database) and the Chrome profile is real and signed in. The precheck correctly identified the surface state."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The audio was uploaded via /api/listen/upload, and the ASR transcript matches the spoken reference with 0% WER and high confidence (0.9898). The source is upload-asr."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "After ASR, the engine confirmed the Notion surface was not valid (login page) and proceeded to decline, maintaining the boundary."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine competently declined with a service-specific proposal naming Notion, blocked services list, and unchanged state boundary, as per D16. No action was taken on the surface."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The trace shows no secondary input mode (e.g., transcript paste) was offered; the gap is confirmed as the only input was uploaded audio."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine declined with a service-specific proposal naming Notion, the trace.diff includes a changed Anticipy decline card (added page for Anticipy surface), broken_script_surfaces is empty, the installed engine is the public user-device engine, real Chrome was used, and the proposal is not generic."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:27:19Z"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "click_submit",
+  "ok": true,
+  "detail": "clicked #submit via CDP",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144847Z/step-08-click_submit.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

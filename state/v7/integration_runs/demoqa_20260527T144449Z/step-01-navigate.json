@@ -1,0 +1,7 @@
+{
+  "name": "navigate",
+  "ok": true,
+  "detail": "url=https://demoqa.com/ via BRIDGE /surface-command navigate",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144449Z/step-01-navigate.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://demoqa.com/\", \"url\": \"https://demoqa.com/\", \"title\": \"\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

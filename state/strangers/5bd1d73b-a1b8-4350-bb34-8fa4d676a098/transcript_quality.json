@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T04:54:35Z",
+  "hypothesis": "I need you to schedule a 30-minute review meeting in calendar app for Friday, May 29th from 9am to 10am. And in reminders app remind me at 8.45am to prep the agenda. Do not invite anyone yet, if you cannot prove the visible Mac calendar, and reminder surfaces, decline without creating anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "I need you to schedule a thirty minute review meeting in Calendar.app for Friday May 29 from 9:00 AM to 10:00 AM, and in Reminders.app remind me at 8:45 AM to prep the agenda. Do not invite anyone yet. If you cannot prove the visible Mac Calendar and Reminders surfaces, decline without creating anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "5bd1d73b-a1b8-4350-bb34-8fa4d676a098",
+  "transcript_boundary_chars": 295,
+  "transcript_boundary_sha256": "dd68610e7188723a8f4317658843e668b46623dc0aa9e1ce1e85e55a130e7e57",
+  "wer": 0.169492
+}

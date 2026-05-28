@@ -1,0 +1,7 @@
+{
+  "actual": "https://www.notion.so/f57a1c99d8714262a0cd2644ed554c3b?v=5a4cd01b470e46b9a8b766a9edbf5434",
+  "expected": "actual matches: /dashboard",
+  "name": "login_to_dashboard",
+  "passed": false,
+  "primitive_used": "navigate + System Events Tab/keystroke/Enter"
+}

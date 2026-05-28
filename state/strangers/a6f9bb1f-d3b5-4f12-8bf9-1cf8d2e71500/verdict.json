@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine properly declined the Notion record creation request with a service-specific competent decline naming Notion, citing inability to verify the exact visible surface. The installed user-device engine and real Chrome were used, no broken surfaces, and the decline satisfies D16. The audio upload was processed correctly.",
+  "specific_failures": [],
+  "verb_category": "web_research_summarize_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Surface proof shows the user on anticipy.ai/app with signed-in state; the engine is the public installed version."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "A Notion surface proof was captured showing a signed-in view (Expenses database), confirming the user had a Notion tab open."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio file was uploaded and transcribed with high confidence; transcript matches the spoken request."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine checked the Notion surface and declined because it could not verify the exact record/workspace, maintaining boundary integrity."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine issued a competent decline naming Notion, with a service-specific proposal and no action taken on the surface."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Only the primary audio upload mode was used; no other input sources were triggered."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine declined with service-specific message naming Notion, and the diff includes a changed Anticipy surface (anticipy.ai/app) and no broken surfaces."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:35:00Z"
+}

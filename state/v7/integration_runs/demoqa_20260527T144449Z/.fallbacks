@@ -1,0 +1,8 @@
+CDP fallback: click via Runtime.evaluate(el.click()) because bridge rejects 'click'
+CDP fallback: type via native HTMLInputElement.value setter because bridge rejects 'type'
+CDP fallback: type via native HTMLInputElement.value setter because bridge rejects 'type'
+CDP fallback: type via native HTMLInputElement.value setter because bridge rejects 'type'
+CDP fallback: click via Runtime.evaluate(label.click()) because bridge rejects 'click'
+CDP fallback: type via native HTMLInputElement.value setter because bridge rejects 'type'
+CDP fallback: click via Runtime.evaluate(el.click()) because bridge rejects 'click'
+CDP fallback: click via Runtime.evaluate(el.click()) because bridge rejects 'click'

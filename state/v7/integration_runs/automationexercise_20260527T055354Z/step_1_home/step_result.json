@@ -1,0 +1,7 @@
+{
+  "actual": "title=<title>Automation Exercise</title> url=https://automationexercise.com/",
+  "expected": "navigate ok + Automation Exercise title",
+  "name": "home_loaded",
+  "passed": true,
+  "primitive_used": "bridge navigate + curl title"
+}

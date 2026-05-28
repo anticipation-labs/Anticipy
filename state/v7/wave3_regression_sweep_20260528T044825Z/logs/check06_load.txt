@@ -1,0 +1,11 @@
+/api/listen/status x10 concurrent:
+  ok=10/10 wall_ms=5.0
+  p50=4.4ms  max=4.7ms  mean=4.4ms
+probe /api/dossier/active?account_id=sweep-load-test: status=404 latency_ms=0.5
+probe /api/dossier: status=422 latency_ms=2.4
+/api/dossier/active x5 concurrent:
+  ok200=0/5 404=5 other=0 wall_ms=1.2
+  all latencies: p50=1.0ms max=1.0ms mean=1.0ms
+LISTEN_THRESHOLD_OK: True (max=4.7ms vs <50ms)
+DOSSIER_THRESHOLD_OK: True (max=1.0ms vs <200ms)
+DOSSIER_ENDPOINT_PRESENT: False

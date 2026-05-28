@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly processed the uploaded audio, performed ASR, and competently declined to act on Amazon because the visible surface was a sign-in page rather than a signed-in orders page. The decline was service-specific (Amazon), recorded in engine logs, and accompanied by an Anticipy decline card surface, satisfying D16 competent-decline. No broken or missing script surfaces, and the runtime used the installed user-device engine with real Chrome.",
+  "specific_failures": [],
+  "verb_category": "purchase_lookup_decline",
+  "hard_category": "e-commerce",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Driver navigated to anticipy.ai/app, engine installed as /Applications/Anticipy.app/Contents/MacOS/anticipy-engine, proof of public entry surface present."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": false,
+      "reasoning": "Driver navigated to Amazon orders page but the captured surface shows an Amazon sign-in page, indicating the profile was not signed in as required by the script."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "ASR produced a matching transcript with WER=0.0 from uploaded MP3 audio, verified by transcript_quality."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR output matches reference text and input mode is uploaded audio per transcript_quality evidence."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined competently (one of the acceptable outcomes) because the Amazon surface was not signed in, satisfying the script's decline condition."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "No alternative input modes (transcript paste or live mic) were offered; only uploaded audio was accepted, consistent with script."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine logs show a competent decline for Amazon with blocked_services including 'Amazon', an unchanging state boundary, and the diff includes an added Anticipy surface (decline card). No third-party surface was changed, and the decline was service-specific, not generic."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:08:20Z"
+}

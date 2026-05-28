@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T16:53:49Z",
+  "hypothesis": "Please add a follow-up note in HubSpot summarizing this morning's launch channel discussion from Slack, and update the Brentwood account record with the next steps. If you cannot prove the visible HubSpot record or my signed in Workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please add a follow-up note in HubSpot summarizing this morning's launch channel discussion from Slack, and update the Brentwood account record with the next steps. If you cannot prove the visible HubSpot record or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "5d2cce7a-e856-4aa3-8197-3d3f62782355",
+  "transcript_boundary_chars": 272,
+  "transcript_boundary_sha256": "66b1b507ffd9c6c76d4924b6de4de9db55280a894722d651eff22d936d7f0df3",
+  "wer": 0.0
+}

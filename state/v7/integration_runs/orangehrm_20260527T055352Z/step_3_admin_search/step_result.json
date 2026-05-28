@@ -1,0 +1,7 @@
+{
+  "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+  "expected": "actual matches: viewSystemUsers",
+  "name": "admin_search",
+  "passed": false,
+  "primitive_used": "in-place navigate + System Events Tab/type/Enter"
+}

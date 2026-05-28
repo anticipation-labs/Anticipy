@@ -1,0 +1,45 @@
+{
+  "ts_utc": "20260528T054152Z",
+  "task": "V2 PRD F-006 and F-007 evidence capture",
+  "path_taken": "A (run-popover-e2e.mjs is a Playwright wrapper without a Tauri-native test spec; I used a direct AppleScript click + screencapture path equivalent to capture-path B because no headless spec exists)",
+  "f006_click_to_popover": {
+    "criterion": "Clicking tray icon opens popover within 200ms",
+    "target_ms": 200,
+    "actual_ms": 66,
+    "click_dispatch_ms": 43,
+    "post_click_to_window_visible_ms": 23,
+    "method": "Single-process AppleScript with internal gdate timing (eliminates per-call osascript boot)",
+    "pass": true,
+    "secondary_measurement_ms": 843,
+    "secondary_note": "Each osascript boot is ~150 ms; measurement is dominated by tooling overhead, not Tauri."
+  },
+  "f007_popover_columns": {
+    "criterion": "Popover shows Now, Next, Past with real data",
+    "vision_model": "google/gemini-2.5-flash",
+    "vision_verdict": "FAIL",
+    "now_header_visible": false,
+    "next_header_visible": false,
+    "past_header_visible": false,
+    "three_columns_layout": false,
+    "visible_text_summary": "Anticipy\nWhat should Anticipy do?\ne.g. Open Gmail and tell me the subject of the most recent\nemail\nRun\nRuns against your real signed-in Chrome in an isolated Anticipy\nwindow. It stops at password and payment walls.",
+    "notes": "The image does not display the 'Now', 'Next', and 'Past' column headers. It shows a prompt for user input and a description of the app's functionality.",
+    "pass": false,
+    "implementation_gap": "desktop/src-tauri/src/lib.rs:1350 points the popover webview at popover.html, but that file does not exist in desktop/src (only index.html exists). The webview falls back to index.html which renders the IDLE section 'What should Anticipy do?' with a textarea and Run button. The Now/Next/Past columnar layout is not implemented in the on-disk frontend."
+  },
+  "evidence_paths": {
+    "baseline_menubar": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/popover_e2e_20260528T054152Z/baseline_menubar.png",
+    "full_screenshot_with_popover": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/popover_e2e_20260528T054152Z/popover_timed.png",
+    "cropped_popover": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/popover_e2e_20260528T054152Z/popover_cropped.png",
+    "vision_response_raw": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/popover_e2e_20260528T054152Z/vision_response.json",
+    "vision_verdict": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/popover_e2e_20260528T054152Z/vision_verdict.json",
+    "timing": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/popover_e2e_20260528T054152Z/timing.json"
+  },
+  "cost_usd_openrouter": 0.0008146,
+  "budget_usd": 0.5,
+  "within_budget": true,
+  "summary": {
+    "F-006_evidence_sufficient": true,
+    "F-007_evidence_sufficient": false,
+    "F-007_status": "MISSING was correct in W3i audit. Verifier-side capture confirms popover renders the IDLE single-pane UI, not Now/Next/Past. Implementing F-007 is a builder task (add popover.html with three columns or refactor index.html), not a verifier-evidence task."
+  }
+}

@@ -1,0 +1,475 @@
+{
+  "dossier_path": "state/v7/test_dossier_rich.json",
+  "generated_at": "2026-05-28T03:57:58Z",
+  "gold_path": "state/v7/hard_proactive_transcripts.json",
+  "mapping": {
+    "address_parents_shipping_default": {
+      "dossier_id": null,
+      "gold_key": "address_parents_shipping_default",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "constraint_jordan_friday_pm_shabbat": {
+      "dossier_id": null,
+      "gold_key": "constraint_jordan_friday_pm_shabbat",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "constraint_maya_2day_review_window": {
+      "dossier_id": null,
+      "gold_key": "constraint_maya_2day_review_window",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "constraint_maya_not_blindsided": {
+      "dossier_id": null,
+      "gold_key": "constraint_maya_not_blindsided",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "constraint_no_birthday_dinner_this_year": {
+      "dossier_id": null,
+      "gold_key": "constraint_no_birthday_dinner_this_year",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "constraint_punch_card_expires_end_may": {
+      "dossier_id": null,
+      "gold_key": "constraint_punch_card_expires_end_may",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "decision_eng_hire_start_first_monday_august": {
+      "dossier_id": null,
+      "gold_key": "decision_eng_hire_start_first_monday_august",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "event_dad_birthday_approaching": {
+      "dossier_id": null,
+      "gold_key": "event_dad_birthday_approaching",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "event_nyc_trip": {
+      "dossier_id": null,
+      "gold_key": "event_nyc_trip",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; token 'trip' in blob",
+      "score": 0.375
+    },
+    "event_q3_board_review_15th": {
+      "dossier_id": null,
+      "gold_key": "event_q3_board_review_15th",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; token 'review' in blob",
+      "score": 0.25
+    },
+    "event_sam_wedding": {
+      "dossier_id": null,
+      "gold_key": "event_sam_wedding",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "event_sam_wedding_date": {
+      "dossier_id": null,
+      "gold_key": "event_sam_wedding_date",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "fact_dad_apollo_book_interest": {
+      "dossier_id": null,
+      "gold_key": "fact_dad_apollo_book_interest",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "fact_david_kid_recital": {
+      "dossier_id": null,
+      "gold_key": "fact_david_kid_recital",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "fact_hot_eight_punch_card_4_left": {
+      "dossier_id": null,
+      "gold_key": "fact_hot_eight_punch_card_4_left",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "fact_priya_recommended_screen_time_lock": {
+      "dossier_id": null,
+      "gold_key": "fact_priya_recommended_screen_time_lock",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "fact_wedding_photographer_family_friend": {
+      "dossier_id": null,
+      "gold_key": "fact_wedding_photographer_family_friend",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "person_dad": {
+      "dossier_id": null,
+      "gold_key": "person_dad",
+      "matched": false,
+      "matched_name": null,
+      "reason": "cross-cast: 'dad' explicitly out of dossier",
+      "score": 0.0
+    },
+    "person_david_acme_cfo": {
+      "dossier_id": "person:James Ortega",
+      "gold_key": "person_david_acme_cfo",
+      "matched": true,
+      "matched_name": "James Ortega",
+      "reason": "cross-cast: 'david' -> James Ortega",
+      "score": 0.9
+    },
+    "person_dr_chen": {
+      "dossier_id": "person:Dr. Sara Nakamura",
+      "gold_key": "person_dr_chen",
+      "matched": true,
+      "matched_name": "Dr. Sara Nakamura",
+      "reason": "cross-cast: 'dr' -> Dr. Sara Nakamura",
+      "score": 0.9
+    },
+    "person_elena_sister_in_law": {
+      "dossier_id": null,
+      "gold_key": "person_elena_sister_in_law",
+      "matched": false,
+      "matched_name": null,
+      "reason": "cross-cast: 'elena' explicitly out of dossier",
+      "score": 0.0
+    },
+    "person_eng_lead": {
+      "dossier_id": null,
+      "gold_key": "person_eng_lead",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; alias token overlap 'lead'",
+      "score": 0.2
+    },
+    "person_jordan_legal": {
+      "dossier_id": "person:Andre Kowalski",
+      "gold_key": "person_jordan_legal",
+      "matched": true,
+      "matched_name": "Andre Kowalski",
+      "reason": "cross-cast: 'jordan' -> Andre Kowalski",
+      "score": 0.9
+    },
+    "person_marcus": {
+      "dossier_id": "person:Devon Park",
+      "gold_key": "person_marcus",
+      "matched": true,
+      "matched_name": "Devon Park",
+      "reason": "cross-cast: 'marcus' -> Devon Park",
+      "score": 0.9
+    },
+    "person_marcus_allergy_gluten": {
+      "dossier_id": "person:Devon Park",
+      "gold_key": "person_marcus_allergy_gluten",
+      "matched": true,
+      "matched_name": "Devon Park",
+      "reason": "cross-cast: 'marcus' -> Devon Park",
+      "score": 0.9
+    },
+    "person_marcus_finance": {
+      "dossier_id": "person:Devon Park",
+      "gold_key": "person_marcus_finance",
+      "matched": true,
+      "matched_name": "Devon Park",
+      "reason": "cross-cast: 'marcus' -> Devon Park",
+      "score": 0.9
+    },
+    "person_maya_ops": {
+      "dossier_id": "person:Maya Chen",
+      "gold_key": "person_maya_ops",
+      "matched": true,
+      "matched_name": "Maya Chen",
+      "reason": "cross-cast: 'maya' -> Maya Chen",
+      "score": 0.9
+    },
+    "person_mom": {
+      "dossier_id": null,
+      "gold_key": "person_mom",
+      "matched": false,
+      "matched_name": null,
+      "reason": "cross-cast: 'mom' explicitly out of dossier",
+      "score": 0.0
+    },
+    "person_priya": {
+      "dossier_id": "person:Priya Patel",
+      "gold_key": "person_priya",
+      "matched": true,
+      "matched_name": "Priya Patel",
+      "reason": "cross-cast: 'priya' -> Priya Patel",
+      "score": 0.9
+    },
+    "person_priya_designer": {
+      "dossier_id": "person:Priya Patel",
+      "gold_key": "person_priya_designer",
+      "matched": true,
+      "matched_name": "Priya Patel",
+      "reason": "cross-cast: 'priya' -> Priya Patel",
+      "score": 0.9
+    },
+    "person_rena_maya_manager": {
+      "dossier_id": "person:Maya Chen",
+      "gold_key": "person_rena_maya_manager",
+      "matched": true,
+      "matched_name": "Maya Chen",
+      "reason": "cross-cast: 'rena' -> Maya Chen",
+      "score": 0.9
+    },
+    "person_sam_brother": {
+      "dossier_id": null,
+      "gold_key": "person_sam_brother",
+      "matched": false,
+      "matched_name": null,
+      "reason": "cross-cast: 'sam' explicitly out of dossier",
+      "score": 0.0
+    },
+    "place_beachway_clinic": {
+      "dossier_id": null,
+      "gold_key": "place_beachway_clinic",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "place_hot_eight_yoga": {
+      "dossier_id": null,
+      "gold_key": "place_hot_eight_yoga",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "place_hot_eight_yoga_sunday_close_noon": {
+      "dossier_id": null,
+      "gold_key": "place_hot_eight_yoga_sunday_close_noon",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; token 'sunday' in blob",
+      "score": 0.188
+    },
+    "place_kissa_italian_westvan": {
+      "dossier_id": "place:Ask for Luigi",
+      "gold_key": "place_kissa_italian_westvan",
+      "matched": true,
+      "matched_name": "Ask for Luigi",
+      "reason": "token 'italian' in blob; critical token 'italian' present",
+      "score": 0.45
+    },
+    "place_min_sok_korean": {
+      "dossier_id": null,
+      "gold_key": "place_min_sok_korean",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_act_at_desk": {
+      "dossier_id": null,
+      "gold_key": "preference_act_at_desk",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_dinner_7pm": {
+      "dossier_id": null,
+      "gold_key": "preference_dinner_7pm",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_drafts_not_sends_external": {
+      "dossier_id": null,
+      "gold_key": "preference_drafts_not_sends_external",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_low_friction_habit_nudges": {
+      "dossier_id": null,
+      "gold_key": "preference_low_friction_habit_nudges",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_no_mondays": {
+      "dossier_id": null,
+      "gold_key": "preference_no_mondays",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_no_personal_tasks_during_workweek": {
+      "dossier_id": null,
+      "gold_key": "preference_no_personal_tasks_during_workweek",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_no_standalone_meme_send": {
+      "dossier_id": null,
+      "gold_key": "preference_no_standalone_meme_send",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_one_strike_dropped": {
+      "dossier_id": null,
+      "gold_key": "preference_one_strike_dropped",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_user_writes_personal_himself": {
+      "dossier_id": null,
+      "gold_key": "preference_user_writes_personal_himself",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_weekend_chore_queue": {
+      "dossier_id": null,
+      "gold_key": "preference_weekend_chore_queue",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "preference_whatsapp_over_sms": {
+      "dossier_id": null,
+      "gold_key": "preference_whatsapp_over_sms",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "project_acme_deal": {
+      "dossier_id": "project:Acme Foods agency contract",
+      "gold_key": "project_acme_deal",
+      "matched": true,
+      "matched_name": "Acme Foods agency contract",
+      "reason": "token 'acme' in blob; critical token 'acme' present",
+      "score": 0.575
+    },
+    "project_onboarding_screen_bug_tue": {
+      "dossier_id": "project:Northbridge seasonal onboarding playbook",
+      "gold_key": "project_onboarding_screen_bug_tue",
+      "matched": true,
+      "matched_name": "Northbridge seasonal onboarding playbook",
+      "reason": "token 'onboarding' in blob; critical token 'onboarding' present",
+      "score": 0.45
+    },
+    "project_q_prior_margin_softness": {
+      "dossier_id": null,
+      "gold_key": "project_q_prior_margin_softness",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "project_series_a_pitch_deck": {
+      "dossier_id": null,
+      "gold_key": "project_series_a_pitch_deck",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "recurring_dental_6mo": {
+      "dossier_id": null,
+      "gold_key": "recurring_dental_6mo",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "recurring_friday_demo": {
+      "dossier_id": null,
+      "gold_key": "recurring_friday_demo",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; token 'friday' in blob",
+      "score": 0.375
+    },
+    "recurring_maya_1to1_wed": {
+      "dossier_id": null,
+      "gold_key": "recurring_maya_1to1_wed",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; token 'maya' in blob",
+      "score": 0.375
+    },
+    "task_month_close": {
+      "dossier_id": null,
+      "gold_key": "task_month_close",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "template_offer_letter_march": {
+      "dossier_id": null,
+      "gold_key": "template_offer_letter_march",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    },
+    "trait_jordan_usually_late_one_day": {
+      "dossier_id": null,
+      "gold_key": "trait_jordan_usually_late_one_day",
+      "matched": false,
+      "matched_name": null,
+      "reason": "below threshold; no candidates",
+      "score": 0.0
+    }
+  },
+  "matched": 13,
+  "schema": "anticipy.v7.gold_key_alignment",
+  "total_keys": 58,
+  "unmatched": 45
+}

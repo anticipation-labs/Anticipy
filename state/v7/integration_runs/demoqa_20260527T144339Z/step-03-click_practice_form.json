@@ -1,0 +1,7 @@
+{
+  "name": "click_practice_form",
+  "ok": true,
+  "detail": "practice-form url=https://demoqa.com/automation-practice-form via CLICKED:a.router-link:Practice Form",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144339Z/step-03-click_practice_form.png",
+  "receipt": "CLICKED:a.router-link:Practice Form"
+}

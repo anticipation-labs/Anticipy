@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "24f86230-fc4c-42a5-a611-11ef7bcc0d64",
+  "created_at": "2025-04-11T14:30:00Z",
+  "name": "Curtis Hammond",
+  "age": 42,
+  "occupation": "Regional Sales Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 6,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 7,
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot deal pipeline and contact management",
+  "primary_real_surface": {
+    "surface": "HubSpot web app in signed-in Chrome profile",
+    "chrome_requirement": "user's primary Chrome profile with active HubSpot session",
+    "acceptable_state": "logged into HubSpot, viewing a contact or deal record"
+  },
+  "daily_tools": [
+    "HubSpot",
+    "Outlook for Mac",
+    "Slack",
+    "Zoom",
+    "Google Sheets"
+  ],
+  "contacts": [
+    {
+      "name": "Linda Okonkwo",
+      "relationship": "VP of Sales",
+      "context": "direct manager, reviews all deal escalations"
+    },
+    {
+      "name": "Marcus Webb",
+      "relationship": "Account Executive",
+      "context": "reports to Curtis, needs coaching on declining unqualified leads"
+    },
+    {
+      "name": "Jenna Hart",
+      "relationship": "Customer Success Lead",
+      "context": "coordinates handoffs for won deals"
+    }
+  ]
+}

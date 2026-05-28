@@ -1,0 +1,1467 @@
+[main e0a3265] supervisor: autocommit progress checkpoint
+ 425 files changed, 5951 insertions(+), 14156 deletions(-)
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/baseline.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/cost_breakdown.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/driver_result.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/listen_status.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/persona.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/proofs/surface_proof/real_chrome_page_metadata.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/proofs/surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/proofs/surface_proof/real_chrome_visible_text.txt
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/run.log
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/anticipy-3485E99997B5BD1B0CCAA222915D5874.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/browser-5405D54748EDB0204E44BA3B17EE1EBE.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/notion-1153454E9FA1EF3CD6B4639D932524F1.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/notion-FFA45DF08BB675160ED33B8826DA5B86.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/anticipy-D087A7B118737ADE57BDB620818065A8.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/anticipy-DFC612F782EB3805A5C8AC0C1E29E1EA.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/browser-AD3E0B4178566C487F72F94BF7148CF1.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/crm-B56F2E4C36103C4ECA74E0755DA2B0AC.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/linear-B17498DD29F0D20618D4DB8AD4474FD9.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/notion-1153454E9FA1EF3CD6B4639D932524F1.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/notion-FFA45DF08BB675160ED33B8826DA5B86.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/proofs/real_surface_proof/real_chrome_page_metadata.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/proofs/real_surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/real_surface_proof.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/script.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/surface_proof.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/surface_proof_anticipy.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/trace.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/transcript_quality.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/upload_response.json
+ delete mode 100644 state/strangers/d0659358-2a6c-42e4-b96c-bd385b293230/verdict.json
+ delete mode 100644 state/strangers/e193ab8d-bc02-4386-b0e0-524fe4f38313/persona.json
+ delete mode 100644 state/strangers/e193ab8d-bc02-4386-b0e0-524fe4f38313/run.log
+ delete mode 100644 state/strangers/e193ab8d-bc02-4386-b0e0-524fe4f38313/script.json
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/baseline.json
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/persona.json
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/run.log
+ rename state/strangers/{d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/anticipy-061FE0A2DE4C71B4DC8ABFEAA2B86B96.png => e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/anticipy-0017806ECBACC0F9DE768256E9A20033.png} (77%)
+ rename state/strangers/{d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/anticipy-9160A9A27DA1A641FCF9122F68C31262.png => e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/anticipy-45D5115AEF41CEB22A80ACE923CFEE4B.png} (80%)
+ rename state/strangers/{d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/baseline/anticipy-9160A9A27DA1A641FCF9122F68C31262.png => e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/anticipy-716C4A34ADE8B7EF531979CE0EC4E1B4.png} (100%)
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/browser-AC7C3400FBEF55EDE42668CE231BC08D.png
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/crm-1BEF888D1BB37086BB6B559951350DD8.png
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/linear-6B4DBD201E489CC4966DB2793D9BBB9A.png
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/notion-3331B995D905D6C1E8D8055EB75D6BCB.png
+ rename state/strangers/{d0659358-2a6c-42e4-b96c-bd385b293230/proofs/surface_proof_anticipy => e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/proofs/real_surface_proof}/real_chrome_page_metadata.json (80%)
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ rename state/strangers/{d0659358-2a6c-42e4-b96c-bd385b293230 => e4518b13-4ea4-4523-acfc-829d763eeb73}/screenshots/baseline/real_surface_proof.json (93%)
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/script.json
+ create mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/upload_response.json
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/areyouheadless/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/areyouheadless/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/sannysoft/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/sannysoft/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/sannysoft/result.json
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/sannysoft/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/sannysoft/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/sannysoft/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142052Z/sannysoft/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/areyouheadless/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/areyouheadless/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/areyouheadless/result.json
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/areyouheadless/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/areyouheadless/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/areyouheadless/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/areyouheadless/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/creepjs/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/creepjs/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/creepjs/result.json
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/creepjs/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/creepjs/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/creepjs/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/creepjs/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/sannysoft/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/sannysoft/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/sannysoft/result.json
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/sannysoft/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/sannysoft/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/sannysoft/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/sannysoft/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T142514Z/summary.md
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/areyouheadless/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/areyouheadless/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/areyouheadless/result.json
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/areyouheadless/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/areyouheadless/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/areyouheadless/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/areyouheadless/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/creepjs/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/creepjs/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/creepjs/result.json
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/creepjs/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/creepjs/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/creepjs/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/creepjs/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/sannysoft/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/sannysoft/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/sannysoft/result.json
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/sannysoft/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/sannysoft/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/sannysoft/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/sannysoft/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T142817Z/summary.md
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/areyouheadless/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/areyouheadless/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/areyouheadless/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/areyouheadless/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/areyouheadless/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/areyouheadless/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/areyouheadless/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/creepjs/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/creepjs/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/creepjs/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/creepjs/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/creepjs/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/creepjs/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/creepjs/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/sannysoft/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/sannysoft/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/sannysoft/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/sannysoft/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/sannysoft/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/sannysoft/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/sannysoft/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143003Z/summary.md
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/areyouheadless/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/areyouheadless/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/areyouheadless/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/areyouheadless/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/areyouheadless/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/areyouheadless/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/areyouheadless/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/creepjs/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/creepjs/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/creepjs/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/creepjs/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/creepjs/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/creepjs/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/creepjs/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/sannysoft/focused_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/sannysoft/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/sannysoft/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/sannysoft/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/sannysoft/tab_title.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/sannysoft/verified_active_url.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/sannysoft/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143215Z/summary.md
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/areyouheadless/cdp.err
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/areyouheadless/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/areyouheadless/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/areyouheadless/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/areyouheadless/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/creepjs/cdp.err
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/creepjs/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/creepjs/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/creepjs/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/creepjs/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/sannysoft/cdp.err
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/sannysoft/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/sannysoft/result.json
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/sannysoft/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/sannysoft/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T143853Z/summary.md
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/areyouheadless/cdp.err
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/areyouheadless/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/areyouheadless/result.json
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/areyouheadless/screenshot.png
+ rename state/{strangers/d0659358-2a6c-42e4-b96c-bd385b293230/screenshots/trace/proofs/real_surface_proof/real_chrome_visible_text.txt => v7/bot_detection_20260527T144146Z/areyouheadless/visible_text.txt} (96%)
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/creepjs/cdp.err
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/creepjs/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/creepjs/result.json
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/creepjs/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/creepjs/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/sannysoft/cdp.err
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/sannysoft/navigate.json
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/sannysoft/result.json
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/sannysoft/screenshot.png
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/sannysoft/visible_text.txt
+ create mode 100644 state/v7/bot_detection_20260527T144146Z/summary.md
+ create mode 100644 state/v7/gate_relaxation_notes.md
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/.step
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/step-02-click_forms_card.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/step-02-click_forms_card.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/step-03-click_practice_form.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/step-03-click_practice_form.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144233Z/trace.log
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/.step
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-02-click_forms_card.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-02-click_forms_card.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-03-click_practice_form.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-03-click_practice_form.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-04-type_name.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-04-type_name.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-05-type_email.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-05-type_email.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-06-click_gender_other.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-06-click_gender_other.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-07-type_phone.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-07-type_phone.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-08-click_submit.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-08-click_submit.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-09-verify_modal.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-09-verify_modal.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-09-verify_modal_body.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-10-close_modal.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/step-10-final.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144339Z/trace.log
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/.step
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-02-click_forms_card.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-02-click_forms_card.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-03-click_practice_form.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-03-click_practice_form.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-04-type_name.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-04-type_name.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-05-type_email.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-05-type_email.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-06-click_gender_other.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-06-click_gender_other.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-07-type_phone.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-07-type_phone.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-08-click_submit.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-08-click_submit.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-09-verify_modal.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-09-verify_modal.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-09-verify_modal_body.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-10-close_modal.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/step-10-final.png
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/summary.json
+ create mode 100644 state/v7/integration_runs/demoqa_20260527T144449Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/step-02-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/step-02-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T142113Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-02-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-02-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-03-open_search.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-03-open_search.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-04-type_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/step-04-type_apple.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143114Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/step-02-target_down.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/step-02-target_health.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143331Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143420Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143420Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143420Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143420Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143420Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143420Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-02-fallback_navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-02-fallback_navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-02-target_health.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-03-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-03-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-04-open_search.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-04-open_search.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-05-type_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/step-05-type_apple.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143459Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-02-fallback_navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-02-fallback_navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-02-target_health.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-03-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-03-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-04-open_search.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-04-open_search.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-05-type_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-05-type_apple.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-06-verify_apple_results.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/step-06-verify_results.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143622Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-02-fallback_navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-02-fallback_navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-02-target_health.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-03-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-03-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-04-open_search.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-04-open_search.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-05-type_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-05-type_apple.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-06-verify_apple_results.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-06-verify_results.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-07-open_product.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-07-open_product.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-08-add_to_basket.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-08-add_to_basket.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-09-basket_counter.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-09-basket_counter.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-10-open_basket.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/step-10-open_basket.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143816Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-02-fallback_navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-02-fallback_navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-02-target_health.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-03-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-03-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-04-open_search.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-04-open_search.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-05-type_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-05-type_apple.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-06-verify_apple_results.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-06-verify_results.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-07-open_product.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-07-open_product.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-08-add_to_basket.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-08-add_to_basket.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-09-basket_counter.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/step-09-basket_counter.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T143945Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-02-fallback_navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-02-fallback_navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-02-target_health.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-03-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-03-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-04-open_search.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-04-open_search.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-05-type_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-05-type_apple.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-06-verify_apple_results.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-06-verify_results.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-07-open_product.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-07-open_product.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-08-add_to_basket.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-08-add_to_basket.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-09-basket_counter.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-09-basket_counter.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-10-open_basket.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-10-open_basket.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-11-final.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/step-11-verify_basket_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/summary.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144127Z/trace.log
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/.fallbacks
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/.step
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/bridge_status.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-01-navigate.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-01-navigate.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-01-target_health.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-02-dismiss_banners.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-02-dismiss_banners.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-03-open_search.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-03-open_search.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-04-type_apple.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-04-type_apple.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-05-verify_apple_results.json
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/step-05-verify_results.png
+ create mode 100644 state/v7/integration_runs/juiceshop_20260527T144539Z/trace.log
+ create mode 100644 state/v7/loop.log
+ create mode 100644 state/v7/loop.pid
+ create mode 100644 state/v7/loop_cycle.txt
+ create mode 100644 state/v7/supervisor/autocommit_loop.log
+ create mode 100644 state/v7/supervisor/health.log
+ create mode 100644 state/v7/supervisor/health_loop.log
+ create mode 100644 state/v7/supervisor/ralph_v7.log
+ create mode 100644 state/v7/supervisor/status_loop.log
+ create mode 100644 state/v7/supervisor/strangers.log
+ create mode 100644 state/v7/supervisor/strangers_loop.log
+ create mode 100644 state/v7/supervisor/supervisor.log
+ create mode 100644 state/v7/supervisor/v7_gates_loop.log
+ create mode 100755 tools/anticipy_supervisor.sh
+To https://github.com/omize10/Anticipy.git
+   5141a2b..e0a3265  HEAD -> main
+[main 2c315be] supervisor: autocommit progress checkpoint
+ 95 files changed, 12718 insertions(+), 3564 deletions(-)
+ create mode 100755 scripts/v7/stranger_batch_supervisor.sh
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/baseline.json
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/persona.json
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/run.log
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/anticipy-0017806ECBACC0F9DE768256E9A20033.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/anticipy-45D5115AEF41CEB22A80ACE923CFEE4B.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/anticipy-716C4A34ADE8B7EF531979CE0EC4E1B4.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/browser-AC7C3400FBEF55EDE42668CE231BC08D.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/crm-1BEF888D1BB37086BB6B559951350DD8.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/linear-6B4DBD201E489CC4966DB2793D9BBB9A.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/notion-3331B995D905D6C1E8D8055EB75D6BCB.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/script.json
+ delete mode 100644 state/strangers/e4518b13-4ea4-4523-acfc-829d763eeb73/upload_response.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/baseline.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/cost_breakdown.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/driver_result.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/listen_status.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/persona.json
+ rename state/strangers/{e4518b13-4ea4-4523-acfc-829d763eeb73/screenshots/baseline/proofs/real_surface_proof => ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/proofs/surface_proof}/real_chrome_page_metadata.json (75%)
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/run.log
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ rename state/strangers/{e4518b13-4ea4-4523-acfc-829d763eeb73 => ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f}/screenshots/baseline/real_surface_proof.json (88%)
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/script.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/surface_proof.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/surface_proof_anticipy.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/transcript_quality.json
+ create mode 100644 state/strangers/ecbcfb7a-0fff-4bdc-9e95-fa2fc90fb22f/upload_response.json
+ create mode 100644 state/v7/bridge_cdp_primary_logs/bridge_live.log
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/Anticipy.dmg
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/app_state.json
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/dmg_headers.txt
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/env.txt
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/had_dev_repo.txt
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/had_preexisting_anticipy.txt
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/identity.env
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/public_app.html
+ create mode 100644 state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/release_meta.json
+ create mode 100644 state/v7/stranger_batch_supervisor.log
+ create mode 100644 state/v7/supervisor/autocommit.log
+ create mode 100644 state/v7/supervisor_status.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/bridge_dryrun.log
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/click.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/eval_js.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/navigate.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/status.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/step-01-status_cdp_primary.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/step-02-navigate_background.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/step-03-eval_js_title.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/step-04-click_selector.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/summary.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151724Z/trace.log
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/bridge_dryrun.log
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/click.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/eval_js.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/navigate.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/status.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/step-01-status_cdp_primary.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/step-02-navigate_background.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/step-03-eval_js_title.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/step-04-click_selector.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/summary.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151816Z/trace.log
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/click.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/eval_js.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/navigate.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/status.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/step-01-status_cdp_primary.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/step-02-navigate_background.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/step-03-eval_js_title.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/step-04-click_selector.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/summary.json
+ create mode 100644 state/v7/test_bridge_cdp_primary_20260527T151845Z/trace.log
+remote: error: Trace: 46ed395aae07976237ac638bf107ee957d52db3e9f571bedb5ce58f99305d837        
+remote: error: See https://gh.io/lfs for more information.        
+remote: error: File state/v7/clean_room_public_install_runs/cleanroom-20260527T151958Z/Anticipy.dmg is 1654.06 MB; this exceeds GitHub's file size limit of 100.00 MB        
+remote: error: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.        
+To https://github.com/omize10/Anticipy.git
+ ! [remote rejected] HEAD -> main (pre-receive hook declined)
+error: failed to push some refs to 'https://github.com/omize10/Anticipy.git'
+[main b91b9fc] supervisor: autocommit progress checkpoint
+ 52 files changed, 23940 insertions(+), 42 deletions(-)
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/baseline.json
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/persona.json
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/run.log
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/anticipy-718651FC1CCFDEA8F7399FA078D2BA4C.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/anticipy-C1DD3C879111A49E532AE57C758F8873.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/anticipy-F968E9FFDD4A3D54891DCCAD97F1AC7C.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/browser-EF9F70EB34FE4BA2374CBFF56CFBE066.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/crm-0FB791E4D007B9909C09C35B550B2E7B.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/linear-15EBA0AB0CDE75F10AD70E9268645443.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/notion-3CDF0A5D351C24215C37F7D2F5799F97.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/notion-90C56A4AB7DC3EC178160AC81C5F28DB.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/script.json
+ create mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/upload_response.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/baseline.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/cost_breakdown.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/driver_result.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/listen_status.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/persona.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/run.log
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/script.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/surface_proof.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/surface_proof_anticipy.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/trace.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/transcript_quality.json
+ create mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/upload_response.json
+ create mode 100644 state/v7/loop_stuck.md
+[main 45a7861] supervisor: autocommit progress checkpoint
+ 72 files changed, 9478 insertions(+), 22727 deletions(-)
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/audio/uploaded_audio.mp3
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/baseline.json (59%)
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/cost_breakdown.json
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/driver_result.json
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/listen_status.json
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/persona.json
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/proofs/surface_proof/real_chrome_page_metadata.json (78%)
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/proofs/surface_proof/real_chrome_visible_text.txt
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/proofs/surface_proof_anticipy/real_chrome_page_metadata.json (95%)
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/proofs/surface_proof_anticipy/real_chrome_visible_text.txt (100%)
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json (88%)
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/screenshots/baseline/real_surface_proof.json (90%)
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/script.json
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/surface_proof.json (89%)
+ rename state/strangers/{b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f => 02ecef44-54b9-43a8-9b96-01963d2abb1b}/surface_proof_anticipy.json (92%)
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/trace.json
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/transcript_quality.json
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/upload_response.json
+ create mode 100644 state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/verdict.json
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/baseline.json
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/persona.json
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/run.log
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/anticipy-718651FC1CCFDEA8F7399FA078D2BA4C.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/anticipy-C1DD3C879111A49E532AE57C758F8873.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/anticipy-F968E9FFDD4A3D54891DCCAD97F1AC7C.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/browser-EF9F70EB34FE4BA2374CBFF56CFBE066.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/crm-0FB791E4D007B9909C09C35B550B2E7B.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/linear-15EBA0AB0CDE75F10AD70E9268645443.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/notion-3CDF0A5D351C24215C37F7D2F5799F97.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/notion-90C56A4AB7DC3EC178160AC81C5F28DB.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/screenshots/baseline/real_surface_proof.json
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/script.json
+ delete mode 100644 state/strangers/7907ec5b-2f40-4d1f-b203-a959d52a35f5/upload_response.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/cost_breakdown.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/driver_result.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/listen_status.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/persona.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof/real_chrome_visible_text.txt
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/run.log
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/script.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/trace.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/transcript_quality.json
+ delete mode 100644 state/strangers/b8e1ff0f-488a-4b4b-ba48-5824b6d01e1f/upload_response.json
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: RPC failed; HTTP 400 curl 22 The requested URL returned error: 400
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 6a45335] supervisor: autocommit progress checkpoint
+ 59 files changed, 25664 insertions(+), 139 deletions(-)
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/baseline.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/cost_breakdown.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/driver_result.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/listen_status.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/persona.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/run.log
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/script.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/surface_proof.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/surface_proof_anticipy.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/trace.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/transcript_quality.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/upload_response.json
+ create mode 100644 state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/verdict.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/baseline.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/cost_breakdown.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/driver_result.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/listen_status.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/persona.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/run.log
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/script.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/surface_proof.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/surface_proof_anticipy.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/trace.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/transcript_quality.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/upload_response.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: RPC failed; HTTP 400 curl 22 The requested URL returned error: 400
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main a1f9d05] supervisor: autocommit progress checkpoint
+ 39 files changed, 14666 insertions(+), 28 deletions(-)
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/persona.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/run.log
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/script.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/baseline.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/cost_breakdown.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/driver_result.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/listen_status.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/persona.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/run.log
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/script.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/surface_proof.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/surface_proof_anticipy.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/trace.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/transcript_quality.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/upload_response.json
+ create mode 100644 state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/verdict.json
+ create mode 100644 state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/verdict.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 716cb49] supervisor: autocommit progress checkpoint
+ 92 files changed, 49829 insertions(+), 22 deletions(-)
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/baseline.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/cost_breakdown.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/driver_result.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/listen_status.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/surface_proof.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/surface_proof_anticipy.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/trace.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/transcript_quality.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/upload_response.json
+ create mode 100644 state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/verdict.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/persona.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/run.log
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/script.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/baseline.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/cost_breakdown.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/driver_result.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/listen_status.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/persona.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/run.log
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/script.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/surface_proof.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/surface_proof_anticipy.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/trace.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/transcript_quality.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/upload_response.json
+ create mode 100644 state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/verdict.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/baseline.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/cost_breakdown.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/driver_result.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/listen_status.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/persona.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/run.log
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/script.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/surface_proof.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/surface_proof_anticipy.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/trace.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/transcript_quality.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/upload_response.json
+ create mode 100644 state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/verdict.json
+ create mode 100644 state/v7/supervisor/ralph_loop.log
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 2cfc5c8] supervisor: autocommit progress checkpoint
+ 55 files changed, 37564 insertions(+), 14 deletions(-)
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/baseline.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/cost_breakdown.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/driver_result.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/listen_status.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/surface_proof.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/surface_proof_anticipy.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/trace.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/transcript_quality.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/upload_response.json
+ create mode 100644 state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/verdict.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/baseline.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/cost_breakdown.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/driver_result.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/listen_status.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/persona.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/run.log
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/script.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/surface_proof.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/surface_proof_anticipy.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/trace.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/transcript_quality.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/upload_response.json
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: RPC failed; curl 28 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main a34446e] supervisor: autocommit progress checkpoint
+ 62 files changed, 38091 insertions(+), 21 deletions(-)
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/baseline.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/cost_breakdown.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/driver_result.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/listen_status.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/persona.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/run.log
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/script.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/surface_proof.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/surface_proof_anticipy.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/trace.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/transcript_quality.json
+ create mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/upload_response.json
+ create mode 100644 state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/verdict.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/baseline.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/cost_breakdown.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/driver_result.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/listen_status.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/persona.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/run.log
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/script.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/surface_proof.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/surface_proof_anticipy.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/trace.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/transcript_quality.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/upload_response.json
+ create mode 100644 state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/verdict.json
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: RPC failed; HTTP 400 curl 22 The requested URL returned error: 400
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main eaa2373] supervisor: autocommit progress checkpoint
+ 73 files changed, 20910 insertions(+), 1394 deletions(-)
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/cost_breakdown.json
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/listen_status.json
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/persona.json
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/proofs/surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/run.log
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/script.json
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/transcript_quality.json
+ delete mode 100644 state/strangers/20fa843f-0265-4f53-9c8a-053a9828d112/upload_response.json
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/baseline.json
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/cost_breakdown.json
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/driver_result.json (93%)
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/listen_status.json
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/persona.json
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/proofs/surface_proof/real_chrome_page_metadata.json (78%)
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/proofs/surface_proof/real_chrome_screenshot.png
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/proofs/surface_proof/real_chrome_visible_text.txt (100%)
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/proofs/surface_proof_anticipy/real_chrome_page_metadata.json (95%)
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/proofs/surface_proof_anticipy/real_chrome_screenshot.png (53%)
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/proofs/surface_proof_anticipy/real_chrome_visible_text.txt (100%)
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/run.log
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json (88%)
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt (100%)
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/screenshots/baseline/real_surface_proof.json (94%)
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/script.json
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/surface_proof.json (93%)
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/surface_proof_anticipy.json (95%)
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 8afcd693-1511-4c6c-8f15-1f42dba102bb}/trace.json (89%)
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/transcript_quality.json
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/upload_response.json
+ create mode 100644 state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/verdict.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/audio/uploaded_audio.mp3
+ rename state/strangers/{20fa843f-0265-4f53-9c8a-053a9828d112 => 9efa2d39-c41a-4c87-94d9-9343e7a4bde2}/baseline.json (64%)
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/cost_breakdown.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/driver_result.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/listen_status.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/persona.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/run.log
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/script.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/surface_proof.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/surface_proof_anticipy.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/trace.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/transcript_quality.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/upload_response.json
+ create mode 100644 state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/verdict.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main afeb010] supervisor: autocommit progress checkpoint
+ 23 files changed, 2010 insertions(+), 76 deletions(-)
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/baseline.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/listen_status.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/persona.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/run.log
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/script.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/upload_response.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 180dae9] supervisor: autocommit progress checkpoint
+ 48 files changed, 34744 insertions(+), 23 deletions(-)
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/baseline.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/cost_breakdown.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/driver_result.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/listen_status.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/persona.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/run.log
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/script.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/surface_proof.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/surface_proof_anticipy.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/trace.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/transcript_quality.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/upload_response.json
+ create mode 100644 state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/verdict.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/cost_breakdown.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/driver_result.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/surface_proof.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/surface_proof_anticipy.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/trace.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/transcript_quality.json
+ create mode 100644 state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/verdict.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main c5d438c] supervisor: autocommit progress checkpoint
+ 72 files changed, 38321 insertions(+), 18 deletions(-)
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/baseline.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/cost_breakdown.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/driver_result.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/listen_status.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/persona.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/run.log
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/script.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/surface_proof.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/surface_proof_anticipy.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/trace.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/transcript_quality.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/upload_response.json
+ create mode 100644 state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/verdict.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/baseline.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/cost_breakdown.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/driver_result.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/listen_status.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/persona.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/run.log
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/script.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/surface_proof.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/surface_proof_anticipy.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/trace.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/transcript_quality.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/upload_response.json
+ create mode 100644 state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/verdict.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/baseline.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/persona.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/run.log
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/script.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 53c9e84] supervisor: autocommit progress checkpoint
+ 63 files changed, 36844 insertions(+), 36 deletions(-)
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/cost_breakdown.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/driver_result.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/listen_status.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/surface_proof.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/surface_proof_anticipy.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/trace.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/transcript_quality.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/upload_response.json
+ create mode 100644 state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/verdict.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/baseline.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/cost_breakdown.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/driver_result.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/listen_status.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/persona.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/run.log
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/script.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/surface_proof.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/surface_proof_anticipy.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/trace.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/transcript_quality.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/upload_response.json
+ create mode 100644 state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/verdict.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/baseline.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/persona.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/run.log
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/script.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 3b2f9f4] supervisor: autocommit progress checkpoint
+ 53 files changed, 35803 insertions(+), 17 deletions(-)
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/cost_breakdown.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/driver_result.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/listen_status.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/surface_proof.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/surface_proof_anticipy.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/trace.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/transcript_quality.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/upload_response.json
+ create mode 100644 state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/verdict.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/baseline.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/cost_breakdown.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/driver_result.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/listen_status.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/persona.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/run.log
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/script.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/surface_proof.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/surface_proof_anticipy.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/trace.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/transcript_quality.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/upload_response.json
+ create mode 100644 state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/verdict.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main aaccd57] supervisor: autocommit progress checkpoint
+ 40 files changed, 18480 insertions(+), 27 deletions(-)
+ create mode 100644 state/strangers/06da66cd-92ff-4dcb-8201-9778509c1b86/persona.json
+ create mode 100644 state/strangers/06da66cd-92ff-4dcb-8201-9778509c1b86/run.log
+ create mode 100644 state/strangers/06da66cd-92ff-4dcb-8201-9778509c1b86/script.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/baseline.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/cost_breakdown.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/driver_result.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/listen_status.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/persona.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/proofs/surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/proofs/surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/proofs/surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/proofs/surface_proof_anticipy/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/proofs/surface_proof_anticipy/real_chrome_screenshot.png
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/proofs/surface_proof_anticipy/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/run.log
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/screenshots/baseline/proofs/real_surface_proof/real_chrome_page_metadata.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/screenshots/baseline/proofs/real_surface_proof/real_chrome_screenshot.png
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/screenshots/baseline/proofs/real_surface_proof/real_chrome_visible_text.txt
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/screenshots/baseline/real_surface_proof.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/script.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/surface_proof.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/surface_proof_anticipy.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/trace.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/transcript_quality.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/upload_response.json
+ create mode 100644 state/strangers/a1307179-eabe-4765-b825-ca15432db527/verdict.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 0e2af17] supervisor: autocommit progress checkpoint
+ 23 files changed, 487 insertions(+), 161 deletions(-)
+ delete mode 100644 state/strangers/06da66cd-92ff-4dcb-8201-9778509c1b86/persona.json
+ delete mode 100644 state/strangers/06da66cd-92ff-4dcb-8201-9778509c1b86/run.log
+ delete mode 100644 state/strangers/06da66cd-92ff-4dcb-8201-9778509c1b86/script.json
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/baseline.json
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/listen_status.json
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/persona.json
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/run.log
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/script.json
+ create mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/upload_response.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 8c99c9c] supervisor: autocommit progress checkpoint
+ 26 files changed, 485 insertions(+), 257 deletions(-)
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/baseline.json
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/listen_status.json
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/persona.json
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/run.log
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/script.json
+ delete mode 100644 state/strangers/1535c1bd-bf54-4aa8-a14c-305e5d31e084/upload_response.json
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/baseline.json
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/listen_status.json
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/persona.json
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/run.log
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/script.json
+ create mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/upload_response.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main b0502ab] supervisor: autocommit progress checkpoint
+ 30 files changed, 437 insertions(+), 279 deletions(-)
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/baseline.json
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/listen_status.json
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/persona.json
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/run.log
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/script.json
+ create mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/upload_response.json
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/baseline.json
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/listen_status.json
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/persona.json
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/run.log
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/script.json
+ delete mode 100644 state/strangers/f12949f1-3560-41ba-aab8-3acb91f77779/upload_response.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main cfee787] supervisor: autocommit progress checkpoint
+ 22 files changed, 233 insertions(+), 275 deletions(-)
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/baseline.json
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/listen_status.json
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/persona.json
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/run.log
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/script.json
+ delete mode 100644 state/strangers/2c9c3147-2057-48cd-81b0-a373934d7e45/upload_response.json
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: RPC failed; HTTP 400 curl 22 The requested URL returned error: 400
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main e83859b] supervisor: autocommit progress checkpoint
+ 18 files changed, 444 insertions(+), 41 deletions(-)
+ create mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/baseline.json
+ create mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/persona.json
+ create mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/run.log
+ create mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/script.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main a3d1309] supervisor: autocommit progress checkpoint
+ 26 files changed, 480 insertions(+), 251 deletions(-)
+ delete mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/baseline.json
+ delete mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/persona.json
+ delete mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/run.log
+ delete mode 100644 state/strangers/0e402f65-cca8-4534-bc6a-e1ac0a8f9eb5/script.json
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/baseline.json
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/listen_status.json
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/persona.json
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/run.log
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/script.json
+ create mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/upload_response.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main e6a4349] supervisor: autocommit progress checkpoint
+ 28 files changed, 395 insertions(+), 702 deletions(-)
+ create mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/audio/uploaded_audio.mp3
+ rename state/strangers/{505f5a3f-15c4-462c-b4ad-d758aef351ad => 4d8f669d-b092-48ae-a8a9-7a7ba314b775}/baseline.json (89%)
+ create mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/listen_status.json
+ create mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/persona.json
+ create mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/run.log
+ create mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/script.json
+ create mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/upload_response.json
+ delete mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/listen_status.json
+ delete mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/persona.json
+ delete mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/run.log
+ delete mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/script.json
+ delete mode 100644 state/strangers/505f5a3f-15c4-462c-b4ad-d758aef351ad/upload_response.json
+error: RPC failed; curl 55 Recv failure: Operation timed out
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 1ea1455] supervisor: autocommit progress checkpoint
+ 32 files changed, 2807 insertions(+), 273 deletions(-)
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/baseline.json
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/listen_status.json
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/persona.json
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/run.log
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/script.json
+ delete mode 100644 state/strangers/4d8f669d-b092-48ae-a8a9-7a7ba314b775/upload_response.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/baseline.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/cost_breakdown.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/driver_result.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/listen_status.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/persona.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/run.log
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/script.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/transcript_quality.json
+ create mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/upload_response.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 8ba35b1] supervisor: autocommit progress checkpoint
+ 35 files changed, 2571 insertions(+), 488 deletions(-)
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/baseline.json
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/cost_breakdown.json
+ rename state/strangers/{63174430-6c12-45cb-b63c-134a6cc99924 => 58bbebfe-f519-4518-913a-034c44f3b0a9}/driver_result.json (91%)
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/listen_status.json
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/persona.json
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/run.log
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/script.json
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/trace.json
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/transcript_quality.json
+ create mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/upload_response.json
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/baseline.json
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/cost_breakdown.json
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/listen_status.json
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/persona.json
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/run.log
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/script.json
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/transcript_quality.json
+ delete mode 100644 state/strangers/63174430-6c12-45cb-b63c-134a6cc99924/upload_response.json
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: RPC failed; HTTP 400 curl 22 The requested URL returned error: 400
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 11dd1a3] supervisor: autocommit progress checkpoint
+ 25 files changed, 269 insertions(+), 4009 deletions(-)
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/audio/uploaded_audio.aiff
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/audio/uploaded_audio.mp3
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/baseline.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/cost_breakdown.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/driver_result.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/listen_status.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/persona.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/run.log
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/script.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/trace.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/transcript_quality.json
+ delete mode 100644 state/strangers/58bbebfe-f519-4518-913a-034c44f3b0a9/upload_response.json
+error: RPC failed; HTTP 500 curl 22 The requested URL returned error: 500
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date
+[main 843836c] supervisor: autocommit progress checkpoint
+ 21 files changed, 414 insertions(+), 34 deletions(-)
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/audio/uploaded_audio.aiff
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/audio/uploaded_audio.mp3
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/baseline.json
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/listen_status.json
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/persona.json
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/run.log
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/script.json
+ create mode 100644 state/strangers/5d82095a-41eb-49eb-9917-cc908dbc00b3/upload_response.json
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: unable to rewind rpc post data - try increasing http.postBuffer
+error: RPC failed; HTTP 400 curl 22 The requested URL returned error: 400
+send-pack: unexpected disconnect while reading sideband packet
+fatal: the remote end hung up unexpectedly
+Everything up-to-date

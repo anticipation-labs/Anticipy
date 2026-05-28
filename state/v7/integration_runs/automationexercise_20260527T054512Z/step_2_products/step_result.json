@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/products",
+  "expected": "url contains /products",
+  "name": "products_page",
+  "passed": true,
+  "primitive_used": "bridge navigate (top-nav fallback)"
+}

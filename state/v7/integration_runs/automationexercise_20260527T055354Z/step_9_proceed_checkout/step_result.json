@@ -1,0 +1,7 @@
+{
+  "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+  "expected": "click issued; expect login wall or modal",
+  "name": "proceed_to_checkout_clicked",
+  "passed": false,
+  "primitive_used": "cliclick on (1100,560) after Page Down"
+}

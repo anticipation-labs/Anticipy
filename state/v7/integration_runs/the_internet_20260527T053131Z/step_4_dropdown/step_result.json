@@ -1,0 +1,7 @@
+{
+  "actual": "https://the-internet.herokuapp.com/dropdown",
+  "expected": "screenshot proof after select sequence",
+  "name": "dropdown_option_2",
+  "passed": true,
+  "primitive_used": "navigate + SE Down/Enter"
+}

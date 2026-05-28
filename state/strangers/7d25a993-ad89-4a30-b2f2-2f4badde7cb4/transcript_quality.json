@@ -1,0 +1,21 @@
+{
+  "evidence": {
+    "input_mode": "transcript_paste",
+    "origin": "driver_result.json",
+    "path": "transcript_boundary",
+    "source": "asr-transcript",
+    "source_mode": "transcript_upload"
+  },
+  "generated_at": "2026-05-26T14:48:57Z",
+  "hypothesis": "I need the Amazon booth supplies handled, but do not buy anything yet. Put together the cart for the folding table clips and the matte black price tags, then ask me before checkout.",
+  "input_fidelity": [
+    "uploaded_text_transcript"
+  ],
+  "reference": "I need the Amazon booth supplies handled, but do not buy anything yet. Put together the cart for the folding table clips and the matte black price tags, then ask me before checkout.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "7d25a993-ad89-4a30-b2f2-2f4badde7cb4",
+  "transcript_boundary_chars": 181,
+  "transcript_boundary_sha256": "08f46fe6b549dd34ea8638a430377d8f86bf6dbb31c3a3e8d3e4369e61b35981",
+  "wer": 0.0
+}

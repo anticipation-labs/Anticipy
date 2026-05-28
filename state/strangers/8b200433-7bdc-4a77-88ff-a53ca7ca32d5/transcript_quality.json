@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T17:01:54Z",
+  "hypothesis": "Please add a comment to the Zendesk ticket for Hugo from this morning saying I am running 15 minutes late to the dinner, and will follow up after, if you cannot prove the visible Zendesk ticket, or my signed in workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please add a comment to the Zendesk ticket for Hugo from this morning saying I am running fifteen minutes late to the dinner and will follow up after. If you cannot prove the visible Zendesk ticket or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "8b200433-7bdc-4a77-88ff-a53ca7ca32d5",
+  "transcript_boundary_chars": 255,
+  "transcript_boundary_sha256": "92a548a7540eb696034ed016f5939f402aa69d48f650c95979451f4bdc8d3d09",
+  "wer": 0.0
+}

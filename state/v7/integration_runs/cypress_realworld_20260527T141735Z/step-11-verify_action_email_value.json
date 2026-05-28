@@ -1,0 +1,7 @@
+{
+  "name": "verify_action_email_value",
+  "ok": true,
+  "detail": ".action-email DOM value=fake@email.com",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-11-verify_action_email_value.png",
+  "receipt": "fake@email.com"
+}

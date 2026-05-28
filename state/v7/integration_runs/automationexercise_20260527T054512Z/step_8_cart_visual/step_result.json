@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/view_cart",
+  "expected": "cart screenshot captured",
+  "name": "cart_screenshot",
+  "passed": true,
+  "primitive_used": "bridge surface-proof"
+}

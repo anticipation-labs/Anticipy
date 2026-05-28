@@ -1,0 +1,38 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "8afcd693-1511-4c6c-8f15-1f42dba102bb",
+  "created_at": "2025-04-09T15:20:00Z",
+  "name": "Jordan Chen",
+  "age": 34,
+  "occupation": "Sales Operations Manager",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Airtable CRM records",
+  "primary_real_surface": {
+    "surface": "Airtable",
+    "chrome_requirement": "signed-in Chrome profile with Airtable open",
+    "acceptable_state": "viewing a record"
+  },
+  "daily_tools": [
+    "Airtable",
+    "Slack",
+    "HubSpot",
+    "Google Sheets",
+    "Outlook"
+  ],
+  "contacts": [
+    {
+      "name": "Alex Rivera",
+      "relationship": "colleague",
+      "context": "Sales team lead"
+    },
+    {
+      "name": "Megan Patel",
+      "relationship": "client",
+      "context": "Key account contact"
+    }
+  ]
+}

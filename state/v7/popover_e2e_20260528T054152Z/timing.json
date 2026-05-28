@@ -1,0 +1,33 @@
+{
+  "ts_utc": "20260528T054152Z",
+  "click_method": "AppleScript inside System Events: 'click menu bar item 1 of menu bar 2 of process Anticipy'",
+  "process": "Anticipy",
+  "popover_window_pos_pts": [
+    1254,
+    34
+  ],
+  "popover_window_size_pts": [
+    480,
+    600
+  ],
+  "display_scale": 2,
+  "measurement_1": {
+    "description": "Single-process AppleScript with internal gdate timing (eliminates per-call osascript boot)",
+    "click_to_visible_total_ms": 66,
+    "click_dispatch_ms": 43,
+    "post_click_to_window_visible_ms": 23,
+    "target_ms": 200,
+    "pass": true
+  },
+  "measurement_2": {
+    "description": "Bash shell with per-poll osascript calls (high overhead, upper bound)",
+    "applescript_click_ms": 572,
+    "click_to_window_visible_ms": 843,
+    "note": "Each osascript boot is ~150 ms; measurement is dominated by tooling overhead, not Tauri."
+  },
+  "implementation_notes": {
+    "popover_eager_create": "desktop/src-tauri/src/lib.rs:1587 ensure_popover() runs at app setup so win.show() is the only synchronous step on click.",
+    "click_handler": "lib.rs:1398 toggle_popover -> lib.rs:1371 show_popover. No animation.",
+    "url": "WebviewUrl::App('popover.html') at lib.rs:1350 - popover.html does not exist in desktop/src, so the webview falls back to index.html which renders the IDLE 'What should Anticipy do?' panel."
+  }
+}

@@ -1,0 +1,5 @@
+bare_text: type=act; surface=gmail; actionable=True; error=''; summary='The user wants to email Maya about the Friday digest.'
+capture_mode: type=act; surface=none; actionable=True; error=''; summary='The user wants to follow up with Devon about an invoice.'
+empty: type=ignore; surface=; actionable=False; error='empty_transcript'; summary=''
+window_turns: type=act; surface=gmail; actionable=True; error=''; summary='The user wants to email Maya about Friday.'
+capture_empty_dict: type=ignore; surface=none; actionable=False; error=''; summary='The user expresses an intention to call their dentist.'

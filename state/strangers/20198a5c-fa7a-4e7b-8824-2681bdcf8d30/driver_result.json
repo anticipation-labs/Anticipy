@@ -1,0 +1,608 @@
+{
+  "audio_artifact": {
+    "bytes": 355726,
+    "content_type": "audio/mpeg",
+    "conversion": {
+      "ok": true,
+      "returncode": 0,
+      "stderr": "ffmpeg version 8.0.1 Copyright (c) 2000-2025 the FFmpeg developers\n  built with Apple clang version 17.0.0 (clang-1700.6.3.2)\n  configuration: --prefix=/opt/homebrew/Cellar/ffmpeg/8.0.1_1 --enable-shared --enable-pthreads --enable-version3 --cc=clang --host-cflags= --host-ldflags= --enable-ffplay --enable-gpl --enable-libsvtav1 --enable-libopus --enable-libx264 --enable-libmp3lame --enable-libdav1d --enable-libvpx --enable-libx265 --enable-videotoolbox --enable-audiotoolbox --enable-neon\n  libavutil      60.  8.100 / 60.  8.100\n  libavcodec     62. 11.100 / 62. 11.100\n  libavformat    62.  3.100 / 62.  3.100\n  libavdevice    62.  1.100 / 62.  1.100\n  libavfilter    11.  4.100 / 11.  4.100\n  libswscale      9.  1.100 /  9.  1.100\n  libswresample   6.  1.100 /  6.  1.100\n[aist#0:0/pcm_s16be @ 0xb4f014180] Guessed Channel Layout: mono\nInput #0, aiff, from '/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/audio/uploaded_audio.aiff':\n  Duration: 00:00:22.13, start: 0.000000, bitrate: 354 kb/s\n  Stream #0:0: Audio: pcm_s16be (twos / 0x736F7774), 22050 Hz, mono, s16, 352 kb/s\nStream mapping:\n  Stream #0:0 -> #0:0 (pcm_s16be (native) -> mp3 (libmp3lame))\nPress [q] to stop, [?] for help\nOutput #0, mp3, to '/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/audio/uploaded_audio.mp3':\n  Metadata:\n    TSSE            : Lavf62.3.100\n  Stream #0:0: Audio: mp3, 22050 Hz, mono, s16p, 128 kb/s\n    Metadata:\n      encoder         : Lavc62.11.100 libmp3lame\n[out#0/mp3 @ 0xb4ec3c180] video:0KiB audio:347KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.129762%\nsize=     347KiB time=00:00:22.13 bitrate= 128.6kbits/s speed= 375x elapsed=0:00:00.05    \n",
+      "stdout": ""
+    },
+    "ok": true,
+    "path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/audio/uploaded_audio.mp3",
+    "source_aiff": {
+      "bytes": 980244,
+      "ok": true,
+      "path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/audio/uploaded_audio.aiff",
+      "rate": 150,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "",
+      "voice": "Samantha"
+    }
+  },
+  "controlled_phrase_match": {
+    "expected_words": [
+      "alder",
+      "already",
+      "anything",
+      "call",
+      "cannot",
+      "contact",
+      "deal",
+      "doing",
+      "finance",
+      "follow",
+      "friday",
+      "hubspot",
+      "morning",
+      "needs",
+      "nora",
+      "packet",
+      "promised",
+      "real",
+      "renewal",
+      "saying",
+      "send",
+      "signed",
+      "summary",
+      "surface",
+      "vega",
+      "vendor",
+      "verify",
+      "visible",
+      "whether",
+      "works"
+    ],
+    "hits": [
+      "already",
+      "anything",
+      "call",
+      "cannot",
+      "contact",
+      "deal",
+      "doing",
+      "finance",
+      "follow",
+      "friday",
+      "hubspot",
+      "morning",
+      "needs",
+      "nora",
+      "packet",
+      "promised",
+      "real",
+      "renewal",
+      "saying",
+      "send",
+      "signed",
+      "summary",
+      "surface",
+      "vega",
+      "vendor",
+      "verify",
+      "visible",
+      "whether"
+    ],
+    "pass": true,
+    "required": 10
+  },
+  "driver_exit_code": 0,
+  "driver_failed": false,
+  "engine_url": "http://127.0.0.1:8731",
+  "failure_phase": "",
+  "generated_at": "2026-05-26T12:54:09Z",
+  "input_mode": "uploaded_audio",
+  "ok": true,
+  "persona_file": "state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/persona.json",
+  "post_transcript_boundary_source": "upload-asr",
+  "public_surface_after": {
+    "open": {
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "",
+      "url": "https://www.anticipy.ai/app"
+    },
+    "proof_pass": true,
+    "proof_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/public_app_after_audio_upload.json"
+  },
+  "public_surface_before": {
+    "open": {
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "",
+      "url": "https://www.anticipy.ai/app"
+    },
+    "proof_pass": true,
+    "proof_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/public_app_before_audio_upload_attempt_1.json",
+    "readiness_attempts": [
+      {
+        "proof_pass": true,
+        "proof_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/public_app_before_audio_upload_attempt_1.json",
+        "upload_controls_visible": true,
+        "url": "https://www.anticipy.ai/app",
+        "visible_text_bytes": 233,
+        "visible_text_preview": "\nAnticipy\nListen\nHistory\nSettings\nLog out\nEngine live\n\nPress Listen. Real spoken audio runs the whole real pipeline and a real proposal returns here.\n\nAudio source\n\nMacBook Air Microphone (builtin)\nListen\nRun transcript\nUpload audio\n"
+      }
+    ],
+    "upload_surface_ready": true
+  },
+  "public_url": "https://www.anticipy.ai/app",
+  "reference_sha256": "8aae2ae43179bc4d9f0f05b953038934bf9bf0b4bdaf11cf67f28188096bde5b",
+  "reference_transcript": "After my renewal call with Nora Vega at Alder Works, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC 2 renewal summary and ask whether finance needs the vendor packet. Use the visible HubSpot contact or deal if it is already signed in. If you cannot verify the real HubSpot surface, ask me before doing anything.",
+  "reset_error": "",
+  "runtime_model_cost_usd": 0.0,
+  "schema": "anticipy.v7.deterministic_audio_upload_driver",
+  "script_file": "state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/script.json",
+  "service_surface": {
+    "direct_browser_cdp": false,
+    "open": {
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "",
+      "url": "https://app.hubspot.com/contacts"
+    },
+    "proof_pass": true,
+    "proof_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/crm_surface_after_audio_upload.json",
+    "screenshot_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/proofs/crm_surface_after_audio_upload/real_chrome_screenshot.png",
+    "url": "https://app.hubspot.com/login",
+    "uses_chrome_real_clone": false,
+    "visible_surface": true
+  },
+  "source": "upload-asr",
+  "source_mode": "audio_upload",
+  "started_at": "2026-05-26T12:53:21Z",
+  "status_after_sanitized": {
+    "matching_recent": {
+      "asr_normalizations": [],
+      "asr_normalized": false,
+      "audio_device": null,
+      "capture": {
+        "asr_normalizations": [],
+        "asr_normalized": false,
+        "bytes": 355726,
+        "content_type": "audio/mpeg",
+        "filename": "",
+        "mean_confidence": 0.9948,
+        "raw_asr_transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+      },
+      "capture_id": null,
+      "competent_decline": true,
+      "d16_receipt": "no-action CRM/SaaS write decline",
+      "decline": true,
+      "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+      "intent": "crm_saas_write",
+      "memory": {
+        "op": "UPDATE",
+        "reason": "The candidate corrects the company name from 'Elder Works' to 'Alderworks' and refines the promised document from 'SOC2 renewal summary' to 'SOC to Renewal Summ"
+      },
+      "outcome": "DECLINED",
+      "plan": {
+        "blocked_services": [
+          "HubSpot"
+        ],
+        "competent_decline": true,
+        "d16_receipt": "no-action CRM/SaaS write decline",
+        "intent": "crm_saas_write",
+        "mode": "decline",
+        "prohibited_actions": [
+          "email",
+          "post",
+          "close",
+          "promise",
+          "write"
+        ],
+        "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+        "task": "",
+        "thing": "HubSpot",
+        "unchanged": [
+          "HubSpot records",
+          "source context",
+          "field/note/status/owner state",
+          "no-extra-change visible state"
+        ],
+        "unchanged_state_boundary": "HubSpot records; source context; field/note/status/owner state; no extra visible changes"
+      },
+      "proactive_due": {
+        "fired": [],
+        "fired_count": 0,
+        "now": 1779800027.104578,
+        "ok": true
+      },
+      "profile_loaded": true,
+      "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "raw_asr_transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "resolution_trace_sync": {
+        "ok": true,
+        "payload": {
+          "candidates": [],
+          "confidence": 0.0,
+          "confirm_card_surfaced": false,
+          "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+          "layer_used": 0,
+          "plan": {
+            "blocked_services": [
+              "HubSpot"
+            ],
+            "competent_decline": true,
+            "d16_receipt": "no-action CRM/SaaS write decline",
+            "intent": "crm_saas_write",
+            "mode": "decline",
+            "prohibited_actions": [
+              "email",
+              "post",
+              "close",
+              "promise",
+              "write"
+            ],
+            "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+            "task": "",
+            "thing": "HubSpot",
+            "unchanged": [
+              "HubSpot records",
+              "source context",
+              "field/note/status/owner state",
+              "no-extra-change visible state"
+            ],
+            "unchanged_state_boundary": "HubSpot records; source context; field/note/status/owner state; no extra visible changes"
+          },
+          "reference": "",
+          "resolved_to": null,
+          "source": "upload-asr",
+          "transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+        },
+        "response": {
+          "id": "8cb8d6be-908f-4c95-b741-9c6e04518028",
+          "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+          "ok": true
+        },
+        "status": 200
+      },
+      "rms": 0.16093963384628296,
+      "source": "upload-asr",
+      "transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "ts": 1779800022.3207731,
+      "v7_artifacts": {
+        "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+        "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+        "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+      },
+      "v7_decision": {
+        "decision": {
+          "message": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+          "mode": "decline"
+        },
+        "device_engine": "user-device",
+        "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+        "input_mode": "mp3_upload",
+        "outcome": "DECLINED",
+        "plan": {
+          "blocked_services": [
+            "HubSpot"
+          ],
+          "competent_decline": true,
+          "d16_receipt": "no-action CRM/SaaS write decline",
+          "intent": "crm_saas_write",
+          "mode": "decline",
+          "prohibited_actions": [
+            "email",
+            "post",
+            "close",
+            "promise",
+            "write"
+          ],
+          "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+          "task": "",
+          "thing": "HubSpot",
+          "unchanged": [
+            "HubSpot records",
+            "source context",
+            "field/note/status/owner state",
+            "no-extra-change visible state"
+          ],
+          "unchanged_state_boundary": "HubSpot records; source context; field/note/status/owner state; no extra visible changes"
+        },
+        "public_build_commit": "",
+        "schema": "anticipy.decision.v7",
+        "source": "upload-asr",
+        "surface_proof_required": true,
+        "ts": 1779800022.3207731
+      },
+      "v7_normalized_input": {
+        "capture": {
+          "asr_normalizations": [],
+          "asr_normalized": false,
+          "audio_device": null,
+          "bytes": 355726,
+          "content_type": "audio/mpeg",
+          "filename": "",
+          "raw_asr_transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+        },
+        "device_engine": "user-device",
+        "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+        "input_mode": "mp3_upload",
+        "public_build_commit": "",
+        "schema": "anticipy.normalized_input.v7",
+        "source": "upload-asr",
+        "ts": 1779800022.3207731,
+        "window": {
+          "turns": [
+            {
+              "asr_confidence": 0.9948,
+              "end_ms": 0,
+              "speaker": "user",
+              "start_ms": 0,
+              "text": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+            }
+          ]
+        }
+      },
+      "window": 1
+    },
+    "pending": {
+      "competent_decline": true,
+      "decline": true,
+      "instruction": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "plan": {
+        "blocked_services": [
+          "HubSpot"
+        ],
+        "competent_decline": true,
+        "d16_receipt": "no-action CRM/SaaS write decline",
+        "intent": "crm_saas_write",
+        "mode": "decline",
+        "prohibited_actions": [
+          "email",
+          "post",
+          "close",
+          "promise",
+          "write"
+        ],
+        "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+        "task": "",
+        "thing": "HubSpot",
+        "unchanged": [
+          "HubSpot records",
+          "source context",
+          "field/note/status/owner state",
+          "no-extra-change visible state"
+        ],
+        "unchanged_state_boundary": "HubSpot records; source context; field/note/status/owner state; no extra visible changes"
+      },
+      "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "ts": 1779800022.3207731
+    },
+    "recent_count": 1
+  },
+  "stranger_id": "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+  "submitted_through_public_app_ui": true,
+  "submitted_through_public_product_upload_endpoint": false,
+  "transcript_boundary": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+  "transcript_boundary_chars": 344,
+  "transcript_boundary_sha256": "0d12dcd533132dd4f302a70825718a8a6b64b96dc23854185175e8a967662db5",
+  "ui_submit": {
+    "chooser": {
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "click": {
+      "method": "chrome_accessibility_click_upload_audio_label",
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "true"
+    },
+    "file_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/audio/uploaded_audio.mp3",
+    "ok": true,
+    "submitted_through_public_app_ui": true,
+    "upload_label_center": null,
+    "window_setup": {
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    }
+  },
+  "upload": {
+    "content_type": "audio/mpeg",
+    "error": "",
+    "response": {
+      "asr_normalizations": [],
+      "asr_normalized": false,
+      "audio_device": null,
+      "capture": {
+        "asr_normalizations": [],
+        "asr_normalized": false,
+        "bytes": 355726,
+        "content_type": "audio/mpeg",
+        "filename": "",
+        "mean_confidence": 0.9948,
+        "raw_asr_transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+      },
+      "capture_id": null,
+      "competent_decline": true,
+      "d16_receipt": "no-action CRM/SaaS write decline",
+      "decline": true,
+      "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+      "intent": "crm_saas_write",
+      "memory": {
+        "op": "UPDATE",
+        "reason": "The candidate corrects the company name from 'Elder Works' to 'Alderworks' and refines the promised document from 'SOC2 renewal summary' to 'SOC to Renewal Summ"
+      },
+      "outcome": "DECLINED",
+      "plan": {
+        "blocked_services": [
+          "HubSpot"
+        ],
+        "competent_decline": true,
+        "d16_receipt": "no-action CRM/SaaS write decline",
+        "intent": "crm_saas_write",
+        "mode": "decline",
+        "prohibited_actions": [
+          "email",
+          "post",
+          "close",
+          "promise",
+          "write"
+        ],
+        "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+        "task": "",
+        "thing": "HubSpot",
+        "unchanged": [
+          "HubSpot records",
+          "source context",
+          "field/note/status/owner state",
+          "no-extra-change visible state"
+        ],
+        "unchanged_state_boundary": "HubSpot records; source context; field/note/status/owner state; no extra visible changes"
+      },
+      "proactive_due": {
+        "fired": [],
+        "fired_count": 0,
+        "now": 1779800027.104578,
+        "ok": true
+      },
+      "profile_loaded": true,
+      "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "raw_asr_transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "resolution_trace_sync": {
+        "ok": true,
+        "payload": {
+          "candidates": [],
+          "confidence": 0.0,
+          "confirm_card_surfaced": false,
+          "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+          "layer_used": 0,
+          "plan": {
+            "blocked_services": [
+              "HubSpot"
+            ],
+            "competent_decline": true,
+            "d16_receipt": "no-action CRM/SaaS write decline",
+            "intent": "crm_saas_write",
+            "mode": "decline",
+            "prohibited_actions": [
+              "email",
+              "post",
+              "close",
+              "promise",
+              "write"
+            ],
+            "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+            "task": "",
+            "thing": "HubSpot",
+            "unchanged": [
+              "HubSpot records",
+              "source context",
+              "field/note/status/owner state",
+              "no-extra-change visible state"
+            ],
+            "unchanged_state_boundary": "HubSpot records; source context; field/note/status/owner state; no extra visible changes"
+          },
+          "reference": "",
+          "resolved_to": null,
+          "source": "upload-asr",
+          "transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+        },
+        "response": {
+          "id": "8cb8d6be-908f-4c95-b741-9c6e04518028",
+          "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+          "ok": true
+        },
+        "status": 200
+      },
+      "rms": 0.16093963384628296,
+      "source": "upload-asr",
+      "transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "ts": 1779800022.3207731,
+      "v7_artifacts": {
+        "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+        "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+        "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+      },
+      "v7_decision": {
+        "decision": {
+          "message": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+          "mode": "decline"
+        },
+        "device_engine": "user-device",
+        "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+        "input_mode": "mp3_upload",
+        "outcome": "DECLINED",
+        "plan": {
+          "blocked_services": [
+            "HubSpot"
+          ],
+          "competent_decline": true,
+          "d16_receipt": "no-action CRM/SaaS write decline",
+          "intent": "crm_saas_write",
+          "mode": "decline",
+          "prohibited_actions": [
+            "email",
+            "post",
+            "close",
+            "promise",
+            "write"
+          ],
+          "proposal": "I can't safely update HubSpot or enterprise SaaS records yet. I cannot prove the exact visible record, field, note, status, owner, Slack/Gmail source context, or unchanged no-extra-change state on your real signed-in surface. I will not email, not post, not close, not promise, and not write to those services. Requested SaaS change to preserve: After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+          "task": "",
+          "thing": "HubSpot",
+          "unchanged": [
+            "HubSpot records",
+            "source context",
+            "field/note/status/owner state",
+            "no-extra-change visible state"
+          ],
+          "unchanged_state_boundary": "HubSpot records; source context; field/note/status/owner state; no extra visible changes"
+        },
+        "public_build_commit": "",
+        "schema": "anticipy.decision.v7",
+        "source": "upload-asr",
+        "surface_proof_required": true,
+        "ts": 1779800022.3207731
+      },
+      "v7_normalized_input": {
+        "capture": {
+          "asr_normalizations": [],
+          "asr_normalized": false,
+          "audio_device": null,
+          "bytes": 355726,
+          "content_type": "audio/mpeg",
+          "filename": "",
+          "raw_asr_transcript": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+        },
+        "device_engine": "user-device",
+        "ingest_id": "upload-asr-c70997ff06ef4f13a89cab09969b4383",
+        "input_mode": "mp3_upload",
+        "public_build_commit": "",
+        "schema": "anticipy.normalized_input.v7",
+        "source": "upload-asr",
+        "ts": 1779800022.3207731,
+        "window": {
+          "turns": [
+            {
+              "asr_confidence": 0.9948,
+              "end_ms": 0,
+              "speaker": "user",
+              "start_ms": 0,
+              "text": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything."
+            }
+          ]
+        }
+      },
+      "window": 1
+    },
+    "status": 200
+  },
+  "visible_surface_proof": {
+    "direct_browser_cdp": false,
+    "dom_path": "",
+    "page_metadata_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/proofs/crm_surface_after_audio_upload/real_chrome_page_metadata.json",
+    "pass": true,
+    "screenshot_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/proofs/crm_surface_after_audio_upload/real_chrome_screenshot.png",
+    "surface_path": "real_chrome_applescript_visible_surface",
+    "url": "https://app.hubspot.com/login",
+    "uses_chrome_real_clone": false
+  },
+  "visible_surface_proof_path": "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/crm_surface_after_audio_upload.json",
+  "visible_ui_driver": "real_chrome_visible_file_picker_upload"
+}

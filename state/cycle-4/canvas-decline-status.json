@@ -1,0 +1,92 @@
+{
+  "inject": {
+    "on": false,
+    "window": 1,
+    "ingest_id": "asr-transcript-4c0ba2477ada44b2967daec1e2b6f01a",
+    "transcript": "Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+    "outcome": "DECLINED",
+    "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+    "plan": {
+      "mode": "decline",
+      "intent": "canvas_edit",
+      "thing": "flyer",
+      "task": "",
+      "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first."
+    },
+    "memory": {
+      "op": "NOOP",
+      "reason": "already known"
+    },
+    "resolution_trace_sync": {
+      "ok": false,
+      "skipped": true,
+      "reason": "not provisioned"
+    },
+    "pending": {
+      "instruction": "Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+      "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "canvas_edit",
+        "thing": "flyer",
+        "task": "",
+        "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first."
+      },
+      "ts": 1779606271.808403
+    },
+    "scheduled": null
+  },
+  "status": {
+    "on": false,
+    "window_seconds": 60.0,
+    "windows": 1,
+    "level": 0.0,
+    "uptime": 8.0,
+    "recent": [
+      {
+        "ts": 1779606271.808403,
+        "rms": 0.0,
+        "ingest_id": "asr-transcript-4c0ba2477ada44b2967daec1e2b6f01a",
+        "transcript": "Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+        "outcome": "DECLINED",
+        "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+        "memory": {
+          "op": "NOOP",
+          "reason": "already known"
+        },
+        "source": "asr-transcript",
+        "window": 1,
+        "plan": {
+          "mode": "decline",
+          "intent": "canvas_edit",
+          "thing": "flyer",
+          "task": "",
+          "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first."
+        },
+        "resolution_trace_sync": {
+          "ok": false,
+          "skipped": true,
+          "reason": "not provisioned"
+        }
+      }
+    ],
+    "pending": {
+      "instruction": "Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+      "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "canvas_edit",
+        "thing": "flyer",
+        "task": "",
+        "proposal": "I can't safely edit that Canva/canvas flyer yet. I won't publish it or send/email anything without asking you first. Requested change to preserve: Can you fix the workshop flyer so it says 14 seats instead of 10, and add supplies included? Please don't publish or email anything without asking me first."
+      },
+      "ts": 1779606271.808403
+    },
+    "acted": null,
+    "error": null
+  }
+}

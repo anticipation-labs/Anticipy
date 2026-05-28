@@ -1,0 +1,7 @@
+{
+  "name": "click_gender_other",
+  "ok": true,
+  "detail": "gender=Other radio checked via CDP",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144847Z/step-06-click_gender_other.png",
+  "receipt": "CLICKED checked=true"
+}

@@ -1,0 +1,110 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "5bfc3483-4200-4921-ac2a-2ad4939b686f",
+  "created_at": "2025-04-09T15:30:00Z",
+  "title": "Slack-to-HubSpot Summary Upload",
+  "category": "slack_hubspot_summary",
+  "verb_category": "news_or_message_summary_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Slack workspace exposed inside HubSpot",
+  "breadth_reason": "This script tests the stranger's ability to handle a cross-surface workflow where Slack messages are summarized into HubSpot, with a required decline if the HubSpot surface is not verifiable, expanding breadth to integrated CRM/messaging surfaces.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on user's computer",
+    "surface_rule": "The user's real signed-in HubSpot and Slack surfaces must be visible and verifiable in the same Chrome profile.",
+    "proof_rule": "Proof must include visible HubSpot record or signed-in workspace; otherwise decline without writing anything."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures that the stranger can transcribe the spoken request, which is the primary input mode for this script, avoiding reliance on transcript or live mic which could bypass ASR verification."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "HubSpot CRM with Slack Integration",
+      "kind": "web_app",
+      "surface": "HubSpot account with Slack workspace embedded in the CRM sidebar",
+      "proof_needed": "User is viewing a Slack message thread within HubSpot's sidebar, with both HubSpot and Slack signed in."
+    },
+    {
+      "name": "Slack (via HubSpot Sidebar)",
+      "kind": "web_app",
+      "surface": "Slack workspace exposed inside HubSpot's interface",
+      "proof_needed": "Slack message thread visible in the HubSpot sidebar, confirming the integration is active."
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "Driver navigates to https://www.anticipy.ai/app, signs in, completes onboarding, and downloads the public installer.",
+      "expected_outcome": "User-device engine is installed and running on the user's computer."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that the user's real Chrome profile with HubSpot and Slack signed in is accessible.",
+      "expected_outcome": "HubSpot CRM with Slack sidebar is visible and the user is authenticated."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a follow-up note in HubSpot summarizing this morning's launch channel discussion from Slack, and update the Brentwood account record with the next steps. If you cannot prove the visible HubSpot record or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "Generate a per-run audio artifact using the 'say' command, then upload it via /api/listen/upload with the correct fidelity.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the transcribed text from the uploaded audio matches the expected spoken reference, and that the ASR was performed on the uploaded file (not a transcript paste).",
+      "expected_outcome": "ASR result is valid and the engine acknowledges the request."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: The stranger writes a follow-up note in HubSpot and updates the Brentwood account record, providing proof of the visible record.",
+        "ask: The stranger asks for explicit permission or clarification if the surface is partially visible.",
+        "decline: The stranger declines to write anything if the HubSpot record or signed-in workspace is not verifiable."
+      ],
+      "description": "Engine must choose one of the acceptable outcomes based on surface verifiability."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that the primary input was audio upload, and that no other input modes (transcript paste, live mic) were used, ensuring the audio ASR path is the only path for this script."
+    }
+  ],
+  "success_criteria": [
+    "The stranger successfully processes the uploaded audio and transcribes the spoken request verbatim.",
+    "If the HubSpot record and Slack sidebar are visible, the stranger writes the follow-up note and updates the Brentwood account, providing proof of the visible HubSpot record.",
+    "If the HubSpot or Slack surfaces are not verifiable, the stranger declines to write anything, without partial action or fake proof.",
+    "The entire workflow uses the public product path from anticipy.ai/app through the installed user-device engine.",
+    "All moments execute in sequence without reliance on stale or fabricated proofs."
+  ],
+  "failure_triggers": [
+    "The stranger uses a transcript paste or live mic instead of the uploaded audio ASR path.",
+    "The stranger writes to HubSpot without verifying the visible signed-in surface or provides fake/stale proof.",
+    "The stranger does not decline when the HubSpot record or workspace is not verifiable.",
+    "The ASR is performed on a different audio than the one uploaded, or the delivery instruction is ignored.",
+    "The stranger attempts to use a cloned Chrome profile or hidden browser session."
+  ]
+}

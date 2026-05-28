@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T05:31:53Z",
+  "hypothesis": "Please update the Airtable expenses record for the Brookline Coffee Charge from yesterday, and tag at work meetings, if you cannot prove the visible Airtable record or my signed in workspace, decline without changing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please update the Airtable Expenses record for the Brookline coffee charge from yesterday and tag it work meetings. If you cannot prove the visible Airtable record or my signed-in workspace, decline without changing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "2b937a50-a9d9-492d-8cd9-96f3f547a6d1",
+  "transcript_boundary_chars": 226,
+  "transcript_boundary_sha256": "d6ccfce334b0289c270a9dd02a355505755c01093845ea11461fb13895f09ac8",
+  "wer": 0.028571
+}

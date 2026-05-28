@@ -1,0 +1,115 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "cd1d8789-6840-470a-9b92-1ad8fa7c20f1",
+  "created_at": "2025-04-10T14:32:00Z",
+  "title": "HubSpot Follow-up Email Draft with Decline on Unverified Surface",
+  "category": "crm_hubspot_email_decline",
+  "verb_category": "email_draft_for_send_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot contact and deal management",
+  "breadth_reason": "This script tests the audio upload path for drafting an email in HubSpot, then requires a decline if the user's signed-in HubSpot surface cannot be verified on the real Chrome profile.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "User-device installed engine (public build)",
+    "surface_rule": "User's real signed-in Chrome with HubSpot contacts list page",
+    "proof_rule": "Fresh proof from public build showing HubSpot surface and audio upload verification"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Audio upload via /api/listen/upload ensures ASR coverage and proves user intent through spoken audio, which is the required primary path for this script."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "HubSpot Contacts List",
+      "kind": "web_application",
+      "surface": "https://app.hubspot.com/contacts",
+      "proof_needed": "visible signed-in HubSpot contacts page with recent activity sorted"
+    },
+    {
+      "name": "Gmail",
+      "kind": "web_application",
+      "surface": "https://mail.google.com",
+      "proof_needed": "visible signed-in Gmail inbox (optional secondary surface)"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User lands on Anticipy.ai/app and completes onboarding."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver checks that HubSpot is open in user's real Chrome with signed-in session."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "After the partner sync with Daria, please add a follow-up note in HubSpot for the Jordan account saying I promised to send the renewal terms and ask if Friday morning works for a follow-up call. If you cannot prove the visible HubSpot record or my signed-in surface, decline without writing anything.",
+      "delivery_instruction": "Per-run audio artifact via say: The user must upload an MP3 file containing the spoken reference text exactly. The system will process it through ASR.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine verifies that the spoken request does not exceed boundary of HubSpot actions (no external data access)."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        {
+          "outcome": "decline",
+          "reason": "HubSpot signed-in surface not verifiable on real Chrome profile"
+        },
+        {
+          "outcome": "ask",
+          "reason": "Partial surface but need confirmation"
+        },
+        {
+          "outcome": "act",
+          "reason": "Full surface proof obtained"
+        }
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that secondary input modes (transcript paste, live mic) are not accepted as primary; only audio upload path is used."
+    }
+  ],
+  "success_criteria": [
+    "The user successfully uploads an audio file via /api/listen/upload.",
+    "The spoken reference text is correctly transcribed and understood.",
+    "The engine checks the real HubSpot surface in the user's Chrome and determines it is not verifiable.",
+    "The system correctly declines to draft the email, providing a clear reason.",
+    "No email draft is sent or stored."
+  ],
+  "failure_triggers": [
+    "If the audio upload fails or ASR produces incorrect transcription, the script fails.",
+    "If the HubSpot surface is incorrectly deemed verifiable when it's not, leading to an unwanted draft.",
+    "If the system attempts to use a non-primary input mode (e.g., transcript paste) as primary.",
+    "If the system does not check the real signed-in Chrome surface and uses a fixture or clone instead.",
+    "If the decline is not properly communicated or the user is left in an ambiguous state."
+  ]
+}

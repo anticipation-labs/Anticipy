@@ -1,0 +1,65 @@
+{
+  "pass": true,
+  "reasoning": "The engine competently declined to act on Notion because the visible surface was a login page, not the signed-in recipe database. The decline names Notion, the Anticipy card changed, and all D16 competent-decline conditions are satisfied. The only moment failure is that the driver did not ensure the correct Notion surface precheck, but the engine's behavior is correct and the run passes overall.",
+  "specific_failures": [
+    "Driver surface precheck failed: Notion login page instead of signed-in recipe database"
+  ],
+  "verb_category": "recipe_or_meal_plan_act",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Driver navigated to anticipy.ai/app, signed in, and installed the engine as evidenced by the surface proof and installed process."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": false,
+      "reasoning": "Driver surface proof shows Notion login page, not the recipe database. The required signed-in workspace with database was not present."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio upload occurred with ASR transcript matching the spoken reference text."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Engine processed the ASR transcript and correctly determined the Notion surface was not verifiable."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined with a service-specific message naming Notion, which is an acceptable outcome per the script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Secondary input modes were not used; focus on uploaded audio was maintained."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine declined to write to Notion because it detected the Notion login page instead of a signed-in workspace. The decline names Notion, the Anticipy card changed, and no third-party surface was changed. All D16 conditions met."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:10:18Z"
+}

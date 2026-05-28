@@ -1,0 +1,43 @@
+{
+  "accuracy": 1.0,
+  "calibration_path": "state/inference_eval/calibration.json",
+  "contracts_present": true,
+  "dataset_path": "state/inference_dataset/synthetic_wants.jsonl",
+  "examples": 5,
+  "generated_at": "2026-05-26T13:06:40Z",
+  "missing_contracts": [],
+  "pass": true,
+  "results": [
+    {
+      "gold": "ask_first",
+      "id": "want_email_001",
+      "pass": true,
+      "predicted": "ask_first"
+    },
+    {
+      "gold": "execute_notify",
+      "id": "want_calendar_001",
+      "pass": true,
+      "predicted": "execute_notify"
+    },
+    {
+      "gold": "decline",
+      "id": "want_crm_decline_001",
+      "pass": true,
+      "predicted": "decline"
+    },
+    {
+      "gold": "silent_decline",
+      "id": "negative_quote_001",
+      "pass": true,
+      "predicted": "silent_decline"
+    },
+    {
+      "gold": "silent_decline",
+      "id": "negative_media_001",
+      "pass": true,
+      "predicted": "silent_decline"
+    }
+  ],
+  "schema": "anticipy.v7.inference_offline_eval"
+}

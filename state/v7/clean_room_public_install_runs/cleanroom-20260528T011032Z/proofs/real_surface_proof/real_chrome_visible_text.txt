@@ -1,0 +1,195 @@
+
+Control plane · owner-only
+Admin
+Every API key + integration setting is editable here. Saves persist to the database and the backend reads them at runtime — no redeploy needed for credentials. Push to Vercel updates project env vars and triggers a redeploy if a Deploy Hook is configured.
+
+Refresh
+Save changes
+Push env to Vercel
+Push + redeploy
+Vercel push · with errors
+No redeploy
+Set Vercel API token + project ID under the Vercel section, then retry.
+AI
+AI provider
+ai.provider
+Which LLM provider the AI gateway uses for classification, triage, and report drafting.
+
+— not set —
+OpenAI API key
+ai.openai_api_key
+Used when AI provider = openai. Starts with sk-.
+paste new value to rotate
+Anthropic API key
+ai.anthropic_api_key
+Used when AI provider = anthropic. Starts with sk-ant-.
+paste new value to rotate
+Google Gemini API key
+ai.gemini_api_key
+Used when AI provider = gemini.
+paste new value to rotate
+Scanner
+Scanner engine
+scanner.engine
+Which underlying scanner powers /api/clients/.../scans.
+
+— not set —
+Safe profile only
+scanner.safe_profile_only
+Block destructive/exploit-like templates. Recommended on for MVP.
+
+— not set —
+Stripe
+Stripe mode
+stripe.mode
+Mock for the demo, test/live to hit real Stripe.
+
+— not set —
+Stripe secret key
+stripe.secret_key
+Starts with sk_test_ or sk_live_.
+paste new value to rotate
+Stripe publishable key
+stripe.publishable_key
+Starts with pk_test_ or pk_live_. Safe to expose.
+not set
+Stripe webhook signing secret
+stripe.webhook_secret
+Starts with whsec_.
+paste new value to rotate
+Google OAuth
+Google OAuth client ID
+google.client_id
+From Google Cloud Console > APIs & Services > Credentials.
+not set
+Google OAuth client secret
+google.client_secret
+Pair this with the client ID.
+paste new value to rotate
+Google OAuth redirect URI
+google.redirect_uri
+Must match the URI configured in Google Cloud Console.
+not set
+Microsoft Graph
+Microsoft Graph client ID
+ms_graph.client_id
+Application (client) ID from Entra ID app registration.
+not set
+Microsoft Graph client secret
+ms_graph.client_secret
+From Certificates & secrets in your app registration.
+paste new value to rotate
+Microsoft Graph tenant ID
+ms_graph.tenant_id
+Directory (tenant) ID. Use 'common' for multitenant.
+not set
+Email
+Email provider
+email.provider
+Outbound transactional email.
+
+— not set —
+Email API key
+email.api_key
+Postmark server token / SES key / Resend API key.
+paste new value to rotate
+From address
+email.from_address
+e.g. ExShield <no-reply@yourdomain.com>.
+not set
+Firebase
+Firebase project ID
+firebase.project_id
+Project ID from Firebase console. Optional — use for OAuth + Firestore at scale.
+not set
+Firebase web API key
+firebase.api_key
+Browser/web SDK config key.
+paste new value to rotate
+Firebase service account JSON
+firebase.admin_sa_json
+Paste the full service account JSON. Required for admin-side Firestore/Auth operations.
+paste new value to rotate
+Firebase auth domain
+firebase.auth_domain
+e.g. exshield.firebaseapp.com.
+not set
+Vercel
+Vercel API token
+vercel.token
+From vercel.com/account/tokens. Required to push env changes + trigger redeploys.
+paste new value to rotate
+Vercel project ID
+vercel.project_id
+From your Vercel project settings.
+not set
+Vercel team ID (optional)
+vercel.team_id
+Leave blank for personal accounts.
+not set
+Vercel deploy hook URL
+vercel.deploy_hook_url
+From Vercel project > Settings > Git > Deploy Hooks. Triggered when you click 'Redeploy now'.
+paste new value to rotate
+Agent handoff runbook
+For any agent picking up this project
+01
+1. `cat ralph/memory/state.md` — single source of truth for what's done + what's next.
+02
+2. `cat docs/PRD.txt` — product spec, do not deviate without recording a decision in ralph/memory/decisions.md.
+03
+3. `cat CLAUDE.md` — build brief.
+04
+4. Pick the top item from 'Loop priorities' in state.md. Implement in a thin vertical slice.
+05
+5. Backend changes → run `cd backend && uv run pytest -q`.
+06
+6. Frontend changes → run `cd frontend && pnpm run lint && pnpm run build`.
+07
+7. Both → run `cd frontend && pnpm exec playwright test`.
+08
+8. `git add -A && git commit -m 'ralph: <one-line>' && git push origin main` to publish.
+09
+9. If deployed: `cd frontend && vercel deploy --yes --prod` to push the frontend, then PATCH backend env on its host.
+10
+10. Update `ralph/memory/state.md` with what shipped + new priorities.
+Do NOT
+✗
+Do NOT touch anything outside /Users/omarebrahim/ExShield-Platform/.
+✗
+Do NOT introduce real plaintext password storage (PRD §10.1).
+✗
+Do NOT bypass the consent workflow (PRD §10.1).
+✗
+Do NOT run destructive scanner templates without explicit user opt-in (PRD §6.3).
+✗
+Do NOT log full mailbox content into AI prompts (PRD §10.3).
+Pick one next
+→
+Real OAuth — finish Gmail consent + token exchange end-to-end (currently mock).
+→
+Real Stripe — wire live keys + verify webhook signature (currently mock).
+→
+Real scanner — drop in Nuclei adapter behind the same ScannerEngine interface.
+→
+Authenticated scans for design partners (PRD §6.2 + Phase 2).
+→
+PSA webhook with HMAC signature (open priority in state.md).
+Handoff artifacts
+code
+GitHub repo — all branches, commits, history.
+tests
+backend/tests/ (pytest) + frontend/tests/e2e/ (Playwright).
+loop_state
+ralph/memory/state.md + ralph/memory/decisions.md.
+deploy_guide
+DEPLOY.md — one-click backend deploy paths.
+admin_runtime_settings
+system_settings DB table — populated via /admin UI.
+Live URLs
+frontend
+https://frontend-iota-gray-49.vercel.app
+backend
+set by NEXT_PUBLIC_API_BASE — see DEPLOY.md
+GitHub →
+MSP portal

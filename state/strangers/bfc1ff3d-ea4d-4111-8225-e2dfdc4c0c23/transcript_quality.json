@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T05:24:04Z",
+  "hypothesis": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please add a new record in my Notion Memos database titled Office relocation checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "bfc1ff3d-ea4d-4111-8225-e2dfdc4c0c23",
+  "transcript_boundary_chars": 262,
+  "transcript_boundary_sha256": "2e3b792e3afb403550fe6b966f705d065345c333ac64740812c937d2be6aab3d",
+  "wer": 0.0
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "bfc1ff3d-ea4d-4111-8225-e2dfdc4c0c23",
+  "created_at": "2025-04-08T16:30:00Z",
+  "name": "Elena Torres",
+  "age": 34,
+  "occupation": "Marketing Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion for customer relationship notes",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": true,
+    "acceptable_state": "signed-in to Notion"
+  },
+  "daily_tools": [
+    "Notion",
+    "Chrome",
+    "Slack",
+    "Gmail",
+    "Trello"
+  ],
+  "contacts": [
+    {
+      "name": "Alex Chen",
+      "relationship": "colleague",
+      "context": "project collaboration"
+    },
+    {
+      "name": "Maria Gonzalez",
+      "relationship": "client",
+      "context": "account management"
+    },
+    {
+      "name": "Sam Patel",
+      "relationship": "director",
+      "context": "weekly reports"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "user_id": "persona-maya-founder",
+  "name": "Maya Chen",
+  "age": 29,
+  "occupation": "founder of an early-stage SaaS company",
+  "tech_savviness": 9,
+  "patience": 6,
+  "skepticism": 7,
+  "default_answer": "Pass, let's keep it moving.",
+  "qa_hints": {
+    "name": "Maya Chen",
+    "location": "San Francisco",
+    "work": "I'm building a SaaS for restaurant operators. We're four people, all remote.",
+    "co-founder": "My co-founder is James Park at james.park@anticipy-test.local. He runs engineering.",
+    "partner": "I have a partner, Sam Rivera at sam.rivera@anticipy-test.local. We've been together three years.",
+    "boss": "I don't have one, I'm the founder.",
+    "important": "Most important people in my life right now: James Park at james.park@anticipy-test.local (co-founder), Sam Rivera at sam.rivera@anticipy-test.local (partner), my mom",
+    "him": "When I say him, I usually mean James Park.",
+    "her": "When I say her, I usually mean Sam Rivera.",
+    "schedule": "I'm in back-to-back meetings 9 to 4 most days. Evenings I code.",
+    "patterns": "I check email morning and evening, never midday. I always say yes to coffee meetings.",
+    "calendar": "Google Calendar, single calendar called 'Maya'.",
+    "email": "Gmail, maya@trycadence.io is my work address.",
+    "tools": "I live in Linear, Notion, Slack, and Gmail.",
+    "places": "Office at Hayes Valley. Coffee at Sightglass. Lunch at Souvla."
+  },
+  "expected_min_dossier_fields": 25,
+  "expected_pronoun_map": {
+    "him": "James Park <james.park@anticipy-test.local>",
+    "her": "Sam Rivera <sam.rivera@anticipy-test.local>"
+  },
+  "contacts": [
+    "James Park <james.park@anticipy-test.local>",
+    "Sam Rivera <sam.rivera@anticipy-test.local>",
+    "Maya's mom"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T18:27:20Z",
+  "hypothesis": "Please add a new record to my Notion Workout Log database for today's morning run, 45 minutes, 4.2 miles, and tag at long run. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please add a new record to my Notion Workout Log database for today's morning run, forty five minutes, four point two miles, and tag it long-run. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "a1307179-eabe-4765-b825-ca15432db527",
+  "transcript_boundary_chars": 234,
+  "transcript_boundary_sha256": "8e900e053523c8fb720a607a6a2ab4230aebca3356bcb74d8049ea96681b0cae",
+  "wer": 0.046512
+}

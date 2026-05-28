@@ -1,0 +1,15 @@
+{
+  "label_id": 39,
+  "bbox": [
+    1052,
+    808,
+    48,
+    48
+  ],
+  "hint_text": "Shape tool",
+  "role": "button",
+  "confidence": 0.9,
+  "reasoning": "The shape tool button in the bottom toolbar is used for drawing geometric shapes including rectangles.",
+  "labeled_screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/canvas_vision_20260527T053832Z/labeled/20260527T053912Z_labeled.png",
+  "query_used": "a tool button for drawing a rectangle"
+}

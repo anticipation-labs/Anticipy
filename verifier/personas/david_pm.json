@@ -1,0 +1,38 @@
+{
+  "user_id": "persona-david-pm",
+  "name": "David Reilly",
+  "age": 41,
+  "occupation": "product manager at a 500-person tech company",
+  "tech_savviness": 6,
+  "patience": 8,
+  "skepticism": 5,
+  "default_answer": "Sure, that sounds fine.",
+  "qa_hints": {
+    "name": "David Reilly",
+    "location": "Austin, Texas",
+    "work": "I'm a senior PM at a mid-stage SaaS. About 500 employees. I run the platform team's roadmap.",
+    "boss": "My VP is Lila Thomas at lila.thomas@anticipy-test.local. I 1:1 with her weekly.",
+    "partner": "My wife is Anna. Two kids, eight and five.",
+    "team": "I work with five engineers and a designer. Eng lead is Tomás Alvarez at tomas.alvarez@anticipy-test.local. Designer is Priya Shah at priya.shah@anticipy-test.local.",
+    "important": "Anna and the kids first. Lila Thomas at lila.thomas@anticipy-test.local at work because she protects my time. Tomás Alvarez at tomas.alvarez@anticipy-test.local because he runs my eng team.",
+    "him": "Him is usually Tomás Alvarez when I'm in work mode.",
+    "her": "Her is usually Lila when work, Anna when home.",
+    "schedule": "9:30 standups, 10-12 deep work, afternoons in meetings. I block Fridays for thinking.",
+    "patterns": "I review PRs in the morning. I never schedule things on weekends.",
+    "calendar": "Google Calendar at work, iCloud at home, two separate calendars I keep apart.",
+    "email": "Two emails. dreilly@workplace.com for work, david.reilly.atx@gmail.com for personal.",
+    "tools": "Jira, Confluence, Slack, Google Docs, Notion personally.",
+    "places": "Office downtown. Lunch at Veracruz Tacos. Coffee at Houndstooth."
+  },
+  "expected_min_dossier_fields": 28,
+  "expected_pronoun_map": {
+    "him": "Tomás Alvarez <tomas.alvarez@anticipy-test.local>",
+    "her": "Lila Thomas <lila.thomas@anticipy-test.local>"
+  },
+  "contacts": [
+    "Anna Reilly",
+    "Lila Thomas <lila.thomas@anticipy-test.local>",
+    "Tomás Alvarez <tomas.alvarez@anticipy-test.local>",
+    "Priya Shah <priya.shah@anticipy-test.local>"
+  ]
+}

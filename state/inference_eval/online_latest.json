@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-05-26T13:06:40Z",
+  "passing_runs": 1,
+  "rows": [
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+      "surface_receipts_present": true,
+      "verb_category": "crm_followup_task_or_note"
+    }
+  ],
+  "schema": "anticipy.v7.inference_online_eval",
+  "stranger_runs": 1
+}

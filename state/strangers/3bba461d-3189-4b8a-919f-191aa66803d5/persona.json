@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "3bba461d-3189-4b8a-919f-191aa66803d5",
+  "created_at": "2025-04-08T14:30:00Z",
+  "name": "Elena Vasquez",
+  "age": 34,
+  "occupation": "Registered Dietitian",
+  "location": "Portland, Oregon",
+  "tech_savviness": 6,
+  "patience_level": 7,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion meal planning database",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": "signed-in Chrome profile with Notion workspace open",
+    "acceptable_state": "Notion tab open showing a meal planning database with recipe entries"
+  },
+  "daily_tools": [
+    "Notion",
+    "Google Calendar",
+    "MyFitnessPal",
+    "Gmail",
+    "Spotify"
+  ],
+  "contacts": [
+    {
+      "name": "Jamie Chen",
+      "relationship": "colleague",
+      "context": "Fellow dietitian at the clinic; collaborates on client meal plans"
+    },
+    {
+      "name": "Marcus Rivera",
+      "relationship": "partner",
+      "context": "Shares household meal prep and grocery list coordination"
+    },
+    {
+      "name": "Dr. Sarah Kim",
+      "relationship": "supervisor",
+      "context": "Clinic director who reviews patient nutrition protocols"
+    }
+  ]
+}

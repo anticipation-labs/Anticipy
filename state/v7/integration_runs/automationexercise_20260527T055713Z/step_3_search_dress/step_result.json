@@ -1,0 +1,7 @@
+{
+  "actual": "first=1",
+  "expected": "navigate ok + matching product id from HTML",
+  "name": "search_results",
+  "passed": true,
+  "primitive_used": "bridge navigate (form GET) + curl HTML"
+}

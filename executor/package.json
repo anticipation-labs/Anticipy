@@ -1,0 +1,45 @@
+{
+  "name": "anticipy-executor",
+  "version": "0.1.0",
+  "description": "Anticipy Mac executor — listens on Supabase Realtime task.dispatched, attaches to Chrome :9222 via CDP, runs skill recipes against the user's REAL profile, calls the Anthropic Computer Use API for canvas fallbacks, sends Aevoy confirmation emails. Ships as an UNSIGNED .dmg from anticipy.ai/download.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "node test/test_executor_smoke.js",
+    "build": "electron-builder --mac --x64 --arm64 -c.mac.identity=null"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0",
+    "@supabase/supabase-js": "^2.57.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0"
+  },
+  "build": {
+    "appId": "ai.anticipy.executor",
+    "productName": "Anticipy",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] }
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "directories": {
+      "output": "../dist/executor"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "renderer/**/*",
+      "package.json"
+    ]
+  }
+}

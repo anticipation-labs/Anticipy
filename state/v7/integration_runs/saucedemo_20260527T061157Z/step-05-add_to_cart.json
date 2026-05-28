@@ -1,0 +1,7 @@
+{
+  "name": "add_to_cart",
+  "ok": true,
+  "detail": "badge=1 after CDP click first .btn_primary (Add to cart)",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061157Z/step-05-add_to_cart.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

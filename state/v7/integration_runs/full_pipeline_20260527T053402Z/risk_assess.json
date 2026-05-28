@@ -1,0 +1,12 @@
+{
+  "level": "high",
+  "proceed_mode": "confirm",
+  "confirm_card_required": true,
+  "reasons": [
+    "money intent detected (verb match)"
+  ],
+  "money_amount": null,
+  "irreversibility_score": 0.7,
+  "third_party_impact": false,
+  "surface_target": "saucedemo.com"
+}

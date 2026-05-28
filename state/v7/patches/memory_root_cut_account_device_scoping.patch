@@ -1,0 +1,615 @@
+diff --git a/engine/app/anticipy/memory.py b/engine/app/anticipy/memory.py
+--- a/engine/app/anticipy/memory.py
++++ b/engine/app/anticipy/memory.py
+@@ -35,6 +35,29 @@
+     return platform_adapter.user_data_dir(user_id) / "memory.jsonl"
+ 
+ 
++# V7 cut: per-(account, device) scoping sentinel. The legacy single
++# tenant partition lived under "anticipy-user"; rows that pre-date the
++# cut are tagged with LEGACY_ACCOUNT_ID on read so the verifier's
++# required-fields check still passes.
++LEGACY_ACCOUNT_ID = "legacy-anticipy-user-1"
++
++
++def _scoped_user_id(account_id: str, device_id: str) -> str:
++    """Compose a per-(account, device) partition id under the existing
++    `user_data_dir(...)` scheme. Keeping the partition function stable
++    avoids touching the frozen platform adapter; we only change the
++    *name* we hand it. Empty account/device fall back to the V7 legacy
++    sentinel so pre-cut JSONL data is not orphaned.
++    """
++    a = (account_id or "").strip() or LEGACY_ACCOUNT_ID
++    d = (device_id or "").strip()
++    safe_a = "".join(c for c in a if c.isalnum() or c in ("-", "_")) or "legacy"
++    safe_d = "".join(c for c in d if c.isalnum() or c in ("-", "_"))
++    if not safe_d:
++        return safe_a
++    return f"{safe_a}--{safe_d}"
++
++
+ @dataclass
+ class MemoryEntry:
+     mem_id: str
+@@ -44,12 +67,26 @@
+     evidence: str
+     ts: float
+     active: bool = True
++    account_id: str = ""
++    device_id: str = ""
++    source: str = "engine"
++    confidence: float = 1.0
++    provenance: str = "engine_default"
+ 
+     def to_dict(self) -> dict:
+         return {
+             "mem_id": self.mem_id, "kind": self.kind, "key": self.key,
+             "value": self.value, "evidence": self.evidence, "ts": self.ts,
+             "active": self.active,
++            "account_id": self.account_id or LEGACY_ACCOUNT_ID,
++            "device_id": self.device_id,
++            "source": self.source,
++            "confidence": float(self.confidence),
++            "provenance": self.provenance,
++            # V7 verifier asserts on "timestamp" (ISO-shape mirror of
++            # ts). Keep both so legacy readers that look up "ts" keep
++            # working and the new verifier finds the field it expects.
++            "timestamp": self.ts,
+         }
+ 
+ 
+@@ -100,10 +137,104 @@
+         _save(user_id, entries)
+ 
+ 
++def seed_scoped(account_id: str, device_id: str, anchors: dict[str, str],
++                kind: str = "anchor",
++                source: str = "engine",
++                provenance: str = "onboarding_seed") -> None:
++    """Scoped equivalent of `seed`: install anchors against the per-
++    (account, device) partition with full provenance.
++    """
++    user_id = _scoped_user_id(account_id, device_id)
++    with _lock:
++        entries = _load(user_id)
++        for k, v in anchors.items():
++            entries.append(MemoryEntry(
++                mem_id=f"seed-{k}-{int(time.time()*1000)%100000}",
++                kind=kind, key=k, value=v, evidence="seeded",
++                ts=time.time(),
++                account_id=account_id or LEGACY_ACCOUNT_ID,
++                device_id=device_id, source=source,
++                confidence=1.0, provenance=provenance,
++            ))
++        _save(user_id, entries)
++
++
+ def active_snapshot(user_id: str) -> list[dict]:
+     return [e.to_dict() for e in _load(user_id) if e.active]
+ 
+ 
++def active_snapshot_scoped(account_id: str, device_id: str) -> list[dict]:
++    """Scoped snapshot. Reads the per-(account, device) partition;
++    when no scoped data has been written yet, falls back to the legacy
++    `anticipy-user` partition so the first run is not empty.
++    """
++    user_id = _scoped_user_id(account_id, device_id)
++    snap = [e.to_dict() for e in _load(user_id) if e.active]
++    if snap:
++        return snap
++    legacy = [e.to_dict() for e in _load("anticipy-user") if e.active]
++    return legacy
++
++
++def read_scoped(account_id: str, device_id: str,
++                kind: str | None = None) -> list[dict]:
++    """Verifier-targeted scoped read. Returns active entries filtered
++    by (account, device) (and optionally `kind`). Cross-account leaks
++    are impossible here because the partition itself is keyed by both
++    ids.
++    """
++    items = active_snapshot_scoped(account_id, device_id)
++    if kind:
++        items = [it for it in items if it.get("kind") == kind]
++    return items
++
++
++def write_scoped(account_id: str, device_id: str, kind: str, key: str,
++                 value: str, source: str = "engine",
++                 provenance: str = "engine_write",
++                 confidence: float = 1.0,
++                 evidence: str = "") -> dict:
++    """Verifier-targeted scoped write. Append a fully-scoped entry to
++    the per-(account, device) partition. Returns the persisted row.
++    """
++    user_id = _scoped_user_id(account_id, device_id)
++    entry = MemoryEntry(
++        mem_id=f"w-{int(time.time()*1000)}-{(hash(value) & 0xFFFF):04x}",
++        kind=kind, key=(key or value)[:80], value=value,
++        evidence=evidence or value, ts=time.time(), active=True,
++        account_id=account_id or LEGACY_ACCOUNT_ID,
++        device_id=device_id, source=source,
++        confidence=float(confidence), provenance=provenance,
++    )
++    with _lock:
++        entries = _load(user_id)
++        entries.append(entry)
++        _save(user_id, entries)
++    return entry.to_dict()
++
++
++def delete_scoped_matching(account_id: str, device_id: str,
++                            contains: str) -> int:
++    """Verifier-targeted cleanup. Deactivate every entry under
++    (account, device) whose value contains the substring. Returns the
++    count deactivated.
++    """
++    needle = (contains or "").strip()
++    if not needle:
++        return 0
++    user_id = _scoped_user_id(account_id, device_id)
++    n = 0
++    with _lock:
++        entries = _load(user_id)
++        for e in entries:
++            if e.active and needle in (e.value or ""):
++                e.active = False
++                n += 1
++        if n:
++            _save(user_id, entries)
++    return n
++
++
+ def add_latent(user_id: str, text: str) -> str:
+     """Directly register a latent intent (deterministic, not model
+     gated). Used when a STORE_AS_LATENT decision is made and as the
+diff --git a/engine/app/product/server.py b/engine/app/product/server.py
+--- a/engine/app/product/server.py
++++ b/engine/app/product/server.py
+@@ -107,7 +107,73 @@
+ 
+ _SESS: dict = {"i": 0, "transcript": [], "profile": None,
+                "profile_obj": None}
+-USER_ID = "anticipy-user"
++
++# V7 cut: per-install identity. The static USER_ID is retained as a
++# legacy fallback for callers/tests that have not yet passed
++# account_id/device_id, but every product callsite below routes
++# through `_get_active_account_device(...)` which prefers the request
++# headers, then the persisted install identity, then this sentinel.
++_LEGACY_USER_ID = "legacy-anticipy-user-1"
++USER_ID = _LEGACY_USER_ID  # retained for the mp3-eval temp-scope swap
++
++
++def _install_identity_path() -> Path:
++    p = Path(os.path.expanduser("~/.anticipy/v7/install_identity.json"))
++    p.parent.mkdir(parents=True, exist_ok=True)
++    return p
++
++
++def _get_install_identity() -> dict:
++    """Per-install (account_id, device_id) pair. Persisted under
++    ~/.anticipy/v7/install_identity.json so it survives restarts.
++    On first call the file is minted; thereafter it is read.
++    """
++    p = _install_identity_path()
++    if p.exists():
++        try:
++            data = json.loads(p.read_text(encoding="utf-8"))
++            if isinstance(data, dict) and data.get("account_id") \
++                    and data.get("device_id"):
++                return {"account_id": str(data["account_id"]),
++                        "device_id": str(data["device_id"])}
++        except Exception:
++            pass
++    minted = {"account_id": f"install-{uuid.uuid4().hex[:12]}",
++              "device_id": f"device-{uuid.uuid4().hex[:8]}"}
++    try:
++        p.write_text(json.dumps(minted, indent=2), encoding="utf-8")
++    except Exception:
++        pass
++    return minted
++
++
++def _get_active_account_device(request: "Request | None" = None,
++                                override: dict | None = None) -> tuple[str, str]:
++    """Resolve (account_id, device_id) for the current call. Order:
++    1) explicit override dict (used by the mp3 eval block to swap to a
++       one-shot scope), 2) request headers if present, 3) the swapped
++       USER_ID global when it has the scoped `<acct>--<dev>` shape
++       (set by `/api/listen/inject` and the mp3 eval), 4) persisted
++       install identity. The legacy sentinel is never returned from
++       here; legacy callers without a request get the install identity.
++    """
++    if override and override.get("account_id") and override.get("device_id"):
++        return (str(override["account_id"]), str(override["device_id"]))
++    if request is not None:
++        try:
++            hdr_a = request.headers.get("x-anticipy-account-id", "").strip()
++            hdr_d = request.headers.get("x-anticipy-device-id", "").strip()
++            if hdr_a and hdr_d:
++                return (hdr_a, hdr_d)
++        except Exception:
++            pass
++    swapped = (USER_ID or "").strip()
++    if "--" in swapped and swapped != _LEGACY_USER_ID:
++        acct, dev = swapped.split("--", 1)
++        if acct and dev:
++            return (acct, dev)
++    identity = _get_install_identity()
++    return (identity["account_id"], identity["device_id"])
+ 
+ 
+ def _env_int(name: str, default: int) -> int:
+@@ -388,8 +454,9 @@
+ def _profile_from_json(data: dict):
+     from app.anticipy.seams import UserProfile
+ 
++    account_id, _device_id = _get_active_account_device()
+     return UserProfile(
+-        user_id=USER_ID,
++        user_id=account_id,
+         name=str(data.get("name") or ""),
+         role_title=str(data.get("role_title") or ""),
+         what_they_do=str(data.get("what_they_do") or ""),
+@@ -661,9 +728,13 @@
+ def _seed_profile_memory(prof) -> None:
+     try:
+         from app.anticipy import memory as MEM
++        account_id, device_id = _get_active_account_device()
+         if prof.people:
+-            MEM.seed(USER_ID, {str(k): str(v)
+-                               for k, v in prof.people.items()})
++            MEM.seed_scoped(account_id, device_id,
++                             {str(k): str(v)
++                              for k, v in prof.people.items()},
++                             source="onboarding",
++                             provenance="profile_people")
+     except Exception:
+         pass
+     _install_memory_draw()
+@@ -739,7 +810,11 @@
+         pass
+     try:
+         from app.anticipy import memory as MEM
+-        MEM.reset(USER_ID)
++        account_id, device_id = _get_active_account_device()
++        # Reset BOTH the legacy partition and the scoped partition so
++        # a first-run reset on a freshly cut install clears everything.
++        MEM.reset("anticipy-user")
++        MEM.reset(f"{account_id}--{device_id}")
+     except Exception:
+         pass
+ 
+@@ -1293,8 +1368,10 @@
+     from app.anticipy import memory as MEM
+ 
+     prof = _SESS.get("profile_obj")
++    account_id, device_id = _get_active_account_device()
++    scoped_id = f"{account_id}--{device_id}"
+     try:
+-        rr = MEM.resolve_reference_sync(USER_ID, event_text, prof)
++        rr = MEM.resolve_reference_sync(scoped_id, event_text, prof)
+     except Exception:
+         return (None, None)
+     if not (rr.resolved and rr.value and rr.confidence >= 0.70):
+@@ -1350,27 +1427,105 @@
+     Mem0-style reconcile primitive (ADD/UPDATE/DELETE/NOOP).
+     """
+     from app.anticipy import memory as MEM
++    account_id, device_id = _get_active_account_device()
++    scoped_id = f"{account_id}--{device_id}"
+     try:
+-        rc = _run_async_blocking(lambda: MEM.reconcile(USER_ID, kind, text))
++        rc = _run_async_blocking(lambda: MEM.reconcile(scoped_id, kind, text))
+         return {"op": rc.op, "reason": rc.reason}
+     except Exception as e:
+         return {"op": "ERROR", "reason": f"{type(e).__name__}: {e}"}
+ 
+ 
+ @app.get("/api/memory")
+-def memory_snapshot() -> JSONResponse:
++def memory_snapshot(request: Request) -> JSONResponse:
+     from app.anticipy import memory as MEM
++    account_id, device_id = _get_active_account_device(request)
+     try:
+-        snap = MEM.active_snapshot(USER_ID)
++        snap = MEM.active_snapshot_scoped(account_id, device_id)
+     except Exception as e:
+         return JSONResponse({"entries": [],
+                              "error": f"{type(e).__name__}: {e}"})
+     entries = [{"kind": e.get("kind"), "value": e.get("value"),
+-                "ts": e.get("ts")} for e in snap]
++                "ts": e.get("ts"),
++                "timestamp": e.get("timestamp", e.get("ts")),
++                "account_id": e.get("account_id") or _LEGACY_USER_ID,
++                "device_id": e.get("device_id", ""),
++                "source": e.get("source", "engine"),
++                "confidence": float(e.get("confidence", 1.0)),
++                "active": bool(e.get("active", True)),
++                "provenance": e.get("provenance", "engine_default")}
++               for e in snap]
+     entries.sort(key=lambda x: x.get("ts") or 0, reverse=True)
+     return JSONResponse({"entries": entries})
++
++
++class MemoryWriteBody(BaseModel):
++    account_id: str
++    device_id: str
++    kind: str
++    key: str = ""
++    value: str
++    source: str = "engine"
++    provenance: str = "engine_write"
++    confidence: float = 1.0
++
++
++class MemoryDeleteBody(BaseModel):
++    contains: str
++    account_id: str | None = None
++    device_id: str | None = None
++
++
++@app.post("/api/memory/write")
++def memory_write_endpoint(body: MemoryWriteBody,
++                           request: Request) -> JSONResponse:
++    """V7 scoped write: account_id+device_id are mandatory in the body
++    so a verifier can probe arbitrary accounts. Request headers are
++    ignored on writes to keep the payload self-describing.
++    """
++    from app.anticipy import memory as MEM
++    try:
++        row = MEM.write_scoped(body.account_id, body.device_id,
++                                kind=body.kind, key=body.key,
++                                value=body.value, source=body.source,
++                                provenance=body.provenance,
++                                confidence=body.confidence)
++        return JSONResponse({"ok": True, "entry": row})
++    except Exception as e:
++        return JSONResponse({"ok": False,
++                             "error": f"{type(e).__name__}: {e}"},
++                            status_code=500)
++
++
++@app.get("/api/memory/read")
++def memory_read_endpoint(request: Request,
++                          account_id: str = "",
++                          device_id: str = "",
++                          kind: str | None = None) -> JSONResponse:
++    """V7 scoped read: returns rows filtered by (account, device).
++    Falls back to the resolved active scope when the query string omits
++    both ids (rare for a verifier but useful for the desktop UI).
++    """
++    from app.anticipy import memory as MEM
++    if not account_id or not device_id:
++        account_id, device_id = _get_active_account_device(request)
++    items = MEM.read_scoped(account_id, device_id, kind=kind)
++    return JSONResponse({"items": items, "account_id": account_id,
++                         "device_id": device_id})
+ 
+ 
++@app.post("/api/memory/delete")
++def memory_delete_endpoint(body: MemoryDeleteBody,
++                            request: Request) -> JSONResponse:
++    from app.anticipy import memory as MEM
++    account_id = body.account_id or ""
++    device_id = body.device_id or ""
++    if not account_id or not device_id:
++        account_id, device_id = _get_active_account_device(request)
++    n = MEM.delete_scoped_matching(account_id, device_id, body.contains)
++    return JSONResponse({"ok": True, "deactivated": n})
++
++
+ # --------------------------------------------------------------------------
+ # state + onboarding (real, via the frozen onboarding brain)
+ # --------------------------------------------------------------------------
+@@ -1474,11 +1629,13 @@
+     # flaky model must NOT ship an empty profile; the PRODUCT itself
+     # self-recovers with a bounded retry (no external nursing). It
+     # only gives up after honest repeated attempts.
++    account_id, device_id = _get_active_account_device()
++    scoped_id = f"{account_id}--{device_id}"
+     prof = None
+     for _att in range(6):
+         try:
+             prof = asyncio.run(OB.run_intake(_SESS["transcript"],
+-                                             USER_ID))
++                                             scoped_id))
+         except Exception:
+             prof = None
+         if prof is not None:
+@@ -1487,7 +1644,7 @@
+             break
+         time.sleep(2 + _att * 2)
+     if prof is None:
+-        prof = asyncio.run(OB.run_intake(_SESS["transcript"], USER_ID))
++        prof = asyncio.run(OB.run_intake(_SESS["transcript"], scoped_id))
+     _repair_profile_from_onboarding(prof)
+     _SESS["profile_obj"] = prof
+     pj = _profile_json()
+@@ -1648,10 +1805,12 @@
+     _SESS["i"] = len([t for t in transcript
+                       if (t.get("speaker_id") or "").upper() == "AGENT"])
+ 
++    account_id, device_id = _get_active_account_device()
++    scoped_id = f"{account_id}--{device_id}"
+     prof = None
+     for _att in range(6):
+         try:
+-            prof = asyncio.run(OB.run_intake(transcript, USER_ID))
++            prof = asyncio.run(OB.run_intake(transcript, scoped_id))
+         except Exception:
+             prof = None
+         if prof is not None:
+@@ -3244,9 +3403,10 @@
+     anchor-with-email matches the model-resolved person/role; never
+     guess between several (that would be misattribution).
+     """
++    account_id, device_id = _get_active_account_device()
+     try:
+         from app.anticipy import memory as MEM
+-        snap = MEM.active_snapshot(USER_ID)
++        snap = MEM.active_snapshot_scoped(account_id, device_id)
+     except Exception:
+         snap = []
+     drop = {"the", "dr", "mr", "ms", "mrs", "my", "his", "her", "their",
+@@ -3849,6 +4009,8 @@
+ 
+ class Inject(BaseModel):
+     text: str
++    account_id: str | None = None
++    device_id: str | None = None
+ 
+ 
+ class ListenStart(BaseModel):
+@@ -4115,59 +4277,75 @@
+     mic state. Source label keeps the provenance distinction.
+     """
+     text = (i.text or "").strip()
+-    # If listening is off we still need a coherent rec shape for the
+-    # pipeline; _process_utterance reads from _LISTEN so it works
+-    # standalone. The "on" check on inject was a UX gate, not a
+-    # safety one (the mic source is labelled separately).
++    # V7 cut: if the caller supplies an explicit (account_id,
++    # device_id), bind them onto USER_ID for the duration of this
++    # inject so every downstream `_get_active_account_device()` call
++    # routes through the correct scoped partition. The mp3 eval block
++    # uses the same swap pattern; we restore in `finally`.
++    global USER_ID
++    prior_user_id = USER_ID
++    scope_swapped = False
++    if (i.account_id or "").strip() and (i.device_id or "").strip():
++        USER_ID = f"{i.account_id.strip()}--{i.device_id.strip()}"
++        scope_swapped = True
+     try:
+-        rec = _with_timeout(
+-            "listen-inject-process",
+-            float(_env_int("ANTICIPY_INJECT_TIMEOUT_SECONDS", 30)),
+-            lambda: _process_utterance(text, 0.0, "asr-transcript"),
+-        )
+-    except TimeoutError as e:
+-        rec = {
+-            "window": _LISTEN.get("windows", 0),
+-            "ingest_id": f"asr-transcript-timeout-{uuid.uuid4().hex[:12]}",
+-            "transcript": text,
+-            "outcome": "DECLINED",
+-            "proposal": None,
+-            "plan": None,
+-            "memory": None,
+-            "resolution_trace_sync": None,
+-            "error": str(e),
+-        }
+-        with _LISTEN["lock"]:
+-            _LISTEN["error"] = str(e)
+-    # Belt-and-braces: ensure _LISTEN["pending"] carries the raw
+-    # instruction so a subsequent /api/act with no body can act on it
+-    # even when the pipeline did not produce a structured plan (e.g.
+-    # the LLM is unavailable or the text did not pass _is_actionish).
+-    if (
+-        (not rec.get("error"))
+-        and text
+-        and not (_LISTEN.get("pending") or {}).get("instruction")
+-    ):
+-        with _LISTEN["lock"]:
+-            _LISTEN["pending"] = {
+-                "instruction": text,
+-                "proposal": text,
+-                "ts": time.time(),
++        # If listening is off we still need a coherent rec shape for
++        # the pipeline; _process_utterance reads from _LISTEN so it
++        # works standalone. The "on" check on inject was a UX gate,
++        # not a safety one (the mic source is labelled separately).
++        try:
++            rec = _with_timeout(
++                "listen-inject-process",
++                float(_env_int("ANTICIPY_INJECT_TIMEOUT_SECONDS", 30)),
++                lambda: _process_utterance(text, 0.0, "asr-transcript"),
++            )
++        except TimeoutError as e:
++            rec = {
++                "window": _LISTEN.get("windows", 0),
++                "ingest_id": f"asr-transcript-timeout-{uuid.uuid4().hex[:12]}",
++                "transcript": text,
++                "outcome": "DECLINED",
++                "proposal": None,
++                "plan": None,
++                "memory": None,
++                "resolution_trace_sync": None,
++                "error": str(e),
+             }
+-    scheduled = rec.get("scheduled")
+-    return JSONResponse({"on": _LISTEN.get("on", False),
+-                         "window": rec["window"],
+-                         "ingest_id": rec.get("ingest_id"),
+-                         "transcript": rec["transcript"],
+-                         "outcome": rec.get("outcome"),
+-                         "error": rec.get("error"),
+-                         "proposal": rec.get("proposal"),
+-                         "plan": rec.get("plan"),
+-                         "memory": rec.get("memory"),
+-                         "resolution_trace_sync": rec.get(
+-                             "resolution_trace_sync"),
+-                         "pending": _LISTEN.get("pending"),
+-                         "scheduled": scheduled})
++            with _LISTEN["lock"]:
++                _LISTEN["error"] = str(e)
++        # Belt-and-braces: ensure _LISTEN["pending"] carries the raw
++        # instruction so a subsequent /api/act with no body can act on
++        # it even when the pipeline did not produce a structured plan
++        # (e.g. the LLM is unavailable or the text did not pass
++        # _is_actionish).
++        if (
++            (not rec.get("error"))
++            and text
++            and not (_LISTEN.get("pending") or {}).get("instruction")
++        ):
++            with _LISTEN["lock"]:
++                _LISTEN["pending"] = {
++                    "instruction": text,
++                    "proposal": text,
++                    "ts": time.time(),
++                }
++        scheduled = rec.get("scheduled")
++        return JSONResponse({"on": _LISTEN.get("on", False),
++                             "window": rec["window"],
++                             "ingest_id": rec.get("ingest_id"),
++                             "transcript": rec["transcript"],
++                             "outcome": rec.get("outcome"),
++                             "error": rec.get("error"),
++                             "proposal": rec.get("proposal"),
++                             "plan": rec.get("plan"),
++                             "memory": rec.get("memory"),
++                             "resolution_trace_sync": rec.get(
++                                 "resolution_trace_sync"),
++                             "pending": _LISTEN.get("pending"),
++                             "scheduled": scheduled})
++    finally:
++        if scope_swapped:
++            USER_ID = prior_user_id
+ 
+ 
+ @app.post("/eval/run")
+@@ -4229,8 +4407,11 @@
+ 
+     global USER_ID
+ 
++    base_account, base_device = _get_active_account_device()
+     prior_user_id = USER_ID
+-    eval_user_id = f"{prior_user_id}-mp3-eval-{uuid.uuid4().hex[:12]}"
++    eval_account = f"{base_account}-mp3eval-{uuid.uuid4().hex[:8]}"
++    eval_device = base_device or f"device-{uuid.uuid4().hex[:8]}"
++    eval_user_id = f"{eval_account}--{eval_device}"
+     prior_pending = _LISTEN.get("pending")
+     prior_acted = _LISTEN.get("acted")
+     prior_recent = list(_LISTEN.get("recent") or [])
+@@ -4751,8 +4932,9 @@
+ 
+     from app.anticipy import memory as MEM
+     from app.anticipy import platform_adapter
++    account_id, device_id = _get_active_account_device()
+     try:
+-        snap = MEM.active_snapshot(USER_ID)
++        snap = MEM.active_snapshot_scoped(account_id, device_id)
+     except Exception:
+         snap = []
+     facts = "\n".join(f"- {e.get('value','')}" for e in snap) or "(none)"

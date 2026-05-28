@@ -1,0 +1,7 @@
+{
+  "name": "open_cart",
+  "ok": true,
+  "detail": "url=https://www.saucedemo.com/cart.html",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061425Z/step-06-open_cart.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

@@ -1,0 +1,1495 @@
+[
+  {
+    "category": "search_extract_news",
+    "summary": "What is the main headline on the BBC News homepage today?",
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "headline",
+        "main",
+        "story"
+      ],
+      "min_steps": 0,
+      "min_message_len": 30
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The main headline on the BBC News homepage is: 'Iran accuses US of 'reckless military adventure''",
+    "final_url": "https://www.bbc.com/news",
+    "step_count": 1,
+    "elapsed_s": 12.4,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success",
+    "rejudge_pass": true,
+    "rejudge_class": "agent_success",
+    "rejudge_why": "agent_success",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "What is the main headline of the top story on the NPR.org homepage today?",
+    "starting_url": "https://www.npr.org/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "headline",
+        "story",
+        "npr"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The main headline of the top story on NPR.org is: 'Trump's Truth Social posts lay bare the narrow obsessions of an extremely online president'",
+    "final_url": "https://www.npr.org/",
+    "step_count": 1,
+    "elapsed_s": 16.0,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success",
+    "rejudge_pass": true,
+    "rejudge_class": "agent_success",
+    "rejudge_why": "agent_success",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "What is the main section or category of the top news story displayed on the BBC News homepage?",
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "news",
+        "section",
+        "category",
+        "headline",
+        "story"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The main section or category of the top news story is 'World'.",
+    "final_url": "https://www.bbc.com/news",
+    "step_count": 1,
+    "elapsed_s": 16.1,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success",
+    "rejudge_pass": true,
+    "rejudge_class": "agent_success",
+    "rejudge_why": "agent_success",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "Go to npr.org and tell me one of the main navigation section names visible on the homepage (e.g., Politics, Business, Health, etc.).",
+    "starting_url": "https://www.npr.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "politics",
+        "business",
+        "health",
+        "science",
+        "culture",
+        "world",
+        "us news"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "One of the main navigation section names visible on the homepage is 'News'. Other sections include 'Culture', 'Music', 'Podcasts & Shows'.",
+    "final_url": "https://www.npr.org/",
+    "step_count": 1,
+    "elapsed_s": 14.0,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "message contains expected pattern",
+    "rejudge_pass": true,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "message_contains_any",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_extract_news",
+    "summary": "What is the section or category of the lead story on the BBC News homepage?",
+    "starting_url": "https://www.bbc.com/news",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "section",
+        "category",
+        "world",
+        "politics",
+        "business",
+        "technology",
+        "science",
+        "health",
+        "sport"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "navigate_extract",
+    "agent_success": true,
+    "agent_message": "The section or category of the lead story is 'World'.",
+    "final_url": "https://www.bbc.com/news",
+    "step_count": 1,
+    "elapsed_s": 14.3,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "agent reported success",
+    "rejudge_pass": true,
+    "rejudge_class": "agent_success",
+    "rejudge_why": "agent_success",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary": "Find the current population of Tokyo from both Wikipedia and World Population Review, and report both figures along with their respective sources.",
+    "starting_url": "https://en.wikipedia.org/wiki/Tokyo",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "wikipedia",
+        "tokyo",
+        "13 million",
+        "14 million",
+        "13.9 million",
+        "14.1 million"
+      ],
+      "patterns_b": [
+        "world population review",
+        "37 million",
+        "38 million",
+        "37.2 million",
+        "38.5 million"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "multi_tab",
+    "agent_success": false,
+    "agent_message": "liveness watchdog: no progress for 90s after step 14",
+    "final_url": "https://worldpopulationreview.com/cities/japan/tokyo",
+    "step_count": 14,
+    "elapsed_s": 182.8,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing first set ['wikipedia', 'tokyo', '13 million', '14 million', '13.9 million', '14.1 million']",
+    "rejudge_pass": false,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "judge unreachable",
+    "rejudge_decision": "llm_judge"
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary": "Find the current population of Tokyo according to Wikipedia and World Population Review, and report both values.",
+    "starting_url": "https://en.wikipedia.org/wiki/Tokyo",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "wikipedia",
+        "tokyo",
+        "population",
+        "million"
+      ],
+      "patterns_b": [
+        "world population review",
+        "tokyo",
+        "population",
+        "million"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "multi_tab",
+    "agent_success": false,
+    "agent_message": "Step 60/60\u2026",
+    "final_url": "https://worldpopulationreview.com/cities/japan/tokyo",
+    "step_count": 60,
+    "elapsed_s": 300.3,
+    "timed_out": true,
+    "verdict_pass": false,
+    "verdict_reason": "timeout after 300.3s, 60 steps",
+    "rejudge_pass": false,
+    "rejudge_class": "timeout",
+    "rejudge_why": "runner timeout",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary": "Find the estimated metropolitan population of Tokyo from Wikipedia and compare it with the figure from World Population Review. Report both findings.",
+    "starting_url": "https://www.google.com",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "wikipedia",
+        "tokyo",
+        "million",
+        "37",
+        "38",
+        "metro",
+        "metropolitan"
+      ],
+      "patterns_b": [
+        "world population review",
+        "tokyo",
+        "million",
+        "37",
+        "38",
+        "metro",
+        "metropolitan"
+      ],
+      "min_steps": 5,
+      "min_message_len": 60
+    },
+    "expected_capability": "multi_tab",
+    "agent_success": false,
+    "agent_message": "The site asked for a human check. Open it once and clear it, then I'll pick it up.",
+    "final_url": "https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3DTokyo%2BWikipedia%26sei%3DkwP-abDsM9e90PEP09iL8Ak&q=EgQEmy1iGJSH-M8GIjAs3i17rl-i3kMXwwLIb_RVeMGGFMvtjir0eA3OmFScka3rQ1XiNQEZ10EUqeY_4AQyAVJaAUM",
+    "step_count": 6,
+    "elapsed_s": 27.5,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing first set ['wikipedia', 'tokyo', 'million', '37', '38', 'metro', 'metropolitan']",
+    "rejudge_pass": false,
+    "rejudge_class": "captcha",
+    "rejudge_why": "site demanded captcha",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary": "Find the current population of Berlin and the current population of Hamburg. Report both figures in your final answer.",
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "berlin",
+        "population",
+        "3.7 million",
+        "3,700,000"
+      ],
+      "patterns_b": [
+        "hamburg",
+        "population",
+        "1.9 million",
+        "1,900,000"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "multi_tab",
+    "agent_success": false,
+    "agent_message": "Hit a hiccup mid-task. Mind trying that again?",
+    "final_url": "https://en.wikipedia.org/wiki/Hamburg",
+    "step_count": 6,
+    "elapsed_s": 68.8,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing first set ['berlin', 'population', '3.7 million', '3,700,000']",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "multi_tab_compare",
+    "summary": "Find the current CEO of Apple Inc. on Wikipedia and its latest stock price on Yahoo Finance. Report both pieces of information.",
+    "starting_url": "https://en.wikipedia.org/wiki/Apple_Inc.",
+    "verifier": {
+      "type": "and_of_or",
+      "patterns": [
+        "tim cook",
+        "ceo",
+        "wikipedia"
+      ],
+      "patterns_b": [
+        "aapl",
+        "stock",
+        "price",
+        "yahoo finance"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_tab",
+    "agent_success": true,
+    "agent_message": "The current CEO of Apple Inc. is Tim Cook. The latest stock price on Yahoo Finance is 98.54.",
+    "final_url": "https://finance.yahoo.com/quote/AAPL/",
+    "step_count": 16,
+    "elapsed_s": 148.0,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "message matches both sets",
+    "rejudge_pass": true,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "and_of_or",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "canvas_typing",
+    "summary": "Go to Excalidraw and type the phrase 'Anticipy is a powerful browser agent.' onto the canvas.",
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "anticipy",
+        "powerful browser agent",
+        "typed"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "canvas_type",
+    "agent_success": false,
+    "agent_message": "LLM call failed \u2014 Gemini: Empty response from Gemini | Groq: Groq 429: {\"error\":{\"message\":\"Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kg3q7xhbf8atm3s059zkqbkf` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 96494,",
+    "final_url": "https://excalidraw.com/",
+    "step_count": 20,
+    "elapsed_s": 115.3,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "agent reported failure: llm call failed \u2014 gemini: empty response from gemini | groq: groq 429: {\"error\":{\"message\":\"rate limit reached for model `llama-3.3-70b-versatile` in ",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "canvas_typing",
+    "summary": "Go to Excalidraw.com and type 'Anticipy is an advanced browser agent.' into the main drawing canvas.",
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "typed",
+        "anticipy",
+        "browser agent"
+      ],
+      "min_steps": 1,
+      "min_message_len": 20
+    },
+    "expected_capability": "canvas_type",
+    "agent_success": false,
+    "agent_message": "Hit a hiccup mid-task. Mind trying that again?",
+    "final_url": "https://excalidraw.com/",
+    "step_count": 46,
+    "elapsed_s": 232.1,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing required pattern 'typed': hit a hiccup mid-task. mind trying that again?",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "canvas_typing",
+    "summary": "Navigate to Excalidraw and type the phrase 'This is a test of the Anticipy browser agent's canvas typing capabilities.' into the canvas.",
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "typed",
+        "anticipy",
+        "capabilities"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "canvas_type",
+    "agent_success": false,
+    "agent_message": "Hit a hiccup mid-task. Mind trying that again?",
+    "final_url": "https://excalidraw.com/",
+    "step_count": 7,
+    "elapsed_s": 61.2,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing required pattern 'typed': hit a hiccup mid-task. mind trying that again?",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "canvas_typing",
+    "summary": "On the Excalidraw drawing canvas, type the phrase 'Anticipy is an innovative browser agent for web automation.'",
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "typed",
+        "anticipy",
+        "innovative",
+        "browser agent",
+        "automation"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "canvas_type",
+    "agent_success": false,
+    "agent_message": "I got stuck on the page \u2014 let me try a different approach next time.",
+    "final_url": "https://excalidraw.com/",
+    "step_count": 60,
+    "elapsed_s": 262.4,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing required pattern 'typed': i got stuck on the page \u2014 let me try a different approach next time.",
+    "rejudge_pass": false,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "judge unreachable",
+    "rejudge_decision": "llm_judge"
+  },
+  {
+    "category": "canvas_typing",
+    "summary": "Navigate to Excalidraw, select the text tool, and type the phrase 'Anticipy AI is revolutionizing browser automation!' onto the canvas.",
+    "starting_url": "https://excalidraw.com/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "anticipy ai is revolutionizing browser automation!",
+        "typed",
+        "text",
+        "successfully"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "canvas_type",
+    "agent_success": false,
+    "agent_message": "LLM call failed \u2014 Gemini: Empty response from Gemini | Groq: Groq 429: {\"error\":{\"message\":\"Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kg3q7xhbf8atm3s059zkqbkf` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 95724,",
+    "final_url": "https://excalidraw.com/",
+    "step_count": 17,
+    "elapsed_s": 98.1,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "agent reported failure: llm call failed \u2014 gemini: empty response from gemini | groq: groq 429: {\"error\":{\"message\":\"rate limit reached for model `llama-3.3-70b-versatile` in ",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "webgl_pointer",
+    "summary": "Using OpenStreetMap, find the Eiffel Tower in Paris and show me its location.",
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "eiffel tower",
+        "paris",
+        "found",
+        "location"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "webgl_pointer",
+    "agent_success": true,
+    "agent_message": "The Eiffel Tower is located at coordinates 48.858260, 2.294501. A direct link to its OpenStreetMap page is: https://www.openstreetmap.org/way/5013364",
+    "final_url": "https://www.openstreetmap.org/way/5013364",
+    "step_count": 4,
+    "elapsed_s": 24.6,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "message contains expected pattern",
+    "rejudge_pass": true,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "message_contains_any",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "webgl_pointer",
+    "summary": "Find the Eiffel Tower on OpenStreetMap and tell me its approximate location or coordinates.",
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "eiffel tower",
+        "paris",
+        "48.85",
+        "2.29"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "webgl_pointer",
+    "agent_success": true,
+    "agent_message": "The approximate coordinates for the Eiffel Tower on OpenStreetMap are Latitude: 48.858262, Longitude: 2.295440.",
+    "final_url": "https://www.openstreetmap.org/search?query=Eiffel+Tower&zoom=18&minlon=2.2910678386688237&minlat=48.85694699631565&maxlon=2.2979342937469487&maxlat=48.859576384025154#map=18/48.858262/2.294501",
+    "step_count": 2,
+    "elapsed_s": 19.9,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "message contains expected pattern",
+    "rejudge_pass": true,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "message_contains_any",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "webgl_pointer",
+    "summary": "Find the Eiffel Tower on OpenStreetMap and tell me its approximate location or coordinates.",
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "eiffel",
+        "tower",
+        "paris",
+        "latitude",
+        "longitude"
+      ],
+      "min_steps": 0,
+      "min_message_len": 30
+    },
+    "expected_capability": "webgl_pointer",
+    "agent_success": true,
+    "agent_message": "The approximate coordinates for the Eiffel Tower are Latitude: 48.858262, Longitude: 2.295440.",
+    "final_url": "https://www.openstreetmap.org/search?query=Eiffel+Tower%2C+Paris&zoom=18&minlon=2.2910678386688237&minlat=48.85694699631565&maxlon=2.2979342937469487&maxlat=48.859576384025154#map=18/48.858262/2.294501",
+    "step_count": 2,
+    "elapsed_s": 13.9,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "message contains expected pattern",
+    "rejudge_pass": true,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "message_contains_any",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "webgl_pointer",
+    "summary": "Find the Eiffel Tower on OpenStreetMap and show me its location.",
+    "starting_url": "https://www.openstreetmap.org/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "eiffel",
+        "tower",
+        "paris"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "webgl_pointer",
+    "agent_success": true,
+    "agent_message": "The Eiffel Tower is located at coordinates derived from the URL: Latitude 48.858262, Longitude 2.295440. The bounding box is minlat=48.85694699631565, minlon=2.2910678386688237, maxlat=48.859576384025154, maxlon=2.2979342937469487.",
+    "final_url": "https://www.openstreetmap.org/search?query=Eiffel+Tower&zoom=18&minlon=2.2910678386688237&minlat=48.85694699631565&maxlon=2.2979342937469487&maxlat=48.859576384025154#map=18/48.858262/2.294501",
+    "step_count": 2,
+    "elapsed_s": 16.8,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "final URL matches",
+    "rejudge_pass": true,
+    "rejudge_class": "url_check",
+    "rejudge_why": "url_contains_any",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "webgl_pointer",
+    "summary": "Find the Eiffel Tower on OpenStreetMap. Once located, tell me the city and country it is in.",
+    "starting_url": "https://www.openstreetmap.org",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "eiffel tower",
+        "paris",
+        "france"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "webgl_pointer",
+    "agent_success": false,
+    "agent_message": "The Eiffel Tower is located in Paris, France. (I think I'm done but couldn't confirm: city, country.)",
+    "final_url": "https://www.openstreetmap.org/search?lat=48.858262&lon=2.294501&zoom=18#map=18/48.858262/2.294501",
+    "step_count": 3,
+    "elapsed_s": 16.8,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "message contains all patterns",
+    "rejudge_pass": true,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "all patterns matched",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary": "Search for 'Anticipy Chrome Extension' on YouTube and confirm you've reached the search results page.",
+    "starting_url": "https://www.youtube.com/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "search_query=Anticipy+Chrome+Extension"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "agent_success": true,
+    "agent_message": "Successfully searched for 'Anticipy Chrome Extension' on YouTube. The search results page is displayed with relevant videos.",
+    "final_url": "https://www.youtube.com/results?search_query=Anticipy+Chrome+Extension",
+    "step_count": 3,
+    "elapsed_s": 18.5,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "final URL matches",
+    "rejudge_pass": true,
+    "rejudge_class": "url_check",
+    "rejudge_why": "url_contains_any",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary": "Search for 'Anticipy AI' on YouTube and report the full URL of the search results page.",
+    "starting_url": "https://www.youtube.com/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "youtube.com/results?search_query=anticipy+ai"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.youtube.com/",
+    "step_count": 0,
+    "elapsed_s": 7.7,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "final URL missing patterns ['youtube.com/results?search_query=anticipy+ai']: https://www.youtube.com/",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary": "Find the documentation for the 'Alert' component on the Ionic Framework website.",
+    "starting_url": "https://ionicframework.com/docs/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "api/alert",
+        "alert"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://ionicframework.com/docs/components",
+    "step_count": 4,
+    "elapsed_s": 28.9,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "final URL missing patterns ['api/alert', 'alert']: https://ionicframework.com/docs/components",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary": "Search YouTube for 'how to make sourdough bread' and navigate to the search results page.",
+    "starting_url": "https://www.youtube.com/",
+    "verifier": {
+      "type": "url_contains_any",
+      "patterns": [
+        "search_query=how+to+make+sourdough+bread",
+        "search_query=how%20to%20make%20sourdough%20bread"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "shadow_dom",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.youtube.com/",
+    "step_count": 0,
+    "elapsed_s": 10.7,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "final URL missing patterns ['search_query=how+to+make+sourdough+bread', 'search_query=how%20to%20make%20sourdough%20bread']: https://www.youtube.com/",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "shadow_dom_heavy",
+    "summary": "Find information about the 'Modal' component in the Ionic Framework documentation and briefly describe its purpose.",
+    "starting_url": "https://ionicframework.com/docs/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "modal",
+        "dialog",
+        "component"
+      ],
+      "min_steps": 0,
+      "min_message_len": 50
+    },
+    "expected_capability": "shadow_dom",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://ionicframework.com/docs",
+    "step_count": 1,
+    "elapsed_s": 13.7,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing required pattern 'modal': hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "multi_field_form",
+    "summary": "Fill out the website feedback form with your name as 'Anticipy User', email as 'test@example.com', select 'Excellent' for overall experience, and in 'What did you like best?' write 'The clear layout and easy navigation.' Do not submit the form.",
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLScXQ-Xw_hT5h9c_G2_g1J_Y5_Q1g_X0m_N6_oA4/viewform",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "filled",
+        "anticipy user",
+        "test@example.com",
+        "excellent",
+        "clear layout"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_field",
+    "agent_success": false,
+    "agent_message": "The starting page is a 'Page Not Found' error, so the form cannot be accessed.",
+    "final_url": "https://docs.google.com/forms/d/e/1FAIpQLScXQ-Xw_hT5h9c_G2_g1J_Y5_Q1g_X0m_N6_oA4/viewform",
+    "step_count": 0,
+    "elapsed_s": 7.6,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing required pattern 'filled': the starting page is a 'page not found' error, so the form cannot be accessed.",
+    "rejudge_pass": false,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "judge unreachable",
+    "rejudge_decision": "llm_judge"
+  },
+  {
+    "category": "multi_field_form",
+    "summary": "Fill out the contact form on Jotform with the following details: First Name: John, Last Name: Doe, Email: john.doe@example.com, Phone Number: 555-123-4567, Message: Inquiry about product pricing. Do NOT submit the form.",
+    "starting_url": "https://form.jotform.com/241604169641052",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "form",
+        "filled",
+        "john",
+        "doe",
+        "example.com",
+        "inquiry"
+      ],
+      "min_steps": 3,
+      "min_message_len": 50
+    },
+    "expected_capability": "multi_field",
+    "agent_success": false,
+    "agent_message": "The form is not available at the provided URL. The page title is 'Jotform - Form is missing'.",
+    "final_url": "https://form.jotform.com/241604169641052",
+    "step_count": 0,
+    "elapsed_s": 7.6,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "only 0 steps taken (need \u22653)",
+    "rejudge_pass": false,
+    "rejudge_class": "literal_check",
+    "rejudge_why": "judge unreachable",
+    "rejudge_decision": "llm_judge"
+  },
+  {
+    "category": "multi_field_form",
+    "summary": "Fill out the feedback form with the name 'Anticipy User', email 'user@example.com', select 'Suggestion' for Feedback Type, and write 'This is a test suggestion for the Anticipy agent.' in the feedback message field. Do not submit the form.",
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLSclK-P8dKzQz2Z2y0Y9J5F-q7t3q2k-y7q-z9v8w0y5p7Q/viewform",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "form",
+        "filled",
+        "feedback",
+        "suggestion",
+        "anticipy"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_field",
+    "agent_success": false,
+    "agent_message": "The starting URL leads to a 'Page Not Found' error, making the form inaccessible.",
+    "final_url": "https://docs.google.com/forms/d/e/1FAIpQLSclK-P8dKzQz2Z2y0Y9J5F-q7t3q2k-y7q-z9v8w0y5p7Q/viewform",
+    "step_count": 0,
+    "elapsed_s": 7.6,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "agent reported failure: the starting url leads to a 'page not found' error, making the form inaccessible.",
+    "rejudge_pass": false,
+    "rejudge_class": "agent_success",
+    "rejudge_why": "agent_success",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "multi_field_form",
+    "summary": "Fill out the 'User Feedback Survey' form on Google Forms. Provide 'Anticipy User' as the name, 'test@example.com' as the email, rate the overall experience as 'Good', and suggest 'Consider adding more customization options.' in the suggestions field. Do not submit the form.",
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLSdp5Q2-G0n69V6qR6Fp_t_Q3K3J7X7C7E7F7G7H7I7J7K7L7M7N7O7P7/viewform",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "form",
+        "filled",
+        "anticipy",
+        "test@example.com",
+        "good",
+        "customization"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "multi_field",
+    "agent_success": false,
+    "agent_message": "The starting page is a 'Page Not Found' error, so the survey form cannot be accessed.",
+    "final_url": "https://docs.google.com/forms/d/e/1FAIpQLSdp5Q2-G0n69V6qR6Fp_t_Q3K3J7X7C7E7F7G7H7I7J7K7L7M7N7O7P7/viewform",
+    "step_count": 0,
+    "elapsed_s": 6.1,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "agent reported failure: the starting page is a 'page not found' error, so the survey form cannot be accessed.",
+    "rejudge_pass": false,
+    "rejudge_class": "agent_success",
+    "rejudge_why": "agent_success",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "multi_field_form",
+    "summary": "Fill out the 'Simple Survey Form' with the following details: Name as 'Anticipy User', Email as 'user@example.com', Phone Number as '555-123-4567', and Comments as 'This is a test submission for the Anticipy extension'. Do not submit the form.",
+    "starting_url": "https://docs.google.com/forms/d/e/1FAIpQLSd1L-9p9v8rQ5q-3F0G5z7P2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z/viewform",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "form filled",
+        "anticipy user",
+        "user@example.com",
+        "555-123-4567",
+        "test submission"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "multi_field",
+    "agent_success": false,
+    "agent_message": "The starting page is a 'Page Not Found' error. The survey form is not available at the provided URL.",
+    "final_url": "https://docs.google.com/forms/d/e/1FAIpQLSd1L-9p9v8rQ5q-3F0G5z7P2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z2z7z/viewform",
+    "step_count": 0,
+    "elapsed_s": 9.1,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "agent reported failure: the starting page is a 'page not found' error. the survey form is not available at the provided url.",
+    "rejudge_pass": false,
+    "rejudge_class": "agent_success",
+    "rejudge_why": "agent_success",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary": "Search for the height of Mount Everest and tell me its official measurement in meters.",
+    "starting_url": "https://duckduckgo.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "8848",
+        "8,848",
+        "8848.86",
+        "8,848.86",
+        "meters"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://duckduckgo.com/",
+    "step_count": 0,
+    "elapsed_s": 10.8,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing all patterns ['8848', '8,848', '8848.86', '8,848.86', 'meters']: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary": "Search for the height of the Eiffel Tower and tell me the measurement.",
+    "starting_url": "https://www.google.com",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "330 meters",
+        "330m",
+        "324 meters",
+        "324m",
+        "1,083 feet",
+        "1083 feet",
+        "1,063 feet",
+        "1063 feet"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.google.com/?zx=1778256134209",
+    "step_count": 2,
+    "elapsed_s": 10.7,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing all patterns ['330 meters', '330m', '324 meters', '324m', '1,083 feet', '1083 feet', '1,063 feet', '1063 feet']: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary": "Search for 'Berlin Wall' on Wikipedia, click the most relevant link, and tell me the year it fell.",
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "1989",
+        "november 9",
+        "nov 9",
+        "nineteen eighty nine"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "step_count": 0,
+    "elapsed_s": 9.2,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing all patterns ['1989', 'november 9', 'nov 9', 'nineteen eighty nine']: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary": "Find the current population of Paris, France, and tell me the number.",
+    "starting_url": "https://www.google.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "2 million",
+        "2.1 million",
+        "2,100,000",
+        "2,130,000",
+        "2,140,000",
+        "2,145,000",
+        "2,133,000"
+      ],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.google.com/?zx=1778256160845",
+    "step_count": 0,
+    "elapsed_s": 7.7,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing all patterns ['2 million', '2.1 million', '2,100,000', '2,130,000', '2,140,000', '2,145,000', '2,133,000']: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "search_click_extract_chain",
+    "summary": "Search for 'oldest university in the world' on Google, click the first relevant result, and tell me the name of the university.",
+    "starting_url": "https://www.google.com",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "al-qarawiyyin",
+        "f\u00e8s",
+        "fez",
+        "859 ad",
+        "university of bologna"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "search_click_extract",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.google.com/?zx=1778256170907",
+    "step_count": 0,
+    "elapsed_s": 9.3,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing all patterns ['al-qarawiyyin', 'f\u00e8s', 'fez', '859 ad', 'university of bologna']: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "retry_after_fail",
+    "summary": "Search for 'Nintendo Switch' on Walmart.com and tell me if it's currently available and its approximate price.",
+    "starting_url": "https://www.walmart.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "nintendo switch",
+        "available",
+        "in stock",
+        "price",
+        "dollars",
+        "$"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.walmart.com/",
+    "step_count": 1,
+    "elapsed_s": 15.6,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "message contains expected pattern",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "retry_after_fail",
+    "summary": "Search for 'handmade ceramic mug' on Etsy and confirm the search was successful by describing the results.",
+    "starting_url": "https://www.etsy.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "ceramic mug",
+        "results",
+        "etsy"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.etsy.com/",
+    "step_count": 0,
+    "elapsed_s": 12.5,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing required pattern 'ceramic mug': hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "retry_after_fail",
+    "summary": "On Walmart.com, search for 'gaming laptop' and find the price of the first result displayed.",
+    "starting_url": "https://www.walmart.com/",
+    "verifier": {
+      "type": "agent_success",
+      "patterns": [
+        "gaming laptop",
+        "price",
+        "$",
+        "dollar",
+        "cost"
+      ],
+      "min_steps": 0,
+      "min_message_len": 40
+    },
+    "expected_capability": "retry",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.walmart.com/blocked?url=Lw==&uuid=64567040-4af7-11f1-b44e-e724df61348e&vid=6510abdd-4af7-11f1-9022-659eb29ac433&g=b",
+    "step_count": 0,
+    "elapsed_s": 9.2,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "agent reported failure: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "retry_after_fail",
+    "summary": "On BestBuy.com, search for 'Dyson V11 Animal cordless vacuum' and report its general price range or if it's currently unavailable.",
+    "starting_url": "https://www.bestbuy.com/",
+    "verifier": {
+      "type": "message_contains_any",
+      "patterns": [
+        "dyson v11 animal",
+        "cordless vacuum",
+        "price",
+        "available",
+        "unavailable"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.bestbuy.com/",
+    "step_count": 1,
+    "elapsed_s": 14.1,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing all patterns ['dyson v11 animal', 'cordless vacuum', 'price', 'available', 'unavailable']: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "retry_after_fail",
+    "summary": "Search for 'Sony WH-1000XM5 headphones' on Best Buy and tell me its current price.",
+    "starting_url": "https://www.bestbuy.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "sony wh-1000xm5",
+        "price",
+        "$"
+      ],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "retry",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.bestbuy.com/",
+    "step_count": 1,
+    "elapsed_s": 15.7,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "infra_skip: starting_url did not load (LLM-generated dataset bug)",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "graceful_decline",
+    "summary": "Post a public update on Facebook saying 'Hello world from Anticipy!'",
+    "starting_url": "https://www.facebook.com/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.facebook.com/",
+    "step_count": 0,
+    "elapsed_s": 12.4,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "declined but didn't mention login: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "graceful_decline",
+    "summary": "Post a short update on LinkedIn about recent advancements in AI.",
+    "starting_url": "https://www.linkedin.com/feed/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.linkedin.com/uas/login?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2F",
+    "step_count": 0,
+    "elapsed_s": 15.6,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "declined but didn't mention login: hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "graceful_decline",
+    "summary": "Create a new post on LinkedIn about the latest trends in artificial intelligence.",
+    "starting_url": "https://www.linkedin.com/feed/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "agent_success": false,
+    "agent_message": "That site wants you signed in. Open it once in this browser, then ask me again.",
+    "final_url": "https://www.linkedin.com/uas/login?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed%2F",
+    "step_count": 0,
+    "elapsed_s": 9.2,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "declined gracefully and identified the login wall",
+    "rejudge_pass": true,
+    "rejudge_class": "graceful_decline",
+    "rejudge_why": "declined gracefully",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "graceful_decline",
+    "summary": "Post a photo of a sunset to Instagram.",
+    "starting_url": "https://www.instagram.com/create/post/",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "agent_success": false,
+    "agent_message": "That site wants you signed in. Open it once in this browser, then ask me again.",
+    "final_url": "chrome-error://chromewebdata/",
+    "step_count": 0,
+    "elapsed_s": 4.6,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "declined gracefully and identified the login wall",
+    "rejudge_pass": true,
+    "rejudge_class": "graceful_decline",
+    "rejudge_why": "declined gracefully",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "graceful_decline",
+    "summary": "Post a short update on LinkedIn about the importance of continuous learning.",
+    "starting_url": "https://www.linkedin.com/feed",
+    "verifier": {
+      "type": "agent_failed_with_login",
+      "patterns": [],
+      "min_steps": 0,
+      "min_message_len": 0
+    },
+    "expected_capability": "graceful_decline",
+    "agent_success": false,
+    "agent_message": "That site wants you signed in. Open it once in this browser, then ask me again.",
+    "final_url": "https://www.linkedin.com/uas/login?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Ffeed",
+    "step_count": 0,
+    "elapsed_s": 10.9,
+    "timed_out": false,
+    "verdict_pass": true,
+    "verdict_reason": "declined gracefully and identified the login wall",
+    "rejudge_pass": true,
+    "rejudge_class": "graceful_decline",
+    "rejudge_why": "declined gracefully",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "long_task",
+    "summary": "Find the base clock speed for the AMD Ryzen 5 5600X, Ryzen 7 5800X, and Ryzen 9 5900X CPUs on TechPowerUp and tell me which one has the highest base clock speed.",
+    "starting_url": "https://www.techpowerup.com/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "5600x",
+        "5800x",
+        "5900x",
+        "3.8",
+        "ghz",
+        "highest"
+      ],
+      "min_steps": 20,
+      "min_message_len": 50
+    },
+    "expected_capability": "long_task",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.techpowerup.com/",
+    "step_count": 1,
+    "elapsed_s": 17.0,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "only 1 steps taken (need \u226520)",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "long_task",
+    "summary": "Find the initial release year for Python, Java, and C++ programming languages from Wikipedia and list all three years in your final message.",
+    "starting_url": "https://www.wikipedia.org/",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "python",
+        "java",
+        "c++",
+        "1991",
+        "1995",
+        "1979"
+      ],
+      "patterns_b": [],
+      "min_steps": 0,
+      "min_message_len": 20
+    },
+    "expected_capability": "long_task",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.wikipedia.org/",
+    "step_count": 0,
+    "elapsed_s": 10.8,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "message missing required pattern 'python': hit my ai rate limit. give me a minute and try again.",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "long_task",
+    "summary": "Compare the current price of the Sony WH-1000XM5 noise-canceling headphones on Amazon, Best Buy, and Target, and report which retailer offers the lowest price.",
+    "starting_url": "https://www.amazon.com",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "wh-1000xm5",
+        "sony",
+        "amazon",
+        "best buy",
+        "target",
+        "lowest",
+        "cheapest"
+      ],
+      "min_steps": 20,
+      "min_message_len": 50
+    },
+    "expected_capability": "long_task",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://www.amazon.com/",
+    "step_count": 0,
+    "elapsed_s": 12.5,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "only 0 steps taken (need \u226520)",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "long_task",
+    "summary": "Find the capital cities of Brazil, Canada, and Australia. Then, for each capital, find its population. Finally, tell me which of these three capital cities has the largest population.",
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "brazil",
+        "canada",
+        "australia",
+        "brasilia",
+        "ottawa",
+        "canberra",
+        "population",
+        "largest"
+      ],
+      "min_steps": 20,
+      "min_message_len": 100
+    },
+    "expected_capability": "long_task",
+    "agent_success": false,
+    "agent_message": "Starting\u2026",
+    "final_url": "",
+    "step_count": 0,
+    "elapsed_s": 301.3,
+    "timed_out": true,
+    "verdict_pass": false,
+    "verdict_reason": "timeout after 301.3s, 0 steps",
+    "rejudge_pass": false,
+    "rejudge_class": "timeout",
+    "rejudge_why": "runner timeout",
+    "rejudge_decision": "programmatic"
+  },
+  {
+    "category": "long_task",
+    "summary": "Find the current estimated population for Brazil, Nigeria, and Pakistan from Wikipedia, and tell me which country has the largest population.",
+    "starting_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "verifier": {
+      "type": "message_contains_all",
+      "patterns": [
+        "brazil",
+        "nigeria",
+        "pakistan",
+        "population",
+        "largest"
+      ],
+      "min_steps": 25,
+      "min_message_len": 70
+    },
+    "expected_capability": "long_task",
+    "agent_success": false,
+    "agent_message": "Hit my AI rate limit. Give me a minute and try again.",
+    "final_url": "https://en.wikipedia.org/wiki/Main_Page",
+    "step_count": 0,
+    "elapsed_s": 10.7,
+    "timed_out": false,
+    "verdict_pass": false,
+    "verdict_reason": "agent message too short (53 chars)",
+    "rejudge_pass": false,
+    "rejudge_class": "infra",
+    "rejudge_why": "LLM provider exhaustion / network",
+    "rejudge_decision": "programmatic"
+  }
+]

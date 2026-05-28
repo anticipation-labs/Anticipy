@@ -1,0 +1,20 @@
+{
+  "scenario": "ambiguity trap (two advisors both plausibly match an indirect reference)",
+  "instruction": "I should run the final launch date by my advisor before I lock it in.",
+  "both_contenders": [
+    "Dr. Sam Whitfield (hardware and manufacturing advisor)",
+    "Renu Castellanos (go to market advisor)"
+  ],
+  "engine_response": {
+    "ran": false,
+    "clarify": true,
+    "question": "Which advisor do you mean \u2014 Dr. Sam (hardware and manufacturing) or Renu (go to market)?",
+    "resolved_person": ""
+  },
+  "state_change": {
+    "gmail_compose_tabs_before": 0,
+    "gmail_compose_tabs_after": 0,
+    "draft_created": false
+  },
+  "verdict": "engine ASKED the correct clarifying question naming both contenders and created ZERO Gmail/Calendar change"
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "9efa2d39-c41a-4c87-94d9-9343e7a4bde2",
+  "created_at": "2025-04-09T15:30:00Z",
+  "name": "David Chen",
+  "age": 42,
+  "occupation": "Sales Operations Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Salesforce lead management and decline logging",
+  "primary_real_surface": {
+    "surface": "Salesforce Web App",
+    "chrome_requirement": "Chrome browser with Salesforce session active",
+    "acceptable_state": "logged in, leads list view visible"
+  },
+  "daily_tools": [
+    "Salesforce",
+    "Slack",
+    "Outlook",
+    "Google Sheets",
+    "Zoom"
+  ],
+  "contacts": [
+    {
+      "name": "Maria Gonzalez",
+      "relationship": "colleague",
+      "context": "CRM team lead, helps with Salesforce configurations"
+    },
+    {
+      "name": "James Lee",
+      "relationship": "manager",
+      "context": "Sales Operations Director, oversees lead process"
+    },
+    {
+      "name": "Sarah Patel",
+      "relationship": "IT support",
+      "context": "Handles Salesforce permissions and browser issues"
+    }
+  ]
+}

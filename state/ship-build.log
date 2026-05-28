@@ -1,0 +1,3 @@
+[build_dmg] Embedding build commit 1452426566d26abf11c1ec4c0bec354bd320a508
+[build_dmg] Building PyInstaller engine sidecar
+FATAL: /Users/omarebrahim/Developer/Anticipy-V7/engine/.venv/bin/pyinstaller not found. Run 'uv sync' inside engine/.

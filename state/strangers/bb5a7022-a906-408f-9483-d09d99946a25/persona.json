@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "bb5a7022-a906-408f-9483-d09d99946a25",
+  "created_at": "2025-04-10T14:30:00Z",
+  "name": "Jordan Chen",
+  "age": 34,
+  "occupation": "Customer Success Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "Zendesk ticket triage and response",
+  "primary_real_surface": {
+    "surface": "zendesk",
+    "chrome_requirement": "signed_in",
+    "acceptable_state": "ticket_view"
+  },
+  "daily_tools": [
+    "Zendesk",
+    "Slack",
+    "Gmail",
+    "Zoom",
+    "Notion"
+  ],
+  "contacts": [
+    {
+      "name": "Maya Patel",
+      "relationship": "colleague",
+      "context": "works on same account team"
+    },
+    {
+      "name": "Tom Harrison",
+      "relationship": "manager",
+      "context": "direct supervisor"
+    },
+    {
+      "name": "Lisa Kim",
+      "relationship": "client",
+      "context": "primary contact at Acme Corp"
+    }
+  ]
+}

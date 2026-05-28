@@ -1,0 +1,5 @@
+[14:42:33] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144233Z
+[14:42:40] demoqa CDP tab=6FAA8E573ED71635E16536BE8A50EF69 url=https://demoqa.com/
+[14:42:40] PASS step 1 navigate :: url=https://demoqa.com/ via BRIDGE /surface-command navigate
+[14:42:44] PASS step 2 click_forms_card :: forms page url=https://demoqa.com/forms via CLICKED:Forms
+[14:42:48] FAIL step 3 click_practice_form :: click=CLICKED:Practice Form url=https://demoqa.com/forms

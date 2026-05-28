@@ -1,0 +1,2 @@
+stranger contract valid: /Users/omarebrahim/Developer/Anticipy-V7/state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/persona.json /Users/omarebrahim/Developer/Anticipy-V7/state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/script.json
+{"out": "/Users/omarebrahim/Developer/Anticipy-V7/state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/trace.json", "pages": 2, "surface_receipts_present": true, "changed_surfaces": ["anticipy"], "all_changed_surfaces": ["anticipy", "browser"]}

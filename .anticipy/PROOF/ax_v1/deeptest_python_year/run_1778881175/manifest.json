@@ -1,0 +1,47 @@
+{
+  "intent_goal": "Find what year the Python programming language was first released",
+  "skill_id": "deeptest_python_year",
+  "model": "qwen3:8b",
+  "max_iters": 10,
+  "final_verdict": "DONE",
+  "final_answer": "The Python programming language was first released in 1991.",
+  "final_evidence": "The visible page text confirms that Python was first released on February 20, 1991.",
+  "error": null,
+  "n_iterations": 2,
+  "iterations": [
+    {
+      "iteration": 0,
+      "action_kind": "navigate",
+      "action_ref": null,
+      "action_url": "https://www.google.com/search?q=what+year+was+python+first+released",
+      "action_text": null,
+      "action_answer": null,
+      "action_raw": "{\"action\":\"navigate\",\"url\":\"https://www.google.com/search?q=what+year+was+python+first+released\"}",
+      "dispatch_ok": true,
+      "dispatch_stderr": "",
+      "verifier_verdict": "",
+      "verifier_reason": "",
+      "latency_decide_s": 7.26,
+      "latency_verify_s": 0.0,
+      "latency_dispatch_s": 1.24,
+      "screenshot": "step_00.png"
+    },
+    {
+      "iteration": 1,
+      "action_kind": "done",
+      "action_ref": null,
+      "action_url": null,
+      "action_text": null,
+      "action_answer": "The Python programming language was first released in 1991.",
+      "action_raw": "{\"action\":\"done\",\"answer\":\"The Python programming language was first released in 1991.\"}",
+      "dispatch_ok": true,
+      "dispatch_stderr": "",
+      "verifier_verdict": "DONE",
+      "verifier_reason": "The visible page text confirms that Python was first released on February 20, 1991.",
+      "latency_decide_s": 12.05,
+      "latency_verify_s": 7.66,
+      "latency_dispatch_s": 0.0,
+      "screenshot": "step_01.png"
+    }
+  ]
+}

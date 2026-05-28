@@ -1,0 +1,13 @@
+{
+  "acquired_via": "chrome_applescript_loopback_bridge",
+  "bridge_closed": false,
+  "dom": "<html><body data-bridge='applescript'></body></html>",
+  "error": "",
+  "ok": true,
+  "pid": 16532,
+  "screenshot_bytes": 3318453,
+  "screenshot_path": "/Users/omarebrahim/.anticipy/screenshots/20260527T061545Z_proof.png",
+  "title": "OrangeHRM",
+  "url": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+  "url_source": "activate_tab_matching"
+}

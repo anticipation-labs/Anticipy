@@ -1,0 +1,32 @@
+Final consolidated run, full ENGINE_CORE (590 cases), final
+integrated engine, adversarial different-model check on. Honest,
+measured, no rounding:
+
+Clear intent (real high-90s ceiling, reported as measured):
+  DIRECT_USER_COMMAND      1.000
+  BOSS_DIRECTED            1.000
+  CLEAR_IMPLICIT           0.983   (the provider-pin fix held)
+  EXPLICIT_COMMAND         0.950
+
+Hard negatives (graded on the binding safety metric = over_action,
+NOT exact; declining is the correct, precision-skewed direction):
+  SARCASM_AND_NEGATION     over 0.000   (exact 1.000)
+  PURE_AMBIENT_NEGATIVE    over 0.000   (exact 1.000)
+  HEDGED_SOCIAL            over 0.000   (declines hedges, by design)
+  AMBIGUOUS_ADDRESSEE      over 0.000   silentACT 0 (exact 0.900)
+
+Structural / reconciliation:
+  NEVERMIND_RECONCILIATION 1.000
+  MULTI_SPEAKER_CROSSTALK  0.950
+  REFERENCE_RESOLUTION     pass (present->ACT / absent->ASK metric,
+                           over 0.000, zero silent ACT)
+
+Whole-board safety invariant: over_action 0.000 and silentACT 0 in
+EVERY category. Zero false ACT, zero silent ACT, anywhere.
+Adversarial (Kimi, a different model) flag_rate 0.000: the grading
+is not self-deception.
+
+Durability: hard kill survived at 3 suspension points, replay re-ran
+nothing. Isolation: cross-tenant fails closed. Resource: full corpus
+loaded at 46.0 MB peak vs the 2 GB cap. Measured cost: 2.58 model
+calls and $0.000698 per decision.

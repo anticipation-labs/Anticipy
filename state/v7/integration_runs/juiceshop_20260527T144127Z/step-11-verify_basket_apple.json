@@ -1,0 +1,7 @@
+{
+  "name": "verify_basket_apple",
+  "ok": true,
+  "detail": "apple rows in basket=2",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144127Z/step-11-final.png",
+  "receipt": "rows=2"
+}

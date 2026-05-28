@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "ba605816-fee2-4c6d-9087-a21a0e59b24c",
+  "created_at": "2025-04-10T14:30:00Z",
+  "name": "Jordan Chen",
+  "age": 34,
+  "occupation": "Sales Operations Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot in signed-in Chrome profile",
+  "primary_real_surface": {
+    "surface": "hubspot.com",
+    "chrome_requirement": "user signed into HubSpot in default Chrome profile",
+    "acceptable_state": "viewing a contact record"
+  },
+  "daily_tools": [
+    "HubSpot",
+    "Gmail",
+    "Slack",
+    "Zoom",
+    "Google Sheets"
+  ],
+  "contacts": [
+    {
+      "name": "Maya Patel",
+      "relationship": "colleague",
+      "context": "works in same sales team"
+    },
+    {
+      "name": "David Kim",
+      "relationship": "manager",
+      "context": "direct supervisor"
+    },
+    {
+      "name": "Sarah Johnson",
+      "relationship": "client",
+      "context": "key account contact"
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "ccb50a84-1b2c-4be3-a641-63e21618cdee",
+  "created_at": "2025-04-09T14:30:00Z",
+  "title": "categorize airtable expense via uploaded audio",
+  "category": "airtable_expense_categorize",
+  "verb_category": "expense_or_budget_track_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Airtable expense tracking",
+  "breadth_reason": "This script tests Anticipy's ability to process a user's uploaded audio recording against a real signed-in Airtable surface, covering the full public product path from audio upload to surface proof.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "public downloadable user-device engine",
+    "surface_rule": "user's signed-in Chrome with Airtable tab open",
+    "proof_rule": "fresh surface-readable proof from the public build"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio tests the ASR pipeline on a real mp3 file, ensuring coverage of the audio upload path rather than relying on pasted transcripts or live microphone capture."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Airtable",
+      "kind": "browser_tab",
+      "surface": "Airtable base with Expenses table",
+      "proof_needed": "visible Airtable record or signed-in workspace"
+    },
+    {
+      "name": "Chrome Profile",
+      "kind": "browser_profile",
+      "surface": "user's signed-in Chrome profile",
+      "proof_needed": "proof of signed-in state"
+    },
+    {
+      "name": "Audio Upload",
+      "kind": "file_upload",
+      "surface": "/api/listen/upload endpoint",
+      "proof_needed": "audio/mpeg file with spoken reference text"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver"
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver"
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please update the Airtable Expenses record for the Brookline coffee charge from yesterday and tag it work meetings. If you cannot prove the visible Airtable record or my signed-in workspace, decline without changing anything.",
+      "delivery_instruction": "Use the Anticipy say command to produce a per-run audio artifact of the spoken reference text, then upload the resulting mp3 file via the /api/listen/upload endpoint.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine"
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act",
+        "ask",
+        "decline"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true
+    }
+  ],
+  "success_criteria": [
+    "The engine correctly transcribes the uploaded audio and extracts the intent to update an Airtable expense record.",
+    "The engine verifies the user's signed-in Airtable surface in Chrome before taking any action.",
+    "If the Airtable surface is visible and the record is found, the engine updates the record and tags it as 'work meetings'.",
+    "If the surface is not verifiable, the engine declines with a clear explanation and makes no changes.",
+    "All proofs are generated from the public build using fresh surface captures."
+  ],
+  "failure_triggers": [
+    "The engine attempts to act without first verifying the signed-in Airtable surface.",
+    "The engine uses a transcript paste or live microphone instead of the uploaded audio file.",
+    "The engine modifies the Airtable record when the surface is not provably visible.",
+    "The engine uses stale screenshots, logs, or fixture data as proof.",
+    "The engine fails to produce a proof artifact tied to the public build."
+  ]
+}

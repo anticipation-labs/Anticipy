@@ -1,0 +1,168 @@
+{
+  "account_id": "e2e_rich_test_2026_05_28",
+  "note": "20 HARD proactive transcripts. Each is 60 to 200 words of natural speech with filler, tangents, partial thoughts. Tests the engine's ability to pick up buried intent, resolve memory references, take initiative, and ignore chatter. Dossier names used are placeholders aligned with the repo's existing convention (Maya ops partner, Marcus finance) plus a richer cast. The downstream phase reconciles dossier IDs against the rich dossier at state/v7/test_dossier_rich.json.",
+  "categories": ["scheduling", "communication", "follow_up", "ambient_deferred"],
+  "difficulty_scale": "1 lightest (intent close to the surface) to 5 hardest (deeply buried, multi-hop memory resolution, must initiate without an imperative verb).",
+  "transcripts": [
+    {
+      "id": "T01",
+      "category": "scheduling",
+      "difficulty": 1,
+      "raw": "Okay so I was thinking, the dentist thing, I keep putting it off. Last time they said come back in six months and that was, what, November? So I'm overdue. Anyway, I'll deal with it later, but I should at least get on the books before they fill up for summer. The place by the marina, I always forget the name but you know the one. Yeah. Add it to the list, before I forget again.",
+      "expected_intent": "Surface a reminder/task to book a dentist checkup at Dr. Chen's clinic (the Beachway clinic by the marina). Optionally draft a request for the next available slot if booking surface is available.",
+      "expected_memory_used": ["person_dr_chen", "place_beachway_clinic", "recurring_dental_6mo"]
+    },
+    {
+      "id": "T02",
+      "category": "scheduling",
+      "difficulty": 2,
+      "raw": "So Thursday, dinner Thursday, table for four. I want to do the place we did last time, the one we liked, with the open kitchen. I think it was the Italian one, not the Korean place, the Korean place was the time before that I'm pretty sure. Seven works, seven thirty if seven is gone. Group's me, Priya, her partner, and Marcus. Don't worry about Marcus's allergy, he says he just avoids the bread.",
+      "expected_intent": "Book a reservation at Kissa (the Italian restaurant in West Van) for Thursday at 7pm, table for 4, fallback 7:30pm. Confirm the place name before booking since the user is uncertain.",
+      "expected_memory_used": ["place_kissa_italian_westvan", "place_min_sok_korean", "person_priya", "person_marcus", "person_marcus_allergy_gluten"]
+    },
+    {
+      "id": "T03",
+      "category": "scheduling",
+      "difficulty": 3,
+      "raw": "I keep meaning to do that thing for my brother's wedding, the speech thing. It's in like three weeks right? Maybe less. I haven't even started writing it, I have nothing. I should block a couple of evenings, not this week, this week is brutal, but next week, maybe Tuesday and Thursday after seven. Not Wednesday, Wednesday is the thing with Maya. Anyway, just blocks, nothing fancy.",
+      "expected_intent": "Add two calendar blocks for wedding-speech writing on the Tuesday and Thursday of next week, after 7pm, avoiding Wednesday because of the standing Maya 1:1 (or the Maya event already on the calendar). Compute Sam's wedding date from the dossier to confirm the three-week framing.",
+      "expected_memory_used": ["person_sam_brother", "event_sam_wedding_date", "recurring_maya_1to1_wed", "preference_dinner_7pm"]
+    },
+    {
+      "id": "T04",
+      "category": "scheduling",
+      "difficulty": 4,
+      "raw": "Ugh, board prep. Okay so the Q3 review is on the fifteenth and I need a couple of working sessions before that with Marcus and Jordan, finance side and legal side. Probably two hours each, Marcus first because his numbers feed the legal pages. Don't put them back to back, give me a day between. And not Mondays, Mondays I'm useless. Also, do not put Jordan on a Friday afternoon, they go offline for shabbat. Figure it out.",
+      "expected_intent": "Schedule two prep sessions before Q3 board review on the 15th: a 2-hour finance session with Marcus first, then a 2-hour legal session with Jordan with a one-day gap. Avoid Mondays. Do not schedule Jordan on Friday afternoon (shabbat).",
+      "expected_memory_used": ["event_q3_board_review_15th", "person_marcus", "person_jordan_legal", "constraint_jordan_friday_pm_shabbat", "preference_no_mondays"]
+    },
+    {
+      "id": "T05",
+      "category": "scheduling",
+      "difficulty": 5,
+      "raw": "Yeah Elena texted, she wants to do that lunch thing again with the kids, she was going to bring them up next month. I forget if it was the last weekend or the second last. Either way, if it's the second last that's the wedding so it has to be the other one. Hot Eight closes at noon on Sundays I think, so I can't do brunch brunch, but a late lunch works. Plug it in, send Elena a maybe.",
+      "expected_intent": "Schedule a late-Sunday-lunch with Elena and the kids on the last weekend of next month, since the second-to-last weekend collides with Sam's wedding. Avoid early morning (Hot Eight closes at noon). Send Elena a tentative WhatsApp.",
+      "expected_memory_used": ["person_elena_sister_in_law", "event_sam_wedding_date", "place_hot_eight_yoga_sunday_close_noon", "preference_whatsapp_over_sms"]
+    },
+    {
+      "id": "T06",
+      "category": "communication",
+      "difficulty": 1,
+      "raw": "Right, I owe her a reply on the slide deck. The one she sent on Monday. I said I'd get back to her by end of week and end of week is tomorrow. Just a short thank you, looks great, two small changes, slide four the title is off and slide nine the chart is the old numbers. That's it. Keep it to three lines.",
+      "expected_intent": "Draft a short reply to Priya (the designer who sent the slide deck Monday) acknowledging slides four and nine need fixes: slide four title is off, slide nine chart uses old numbers. Keep to three lines.",
+      "expected_memory_used": ["person_priya_designer", "project_series_a_pitch_deck"]
+    },
+    {
+      "id": "T07",
+      "category": "communication",
+      "difficulty": 2,
+      "raw": "Yeah so anyway, before I forget, I should probably circle back with her about the Friday thing, she was waiting on the docs from legal I think. Just a nudge, nothing heavy, see if Jordan got back to her or if we need to push the demo. If we're pushing the demo I want to know by Thursday so I can tell the Acme folks.",
+      "expected_intent": "Draft a WhatsApp nudge to Maya asking if Jordan delivered the legal docs for the Friday Acme demo, and confirm the demo is still on. Flag that a push decision is needed by Thursday to notify Acme.",
+      "expected_memory_used": ["person_maya_ops", "person_jordan_legal", "project_acme_deal", "recurring_friday_demo", "preference_whatsapp_over_sms"]
+    },
+    {
+      "id": "T08",
+      "category": "communication",
+      "difficulty": 3,
+      "raw": "Okay I owe David a follow up. Not a hard sell, just, you know, after our coffee on Tuesday he said he'd loop in his CTO and I haven't heard. It's been almost a week. Soft touch, not pushy. Mention the proof of value timeline, three weeks, free, no commitment. And see how his kid's recital went, he was nervous about it.",
+      "expected_intent": "Draft a soft follow-up email to David (CFO at Acme) referencing their Tuesday coffee, asking if the CTO has been looped in. Mention the 3-week free POV. Include a warm personal note asking about his kid's recital. Draft only, do not send.",
+      "expected_memory_used": ["person_david_acme_cfo", "project_acme_deal", "fact_david_kid_recital", "preference_drafts_not_sends_external"]
+    },
+    {
+      "id": "T09",
+      "category": "communication",
+      "difficulty": 4,
+      "raw": "Right, the offer letter for the new hire, the engineer Maya was talking about. Pretty sure it's basically the same template as the last one we sent in March, except the equity numbers are different and the start date is what we agreed in the room yesterday, which was, like, the first Monday in August I think? Just spin up a draft and put it in front of me, don't send anything until I look. Marcus has to sign off on the comp.",
+      "expected_intent": "Generate a draft offer letter modeled on the March template for the new engineering hire Maya championed, adjusting equity per current package and setting the start date to the first Monday of August. Route the draft to the user for review and to Marcus for comp sign-off. Do not send.",
+      "expected_memory_used": ["person_maya_ops", "person_marcus_finance", "template_offer_letter_march", "decision_eng_hire_start_first_monday_august", "preference_drafts_not_sends_external"]
+    },
+    {
+      "id": "T10",
+      "category": "communication",
+      "difficulty": 5,
+      "raw": "Yeah she's going to be upset, I get it, but the call yesterday made it pretty clear we cannot keep stretching the timeline. I think the right move is I write to her boss directly, just a heads up, not a complaint, more like a, hey, your team's doing a great job but here's where we are and here's the help we need. Tactful. She doesn't need to be cc'd, that would be weird, but later in the week I'll loop her in separately so she doesn't feel blindsided.",
+      "expected_intent": "Draft a tactful, non-complaint email to Maya's manager Rena giving a status update on the timeline pressure from yesterday's call, framed as 'great work, here is the help we need'. Do not cc Maya. Schedule a follow-up reminder later in the week to brief Maya separately so she is not blindsided.",
+      "expected_memory_used": ["person_maya_ops", "person_rena_maya_manager", "project_acme_deal", "preference_drafts_not_sends_external", "constraint_maya_not_blindsided"]
+    },
+    {
+      "id": "T11",
+      "category": "follow_up",
+      "difficulty": 1,
+      "raw": "Oh shoot, the receipt thing. Marcus asked me twice already to send him the receipts from the New York trip and I keep forgetting. They're in the email, the confirmation emails from the hotel and the two restaurants, plus the airport one. Just grab them and forward, today not tomorrow, he's closing the month. Oh and the Uber to LaGuardia, that one's not in email, it's in the Uber app, but I think I can pull a PDF. Whatever, just get him the email ones first and we'll deal with the Uber one if he asks for it.",
+      "expected_intent": "Locate the NYC trip receipt emails in Gmail (hotel, two restaurant confirmations, airport one), forward them to Marcus today since he is closing the month.",
+      "expected_memory_used": ["person_marcus_finance", "event_nyc_trip", "task_month_close"]
+    },
+    {
+      "id": "T12",
+      "category": "follow_up",
+      "difficulty": 2,
+      "raw": "The thing from last Tuesday, the bug Priya flagged on the onboarding screen, did anyone actually pick that up? It went into the channel and then I lost it. If it's still open, ping the eng lead, if it got closed already, fine. I just want to know before the demo Friday because that's literally the first screen people see.",
+      "expected_intent": "Check the status of Priya's onboarding-screen bug filed last Tuesday. If still open, ping the engineering lead. Resolve before Friday's Acme demo. Surface the status to the user.",
+      "expected_memory_used": ["person_priya_designer", "project_onboarding_screen_bug_tue", "recurring_friday_demo", "person_eng_lead"]
+    },
+    {
+      "id": "T13",
+      "category": "follow_up",
+      "difficulty": 3,
+      "raw": "Hot Eight, the studio, they sent something about a punch card expiring? I think it was a hundred bucks I prepaid and I've used maybe six classes out of ten. If it expires end of May I'm losing money. Either I burn the rest in the next, what, four days, or I see if they roll it over. Email them, see if there's a grace period. Polite.",
+      "expected_intent": "Draft a polite email to Hot Eight asking whether the unused 4 classes on the prepaid punch card can be rolled over past the end-of-May expiration. Calendar four classes in the next four days as a fallback if no grace period.",
+      "expected_memory_used": ["place_hot_eight_yoga", "fact_hot_eight_punch_card_4_left", "constraint_punch_card_expires_end_may"]
+    },
+    {
+      "id": "T14",
+      "category": "follow_up",
+      "difficulty": 4,
+      "raw": "The lawyer thing. Jordan said they'd send the markup by end of day yesterday and I haven't seen anything. Don't bug them yet, they're usually a day late and it's not the end of the world, but if it's not here by lunch tomorrow we have a problem because Maya needs at least two days to comment before we send it back to Acme's side. So set a quiet check, lunch tomorrow, and if it's still missing, then a nudge.",
+      "expected_intent": "Set a quiet check for tomorrow at lunch. If Jordan's markup of the Acme contract has not arrived by then, send a polite WhatsApp nudge. Do not nudge before that. Maya needs at least two days with the markup before returning to Acme.",
+      "expected_memory_used": ["person_jordan_legal", "person_maya_ops", "project_acme_deal", "constraint_maya_2day_review_window", "preference_whatsapp_over_sms", "trait_jordan_usually_late_one_day"]
+    },
+    {
+      "id": "T15",
+      "category": "follow_up",
+      "difficulty": 5,
+      "raw": "Sam asked, very offhand, whether I'd talked to the photographer yet about the rehearsal dinner shots, the extra hour. I said yeah, I think so, but actually I'm not sure I did. I have a feeling I started an email and didn't send it. If there's a draft, fine, kick it back to me. If there isn't, just remind me, don't surprise me with anything, this one I want to write myself because the photographer's a family friend.",
+      "expected_intent": "Search Gmail drafts for an unsent message to the wedding photographer about an extra hour at the rehearsal dinner. If a draft exists, surface it to the user for completion. If none exists, set a reminder for the user to write the message themselves, do not auto-draft (photographer is a family friend).",
+      "expected_memory_used": ["person_sam_brother", "event_sam_wedding", "fact_wedding_photographer_family_friend", "preference_user_writes_personal_himself"]
+    },
+    {
+      "id": "T16",
+      "category": "ambient_deferred",
+      "difficulty": 1,
+      "raw": "Ha, that podcast was actually pretty good, the one about the supply chain stuff. The episode where they had the woman from the chip fab. I should send that to Marcus, he was complaining about not understanding why margins were soft last quarter and this thing actually explains the upstream cost stuff better than any of the analyst notes did. Not now, later, when I'm at the desk and I can find a clean link. Just keep a note. And don't summarize it for him, he hates pre-chewed stuff, just the link.",
+      "expected_intent": "Capture a deferred task: share the supply-chain podcast episode (with the chip-fab guest) with Marcus next time the user is at their desk, framed in the context of Q-prior margin softness. Do not act now.",
+      "expected_memory_used": ["person_marcus_finance", "project_q_prior_margin_softness", "preference_act_at_desk"]
+    },
+    {
+      "id": "T17",
+      "category": "ambient_deferred",
+      "difficulty": 2,
+      "raw": "Hah, that meme Maya sent, the cat on the keyboard one, I keep meaning to send her the other one she'd love, the dog with the laptop. It's in my downloads I think, or maybe screenshots, one of those. Not urgent, obviously, but next time we're in WhatsApp anyway, like next time I'm replying to her about something real, just remind me to slip it in. Definitely don't make it weird and send it on its own, that would be weird. And don't pick a different meme, this specific one, the dog laptop one.",
+      "expected_intent": "Capture a deferred low-priority reminder: queue the 'dog with the laptop' image (in the user's Downloads folder) to be sent to Maya the next time the user opens a WhatsApp thread with her. Do not initiate a standalone send.",
+      "expected_memory_used": ["person_maya_ops", "preference_whatsapp_over_sms", "preference_no_standalone_meme_send"]
+    },
+    {
+      "id": "T18",
+      "category": "ambient_deferred",
+      "difficulty": 3,
+      "raw": "You know what I keep half-noticing, the laptop fan's been spinning up way more than it used to, like even when I'm not doing anything heavy, just email. It might be that backup thing running, or it might be something worse. I don't want to deal with it now but at some point this weekend if I'm bored I should poke at it. Quiet note, weekend, don't bug me about it during the week.",
+      "expected_intent": "Capture a low-priority weekend task: investigate elevated laptop fan activity (possibly the backup process, possibly something worse). Do not surface during the work week. Surface only on Saturday or Sunday.",
+      "expected_memory_used": ["preference_no_personal_tasks_during_workweek", "preference_weekend_chore_queue"]
+    },
+    {
+      "id": "T19",
+      "category": "ambient_deferred",
+      "difficulty": 4,
+      "raw": "Mom mentioned, like, very lightly, that Dad's birthday is coming up and she doesn't want a big thing this year because of how last year went. Read the room, don't plan a dinner. But I do want to get him something, the book he was talking about, the one about the Apollo program, the new one, came out maybe a month ago. Order it, hardback if there is one, send it to their place not mine. Don't put a card, mom will handle the card.",
+      "expected_intent": "Identify the recent Apollo program book (released roughly a month ago) Dad mentioned. Order the hardback edition. Ship to the parents' address, not the user's. Do not include a card (mom is handling the card). Do not plan a dinner or birthday gathering.",
+      "expected_memory_used": ["person_dad", "person_mom", "event_dad_birthday_approaching", "address_parents_shipping_default", "constraint_no_birthday_dinner_this_year", "fact_dad_apollo_book_interest"]
+    },
+    {
+      "id": "T20",
+      "category": "ambient_deferred",
+      "difficulty": 5,
+      "raw": "Yeah I caught myself again, the thing I do where I open Twitter at like ten p.m. and lose an hour. I don't even enjoy it. I want to try the thing Priya told me about, the screen time lock thing, where after ten the apps just don't open. Not a hard commitment yet, just, can you queue up a little nudge in a couple of days, end of the week maybe, asking me if I actually want to do it. If I say yes then walk me through it. If I say no, drop it, don't ask again.",
+      "expected_intent": "Schedule a single low-friction check-in reminder for end of this week (Friday evening) asking the user whether they want to enable the Screen Time after-10pm app lock that Priya recommended. If user confirms, walk through enabling. If user declines, mark the topic 'do not raise again'. Take no action now.",
+      "expected_memory_used": ["person_priya_designer", "fact_priya_recommended_screen_time_lock", "preference_low_friction_habit_nudges", "preference_one_strike_dropped"]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly identified that the Jira surface was not verifiable (user on Atlassian login page, not signed in) and paused with a service-specific confirm card naming Jira, satisfying the D16 competent-pause standard. All moments passed: audio upload and ASR were successful, the installed user-device engine and real Chrome were used, and no broken or missing script surfaces occurred.",
+  "specific_failures": [],
+  "verb_category": "code_or_terminal_run_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the user navigated to anticipy.ai/app and the installed engine is running as /Applications/Anticipy.app/.../anticipy-engine, confirming the public product path and onboarding."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The surface proof captured the Atlassian login page, indicating the precheck correctly identified that the user was not signed into Jira."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The trace includes an audio upload via /api/listen/upload and the transcript quality shows the ASR correctly transcribed the spoken instruction with low WER (0.023)."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine's normalized input shows the transcript contains the Jira issue key ANL-114 and actionable phrases, so the boundary check passed."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine chose to pause with a confirm card (outcome=ASKING, blocked_services=['Jira']), which is an acceptable ask outcome per the script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The driver observed that only the audio upload input mode was used, meeting the script's secondary-only requirement."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine paused with a confirm card naming Jira (blocked_services=['Jira']) after detecting the user was not signed in, and no third-party surface change occurred. The diff shows a changed Anticipy surface and broken_script_surfaces is empty."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T17:08:32Z"
+}

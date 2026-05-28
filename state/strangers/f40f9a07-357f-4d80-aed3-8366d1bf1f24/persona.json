@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "f40f9a07-357f-4d80-aed3-8366d1bf1f24",
+  "created_at": "2025-04-10T14:22:00Z",
+  "name": "Claudia Espinoza",
+  "age": 41,
+  "occupation": "Senior Product Marketing Manager",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 8,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion CRM for deal tracking and account research",
+  "primary_real_surface": {
+    "surface": "Notion (signed-in Chrome profile)",
+    "chrome_requirement": "default signed-in profile with Notion workspace open",
+    "acceptable_state": "Notion workspace showing a CRM database view, with at least one deal record expanded"
+  },
+  "daily_tools": [
+    "Slack",
+    "Notion",
+    "Zoom",
+    "HubSpot",
+    "Google Docs"
+  ],
+  "contacts": [
+    {
+      "name": "Raj Patel",
+      "relationship": "colleague",
+      "context": "VP of Sales; collaborates on deal tracking and account prioritization in shared Notion CRM"
+    },
+    {
+      "name": "Leona Kim",
+      "relationship": "direct report",
+      "context": "Marketing Coordinator; helps maintain Notion CRM records and research competitor accounts"
+    },
+    {
+      "name": "Marcus Webb",
+      "relationship": "external partner",
+      "context": "Freelance market researcher; provides summaries for accounts in Notion CRM pipeline"
+    }
+  ]
+}

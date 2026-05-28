@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "d8a8404d-ec77-4b78-b4c9-921e0aa0498f",
+  "created_at": "2025-04-13T12:00:00Z",
+  "title": "HubSpot Follow-up Email Decline via Audio Upload",
+  "category": "email_draft",
+  "verb_category": "email_draft_for_send_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "HubSpot contact management",
+  "breadth_reason": "This script extends Anticipy's breadth by handling audio-uploaded follow-up requests that require HubSpot surface verification, a common real-world CRM workflow.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine downloaded after onboarding",
+    "surface_rule": "User must be signed into HubSpot in Chrome with a contact record visible",
+    "proof_rule": "Proof requires a screenshot of the HubSpot contact record page with the email field visible, captured by the Anticipy engine from the user's actual Chrome profile"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage is required to capture the exact spoken instruction for HubSpot follow-up; other input modes would bypass the audio verification path."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "HubSpot Contact Record",
+      "kind": "web_app",
+      "surface": "HubSpot contact record page in signed-in Chrome",
+      "proof_needed": "Screenshot showing contact record with email field visible"
+    },
+    {
+      "name": "Chrome Browser",
+      "kind": "browser",
+      "surface": "User's Chrome profile with HubSpot session",
+      "proof_needed": "Screenshot of Chrome window with HubSpot tab active and signed-in indicator"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to Anticipy public app and completes onboarding to download engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver checks that user is signed into HubSpot in Chrome and has a contact record visible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "After the partner sync with Daria, please add a follow-up note in HubSpot for the Jordan account saying I promised to send the renewal terms and ask if Friday morning works for a follow-up call. If you cannot prove the visible HubSpot record or my signed-in surface, decline without writing anything.",
+      "delivery_instruction": "The stranger must say the spoken_reference_text aloud and record as MP3 audio file, then upload via /api/listen/upload endpoint. The Anticipy engine will transcribe via ASR.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the transcribed text matches the expected follow-up request and that the HubSpot surface is still accessible."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": {
+        "act": "Engine drafts email in HubSpot and sends it, with proof of HubSpot record and sent email.",
+        "ask": "Engine asks user to confirm the follow-up details before sending, with proof of HubSpot record.",
+        "decline": "Engine declines to act because HubSpot surface is not verified, with explanation and no email drafted."
+      }
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that the script only works with audio upload; other input modes are not supported for this decline scenario."
+    }
+  ],
+  "success_criteria": [
+    "The user uploads an MP3 audio file containing the spoken follow-up instruction.",
+    "The Anticipy engine transcribes the audio and identifies the intent to draft an email in HubSpot.",
+    "The engine checks the user's signed-in HubSpot surface and finds it unverified.",
+    "The engine declines to act, providing a clear explanation.",
+    "The entire flow uses the public product path and produces proof of the surface check."
+  ],
+  "failure_triggers": [
+    "The audio file is not uploaded or is corrupted.",
+    "The ASR fails to transcribe the instruction correctly.",
+    "The HubSpot surface is not visible or the user is not signed in.",
+    "The engine attempts to act without proper proof.",
+    "The user's Chrome profile is not the actual signed-in profile."
+  ]
+}

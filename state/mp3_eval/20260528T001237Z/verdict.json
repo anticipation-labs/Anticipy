@@ -1,0 +1,54 @@
+{
+  "pass": false,
+  "overall_grade": "C",
+  "reasoning": "The engine did catch several important items: the application mention at ~00:44:04 with engine action mp3-eval-23, the French homework/assessment cluster at ~01:12-01:13 with mp3-eval-38, the math criteria D due date at ~02:01-02:02 with mp3-eval-63/mp3-eval-64, and the Hildebrand follow-up at ~03:09:24 with mp3-eval-98. However, it missed clear communication/homework/deadline moments at ~00:32:45, ~02:30:58, and ~03:46:17, so I do not think it reaches the 70% bar on this real-day transcript. It also over-acted on the fragment at ~00:54:57 with mp3-eval-28, treating incomplete hallway chatter as an ambiguous follow-up request. No high-impact fabricated email draft was produced, but the combination of misses and one hallucinated/low-quality intent fails the rubric.",
+  "specific_misses": [
+    {
+      "timestamp": "~00:32:45",
+      "what_user_said": "Wait, send me your socials. You have to see it has to be. Yeah, because I need two examples for it to make a good one. That's why I want Diego's too.",
+      "what_engine_should_have_done": "Surface a confirm/clarify card for a communication or follow-up to get the socials examples, asking who to message and what exactly to request.",
+      "what_engine_actually_did": "No corresponding action appears in engine_output.json."
+    },
+    {
+      "timestamp": "~02:30:58",
+      "what_user_said": "Hey, we've got some homework to do. Here we go, everybody. Pyramid, spheres and keys.",
+      "what_engine_should_have_done": "Surface a low-risk homework reminder or clarify card for the math homework on pyramids, spheres, and cones.",
+      "what_engine_actually_did": "No corresponding action appears between the math due-date actions mp3-eval-63/mp3-eval-64 and the later Hildebrand action mp3-eval-98."
+    },
+    {
+      "timestamp": "~03:46:17",
+      "what_user_said": "So I need first criteria to be my Saturday morning. Okay. Wait, like this Saturday or next Saturday? Like what about Saturday night? Saturday night. Saturday morning. Oh, no, I'm marking them.",
+      "what_engine_should_have_done": "Surface a clarify card for the science lab criterion deadline, because the due time/date was actionable but ambiguous.",
+      "what_engine_actually_did": "No corresponding action appears for the end-of-transcript lab deadline/instructions."
+    }
+  ],
+  "specific_wins": [
+    {
+      "timestamp": "~00:44:04",
+      "what_user_said": "Yo, oh my, I gotta apply for three rooms. I started at five hours and answered, yeah, and it says I have a couple of features in this email.",
+      "what_engine_did_correctly": "engine_output.json action mp3-eval-23 deferred with a clarify question, missing_slots for surface/application_target, risk_tier 3, and confirm_card_id clarify-4a534676258c."
+    },
+    {
+      "timestamp": "~01:12:13",
+      "what_user_said": "Uh for homework, you will have to write those two documents that you started writing. The two documents, one is a formal email, one formally mail example.",
+      "what_engine_did_correctly": "engine_output.json action mp3-eval-38 surfaced a school_homework_reminder confirm card rather than silently creating a task."
+    },
+    {
+      "timestamp": "~02:01:40",
+      "what_user_said": "Tomorrow's assessment is your criteria D. It will be due next Thursday, and I'll have the marked to you by Friday.",
+      "what_engine_did_correctly": "engine_output.json actions mp3-eval-63 and mp3-eval-64 surfaced confirm cards for the assessment and due date."
+    },
+    {
+      "timestamp": "~03:09:24",
+      "what_user_said": "I'm gonna go talk to Mr. Hildebrand, because I can probably push it to a seven or a six at least.",
+      "what_engine_did_correctly": "engine_output.json action mp3-eval-98 correctly proposed a low-risk follow-up reminder for Mr. Hildebrand."
+    }
+  ],
+  "hallucinations": [
+    {
+      "engine_action_id": "mp3-eval-28",
+      "what_engine_thought_user_said": "The engine treated this as an actionable ambiguous_followup_request and asked, 'Who should I ask, and what should I ask them?'",
+      "actual_transcript_segment": "Who? I have to ask her to even. What? Who? Who? What? When? Where why? Oh my god. Miss Roy. Diego and either."
+    }
+  ]
+}

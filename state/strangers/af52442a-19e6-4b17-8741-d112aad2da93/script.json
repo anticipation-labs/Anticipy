@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "af52442a-19e6-4b17-8741-d112aad2da93",
+  "created_at": "2025-04-05T12:00:00Z",
+  "title": "Add Notion recipe record from uploaded audio",
+  "category": "notion_recipe_upload",
+  "verb_category": "recipe_or_meal_plan_act",
+  "hard_category": "crm",
+  "hard_category_focus": "Notion-based client management for meal planning",
+  "breadth_reason": "Extends breadth by testing the full public product path for an uploaded audio ASR request that requires a real signed-in Notion surface to act, with a decline fallback if the surface is unverifiable.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on Carlos's computer",
+    "surface_rule": "Must use Carlos's real signed-in Chrome profile with Notion workspace open and visible",
+    "proof_rule": "Proof must include a fresh screen capture of the Notion page showing the new record, timestamped and tied to the public build"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "This script tests uploaded audio ASR coverage for a recipe addition request, ensuring the engine processes a user-uploaded mp3 file rather than relying on live mic or pasted transcript."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Notion Recipes database",
+      "kind": "web_app",
+      "surface": "Notion page with client meal plan records open in signed-in Chrome",
+      "proof_needed": "Visible signed-in Notion workspace showing the Recipes database"
+    },
+    {
+      "name": "Chrome browser profile",
+      "kind": "browser",
+      "surface": "User's signed-in Chrome profile with Notion tab active",
+      "proof_needed": "Chrome window with user's avatar and Notion tab visible"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "Driver starts at https://www.anticipy.ai/app, signs in, completes onboarding, downloads the public installer, installs the engine on Carlos's computer, and grants normal permissions."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that Carlos's signed-in Chrome profile is active and that a Notion workspace with the Recipes database is open and visible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a new record to my Notion Recipes database for the miso eggplant Avery sent me and tag it weeknight. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "The stranger records an mp3 audio file of the spoken reference text and uploads it via /api/listen/upload. The engine must process this uploaded audio for ASR each run.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the ASR output matches the spoken reference text and that the audio was uploaded (not live mic or pasted)."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: Engine adds a new record to the Notion Recipes database with name 'Miso Eggplant', source 'Avery', and tag 'weeknight', then provides proof of the new record in the visible Notion surface.",
+        "ask: Engine asks the user to confirm the Notion surface is correct before proceeding.",
+        "decline: Engine declines because the Notion surface is not verifiably signed-in or visible, and does not write anything."
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that the secondary input modes (transcript paste, live mic) are not used and that the uploaded audio path is the only primary input mode."
+    }
+  ],
+  "success_criteria": [
+    "Engine processes the uploaded mp3 audio file via /api/listen/upload and produces an accurate ASR transcript matching the spoken reference text.",
+    "Engine verifies that Carlos's signed-in Chrome profile has the Notion Recipes database open and visible.",
+    "Engine adds a new record to the Notion Recipes database with the correct fields (name: Miso Eggplant, source: Avery, tag: weeknight).",
+    "Engine provides a fresh screen capture of the Notion page showing the new record as proof, timestamped and tied to the public build.",
+    "If the Notion surface is not verifiable, engine declines without writing any data."
+  ],
+  "failure_triggers": [
+    "Engine uses a transcript paste or live mic instead of processing the uploaded audio file.",
+    "Engine attempts to act on a cloned or non-signed-in Chrome profile.",
+    "Engine creates a record without verifying the Notion surface is visible and signed-in.",
+    "Engine provides stale or fixture-based proof instead of a fresh screen capture.",
+    "Engine writes data to Notion when the surface is not verifiable (should have declined)."
+  ]
+}

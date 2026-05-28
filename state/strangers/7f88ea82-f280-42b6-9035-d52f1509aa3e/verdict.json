@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly declined to act on Notion because the surface proof showed a Notion login page rather than a signed-in workspace, satisfying the script's instruction to decline if the surface is not provable. The decline is service-specific (names Notion), the installed engine is the public user-device engine, real Chrome was used without clones, and no broken script surfaces exist. The missing script surface (Notion) is excused by the competent D16 decline.",
+  "specific_failures": [],
+  "verb_category": "web_research_summarize_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the user accessed https://www.anticipy.ai/app and the installed engine is the public user-device engine at /Applications/Anticipy.app/Contents/MacOS/anticipy-engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The surface proof shows real Chrome was used (no clone, no hidden browser) and the engine attempted to verify the Notion surface, which was found to be a login page."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The transcript_quality evidence confirms audio was uploaded via /api/listen/upload, source_mode is audio_upload, and the hypothesis closely matches the reference text with a WER of 0.0476."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine did not write to any third-party surface; the only changed surface is the Anticipy decline card, and the Notion surface remained unchanged (login page)."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine declined with a service-specific proposal naming Notion, citing inability to prove the visible signed-in workspace, which matches the acceptable decline outcome."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The primary input mode was uploaded audio as required; no secondary-only input mode was used."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine declined because the Notion surface was a login page (not signed-in), the decline log names Notion specifically, the Anticipy decline card changed, and no third-party surface was modified."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:04:35Z"
+}

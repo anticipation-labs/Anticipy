@@ -1,0 +1,7 @@
+{
+  "actual": "https://www.anticipy.ai/app",
+  "expected": "url contains /secure",
+  "name": "form_authentication",
+  "passed": false,
+  "primitive_used": "navigate + SE Tab/type/Enter"
+}

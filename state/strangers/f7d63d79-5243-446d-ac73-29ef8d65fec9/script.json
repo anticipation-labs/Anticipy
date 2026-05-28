@@ -1,0 +1,107 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "f7d63d79-5243-446d-ac73-29ef8d65fec9",
+  "created_at": "2025-04-06T14:30:00Z",
+  "title": "Buried Saturday brunch scheduling",
+  "category": "scheduling_ambient",
+  "verb_category": "ambient_buried_intent",
+  "hard_category": "ambient",
+  "hard_category_focus": "Ambient browser and app surface",
+  "breadth_reason": "This script extends breadth by verifying that Anticipy can surface a buried scheduling intent from an uploaded audio file via ASR, rather than requiring a live microphone or text input.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine",
+    "surface_rule": "Must use user's real signed-in Anticipy surface on the same machine where the engine runs.",
+    "proof_rule": "Proof must be captured from the public build's fresh surface render, including visible browser tabs and app windows, with timestamps matching the run."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage is the primary proof path because it allows the engine to process a pre-recorded conversational snippet offline, testing the ASR pipeline without depending on real-time microphone permissions."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Chrome Browser",
+      "kind": "browser",
+      "surface": "macOS Desktop Chrome signed into user's Google account with HubSpot tab open or accessible",
+      "proof_needed": "At least one visible tab showing HubSpot or a fresh screenshot of the Chrome window with the relevant record."
+    },
+    {
+      "name": "Anticipy App",
+      "kind": "application",
+      "surface": "Public Anticipy app window after sign-in and onboarding",
+      "proof_needed": "Visible Anticipy interface with user's dashboard and status indicators."
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "Open the public Anticipy URL, complete sign-in and onboarding, and confirm the downloadable engine is available."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Verify that the user's real signed-in Chrome and Anticipy surfaces are visible and accessible. If not, record the missing surface and do not proceed."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Yeah, the kids were a handful this morning. Oh, before I forget, I really should set up Saturday brunch with Dana at the new place on Hawthorne, she wanted to catch up before her trip. Anyway, please add a follow-up note in HubSpot under the Brunch outreach record so I don't lose track. If you cannot prove the visible HubSpot surface, decline without writing anything.",
+      "delivery_instruction": "Generate a fresh audio file using the 'say' command on macOS, speaking the entire spoken_reference_text at normal pace. Save as an mp3 and upload via /api/listen/upload. Each run must produce a new file to avoid stale-artifact proofs.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "After ASR completes, the engine must check whether the transcribed text contains an actionable intent that matches a known surface (HubSpot). If no surface is provably visible, the engine should prepare a decline."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act",
+        "ask",
+        "decline"
+      ],
+      "description": "The engine must produce one of the three outcomes: act (by adding the note to HubSpot), ask (for clarification or permissions), or decline (if HubSpot surface is not provably visible). The output must include a proof artifact (screenshot or log) showing the decision and its reason."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "After the run, the driver evaluates whether ASR-based audio upload uncovered any surface that would have been invisible to live-mic or paste-only modes. Note any gaps in the script's coverage of alternative input fidelities."
+    }
+  ],
+  "success_criteria": [
+    "The engine successfully processes the uploaded audio and transcribes the spoken reference text with acceptable accuracy.",
+    "The engine identifies the buried scheduling intent and either acts on the HubSpot surface (if visible) or correctly declines with a clear reason.",
+    "The corresponding proof (screenshot, log, or API response) is from the real user's signed-in surfaces, not from a mocked or cloned environment.",
+    "The script completes all six moments in order, with no unhandled exceptions or skipped steps.",
+    "The final state confirms that audio upload as primary input fidelity works end-to-end for ambient intent extraction."
+  ],
+  "failure_triggers": [
+    "The uploaded audio file fails to transcribe or returns garbage text.",
+    "The engine attempts to act on a surface that is not provably visible at the time of execution (e.g., stale screenshot or fake HubSpot tab).",
+    "The proof artifact is from a different build or run, violating freshness requirements.",
+    "The real user's Anticipy surface is not available (e.g., no signed-in browser profile), causing the script to abort early.",
+    "The engine chooses 'ask' or 'decline' without providing a human-readable justification tied to the surface state."
+  ]
+}

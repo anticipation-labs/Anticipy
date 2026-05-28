@@ -1,0 +1,6 @@
+[05:39:48] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T053947Z
+[05:39:48] dedicated window id: 1285463315
+[05:39:53] PASS 0 navigate_login :: url=https://www.saucedemo.com/ via BRIDGE /surface-command navigate
+[05:39:57] PASS 0 type_username :: cliclick c+t combo at (720,240) text=standard_user
+[05:39:59] PASS 0 type_password :: cliclick c+t combo at (720,290)
+[05:40:03] FAIL 0 click_login :: expected /inventory.html got https://www.saucedemo.com/

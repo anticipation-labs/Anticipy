@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T05:04:06Z",
+  "hypothesis": "Please create a new record in MyNotion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please create a new record in my Notion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "7f88ea82-f280-42b6-9035-d52f1509aa3e",
+  "transcript_boundary_chars": 256,
+  "transcript_boundary_sha256": "1c514ed1ad68a2bf079a8dda2816d42630a908b9e3b0b98de26cd388bb853cf0",
+  "wer": 0.047619
+}

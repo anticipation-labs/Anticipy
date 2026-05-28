@@ -1,0 +1,8 @@
+[14:45:39] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144539Z
+[14:45:50] juice-shop CDP tab=856921C733472B16367C18F03D388656 url=https://juice-shop.herokuapp.com/
+[14:45:51] PASS step 1 navigate :: url=https://juice-shop.herokuapp.com/ via BRIDGE /surface-command navigate
+[14:45:51] PASS step 1 target_health :: page title='OWASP Juice Shop' url=https://juice-shop.herokuapp.com/
+[14:45:54] PASS step 2 dismiss_banners :: welcome banner + cookie bar dismissed (best-effort)
+[14:45:56] PASS step 3 open_search :: visible text inputs=1 after Open search click
+[14:45:59] PASS step 4 type_apple :: typed 'apple' into search; submitted via Enter
+[14:46:09] FAIL step 5 verify_apple_results :: no apple cards after 8s

@@ -1,0 +1,584 @@
+{
+  "counted_passes_checked": 43,
+  "demoted": [
+    {
+      "demoted_reason": "missing_real_chrome_screenshot_png_bytes",
+      "hard_category": "crm",
+      "stranger_id": "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+      "trace_path": "state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/trace.json",
+      "verb_category": "crm_followup_task_or_note",
+      "verdict_path": "state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/verdict.json"
+    },
+    {
+      "demoted_reason": "missing_real_chrome_screenshot_png_bytes",
+      "hard_category": "e-commerce",
+      "stranger_id": "7d25a993-ad89-4a30-b2f2-2f4badde7cb4",
+      "trace_path": "state/strangers/7d25a993-ad89-4a30-b2f2-2f4badde7cb4/trace.json",
+      "verb_category": "commerce_cart_or_order_prep",
+      "verdict_path": "state/strangers/7d25a993-ad89-4a30-b2f2-2f4badde7cb4/verdict.json"
+    },
+    {
+      "demoted_reason": "missing_real_chrome_screenshot_png_bytes",
+      "hard_category": "canvas",
+      "stranger_id": "8ee08723-ad73-4016-bf0e-fc48f742d78a",
+      "trace_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/trace.json",
+      "verb_category": "canvas_design_edit_or_comment",
+      "verdict_path": "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/verdict.json"
+    }
+  ],
+  "demoted_count": 3,
+  "demoted_uuids": [
+    "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+    "7d25a993-ad89-4a30-b2f2-2f4badde7cb4",
+    "8ee08723-ad73-4016-bf0e-fc48f742d78a"
+  ],
+  "failures": [],
+  "generated_at": "2026-05-28T04:57:07Z",
+  "pass": true,
+  "rows": [
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "00f9b022-ff3d-42a2-bdb9-8d2a5dc93bf1",
+      "trace_path": "state/strangers/00f9b022-ff3d-42a2-bdb9-8d2a5dc93bf1/trace.json",
+      "verb_category": "task_or_todo_add_ack",
+      "verdict_path": "state/strangers/00f9b022-ff3d-42a2-bdb9-8d2a5dc93bf1/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "linear"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "02ecef44-54b9-43a8-9b96-01963d2abb1b",
+      "trace_path": "state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/trace.json",
+      "verb_category": "task_or_todo_add_ack",
+      "verdict_path": "state/strangers/02ecef44-54b9-43a8-9b96-01963d2abb1b/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "1a63650d-0d62-4b2a-b533-56e2716f1991",
+      "trace_path": "state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/trace.json",
+      "verb_category": "health_or_workout_log_ack",
+      "verdict_path": "state/strangers/1a63650d-0d62-4b2a-b533-56e2716f1991/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "browser"
+      ],
+      "failures": [],
+      "hard_category": "e-commerce",
+      "pass": true,
+      "stranger_id": "1beade1d-0317-449c-8144-7dd8eb615e22",
+      "trace_path": "state/strangers/1beade1d-0317-449c-8144-7dd8eb615e22/trace.json",
+      "verb_category": "travel_research_compare_decline",
+      "verdict_path": "state/strangers/1beade1d-0317-449c-8144-7dd8eb615e22/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "e-commerce",
+      "pass": true,
+      "stranger_id": "207da1c8-64ee-4fbd-90c8-841cebbbe5ca",
+      "trace_path": "state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/trace.json",
+      "verb_category": "shopify_admin_reply_decline",
+      "verdict_path": "state/strangers/207da1c8-64ee-4fbd-90c8-841cebbbe5ca/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "linear"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "20d770b4-147b-436c-a5b1-44d6b1260a16",
+      "trace_path": "state/strangers/20d770b4-147b-436c-a5b1-44d6b1260a16/trace.json",
+      "verb_category": "task_or_todo_add_ack",
+      "verdict_path": "state/strangers/20d770b4-147b-436c-a5b1-44d6b1260a16/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "24f86230-fc4c-42a5-a611-11ef7bcc0d64",
+      "trace_path": "state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/trace.json",
+      "verb_category": "email_draft_for_send_decline",
+      "verdict_path": "state/strangers/24f86230-fc4c-42a5-a611-11ef7bcc0d64/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "2b937a50-a9d9-492d-8cd9-96f3f547a6d1",
+      "trace_path": "state/strangers/2b937a50-a9d9-492d-8cd9-96f3f547a6d1/trace.json",
+      "verb_category": "expense_or_budget_track_decline",
+      "verdict_path": "state/strangers/2b937a50-a9d9-492d-8cd9-96f3f547a6d1/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "commerce"
+      ],
+      "failures": [],
+      "hard_category": "e-commerce",
+      "pass": true,
+      "stranger_id": "34e9e417-460b-4146-80fb-d3c6b4d0f822",
+      "trace_path": "state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/trace.json",
+      "verb_category": "amazon_order_refund_decline",
+      "verdict_path": "state/strangers/34e9e417-460b-4146-80fb-d3c6b4d0f822/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "notion"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "3bba461d-3189-4b8a-919f-191aa66803d5",
+      "trace_path": "state/strangers/3bba461d-3189-4b8a-919f-191aa66803d5/trace.json",
+      "verb_category": "recipe_or_meal_plan_act",
+      "verdict_path": "state/strangers/3bba461d-3189-4b8a-919f-191aa66803d5/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "linear"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "430e0381-972e-4992-91b4-8804406d8581",
+      "trace_path": "state/strangers/430e0381-972e-4992-91b4-8804406d8581/trace.json",
+      "verb_category": "task_or_todo_add_ack",
+      "verdict_path": "state/strangers/430e0381-972e-4992-91b4-8804406d8581/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "448115a2-5e97-4e5b-b7ad-adf819724a8b",
+      "trace_path": "state/strangers/448115a2-5e97-4e5b-b7ad-adf819724a8b/trace.json",
+      "verb_category": "email_draft_for_send_decline",
+      "verdict_path": "state/strangers/448115a2-5e97-4e5b-b7ad-adf819724a8b/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "native",
+      "pass": true,
+      "stranger_id": "5bd1d73b-a1b8-4350-bb34-8fa4d676a098",
+      "trace_path": "state/strangers/5bd1d73b-a1b8-4350-bb34-8fa4d676a098/trace.json",
+      "verb_category": "calendar_event_create_clarify",
+      "verdict_path": "state/strangers/5bd1d73b-a1b8-4350-bb34-8fa4d676a098/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "5bfc3483-4200-4921-ac2a-2ad4939b686f",
+      "trace_path": "state/strangers/5bfc3483-4200-4921-ac2a-2ad4939b686f/trace.json",
+      "verb_category": "news_or_message_summary_decline",
+      "verdict_path": "state/strangers/5bfc3483-4200-4921-ac2a-2ad4939b686f/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "5d2cce7a-e856-4aa3-8197-3d3f62782355",
+      "trace_path": "state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/trace.json",
+      "verb_category": "news_or_message_summary_decline",
+      "verdict_path": "state/strangers/5d2cce7a-e856-4aa3-8197-3d3f62782355/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "commerce"
+      ],
+      "failures": [],
+      "hard_category": "e-commerce",
+      "pass": true,
+      "stranger_id": "7a240edb-4141-452b-97db-4931ddeaaa2d",
+      "trace_path": "state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/trace.json",
+      "verb_category": "purchase_lookup_decline",
+      "verdict_path": "state/strangers/7a240edb-4141-452b-97db-4931ddeaaa2d/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "notion"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "7f88ea82-f280-42b6-9035-d52f1509aa3e",
+      "trace_path": "state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/trace.json",
+      "verb_category": "web_research_summarize_decline",
+      "verdict_path": "state/strangers/7f88ea82-f280-42b6-9035-d52f1509aa3e/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "browser",
+        "native_ax"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "8afcd693-1511-4c6c-8f15-1f42dba102bb",
+      "trace_path": "state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/trace.json",
+      "verb_category": "airtable_record_edit_decline",
+      "verdict_path": "state/strangers/8afcd693-1511-4c6c-8f15-1f42dba102bb/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "8b200433-7bdc-4a77-88ff-a53ca7ca32d5",
+      "trace_path": "state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/trace.json",
+      "verb_category": "phone_text_message_draft_decline",
+      "verdict_path": "state/strangers/8b200433-7bdc-4a77-88ff-a53ca7ca32d5/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "90b69e54-8ad6-4225-ae1e-a699e480f2ce",
+      "trace_path": "state/strangers/90b69e54-8ad6-4225-ae1e-a699e480f2ce/trace.json",
+      "verb_category": "recipe_or_meal_plan_act",
+      "verdict_path": "state/strangers/90b69e54-8ad6-4225-ae1e-a699e480f2ce/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "canvas_design"
+      ],
+      "failures": [],
+      "hard_category": "canvas",
+      "pass": true,
+      "stranger_id": "9b33f731-e484-4ade-9c68-1655149f9731",
+      "trace_path": "state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/trace.json",
+      "verb_category": "canvas_design_edit_decline",
+      "verdict_path": "state/strangers/9b33f731-e484-4ade-9c68-1655149f9731/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "9ba71637-36bb-4b73-9c3f-1c6e1ec48c5f",
+      "trace_path": "state/strangers/9ba71637-36bb-4b73-9c3f-1c6e1ec48c5f/trace.json",
+      "verb_category": "recipe_or_meal_plan_act",
+      "verdict_path": "state/strangers/9ba71637-36bb-4b73-9c3f-1c6e1ec48c5f/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "9efa2d39-c41a-4c87-94d9-9343e7a4bde2",
+      "trace_path": "state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/trace.json",
+      "verb_category": "salesforce_lead_log_decline",
+      "verdict_path": "state/strangers/9efa2d39-c41a-4c87-94d9-9343e7a4bde2/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "a1307179-eabe-4765-b825-ca15432db527",
+      "trace_path": "state/strangers/a1307179-eabe-4765-b825-ca15432db527/trace.json",
+      "verb_category": "health_or_workout_log_ack",
+      "verdict_path": "state/strangers/a1307179-eabe-4765-b825-ca15432db527/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "notion"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "a6f9bb1f-d3b5-4f12-8bf9-1cf8d2e71500",
+      "trace_path": "state/strangers/a6f9bb1f-d3b5-4f12-8bf9-1cf8d2e71500/trace.json",
+      "verb_category": "web_research_summarize_decline",
+      "verdict_path": "state/strangers/a6f9bb1f-d3b5-4f12-8bf9-1cf8d2e71500/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "af52442a-19e6-4b17-8741-d112aad2da93",
+      "trace_path": "state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/trace.json",
+      "verb_category": "recipe_or_meal_plan_act",
+      "verdict_path": "state/strangers/af52442a-19e6-4b17-8741-d112aad2da93/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "browser"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "b501f884-3db0-4434-88aa-eeeb8aa66cb2",
+      "trace_path": "state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/trace.json",
+      "verb_category": "code_or_terminal_run_decline",
+      "verdict_path": "state/strangers/b501f884-3db0-4434-88aa-eeeb8aa66cb2/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "browser"
+      ],
+      "failures": [],
+      "hard_category": "e-commerce",
+      "pass": true,
+      "stranger_id": "b7ba64e9-4048-43b9-8582-34e2e8be1645",
+      "trace_path": "state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/trace.json",
+      "verb_category": "travel_research_compare_decline",
+      "verdict_path": "state/strangers/b7ba64e9-4048-43b9-8582-34e2e8be1645/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "notion"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "b91091ff-777c-41b8-8819-3f336a7766fc",
+      "trace_path": "state/strangers/b91091ff-777c-41b8-8819-3f336a7766fc/trace.json",
+      "verb_category": "notes_or_memo_create_act",
+      "verdict_path": "state/strangers/b91091ff-777c-41b8-8819-3f336a7766fc/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "ba605816-fee2-4c6d-9087-a21a0e59b24c",
+      "trace_path": "state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/trace.json",
+      "verb_category": "email_draft_for_send_decline",
+      "verdict_path": "state/strangers/ba605816-fee2-4c6d-9087-a21a0e59b24c/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "browser"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "bb5a7022-a906-408f-9483-d09d99946a25",
+      "trace_path": "state/strangers/bb5a7022-a906-408f-9483-d09d99946a25/trace.json",
+      "verb_category": "phone_text_message_draft_decline",
+      "verdict_path": "state/strangers/bb5a7022-a906-408f-9483-d09d99946a25/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "linear"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "bb829f6c-f974-4ada-ac40-5a81b633db9b",
+      "trace_path": "state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/trace.json",
+      "verb_category": "task_or_todo_add_ack",
+      "verdict_path": "state/strangers/bb829f6c-f974-4ada-ac40-5a81b633db9b/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "notion"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "bfc1ff3d-ea4d-4111-8225-e2dfdc4c0c23",
+      "trace_path": "state/strangers/bfc1ff3d-ea4d-4111-8225-e2dfdc4c0c23/trace.json",
+      "verb_category": "notes_or_memo_create_act",
+      "verdict_path": "state/strangers/bfc1ff3d-ea4d-4111-8225-e2dfdc4c0c23/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "linear"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "cc99d0b1-6bcf-41a7-81f6-00ae0672cb29",
+      "trace_path": "state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/trace.json",
+      "verb_category": "task_or_todo_add_ack",
+      "verdict_path": "state/strangers/cc99d0b1-6bcf-41a7-81f6-00ae0672cb29/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "ccb50a84-1b2c-4be3-a641-63e21618cdee",
+      "trace_path": "state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/trace.json",
+      "verb_category": "expense_or_budget_track_decline",
+      "verdict_path": "state/strangers/ccb50a84-1b2c-4be3-a641-63e21618cdee/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "cd1d8789-6840-470a-9b92-1ad8fa7c20f1",
+      "trace_path": "state/strangers/cd1d8789-6840-470a-9b92-1ad8fa7c20f1/trace.json",
+      "verb_category": "email_draft_for_send_decline",
+      "verdict_path": "state/strangers/cd1d8789-6840-470a-9b92-1ad8fa7c20f1/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "d8a8404d-ec77-4b78-b4c9-921e0aa0498f",
+      "trace_path": "state/strangers/d8a8404d-ec77-4b78-b4c9-921e0aa0498f/trace.json",
+      "verb_category": "email_draft_for_send_decline",
+      "verdict_path": "state/strangers/d8a8404d-ec77-4b78-b4c9-921e0aa0498f/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "browser"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "e68135df-cfa3-4b20-9aa4-5206bc5a3786",
+      "trace_path": "state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/trace.json",
+      "verb_category": "expense_or_budget_track_decline",
+      "verdict_path": "state/strangers/e68135df-cfa3-4b20-9aa4-5206bc5a3786/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "f15d7af0-aa46-4964-b047-bcc20f261751",
+      "trace_path": "state/strangers/f15d7af0-aa46-4964-b047-bcc20f261751/trace.json",
+      "verb_category": "health_or_workout_log_ack",
+      "verdict_path": "state/strangers/f15d7af0-aa46-4964-b047-bcc20f261751/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "f40f9a07-357f-4d80-aed3-8366d1bf1f24",
+      "trace_path": "state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/trace.json",
+      "verb_category": "web_research_summarize_decline",
+      "verdict_path": "state/strangers/f40f9a07-357f-4d80-aed3-8366d1bf1f24/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy"
+      ],
+      "failures": [],
+      "hard_category": "crm",
+      "pass": true,
+      "stranger_id": "f63deb0f-e6e7-4bf1-adf6-aca3e3866bd2",
+      "trace_path": "state/strangers/f63deb0f-e6e7-4bf1-adf6-aca3e3866bd2/trace.json",
+      "verb_category": "notes_or_memo_create_act",
+      "verdict_path": "state/strangers/f63deb0f-e6e7-4bf1-adf6-aca3e3866bd2/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "crm"
+      ],
+      "failures": [],
+      "hard_category": "ambient",
+      "pass": true,
+      "stranger_id": "f7d63d79-5243-446d-ac73-29ef8d65fec9",
+      "trace_path": "state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/trace.json",
+      "verb_category": "ambient_buried_intent",
+      "verdict_path": "state/strangers/f7d63d79-5243-446d-ac73-29ef8d65fec9/verdict.json"
+    },
+    {
+      "changed_surfaces": [
+        "anticipy",
+        "commerce"
+      ],
+      "failures": [],
+      "hard_category": "e-commerce",
+      "pass": true,
+      "stranger_id": "f80c86c5-91ec-4c6d-b26d-86a6c79c811a",
+      "trace_path": "state/strangers/f80c86c5-91ec-4c6d-b26d-86a6c79c811a/trace.json",
+      "verb_category": "purchase_lookup_decline",
+      "verdict_path": "state/strangers/f80c86c5-91ec-4c6d-b26d-86a6c79c811a/verdict.json"
+    }
+  ],
+  "schema": "anticipy.v7.no_fake_receipts"
+}

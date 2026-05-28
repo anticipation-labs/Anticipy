@@ -1,0 +1,7 @@
+{
+  "name": "type_username",
+  "ok": true,
+  "detail": "cliclick c+t combo at (720,240) text=standard_user",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T053947Z/step-01-type_username.png",
+  "receipt": "click+type fallback"
+}

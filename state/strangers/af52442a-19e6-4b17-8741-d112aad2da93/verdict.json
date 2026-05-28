@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine processed uploaded audio with accurate ASR, identified Notion as the target service, and issued a confirm card (ASKING) with blocked_services: Notion and service-specific proposal, satisfying the D16 competent-pause standard. The Notion surface was missing (not signed-in), but the engine correctly declined to act, so the run passes.",
+  "specific_failures": [],
+  "verb_category": "recipe_or_meal_plan_act",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the installed user-device engine at /Applications/Anticipy.app/... and a public extension zip, indicating the driver completed the public product path."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The driver performed surface checks (real Chrome, Notion login page visible), and the engine later correctly identified that the Notion workspace was not signed-in, leading to a competent pause."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The audio was uploaded via /api/listen/upload, transcript matches reference with 0% WER, and the input mode is mp3_upload."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR output matches spoken reference text (WER=0.0), and the audio was uploaded, not live mic or pasted."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine issued a confirm card (ASKING) with blocked_services: Notion and a service-specific proposal, which is an acceptable outcome (ask) per the script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The trace confirms only the uploaded audio path was used; no live mic or paste input was recorded."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine paused with a confirm card (ASKING) naming Notion via blocked_services and proposal; the Notion surface was absent but no broken script surfaces; installed engine and real Chrome are confirmed."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T16:40:19Z"
+}

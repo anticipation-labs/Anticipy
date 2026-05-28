@@ -1,0 +1,805 @@
+diff --git a/src/components/PermissionWalkthrough.tsx b/src/components/PermissionWalkthrough.tsx
+new file mode 100644
+index 0000000..a81ae3f
+--- /dev/null
++++ b/src/components/PermissionWalkthrough.tsx
+@@ -0,0 +1,360 @@
++"use client";
++
++/**
++ * First-launch permission walkthrough modal.
++ *
++ * Rendered above the /app surface when
++ *   GET /api/permissions/first_launch -> {completed: false}
++ *
++ * Walks the user through five macOS permission grants in sequence:
++ *   1. Microphone        (NSMicrophoneUsageDescription)
++ *   2. Accessibility     (NSAccessibilityUsageDescription)
++ *   3. Screen recording  (NSScreenCaptureUsageDescription)
++ *   4. Automation        (NSAppleEventsUsageDescription, 5 sub-prompts)
++ *   5. Notifications     (NSUserNotificationsUsageDescription)
++ *
++ * For each step:
++ *   - Click "Grant" -> POST /api/permissions/request/<kind> (triggers TCC dialog)
++ *   - Status badge updates from /api/permissions/status
++ *   - If denied -> show remediation card with deep link to System Settings
++ *   - Once authorized -> auto-advance to next step
++ *
++ * When all five reach authorized OR user explicitly skips:
++ *   POST /api/permissions/first_launch/complete
++ *   Modal closes for good.
++ *
++ * No em-dashes. Under 300 lines.
++ */
++
++import { useCallback, useEffect, useMemo, useState } from "react";
++
++const LOCAL_ENGINE = "http://127.0.0.1:8731";
++
++type PermStatus =
++  | "not_determined"
++  | "authorized"
++  | "denied"
++  | "restricted"
++  | "provisional"
++  | "ephemeral"
++  | "unavailable"
++  | "not_macos"
++  | "unknown";
++
++type AutomationTarget = "calendar" | "reminders" | "notes" | "messages" | "system_events";
++
++type FullStatus = {
++  microphone: PermStatus;
++  accessibility: PermStatus;
++  screen_recording: PermStatus;
++  automation: Record<AutomationTarget, PermStatus>;
++  notifications: PermStatus;
++};
++
++type StepKind =
++  | "microphone"
++  | "accessibility"
++  | "screen_recording"
++  | "automation"
++  | "notifications";
++
++type Step = {
++  kind: StepKind;
++  title: string;
++  rationale: string;
++  ctaLabel: string;
++};
++
++const STEPS: Step[] = [
++  {
++    kind: "microphone",
++    title: "So Anticipy can hear you.",
++    rationale:
++      "Microphone access lets Anticipy notice the to-dos you mention out loud.",
++    ctaLabel: "Grant microphone",
++  },
++  {
++    kind: "accessibility",
++    title: "So Anticipy can see what you're looking at.",
++    rationale:
++      "Accessibility lets Anticipy read the visible parts of native apps so it can act on what you reference.",
++    ctaLabel: "Grant accessibility",
++  },
++  {
++    kind: "screen_recording",
++    title: "For canvas apps like Figma.",
++    rationale:
++      "Screen recording lets Anticipy capture a frame only when the active app does not expose its text any other way.",
++    ctaLabel: "Grant screen recording",
++  },
++  {
++    kind: "automation",
++    title: "So Anticipy can use Calendar, Reminders, Notes, and Messages.",
++    rationale:
++      "macOS asks once per app. You'll see five quick dialogs in a row. Allow each one.",
++    ctaLabel: "Grant automation",
++  },
++  {
++    kind: "notifications",
++    title: "So Confirm Cards reach you in time.",
++    rationale:
++      "Notifications surface a quiet card a few seconds before any irreversible action so you can cancel without picking up your phone.",
++    ctaLabel: "Grant notifications",
++  },
++];
++
++const AUTOMATION_TARGETS: AutomationTarget[] = [
++  "calendar",
++  "reminders",
++  "notes",
++  "messages",
++  "system_events",
++];
++
++function badgeFor(status: PermStatus): { label: string; tone: "ok" | "warn" | "off" } {
++  if (status === "authorized") return { label: "granted", tone: "ok" };
++  if (status === "denied" || status === "restricted")
++    return { label: "blocked", tone: "warn" };
++  if (status === "not_macos" || status === "unavailable")
++    return { label: "not applicable", tone: "off" };
++  return { label: "pending", tone: "off" };
++}
++
++function isStepDone(kind: StepKind, status: FullStatus): boolean {
++  if (kind === "automation") {
++    return AUTOMATION_TARGETS.every((t) => status.automation[t] === "authorized");
++  }
++  const v = status[kind];
++  return v === "authorized";
++}
++
++function isStepBlocked(kind: StepKind, status: FullStatus): boolean {
++  if (kind === "automation") {
++    return AUTOMATION_TARGETS.some(
++      (t) => status.automation[t] === "denied" || status.automation[t] === "restricted",
++    );
++  }
++  const v = status[kind];
++  return v === "denied" || v === "restricted";
++}
++
++async function pollStatus(): Promise<FullStatus | null> {
++  try {
++    const r = await fetch(`${LOCAL_ENGINE}/api/permissions/status`, {
++      method: "GET",
++      cache: "no-store",
++    });
++    if (!r.ok) return null;
++    const body = await r.json();
++    return body?.status ?? null;
++  } catch {
++    return null;
++  }
++}
++
++async function triggerRequest(kind: string): Promise<PermStatus | null> {
++  try {
++    const r = await fetch(`${LOCAL_ENGINE}/api/permissions/request/${kind}`, {
++      method: "POST",
++    });
++    if (!r.ok) return null;
++    const body = await r.json();
++    return (body?.status as PermStatus) ?? null;
++  } catch {
++    return null;
++  }
++}
++
++async function openSystemSettings(kind: string): Promise<void> {
++  try {
++    const r = await fetch(`${LOCAL_ENGINE}/api/permissions/deeplink/${kind}`);
++    if (!r.ok) return;
++    const body = await r.json();
++    if (body?.url) window.open(body.url, "_self");
++  } catch {
++    /* honest no-op */
++  }
++}
++
++async function markComplete(skipped: boolean, snapshot: FullStatus | null): Promise<void> {
++  try {
++    await fetch(`${LOCAL_ENGINE}/api/permissions/first_launch/complete`, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ skipped, snapshot: snapshot ?? {} }),
++    });
++  } catch {
++    /* honest no-op; next launch re-shows */
++  }
++}
++
++export function PermissionWalkthrough({ onClose }: { onClose: () => void }) {
++  const [stepIdx, setStepIdx] = useState(0);
++  const [status, setStatus] = useState<FullStatus | null>(null);
++  const [busy, setBusy] = useState(false);
++
++  const refresh = useCallback(async () => {
++    const next = await pollStatus();
++    if (next) setStatus(next);
++  }, []);
++
++  useEffect(() => {
++    refresh();
++    const id = setInterval(refresh, 2000);
++    return () => clearInterval(id);
++  }, [refresh]);
++
++  const step = STEPS[stepIdx];
++
++  const advance = useCallback(() => {
++    if (stepIdx < STEPS.length - 1) setStepIdx((i) => i + 1);
++  }, [stepIdx]);
++
++  useEffect(() => {
++    if (!status || !step) return;
++    if (isStepDone(step.kind, status)) advance();
++  }, [status, step, advance]);
++
++  const allDone = useMemo(() => {
++    if (!status) return false;
++    return STEPS.every((s) => isStepDone(s.kind, status));
++  }, [status]);
++
++  const handleGrant = useCallback(async () => {
++    if (!step) return;
++    setBusy(true);
++    try {
++      if (step.kind === "automation") {
++        for (const t of AUTOMATION_TARGETS) {
++          await triggerRequest(`automation_${t}`);
++        }
++      } else {
++        await triggerRequest(step.kind);
++      }
++      await refresh();
++    } finally {
++      setBusy(false);
++    }
++  }, [step, refresh]);
++
++  const handleSkipStep = useCallback(() => advance(), [advance]);
++
++  const handleFinish = useCallback(async (skipped: boolean) => {
++    await markComplete(skipped, status);
++    onClose();
++  }, [status, onClose]);
++
++  if (!step) return null;
++
++  const blocked = status ? isStepBlocked(step.kind, status) : false;
++
++  return (
++    <div
++      role="dialog"
++      aria-modal="true"
++      className="fixed inset-0 z-50 grid place-items-center bg-dark/85 backdrop-blur-md p-6"
++    >
++      <div className="w-full max-w-2xl rounded-3xl border border-cream/10 bg-dark/95 p-10 shadow-2xl">
++        {allDone ? (
++          <section>
++            <h2 className="font-serif text-3xl text-cream">You're all set.</h2>
++            <p className="mt-4 text-cream/70">
++              Anticipy is listening. Talk normally. We'll surface a Confirm Card
++              before anything irreversible.
++            </p>
++            <button
++              onClick={() => handleFinish(false)}
++              className="mt-8 rounded-pill bg-cream px-6 py-3 text-dark hover:bg-gold"
++            >
++              Take me in
++            </button>
++          </section>
++        ) : (
++          <section>
++            <p className="text-[11px] uppercase tracking-[0.22em] text-gold/80">
++              Step {stepIdx + 1} of {STEPS.length}
++            </p>
++            <h2 className="mt-3 font-serif text-3xl text-cream">{step.title}</h2>
++            <p className="mt-4 text-cream/70">{step.rationale}</p>
++
++            <div className="mt-6 grid grid-cols-1 gap-2 rounded-2xl border border-cream/10 p-4 text-sm">
++              {STEPS.map((s) => {
++                const b = status ? badgeFor(
++                  s.kind === "automation"
++                    ? (isStepDone("automation", status)
++                        ? "authorized"
++                        : isStepBlocked("automation", status)
++                          ? "denied"
++                          : "not_determined")
++                    : status[s.kind],
++                ) : { label: "pending", tone: "off" as const };
++                const tone = b.tone === "ok"
++                  ? "text-emerald-300"
++                  : b.tone === "warn" ? "text-amber-300" : "text-cream/40";
++                return (
++                  <div key={s.kind} className="flex items-center justify-between">
++                    <span className="text-cream/80">{s.title.split(".")[0]}.</span>
++                    <span className={`uppercase tracking-wide text-xs ${tone}`}>
++                      {b.label}
++                    </span>
++                  </div>
++                );
++              })}
++            </div>
++
++            <div className="mt-8 flex flex-wrap gap-3">
++              <button
++                onClick={handleGrant}
++                disabled={busy}
++                className="rounded-pill bg-cream px-6 py-3 text-dark hover:bg-gold disabled:opacity-50"
++              >
++                {busy ? "Asking macOS..." : step.ctaLabel}
++              </button>
++              {blocked && (
++                <button
++                  onClick={() => openSystemSettings(step.kind)}
++                  className="rounded-pill border border-cream/30 px-6 py-3 text-cream/90 hover:border-gold"
++                >
++                  Open System Settings
++                </button>
++              )}
++              <button
++                onClick={handleSkipStep}
++                className="rounded-pill px-6 py-3 text-cream/60 hover:text-cream"
++              >
++                Skip for now
++              </button>
++            </div>
++
++            {blocked && (
++              <p className="mt-4 text-xs text-amber-300/90">
++                macOS says this is blocked. Open System Settings, toggle Anticipy
++                on, then come back and click {step.ctaLabel.toLowerCase()} again.
++              </p>
++            )}
++
++            <button
++              onClick={() => handleFinish(true)}
++              className="mt-6 text-xs uppercase tracking-[0.18em] text-cream/40 hover:text-cream/70"
++            >
++              Skip the rest, I'll handle it later
++            </button>
++          </section>
++        )}
++      </div>
++    </div>
++  );
++}
++
++export async function shouldShowWalkthrough(): Promise<boolean> {
++  try {
++    const r = await fetch(`${LOCAL_ENGINE}/api/permissions/first_launch`, {
++      cache: "no-store",
++    });
++    if (!r.ok) return false;
++    const body = await r.json();
++    return body?.completed === false;
++  } catch {
++    return false;
++  }
++}
+diff --git a/engine/app/product/permission_walkthrough.py b/engine/app/product/permission_walkthrough.py
+new file mode 100644
+index 0000000..6f724c0
+--- /dev/null
++++ b/engine/app/product/permission_walkthrough.py
+@@ -0,0 +1,370 @@
++"""First-launch permission walkthrough backend.
++
++Routes (all loopback-only via the engine's existing perimeter):
++
++  GET  /api/permissions/status
++      Returns the current TCC status for every permission Anticipy needs.
++
++  POST /api/permissions/request/{kind}
++      Triggers the macOS native consent dialog for `kind` and returns
++      the new status. kind is one of:
++        microphone, accessibility, screen_recording, automation_<app>,
++        notifications.
++      automation_<app> takes one of: calendar, reminders, notes,
++      messages, system_events.
++
++  GET  /api/permissions/deeplink/{kind}
++      Returns the x-apple.systempreferences:// URL that opens the right
++      System Settings pane. The frontend opens it via window.open.
++
++  GET  /api/permissions/first_launch
++      Returns {"completed": bool, "marker_path": str} so the frontend
++      can decide whether to render the walkthrough.
++
++  POST /api/permissions/first_launch/complete
++      Body: {"skipped": bool, "snapshot": {...status dict...}}
++      Writes ~/.anticipy/v7/first_launch_complete.json so the modal
++      never re-shows. Honest: records the snapshot of what was actually
++      granted at completion time so subsequent launches can re-prompt
++      only for missing pieces.
++
++This module never touches frozen paths. It mirrors the deferred-import
++wire pattern in `app.product.native_action_wire` so importing at
++startup never wedges the FastAPI singleton. No em-dashes.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import subprocess
++import sys
++import threading
++import time
++from pathlib import Path
++from typing import Any
++
++from fastapi import APIRouter, HTTPException
++from fastapi.responses import JSONResponse
++from pydantic import BaseModel
++
++
++MARKER_DIR = Path(os.environ.get(
++    "ANTICIPY_V7_STATE_DIR",
++    str(Path.home() / ".anticipy" / "v7"),
++))
++MARKER_FILE = MARKER_DIR / "first_launch_complete.json"
++
++AUTOMATION_TARGETS = {
++    "calendar": "Calendar",
++    "reminders": "Reminders",
++    "notes": "Notes",
++    "messages": "Messages",
++    "system_events": "System Events",
++}
++
++DEEPLINKS = {
++    "microphone":
++        "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
++    "accessibility":
++        "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
++    "screen_recording":
++        "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
++    "automation":
++        "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
++    "notifications":
++        "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
++}
++
++
++router = APIRouter()
++
++
++# ---------------------------------------------------------------------------
++# status reads (no prompts)
++# ---------------------------------------------------------------------------
++
++def _mic_status() -> str:
++    if sys.platform != "darwin":
++        return "not_macos"
++    try:
++        from AVFoundation import AVCaptureDevice, AVMediaTypeAudio
++    except Exception:
++        return "unavailable"
++    names = {0: "not_determined", 1: "restricted", 2: "denied", 3: "authorized"}
++    try:
++        return names.get(int(AVCaptureDevice.authorizationStatusForMediaType_(
++            AVMediaTypeAudio)), "unknown")
++    except Exception:
++        return "unknown"
++
++
++def _accessibility_status() -> str:
++    if sys.platform != "darwin":
++        return "not_macos"
++    try:
++        from ApplicationServices import AXIsProcessTrusted
++    except Exception:
++        return "unavailable"
++    try:
++        return "authorized" if bool(AXIsProcessTrusted()) else "not_determined"
++    except Exception:
++        return "unknown"
++
++
++def _screen_recording_status() -> str:
++    if sys.platform != "darwin":
++        return "not_macos"
++    try:
++        from Quartz import CGPreflightScreenCaptureAccess
++        return "authorized" if bool(CGPreflightScreenCaptureAccess()) else "not_determined"
++    except Exception:
++        return "unknown"
++
++
++def _automation_status(target: str) -> str:
++    if sys.platform != "darwin":
++        return "not_macos"
++    app = AUTOMATION_TARGETS.get(target)
++    if not app:
++        return "unknown"
++    script = f'tell application "{app}" to count windows'
++    try:
++        r = subprocess.run(
++            ["/usr/bin/osascript", "-e", script],
++            capture_output=True, text=True, timeout=8.0, check=False,
++        )
++    except Exception:
++        return "unknown"
++    if r.returncode == 0:
++        return "authorized"
++    err = (r.stderr or "").strip()
++    if "-1743" in err or "Not authorized" in err:
++        return "denied"
++    return "not_determined"
++
++
++def _notifications_status() -> str:
++    if sys.platform != "darwin":
++        return "not_macos"
++    try:
++        from UserNotifications import UNUserNotificationCenter
++    except Exception:
++        return "unavailable"
++    centre = UNUserNotificationCenter.currentNotificationCenter()
++    done = threading.Event()
++    box: dict[str, Any] = {"status": "unknown"}
++
++    def cb(settings) -> None:
++        try:
++            box["status"] = {
++                0: "not_determined", 1: "denied",
++                2: "authorized", 3: "provisional", 4: "ephemeral",
++            }.get(int(settings.authorizationStatus()), "unknown")
++        finally:
++            done.set()
++    try:
++        centre.getNotificationSettingsWithCompletionHandler_(cb)
++    except Exception:
++        return "unknown"
++    done.wait(timeout=3.0)
++    return box["status"]
++
++
++def _full_status() -> dict[str, Any]:
++    return {
++        "microphone": _mic_status(),
++        "accessibility": _accessibility_status(),
++        "screen_recording": _screen_recording_status(),
++        "automation": {k: _automation_status(k) for k in AUTOMATION_TARGETS},
++        "notifications": _notifications_status(),
++    }
++
++
++# ---------------------------------------------------------------------------
++# prompt triggers
++# ---------------------------------------------------------------------------
++
++def _request_microphone(timeout_s: float = 12.0) -> str:
++    if sys.platform != "darwin":
++        return _mic_status()
++    try:
++        import Foundation
++        from AVFoundation import AVCaptureDevice, AVMediaTypeAudio
++    except Exception:
++        return _mic_status()
++    done = threading.Event()
++    out: dict[str, bool] = {"granted": False}
++
++    def cb(granted: bool) -> None:
++        out["granted"] = bool(granted)
++        done.set()
++    try:
++        AVCaptureDevice.requestAccessForMediaType_completionHandler_(
++            AVMediaTypeAudio, cb)
++    except Exception:
++        return _mic_status()
++    deadline = time.time() + timeout_s
++    while not done.is_set() and time.time() < deadline:
++        Foundation.NSRunLoop.currentRunLoop().runMode_beforeDate_(
++            Foundation.NSDefaultRunLoopMode,
++            Foundation.NSDate.dateWithTimeIntervalSinceNow_(0.1))
++    return _mic_status()
++
++
++def _request_accessibility() -> str:
++    if sys.platform != "darwin":
++        return _accessibility_status()
++    try:
++        from ApplicationServices import AXIsProcessTrustedWithOptions
++        from CoreFoundation import (
++            CFDictionaryCreate, kCFAllocatorDefault,
++            kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks,
++            kCFBooleanTrue,
++        )
++        from ApplicationServices import kAXTrustedCheckOptionPrompt
++        opts = CFDictionaryCreate(
++            kCFAllocatorDefault,
++            [kAXTrustedCheckOptionPrompt], [kCFBooleanTrue], 1,
++            kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks)
++        AXIsProcessTrustedWithOptions(opts)
++    except Exception:
++        pass
++    return _accessibility_status()
++
++
++def _request_screen_recording() -> str:
++    if sys.platform != "darwin":
++        return _screen_recording_status()
++    try:
++        from Quartz import CGRequestScreenCaptureAccess
++        CGRequestScreenCaptureAccess()
++    except Exception:
++        try:
++            subprocess.run(
++                ["/usr/sbin/screencapture", "-x", "-R", "0,0,1,1",
++                 str(MARKER_DIR / "screen_probe.png")],
++                capture_output=True, timeout=4.0, check=False,
++            )
++        except Exception:
++            pass
++    return _screen_recording_status()
++
++
++def _request_automation(target: str) -> str:
++    return _automation_status(target)  # the status read itself triggers the prompt
++
++
++def _request_notifications(timeout_s: float = 6.0) -> str:
++    if sys.platform != "darwin":
++        return _notifications_status()
++    try:
++        from UserNotifications import (
++            UNUserNotificationCenter,
++            UNAuthorizationOptionAlert, UNAuthorizationOptionSound,
++        )
++    except Exception:
++        return _notifications_status()
++    centre = UNUserNotificationCenter.currentNotificationCenter()
++    done = threading.Event()
++
++    def cb(granted: bool, err) -> None:
++        done.set()
++    try:
++        centre.requestAuthorizationWithOptions_completionHandler_(
++            UNAuthorizationOptionAlert | UNAuthorizationOptionSound, cb)
++    except Exception:
++        return _notifications_status()
++    done.wait(timeout=timeout_s)
++    return _notifications_status()
++
++
++# ---------------------------------------------------------------------------
++# routes
++# ---------------------------------------------------------------------------
++
++class CompleteBody(BaseModel):
++    skipped: bool = False
++    snapshot: dict[str, Any] = {}
++
++
++@router.get("/api/permissions/status")
++def status() -> JSONResponse:
++    return JSONResponse({"ok": True, "status": _full_status()})
++
++
++@router.post("/api/permissions/request/{kind}")
++def request_permission(kind: str) -> JSONResponse:
++    if kind == "microphone":
++        return JSONResponse({"ok": True, "kind": kind,
++                             "status": _request_microphone()})
++    if kind == "accessibility":
++        return JSONResponse({"ok": True, "kind": kind,
++                             "status": _request_accessibility()})
++    if kind == "screen_recording":
++        return JSONResponse({"ok": True, "kind": kind,
++                             "status": _request_screen_recording()})
++    if kind == "notifications":
++        return JSONResponse({"ok": True, "kind": kind,
++                             "status": _request_notifications()})
++    if kind.startswith("automation_"):
++        target = kind[len("automation_"):]
++        if target not in AUTOMATION_TARGETS:
++            raise HTTPException(status_code=400, detail=f"unknown automation target: {target}")
++        return JSONResponse({"ok": True, "kind": kind,
++                             "status": _request_automation(target)})
++    raise HTTPException(status_code=400, detail=f"unknown permission kind: {kind}")
++
++
++@router.get("/api/permissions/deeplink/{kind}")
++def deeplink(kind: str) -> JSONResponse:
++    url = DEEPLINKS.get(kind)
++    if not url:
++        raise HTTPException(status_code=404, detail=f"no deeplink for {kind}")
++    return JSONResponse({"ok": True, "kind": kind, "url": url})
++
++
++@router.get("/api/permissions/first_launch")
++def first_launch() -> JSONResponse:
++    completed = MARKER_FILE.exists()
++    payload: dict[str, Any] = {
++        "ok": True, "completed": completed,
++        "marker_path": str(MARKER_FILE),
++    }
++    if completed:
++        try:
++            payload["marker"] = json.loads(MARKER_FILE.read_text("utf-8"))
++        except Exception as e:
++            payload["marker_error"] = f"{type(e).__name__}: {e}"
++    return JSONResponse(payload)
++
++
++@router.post("/api/permissions/first_launch/complete")
++def first_launch_complete(body: CompleteBody) -> JSONResponse:
++    MARKER_DIR.mkdir(parents=True, exist_ok=True)
++    record = {
++        "completed_at": int(time.time()),
++        "skipped": bool(body.skipped),
++        "snapshot": body.snapshot or _full_status(),
++    }
++    MARKER_FILE.write_text(json.dumps(record, indent=2), "utf-8")
++    return JSONResponse({"ok": True, "marker_path": str(MARKER_FILE),
++                         "record": record})
++
++
++def attach() -> bool:
++    """Register the permission router on the existing FastAPI app.
++
++    Deferred-import wire pattern, mirrors `native_action_wire.attach`.
++    Returns True on success, False on any failure.
++    """
++    try:
++        from app.product.server import app
++        existing_paths = {getattr(r, "path", None) for r in app.routes}
++        new_paths = {getattr(r, "path", None) for r in router.routes}
++        if new_paths and new_paths.issubset(existing_paths):
++            return True
++        app.include_router(router)
++        return True
++    except Exception:
++        return False
+diff --git a/src/app/app/page.tsx b/src/app/app/page.tsx
+index 79fbebe..1c9db23 100644
+--- a/src/app/app/page.tsx
++++ b/src/app/app/page.tsx
+@@ -12,6 +12,10 @@
+ import { useCallback, useEffect, useState } from "react";
+ import type { Session } from "@supabase/supabase-js";
+ import { supabase } from "@/lib/supabase";
++import {
++  PermissionWalkthrough,
++  shouldShowWalkthrough,
++} from "@/components/PermissionWalkthrough";
+ 
+ type Seg = { status: "ready" | "needs_user" | "gated" | "live"; detail: string };
+ type AppState = {
+@@ -270,6 +274,17 @@ export default function AnticipyApp() {
+   const [view, setView] = useState<View>("account");
+   const [state, setState] = useState<AppState | null>(null);
+   const [error, setError] = useState<string | null>(null);
++  const [showWalkthrough, setShowWalkthrough] = useState(false);
++
++  useEffect(() => {
++    let cancelled = false;
++    shouldShowWalkthrough().then((should) => {
++      if (!cancelled) setShowWalkthrough(should);
++    });
++    return () => {
++      cancelled = true;
++    };
++  }, []);
+   const [localEngine, setLocalEngine] = useState<LocalEngine>({
+     live: false,
+     detail:
+@@ -919,6 +934,9 @@ export default function AnticipyApp() {
+ 
+   return (
+     <Shell>
++      {showWalkthrough && (
++        <PermissionWalkthrough onClose={() => setShowWalkthrough(false)} />
++      )}
+       <style>{`
+         @keyframes breathe {
+           0%,100% { transform: scale(0.96); opacity: 0.85; }
+diff --git a/engine/app/product/server.py b/engine/app/product/server.py
+index bfa02a5..45797df 100644
+--- a/engine/app/product/server.py
++++ b/engine/app/product/server.py
+@@ -6561,6 +6561,15 @@ try:
+ except Exception:
+     pass
+ 
++# V7 installer first-launch permission walkthrough. Routes under
++# /api/permissions/*. Deferred attach matches the scoped-memory pattern
++# so a stale import never crashes the engine.
++try:
++    from app.product.permission_walkthrough import attach as _perm_walk_attach
++    _perm_walk_attach()
++except Exception:
++    pass
++
+ 
+ if __name__ == "__main__":
+     _run_sidecar()

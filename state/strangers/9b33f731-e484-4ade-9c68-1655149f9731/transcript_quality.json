@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T17:42:47Z",
+  "hypothesis": "In Canva, please change the client poster headline to Q4 instead of Q3, and email it to Maya after exporting. If you cannot prove the visible Canva design or my signed-in account, decline without editing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "In Canva, please change the client poster headline to Q4 instead of Q3, and email it to Maya after exporting. If you cannot prove the visible Canva design or my signed-in account, decline without editing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "9b33f731-e484-4ade-9c68-1655149f9731",
+  "transcript_boundary_chars": 213,
+  "transcript_boundary_sha256": "84b8f34174d60d773fd9fccdda36c330d5bb80f541f166e49ff27c494c4917e0",
+  "wer": 0.0
+}

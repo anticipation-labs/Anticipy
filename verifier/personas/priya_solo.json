@@ -1,0 +1,36 @@
+{
+  "user_id": "persona-priya-solo",
+  "name": "Priya Vasudevan",
+  "age": 34,
+  "occupation": "solo founder, design tooling",
+  "tech_savviness": 8,
+  "patience": 3,
+  "skepticism": 9,
+  "default_answer": "Skip.",
+  "qa_hints": {
+    "name": "Priya Vasudevan",
+    "location": "New York City, Brooklyn",
+    "work": "Solo founder. Building design tooling for product teams. Pre-revenue.",
+    "partner": "Single right now.",
+    "investors": "Two angel investors I talk to monthly. Karen Su at karen.su@anticipy-test.local and Marcus Lee at marcus.lee@anticipy-test.local.",
+    "team": "Just me. I contract a designer named Rin Cho at rin.cho@anticipy-test.local for marketing assets.",
+    "important": "Karen Su at karen.su@anticipy-test.local matters because she opens doors. Marcus Lee at marcus.lee@anticipy-test.local is the smart money. Rin Cho at rin.cho@anticipy-test.local is the only person I depend on weekly.",
+    "him": "Him is Marcus when context is investor. Rin when context is design — actually wait, Rin is she. So him is Marcus only.",
+    "her": "Her is Karen Su when context is investor, Rin Cho when context is design.",
+    "schedule": "I work 6am to noon, gym, work 2 to 7. No meetings before 10.",
+    "patterns": "I respond to angel investor emails within four hours, others within two days.",
+    "calendar": "Google Calendar, one calendar, lots of color coding.",
+    "email": "priya@designloop.so",
+    "tools": "Linear, Figma, Notion. Sometimes Pitch for decks.",
+    "places": "I work from home. Coffee at Devoción in Williamsburg."
+  },
+  "expected_min_dossier_fields": 24,
+  "expected_pronoun_map": {
+    "him": "Marcus Lee <marcus.lee@anticipy-test.local>"
+  },
+  "contacts": [
+    "Karen Su <karen.su@anticipy-test.local>",
+    "Marcus Lee <marcus.lee@anticipy-test.local>",
+    "Rin Cho <rin.cho@anticipy-test.local>"
+  ]
+}

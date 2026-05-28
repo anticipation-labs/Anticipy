@@ -1,0 +1,201 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "8ee08723-ad73-4016-bf0e-fc48f742d78a",
+  "created_at": "2026-05-26T13:30:54Z",
+  "title": "Transcript upload note into real Canva design",
+  "category": "canvas_transcript_upload_design_note",
+  "verb_category": "canvas_design_edit_or_comment",
+  "hard_category": "canvas",
+  "hard_category_focus": "canvas based design tools",
+  "breadth_reason": "state/stranger_breadth.json shows one verified CRM stranger and no verified canvas strangers, so this run broadens the rolling hard-category set with a real Canva user surface.",
+  "transcript_audit_policy": {
+    "last_audit_file": "state/last_v6_transcript_audit.json",
+    "observed_verdict": "pass",
+    "requires_uploaded_audio_asr_recovery": false,
+    "reason": "The last transcript audit verdict is pass, so this script may use transcript_upload as the primary input while still observing audio and microphone proof gaps."
+  },
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "public downloadable user-device engine installed on the signed-in user's computer",
+    "surface_rule": "use the user's actual visible Chrome profile and Canva design surface; do not use cloned Chrome, copied profiles, hidden browser state, private install paths, stale public builds, or log-only proof",
+    "proof_rule": "every action, ask, or decline must cite current surface-readable proof from the public build and the visible user surface"
+  },
+  "primary_user_input": {
+    "source_mode": "transcript_upload",
+    "source_detail": "text_file",
+    "input_fidelity": "uploaded_text_transcript",
+    "not_primary": [
+      "audio_upload",
+      "mp3_upload",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "This exercises the text transcript upload path without making live microphone permission or generated audio a prerequisite."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Anticipy public app",
+      "kind": "public browser app",
+      "surface": "https://www.anticipy.ai/app",
+      "proof_needed": [
+        "current public app URL or visible app state",
+        "signed-in account or onboarding/download state",
+        "paired installed user-device engine status if available",
+        "current installer or build identity when surfaced by the product"
+      ]
+    },
+    {
+      "name": "Canva",
+      "kind": "real Chrome canvas design surface",
+      "surface": "Canva design editor in the user's actual signed-in Chrome profile",
+      "proof_needed": [
+        "visible Chrome URL/title or DOM/screenshot showing canva.com and a current design editor, visible Canva sign-in, or readable missing-design state",
+        "surface-readable evidence for the Solace Studio spring pop-up design or the absence of a matching readable design",
+        "before/after proof if Anticipy adds a Canva comment or text note"
+      ]
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "surface": "https://www.anticipy.ai/app",
+      "instruction": "Start from the public app path, use the public account/onboarding/download flow if needed, and confirm that the installed user-device engine is the runtime handling the input.",
+      "must_not": [
+        "private developer checkout",
+        "private binary",
+        "backend credential shortcut",
+        "stale public build proof"
+      ],
+      "proof_expected": [
+        "public app visible state",
+        "installed user-device engine pairing or status surface",
+        "current build or installer identity when surfaced by the product"
+      ]
+    },
+    {
+      "id": "m02_real_canvas_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "hard_category": "canvas",
+      "surface": "Canva design editor in real visible Chrome",
+      "instruction": "Attach to or open the user's actual Chrome profile with session preservation and inspect only the visible Canva state. If Canva is not signed in, no design is visible, or the requested Solace Studio design cannot be read, leave Canva unchanged and require Anticipy to ask or decline with that surface proof.",
+      "valid_surface_examples": [
+        "canva.com design editor already visible in Chrome",
+        "Canva sign-in screen visible in Chrome",
+        "Canva projects or search results visible in Chrome"
+      ],
+      "invalid_surface_examples": [
+        "hidden browser profile",
+        "copied Chrome profile",
+        "service response without a visible Canva surface",
+        "generic browser notes"
+      ]
+    },
+    {
+      "id": "m03_transcript_upload_primary",
+      "kind": "transcript_upload",
+      "actor": "stranger",
+      "input_fidelity": "uploaded_text_transcript",
+      "source_mode": "transcript_upload",
+      "source_detail": "text_file",
+      "transcript_reference_text": "In the Canva flyer I already have open for Solace Studio's spring pop-up, add a small comment near the Early Bird tile saying: Sponsor logo deadline Friday 2 PM. If you cannot verify the real Canva surface is open and editable, ask me before changing anything.",
+      "delivery_instruction": "Deliver this through the product's transcript paste/upload path, preferring a text-file upload when the product exposes it. Do not use MP3 upload or live microphone capture for the primary input.",
+      "proof_expected": [
+        "transcript upload or paste/upload route receives the exact text bytes",
+        "fresh transcript ingest id or equivalent transcript-upload receipt",
+        "normalized input record with source_mode transcript_upload and source_detail text_file",
+        "same account and device identity as the installed user-device engine"
+      ]
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "normalized_inference_boundary_check",
+      "actor": "engine",
+      "instruction": "Show that the uploaded text transcript enters the same normalized inference boundary used by MP3/audio upload, computer microphone, and external microphone inputs.",
+      "proof_expected": [
+        "anticipy.normalized_input.v7 or equivalent normalized input artifact",
+        "same downstream inference event shape as audio and microphone input modes",
+        "no separate Canva decision branch for transcript upload"
+      ],
+      "proof_gap_to_expose": [
+        "missing MP3/audio upload proof",
+        "missing computer microphone selected-device proof",
+        "missing external microphone selected-device proof",
+        "missing public installed user-device engine pairing proof"
+      ]
+    },
+    {
+      "id": "m05_decision_on_canva",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "instruction": "Choose exactly one decision after reading the transcript upload and the real Canva surface.",
+      "acceptable_outcomes": [
+        {
+          "decision": "act",
+          "when": "A real visible Canva design for Solace Studio's spring pop-up is already signed in, editable, and the Early Bird area is surface-readable.",
+          "required_proof": [
+            "current Canva surface before action",
+            "Canva comment or text-note surface after action",
+            "decision artifact tied to the transcript-upload normalized input"
+          ]
+        },
+        {
+          "decision": "ask",
+          "when": "Canva is signed in but the matching design, Early Bird area, or edit target needs user confirmation.",
+          "required_proof": [
+            "visible Canva ambiguity or missing target evidence",
+            "user-facing clarification or approval request",
+            "decision artifact with proof refs"
+          ]
+        },
+        {
+          "decision": "decline",
+          "when": "Canva is not signed in, the design surface is unreadable, permissions are missing, or the product cannot verify it is using the real Chrome user surface.",
+          "required_proof": [
+            "visible Canva sign-in, missing permission, or unreadable-surface evidence",
+            "Canva-specific decline reason",
+            "decision artifact with proof refs"
+          ]
+        }
+      ],
+      "unacceptable_outcomes": [
+        "claiming a Canva edit without a current visible Canva surface",
+        "using audio upload or live microphone as the delivered primary input",
+        "using a copied Chrome profile or hidden browser for Canva proof",
+        "claiming success from logs alone",
+        "replacing Canva proof with a generic browser note"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "instruction": "After the primary transcript upload path is delivered, observe whether the public product exposes MP3/audio upload, computer microphone, and external microphone selection controls. Record visible gaps, but do not replace the transcript-upload input with those modes.",
+      "proof_expected": [
+        "visible MP3/audio upload control or missing-control state",
+        "visible computer microphone permission or selected-device state if present",
+        "visible external microphone selection or missing-device state if present",
+        "no fake receipts accepted for any input-mode claim"
+      ]
+    }
+  ],
+  "success_criteria": [
+    "persona_uuid matches the UUID directory and persona.json uuid",
+    "transcript upload is the delivered primary input",
+    "the uploaded text transcript reaches the same normalized inference pipeline as audio and microphone modes",
+    "Canva is the hard-category surface and is read through real visible Chrome",
+    "Anticipy records act, ask, or decline with surface-readable proof from the current public build"
+  ],
+  "failure_triggers": [
+    "primary input is MP3/audio upload, live mic, computer microphone, or external microphone",
+    "Canva proof is replaced by a generic browser note or non-user surface",
+    "Chrome proof comes from a cloned profile or hidden browser",
+    "decision proof relies on logs without visible surface evidence",
+    "product uses a private build or source checkout as the user-device engine",
+    "input-mode parity is claimed without normalized input or inference artifacts"
+  ]
+}

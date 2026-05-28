@@ -1,0 +1,7 @@
+{
+  "name": "fallback_navigate",
+  "ok": true,
+  "detail": "primary down; falling back to preview.owasp-juice.shop title='OWASP Juice Shop' url=https://preview.owasp-juice.shop/#/",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143459Z/step-02-fallback_navigate.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://preview.owasp-juice.shop/\", \"url\": \"https://preview.owasp-juice.shop/\", \"title\": \"OWASP Juice Shop\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

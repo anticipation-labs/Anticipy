@@ -1,0 +1,87 @@
+{
+  "failed": 4,
+  "passed": 7,
+  "run_dir": "state/v7/integration_runs/automationexercise_20260527T055354Z",
+  "site": "automationexercise.com",
+  "steps": [
+    {
+      "actual": "url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login login_form=true signup_form=true",
+      "expected": "/login with login form (no real signup)",
+      "name": "login_wall",
+      "passed": true,
+      "primitive_used": "bridge navigate + curl HTML"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "final login-wall screenshot",
+      "name": "final_screenshot",
+      "passed": true,
+      "primitive_used": "bridge surface-proof"
+    },
+    {
+      "actual": "title=<title>Automation Exercise</title> url=https://automationexercise.com/",
+      "expected": "navigate ok + Automation Exercise title",
+      "name": "home_loaded",
+      "passed": true,
+      "primitive_used": "bridge navigate + curl title"
+    },
+    {
+      "actual": "navOK=True url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "navigate ok + products listing in HTML",
+      "name": "products_page",
+      "passed": false,
+      "primitive_used": "bridge navigate (top-nav fallback) + curl HTML"
+    },
+    {
+      "actual": "first=1",
+      "expected": "navigate ok + matching product id from HTML",
+      "name": "search_results",
+      "passed": true,
+      "primitive_used": "bridge navigate (form GET) + curl HTML"
+    },
+    {
+      "actual": "url=https://automationexercise.com/ price=true cart=true",
+      "expected": "HTML has price + cart button",
+      "name": "product_details_page",
+      "passed": true,
+      "primitive_used": "bridge navigate + curl HTML"
+    },
+    {
+      "actual": "https://automationexercise.com/",
+      "expected": "still on product_details (modal expected)",
+      "name": "add_to_cart_clicked",
+      "passed": false,
+      "primitive_used": "cliclick on (880,372)"
+    },
+    {
+      "actual": "https://automationexercise.com/",
+      "expected": "ESC sent to close Continue Shopping modal",
+      "name": "modal_dismissed",
+      "passed": true,
+      "primitive_used": "System Events key code 53 (ESC)"
+    },
+    {
+      "actual": "url=https://automationexercise.com/ empty=false has_product=false",
+      "expected": "visible text shows a Rs.NNN cart line",
+      "name": "cart_view",
+      "passed": false,
+      "primitive_used": "bridge navigate + cmd+a/cmd+c text harvest"
+    },
+    {
+      "actual": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-89433d63d993",
+      "expected": "cart screenshot captured",
+      "name": "cart_screenshot",
+      "passed": true,
+      "primitive_used": "bridge surface-proof"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "click issued; expect login wall or modal",
+      "name": "proceed_to_checkout_clicked",
+      "passed": false,
+      "primitive_used": "cliclick on (1100,560) after Page Down"
+    }
+  ],
+  "total": 11,
+  "wall_seconds": 127
+}

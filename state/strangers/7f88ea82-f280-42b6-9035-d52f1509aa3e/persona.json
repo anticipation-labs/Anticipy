@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "7f88ea82-f280-42b6-9035-d52f1509aa3e",
+  "created_at": "2025-04-14T12:00:00Z",
+  "name": "James Chen",
+  "age": 35,
+  "occupation": "Sales Operations Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion CRM pipeline management",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": true,
+    "acceptable_state": "signed in and open"
+  },
+  "daily_tools": [
+    "Notion",
+    "Gmail",
+    "Slack",
+    "Google Calendar",
+    "Chrome"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Johnson",
+      "relationship": "Team Lead",
+      "context": "Sales team"
+    },
+    {
+      "name": "Mike Nguyen",
+      "relationship": "Client",
+      "context": "Prospect at Acme Corp"
+    },
+    {
+      "name": "Emily Davis",
+      "relationship": "Colleague",
+      "context": "Marketing operations"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T17:55:59Z",
+  "hypothesis": "On the Shopify order page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed and admin account, decline without changing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "On the Shopify order page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed-in admin account, decline without changing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "207da1c8-64ee-4fbd-90c8-841cebbbe5ca",
+  "transcript_boundary_chars": 252,
+  "transcript_boundary_sha256": "6217846d39ac73b0f406f1312668a512bb430a4daadc6d52dd2e02ecd7fcbb66",
+  "wer": 0.02439
+}

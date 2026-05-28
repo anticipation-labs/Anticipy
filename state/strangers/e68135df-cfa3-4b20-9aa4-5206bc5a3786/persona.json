@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "e68135df-cfa3-4b20-9aa4-5206bc5a3786",
+  "created_at": "2025-04-10T14:32:00Z",
+  "name": "James Cordero",
+  "age": 42,
+  "occupation": "Operations Manager",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 7,
+  "hard_category": "crm",
+  "hard_category_focus": "Airtable as CRM for project tracking",
+  "primary_real_surface": {
+    "surface": "https://airtable.com/",
+    "chrome_requirement": "user must be signed in to Chrome profile with Airtable access",
+    "acceptable_state": "Airtable dashboard visible with base list"
+  },
+  "daily_tools": [
+    "Airtable",
+    "Slack",
+    "Google Sheets",
+    "Asana",
+    "Zoom"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Jenkins",
+      "relationship": "colleague",
+      "context": "Operations team lead"
+    },
+    {
+      "name": "Mark Tao",
+      "relationship": "vendor",
+      "context": "IT services provider"
+    },
+    {
+      "name": "Lena Kim",
+      "relationship": "assistant",
+      "context": "helps manage schedules and data entry"
+    }
+  ]
+}

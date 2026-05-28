@@ -1,0 +1,7 @@
+{
+  "actual": "https://www.anticipy.ai/app",
+  "expected": "actual matches: viewSystemUsers",
+  "name": "admin_users_table",
+  "passed": false,
+  "primitive_used": "bridge navigate (sidebar click fallback)"
+}

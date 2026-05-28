@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "Anticipy competently declined the Notion write request because it could not verify the exact record state on the visible surface. The decline named Notion, used the installed engine, real Chrome, and no broken surfaces, satisfying D16.",
+  "specific_failures": [],
+  "verb_category": "notes_or_memo_create_act",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Surface proof shows public entry at anticipy.ai/app, indicating driver performed this step."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Surface proof shows Notion page visible in Chrome (Expenses view), confirming signed-in state."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "ASR transcript matches spoken reference with WER 0.0, source=upload-asr."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR output within boundary checks; transcript_quality shows valid."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined with service-specific message naming Notion, a valid acceptable outcome."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Only audio upload mode was used; no other input modes observed."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine declined with blocked_services=['Notion'], broken_script_surfaces empty, and decline card changed."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:24:57Z"
+}

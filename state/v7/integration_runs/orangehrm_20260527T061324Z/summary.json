@@ -1,0 +1,58 @@
+{
+  "failed": 6,
+  "passed": 1,
+  "run_dir": "state/v7/integration_runs/orangehrm_20260527T061324Z",
+  "site": "opensource-demo.orangehrmlive.com",
+  "steps": [
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: /dashboard",
+      "name": "login_to_dashboard",
+      "passed": false,
+      "primitive_used": "navigate + System Events Tab/keystroke/Enter"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: viewSystemUsers",
+      "name": "admin_users_table",
+      "passed": false,
+      "primitive_used": "in-place navigate (sidebar click fallback)"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: viewSystemUsers",
+      "name": "admin_search",
+      "passed": false,
+      "primitive_used": "in-place navigate + System Events Tab/type/Enter"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: viewSystemUsers",
+      "name": "reset_filter",
+      "passed": false,
+      "primitive_used": "in-place navigate (Reset button click fallback)"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: addEmployee",
+      "name": "pim_add_employee_form",
+      "passed": false,
+      "primitive_used": "in-place navigate (sidebar click fallback)"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: viewPersonalDetails|empNumber",
+      "name": "employee_saved",
+      "passed": false,
+      "primitive_used": "in-place navigate + System Events Tab/type/Enter (submit)"
+    },
+    {
+      "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+      "expected": "actual matches: orangehrm",
+      "name": "final_screenshot",
+      "passed": true,
+      "primitive_used": "bridge surface-proof"
+    }
+  ],
+  "total": 7
+}

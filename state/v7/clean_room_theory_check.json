@@ -1,0 +1,13 @@
+{
+  "ts": "2026-05-28T05:27:13Z",
+  "mode": "theory_check",
+  "pass": true,
+  "checks": {
+    "public_dmg_sha_ok": true,
+    "public_dmg_url_serves": true,
+    "installed_engine_binary_executable": true,
+    "installed_engine_health_ok": true
+  },
+  "site": "https://www.anticipy.ai",
+  "engine": "http://127.0.0.1:8731"
+}

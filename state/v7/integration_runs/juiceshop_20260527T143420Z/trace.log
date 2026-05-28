@@ -1,0 +1,3 @@
+[14:34:20] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143420Z
+[14:34:37] juice-shop CDP tab=D51E152AA25677E97F67A000BA34F5A0 url=about:blank
+[14:34:37] FAIL step 1 navigate :: url=about:blank resp={"ok": true, "command": "navigate", "data": {"navigatedTo": "https://juice-shop.herokuapp.com/", "url": "https://juice-shop.herokuapp.com/", "title": ""}, "acquired_via": "chrome_applescript_loopback_

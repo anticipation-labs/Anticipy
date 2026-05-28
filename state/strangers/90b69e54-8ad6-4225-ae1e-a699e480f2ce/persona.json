@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "90b69e54-8ad6-4225-ae1e-a699e480f2ce",
+  "created_at": "2025-04-10T14:30:00Z",
+  "name": "Marcus Chen",
+  "age": 34,
+  "occupation": "Digital Marketing Manager",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion-based meal planning and recipe management",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": "user signed into Chrome with personal Google account",
+    "acceptable_state": "Notion open in a Chrome tab with a meal planning database visible"
+  },
+  "daily_tools": [
+    "Notion",
+    "Slack",
+    "Google Calendar",
+    "Trello",
+    "Spotify"
+  ],
+  "contacts": [
+    {
+      "name": "Elena Rossi",
+      "relationship": "wife",
+      "context": "shares meal planning and grocery lists in Notion"
+    },
+    {
+      "name": "Jordan Kim",
+      "relationship": "coworker",
+      "context": "collaborates on marketing campaigns in Notion"
+    },
+    {
+      "name": "Sam Patel",
+      "relationship": "friend",
+      "context": "shares recipe ideas and cooking tips"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+CLI
+Skill
+Github
+1
+Install the CLI
+One line — auth, uploads, and polling are handled for you.
+
+npm install -g @higgsfield/cli
+2
+Sign in
+Opens a browser, takes 5 seconds. Run higgsfield auth login and you're authenticated.
+
+higgsfield auth login
+3
+Plug skills into your agent
+Works with Claude Code, Cursor, Codex, and 12+ other agents. Then just say: "Generate an image with Higgsfield."
+
+npx skills add higgsfield-ai/skills

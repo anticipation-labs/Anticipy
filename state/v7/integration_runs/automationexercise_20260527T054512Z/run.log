@@ -1,0 +1,39 @@
+[05:45:12Z] run dir: state/v7/integration_runs/automationexercise_20260527T054512Z
+[05:45:12Z] bridge: http://127.0.0.1:7777  base: https://automationexercise.com
+[05:45:12Z] bridge acquired_via: chrome_applescript_loopback_bridge
+[05:45:12Z] STEP 1: home
+[05:45:23Z] home url=https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-eafe8520c6f9 title=Anticipy App
+[05:45:23Z] STEP 2: Products nav
+[05:45:30Z] products url=https://automationexercise.com/products
+[05:45:30Z] STEP 3: search dress
+[05:45:40Z] search url=https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-0705ebf22c71 first_pid=1
+[05:45:40Z] STEP 4-5: view product + verify
+[05:45:53Z] product url=https://automationexercise.com/product_details/1 html_price=true html_cart=true
+[05:45:53Z] STEP 6: add to cart
+[05:45:57Z] after-add-to-cart url=https://automationexercise.com/product_details/1
+[05:45:57Z] STEP 7: dismiss modal
+[05:46:01Z] after-dismiss url=https://bot.sannysoft.com/
+[05:46:01Z] STEP 8: cart
+[05:46:07Z] cart url=https://automationexercise.com/view_cart
+[05:46:07Z] STEP 9: cart visual proof
+[05:46:09Z] STEP 10: proceed to checkout
+[05:46:14Z] post-checkout-click url=https://automationexercise.com/view_cart
+[05:46:15Z] STEP 11: register/login wall
+[05:46:22Z] login url=https://automationexercise.com/login login_form=true signup_form=true
+[05:46:22Z] STEP 12: final screenshot
+[05:46:24Z] 
+[05:46:24Z] AGGREGATE RESULTS
+[05:46:24Z] =================
+[05:46:24Z] home_loaded                    FAIL  host mismatch (url=https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-eafe8520c6f9)
+[05:46:24Z] products_page                  PASS  products listing loaded
+[05:46:24Z] search_results                 FAIL  no matching product or wrong URL
+[05:46:24Z] product_details_page           PASS  price + add-to-cart present
+[05:46:24Z] add_to_cart_clicked            PASS  click issued
+[05:46:24Z] modal_dismissed                PASS  ESC sent
+[05:46:24Z] cart_view                      PASS  cart page loaded
+[05:46:25Z] cart_screenshot                PASS  state/v7/integration_runs/automationexercise_20260527T054512Z/step_8_cart_visual/proof_screenshot.png
+[05:46:25Z] proceed_to_checkout_clicked    PASS  click issued; URL=https://automationexercise.com/view_cart
+[05:46:25Z] login_wall                     PASS  stopped at login wall; signup form=true
+[05:46:25Z] final_screenshot               PASS  state/v7/integration_runs/automationexercise_20260527T054512Z/final_login_wall.png
+[05:46:25Z] 
+[05:46:25Z] Passed: 9  Failed: 2  Total: 11  Wall: 72s

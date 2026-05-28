@@ -1,0 +1,31 @@
+[05:57:13Z] run_dir=state/v7/integration_runs/automationexercise_20260527T055713Z bridge=http://127.0.0.1:7777 base=https://automationexercise.com
+[05:57:14Z] bridge acquired_via=chrome_applescript_loopback_bridge
+[05:57:14Z] STEP 1: home
+[05:57:37Z] home navOK=True active_url=https://automationexercise.com/ curl_title=<title>Automation Exercise</title>
+[05:57:38Z] STEP 2: Products nav
+[05:58:01Z] STEP 3: search dress
+[05:58:15Z] search navOK=True url=https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-5e89a00d94ca first_pid=1
+[05:58:16Z] STEP 4-5: view product + verify
+[05:58:32Z] product url=https://automationexercise.com/product_details/1 html_price=true html_cart=true
+[05:58:34Z] STEP 6: add to cart  STEP 7: dismiss modal
+[05:58:42Z] after-add-to-cart url=https://automationexercise.com/product_details/1
+[05:58:57Z] STEP 8: cart
+[05:59:15Z] cart url=https://automationexercise.com/view_cart empty=false has_product=false
+[05:59:15Z] STEP 9: cart screenshot  STEP 10: proceed to checkout
+[05:59:31Z] post-checkout-click url=https://automationexercise.com/view_cart
+[05:59:32Z] STEP 11: register/login wall  STEP 12: final screenshot
+[05:59:54Z] login url=https://automationexercise.com/login login_form=true signup_form=true
+[06:00:01Z] 
+[06:00:01Z] AGGREGATE RESULTS
+[06:00:01Z] home_loaded                    PASS  navigate ok; title matched
+[06:00:01Z] products_page                  FAIL  navigate failed or no listing
+[06:00:01Z] search_results                 PASS  first matching product id=1
+[06:00:01Z] product_details_page           PASS  price + add-to-cart present
+[06:00:01Z] add_to_cart_clicked            PASS  click issued
+[06:00:01Z] modal_dismissed                PASS  ESC sent
+[06:00:01Z] cart_view                      FAIL  cart empty or no product line
+[06:00:01Z] cart_screenshot                PASS  state/v7/integration_runs/automationexercise_20260527T055713Z/step_8_cart_visual/proof_screenshot.png
+[06:00:01Z] proceed_to_checkout_clicked    PASS  click issued; URL=https://automationexercise.com/view_cart
+[06:00:01Z] login_wall                     PASS  stopped at login wall
+[06:00:01Z] final_screenshot               PASS  state/v7/integration_runs/automationexercise_20260527T055713Z/final_login_wall.png
+[06:00:01Z] Passed: 9 Failed: 2 Total: 11 Wall: 168s

@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T04:51:33Z",
+  "hypothesis": "After the partner sync with Daria, please add a follow-up note in HubSpot for the Jordan account saying I promise to send the renewal terms and ask if Friday morning works for a follow-up call. If you cannot prove the visible HubSpot record or my signed in surface, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "After the partner sync with Daria, please add a follow-up note in HubSpot for the Jordan account saying I promised to send the renewal terms and ask if Friday morning works for a follow-up call. If you cannot prove the visible HubSpot record or my signed-in surface, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "d8a8404d-ec77-4b78-b4c9-921e0aa0498f",
+  "transcript_boundary_chars": 299,
+  "transcript_boundary_sha256": "c8215e6dad5861f516169f51975db5cf8096e8b0eb3bb684dd53a9601da9fea9",
+  "wer": 0.018519
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "2b937a50-a9d9-492d-8cd9-96f3f547a6d1",
+  "created_at": "2025-01-15T14:30:00Z",
+  "name": "Marcus Delgado",
+  "age": 42,
+  "occupation": "Financial Analyst",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 8,
+  "hard_category": "crm",
+  "hard_category_focus": "Airtable expense tracking in Chrome",
+  "primary_real_surface": {
+    "surface": "Airtable web app in Chrome",
+    "chrome_requirement": "signed-in Chrome with Airtable tab open",
+    "acceptable_state": "viewing expense records"
+  },
+  "daily_tools": [
+    "Airtable",
+    "Google Sheets",
+    "Slack",
+    "QuickBooks",
+    "Outlook"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Chen",
+      "relationship": "colleague",
+      "context": "works in same finance department"
+    },
+    {
+      "name": "Mike Rodriguez",
+      "relationship": "manager",
+      "context": "reviews budget reports"
+    },
+    {
+      "name": "Linda Park",
+      "relationship": "client",
+      "context": "provides expense data"
+    }
+  ]
+}

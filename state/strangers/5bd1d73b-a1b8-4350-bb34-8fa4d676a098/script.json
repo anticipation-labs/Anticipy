@@ -1,0 +1,117 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "5bd1d73b-a1b8-4350-bb34-8fa4d676a098",
+  "created_at": "2025-04-11T12:00:00Z",
+  "title": "Schedule meeting via Calendar.app with audio upload",
+  "category": "native_calendar_event_clarify",
+  "verb_category": "calendar_event_create_clarify",
+  "hard_category": "native",
+  "hard_category_focus": "Apple Calendar.app event creation and clarification",
+  "breadth_reason": "This script tests Anticipy's ability to process a calendar event request via audio upload and decline if the native Calendar surface is not verifiable.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "anticipy user-device engine v7 (downloaded from public product)",
+    "surface_rule": "Anticipy must use the user's actual signed-in Calendar.app and Reminders.app on their Mac; no cloned or simulated surfaces.",
+    "proof_rule": "Proof requires a fresh screenshot of the Calendar.app window showing the event, and a screenshot of Reminders.app showing the reminder, both captured after the action. If decline, proof must show the decline reason and the absence of any created entries."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Primary input via uploaded audio ensures ASR coverage for calendar event creation; transcript paste or live mic would bypass the upload proof path."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Apple Calendar",
+      "kind": "native_app",
+      "surface": "Calendar.app on Mac",
+      "proof_needed": "Visible Calendar window showing the created event or empty state indicating readiness"
+    },
+    {
+      "name": "Apple Reminders",
+      "kind": "native_app",
+      "surface": "Reminders.app on Mac",
+      "proof_needed": "Visible Reminders window with the reminder or confirmation of creation"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to https://www.anticipy.ai/app, signs in, and downloads the user-device engine; the engine is installed and granted necessary permissions."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that Apple Calendar.app is signed in and visible on the user's Mac, and that Reminders.app is also available."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "I need you to schedule a thirty minute review meeting in Calendar.app for Friday May 29 from 9:00 AM to 10:00 AM, and in Reminders.app remind me at 8:45 AM to prep the agenda. Do not invite anyone yet. If you cannot prove the visible Mac Calendar and Reminders surfaces, decline without creating anything.",
+      "delivery_instruction": "The stranger will speak the request aloud and upload the resulting audio file via /api/listen/upload. The audio artifact is a single MP3 recorded by the driver.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg",
+      "description": "Stranger uploads the MP3 audio of the spoken request."
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the ASR output matches the intended request and that no boundaries (e.g., multiple requests, off-topic content) were crossed."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        {
+          "outcome": "act",
+          "condition": "Calendar.app and Reminders.app are verifiable as visible, signed-in surfaces. Engine creates the calendar event and reminder."
+        },
+        {
+          "outcome": "ask",
+          "condition": "Surface is partially readable (e.g., Calendar visible but Reminders not). Engine asks for clarification before proceeding."
+        },
+        {
+          "outcome": "decline",
+          "condition": "Calendar.app is not verifiable (e.g., not visible, not signed in, or inaccessible). Engine declines without creating any entries, providing clear reason."
+        }
+      ],
+      "description": "Engine decides whether to act, ask, or decline based on surface verification."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that audio upload provides ASR input but the surface gap (e.g., Calendar.app not visible) would cause decline, highlighting the dependency on surface verification."
+    }
+  ],
+  "success_criteria": [
+    "The engine successfully processes the audio upload and extracts the correct intent for calendar event and reminder creation.",
+    "The engine correctly identifies that both Calendar.app and Reminders.app must be verifiable to proceed.",
+    "If both surfaces are visible and signed in, the engine creates a 30-minute review meeting in Calendar on May 29 from 9:00-10:00 AM, and a reminder in Reminders at 8:45 AM to prep the agenda, without inviting anyone.",
+    "If any surface is not verifiable, the engine declines without creating any entries, providing a clear explanation.",
+    "All proofs (screenshots of Calendar and Reminders) are fresh and taken from the actual user surface after the action or decline."
+  ],
+  "failure_triggers": [
+    "The engine fails if it does not receive the audio upload or if ASR produces an incorrect transcript.",
+    "The engine fails if it attempts to create events without verifying the Calendar surface (e.g., using a stale or cloned profile).",
+    "The engine fails if it creates only one of the two requested entries (event or reminder) without a valid reason.",
+    "The engine fails if it asks for clarification when both surfaces are clearly visible and verifiable.",
+    "The engine fails if it declines without a clear surface-related reason, or if it uses a non-user-authenticated surface."
+  ]
+}

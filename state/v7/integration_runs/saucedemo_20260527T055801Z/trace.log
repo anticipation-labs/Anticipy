@@ -1,0 +1,3 @@
+[05:58:02] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T055801Z
+[05:58:15] saucedemo CDP tab id: D18EA291C4A00100C18E23E7C37B5149
+[05:58:16] FAIL step 1 navigate_login :: url=about:blank resp={"ok": true, "command": "navigate", "data": {"navigatedTo": "https://www.saucedemo.com/", "url": "https://www.saucedemo.com/", "title": ""}, "acquired_via": "chrome_applescript_loopback_bridge", "erro

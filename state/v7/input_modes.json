@@ -1,0 +1,4015 @@
+{
+  "audio_devices": {
+    "count": 4,
+    "default_input": "BlackHole 2ch",
+    "devices": [
+      {
+        "connection_type": "unsupported",
+        "default_sample_rate": 48000.0,
+        "index": 0,
+        "is_default": false,
+        "kind": "unsupported",
+        "max_input_channels": 1,
+        "name": "The printer123 Microphone",
+        "source_detail": "unsupported_device"
+      },
+      {
+        "connection_type": "virtual",
+        "default_sample_rate": 48000.0,
+        "index": 1,
+        "is_default": true,
+        "kind": "virtual",
+        "max_input_channels": 2,
+        "name": "BlackHole 2ch",
+        "source_detail": "virtual_loopback"
+      },
+      {
+        "connection_type": "built_in",
+        "default_sample_rate": 44100.0,
+        "index": 2,
+        "is_default": false,
+        "kind": "builtin",
+        "max_input_channels": 1,
+        "name": "MacBook Air Microphone",
+        "source_detail": "built_in_mic"
+      },
+      {
+        "connection_type": "virtual",
+        "default_sample_rate": 44100.0,
+        "index": 4,
+        "is_default": true,
+        "kind": "virtual",
+        "max_input_channels": 1,
+        "name": "BlackHole 2ch",
+        "source_detail": "virtual_loopback"
+      }
+    ],
+    "ok": true,
+    "status": 200
+  },
+  "captured_at": "2026-05-27T23:46:09Z",
+  "computer_microphone": {
+    "boundary": "normalized_transcript_and_surface_context_v7",
+    "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+    "controlled_phrase_match": {
+      "expected_words": [
+        "anticipy",
+        "calendar",
+        "computer",
+        "microphone",
+        "orange",
+        "ready"
+      ],
+      "hits": [
+        "calendar",
+        "computer",
+        "microphone",
+        "orange"
+      ],
+      "pass": true,
+      "required": 3
+    },
+    "cost_receipt": {
+      "reason": "local ASR probe",
+      "runtime_model_cost_usd": 0.0
+    },
+    "endpoint": "/api/listen/start",
+    "implementation": "_process_utterance",
+    "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+    "live_capture_pass": true,
+    "observed_source": "mic-asr",
+    "pass": true,
+    "playback": {
+      "duration_ms": 9173,
+      "ok": true,
+      "output": {
+        "after": "MacBook Air Speakers",
+        "before": "MacBook Air Speakers",
+        "ok": true,
+        "raw": "output audio device set to \"MacBook Air Speakers\"",
+        "target": "MacBook Air Speakers",
+        "volume_after": "output volume:100, input volume:100, alert volume:63, output muted:false",
+        "volume_before": "output volume:100, input volume:100, alert volume:63, output muted:true"
+      },
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "record_capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+    "requested_device": {
+      "connection_type": "built_in",
+      "default_sample_rate": 44100.0,
+      "index": 2,
+      "is_default": false,
+      "kind": "builtin",
+      "max_input_channels": 1,
+      "name": "MacBook Air Microphone",
+      "source_detail": "built_in_mic"
+    },
+    "rms": 0.2157546728849411,
+    "selected_device": {
+      "connection_type": "built_in",
+      "default_sample_rate": 44100.0,
+      "index": 2,
+      "is_default": false,
+      "kind": "builtin",
+      "max_input_channels": 1,
+      "name": "MacBook Air Microphone",
+      "source_detail": "built_in_mic"
+    },
+    "source_detail": "built_in_mic",
+    "source_mode": "computer_microphone",
+    "start_response": {
+      "audio_device": {
+        "connection_type": "built_in",
+        "default_sample_rate": 44100.0,
+        "index": 2,
+        "is_default": false,
+        "kind": "builtin",
+        "max_input_channels": 1,
+        "name": "MacBook Air Microphone",
+        "source_detail": "built_in_mic"
+      },
+      "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+      "on": true,
+      "permission": "authorized",
+      "sample_rate": 44100,
+      "source_mode": "computer_microphone",
+      "window_seconds": 15.0
+    },
+    "status": 200,
+    "trace_receipt": {
+      "record": {
+        "asr_normalizations": [],
+        "asr_normalized": false,
+        "audio_device": {
+          "connection_type": "built_in",
+          "default_sample_rate": 44100.0,
+          "index": 2,
+          "is_default": false,
+          "kind": "builtin",
+          "max_input_channels": 1,
+          "name": "MacBook Air Microphone",
+          "source_detail": "built_in_mic"
+        },
+        "capture": {
+          "asr_normalizations": [],
+          "asr_normalized": false,
+          "audio_device": {
+            "connection_type": "built_in",
+            "default_sample_rate": 44100.0,
+            "index": 2,
+            "is_default": false,
+            "kind": "builtin",
+            "max_input_channels": 1,
+            "name": "MacBook Air Microphone",
+            "source_detail": "built_in_mic"
+          },
+          "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+          "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+          "source_mode": "computer_microphone",
+          "stream_sample_rate": 44100.0
+        },
+        "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+        "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+        "memory": {
+          "op": "NOOP",
+          "reason": "The candidate is nonsensical and contains no actionable or factual information worth storing."
+        },
+        "outcome": "LIFE_LOG",
+        "plan": {
+          "intent": "other",
+          "mode": "clarify",
+          "person": "",
+          "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+          "task": "",
+          "thing": ""
+        },
+        "proactive_due": {
+          "fired": [],
+          "fired_count": 0,
+          "now": 1779925601.09588,
+          "ok": true
+        },
+        "profile_loaded": true,
+        "proposal": null,
+        "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+        "resolution_trace_sync": {
+          "ok": false,
+          "reason": "not provisioned",
+          "skipped": true
+        },
+        "rms": 0.2157546728849411,
+        "source": "mic-asr",
+        "transcript": "Computer microphone anticipate orange calendar.",
+        "ts": 1779925596.906807,
+        "v7_artifacts": {
+          "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+          "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+          "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+        },
+        "v7_decision": {
+          "decision": {
+            "message": "",
+            "mode": "ask_first"
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+          "input_mode": "computer_microphone",
+          "outcome": "LIFE_LOG",
+          "plan": {
+            "intent": "other",
+            "mode": "clarify",
+            "person": "",
+            "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+            "task": "",
+            "thing": ""
+          },
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.decision.v7",
+          "source": "mic-asr",
+          "surface_proof_required": true,
+          "ts": 1779925596.906807
+        },
+        "v7_normalized_input": {
+          "capture": {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "bytes": null,
+            "content_type": null,
+            "filename": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar."
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+          "input_mode": "computer_microphone",
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.normalized_input.v7",
+          "source": "mic-asr",
+          "ts": 1779925596.906807,
+          "window": {
+            "turns": [
+              {
+                "asr_confidence": null,
+                "end_ms": 0,
+                "speaker": "user",
+                "start_ms": 0,
+                "text": "Computer microphone anticipate orange calendar."
+              }
+            ]
+          }
+        },
+        "window": 1
+      },
+      "type": "listen_status_recent"
+    },
+    "transcript": "Computer microphone anticipate orange calendar.",
+    "transcript_chars": 47,
+    "transcript_quality_receipt": {
+      "mode": "computer_microphone",
+      "reason": "probe has no acoustic ground truth alignment",
+      "transcript_chars": 47,
+      "wer": null
+    },
+    "wait": {
+      "ok": true,
+      "record": {
+        "asr_normalizations": [],
+        "asr_normalized": false,
+        "audio_device": {
+          "connection_type": "built_in",
+          "default_sample_rate": 44100.0,
+          "index": 2,
+          "is_default": false,
+          "kind": "builtin",
+          "max_input_channels": 1,
+          "name": "MacBook Air Microphone",
+          "source_detail": "built_in_mic"
+        },
+        "capture": {
+          "asr_normalizations": [],
+          "asr_normalized": false,
+          "audio_device": {
+            "connection_type": "built_in",
+            "default_sample_rate": 44100.0,
+            "index": 2,
+            "is_default": false,
+            "kind": "builtin",
+            "max_input_channels": 1,
+            "name": "MacBook Air Microphone",
+            "source_detail": "built_in_mic"
+          },
+          "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+          "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+          "source_mode": "computer_microphone",
+          "stream_sample_rate": 44100.0
+        },
+        "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+        "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+        "memory": {
+          "op": "NOOP",
+          "reason": "The candidate is nonsensical and contains no actionable or factual information worth storing."
+        },
+        "outcome": "LIFE_LOG",
+        "plan": {
+          "intent": "other",
+          "mode": "clarify",
+          "person": "",
+          "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+          "task": "",
+          "thing": ""
+        },
+        "proactive_due": {
+          "fired": [],
+          "fired_count": 0,
+          "now": 1779925601.09588,
+          "ok": true
+        },
+        "profile_loaded": true,
+        "proposal": null,
+        "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+        "resolution_trace_sync": {
+          "ok": false,
+          "reason": "not provisioned",
+          "skipped": true
+        },
+        "rms": 0.2157546728849411,
+        "source": "mic-asr",
+        "transcript": "Computer microphone anticipate orange calendar.",
+        "ts": 1779925596.906807,
+        "v7_artifacts": {
+          "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+          "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+          "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+        },
+        "v7_decision": {
+          "decision": {
+            "message": "",
+            "mode": "ask_first"
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+          "input_mode": "computer_microphone",
+          "outcome": "LIFE_LOG",
+          "plan": {
+            "intent": "other",
+            "mode": "clarify",
+            "person": "",
+            "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+            "task": "",
+            "thing": ""
+          },
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.decision.v7",
+          "source": "mic-asr",
+          "surface_proof_required": true,
+          "ts": 1779925596.906807
+        },
+        "v7_normalized_input": {
+          "capture": {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "bytes": null,
+            "content_type": null,
+            "filename": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar."
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+          "input_mode": "computer_microphone",
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.normalized_input.v7",
+          "source": "mic-asr",
+          "ts": 1779925596.906807,
+          "window": {
+            "turns": [
+              {
+                "asr_confidence": null,
+                "end_ms": 0,
+                "speaker": "user",
+                "start_ms": 0,
+                "text": "Computer microphone anticipate orange calendar."
+              }
+            ]
+          }
+        },
+        "window": 1
+      },
+      "status": {
+        "acted": null,
+        "audio_device": {
+          "connection_type": "built_in",
+          "default_sample_rate": 44100.0,
+          "index": 2,
+          "is_default": false,
+          "kind": "builtin",
+          "max_input_channels": 1,
+          "name": "MacBook Air Microphone",
+          "source_detail": "built_in_mic"
+        },
+        "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+        "error": null,
+        "level": 0.062067,
+        "on": true,
+        "pending": {
+          "clarify": true,
+          "instruction": "Computer microphone anticipate orange calendar.",
+          "plan": {
+            "intent": "other",
+            "mode": "clarify",
+            "person": "",
+            "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+            "task": "",
+            "thing": ""
+          },
+          "proposal": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+          "ts": 1779925596.906807
+        },
+        "recent": [
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+              "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+              "source_mode": "computer_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+            "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is nonsensical and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925601.09588,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.2157546728849411,
+            "source": "mic-asr",
+            "transcript": "Computer microphone anticipate orange calendar.",
+            "ts": 1779925596.906807,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+              "input_mode": "computer_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925596.906807
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Computer microphone anticipate orange calendar."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+              "input_mode": "computer_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925596.906807,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Computer microphone anticipate orange calendar."
+                  }
+                ]
+              }
+            },
+            "window": 1
+          },
+          {
+            "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, non-actionable note without clear factual content to add or reconcile with existing memory."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925580.722589,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.0,
+            "source": "asr-transcript",
+            "transcript": "Anticipy transcript proof d40e17c6. Remember the green folder.",
+            "ts": 1779925577.0601332,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+              "input_mode": "text_transcript",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "asr-transcript",
+              "surface_proof_required": true,
+              "ts": 1779925577.0601332
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": null,
+                "audio_device": null,
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": null
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+              "input_mode": "text_transcript",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "asr-transcript",
+              "ts": 1779925577.0601332,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy transcript proof d40e17c6. Remember the green folder."
+                  }
+                ]
+              }
+            },
+            "window": 4
+          },
+          {
+            "asr_normalizations": [
+              {
+                "count": 1,
+                "pattern": "^anticipate(?=[,\\s])",
+                "reason": "hotword_asr_correction",
+                "replacement": "Anticipy"
+              }
+            ],
+            "asr_normalized": true,
+            "audio_device": null,
+            "capture": {
+              "asr_normalizations": [
+                {
+                  "count": 1,
+                  "pattern": "^anticipate(?=[,\\s])",
+                  "reason": "hotword_asr_correction",
+                  "replacement": "Anticipy"
+                }
+              ],
+              "asr_normalized": true,
+              "bytes": 239444,
+              "content_type": "audio/aiff",
+              "filename": "",
+              "mean_confidence": 0.9832,
+              "raw_asr_transcript": "Anticipate audio upload proof 419,998A. Remember the blue notebook?"
+            },
+            "capture_id": null,
+            "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, context-free question with no actionable or factual content to store."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925577.052275,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Anticipate audio upload proof 419,998A. Remember the blue notebook?",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.12033578753471375,
+            "source": "upload-asr",
+            "transcript": "Anticipy audio upload proof 419,998A. Remember the blue notebook?",
+            "ts": 1779925571.9750211,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+              "input_mode": "audio_upload",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "upload-asr",
+              "surface_proof_required": true,
+              "ts": 1779925571.9750211
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [
+                  {
+                    "count": 1,
+                    "pattern": "^anticipate(?=[,\\s])",
+                    "reason": "hotword_asr_correction",
+                    "replacement": "Anticipy"
+                  }
+                ],
+                "asr_normalized": true,
+                "audio_device": null,
+                "bytes": 239444,
+                "content_type": "audio/aiff",
+                "filename": "",
+                "raw_asr_transcript": "Anticipate audio upload proof 419,998A. Remember the blue notebook?"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+              "input_mode": "audio_upload",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "upload-asr",
+              "ts": 1779925571.9750211,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": 0.9832,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy audio upload proof 419,998A. Remember the blue notebook?"
+                  }
+                ]
+              }
+            },
+            "window": 3
+          },
+          {
+            "asr_normalizations": [
+              {
+                "count": 1,
+                "pattern": "^anticipate(?=[,\\s])",
+                "reason": "hotword_asr_correction",
+                "replacement": "Anticipy"
+              }
+            ],
+            "asr_normalized": true,
+            "audio_device": null,
+            "capture": {
+              "asr_normalizations": [
+                {
+                  "count": 1,
+                  "pattern": "^anticipate(?=[,\\s])",
+                  "reason": "hotword_asr_correction",
+                  "replacement": "Anticipy"
+                }
+              ],
+              "asr_normalized": true,
+              "bytes": 196122,
+              "content_type": "audio/aiff",
+              "filename": "",
+              "mean_confidence": 0.9933,
+              "raw_asr_transcript": "Anticipate audio upload proof test 123. Remember the blue notebook?"
+            },
+            "capture_id": null,
+            "ingest_id": "upload-asr-3b9a2877a3334e87854ac68ca2d522a0",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, context-free note that does not add actionable or factual information to the existing memory."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925557.265197,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Anticipate audio upload proof test 123. Remember the blue notebook?",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.11534231156110764,
+            "source": "upload-asr",
+            "transcript": "Anticipy audio upload proof test 123. Remember the blue notebook?",
+            "ts": 1779925551.970879,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-3b9a2877a3334e87854ac68ca2d522a0",
+              "input_mode": "audio_upload",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "upload-asr",
+              "surface_proof_required": true,
+              "ts": 1779925551.970879
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [
+                  {
+                    "count": 1,
+                    "pattern": "^anticipate(?=[,\\s])",
+                    "reason": "hotword_asr_correction",
+                    "replacement": "Anticipy"
+                  }
+                ],
+                "asr_normalized": true,
+                "audio_device": null,
+                "bytes": 196122,
+                "content_type": "audio/aiff",
+                "filename": "",
+                "raw_asr_transcript": "Anticipate audio upload proof test 123. Remember the blue notebook?"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-3b9a2877a3334e87854ac68ca2d522a0",
+              "input_mode": "audio_upload",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "upload-asr",
+              "ts": 1779925551.970879,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": 0.9933,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy audio upload proof test 123. Remember the blue notebook?"
+                  }
+                ]
+              }
+            },
+            "window": 2
+          },
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-3fa8172359e74c8383625b1e28283df4",
+              "raw_asr_transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+              "source_mode": "external_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-3fa8172359e74c8383625b1e28283df4",
+            "ingest_id": "mic-asr-a2dbc55bb67d404caa245caade339f63",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is incoherent and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925519.205745,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.2888687551021576,
+            "source": "mic-asr",
+            "transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+            "ts": 1779925513.7446258,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-a2dbc55bb67d404caa245caade339f63",
+              "input_mode": "external_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925513.7446258
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-a2dbc55bb67d404caa245caade339f63",
+              "input_mode": "external_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925513.7446258,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend."
+                  }
+                ]
+              }
+            },
+            "window": 1
+          },
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-a175b3376ad44a96806178cc8d01822d",
+              "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+              "source_mode": "computer_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-a175b3376ad44a96806178cc8d01822d",
+            "ingest_id": "mic-asr-dac69237a2744ab3b0179e9ddcf1996b",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate text is nonsensical and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "I'm sorry, I didn't understand that. Could you please rephrase what you'd like me to do?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925496.93253,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.3736264407634735,
+            "source": "mic-asr",
+            "transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "ts": 1779925488.5733278,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-dac69237a2744ab3b0179e9ddcf1996b",
+              "input_mode": "computer_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "I'm sorry, I didn't understand that. Could you please rephrase what you'd like me to do?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925488.5733278
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-dac69237a2744ab3b0179e9ddcf1996b",
+              "input_mode": "computer_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925488.5733278,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+                  }
+                ]
+              }
+            },
+            "window": 2
+          },
+          {
+            "ask_user": true,
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": null,
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "bytes": 105508,
+              "content_type": "audio/mpeg",
+              "filename": "uploaded_audio.mp3",
+              "mean_confidence": 0.9909,
+              "raw_asr_transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything."
+            },
+            "capture_id": null,
+            "competent_decline": false,
+            "d16_receipt": "CRM/SaaS write attempt via dispatcher (confirm card for email/post/publish/delete)",
+            "decline": false,
+            "dispatcher_outcome": {
+              "error": "",
+              "history": [
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Atlas Onboarding | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/setup/personalization"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Atlas Onboarding | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/setup/personalization"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Deploy your cluster | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/clusters/starterTemplates"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Deploy your cluster | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/clusters/starterTemplates"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-000d736ffa46"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-3748111de16f"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                }
+              ],
+              "intent": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+              "message": "",
+              "options": [
+                "keep_going",
+                "show_me_what_you_did",
+                "cancel"
+              ],
+              "proof": {
+                "surface": {
+                  "dom_structure": "M1 button: missing value\nM2 button: missing value\nM3 button: missing value",
+                  "dom_text": "",
+                  "screenshot_path": "/Users/omarebrahim/.anticipy/screenshots/universal/20260527T234428Z_universal.png",
+                  "source": "osascript_fallback",
+                  "title": "Anticipy App",
+                  "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090",
+                  "visible_elements_with_set_of_mark_labels": [
+                    {
+                      "kind": "button",
+                      "label": "M1",
+                      "name": "missing value"
+                    },
+                    {
+                      "kind": "button",
+                      "label": "M2",
+                      "name": "missing value"
+                    },
+                    {
+                      "kind": "button",
+                      "label": "M3",
+                      "name": "missing value"
+                    }
+                  ]
+                }
+              },
+              "question": "I've tried 20 steps toward \"Please add a new record in my Notion Memos database titled Office Relocation Che\" and haven't succeeded yet. Help me succeed?",
+              "status": "ask_user",
+              "steps": 20
+            },
+            "ingest_id": "upload-asr-8485e99fe4c948cd9bfff8372bc19e80",
+            "intent": "crm_saas_write",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a request to perform an action, not a factual observation about the user's life or preferences. It does not add, update, or delete any stored m"
+            },
+            "outcome": "ASKING",
+            "plan": {
+              "ask_user": false,
+              "blocked_services": [
+                "Notion"
+              ],
+              "competent_decline": false,
+              "confirm_card_id": "ask-c4c1484582c2",
+              "d16_receipt": "CRM/SaaS write attempt via dispatcher (confirm card for email/post/publish/delete)",
+              "intent": "crm_saas_write",
+              "irreversible_steps": [
+                "email",
+                "post",
+                "close",
+                "promise",
+                "publish"
+              ],
+              "mode": "act",
+              "proposal": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+              "require_confirm": false,
+              "task": "",
+              "thing": "Notion",
+              "unchanged": [
+                "Notion records",
+                "source context",
+                "field/note/status/owner state",
+                "no-extra-change visible state"
+              ],
+              "unchanged_state_boundary": "Notion records; source context; field/note/status/owner state; no extra external comms without confirm",
+              "universal_dispatch": true
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925493.1324959,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+            "raw_asr_transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.1092832162976265,
+            "source": "upload-asr",
+            "transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+            "ts": 1779925242.6459389,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-8485e99fe4c948cd9bfff8372bc19e80",
+              "input_mode": "mp3_upload",
+              "outcome": "ASKING",
+              "plan": {
+                "ask_user": false,
+                "blocked_services": [
+                  "Notion"
+                ],
+                "competent_decline": false,
+                "confirm_card_id": "ask-c4c1484582c2",
+                "d16_receipt": "CRM/SaaS write attempt via dispatcher (confirm card for email/post/publish/delete)",
+                "intent": "crm_saas_write",
+                "irreversible_steps": [
+                  "email",
+                  "post",
+                  "close",
+                  "promise",
+                  "publish"
+                ],
+                "mode": "act",
+                "proposal": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+                "require_confirm": false,
+                "task": "",
+                "thing": "Notion",
+                "unchanged": [
+                  "Notion records",
+                  "source context",
+                  "field/note/status/owner state",
+                  "no-extra-change visible state"
+                ],
+                "unchanged_state_boundary": "Notion records; source context; field/note/status/owner state; no extra external comms without confirm",
+                "universal_dispatch": true
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "upload-asr",
+              "surface_proof_required": true,
+              "ts": 1779925242.6459389
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": null,
+                "bytes": 105508,
+                "content_type": "audio/mpeg",
+                "filename": "uploaded_audio.mp3",
+                "raw_asr_transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-8485e99fe4c948cd9bfff8372bc19e80",
+              "input_mode": "mp3_upload",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "upload-asr",
+              "ts": 1779925242.6459389,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": 0.9909,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything."
+                  }
+                ]
+              }
+            },
+            "window": 8
+          },
+          {
+            "ingest_id": "asr-transcript-72739357a5c44fdeb89591b5f4a960c3",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, contextless note that does not add actionable or clear information to the existing memory."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925472.158999,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.0,
+            "source": "asr-transcript",
+            "transcript": "Anticipy transcript proof 32e47436. Remember the green folder.",
+            "ts": 1779925464.889355,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-72739357a5c44fdeb89591b5f4a960c3",
+              "input_mode": "text_transcript",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "asr-transcript",
+              "surface_proof_required": true,
+              "ts": 1779925464.889355
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": null,
+                "audio_device": null,
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": null
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-72739357a5c44fdeb89591b5f4a960c3",
+              "input_mode": "text_transcript",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "asr-transcript",
+              "ts": 1779925464.889355,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy transcript proof 32e47436. Remember the green folder."
+                  }
+                ]
+              }
+            },
+            "window": 1
+          },
+          {
+            "ingest_id": "asr-transcript-788869e60d5f465a96d89af6c2c6afdc",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is vague and lacks actionable or factual content; 'remember the green folder' is not a clear, storable fact."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925461.258828,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.0,
+            "source": "asr-transcript",
+            "transcript": "Anticipy transcript proof 62989097. Remember the green folder.",
+            "ts": 1779925451.035244,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-788869e60d5f465a96d89af6c2c6afdc",
+              "input_mode": "text_transcript",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "asr-transcript",
+              "surface_proof_required": true,
+              "ts": 1779925451.035244
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": null,
+                "audio_device": null,
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": null
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-788869e60d5f465a96d89af6c2c6afdc",
+              "input_mode": "text_transcript",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "asr-transcript",
+              "ts": 1779925451.035244,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy transcript proof 62989097. Remember the green folder."
+                  }
+                ]
+              }
+            },
+            "window": 3
+          },
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-df822a0c22034fa8beeeb026a75809c8",
+              "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+              "source_mode": "computer_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-df822a0c22034fa8beeeb026a75809c8",
+            "ingest_id": "mic-asr-5d2b0d67014d408c997668abb8dd04d9",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate text is nonsensical and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "I'm not sure what you mean by 'orange calendar ready'. Could you clarify what you'd like me to do?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925451.700037,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.36563071608543396,
+            "source": "mic-asr",
+            "transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "ts": 1779925439.420553,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-5d2b0d67014d408c997668abb8dd04d9",
+              "input_mode": "computer_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "I'm not sure what you mean by 'orange calendar ready'. Could you clarify what you'd like me to do?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925439.420553
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-5d2b0d67014d408c997668abb8dd04d9",
+              "input_mode": "computer_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925439.420553,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+                  }
+                ]
+              }
+            },
+            "window": 2
+          }
+        ],
+        "sample_rate": 44100,
+        "source_mode": "computer_microphone",
+        "uptime": 22.7,
+        "window_seconds": 15.0,
+        "windows": 1
+      },
+      "transcript_chars": 47
+    }
+  },
+  "engine": {
+    "installed_process": {
+      "command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+      "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+      "health": {
+        "listening": false,
+        "ok": true,
+        "onboarded": true,
+        "pid": 15148,
+        "port": 8731,
+        "profile_error": "",
+        "service": "anticipy-local-engine",
+        "version": "product-3"
+      },
+      "listener_count": 1,
+      "lsof": "COMMAND     PID        USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME\nanticipy- 15148 omarebrahim   14u  IPv4 0xd363ead3bcca88d3      0t0  TCP 127.0.0.1:8731 (LISTEN)",
+      "ok": true,
+      "pid": 15148,
+      "port": 8731
+    },
+    "url": "http://127.0.0.1:8731"
+  },
+  "external_microphone": {
+    "boundary": "normalized_transcript_and_surface_context_v7",
+    "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+    "controlled_phrase_match": {
+      "expected_words": [
+        "anticipy",
+        "calendar",
+        "computer",
+        "microphone",
+        "orange",
+        "ready"
+      ],
+      "hits": [
+        "calendar",
+        "computer",
+        "microphone",
+        "orange",
+        "ready"
+      ],
+      "pass": true,
+      "required": 3
+    },
+    "cost_receipt": {
+      "reason": "local ASR probe",
+      "runtime_model_cost_usd": 0.0
+    },
+    "endpoint": "/api/listen/start",
+    "implementation": "_process_utterance",
+    "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+    "live_capture_pass": true,
+    "observed_source": "mic-asr",
+    "pass": true,
+    "playback": {
+      "duration_ms": 9159,
+      "ok": true,
+      "output": {
+        "after": "MacBook Air Speakers",
+        "before": "MacBook Air Speakers",
+        "ok": true,
+        "raw": "output audio device set to \"MacBook Air Speakers\"",
+        "target": "MacBook Air Speakers",
+        "volume_after": "output volume:100, input volume:100, alert volume:63, output muted:false",
+        "volume_before": "output volume:100, input volume:100, alert volume:63, output muted:true"
+      },
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    "record_capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+    "requested_device": {
+      "connection_type": "built_in",
+      "default_sample_rate": 44100.0,
+      "index": 2,
+      "is_default": false,
+      "kind": "builtin",
+      "max_input_channels": 1,
+      "name": "MacBook Air Microphone",
+      "source_detail": "builtin_used_as_external_until_pendant_ships"
+    },
+    "rms": 0.3130822479724884,
+    "selected_device": {
+      "connection_type": "built_in",
+      "default_sample_rate": 44100.0,
+      "index": 2,
+      "is_default": false,
+      "kind": "builtin",
+      "max_input_channels": 1,
+      "name": "MacBook Air Microphone",
+      "source_detail": "built_in_mic"
+    },
+    "source_detail": "built_in_mic",
+    "source_mode": "external_microphone",
+    "start_response": {
+      "audio_device": {
+        "connection_type": "built_in",
+        "default_sample_rate": 44100.0,
+        "index": 2,
+        "is_default": false,
+        "kind": "builtin",
+        "max_input_channels": 1,
+        "name": "MacBook Air Microphone",
+        "source_detail": "built_in_mic"
+      },
+      "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+      "on": true,
+      "permission": "authorized",
+      "sample_rate": 44100,
+      "source_mode": "external_microphone",
+      "window_seconds": 15.0
+    },
+    "status": 200,
+    "trace_receipt": {
+      "record": {
+        "asr_normalizations": [],
+        "asr_normalized": false,
+        "audio_device": {
+          "connection_type": "built_in",
+          "default_sample_rate": 44100.0,
+          "index": 2,
+          "is_default": false,
+          "kind": "builtin",
+          "max_input_channels": 1,
+          "name": "MacBook Air Microphone",
+          "source_detail": "built_in_mic"
+        },
+        "capture": {
+          "asr_normalizations": [],
+          "asr_normalized": false,
+          "audio_device": {
+            "connection_type": "built_in",
+            "default_sample_rate": 44100.0,
+            "index": 2,
+            "is_default": false,
+            "kind": "builtin",
+            "max_input_channels": 1,
+            "name": "MacBook Air Microphone",
+            "source_detail": "built_in_mic"
+          },
+          "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+          "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+          "source_mode": "external_microphone",
+          "stream_sample_rate": 44100.0
+        },
+        "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+        "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+        "memory": {
+          "op": "NOOP",
+          "reason": "The candidate text is nonsensical and contains no actionable or factual information worth storing."
+        },
+        "outcome": "LIFE_LOG",
+        "plan": {
+          "intent": "other",
+          "mode": "clarify",
+          "person": "",
+          "question": "What would you like me to do with the orange calendar?",
+          "task": "",
+          "thing": ""
+        },
+        "proactive_due": {
+          "fired": [],
+          "fired_count": 0,
+          "now": 1779925624.5840771,
+          "ok": true
+        },
+        "profile_loaded": true,
+        "proposal": null,
+        "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+        "resolution_trace_sync": {
+          "ok": false,
+          "reason": "not provisioned",
+          "skipped": true
+        },
+        "rms": 0.3130822479724884,
+        "source": "mic-asr",
+        "transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+        "ts": 1779925619.2831628,
+        "v7_artifacts": {
+          "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+          "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+          "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+        },
+        "v7_decision": {
+          "decision": {
+            "message": "",
+            "mode": "ask_first"
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+          "input_mode": "external_microphone",
+          "outcome": "LIFE_LOG",
+          "plan": {
+            "intent": "other",
+            "mode": "clarify",
+            "person": "",
+            "question": "What would you like me to do with the orange calendar?",
+            "task": "",
+            "thing": ""
+          },
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.decision.v7",
+          "source": "mic-asr",
+          "surface_proof_required": true,
+          "ts": 1779925619.2831628
+        },
+        "v7_normalized_input": {
+          "capture": {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "bytes": null,
+            "content_type": null,
+            "filename": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+          "input_mode": "external_microphone",
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.normalized_input.v7",
+          "source": "mic-asr",
+          "ts": 1779925619.2831628,
+          "window": {
+            "turns": [
+              {
+                "asr_confidence": null,
+                "end_ms": 0,
+                "speaker": "user",
+                "start_ms": 0,
+                "text": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+              }
+            ]
+          }
+        },
+        "window": 1
+      },
+      "type": "listen_status_recent"
+    },
+    "transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+    "transcript_chars": 107,
+    "transcript_quality_receipt": {
+      "mode": "external_microphone",
+      "reason": "probe has no acoustic ground truth alignment",
+      "transcript_chars": 107,
+      "wer": null
+    },
+    "wait": {
+      "ok": true,
+      "record": {
+        "asr_normalizations": [],
+        "asr_normalized": false,
+        "audio_device": {
+          "connection_type": "built_in",
+          "default_sample_rate": 44100.0,
+          "index": 2,
+          "is_default": false,
+          "kind": "builtin",
+          "max_input_channels": 1,
+          "name": "MacBook Air Microphone",
+          "source_detail": "built_in_mic"
+        },
+        "capture": {
+          "asr_normalizations": [],
+          "asr_normalized": false,
+          "audio_device": {
+            "connection_type": "built_in",
+            "default_sample_rate": 44100.0,
+            "index": 2,
+            "is_default": false,
+            "kind": "builtin",
+            "max_input_channels": 1,
+            "name": "MacBook Air Microphone",
+            "source_detail": "built_in_mic"
+          },
+          "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+          "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+          "source_mode": "external_microphone",
+          "stream_sample_rate": 44100.0
+        },
+        "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+        "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+        "memory": {
+          "op": "NOOP",
+          "reason": "The candidate text is nonsensical and contains no actionable or factual information worth storing."
+        },
+        "outcome": "LIFE_LOG",
+        "plan": {
+          "intent": "other",
+          "mode": "clarify",
+          "person": "",
+          "question": "What would you like me to do with the orange calendar?",
+          "task": "",
+          "thing": ""
+        },
+        "proactive_due": {
+          "fired": [],
+          "fired_count": 0,
+          "now": 1779925624.5840771,
+          "ok": true
+        },
+        "profile_loaded": true,
+        "proposal": null,
+        "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+        "resolution_trace_sync": {
+          "ok": false,
+          "reason": "not provisioned",
+          "skipped": true
+        },
+        "rms": 0.3130822479724884,
+        "source": "mic-asr",
+        "transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+        "ts": 1779925619.2831628,
+        "v7_artifacts": {
+          "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+          "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+          "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+        },
+        "v7_decision": {
+          "decision": {
+            "message": "",
+            "mode": "ask_first"
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+          "input_mode": "external_microphone",
+          "outcome": "LIFE_LOG",
+          "plan": {
+            "intent": "other",
+            "mode": "clarify",
+            "person": "",
+            "question": "What would you like me to do with the orange calendar?",
+            "task": "",
+            "thing": ""
+          },
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.decision.v7",
+          "source": "mic-asr",
+          "surface_proof_required": true,
+          "ts": 1779925619.2831628
+        },
+        "v7_normalized_input": {
+          "capture": {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "bytes": null,
+            "content_type": null,
+            "filename": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+          },
+          "device_engine": "user-device",
+          "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+          "input_mode": "external_microphone",
+          "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+          "schema": "anticipy.normalized_input.v7",
+          "source": "mic-asr",
+          "ts": 1779925619.2831628,
+          "window": {
+            "turns": [
+              {
+                "asr_confidence": null,
+                "end_ms": 0,
+                "speaker": "user",
+                "start_ms": 0,
+                "text": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+              }
+            ]
+          }
+        },
+        "window": 1
+      },
+      "status": {
+        "acted": null,
+        "audio_device": {
+          "connection_type": "built_in",
+          "default_sample_rate": 44100.0,
+          "index": 2,
+          "is_default": false,
+          "kind": "builtin",
+          "max_input_channels": 1,
+          "name": "MacBook Air Microphone",
+          "source_detail": "built_in_mic"
+        },
+        "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+        "error": null,
+        "level": 0.057887,
+        "on": true,
+        "pending": {
+          "clarify": true,
+          "instruction": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+          "plan": {
+            "intent": "other",
+            "mode": "clarify",
+            "person": "",
+            "question": "What would you like me to do with the orange calendar?",
+            "task": "",
+            "thing": ""
+          },
+          "proposal": "What would you like me to do with the orange calendar?",
+          "ts": 1779925619.2831628
+        },
+        "recent": [
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+              "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+              "source_mode": "external_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-d1e8fc0324bd400a8bf994cf664ccf9a",
+            "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate text is nonsensical and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "What would you like me to do with the orange calendar?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925624.5840771,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.3130822479724884,
+            "source": "mic-asr",
+            "transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "ts": 1779925619.2831628,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+              "input_mode": "external_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "What would you like me to do with the orange calendar?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925619.2831628
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-fc2013dfa7df49748283fd21886c2db1",
+              "input_mode": "external_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925619.2831628,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+                  }
+                ]
+              }
+            },
+            "window": 1
+          },
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+              "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+              "source_mode": "computer_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-9dd8e5f7aab0403aa67797402f9994b0",
+            "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is nonsensical and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925601.09588,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.2157546728849411,
+            "source": "mic-asr",
+            "transcript": "Computer microphone anticipate orange calendar.",
+            "ts": 1779925596.906807,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+              "input_mode": "computer_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "What would you like me to do with the orange calendar? For example, create an event, check a date, or something else?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925596.906807
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Computer microphone anticipate orange calendar."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-ccf888ec81d54a19ac3e7ee07f724747",
+              "input_mode": "computer_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925596.906807,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Computer microphone anticipate orange calendar."
+                  }
+                ]
+              }
+            },
+            "window": 1
+          },
+          {
+            "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, non-actionable note without clear factual content to add or reconcile with existing memory."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925580.722589,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.0,
+            "source": "asr-transcript",
+            "transcript": "Anticipy transcript proof d40e17c6. Remember the green folder.",
+            "ts": 1779925577.0601332,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+              "input_mode": "text_transcript",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "asr-transcript",
+              "surface_proof_required": true,
+              "ts": 1779925577.0601332
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": null,
+                "audio_device": null,
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": null
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+              "input_mode": "text_transcript",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "asr-transcript",
+              "ts": 1779925577.0601332,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy transcript proof d40e17c6. Remember the green folder."
+                  }
+                ]
+              }
+            },
+            "window": 4
+          },
+          {
+            "asr_normalizations": [
+              {
+                "count": 1,
+                "pattern": "^anticipate(?=[,\\s])",
+                "reason": "hotword_asr_correction",
+                "replacement": "Anticipy"
+              }
+            ],
+            "asr_normalized": true,
+            "audio_device": null,
+            "capture": {
+              "asr_normalizations": [
+                {
+                  "count": 1,
+                  "pattern": "^anticipate(?=[,\\s])",
+                  "reason": "hotword_asr_correction",
+                  "replacement": "Anticipy"
+                }
+              ],
+              "asr_normalized": true,
+              "bytes": 239444,
+              "content_type": "audio/aiff",
+              "filename": "",
+              "mean_confidence": 0.9832,
+              "raw_asr_transcript": "Anticipate audio upload proof 419,998A. Remember the blue notebook?"
+            },
+            "capture_id": null,
+            "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, context-free question with no actionable or factual content to store."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925577.052275,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Anticipate audio upload proof 419,998A. Remember the blue notebook?",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.12033578753471375,
+            "source": "upload-asr",
+            "transcript": "Anticipy audio upload proof 419,998A. Remember the blue notebook?",
+            "ts": 1779925571.9750211,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+              "input_mode": "audio_upload",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "upload-asr",
+              "surface_proof_required": true,
+              "ts": 1779925571.9750211
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [
+                  {
+                    "count": 1,
+                    "pattern": "^anticipate(?=[,\\s])",
+                    "reason": "hotword_asr_correction",
+                    "replacement": "Anticipy"
+                  }
+                ],
+                "asr_normalized": true,
+                "audio_device": null,
+                "bytes": 239444,
+                "content_type": "audio/aiff",
+                "filename": "",
+                "raw_asr_transcript": "Anticipate audio upload proof 419,998A. Remember the blue notebook?"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+              "input_mode": "audio_upload",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "upload-asr",
+              "ts": 1779925571.9750211,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": 0.9832,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy audio upload proof 419,998A. Remember the blue notebook?"
+                  }
+                ]
+              }
+            },
+            "window": 3
+          },
+          {
+            "asr_normalizations": [
+              {
+                "count": 1,
+                "pattern": "^anticipate(?=[,\\s])",
+                "reason": "hotword_asr_correction",
+                "replacement": "Anticipy"
+              }
+            ],
+            "asr_normalized": true,
+            "audio_device": null,
+            "capture": {
+              "asr_normalizations": [
+                {
+                  "count": 1,
+                  "pattern": "^anticipate(?=[,\\s])",
+                  "reason": "hotword_asr_correction",
+                  "replacement": "Anticipy"
+                }
+              ],
+              "asr_normalized": true,
+              "bytes": 196122,
+              "content_type": "audio/aiff",
+              "filename": "",
+              "mean_confidence": 0.9933,
+              "raw_asr_transcript": "Anticipate audio upload proof test 123. Remember the blue notebook?"
+            },
+            "capture_id": null,
+            "ingest_id": "upload-asr-3b9a2877a3334e87854ac68ca2d522a0",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, context-free note that does not add actionable or factual information to the existing memory."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925557.265197,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Anticipate audio upload proof test 123. Remember the blue notebook?",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.11534231156110764,
+            "source": "upload-asr",
+            "transcript": "Anticipy audio upload proof test 123. Remember the blue notebook?",
+            "ts": 1779925551.970879,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-3b9a2877a3334e87854ac68ca2d522a0",
+              "input_mode": "audio_upload",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "upload-asr",
+              "surface_proof_required": true,
+              "ts": 1779925551.970879
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [
+                  {
+                    "count": 1,
+                    "pattern": "^anticipate(?=[,\\s])",
+                    "reason": "hotword_asr_correction",
+                    "replacement": "Anticipy"
+                  }
+                ],
+                "asr_normalized": true,
+                "audio_device": null,
+                "bytes": 196122,
+                "content_type": "audio/aiff",
+                "filename": "",
+                "raw_asr_transcript": "Anticipate audio upload proof test 123. Remember the blue notebook?"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-3b9a2877a3334e87854ac68ca2d522a0",
+              "input_mode": "audio_upload",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "upload-asr",
+              "ts": 1779925551.970879,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": 0.9933,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy audio upload proof test 123. Remember the blue notebook?"
+                  }
+                ]
+              }
+            },
+            "window": 2
+          },
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-3fa8172359e74c8383625b1e28283df4",
+              "raw_asr_transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+              "source_mode": "external_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-3fa8172359e74c8383625b1e28283df4",
+            "ingest_id": "mic-asr-a2dbc55bb67d404caa245caade339f63",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is incoherent and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925519.205745,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.2888687551021576,
+            "source": "mic-asr",
+            "transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+            "ts": 1779925513.7446258,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-a2dbc55bb67d404caa245caade339f63",
+              "input_mode": "external_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925513.7446258
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-a2dbc55bb67d404caa245caade339f63",
+              "input_mode": "external_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925513.7446258,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend."
+                  }
+                ]
+              }
+            },
+            "window": 1
+          },
+          {
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": {
+              "connection_type": "built_in",
+              "default_sample_rate": 44100.0,
+              "index": 2,
+              "is_default": false,
+              "kind": "builtin",
+              "max_input_channels": 1,
+              "name": "MacBook Air Microphone",
+              "source_detail": "built_in_mic"
+            },
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "audio_device": {
+                "connection_type": "built_in",
+                "default_sample_rate": 44100.0,
+                "index": 2,
+                "is_default": false,
+                "kind": "builtin",
+                "max_input_channels": 1,
+                "name": "MacBook Air Microphone",
+                "source_detail": "built_in_mic"
+              },
+              "capture_id": "mic-capture-a175b3376ad44a96806178cc8d01822d",
+              "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+              "source_mode": "computer_microphone",
+              "stream_sample_rate": 44100.0
+            },
+            "capture_id": "mic-capture-a175b3376ad44a96806178cc8d01822d",
+            "ingest_id": "mic-asr-dac69237a2744ab3b0179e9ddcf1996b",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate text is nonsensical and contains no actionable or factual information worth storing."
+            },
+            "outcome": "LIFE_LOG",
+            "plan": {
+              "intent": "other",
+              "mode": "clarify",
+              "person": "",
+              "question": "I'm sorry, I didn't understand that. Could you please rephrase what you'd like me to do?",
+              "task": "",
+              "thing": ""
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925496.93253,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.3736264407634735,
+            "source": "mic-asr",
+            "transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready.",
+            "ts": 1779925488.5733278,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-dac69237a2744ab3b0179e9ddcf1996b",
+              "input_mode": "computer_microphone",
+              "outcome": "LIFE_LOG",
+              "plan": {
+                "intent": "other",
+                "mode": "clarify",
+                "person": "",
+                "question": "I'm sorry, I didn't understand that. Could you please rephrase what you'd like me to do?",
+                "task": "",
+                "thing": ""
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "mic-asr",
+              "surface_proof_required": true,
+              "ts": 1779925488.5733278
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": {
+                  "connection_type": "built_in",
+                  "default_sample_rate": 44100.0,
+                  "index": 2,
+                  "is_default": false,
+                  "kind": "builtin",
+                  "max_input_channels": 1,
+                  "name": "MacBook Air Microphone",
+                  "source_detail": "built_in_mic"
+                },
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "mic-asr-dac69237a2744ab3b0179e9ddcf1996b",
+              "input_mode": "computer_microphone",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "mic-asr",
+              "ts": 1779925488.5733278,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange calendar ready."
+                  }
+                ]
+              }
+            },
+            "window": 2
+          },
+          {
+            "ask_user": true,
+            "asr_normalizations": [],
+            "asr_normalized": false,
+            "audio_device": null,
+            "capture": {
+              "asr_normalizations": [],
+              "asr_normalized": false,
+              "bytes": 105508,
+              "content_type": "audio/mpeg",
+              "filename": "uploaded_audio.mp3",
+              "mean_confidence": 0.9909,
+              "raw_asr_transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything."
+            },
+            "capture_id": null,
+            "competent_decline": false,
+            "d16_receipt": "CRM/SaaS write attempt via dispatcher (confirm card for email/post/publish/delete)",
+            "decline": false,
+            "dispatcher_outcome": {
+              "error": "",
+              "history": [
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Atlas Onboarding | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/setup/personalization"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Atlas Onboarding | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/setup/personalization"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Deploy your cluster | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/clusters/starterTemplates"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Deploy your cluster | Cloud: MongoDB Cloud",
+                    "url": "https://cloud.mongodb.com/v2/6a1780ce0850fe5723d850d6#/clusters/starterTemplates"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-000d736ffa46"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-3748111de16f"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                },
+                {
+                  "args": {
+                    "surface_target": "active_tab"
+                  },
+                  "error": "",
+                  "model": "cascade-failed",
+                  "ok": true,
+                  "primitive": "read",
+                  "proof_summary": {
+                    "title": "Anticipy App",
+                    "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090"
+                  },
+                  "why": "planner cascade failed: http 400 google/gemini-flash-2.5: {\"error\":{\"message\":\"google/gemini-flash-2.5 is not a valid model ID\",\"code\":400},\"user_id\":\"user_3990xD0AWy59iLHDjFpux00OCah\""
+                }
+              ],
+              "intent": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+              "message": "",
+              "options": [
+                "keep_going",
+                "show_me_what_you_did",
+                "cancel"
+              ],
+              "proof": {
+                "surface": {
+                  "dom_structure": "M1 button: missing value\nM2 button: missing value\nM3 button: missing value",
+                  "dom_text": "",
+                  "screenshot_path": "/Users/omarebrahim/.anticipy/screenshots/universal/20260527T234428Z_universal.png",
+                  "source": "osascript_fallback",
+                  "title": "Anticipy App",
+                  "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-9ce249a00090",
+                  "visible_elements_with_set_of_mark_labels": [
+                    {
+                      "kind": "button",
+                      "label": "M1",
+                      "name": "missing value"
+                    },
+                    {
+                      "kind": "button",
+                      "label": "M2",
+                      "name": "missing value"
+                    },
+                    {
+                      "kind": "button",
+                      "label": "M3",
+                      "name": "missing value"
+                    }
+                  ]
+                }
+              },
+              "question": "I've tried 20 steps toward \"Please add a new record in my Notion Memos database titled Office Relocation Che\" and haven't succeeded yet. Help me succeed?",
+              "status": "ask_user",
+              "steps": 20
+            },
+            "ingest_id": "upload-asr-8485e99fe4c948cd9bfff8372bc19e80",
+            "intent": "crm_saas_write",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a request to perform an action, not a factual observation about the user's life or preferences. It does not add, update, or delete any stored m"
+            },
+            "outcome": "ASKING",
+            "plan": {
+              "ask_user": false,
+              "blocked_services": [
+                "Notion"
+              ],
+              "competent_decline": false,
+              "confirm_card_id": "ask-c4c1484582c2",
+              "d16_receipt": "CRM/SaaS write attempt via dispatcher (confirm card for email/post/publish/delete)",
+              "intent": "crm_saas_write",
+              "irreversible_steps": [
+                "email",
+                "post",
+                "close",
+                "promise",
+                "publish"
+              ],
+              "mode": "act",
+              "proposal": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+              "require_confirm": false,
+              "task": "",
+              "thing": "Notion",
+              "unchanged": [
+                "Notion records",
+                "source context",
+                "field/note/status/owner state",
+                "no-extra-change visible state"
+              ],
+              "unchanged_state_boundary": "Notion records; source context; field/note/status/owner state; no extra external comms without confirm",
+              "universal_dispatch": true
+            },
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925493.1324959,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+            "raw_asr_transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.1092832162976265,
+            "source": "upload-asr",
+            "transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+            "ts": 1779925242.6459389,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+                "mode": "ask_first"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-8485e99fe4c948cd9bfff8372bc19e80",
+              "input_mode": "mp3_upload",
+              "outcome": "ASKING",
+              "plan": {
+                "ask_user": false,
+                "blocked_services": [
+                  "Notion"
+                ],
+                "competent_decline": false,
+                "confirm_card_id": "ask-c4c1484582c2",
+                "d16_receipt": "CRM/SaaS write attempt via dispatcher (confirm card for email/post/publish/delete)",
+                "intent": "crm_saas_write",
+                "irreversible_steps": [
+                  "email",
+                  "post",
+                  "close",
+                  "promise",
+                  "publish"
+                ],
+                "mode": "act",
+                "proposal": "Attempting Notion. Will surface a confirm card if the real surface state cannot be proven. Source: \"Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.\"",
+                "require_confirm": false,
+                "task": "",
+                "thing": "Notion",
+                "unchanged": [
+                  "Notion records",
+                  "source context",
+                  "field/note/status/owner state",
+                  "no-extra-change visible state"
+                ],
+                "unchanged_state_boundary": "Notion records; source context; field/note/status/owner state; no extra external comms without confirm",
+                "universal_dispatch": true
+              },
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "upload-asr",
+              "surface_proof_required": true,
+              "ts": 1779925242.6459389
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": false,
+                "audio_device": null,
+                "bytes": 105508,
+                "content_type": "audio/mpeg",
+                "filename": "uploaded_audio.mp3",
+                "raw_asr_transcript": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything."
+              },
+              "device_engine": "user-device",
+              "ingest_id": "upload-asr-8485e99fe4c948cd9bfff8372bc19e80",
+              "input_mode": "mp3_upload",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "upload-asr",
+              "ts": 1779925242.6459389,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": 0.9909,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Please add a new record in my Notion Memos database titled Office Relocation Checklist and include movers, internet provider, new chairs, and key handoff. If you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything."
+                  }
+                ]
+              }
+            },
+            "window": 8
+          },
+          {
+            "ingest_id": "asr-transcript-72739357a5c44fdeb89591b5f4a960c3",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is a vague, contextless note that does not add actionable or clear information to the existing memory."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925472.158999,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.0,
+            "source": "asr-transcript",
+            "transcript": "Anticipy transcript proof 32e47436. Remember the green folder.",
+            "ts": 1779925464.889355,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-72739357a5c44fdeb89591b5f4a960c3",
+              "input_mode": "text_transcript",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "asr-transcript",
+              "surface_proof_required": true,
+              "ts": 1779925464.889355
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": null,
+                "audio_device": null,
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": null
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-72739357a5c44fdeb89591b5f4a960c3",
+              "input_mode": "text_transcript",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "asr-transcript",
+              "ts": 1779925464.889355,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy transcript proof 32e47436. Remember the green folder."
+                  }
+                ]
+              }
+            },
+            "window": 1
+          },
+          {
+            "ingest_id": "asr-transcript-788869e60d5f465a96d89af6c2c6afdc",
+            "memory": {
+              "op": "NOOP",
+              "reason": "The candidate is vague and lacks actionable or factual content; 'remember the green folder' is not a clear, storable fact."
+            },
+            "outcome": "LIFE_LOG",
+            "proactive_due": {
+              "fired": [],
+              "fired_count": 0,
+              "now": 1779925461.258828,
+              "ok": true
+            },
+            "profile_loaded": true,
+            "proposal": null,
+            "resolution_trace_sync": {
+              "ok": false,
+              "reason": "not provisioned",
+              "skipped": true
+            },
+            "rms": 0.0,
+            "source": "asr-transcript",
+            "transcript": "Anticipy transcript proof 62989097. Remember the green folder.",
+            "ts": 1779925451.035244,
+            "v7_artifacts": {
+              "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+              "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+              "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+            },
+            "v7_decision": {
+              "decision": {
+                "message": "",
+                "mode": "silent_noop"
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-788869e60d5f465a96d89af6c2c6afdc",
+              "input_mode": "text_transcript",
+              "outcome": "LIFE_LOG",
+              "plan": {},
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.decision.v7",
+              "source": "asr-transcript",
+              "surface_proof_required": true,
+              "ts": 1779925451.035244
+            },
+            "v7_normalized_input": {
+              "capture": {
+                "asr_normalizations": [],
+                "asr_normalized": null,
+                "audio_device": null,
+                "bytes": null,
+                "content_type": null,
+                "filename": null,
+                "raw_asr_transcript": null
+              },
+              "device_engine": "user-device",
+              "ingest_id": "asr-transcript-788869e60d5f465a96d89af6c2c6afdc",
+              "input_mode": "text_transcript",
+              "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+              "schema": "anticipy.normalized_input.v7",
+              "source": "asr-transcript",
+              "ts": 1779925451.035244,
+              "window": {
+                "turns": [
+                  {
+                    "asr_confidence": null,
+                    "end_ms": 0,
+                    "speaker": "user",
+                    "start_ms": 0,
+                    "text": "Anticipy transcript proof 62989097. Remember the green folder."
+                  }
+                ]
+              }
+            },
+            "window": 3
+          }
+        ],
+        "sample_rate": 44100,
+        "source_mode": "external_microphone",
+        "uptime": 22.7,
+        "window_seconds": 15.0,
+        "windows": 2
+      },
+      "transcript_chars": 107
+    }
+  },
+  "mp3_audio_upload": {
+    "boundary": "normalized_transcript_and_surface_context_v7",
+    "bytes": 239444,
+    "controlled_phrase_match": {
+      "expected_words": [
+        "4192098a",
+        "anticipy",
+        "audio",
+        "blue",
+        "notebook",
+        "remember",
+        "upload"
+      ],
+      "hits": [
+        "anticipy",
+        "audio",
+        "blue",
+        "notebook",
+        "remember",
+        "upload"
+      ],
+      "pass": true,
+      "required": 3
+    },
+    "cost_receipt": {
+      "reason": "local ASR probe",
+      "runtime_model_cost_usd": 0.0
+    },
+    "endpoint": "/api/listen/upload",
+    "implementation": "_process_utterance",
+    "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+    "observed_source": "upload-asr",
+    "pass": true,
+    "response": {
+      "asr_normalizations": [
+        {
+          "count": 1,
+          "pattern": "^anticipate(?=[,\\s])",
+          "reason": "hotword_asr_correction",
+          "replacement": "Anticipy"
+        }
+      ],
+      "asr_normalized": true,
+      "bytes": 239444,
+      "content_type": "audio/aiff",
+      "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+      "memory": {
+        "op": "NOOP",
+        "reason": "The candidate is a vague, context-free question with no actionable or factual content to store."
+      },
+      "ok": true,
+      "outcome": "LIFE_LOG",
+      "pending": {
+        "clarify": true,
+        "instruction": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+        "plan": {
+          "intent": "other",
+          "mode": "clarify",
+          "person": "",
+          "question": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+          "task": "",
+          "thing": ""
+        },
+        "proposal": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+        "ts": 1779925513.7446258
+      },
+      "plan": null,
+      "proactive_due": {
+        "fired": [],
+        "fired_count": 0,
+        "now": 1779925577.052275,
+        "ok": true
+      },
+      "proposal": null,
+      "raw_asr_transcript": "Anticipate audio upload proof 419,998A. Remember the blue notebook?",
+      "resolution_trace_sync": {
+        "ok": false,
+        "reason": "not provisioned",
+        "skipped": true
+      },
+      "scheduled": null,
+      "source": "upload-asr",
+      "transcript": "Anticipy audio upload proof 419,998A. Remember the blue notebook?",
+      "v7_artifacts": {
+        "decisions": "/Users/omarebrahim/.anticipy/v7/decisions.jsonl",
+        "inference_events": "/Users/omarebrahim/.anticipy/v7/inference_events.jsonl",
+        "normalized_inputs": "/Users/omarebrahim/.anticipy/v7/normalized_inputs.jsonl"
+      },
+      "v7_decision": {
+        "decision": {
+          "message": "",
+          "mode": "silent_noop"
+        },
+        "device_engine": "user-device",
+        "ingest_id": "upload-asr-0d6286bb3cd44b1b844818598093881a",
+        "input_mode": "audio_upload",
+        "outcome": "LIFE_LOG",
+        "plan": {},
+        "public_build_commit": "ba8b19d319a4d01f96b63e7b72154bfbea790cce",
+        "schema": "anticipy.decision.v7",
+        "source": "upload-asr",
+        "surface_proof_required": true,
+        "ts": 1779925571.9750211
+      },
+      "window": 3
+    },
+    "source_detail": "mp3_or_audio_upload",
+    "source_mode": "audio_upload",
+    "status": 200,
+    "trace_receipt": {
+      "source": "upload-asr",
+      "type": "engine_response"
+    },
+    "transcript": "Anticipy audio upload proof 419,998A. Remember the blue notebook?",
+    "transcript_chars": 65,
+    "transcript_quality_receipt": {
+      "mode": "audio_upload",
+      "reason": "probe has no human reference transcript",
+      "transcript_chars": 65,
+      "wer": null
+    }
+  },
+  "pass": true,
+  "same_inference_path": {
+    "boundary": "normalized_transcript_and_surface_context_v7",
+    "implementation": "_process_utterance",
+    "implementations": [
+      "_process_utterance",
+      "_process_utterance",
+      "_process_utterance",
+      "_process_utterance"
+    ],
+    "observed_sources": [
+      "upload-asr",
+      "asr-transcript",
+      "mic-asr",
+      "mic-asr"
+    ],
+    "pass": true
+  },
+  "schema": "anticipy.input_modes_probe.v7",
+  "selected_probe_devices": {
+    "computer_microphone": {
+      "connection_type": "built_in",
+      "default_sample_rate": 44100.0,
+      "index": 2,
+      "is_default": false,
+      "kind": "builtin",
+      "max_input_channels": 1,
+      "name": "MacBook Air Microphone",
+      "source_detail": "built_in_mic"
+    },
+    "external_microphone": {
+      "connection_type": "built_in",
+      "default_sample_rate": 44100.0,
+      "index": 2,
+      "is_default": false,
+      "kind": "builtin",
+      "max_input_channels": 1,
+      "name": "MacBook Air Microphone",
+      "source_detail": "builtin_used_as_external_until_pendant_ships"
+    }
+  },
+  "text_transcript": {
+    "boundary": "normalized_transcript_and_surface_context_v7",
+    "cost_receipt": {
+      "reason": "transcript probe",
+      "runtime_model_cost_usd": 0.0
+    },
+    "endpoint": "/api/listen/inject",
+    "implementation": "_process_utterance",
+    "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+    "observed_source": "asr-transcript",
+    "pass": true,
+    "response": {
+      "error": null,
+      "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+      "memory": {
+        "op": "NOOP",
+        "reason": "The candidate is a vague, non-actionable note without clear factual content to add or reconcile with existing memory."
+      },
+      "on": false,
+      "outcome": "LIFE_LOG",
+      "pending": {
+        "clarify": true,
+        "instruction": "Oh my god, you're so entirely scared. Computer microphone anticipate orange calendar ready. Computer microphone anticipate orange. Yeah, it was completely bonked out. But I ran in my friend.",
+        "plan": {
+          "intent": "other",
+          "mode": "clarify",
+          "person": "",
+          "question": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+          "task": "",
+          "thing": ""
+        },
+        "proposal": "I'm sorry, I didn't understand that. Could you please clarify what you'd like me to do?",
+        "ts": 1779925513.7446258
+      },
+      "plan": null,
+      "proposal": null,
+      "resolution_trace_sync": {
+        "ok": false,
+        "reason": "not provisioned",
+        "skipped": true
+      },
+      "scheduled": null,
+      "transcript": "Anticipy transcript proof d40e17c6. Remember the green folder.",
+      "window": 4
+    },
+    "source_detail": "paste",
+    "source_mode": "transcript_upload",
+    "status": 200,
+    "trace_receipt": {
+      "ingest_id": "asr-transcript-31f575ebed654621beea1b273f1ae505",
+      "type": "engine_response"
+    },
+    "transcript": "Anticipy transcript proof d40e17c6. Remember the green folder."
+  }
+}

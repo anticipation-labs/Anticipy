@@ -1,0 +1,65 @@
+{
+  "pass": true,
+  "reasoning": "Anticipy correctly declined the calendar/reminder request because the Apple Calendar surface was not verifiable. The decline was competent, naming the blocked service (Calendar/Reminders) and a changed Anticipy decline card was present, satisfying D16. The engine is the installed user-device engine, and real Chrome surface proof was provided.",
+  "specific_failures": [
+    "Moment m02 (real_surface_precheck) failed because the trace does not show the driver verifying that Apple Calendar.app or Reminders.app were visible; only Chrome surface proofs were captured."
+  ],
+  "verb_category": "calendar_event_create_clarify",
+  "hard_category": "native",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The engine is installed from the public path and the surface proof shows the Anticipy app page."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": false,
+      "reasoning": "No evidence that the driver verified Calendar.app or Reminders.app; only Chrome surface proofs were taken."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio upload was confirmed and ASR transcript matches the reference with acceptable WER."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Transcript boundary is within limits and no off-topic content detected."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined because Calendar surface was not verifiable, which is a valid outcome per script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The observed decline due to surface gap matches the expected driver observation."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine logs a competent decline for Calendar/Reminders, diff includes changed anticipy surface, and no broken script surfaces."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T04:55:21Z"
+}

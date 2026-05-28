@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine received the audio upload, correctly identified the request as a Notion write, observed that the user was on the Notion login page (not signed in), and issued a competent decline naming Notion with no third-party surface change. The D16 competent-decline standard is satisfied: broken surfaces are empty, engine logs name the service, the installed engine is the public user-device engine, real Chrome was used, and the decline proposal is service-specific.",
+  "specific_failures": [],
+  "verb_category": "health_or_workout_log_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The user navigated to the Anticipy public app (https://www.anticipy.ai/app) and uploaded an audio file; the trace confirms the uploaded audio path via /api/listen/upload."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The driver verified that Notion was open in the user's Chrome profile (notion.so/login), correctly identifying that the target surface was not signed-in/visible, which is the prerequisite for the decline path."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The uploaded mp3 was successfully processed and transcribed with high confidence (WER 4.6%), demonstrating the audio upload proof path."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine checked the transcribed request against the boundary condition (Notion surface readable) and correctly determined the surface was not verifiable, leading to a decline."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine declined with a service-specific reason naming Notion, did not write anything, and the decline appears as a changed Anticipy surface and in engine logs."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The primary audio upload path was used; the trace shows source_mode: audio_upload and no secondary input modes were employed."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "The engine declined before touching the Notion surface, the decline log names Notion explicitly, and the missing Notion surface is allowed under D16 because the decline was competent and broken surfaces are empty."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:30:03Z"
+}

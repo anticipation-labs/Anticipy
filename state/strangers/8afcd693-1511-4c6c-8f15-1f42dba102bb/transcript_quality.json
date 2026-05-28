@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T17:19:02Z",
+  "hypothesis": "Please update the Airtable customer's record for the Lighthouse Renewal to set the status to in review, and tag the owner. If you cannot prove the visible Airtable record or my signed in Workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please update the Airtable Customers record for the Lighthouse renewal to set the status to in review and tag the owner. If you cannot prove the visible Airtable record or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "8afcd693-1511-4c6c-8f15-1f42dba102bb",
+  "transcript_boundary_chars": 231,
+  "transcript_boundary_sha256": "24cda5b65b975c30d43a736e041f6039f6adeaab2dbfe5cff452fe5b08fee11b",
+  "wer": 0.026316
+}

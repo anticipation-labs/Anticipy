@@ -1,0 +1,25 @@
+{
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/test_bridge_cdp_primary_20260527T151816Z",
+  "steps_passed": 4,
+  "steps_failed": 0,
+  "failed_step": "",
+  "results": [
+    {
+      "name": "status_cdp_primary",
+      "ok": true
+    },
+    {
+      "name": "navigate_background",
+      "ok": true
+    },
+    {
+      "name": "eval_js_title",
+      "ok": true
+    },
+    {
+      "name": "click_selector",
+      "ok": true
+    }
+  ],
+  "verdict": "PASS"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "navigate_background",
+  "ok": false,
+  "detail": "navigated ok but frontmost CHANGED from https://console.firebase.google.com/u/0/project/altuf-cf03d/ to https://console.anthropic.com/settings/keys (regression: not background)",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://example.com/?anticipy_cdp_test=20260527T151724Z\", \"url\": \"https://example.com/?anticipy_cdp_test=20260527T151724Z\", \"title\": \"Example Domain\", \"targetId\": \"4D1A581050E038BBA6536217E50E40AF\", \"in_place\": true, \"background_tab\": fals"
+}

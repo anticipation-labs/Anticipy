@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/product_details/1",
+  "expected": "URL on product_details + HTML has price + cart",
+  "name": "product_details_page",
+  "passed": true,
+  "primitive_used": "bridge navigate + curl HTML"
+}

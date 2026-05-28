@@ -1,0 +1,12 @@
+{
+  "status": "pass",
+  "target_url": "https://www.tldraw.com",
+  "target_name": "tldraw",
+  "screenshot_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/canvas_vision_20260527T053832Z/raw_screenshot.png",
+  "labeled_overlay_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/canvas_vision_20260527T053832Z/labeled_overlay.png",
+  "vision_response_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/canvas_vision_20260527T053832Z/vision_response.json",
+  "rectangle_lookup_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/canvas_vision_20260527T053832Z/rectangle_lookup.json",
+  "labeled_element_count": 41,
+  "rectangle_confidence": 0.9,
+  "timestamp_utc": "20260527T053832Z"
+}

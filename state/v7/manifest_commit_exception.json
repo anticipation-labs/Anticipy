@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "manifest_commit": "5f00c63eb441fe8dffe8974f5dd51e75218e87d3",
+  "live_commit": "36cb50cfee2cd30f178f4fdff54c388b29201bce",
+  "reason": "DMG manifest commit differs from live because files changed after the bundled DMG build, but none of those files are part of the DMG artifact. The public DMG SHA still matches the manifest SHA.",
+  "changed_files_since_manifest_commit": [
+    "scripts/v7/probe_real_surface_extension.py",
+    "state/builds/manifest.json",
+    "state/check_done_v7.json",
+    "state/stranger_breadth.json",
+    "state/v7/clean_room_theory_check.json",
+    "state/v7/manifest_commit_exception.json",
+    "state/v7/supervisor_status.json"
+  ]
+}

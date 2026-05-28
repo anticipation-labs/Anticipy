@@ -1,0 +1,7 @@
+{
+  "name": "open_search",
+  "ok": true,
+  "detail": "visible text inputs=1 after Open search click",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144539Z/step-03-open_search.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

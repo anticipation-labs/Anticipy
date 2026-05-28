@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/product_details/1",
+  "expected": "still on product_details (modal expected)",
+  "name": "add_to_cart_clicked",
+  "passed": true,
+  "primitive_used": "cliclick on (880,372)"
+}

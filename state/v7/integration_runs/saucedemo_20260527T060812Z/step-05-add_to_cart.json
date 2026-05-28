@@ -1,0 +1,7 @@
+{
+  "name": "add_to_cart",
+  "ok": false,
+  "detail": "expected badge=1 got ''",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T060812Z/step-05-add_to_cart.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

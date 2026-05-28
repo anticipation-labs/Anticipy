@@ -1,0 +1,1 @@
+CDP fallback: click via Runtime.evaluate(el.click()) because bridge rejects 'click'

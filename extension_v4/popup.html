@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Anticipy</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">Anticipy</div>
+      <div id="status-dot" class="status-dot disconnected" title="disconnected"></div>
+    </header>
+
+    <main>
+      <section id="connect-panel" hidden>
+        <div class="task-header">Daemon not connected</div>
+        <p class="muted" id="connect-detail">Looking for the local Python daemon…</p>
+        <div id="connect-error" class="error-box" hidden></div>
+        <div class="row">
+          <button id="reconnect-btn" class="primary">Try again</button>
+          <button id="show-log-btn" class="secondary">Show log location</button>
+        </div>
+        <div id="reconnect-feedback" class="muted small" hidden></div>
+      </section>
+
+      <section id="idle-panel" hidden>
+        <label for="task-input">What should I do?</label>
+        <textarea id="task-input" rows="3" placeholder="e.g. find a flight from JFK to SFO Friday morning"></textarea>
+        <button id="send-btn" class="primary">Send</button>
+      </section>
+
+      <section id="active-panel" hidden>
+        <div class="task-header">Working on:</div>
+        <div id="task-summary" class="task-summary"></div>
+        <div class="step-label">Current step</div>
+        <div id="task-step" class="task-step">starting...</div>
+        <button id="cancel-btn" class="danger">Cancel</button>
+      </section>
+
+      <section id="done-panel" hidden>
+        <div class="task-header">Done.</div>
+        <div id="done-summary" class="task-summary"></div>
+        <button id="dismiss-btn" class="primary">OK</button>
+      </section>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

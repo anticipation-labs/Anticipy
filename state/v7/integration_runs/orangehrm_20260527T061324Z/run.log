@@ -1,0 +1,30 @@
+[06:13:24Z] run dir: state/v7/integration_runs/orangehrm_20260527T061324Z
+[06:13:24Z] bridge: http://127.0.0.1:7777  base: https://opensource-demo.orangehrmlive.com
+[06:13:28Z] bridge acquired_via: chrome_applescript_loopback_bridge
+[06:13:28Z] STEPS 1-5: login + dashboard
+[06:14:10Z] post-login url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login title=OrangeHRM
+[06:14:10Z] retry login with different tab count
+[06:14:46Z] retry post-login url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login title=OrangeHRM
+[06:14:46Z] STEPS 6-7: Admin users table
+[06:15:00Z] admin_users_table url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:15:01Z] STEPS 8-9: search Admin
+[06:15:19Z] search url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:15:19Z] STEP 10: reset filter
+[06:15:33Z] reset_filter url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:15:33Z] STEPS 11-12: PIM Add Employee form
+[06:15:48Z] pim_add_employee_form url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:15:48Z] STEPS 13-15: fill name + Save + verify
+[06:16:11Z] after-save url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:16:11Z] no redirect yet, polling 10s for viewPersonalDetails
+[06:16:45Z] final url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:16:46Z] STEP 16: final screenshot
+[06:16:50Z] final url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:16:51Z] AGGREGATE RESULTS
+[06:16:51Z] login_to_dashboard         FAIL  expected match //dashboard/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[06:16:51Z] admin_users_table          FAIL  expected match /viewSystemUsers/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[06:16:51Z] admin_search               FAIL  expected match /viewSystemUsers/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[06:16:51Z] reset_filter               FAIL  expected match /viewSystemUsers/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[06:16:51Z] pim_add_employee_form      FAIL  expected match /addEmployee/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[06:16:51Z] employee_saved             FAIL  expected match /viewPersonalDetails|empNumber/ in 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login'
+[06:16:51Z] final_screenshot           PASS  https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[06:16:51Z] Passed: 1  Failed: 6  Total: 7

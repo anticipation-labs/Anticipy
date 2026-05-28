@@ -1,0 +1,107 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+**/node_modules/
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+/dist
+dist/executor/
+dist/anticipy-extension*
+# PyInstaller build artifacts under engine/ (2.6G+, never tracked)
+engine/build/
+engine/dist/
+# stale duplicate of the canonical CLAUDE.md (dead Browser Use/Gemini
+# architecture); kept on disk, not tracked
+AGENTS.md
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+.env
+
+# claude/mcp config (contains tokens)
+.mcp.json
+.claude/
+.agents/
+.playwright-mcp/
+skills-lock.json
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+engine/logs/test_results.json
+engine/browser-data/
+
+# python virtualenvs (43k+ files; not tracking)
+.venv/
+engine/.venv/
+**/.venv/
+**/__pycache__/
+
+# anticipy local artifacts (model weights, sqlite-vec dbs, transcripts, wearer voiceprint)
+.anticipy/models/
+.anticipy/*.db
+.anticipy/*.wav
+.anticipy/*.npy
+
+# macOS / Finder duplicates
+.DS_Store
+**/.DS_Store
+**/* 2
+**/* 2.*
+.metadata_never_index
+.metadata_never_index_unless_rootfs
+
+# build / coverage artifacts
+.next/
+out/
+.turbo/
+.swc/
+.cache/
+
+# editor / IDE droppings
+.idea/
+.vscode/launch.json
+*.swp
+*.swo
+
+# training corpus contains real user transcripts — NEVER commit
+engine/data/training_corpus.jsonl
+engine/data/training_corpus.*.jsonl
+engine/data/few_shot_block.txt
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+public/Anticipy.dmg
+public/Anticipy*.dmg
+state/v7/clean_room_public_install_runs/*/*.dmg
+state/v7/clean_room_public_install_runs/*/Anticipy.dmg
+desktop/src-tauri/bin/anticipy-engine-aarch64-apple-darwin
+desktop/src-tauri/resources/parakeet-tdt-0.6b-v3/*.safetensors
+desktop/src-tauri/resources/parakeet-tdt-0.6b-v3/README.md
+desktop/src-tauri/resources/parakeet-tdt-0.6b-v3/config.json

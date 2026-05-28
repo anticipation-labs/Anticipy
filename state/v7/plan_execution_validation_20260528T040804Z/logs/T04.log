@@ -1,0 +1,11 @@
+plan_id=T04 ts=1779941298.556
+category=calendar
+plan={"mode": "act", "person": "", "thing": "Q3 review working sessions", "intent": "calendar_event", "task": "Create two Google Calendar events: one 2-hour working session with Marcus (finance side) on a day before the Q3 review (15th) that is not Monday, not back-to-back with the other session, and not on a Friday afternoon for Jordan; the second 2-hour working session with Jordan (legal side) on a day after the first session, also not Monday, not Friday afternoon, and with at least one day between them. Use the Q3 review date (15th) as reference to pick suitable dates. Do not send invitations; l
+inject http=200 ok=True
+act http=200 dur=0.00s body={"ran": false, "gated": true, "resolved_person": "", "resolved_thing": "", "task": "Create two Google Calendar events: 1) 'Working session with Marcus (finance)' for 2 hours on a non-Monday before the 15th, with a day gap before the next; 2) 'Working session with Jordan (legal)' for 2 hours on a non-Monday, not on a Friday afternoon, with a day after the Marcus session. Do not send invitations.", 
+[verify_calendar] titles=['Q3 review working sessions']
+[verify_calendar] search_term='Q3 review working sessions'
+[verify_calendar] open_new_tab ok=True targetId=3D1018BEBECF275A695DDA9CE5ADD451 err=
+[dom_probe] ok=True err=
+[verify_calendar] shot ok=True bytes=203851 err=
+[verify_calendar] closed={"ok": true, "http": 200, "body": "Target is closing"}

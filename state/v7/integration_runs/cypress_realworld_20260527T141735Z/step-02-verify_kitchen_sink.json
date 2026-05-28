@@ -1,0 +1,7 @@
+{
+  "name": "verify_kitchen_sink",
+  "ok": true,
+  "detail": "h1/title contains Kitchen Sink: Kitchen Sink",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-02-verify_kitchen_sink.png",
+  "receipt": "Kitchen Sink"
+}

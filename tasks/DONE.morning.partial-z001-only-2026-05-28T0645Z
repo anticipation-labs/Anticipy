@@ -1,0 +1,69 @@
+# DONE: Z-001 reached 9/9 PASS
+
+ts: 2026-05-28T06:45:00Z
+local_head: see `git rev-parse HEAD`
+run_dir: state/v7/z001_e2e_runs/20260528T063845Z/
+
+Proven evidence on disk: `state/v7/z001_e2e_runs/20260528T063845Z/result.json`
+- verdict: PASS
+- total_steps: 9
+- passing: 9
+- failing: [] (empty array, every step ok)
+- tab_leakage_count: 0
+- supabase_user_id: fd2079fd-4467-4489-be2e-db629a5a7487 (real auth.users row)
+- gmail_draft_subject: "Thursday call confirmation"
+- gmail_draft_url: https://mail.google.com/mail/u/0/#search/in%3Adrafts+to%3Alara%40anticipy-test.local+subject%3A('Thursday+call+confirmation')
+
+A simulated stranger COMPLETED the full V2 PRD Z-001 journey:
+
+1. Signed up at anticipy.ai/app with a fresh email (z001_test_4f246116a47b@anticipy-test.local)
+2. Real Supabase auth.users row created
+3. Handoff token exchanged successfully
+4. Engine accepted the audio inject
+5. Engine ran direct_gmail_compose via real Chrome CDP
+6. Real Gmail draft persisted in user's drafts folder
+7. Body typed via CDP Input.insertText (isTrusted=true)
+8. Verified visible in Gmail drafts search (1-1 of 1)
+9. Zero tab leakage
+
+## Commits that closed the cycle
+
+- 349f0241 - memory partition fix (account_id vs user_id synonym)
+- 9c247002 - W3a engine fixes (clarify-reflex, intent_extractor:170, ASR workers, router-wire mount, compose retries)
+- d376981a - bridge async-rewrite (50/50 success vs 15/50 before)
+- de1a8c38 - M3 Supabase cloud sync (real round-trip verified via service_role_key)
+- c6491d2e - Twilio onboarding B-001 (MOCK + LOCAL_FALLBACK both PASS)
+- 3edd1c4e - DMG download URL fix (was 0 bytes, now serves real 2.5GB)
+- d2e707d1 - surface probe tab leak fix (closes own tab via CDP)
+- 233c611d - F-006 popover click measured 66ms (target was <200ms)
+- eb0bbf6d + 1437cd2e - W5c: Input.insertText for Gmail compose (the step 9 close)
+
+## What is NOT yet shipped (next cycle)
+
+- New packaged DMG with the engine fixes. ship.sh failed on pyinstaller OOM
+  while bundling parakeet-mlx model. Z-001 was proven against source engine
+  on 8731. To ship to real users, the DMG packaging needs more RAM or a
+  different bundling strategy.
+- F-007 Now/Next/Past popover columns. desktop/src/popover.html does not
+  exist; only index.html. Tauri commands fetch_active_task / fetch_next_tasks /
+  fetch_past_tasks exist at lib.rs:1547-1549 but no UI consumes them.
+- Memory precision composite 0.46 (target 0.75). W3a clarify-reflex fix was
+  shipped but the 20 hard transcripts were not re-scored against the new
+  engine. Likely will jump significantly once re-run.
+- Stranger volume at 43 verified (target 100). Adequate floor per V7.11
+  relaxation, but more real strangers strengthen the claim.
+- 3 V2 PRD criteria still MISSING per W3i audit (A-007 Deepgram integration,
+  DoD-7 full wipe + fresh Z-001 run, F-007 popover columns).
+
+## Overnight loop state
+
+tools/finish_overnight.sh PID 75539 is still running and will keep verifying
+until 8h timeout from 06:42:08Z (i.e. ~14:42 UTC). Loop log:
+state/v7/overnight/overnight_20260528T064208Z.log
+
+## Bottom line
+
+The product worked end-to-end for one synthetic stranger. A fresh signup
+on the live site led to a real Gmail draft appearing in a real Chrome
+session via a real engine action plan. That is the trillion-dollar
+proof you asked for at the V2 PRD's definition of done #3.

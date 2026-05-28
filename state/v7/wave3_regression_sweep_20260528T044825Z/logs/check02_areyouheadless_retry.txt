@@ -1,0 +1,7 @@
+Retry of areyouheadless after canary curl-timeout NAV_FAILED.
+
+Direct bridge navigate succeeded (60s timeout, returned ok:true targetId=E136B929A50A8AFDA0D2E617130D3FF8).
+Visible text via CDP shows: "You are not Chrome headless".
+Verdict: REAL_HUMAN_BROWSER. The NAV_FAILED in the canary run was a transient 30s curl timeout on the bridge call, not a bot detection failure.
+
+All 3 sites verdict: REAL_HUMAN_BROWSER.

@@ -1,0 +1,48 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "f80c86c5-91ec-4c6d-b26d-86a6c79c811a",
+  "created_at": "2025-04-09T15:30:00Z",
+  "name": "Marcus Delgado",
+  "age": 35,
+  "occupation": "Senior Logistics Analyst",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Amazon order management and decline processing",
+  "primary_real_surface": {
+    "surface": "Amazon.com",
+    "chrome_requirement": "signed-in Chrome profile",
+    "acceptable_state": "orders page"
+  },
+  "daily_tools": [
+    "Chrome",
+    "Amazon app",
+    "Slack",
+    "Excel",
+    "Gmail"
+  ],
+  "contacts": [
+    {
+      "name": "Aisha Khan",
+      "relationship": "colleague",
+      "context": "logistics team"
+    },
+    {
+      "name": "Mike Torres",
+      "relationship": "supervisor",
+      "context": "supply chain"
+    },
+    {
+      "name": "Sofia Delgado",
+      "relationship": "spouse",
+      "context": "personal"
+    },
+    {
+      "name": "Liam",
+      "relationship": "neighbor",
+      "context": "casual"
+    }
+  ]
+}

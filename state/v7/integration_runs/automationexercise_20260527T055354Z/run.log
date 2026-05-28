@@ -1,0 +1,31 @@
+[05:53:54Z] run_dir=state/v7/integration_runs/automationexercise_20260527T055354Z bridge=http://127.0.0.1:7777 base=https://automationexercise.com
+[05:53:56Z] bridge acquired_via=chrome_applescript_loopback_bridge
+[05:53:56Z] STEP 1: home
+[05:54:07Z] home navOK=True active_url=https://automationexercise.com/ curl_title=<title>Automation Exercise</title>
+[05:54:08Z] STEP 2: Products nav
+[05:54:19Z] STEP 3: search dress
+[05:54:33Z] search navOK=True url=https://automationexercise.com/products?search_product=dress first_pid=1
+[05:54:36Z] STEP 4-5: view product + verify
+[05:54:55Z] product url=https://automationexercise.com/ html_price=true html_cart=true
+[05:54:56Z] STEP 6: add to cart  STEP 7: dismiss modal
+[05:55:03Z] after-add-to-cart url=https://automationexercise.com/
+[05:55:10Z] STEP 8: cart
+[05:55:25Z] cart url=https://automationexercise.com/ empty=false has_product=false
+[05:55:26Z] STEP 9: cart screenshot  STEP 10: proceed to checkout
+[05:55:42Z] post-checkout-click url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+[05:55:43Z] STEP 11: register/login wall  STEP 12: final screenshot
+[05:55:56Z] login url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login login_form=true signup_form=true
+[05:56:01Z] 
+[05:56:01Z] AGGREGATE RESULTS
+[05:56:01Z] home_loaded                    PASS  navigate ok; title matched
+[05:56:01Z] products_page                  FAIL  navigate failed or no listing
+[05:56:01Z] search_results                 PASS  first matching product id=1
+[05:56:01Z] product_details_page           PASS  price + add-to-cart present
+[05:56:01Z] add_to_cart_clicked            FAIL  page navigated away
+[05:56:01Z] modal_dismissed                PASS  ESC sent
+[05:56:01Z] cart_view                      FAIL  cart empty or no product line
+[05:56:01Z] cart_screenshot                PASS  state/v7/integration_runs/automationexercise_20260527T055354Z/step_8_cart_visual/proof_screenshot.png
+[05:56:01Z] proceed_to_checkout_clicked    FAIL  unexpected URL after click
+[05:56:01Z] login_wall                     PASS  stopped at login wall
+[05:56:01Z] final_screenshot               PASS  state/v7/integration_runs/automationexercise_20260527T055354Z/final_login_wall.png
+[05:56:01Z] Passed: 7 Failed: 4 Total: 11 Wall: 127s

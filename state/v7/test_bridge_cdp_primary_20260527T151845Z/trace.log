@@ -1,0 +1,7 @@
+[15:18:46] PASS status_cdp_primary :: bridge_kind=cdp_primary cdp_alive=True
+[15:18:51] frontmost URL after navigate: https://console.firebase.google.com/u/0/project/altuf-cf03d/settings/general
+[15:18:51] navigate response: in_place=False url=https://example.com/?anticipy_cdp_test=20260527T151845Z via=chrome_cdp_loopback_bridge
+[15:18:51] PASS navigate_background :: tab navigated to https://example.com/?anticipy_cdp_test=20260527T151845Z; frontmost is https://console.firebase.google.com/u/0/project/altuf-cf03d/ (no foreground steal)
+[15:18:52] PASS eval_js_title :: result='Example Domain' via=chrome_cdp_loopback_bridge (no Apple Events permission needed)
+[15:18:53] PASS click_selector :: selector=a -> result=OK
+[15:18:53] PASS steps=4

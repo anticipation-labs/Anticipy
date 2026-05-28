@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly identified that the user was not signed into HubSpot (login page visible) and issued a service-specific confirm card (ASKING) with blocked_services=[HubSpot], satisfying the D16 competent-pause standard. No broken surfaces, real Chrome and installed user-device engine were used, and the audio upload ASR correctly captured the intent.",
+  "specific_failures": [],
+  "verb_category": "news_or_message_summary_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Public entry at anticipy.ai/app with installed engine confirmed."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver captured surface proof showing HubSpot login page, indicating user not signed in, which is a valid precheck outcome."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio upload succeeded via /api/listen/upload, ASR transcript matches reference with 0 WER and includes key entities."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR output accurately captures intent to summarize Slack into HubSpot and references Brentwood account."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine paused with a confirm card (ASKING) naming HubSpot, an acceptable 'ask' outcome given the unverified surface."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Driver notes that transcript paste and live mic are not primary; audio upload path is covered."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine issued a confirm card (ASKING) with outcome=ASKING, competent_decline=false, blocked_services=[HubSpot] in the v7_decision log, and the diff shows added anticipy surface for the confirm card, satisfying the D16 standard."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T16:55:00Z"
+}

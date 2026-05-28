@@ -1,0 +1,3 @@
+[05:33:06] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T053306Z
+[05:33:07] saucedemo window id: 1285463072
+[05:33:10] FAIL 0 navigate_login :: url=https://example.cypress.io/ resp={"ok":false,"error":"bad secret"}

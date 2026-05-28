@@ -1,0 +1,6 @@
+{
+  "name": "eval_js_title",
+  "ok": true,
+  "detail": "result='Example Domain' via=chrome_cdp_loopback_bridge (no Apple Events permission needed)",
+  "receipt": "{\"ok\": true, \"command\": \"eval_js\", \"data\": {\"result\": \"Example Domain\"}, \"acquired_via\": \"chrome_cdp_loopback_bridge\", \"bridge_kind\": \"cdp_primary\", \"error\": \"\"}"
+}

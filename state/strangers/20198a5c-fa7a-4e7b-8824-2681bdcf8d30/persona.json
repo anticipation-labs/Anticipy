@@ -1,0 +1,53 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+  "created_at": "2026-05-26T10:11:40Z",
+  "name": "Priya Raman",
+  "age": 34,
+  "occupation": "customer success lead at a 28-person B2B SaaS company",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 8,
+  "hard_category": "crm",
+  "hard_category_focus": "CRM / enterprise SaaS",
+  "primary_real_surface": {
+    "surface": "HubSpot CRM in the user's actual signed-in Chrome profile",
+    "chrome_requirement": "visible real Chrome session with session preservation; no cloned Chrome profile or hidden browser",
+    "acceptable_state": "either a signed-in HubSpot contact or deal record, or a visible HubSpot sign-in / missing-account state that Anticipy can cite before asking or declining"
+  },
+  "daily_tools": [
+    "HubSpot CRM",
+    "Gmail in Chrome",
+    "Google Calendar in Chrome",
+    "Slack desktop app"
+  ],
+  "contacts": [
+    {
+      "name": "Nora Vega",
+      "relationship": "operations buyer at Alder Works",
+      "context": "renewal call this week; finance may need a vendor packet before approval"
+    },
+    {
+      "name": "Mateo Chen",
+      "relationship": "sales counterpart",
+      "context": "owns commercial terms and wants clean CRM notes after customer calls"
+    },
+    {
+      "name": "Lina Patel",
+      "relationship": "finance lead at Priya's company",
+      "context": "handles SOC 2 and vendor documentation requests"
+    }
+  ],
+  "life_context": [
+    "Priya lives in HubSpot during renewal season and is protective of CRM data quality.",
+    "She often records short voice notes after customer calls because typing follow-ups between meetings breaks her flow.",
+    "She will trust Anticipy only if it proves it is looking at the same HubSpot surface she can see in Chrome.",
+    "She is willing to approve a draft CRM task or note, but she does not want Anticipy to invent account records or use a copied browser profile."
+  ],
+  "privacy_and_permissions": [
+    "Normal public-product sign-in and onboarding are acceptable.",
+    "The installed user-device engine may read visible Chrome and microphone or upload permissions when the product asks normally.",
+    "Priya expects Anticipy to ask or decline when HubSpot is not visibly signed in or the contact/deal cannot be verified."
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "intent_id": "db4d76c9-b31b-4bc7-9203-d5948e218879",
+  "summary": "The user wants to buy a Sauce Labs Backpack from saucedemo.com using the standard_user account.",
+  "type": "act",
+  "target_surface": "chrome",
+  "target_person_refs": [],
+  "evidence_quotes": [
+    "Buy a Sauce Labs Backpack from saucedemo.com",
+    "Use the standard_user account"
+  ],
+  "required_slots": [
+    "item_name",
+    "website",
+    "account_type"
+  ],
+  "missing_slots": [],
+  "risk_level": "high",
+  "confidence": 1.0,
+  "actionable_probability": 1.0,
+  "is_third_party_want": false,
+  "is_hypothetical": false,
+  "model": "google/gemini-2.5-flash",
+  "error": "",
+  "is_actionable": true
+}

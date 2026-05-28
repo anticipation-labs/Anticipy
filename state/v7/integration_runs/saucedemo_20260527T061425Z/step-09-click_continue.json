@@ -1,0 +1,7 @@
+{
+  "name": "click_continue",
+  "ok": true,
+  "detail": "url=https://www.saucedemo.com/checkout-step-two.html",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061425Z/step-09-click_continue.png",
+  "receipt": "{\"value\": \"NOTFOUND\", \"type\": \"string\", \"exception\": null}"
+}

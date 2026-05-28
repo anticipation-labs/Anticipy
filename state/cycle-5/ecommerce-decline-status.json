@@ -1,0 +1,92 @@
+{
+  "inject": {
+    "on": false,
+    "window": 1,
+    "ingest_id": "asr-transcript-639e3087aeb9478dac3b83766c3f4af5",
+    "transcript": "I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+    "outcome": "DECLINED",
+    "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+    "plan": {
+      "mode": "decline",
+      "intent": "ecommerce_cart_prep",
+      "thing": "amazon cart",
+      "task": "",
+      "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping."
+    },
+    "memory": {
+      "op": "NOOP",
+      "reason": "The candidate is identical to the existing latent_intent entry m-1779609098852."
+    },
+    "resolution_trace_sync": {
+      "ok": false,
+      "skipped": true,
+      "reason": "not provisioned"
+    },
+    "pending": {
+      "instruction": "I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+      "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "ecommerce_cart_prep",
+        "thing": "amazon cart",
+        "task": "",
+        "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping."
+      },
+      "ts": 1779610286.807539
+    },
+    "scheduled": null
+  },
+  "status": {
+    "on": false,
+    "window_seconds": 60.0,
+    "windows": 1,
+    "level": 0.0,
+    "uptime": 1.3,
+    "recent": [
+      {
+        "ts": 1779610286.807539,
+        "rms": 0.0,
+        "ingest_id": "asr-transcript-639e3087aeb9478dac3b83766c3f4af5",
+        "transcript": "I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+        "outcome": "DECLINED",
+        "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+        "memory": {
+          "op": "NOOP",
+          "reason": "The candidate is identical to the existing latent_intent entry m-1779609098852."
+        },
+        "source": "asr-transcript",
+        "window": 1,
+        "plan": {
+          "mode": "decline",
+          "intent": "ecommerce_cart_prep",
+          "thing": "amazon cart",
+          "task": "",
+          "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping."
+        },
+        "resolution_trace_sync": {
+          "ok": false,
+          "skipped": true,
+          "reason": "not provisioned"
+        }
+      }
+    ],
+    "pending": {
+      "instruction": "I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+      "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping.",
+      "competent_decline": true,
+      "decline": true,
+      "plan": {
+        "mode": "decline",
+        "intent": "ecommerce_cart_prep",
+        "thing": "amazon cart",
+        "task": "",
+        "proposal": "I can't safely prepare that Amazon cart yet. I cannot prove the exact item, quantity, price, delivery date, cart state, or shipping state on your real Amazon surface, so I will not add anything to the cart, buy anything, or change shipping. Requested shopping constraint: I forgot the robotics batteries. Can you check Amazon for a pack of at least 36 AAA batteries that gets here by Thursday and stays under 28 dollars before tax? If it is clearly right, put it in my cart, but do not buy it or change shipping."
+      },
+      "ts": 1779610286.807539
+    },
+    "acted": null,
+    "error": null
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly declined to act because the Linear surface was not signed in (login page visible), issuing a competent, service-specific decline naming Linear. All V7 pass rules are met: installed user-device engine, real Chrome surface, no broken or missing script surfaces, and the decline satisfies D16 standard.",
+  "specific_failures": [],
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "User navigated to anticipy.ai/app as shown by surface proof of Anticipy app page."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver verified Linear surface but found it on login page (not signed in), matching the engine's subsequent competent decline."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio file was uploaded via /api/listen/upload and ASR produced a correct transcript (WER 0.026)."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Engine checked the Linear surface and found it inaccessible (login page), consistent with the decline decision."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined with a competent, service-specific proposal naming Linear, blocking the write as required."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Driver noted that audio upload was the primary input; no other modes were used. This is a secondary observation, no failure."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine declined because Linear surface was not signed in; decline names Linear and includes unchanged-state boundary; no third-party surface change needed."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:22:56Z"
+}

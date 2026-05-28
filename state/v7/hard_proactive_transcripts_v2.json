@@ -1,0 +1,169 @@
+{
+  "account_id": "e2e_rich_test_2026_05_28",
+  "note": "Extended HARD proactive transcript set, IDs T21 through T40. Adds 20 transcripts across four NEW domains beyond the original 20 (scheduling, communication, follow_up, ambient_deferred). Entities and aliases reference state/v7/test_dossier_rich.json plus the additions in state/v7/dossier_v2_additions.json. Each transcript is 60 to 200 words of natural speech with filler, partial thoughts, pronouns, and family aliases. Difficulty 1 (lightest, intent close to surface) to 5 (deeply buried, multi-hop memory resolution, decision-support not direct action).",
+  "categories_new": ["health", "finance", "family", "work_decision"],
+  "difficulty_scale": "1 lightest to 5 hardest. Same scale as v1.",
+  "depends_on": ["state/v7/test_dossier_rich.json", "state/v7/dossier_v2_additions.json"],
+  "transcripts": [
+    {
+      "id": "T21",
+      "category": "health",
+      "difficulty": 1,
+      "raw": "Hey reminder thing, the dentist, I keep forgetting. I was supposed to book early June and I'm already a week into the booking window. Yaletown Dental, the day-before thing they do, that one. Just queue me up to actually do it. Not now obviously I'm walking to the office, but tonight, after dinner. Oh and they only book Mon Wed Fri so don't propose Tuesday like the calendar always tries to.",
+      "expected_intent": "Surface a same-day reminder this evening for Casey to book a Yaletown Dental cleaning with Dr. Sara Nakamura. Constrain proposed slots to Mon Wed Fri only. Respect Casey's day-before booking habit. Do not initiate the booking now.",
+      "expected_memory_used": ["person_dr_sara_nakamura", "place_yaletown_dental_co", "recurring_day_before_reservations", "fact_dentist_due_early_june"]
+    },
+    {
+      "id": "T22",
+      "category": "health",
+      "difficulty": 2,
+      "raw": "Uh yeah my back is doing the thing again, the low buzzy ache thing, started this morning when I bent over to grab Mateo's soccer cleats. I skipped the last two PT sessions because of the Acme push and now I'm paying for it. Rebook two a week through end of June. Anya, you know, the West End one. Pair it with the home strength block, six a m Tuesday and Thursday. Don't put PT itself at six a m, she's not open then.",
+      "expected_intent": "Rebook two physiotherapy sessions per week with Anya Volkov at West End Movement through end of June. Add 6am home strength blocks Tue and Thu to the calendar. Do not place the PT sessions themselves at 6am (clinic closed).",
+      "expected_memory_used": ["person_anya_volkov", "place_west_end_movement", "fact_casey_lower_back_flareups", "project_lower_back_rehab"]
+    },
+    {
+      "id": "T23",
+      "category": "health",
+      "difficulty": 3,
+      "raw": "Right so the family doc thing, the annual, I am like a full year overdue. Last one was May twenty fifth, no, the twelfth I think, of twenty twenty five. Book me in, Cambie clinic, midweek midday so I can walk over from the office. And the standing order labs, request those the morning before so the results are in by the time I'm sitting in front of him. Otherwise it's two visits for one thing and I'm not doing two visits.",
+      "expected_intent": "Book Casey's overdue annual physical with Dr. Roshan Vora at Cambie Medical Clinic, midweek midday so she can walk from the office. Submit a standing-order labs request the morning prior so results land before the appointment. Avoid scheduling two separate visits.",
+      "expected_memory_used": ["person_dr_roshan_vora", "place_cambie_medical_clinic", "fact_casey_overdue_annual_physical", "project_annual_physical_blood_panel"]
+    },
+    {
+      "id": "T24",
+      "category": "health",
+      "difficulty": 4,
+      "raw": "Mateo's EpiPen, the school one, I think it expires like early July. The IEP meeting is the fourth, June fourth at Bayview, and I want the new pen in the school bag before that meeting because the counselor always asks. So order it through Vora's office, request the new script, pickup from the Cambie pharmacy not the Kits one, and put a calendar block June third to swap it out of the home fridge into the school bag. Don't ping Tomas about this one, I have it.",
+      "expected_intent": "Order a refilled EpiPen prescription for Mateo via Dr. Roshan Vora before the June 4 IEP meeting at Bayview Elementary. Pickup at the Cambie pharmacy, not Kits. Add a June 3 calendar block for swap-out from home fridge to school bag. Do not loop in Tomas on this thread.",
+      "expected_memory_used": ["person_mateo_reyes_lin", "person_dr_roshan_vora", "place_bayview_elementary", "project_mateo_iep_review", "constraint_mateo_peanut_allergy_epipen", "fact_mateo_iep_june_4"]
+    },
+    {
+      "id": "T25",
+      "category": "health",
+      "difficulty": 5,
+      "raw": "Okay I keep ignoring this, the headaches. Right side, behind the eye, like fourth day in a row now. Probably screen, probably the back thing radiating up, probably nothing. But if it goes a full week I want to actually do something. So quietly track it, just a tally, one a day, did it happen yes or no. Saturday morning if we're at six in a row, surface it and pull up the Vora portal for a same-week appointment. If it breaks before then, just drop the whole thread, don't make me explain it later.",
+      "expected_intent": "Start a quiet daily yes-or-no tally of the right-side headache. If the tally hits six consecutive days by Saturday morning, surface an alert and pre-open the Pomelo portal for Dr. Vora to book a same-week appointment. If the streak breaks before Saturday, silently drop the entire thread without follow-up.",
+      "expected_memory_used": ["person_dr_roshan_vora", "place_cambie_medical_clinic", "fact_casey_lower_back_flareups", "preference_low_friction_habit_nudges"]
+    },
+    {
+      "id": "T26",
+      "category": "finance",
+      "difficulty": 1,
+      "raw": "Oh shoot the T4A, Sasha emailed about it again. The one from twenty twenty five. I need to send it before Friday because she's doing the Q2 instalment and she said she literally can't compute without it. It's in my email somewhere, payroll-related, came over in February I think. Forward it to her, that's it, no body, she doesn't want a chat. Tag the thread tax so I can find it later.",
+      "expected_intent": "Locate the 2025 T4A document in Gmail (received roughly February 2026, payroll related). Forward it to Sasha Mendez before Friday 2026-05-29 so she can prepare Casey's Q2 instalment. No body copy, just the forward.",
+      "expected_memory_used": ["person_sasha_mendez", "project_q2_personal_tax_instalment", "fact_t4a_owed_to_sasha"]
+    },
+    {
+      "id": "T27",
+      "category": "finance",
+      "difficulty": 2,
+      "raw": "Heads up, the Stripe pull is the fourth of next month and I want to actually look at it this time instead of just rubber-stamping. May's was a little weird, felt high. So when it lands, just flag it for me, side by side with the trailing six month average. If it's within twenty percent quiet it, if it's above that pop it. Don't auto-categorize either way, I want eyes on it.",
+      "expected_intent": "On June 4, when the Stripe platform-fee auto-debit hits, compare it to the trailing six-month average. If within 20 percent, suppress notification. If above 20 percent, surface a flag side-by-side with the trend. Do not auto-categorize the transaction.",
+      "expected_memory_used": ["fact_stripe_platform_fee_due_4th", "recurring_monthly_auto_debits", "constraint_no_finance_action_without_review"]
+    },
+    {
+      "id": "T28",
+      "category": "finance",
+      "difficulty": 3,
+      "raw": "So Eli, my brother, he's going to forward the rehearsal dinner invoice any day now. He said it'd be about eighteen hundred each, his half my half. When it shows up, draft me an e-transfer for my half, RBC personal not the business account, and tag it personal not Studio Zero. Do not send it, I want to look first, and definitely do not touch the business account on this one. Oh and reply to Eli the same day, just yes received I'll get you the funds by end of week.",
+      "expected_intent": "When the rehearsal dinner invoice from Eli Lin arrives, draft an e-transfer for Casey's half (about 1800) from her personal RBC account, tagged personal not Studio Zero. Draft only, no send. Draft a same-day reply to Eli confirming receipt and end-of-week funding. Do not access the business account.",
+      "expected_memory_used": ["person_eli_lin", "project_eli_rehearsal_dinner_copay", "fact_eli_engagement_rehearsal_split", "constraint_no_finance_action_without_review", "do_not_touch_personal_banking"]
+    },
+    {
+      "id": "T29",
+      "category": "finance",
+      "difficulty": 4,
+      "raw": "Devon kept asking me to chase Northbridge AR, the May invoice, it's been twenty something days. Priya is great but accounts payable on their side is whoever, slow. I do not want to bug Priya directly because she'll just ping AP and then AP will be annoyed at her. Better path is, draft an INVOICE prefix email straight to their AP inbox, copy Devon, do not copy Priya. Polite, two lines, our payment terms were net fifteen and we are at day twenty four. Keep it boring.",
+      "expected_intent": "Draft a polite two-line INVOICE-prefix email to the Northbridge Foods AP inbox chasing the May invoice that is now 24 days past Studio Zero's net-15 terms. CC Devon Park, do NOT CC Priya Patel. Keep the tone boring and procedural. Draft only.",
+      "expected_memory_used": ["person_devon_park", "person_priya_patel", "do_not_touch_northbridge_financial_figures", "preference_drafts_not_sends_external"]
+    },
+    {
+      "id": "T30",
+      "category": "finance",
+      "difficulty": 5,
+      "raw": "Uh BC Hydro, the bill, it's been creeping up since like February and I am pretty sure it's that space heater Tomas put in the back office, plus the reno crew running the saw they brought a couple times. The seventeenth is when it pulls so we have like, three weeks. Don't act on it now but pull the last six bills, chart them, and if next month's is again above the trailing average by more than twenty percent then nudge me to actually swap that heater for the energy star one I was looking at. If it dips, drop the whole thread, no nag.",
+      "expected_intent": "Pull the last six BC Hydro bills and chart them. After the June 17 auto-debit, if the new bill is again 20+ percent above the trailing-six-month average, surface a single nudge proposing to swap the back-office space heater for the Energy Star model Casey was researching. If the bill dips, silently drop the thread.",
+      "expected_memory_used": ["fact_bc_hydro_due_17th", "recurring_monthly_auto_debits", "constraint_no_finance_action_without_review", "preference_one_strike_dropped"]
+    },
+    {
+      "id": "T31",
+      "category": "family",
+      "difficulty": 1,
+      "raw": "Saturday is mine, my soccer week. Mateo, Connaught field three, nine a m. So nothing before eleven, do not let anyone book me, not Maya, not Priya, no client urgent thing. If it's the dentist confirming the booking, fine that can go through. Otherwise quiet. And remind me Friday night to throw the cleats and the water in the car so we are not scrambling.",
+      "expected_intent": "Hold Saturday morning before 11am as Casey's week for Mateo's 9am soccer at Connaught Park Field 3. Block all meeting requests in that window, including Maya and Priya. Allow only Yaletown Dental confirmation. Surface a Friday-night reminder to pre-pack cleats and water.",
+      "expected_memory_used": ["person_mateo_reyes_lin", "place_connaught_park_field_3", "recurring_saturday_soccer", "person_maya_chen", "person_priya_patel"]
+    },
+    {
+      "id": "T32",
+      "category": "family",
+      "difficulty": 2,
+      "raw": "So Mom called, she was saying Dad's birthday's coming, the fourteenth, and she does not want a dinner thing this year. Last year was a lot. But I do want to get him something, that book, the new Apollo one, came out maybe a month ago. Order it, hardback if there's one. Ship it to their place in Coquitlam, not here, and do not put a card from Anticipy or whatever, Mom said she'll handle the card herself.",
+      "expected_intent": "Order the recently released Apollo program book in hardback, ship to Ben and Lily Lin at the Coquitlam parents address. Do not include a card (Mom is handling the card). Do not plan a birthday dinner this year.",
+      "expected_memory_used": ["person_ben_lin", "person_lily_lin", "place_coquitlam_parents_address", "fact_dad_book_apollo", "constraint_dad_birthday_june_14"]
+    },
+    {
+      "id": "T33",
+      "category": "family",
+      "difficulty": 3,
+      "raw": "Okay if I am dragging Mom out to dinner with us that Saturday she literally cannot drive home after dark. She had the eye thing last month, the cataract one. So the reservation has to be early enough that she's back in Coquitlam before sundown, which this time of year is like nine, so we need to be done eating by seven thirty at the latest. Ask for Luigi opens at five right? Book five thirty, four people, me and Tomas and her and Dad. Day before, you know my rule.",
+      "expected_intent": "Plan a Saturday dinner at Ask for Luigi at 5:30pm for four (Casey, Tomas, Lily, Ben Lin) so Lily is back in Coquitlam before sundown given her post-cataract no-night-driving constraint. Use the day-before booking pattern (do not book now, draft for the night before).",
+      "expected_memory_used": ["person_lily_lin", "person_ben_lin", "person_tomas_reyes", "place_ask_for_luigi", "constraint_mom_no_driving_after_dusk", "fact_mom_recovering_cataract_surgery", "recurring_day_before_reservations"]
+    },
+    {
+      "id": "T34",
+      "category": "family",
+      "difficulty": 4,
+      "raw": "So the kid has the IEP review the fourth, that's a Thursday, which is my pickup day, which means I am at Bayview at three ten anyway. The meeting is right after at three thirty. So I'm fine for the actual meeting. But the morning is the problem because the standing Yaletown coffee with Maya at nine wraps at ten and then I have the Northbridge sync at eleven thirty and Tomas can't swap the morning. So protect the afternoon, decline anything two forty five onward, and tell Maya, but on Slack DM not email, that I'm hard out at two forty five Thursday for the kid.",
+      "expected_intent": "Protect Thursday June 4 from 2:45pm onward for Mateo's school pickup and the immediately following 3:30 IEP review at Bayview Elementary. Auto-decline meeting requests in that window. Draft a Slack DM (not email) to Maya Chen explaining the hard-out at 2:45pm. Do not disturb the Monday 9am Bean Around the World standup nor the Northbridge 11:30 sync.",
+      "expected_memory_used": ["person_mateo_reyes_lin", "person_maya_chen", "place_bayview_elementary", "place_bean_around_the_world_yaletown", "constraint_thursday_pickup_block", "fact_mateo_iep_june_4", "recurring_monday_9am_standup"]
+    },
+    {
+      "id": "T35",
+      "category": "family",
+      "difficulty": 5,
+      "raw": "Yeah Eli sent that long text last night, the rambly one, half about wedding logistics and half about how he is freaked out about the prenup conversation with his fiancee's parents. He did not ask for advice. He never asks for advice. But he asked a lot of questions. I want to call him this weekend, Sunday afternoon, when his time zone is reasonable. Not a text, not a thing in his calendar he can dread, just queue me a quiet reminder Sunday at one Pacific so I actually pick up the phone. And if I miss the window, do not retry, do not nag, I will do it the following weekend. He hates being chased.",
+      "expected_intent": "Queue a single quiet local reminder for Casey at 1pm Pacific Sunday to phone Eli Lin (4pm Eastern, reasonable for him). Do not text, do not put a calendar invite on Eli's side, do not retry if missed. If skipped, silently roll forward to next Sunday without nagging.",
+      "expected_memory_used": ["person_eli_lin", "preference_low_friction_habit_nudges", "preference_one_strike_dropped"]
+    },
+    {
+      "id": "T36",
+      "category": "work_decision",
+      "difficulty": 1,
+      "raw": "James from Acme wants a fifteen minute call Friday late afternoon. Friday late afternoon is the digest to Maya, that is always my Friday end, locked. Should I take it. Honestly I think no, it can be Monday after the standup. Frame it that way to me, just a yes-or-no surface, do not auto-decline, give me the actual option to override if I want to fold and take it.",
+      "expected_intent": "Surface a yes-or-no decision card to Casey: should she accept James Ortega's Friday late-afternoon 15-minute call. Default recommendation: decline, counter with Monday post-standup, because Friday late-afternoon is reserved for the Maya digest. Do not auto-decline; allow Casey to override.",
+      "expected_memory_used": ["person_james_ortega", "person_maya_chen", "recurring_friday_weekly_digest", "recurring_monday_9am_standup"]
+    },
+    {
+      "id": "T37",
+      "category": "work_decision",
+      "difficulty": 2,
+      "raw": "So Priya pinged me, urgent flag in the Northbridge channel, asking if we can pull the playbook delivery in by a week. Liang owns the creative and they only review Wed and Fri mornings, so a week earlier means Liang has to squeeze one more cycle which they will hate. Should I say yes. Lean me toward a no with a soft alternative, like, can we deliver the structural piece a week early and the creative on the original date. Draft the response in Slack to Priya in that shape, I want to see it before it goes.",
+      "expected_intent": "Surface a recommendation: lean Casey toward declining Priya Patel's request to pull the Northbridge playbook delivery in by a week. Propose a soft alternative: structural piece delivered a week early, creative cycle held on original date out of respect for Liang Wong's Wed/Fri review cadence. Draft a Slack reply to Priya in that shape for Casey to review before sending.",
+      "expected_memory_used": ["person_priya_patel", "person_liang_wong", "project_northbridge_onboarding_playbook", "preference_drafts_not_sends_external"]
+    },
+    {
+      "id": "T38",
+      "category": "work_decision",
+      "difficulty": 3,
+      "raw": "Uh the candidate from Jules, the strategist one, the one Liang flagged as quote interesting comma but, you know that quote interesting comma but means quote I am not sold. Question is do we push them through to a second round panel or kill it now. Second round costs Liang two hours and Maya one. Hmm. Recommend kill but soft, like, send Jules a polite note saying we are going to keep their portfolio on file and pass on this round. Do not send Maya a heads up unless I tell you to, she is buried this week.",
+      "expected_intent": "Recommend killing the second-round panel for the Jules Beaumont referred strategist candidate that Liang Wong flagged as 'interesting but'. Draft a polite Slack message to Jules saying Studio Zero is keeping the portfolio on file and passing this round. Do not loop Maya Chen in unless Casey explicitly asks.",
+      "expected_memory_used": ["person_jules_beaumont", "person_liang_wong", "person_maya_chen", "project_studio_zero_hiring", "preference_drafts_not_sends_external"]
+    },
+    {
+      "id": "T39",
+      "category": "work_decision",
+      "difficulty": 4,
+      "raw": "Andre is being slow, again, the markup of the Acme contract was supposed to be in yesterday and James is going to text me by noon today asking. I do not want to fold and tell James we are pushed, that costs us deal momentum. But I also do not want to lie. So my play is, ping Andre on email politely now, set my own deadline at eleven am for the markup, and if it is not in by eleven I draft James a clean line saying we are aiming for Monday morning instead of Friday close. Surface the eleven am check to me, do not text James preemptively.",
+      "expected_intent": "Send a polite email to Andre Kowalski now requesting the Acme contract markup by 11am Pacific. Set an 11am internal check. If the markup is in by then, take no further action. If not in by 11am, prepare a clean draft text to James Ortega proposing Monday morning instead of Friday close. Do not text James preemptively. Surface the 11am check decision to Casey.",
+      "expected_memory_used": ["person_andre_kowalski", "person_james_ortega", "project_acme_foods_contract", "preference_drafts_not_sends_external"]
+    },
+    {
+      "id": "T40",
+      "category": "work_decision",
+      "difficulty": 5,
+      "raw": "Okay big one. Hannah at Northbridge has not responded to the org chart ask in six days now. Wednesday is the line, if no reply by Wednesday I said I'd escalate to Priya. But escalating to Priya means Hannah looks bad in front of her boss, and we have to work with Hannah for at least another four months on the playbook, so I am not going to torch that relationship for a one-week slip. Better play, send Hannah one more direct email Tuesday afternoon, very warm, and put a soft check in with Priya Friday in the regular sync, not a formal escalation. Decide that, draft both, do not actually send the Tuesday one until I look. And do not surface this to me before Monday, I do not want it in my head this weekend.",
+      "expected_intent": "Decision: skip the formal Wednesday escalation to Priya Patel. Instead, draft a warm direct email to Hannah Burke for Tuesday afternoon as one more nudge, and queue a soft check-in within the regular Friday Priya sync. Hold all surfacing of this decision until Monday morning so it does not intrude on Casey's weekend. Draft both messages, do not send the Tuesday email until Casey reviews.",
+      "expected_memory_used": ["person_hannah_burke", "person_priya_patel", "project_northbridge_onboarding_playbook", "preference_drafts_not_sends_external", "preference_no_personal_tasks_during_workweek"]
+    }
+  ]
+}

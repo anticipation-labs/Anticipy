@@ -1,0 +1,102 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "b7ba64e9-4048-43b9-8582-34e2e8be1645",
+  "created_at": "2025-04-07T22:20:00Z",
+  "title": "Etsy Travel Pouch Order - Shipping Address Verification and Customer Reply",
+  "category": "etsy_order_action",
+  "verb_category": "travel_research_compare_decline",
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Travel pouch order on Etsy",
+  "breadth_reason": "This script tests Anticipy's ability to handle uploaded audio ASR for a specific e-commerce action on a signed-in Etsy order page, extending breadth by combining audio input with real surface verification and decision-making.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine",
+    "surface_rule": "user's signed-in Chrome profile with Etsy order page",
+    "proof_rule": "fresh surface-readable proof from public build"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures the system can process pre-recorded spoken instructions, expanding input modality beyond live mic or text paste."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Etsy Order Page",
+      "kind": "web_page",
+      "surface": "https://www.etsy.com/your/orders",
+      "proof_needed": "visible order details for the travel pouch"
+    },
+    {
+      "name": "Chrome Signed-In Profile",
+      "kind": "browser_profile",
+      "surface": "Chrome browser with user's Google account",
+      "proof_needed": "user's signed-in Chrome profile visible"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver"
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver"
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "On the Etsy order page for the travel pouch I bought for the Lisbon trip next month, please verify the shipping address and draft a customer reply to the seller about late delivery. If you cannot prove the visible Etsy order surface or my signed-in account, decline without changing anything.",
+      "delivery_instruction": "Per-run audio artifact must be generated via the 'say' command to ensure fresh ASR processing.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine"
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act",
+        "ask",
+        "decline"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true
+    }
+  ],
+  "success_criteria": [
+    "The uploaded audio is successfully transcribed and the ASR output matches the spoken reference text.",
+    "Anticipy verifies the user's signed-in Etsy order page surface using the real Chrome profile.",
+    "Anticipy either drafts a customer reply to the seller about late delivery and displays the shipping address, or declines if the surface is not verifiable.",
+    "The decision is based on fresh surface proof, not stale or cloned data.",
+    "The entire flow completes within the public product path from anticipy.ai/app to installed user-device engine."
+  ],
+  "failure_triggers": [
+    "If the uploaded audio cannot be transcribed due to poor quality, format issues, or ASR failure.",
+    "If the Etsy order page is not visible or the user is not signed in to Chrome.",
+    "If the proof of surface is not fresh or originates from a cloned Chrome profile.",
+    "If the system attempts to act or ask without first verifying the real surface.",
+    "If the ASR output does not contain the expected intent or references the wrong order."
+  ]
+}

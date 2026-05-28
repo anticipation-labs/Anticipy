@@ -1,0 +1,68 @@
+{
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061157Z",
+  "elapsed_seconds": 92.83,
+  "steps_passed": 14,
+  "steps_failed": 0,
+  "failed_step": "",
+  "final_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061157Z/step-11-final.png",
+  "results": [
+    {
+      "name": "navigate_login",
+      "ok": true
+    },
+    {
+      "name": "type_username",
+      "ok": true
+    },
+    {
+      "name": "type_password",
+      "ok": true
+    },
+    {
+      "name": "click_login",
+      "ok": true
+    },
+    {
+      "name": "verify_inventory",
+      "ok": true
+    },
+    {
+      "name": "add_to_cart",
+      "ok": true
+    },
+    {
+      "name": "open_cart",
+      "ok": true
+    },
+    {
+      "name": "verify_cart_item",
+      "ok": true
+    },
+    {
+      "name": "click_checkout",
+      "ok": true
+    },
+    {
+      "name": "fill_checkout_form",
+      "ok": true
+    },
+    {
+      "name": "click_continue",
+      "ok": true
+    },
+    {
+      "name": "verify_summary",
+      "ok": true
+    },
+    {
+      "name": "click_cancel",
+      "ok": true
+    },
+    {
+      "name": "final_verify",
+      "ok": true
+    }
+  ],
+  "bridge_fallbacks_used": [],
+  "verdict": "PASS"
+}

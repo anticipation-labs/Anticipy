@@ -1,0 +1,7 @@
+{
+  "actual": "https://the-internet.herokuapp.com/javascript_alerts",
+  "expected": "page rendered without invoking alert triggers",
+  "name": "javascript_alerts",
+  "passed": true,
+  "primitive_used": "navigate + surface-proof"
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "34e9e417-460b-4146-80fb-d3c6b4d0f822",
+  "created_at": "2025-04-02T15:30:00Z",
+  "name": "Marcus Chen",
+  "age": 34,
+  "occupation": "Graphic Designer",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Amazon order refund process",
+  "primary_real_surface": {
+    "surface": "Amazon order page",
+    "chrome_requirement": "signed-in Chrome",
+    "acceptable_state": "order details visible"
+  },
+  "daily_tools": [
+    "Chrome",
+    "Slack",
+    "Figma",
+    "Spotify",
+    "Gmail"
+  ],
+  "contacts": [
+    {
+      "name": "Lena Park",
+      "relationship": "colleague",
+      "context": "works on design team"
+    },
+    {
+      "name": "Raj Patel",
+      "relationship": "friend",
+      "context": "tech-savvy buddy who recommends tools"
+    },
+    {
+      "name": "Sofia Martinez",
+      "relationship": "partner",
+      "context": "shares household Amazon account"
+    }
+  ]
+}

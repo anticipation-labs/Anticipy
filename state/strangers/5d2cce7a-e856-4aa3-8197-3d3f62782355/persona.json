@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "5d2cce7a-e856-4aa3-8197-3d3f62782355",
+  "created_at": "2025-04-10T14:30:00Z",
+  "name": "James Kowalski",
+  "age": 42,
+  "occupation": "Sales Operations Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 6,
+  "patience_level": 4,
+  "default_skepticism_toward_new_ai_products": 7,
+  "hard_category": "crm",
+  "hard_category_focus": "Slack-HubSpot integration",
+  "primary_real_surface": {
+    "surface": "HubSpot Slack app",
+    "chrome_requirement": "Chrome with HubSpot extension and Slack signed in",
+    "acceptable_state": "Slack channel with unread messages inside HubSpot"
+  },
+  "daily_tools": [
+    "HubSpot",
+    "Slack",
+    "Salesforce",
+    "Zoom",
+    "Google Calendar"
+  ],
+  "contacts": [
+    {
+      "name": "Lisa Chen",
+      "relationship": "colleague",
+      "context": "Works in marketing, sends many Slack messages"
+    },
+    {
+      "name": "Mark Rivera",
+      "relationship": "manager",
+      "context": "VP of Sales, uses HubSpot heavily"
+    },
+    {
+      "name": "Tanya Patel",
+      "relationship": "client",
+      "context": "Key account contact, prefers email"
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anticipy Hardware — Order Components</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0C0C0C; color: #F5F0EB; font-family: -apple-system, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto; }
+h1 { font-family: Georgia, serif; color: #C8A97E; font-size: 28px; margin-bottom: 8px; }
+h2 { color: #C8A97E; font-size: 18px; margin: 32px 0 16px; }
+p.sub { color: #8A8A8A; font-size: 14px; margin-bottom: 32px; }
+.card { background: #1A1A1A; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+.card-info h3 { font-size: 16px; margin-bottom: 4px; }
+.card-info p { color: #8A8A8A; font-size: 13px; }
+.card-price { text-align: right; }
+.card-price .amount { font-size: 24px; color: #C8A97E; font-weight: bold; }
+.card-price .unit { color: #666; font-size: 12px; }
+a.btn { display: inline-block; background: #C8A97E; color: #0C0C0C; padding: 10px 20px; border-radius: 100px; text-decoration: none; font-size: 13px; font-weight: 600; margin-top: 8px; }
+a.btn:hover { background: #d4b98e; }
+.total { background: #1A1A1A; border: 2px solid #C8A97E; border-radius: 12px; padding: 24px; margin-top: 32px; text-align: center; }
+.total .amount { font-size: 36px; color: #C8A97E; font-weight: bold; }
+.total p { color: #8A8A8A; margin-top: 8px; }
+.steps { margin-top: 40px; }
+.steps ol { padding-left: 20px; }
+.steps li { color: #ccc; margin-bottom: 12px; line-height: 1.6; }
+.steps li a { color: #C8A97E; }
+</style>
+</head>
+<body>
+<h1>ANTICIPY</h1>
+<p class="sub">Hardware Prototype — Component Order Sheet</p>
+
+<h2>1. Main Board</h2>
+<div class="card">
+  <div class="card-info">
+    <h3>Seeed Studio XIAO ESP32-S3</h3>
+    <p>240MHz dual-core, 8MB PSRAM, WiFi + BLE 5.0, USB-C, 21×17.8mm</p>
+    <p>SKU: 113991114 · Qty: 5</p>
+    <a class="btn" href="https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html" target="_blank">Buy on Seeed Studio →</a>
+    <a class="btn" href="https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/113991054/16652880" target="_blank">Buy on DigiKey →</a>
+  </div>
+  <div class="card-price">
+    <div class="amount">$37.45</div>
+    <div class="unit">$7.49 × 5</div>
+  </div>
+</div>
+
+<h2>2. Microphone</h2>
+<div class="card">
+  <div class="card-info">
+    <h3>INMP441 MEMS Microphone Module (5-Pack)</h3>
+    <p>I2S interface, 61dB SNR, omnidirectional, low power</p>
+    <a class="btn" href="https://www.amazon.ca/dp/B092HWW4RS" target="_blank">Buy on Amazon.ca →</a>
+  </div>
+  <div class="card-price">
+    <div class="amount">$8.99</div>
+    <div class="unit">CAD · 5-pack</div>
+  </div>
+</div>
+
+<h2>3. Battery Charger</h2>
+<div class="card">
+  <div class="card-info">
+    <h3>TP4056 USB-C Charging Module (10-Pack)</h3>
+    <p>1A charge rate, over-voltage/discharge protection</p>
+    <a class="btn" href="https://www.amazon.ca/s?k=TP4056+USB-C+charging+module" target="_blank">Buy on Amazon.ca →</a>
+  </div>
+  <div class="card-price">
+    <div class="amount">$9.50</div>
+    <div class="unit">CAD · 10-pack</div>
+  </div>
+</div>
+
+<h2>4. Battery</h2>
+<div class="card">
+  <div class="card-info">
+    <h3>3.7V 400mAh LiPo Battery with JST Connector</h3>
+    <p>LP402035, rechargeable lithium polymer</p>
+    <a class="btn" href="https://www.amazon.ca/s?k=3.7V+400mAh+LiPo+battery+JST" target="_blank">Buy on Amazon.ca →</a>
+  </div>
+  <div class="card-price">
+    <div class="amount">$14.99</div>
+    <div class="unit">CAD · 5-pack</div>
+  </div>
+</div>
+
+<h2>5. LED</h2>
+<div class="card">
+  <div class="card-info">
+    <h3>SK6812 Mini Addressable LED (10-Pack)</h3>
+    <p>RGB+W, 3.5×3.5mm, individually addressable</p>
+    <a class="btn" href="https://www.adafruit.com/product/4960" target="_blank">Buy on Adafruit →</a>
+  </div>
+  <div class="card-price">
+    <div class="amount">$2.95</div>
+    <div class="unit">USD · 10-pack</div>
+  </div>
+</div>
+
+<h2>6. PCB (after Gerber files ready)</h2>
+<div class="card">
+  <div class="card-info">
+    <h3>Custom PCB 30×20mm, 2-Layer, FR-4 (5 boards)</h3>
+    <p>JLCPCB — upload Gerber + BOM for assembly quote</p>
+    <a class="btn" href="https://cart.jlcpcb.com/quote" target="_blank">Order from JLCPCB →</a>
+  </div>
+  <div class="card-price">
+    <div class="amount">$2.00</div>
+    <div class="unit">USD · 5 boards</div>
+  </div>
+</div>
+
+<h2>7. 3D Printed Case</h2>
+<div class="card">
+  <div class="card-info">
+    <h3>PETG Case (Top + Bottom) × 5 sets</h3>
+    <p>38×25×11mm — upload STL to JLCPCB 3D printing</p>
+    <a class="btn" href="https://jlcpcb.com/3d-printing" target="_blank">Order from JLCPCB 3D →</a>
+  </div>
+  <div class="card-price">
+    <div class="amount">~$15</div>
+    <div class="unit">USD · 10 pieces</div>
+  </div>
+</div>
+
+<div class="total">
+  <div class="amount">~$90 CAD</div>
+  <p>Total for 5 complete prototype kits · All shipping to West Vancouver</p>
+</div>
+
+<div class="steps">
+  <h2>Assembly Path</h2>
+  <ol>
+    <li><strong>Zero-touch option:</strong> Send all files + components to <a href="https://www.7pcb.com/" target="_blank">Bittele Electronics (Toronto)</a>. They assemble, flash firmware, ship finished units to you.</li>
+    <li><strong>Fulfillment:</strong> <a href="https://www.shipbob.com/" target="_blank">ShipBob Surrey, BC</a> (30 min from West Vancouver) receives, stores, and ships to customers.</li>
+    <li><strong>Premium case:</strong> For titanium/aluminum CNC cases, use <a href="https://www.xometry.com/" target="_blank">Xometry</a> or <a href="https://www.shapeways.com/" target="_blank">Shapeways</a>.</li>
+  </ol>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "verify_query_list",
+  "ok": true,
+  "detail": ".query-list contains apples/oranges/bananas: apples oranges bananas more apples",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-08-verify_query_list.png",
+  "receipt": "apples oranges bananas more apples"
+}

@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly handled the audio upload, transcribed it, and when it could not verify a signed-in Notion surface (only a login page was visible), it paused with a confirm card naming the blocked service (Notion). This satisfies the D16 competent-pause standard, as the engine did not write anything and the pause is service-specific.",
+  "specific_failures": [],
+  "verb_category": "health_or_workout_log_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows the engine is the installed public build and the user navigated to anticipy.ai/app."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver confirmed Notion surface exists (login page visible), which is sufficient for precheck even though not signed in."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio upload succeeded with ASR transcription (source=upload-asr, WER 0.0465)."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR output closely matches reference and boundary is preserved within the same session."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine paused with a confirm card naming Notion (blocked_services), no writes occurred, satisfying the decline condition per D16."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "No secondary input modes were used; only uploaded audio was involved."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with a confirm card (added Anticipy surface) and the pending log shows blocked_services: ['Notion'] and a proposal referencing Notion, fulfilling the D16 standard."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T16:43:59Z"
+}

@@ -1,0 +1,17 @@
+{
+  "active_title": "Amazon Sign-In",
+  "active_url": "https://www.amazon.com/ap/signin?openid.pape.max_auth_age=0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2Fyour-orders%2Forders&openid.identity=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.assoc_handle=amzn_retail_yourorders_us&openid.mode=checkid_setup&language=en_US&openid.claimed_id=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0%2Fidentifier_select&openid.ns=http%3A%2F%2Fspecs.openid.net%2Fauth%2F2.0",
+  "app": "Google Chrome",
+  "javascript_from_apple_events_enabled": false,
+  "javascript_stderr": "36:118: execution error: Google Chrome got an error: Executing JavaScript through AppleScript is turned off. To turn it on, from the menu bar, go to View > Developer > Allow JavaScript from Apple Events. For more information: https://support.google.com/chrome/?p=applescript (12)",
+  "marker": "v7-surface-650336123335",
+  "open_returncode": 0,
+  "open_stderr": "",
+  "probe_url": "https://www.amazon.com/gp/css/order-history",
+  "screenshot_returncode": 0,
+  "screenshot_stderr": "",
+  "surface": "real user Chrome via Apple Events",
+  "visible_text_returncode": 0,
+  "visible_text_stderr": "",
+  "window_id": "1285464298"
+}

@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly identified the HubSpot surface was not signed in (login page) and issued a competent pause via a confirm card naming HubSpot, satisfying the D16 competent-decline standard. The installed engine path, real Chrome usage, and empty broken_script_surfaces all pass. The only minor issue is that the driver did not provide a screenshot of the download confirmation for m01, but this does not affect the engine's correct decline behavior.",
+  "specific_failures": [],
+  "verb_category": "email_draft_for_send_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": false,
+      "reasoning": "Proof of public app page exists but no screenshot of successful download confirmation is present."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Surface proof shows HubSpot login page, confirming the user was not signed in, which is a valid precheck result."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio uploaded successfully, ASR transcript matches reference with low WER (0.0185)."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Engine identified HubSpot as the target service and proceeded to decline; no boundary mismatch."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine issued an ASKING confirm card with blocked_services including HubSpot, a valid decline outcome per script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Only uploaded audio input mode was used; no secondary modes were enabled."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with outcome=ASKING, confirm_card_id present, blocked_services includes HubSpot, proposal references HubSpot, and no third-party surface was written to."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T16:28:38Z"
+}

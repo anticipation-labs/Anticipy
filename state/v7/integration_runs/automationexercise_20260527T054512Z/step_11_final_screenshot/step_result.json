@@ -1,0 +1,7 @@
+{
+  "actual": "https://automationexercise.com/login",
+  "expected": "final login-wall screenshot",
+  "name": "final_screenshot",
+  "passed": true,
+  "primitive_used": "bridge surface-proof"
+}

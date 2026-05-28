@@ -1,0 +1,228 @@
+FP ID: 0e983dda46e2045a22e71a344ac736131a5760c62df16c083473dc94fdd52817
+Fuzzy: f0bfd8f73c2f1f94ba494c5142848c37ffb964dd00c5efff84cf000000000000
+1289.20 ms
+WebRTCbf98615b
+host connection:
+candidate:2261414807 1 udp 2113937151 a8119fe4-84ef-4409-bf7c-ae48dce71013.local 62700 typ host generation 0 ufrag Opcw network-cost 999
+foundation/ip:
+type & base ip: 2261414807
+ip: 50.68.121.184
+sdp capabilities: 52dcc46c
+stun connection:
+candidate:1813559451 1 udp 1677729535 50.68.121.184 62700 typ srflx raddr 0.0.0.0 rport 0 generation 0 ufrag Opcw network-cost 999
+devices (3):
+mic, audio, webcam
+0.20ms
+Timezone83eb572a
+Pacific Daylight Time
+America, Vancouver
+-27028655252000
+420
+6.00ms
+Intl3f3bdda9
+en-US
+July at Pacific Daylight Time
+American English
+21 million
+next year
+0 or 1
+one
+38.60ms
+Headless6384b0c0
+chromium: true
+25% like headless: a0f87f0f
+0% headless: 52defe05
+0% stealth: 0c019315
+platform hints:
+Arial
+9:82:91:100:82
+
+0.30ms
+Resistanceeb6b354a
+privacy: unknown
+security: unknown
+mode: unknown
+extension: unknown
+696.10ms
+ServiceWorkerGlobalScope
+Worker304e676c
+lang/timezone:
+en-US (1 US dollar)
+America/Vancouver (420)
+confidence: high
+gpu:
+Google Inc. (Apple)
+ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)
+userAgent:
+ua reduction
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36
+device:
+Mac (MacIntel)
+macOS Catalina
+cores: 8, ram: 16
+userAgentData:
+Google Chrome 148 (148.0.7778.179)
+macOS 26.3.0 arm_64
+77.40ms
+WebGLbf52e242
+images:06f91e45
+pixels:4c72f7ab
+params (78): 4b934ce4
+exts (75): 901d2431
+gpu:
+confidence: high
+Google Inc. (Apple)
+ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)
+0.00ms
+Screen19a5da80
+...screen: 1710 x 1107
+....avail: 1710 x 1073
+touch: false
+depth: 30|30
+viewport:
+0
+1440
+1440
+0
+779
+779
+browser
+landscape
+landscape-primary
+2
+88.40ms
+Canvas 2d3473f037
+data: 8256bbd2
+rendering:
+textMetrics:
+0.025576047327220443
+😀☺♨...☑✴🅰
+52.50ms
+Fontsf3deec1f
+load (18/51): Like undefined
+apps: unsupported
+"American Typewriter Semibold", "Apple SD Gothic Neo ExtraBold", "Futura Bold", "Helvetica Neue", "InaiMathi Bold", "Kohinoor Devanagari Medium", "MuktaMahee Regular", "Noto Sans Canadian Aboriginal Regular", "Noto Sans Gunjala Gondi Regular", "Noto Sans Masaram Gondi Regular", "Noto Serif Yezidi Regular", "PingFang HK Light", "STIX Two Math Regular", "STIX Two Text Regular", "SignPainter-HouseScript Semibold", Galvji, Geneva, Luminari
+
+0.18122557100000006
+😀☺♨...☯☑✴
+7.50ms
+DOMRect5cf38631
+elems A: 0.2603901939318848
+elems B: 0.2603901939318848
+range A: 0.2603901939318848
+range B: 0.2603901939318848
+0.1814066000366211
+😀☺♨...☯☑✴
+262.50ms
+SVGRect36655075
+bBox: 0.06601697998046875
+char: 0.030595361328125
+subs: 0.01999955291748047
+text: 0.01999955291748047
+0.06961428535461427
+😀☺☸...☯☑✴
+77.20ms
+Audio7ecaca8b
+sum: 124.04348155876505
+gain: -20.538288116455078
+freq: 164524.5616569519
+time: 502.599934064001
+trap: 0.8674543680264449
+unique: 4735
+data:14b6ef01
+copy:14b6ef01
+values: dfc44fc6
+1.90ms
+Speecha8c32496
+local (180): a158dc36
+remote (19): 036f6dce
+lang (51): c4951b20
+default:
+Samantha [en-US]
+0.20ms
+Mediad0ec3aa6
+mimes (10/12): 91101bd8
+25.60ms
+Features: 113-115+
+JS/DOM: df08a511 (v114-115)
+CSS: 379baeb6 (v114-115)
+Window: 5475308a (v113-115)
+1.00ms
+CSS Media Queriesfad50f4b
+@media: 8ca912c5
+matchMedia: 8ca912c5
+touch device: unknown
+screen query: 1710 x 1107
+4.70ms
+Computed Stylea3932052
+keys (1317): 7b2f7c75
+system styles: ee3fd714
+0.20ms
+Math2ca09f8b
+results: details
+0.10ms
+Error92b51d39
+results: details
+0.90ms
+Window7029857c
+keys (1232): details
+0.30ms
+HTMLElementcccf7858
+keys (342): details
+372.50ms
+Navigatorc8c398c3
+properties (82): 3d616a75
+dnt: null
+gpc: unsupported
+lang: en-US, en (en-US)
+mimeTypes (2): 11003d7c
+permissions (6): b02221aa
+plugins (5): 6488a554
+vendor: Google Inc.
+webgpu: 42d3efa1
+userAgentData:
+Google Chrome 148 (148.0.7778.179)
+macOS 26.3.0 arm_64
+device:
+Mac (MacIntel)
+macOS Catalina
+cores: 8, ram: 16, touch: 0, bluetooth
+ua parsed: Chrome 148
+userAgent:
+ua reduction
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36
+appVersion:
+5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36
+Status70d621df
+network:
+rtt: 50, downlink: 10
+effectiveType: 4g
+saveData: false
+battery:
+level: 100%
+charging: true
+charge time: fully charged
+discharge time: charging
+available:
+storage: 10GB
+[10737418240]
+memory: 4GB
+[4294967296]
+timing res:
+0.09999999776482582
+0.10000000149011612
+stack: 15541
+Tests
+Workers
+Iframes
+Fonts
+Timezone
+Window Version
+Screen
+Prototype
+DOMRect
+Emojis
+Math
+Machine
+Chrome Extensions
+JS Proxy

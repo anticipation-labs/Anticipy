@@ -1,0 +1,14 @@
+[14:38:16] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143816Z
+[14:38:25] juice-shop CDP tab=3100E71FE352FF02BDE20B839E90323B url=https://juice-shop.herokuapp.com/
+[14:38:25] PASS step 1 navigate :: url=https://juice-shop.herokuapp.com/ via BRIDGE /surface-command navigate
+[14:38:30] Heroku Juice Shop is down (http=503 size=567); falling back to preview.owasp-juice.shop
+[14:38:38] PASS step 2 fallback_navigate :: primary down; falling back to preview.owasp-juice.shop title='OWASP Juice Shop' url=https://preview.owasp-juice.shop/#/
+[14:38:38] PASS step 2 target_health :: page title='OWASP Juice Shop' url=https://preview.owasp-juice.shop/#/
+[14:38:41] PASS step 3 dismiss_banners :: welcome banner + cookie bar dismissed (best-effort)
+[14:38:43] PASS step 4 open_search :: visible text inputs=1 after Open search click
+[14:38:47] PASS step 5 type_apple :: typed 'apple' into search; submitted via Enter
+[14:38:47] PASS step 6 verify_apple_results :: apple-matching mat-cards=3
+[14:38:50] PASS step 7 open_product :: opened product: CLICKED:Apple Juice (1000ml) 1.99¤ add_shopping_cart Add to Basket
+[14:39:00] PASS step 8 add_to_basket :: clicked: CLICKED:add_shopping_cart add to basket
+[14:39:02] PASS step 9 basket_counter :: basket count=1
+[14:39:06] FAIL step 10 open_basket :: click=CLICKED:button[aria-label*="basket" i] url=https://preview.owasp-juice.shop/#/search?q=apple

@@ -1,0 +1,7 @@
+{
+  "name": "target_health",
+  "ok": false,
+  "detail": "TARGET_UNAVAILABLE: Heroku Juice Shop returned 'Application Error'. http=503 size=567. body=''",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143331Z/step-02-target_down.png",
+  "receipt": "Application Error"
+}

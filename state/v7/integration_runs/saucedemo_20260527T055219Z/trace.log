@@ -1,0 +1,6 @@
+[05:52:20] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T055219Z
+[05:52:26] saucedemo CDP tab id: 55CEA473DB52A681D66F1277B7DFED4E
+[05:52:27] PASS step 1 navigate_login :: url=https://www.saucedemo.com/ via BRIDGE /surface-command navigate
+[05:52:28] PASS step 2 type_username :: CDP fill #user-name=standard_user (bridge type unsupported)
+[05:52:30] PASS step 3 type_password :: CDP fill #password=secret_sauce
+[05:52:33] FAIL step 4 click_login :: expected /inventory.html got https://www.saucedemo.com/

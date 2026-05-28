@@ -1,0 +1,38 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "ccb50a84-1b2c-4be3-a641-63e21618cdee",
+  "created_at": "2025-04-09T14:30:00Z",
+  "name": "James Hartley",
+  "age": 45,
+  "occupation": "Financial Analyst",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "Airtable expense tracking",
+  "primary_real_surface": {
+    "surface": "Airtable",
+    "chrome_requirement": "signed-in Chrome with Airtable tab open",
+    "acceptable_state": "any view of an Airtable base"
+  },
+  "daily_tools": [
+    "Excel",
+    "QuickBooks",
+    "Slack",
+    "Google Drive",
+    "Zoom"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Chen",
+      "relationship": "colleague",
+      "context": "finance team"
+    },
+    {
+      "name": "Mike O'Brien",
+      "relationship": "manager",
+      "context": "approves budgets"
+    }
+  ]
+}

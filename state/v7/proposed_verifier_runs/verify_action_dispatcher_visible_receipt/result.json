@@ -1,0 +1,84 @@
+{
+  "schema": "anticipy.v7.proposed_verifier.action_dispatcher_visible_receipt",
+  "pass": false,
+  "generated_at": "2026-05-27T04:39:20Z",
+  "completed_at": "2026-05-27T04:39:54Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "sentinel": "v7probe71b96c819f",
+  "assertions": [
+    {
+      "name": "D1_browser_action_success_requires_visible_receipt",
+      "pass": true,
+      "evidence": {
+        "status": 200,
+        "ran": false,
+        "engine_status": null,
+        "path": null,
+        "receipt_details": {
+          "found_keys": [],
+          "details": {}
+        }
+      },
+      "failure": null
+    },
+    {
+      "name": "D2_single_shared_dispatcher",
+      "pass": false,
+      "evidence": {
+        "files_present": [
+          "/Users/omarebrahim/Developer/Anticipy-V7/engine/app/middle/dispatcher.py",
+          "/Users/omarebrahim/Developer/Anticipy-V7/engine/app/proactive/dispatcher.py"
+        ],
+        "files_defining_class_Dispatcher": [
+          "/Users/omarebrahim/Developer/Anticipy-V7/engine/app/middle/dispatcher.py",
+          "/Users/omarebrahim/Developer/Anticipy-V7/engine/app/proactive/dispatcher.py"
+        ]
+      },
+      "failure": "More than one Dispatcher class is defined in the engine. Unify into a single shared dispatcher."
+    },
+    {
+      "name": "D3_provider_callback_alone_not_success",
+      "pass": true,
+      "evidence": {
+        "ran_true": false,
+        "surface_receipt_proof_empty": true,
+        "any_visible_receipt": false
+      },
+      "failure": null
+    },
+    {
+      "name": "D4_no_double_fire_via_competing_dispatcher",
+      "pass": true,
+      "evidence": {
+        "second_call_status": 200,
+        "second_ran": false,
+        "second_receipt_details": {
+          "found_keys": [],
+          "details": {}
+        },
+        "first_receipt_keys": []
+      },
+      "failure": null
+    }
+  ],
+  "passed_count": 3,
+  "failed_count": 1,
+  "cleanup": {
+    "status": 200,
+    "body": {
+      "ran": false,
+      "gated": true,
+      "resolved_person": "",
+      "resolved_thing": "",
+      "task": "Close all browser tabs related to v7probe71b96c819f.",
+      "error": "No real Chrome on :9222 and the launchd agent could not be kicked. The real path (action_handoff -> frozen DSv4SkillRunner) is wired; the real-clone browser is the edge."
+    }
+  },
+  "frozen_paths_unlocked": [
+    "engine/app/middle/dispatcher.py",
+    "engine/app/proactive/dispatcher.py",
+    "engine/app/product/server.py (action call sites)"
+  ],
+  "v7_gate_guarded": "V7.10_real_chrome_user_surface_no_clone, V7.20_no_fake_receipts_backdoors_stale_proofs",
+  "spec_cite": "ANTICIPY_V7.md PART 0, PART 1A item 3, PART 3, PART 4, PART 7 R5/R7/R8"
+}

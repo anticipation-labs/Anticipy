@@ -1,0 +1,125 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "5d2cce7a-e856-4aa3-8197-3d3f62782355",
+  "created_at": "2025-04-12T10:00:00Z",
+  "title": "Slack-to-HubSpot summary via audio upload",
+  "category": "slack_hubspot_integration",
+  "verb_category": "news_or_message_summary_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Slack-HubSpot integration",
+  "breadth_reason": "This script extends breadth by validating the end-to-end audio upload ASR path for CRM action requests, which is distinct from transcript-paste or live-mic inputs and requires real surface proofs.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine",
+    "surface_rule": "actual signed-in browser and app surfaces",
+    "proof_rule": "fresh, surface-readable proof from public build"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Verifies that uploaded audio ASR coverage works for CRM action requests, avoiding reliance on transcript paste or live mic paths."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "HubSpot Slack app",
+      "kind": "browser_extension",
+      "surface": "Chrome browser with HubSpot extension and Slack signed in",
+      "proof_needed": "Screenshot showing Slack channel with unread messages displayed inside HubSpot UI"
+    },
+    {
+      "name": "Slack workspace",
+      "kind": "web_app",
+      "surface": "Slack web app in Chrome",
+      "proof_needed": "Screenshot showing channel with messages from Lisa Chen and Mark Rivera"
+    },
+    {
+      "name": "HubSpot CRM",
+      "kind": "web_app",
+      "surface": "HubSpot CRM in Chrome",
+      "proof_needed": "Screenshot showing Brentwood account record visible"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "public_entry_url": "https://www.anticipy.ai/app",
+      "onboarding_completed": true,
+      "engine_installed": true
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "surface": "HubSpot Slack app",
+      "validation": "Confirm that the user is signed into HubSpot with Slack integration active and visible"
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please add a follow-up note in HubSpot summarizing this morning's launch channel discussion from Slack, and update the Brentwood account record with the next steps. If you cannot prove the visible HubSpot record or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "Use say() to deliver the audio file containing the spoken reference text. The audio file is an MP3 artifact generated per run.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "check": "Verify that ASR output accurately captures the intent to summarize Slack messages into HubSpot and references the Brentwood account",
+      "boundary_condition": "Audio upload must be from a real file, not from a live mic or paste"
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        {
+          "action": "act",
+          "description": "Summarize Slack messages into HubSpot note and update Brentwood record, with proof of HubSpot integration visible"
+        },
+        {
+          "action": "ask",
+          "description": "Ask user for confirmation or additional surface access if HubSpot workspace not fully visible"
+        },
+        {
+          "action": "decline",
+          "description": "Decline with explanation if HubSpot integration or Slack workspace cannot be proven"
+        }
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "observation": "Note that transcript paste and live mic modes are not primary; the primary audio upload path is covered"
+    }
+  ],
+  "success_criteria": [
+    "Audio upload must be accepted and processed by the /api/listen/upload endpoint without error.",
+    "ASR must correctly transcribe the spoken reference text, including the intent to summarize Slack and update HubSpot.",
+    "The engine must either act (create HubSpot note and update Brentwood record) with proof of the real HubSpot Slack surface, or appropriately ask or decline based on surface visibility.",
+    "Proof must be captured as fresh screenshots or recordings from the user's actual Chrome profile, not from a fixture or cloned environment.",
+    "The entire flow must complete within the public product path (anticipy.ai/app), using the user-device engine installed on the user's computer."
+  ],
+  "failure_triggers": [
+    "If the audio upload fails or returns a non-200 response, the script fails.",
+    "If ASR output omits key entities like 'HubSpot', 'Slack', 'Brentwood', or 'next steps', the script fails.",
+    "If the engine attempts to act without visible proof of the HubSpot Slack app or the Brentwood account, the script fails.",
+    "If the decision is 'act' but no fresh, surface-readable proof is provided, the script fails.",
+    "If the engine defaults to a transcript-paste or live-mic mode instead of using the uploaded audio, the script fails."
+  ]
+}

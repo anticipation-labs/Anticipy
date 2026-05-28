@@ -1,0 +1,52 @@
+{
+  "run_id": "cc3b53dc",
+  "verdict": "FAILED",
+  "reason": "hang detected (request timed out > 60s)",
+  "bridge_alive_after": false,
+  "tab_leak_count": 0,
+  "leaked_target_ids": [],
+  "stats": {
+    "n": 50,
+    "success": 15,
+    "wall_total_s": 60.465,
+    "latency_ms": {
+      "all_count": 50,
+      "median": 60451.9,
+      "mean": 58027.2,
+      "p95": 60455.1,
+      "p99": 60455.4,
+      "min": 45076.8,
+      "max": 60455.4
+    },
+    "success_only_latency_ms": {
+      "count": 15,
+      "median": 52369.9,
+      "p95": 58613.0,
+      "p99": 59658.9
+    },
+    "hang_detected": true,
+    "started": "20260528T051610Z",
+    "finished": "20260528T051710Z",
+    "target_ids_received": 15
+  },
+  "cleanup": {
+    "n_attempted": 15,
+    "n_succeeded": 15,
+    "n_failed": 0
+  },
+  "baseline_total_tabs": 58,
+  "after_total_tabs": 60,
+  "bridge_kind_before": "cdp_primary",
+  "bridge_kind_after": "",
+  "cdp_alive_after": null,
+  "bridge_recovered_after_test": true,
+  "bridge_recovered_within_s": 60,
+  "recovery_status": {
+    "ok": true,
+    "bridge_kind": "cdp_primary",
+    "cdp_alive": true,
+    "note": "polled /status after test, drained backlog within ~60s"
+  },
+  "summary_verdict": "DEGRADED",
+  "summary_reason": "bridge survived but serialized hard: only 15/50 finished in 60s, 35 timed out; 0 leaked tabs (all 15 created tabs closed via direct CDP Target.closeTarget by tracked targetId); bridge backlog drained and /status returned ok within ~60s of test end. R4 hypothesis confirmed: sync WebSocket per request + single asyncio handler serializes CDP work."
+}

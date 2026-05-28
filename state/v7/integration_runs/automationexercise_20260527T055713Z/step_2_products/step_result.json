@@ -1,0 +1,7 @@
+{
+  "actual": "navOK=True url=https://automationexercise.com/products",
+  "expected": "navigate ok + products listing in HTML",
+  "name": "products_page",
+  "passed": false,
+  "primitive_used": "bridge navigate (top-nav fallback) + curl HTML"
+}

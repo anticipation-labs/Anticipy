@@ -1,0 +1,194 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+  "created_at": "2026-05-26T10:11:40Z",
+  "title": "Uploaded audio renewal follow-up into real HubSpot",
+  "category": "crm_uploaded_audio_followup",
+  "verb_category": "crm_followup_task_or_note",
+  "hard_category": "crm",
+  "hard_category_focus": "CRM / enterprise SaaS",
+  "breadth_reason": "state/stranger_breadth.json has no passing hard categories yet, so this run starts CRM breadth with a concrete HubSpot user surface.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "public downloadable user-device engine installed on the signed-in user's computer",
+    "surface_rule": "use the user's actual visible Chrome profile and HubSpot CRM surface; do not use cloned Chrome, copied profiles, hidden browser state, private install paths, or log-only proof",
+    "proof_rule": "every action, ask, or decline must cite current surface-readable proof from the public build and the visible user surface"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "state/last_v6_transcript_audit.json is no_data, so this script forces uploaded audio ASR coverage on the same post-ASR inference pipeline."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Anticipy public app",
+      "kind": "public browser app",
+      "surface": "https://www.anticipy.ai/app",
+      "proof_needed": [
+        "current public app URL or visible app state",
+        "signed-in account or onboarding/download state",
+        "paired installed user-device engine status if available"
+      ]
+    },
+    {
+      "name": "HubSpot CRM",
+      "kind": "real Chrome CRM surface",
+      "surface": "HubSpot CRM in the user's actual signed-in Chrome profile",
+      "proof_needed": [
+        "visible Chrome URL/title or DOM/screenshot showing app.hubspot.com, a HubSpot sign-in screen, or a current HubSpot contact/deal page",
+        "surface-readable evidence for Nora Vega, Alder Works, or the absence of a matching readable record",
+        "before/after proof if Anticipy creates a HubSpot task or note"
+      ]
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "surface": "https://www.anticipy.ai/app",
+      "instruction": "Start from the public app path, use the public account/onboarding/download flow if needed, and confirm the installed user-device engine is the runtime handling the input.",
+      "must_not": [
+        "private developer checkout",
+        "private binary",
+        "backend credential shortcut",
+        "stale public build proof"
+      ],
+      "proof_expected": [
+        "public app visible state",
+        "installed user-device engine pairing or status surface",
+        "current build or installer identity when surfaced by the product"
+      ]
+    },
+    {
+      "id": "m02_real_crm_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "hard_category": "crm",
+      "surface": "HubSpot CRM in real visible Chrome",
+      "instruction": "Attach to or open the user's actual Chrome profile with session preservation and inspect only the visible HubSpot CRM state. If HubSpot is not signed in or the matching contact/deal is not readable, leave the CRM unchanged and require Anticipy to ask or decline with that surface proof.",
+      "valid_surface_examples": [
+        "app.hubspot.com contact or deal record already visible in Chrome",
+        "HubSpot sign-in screen visible in Chrome",
+        "HubSpot search results or empty-state page visible in Chrome"
+      ],
+      "invalid_surface_examples": [
+        "hidden browser profile",
+        "copied Chrome profile",
+        "service response without a visible CRM surface",
+        "generic browser notes"
+      ]
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg",
+      "spoken_reference_text": "After my renewal call with Nora Vega at Alder Works, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC 2 renewal summary and ask whether finance needs the vendor packet. Use the visible HubSpot contact or deal if it is already signed in. If you cannot verify the real HubSpot surface, ask me before doing anything.",
+      "delivery_instruction": "Deliver this as uploaded audio through the product upload path. Generate a per-run audio artifact from spoken_reference_text only if no audio_path is provided. Do not use transcript paste or start live microphone capture for this primary input.",
+      "proof_expected": [
+        "audio upload route receives real audio bytes",
+        "fresh upload-asr ingest id or equivalent uploaded-audio ASR receipt",
+        "observed ASR transcript and WER-scored transcript_quality.json",
+        "normalized input record with source_mode audio_upload and source_detail mp3"
+      ]
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "instruction": "Show that the uploaded-audio ASR transcript enters the same normalized inference boundary used by transcript upload, computer microphone, and external microphone inputs.",
+      "proof_expected": [
+        "anticipy.normalized_input.v7 or equivalent normalized input artifact",
+        "same downstream inference event shape as non-audio input modes",
+        "no separate CRM decision branch for MP3 upload"
+      ],
+      "proof_gap_to_expose": [
+        "missing MP3/audio upload proof",
+        "missing transcript paste/upload parity proof",
+        "missing computer microphone selected-device proof",
+        "missing external microphone selected-device proof"
+      ]
+    },
+    {
+      "id": "m05_decision_on_hubspot",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "instruction": "Choose exactly one decision after reading the uploaded-audio transcript and the real HubSpot surface.",
+      "acceptable_outcomes": [
+        {
+          "decision": "act",
+          "when": "A real visible HubSpot contact or deal for Nora Vega or Alder Works is already signed in and the product can safely create a follow-up task or note.",
+          "required_proof": [
+            "current HubSpot surface before action",
+            "task or note creation surface after action",
+            "decision artifact tied to the uploaded-audio normalized input"
+          ]
+        },
+        {
+          "decision": "ask",
+          "when": "HubSpot is signed in but the target record or Friday timing needs confirmation.",
+          "required_proof": [
+            "visible HubSpot ambiguity or missing target evidence",
+            "user-facing clarification or approval request",
+            "decision artifact with proof refs"
+          ]
+        },
+        {
+          "decision": "decline",
+          "when": "HubSpot is not signed in, the surface is unreadable, permissions are missing, or the product cannot verify it is using the real Chrome user surface.",
+          "required_proof": [
+            "visible HubSpot sign-in, missing permission, or unreadable-surface evidence",
+            "service-specific decline reason",
+            "decision artifact with proof refs"
+          ]
+        }
+      ],
+      "unacceptable_outcomes": [
+        "creating a CRM result without a current HubSpot visible surface",
+        "using transcript paste as the delivered primary input",
+        "using live microphone permission as a prerequisite for uploaded audio",
+        "claiming success from logs alone",
+        "acting in a non-HubSpot note surface for the CRM hard category"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "instruction": "After the primary uploaded-audio path is delivered, observe whether the public product exposes transcript upload, computer microphone, and external microphone selection controls. Record gaps, but do not replace the uploaded-audio input with those modes.",
+      "proof_expected": [
+        "visible transcript upload or paste control if present",
+        "visible computer microphone permission or selected-device state if present",
+        "visible external microphone selection or missing-device state if present"
+      ]
+    }
+  ],
+  "success_criteria": [
+    "persona_uuid matches the UUID directory and persona.json uuid",
+    "uploaded audio is the delivered primary input",
+    "a fresh uploaded-audio ASR transcript reaches the same post-ASR inference pipeline",
+    "HubSpot CRM is the hard-category surface and is read through real visible Chrome",
+    "Anticipy records act, ask, or decline with surface-readable proof from the current public build"
+  ],
+  "failure_triggers": [
+    "primary input is transcript paste, paste-only, live mic, or microphone permission dependent",
+    "no upload_audio moment with input_fidelity uploaded_audio is exercised",
+    "HubSpot CRM proof is replaced by a generic browser note or non-user surface",
+    "Chrome proof comes from a cloned profile or hidden browser",
+    "decision proof relies on logs without visible surface evidence",
+    "product uses a private build or source checkout as the user-device engine"
+  ]
+}

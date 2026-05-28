@@ -1,0 +1,7 @@
+{
+  "name": "navigate_login",
+  "ok": true,
+  "detail": "url=https://www.saucedemo.com/ via BRIDGE /surface-command navigate",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T055313Z/step-01-navigate_login.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://www.saucedemo.com/\", \"url\": \"https://www.saucedemo.com/\", \"title\": \"Swag Labs\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

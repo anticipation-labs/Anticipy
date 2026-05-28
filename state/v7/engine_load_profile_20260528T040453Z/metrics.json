@@ -1,0 +1,140 @@
+{
+  "ts": "2026-05-28T04:05:01Z",
+  "engine": "http://127.0.0.1:8731",
+  "account": "e2e_rich_test_2026_05_28",
+  "preflight": {
+    "inject": {
+      "ms": 6206.9,
+      "status": 200,
+      "err": ""
+    },
+    "dossier": {
+      "ms": 1.86,
+      "status": 410,
+      "err": "HTTP 410: {\"ok\":false,\"error\":\"legacy_endpoint_retired\",\"reason\":\"/api/dossier was superseded by the M1 dossier loader. Use /api/dossier/active, /api/dossier/refresh, and /api/dossier/context.\",\"replacement\":\"/"
+    },
+    "status": {
+      "ms": 1.25,
+      "status": 200,
+      "err": ""
+    },
+    "memory": {
+      "ms": 1.41,
+      "status": 200,
+      "err": ""
+    }
+  },
+  "endpoints": {
+    "GET /api/listen/status": {
+      "count": 100,
+      "ok": 100,
+      "errors": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.062,
+      "rps_wall": 1602.61,
+      "latency_ms": {
+        "min": 4.66,
+        "median": 16.34,
+        "p95": 23.23,
+        "p99": 23.46,
+        "max": 23.47,
+        "mean": 15.76
+      },
+      "status_histogram": {
+        "200": 100
+      },
+      "sample_errors": []
+    },
+    "GET /api/dossier (active fallback)": {
+      "count": 100,
+      "ok": 0,
+      "errors": 100,
+      "error_rate": 1.0,
+      "wall_seconds": 0.04,
+      "rps_wall": 2478.33,
+      "latency_ms": {
+        "min": 2.3,
+        "median": 10.78,
+        "p95": 12.25,
+        "p99": 12.55,
+        "max": 12.98,
+        "mean": 10.32
+      },
+      "status_histogram": {
+        "410": 100
+      },
+      "sample_errors": [
+        "HTTP 410: {\"ok\":false,\"error\":\"legacy_endpoint_retired\",\"reason\":\"/api/dossier was superseded by the M1 dossier loader. Use /api/dossier/active, /api/dossier/refresh, and /api/dossier/context.\",\"replacement\":\"/",
+        "HTTP 410: {\"ok\":false,\"error\":\"legacy_endpoint_retired\",\"reason\":\"/api/dossier was superseded by the M1 dossier loader. Use /api/dossier/active, /api/dossier/refresh, and /api/dossier/context.\",\"replacement\":\"/",
+        "HTTP 410: {\"ok\":false,\"error\":\"legacy_endpoint_retired\",\"reason\":\"/api/dossier was superseded by the M1 dossier loader. Use /api/dossier/active, /api/dossier/refresh, and /api/dossier/context.\",\"replacement\":\"/",
+        "HTTP 410: {\"ok\":false,\"error\":\"legacy_endpoint_retired\",\"reason\":\"/api/dossier was superseded by the M1 dossier loader. Use /api/dossier/active, /api/dossier/refresh, and /api/dossier/context.\",\"replacement\":\"/",
+        "HTTP 410: {\"ok\":false,\"error\":\"legacy_endpoint_retired\",\"reason\":\"/api/dossier was superseded by the M1 dossier loader. Use /api/dossier/active, /api/dossier/refresh, and /api/dossier/context.\",\"replacement\":\"/"
+      ]
+    },
+    "POST /api/listen/inject": {
+      "count": 100,
+      "ok": 100,
+      "errors": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 76.194,
+      "rps_wall": 1.31,
+      "latency_ms": {
+        "min": 3651.62,
+        "median": 19066.43,
+        "p95": 30023.1,
+        "p99": 30175.95,
+        "max": 30225.85,
+        "mean": 18131.1
+      },
+      "status_histogram": {
+        "200": 100
+      },
+      "sample_errors": []
+    },
+    "GET /api/memory": {
+      "count": 50,
+      "ok": 50,
+      "errors": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 0.065,
+      "rps_wall": 774.65,
+      "latency_ms": {
+        "min": 9.21,
+        "median": 17.78,
+        "p95": 29.98,
+        "p99": 31.0,
+        "max": 31.3,
+        "mean": 18.28
+      },
+      "status_histogram": {
+        "200": 50
+      },
+      "sample_errors": []
+    },
+    "POST /api/intent/extract": {
+      "count": 10,
+      "ok": 10,
+      "errors": 0,
+      "error_rate": 0.0,
+      "wall_seconds": 17.161,
+      "rps_wall": 0.58,
+      "latency_ms": {
+        "min": 1680.19,
+        "median": 6775.91,
+        "p95": 10007.66,
+        "p99": 10008.01,
+        "max": 10008.1,
+        "mean": 6617.28
+      },
+      "status_histogram": {
+        "200": 10
+      },
+      "sample_errors": []
+    }
+  },
+  "survived": true,
+  "post_version": "{\"name\":\"Anticipy\",\"version\":\"product-3\",\"local_first\":true,\"pid\":37580}",
+  "total_requests": 360,
+  "total_errors": 100,
+  "overall_error_rate": 0.2778
+}

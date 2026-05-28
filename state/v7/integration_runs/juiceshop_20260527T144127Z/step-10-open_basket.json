@@ -1,0 +1,7 @@
+{
+  "name": "open_basket",
+  "ok": true,
+  "detail": "basket page url=https://preview.owasp-juice.shop/#/basket via CLICKED: shopping_cart your basket1",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144127Z/step-10-open_basket.png",
+  "receipt": "CLICKED: shopping_cart your basket1"
+}

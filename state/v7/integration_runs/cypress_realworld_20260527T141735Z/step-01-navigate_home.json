@@ -1,0 +1,7 @@
+{
+  "name": "navigate_home",
+  "ok": true,
+  "detail": "url=https://example.cypress.io/ via BRIDGE /surface-command navigate",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/cypress_realworld_20260527T141735Z/step-01-navigate_home.png",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://example.cypress.io/\", \"url\": \"https://example.cypress.io/\", \"title\": \"Cypress.io: Kitchen Sink\"}, \"acquired_via\": \"chrome_applescript_loopback_bridge\", \"error\": \"\"}"
+}

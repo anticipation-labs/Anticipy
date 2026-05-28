@@ -1,0 +1,61 @@
+- generic [active] [ref=e1]:
+  - link "Skip to content":
+    - /url: "#geist-skip-nav"
+  - main [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - button "Open sidebar" [ref=e9] [cursor=pointer]:
+            - img [ref=e11]
+          - generic [ref=e116]:
+            - link "Other anticipy" [ref=e117] [cursor=pointer]:
+              - /url: /omar-ebrahims-projects-022b18ec/anticipy
+            - button [ref=e122] [cursor=pointer]
+            - link "Back to team view" [ref=e128] [cursor=pointer]:
+              - /url: /omar-ebrahims-projects-022b18ec/~/settings/environment-variables
+        - generic [ref=e18]:
+          - generic [ref=e19]:
+            - link "Project Settings" [ref=e132] [cursor=pointer]:
+              - /url: /omar-ebrahims-projects-022b18ec/anticipy/settings
+            - img [ref=e21]
+          - generic [ref=e23]: Environment Variables
+        - button "Open page actions menu" [ref=e25] [cursor=pointer]:
+          - img [ref=e27]
+      - generic [ref=e36]:
+        - generic [ref=e38]:
+          - generic [ref=e39]:
+            - heading "Environment Variables" [level=2] [ref=e40]
+            - paragraph [ref=e41]
+          - generic [ref=e45]:
+            - button "Link Shared Variable" [ref=e46] [cursor=pointer]
+            - button "Add Environment Variable" [ref=e48] [cursor=pointer]
+        - tablist [ref=e50]:
+          - tab "Project" [selected] [ref=e51] [cursor=pointer]
+          - tab "Shared" [ref=e52] [cursor=pointer]
+        - generic [ref=e53]:
+          - generic [ref=e55]:
+            - searchbox "Search" [ref=e56]
+            - img [ref=e58]
+          - combobox [ref=e61]:
+            - generic [ref=e134]
+          - generic [ref=e64]:
+            - generic
+            - combobox [ref=e65] [cursor=pointer]
+            - generic
+        - generic [ref=e67]:
+          - generic [ref=e141]:
+            - generic [ref=e143]
+            - generic [ref=e184]
+            - generic [ref=e225]
+            - generic [ref=e266]
+            - generic [ref=e307]
+            - generic [ref=e348]
+          - generic [ref=e110]:
+            - generic [ref=e389] [cursor=pointer]
+            - generic [ref=e112]
+  - alert [ref=e394]
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - img

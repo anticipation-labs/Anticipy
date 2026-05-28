@@ -1,0 +1,1 @@
+{"ok": true, "command": "navigate", "data": {"navigatedTo": "https://abrahamjuliot.github.io/creepjs", "url": "https://abrahamjuliot.github.io/creepjs/", "title": "CreepJS", "targetId": "48F8FD0496DB1C3BE1DB78E46A337322", "in_place": false, "background_tab": true}, "acquired_via": "chrome_cdp_loopback_bridge", "bridge_kind": "cdp_primary", "error": ""}

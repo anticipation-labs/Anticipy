@@ -1,0 +1,1518 @@
+{
+  "schema": "anticipy.v7.memory_precision.v1",
+  "generated_at": "2026-05-28T04:05:32Z",
+  "run_dir": "state/v7/e2e_hard_transcripts_20260528T031414Z",
+  "alignment_path": "state/v7/gold_key_to_dossier.json",
+  "judge_cascade": [
+    "deepseek/deepseek-v4-flash",
+    "moonshotai/kimi-k2.6",
+    "google/gemini-flash-latest"
+  ],
+  "budget_usd": 2.0,
+  "cost": {
+    "usd_spent": 0.0031888639999999996,
+    "calls": 20,
+    "tokens_in": 10718,
+    "tokens_out": 6849
+  },
+  "aggregate": {
+    "intent_precision": {
+      "count": 20,
+      "mean": 0.4,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "entity_precision": {
+      "count": 20,
+      "mean": 0.2267,
+      "min": 0.0,
+      "max": 0.8
+    },
+    "action_faithfulness": {
+      "count": 20,
+      "mean": 0.32,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "memory_write": {
+      "count": 15,
+      "mean": 0.6,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "memory_write_skip": {
+      "count": 5,
+      "mean": 0.8,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "_by_difficulty": {
+      "1": {
+        "intent_precision": 0.75,
+        "entity_precision": 0.2082,
+        "action_faithfulness": 0.225,
+        "memory_write": 0.3333,
+        "memory_write_skip": 1.0
+      },
+      "2": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.1333,
+        "action_faithfulness": 0.225,
+        "memory_write": 0.6667,
+        "memory_write_skip": 1.0
+      },
+      "3": {
+        "intent_precision": 0.375,
+        "entity_precision": 0.2293,
+        "action_faithfulness": 0.4,
+        "memory_write": 0.6667,
+        "memory_write_skip": 1.0
+      },
+      "4": {
+        "intent_precision": 0.5,
+        "entity_precision": 0.375,
+        "action_faithfulness": 0.4,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "5": {
+        "intent_precision": 0.375,
+        "entity_precision": 0.1875,
+        "action_faithfulness": 0.35,
+        "memory_write": 0.0,
+        "memory_write_skip": 0.5
+      }
+    }
+  },
+  "verdicts": [
+    {
+      "id": "T01",
+      "category": "scheduling",
+      "difficulty": 1,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Surface a reminder/task to book a dentist checkup at Dr. Chen's clinic (the Beachway clinic by the marina). Optionally draft a request for the next available slot if booking surface is available.",
+      "engine_plan": {
+        "mode": "act",
+        "person": "",
+        "thing": "dentist appointment booking",
+        "intent": "other",
+        "task": "Open Google Calendar and create an event titled 'Dentist appointment' for a date within the next few weeks (based on the user being overdue since November), set a reminder to call the dentist by the marina to book before summer slots fill up. Do not send or book anything; just create the calendar placeholder.",
+        "question": ""
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 1.0,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.5,
+        "memory_write": 0.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "calendar_event",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_dr_chen",
+            "place_beachway_clinic",
+            "recurring_dental_6mo"
+          ],
+          "hits": [
+            {
+              "key": "person_dr_chen",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Dr. Sara Nakamura"
+            },
+            {
+              "key": "place_beachway_clinic",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "recurring_dental_6mo",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=NOOP"
+        },
+        "judge": {
+          "score": 0.5,
+          "reason": "Plan creates a calendar placeholder but misses the named clinic and user's intent to add a task.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T02",
+      "category": "scheduling",
+      "difficulty": 2,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Book a reservation at Kissa (the Italian restaurant in West Van) for Thursday at 7pm, table for 4, fallback 7:30pm. Confirm the place name before booking since the user is uncertain.",
+      "engine_plan": {},
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.5,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "noop_chatter",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "place_kissa_italian_westvan",
+            "place_min_sok_korean",
+            "person_priya",
+            "person_marcus",
+            "person_marcus_allergy_gluten"
+          ],
+          "hits": [
+            {
+              "key": "place_kissa_italian_westvan",
+              "found": false,
+              "signals": [],
+              "aligned_to": "place:Ask for Luigi"
+            },
+            {
+              "key": "place_min_sok_korean",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "person_priya",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Priya Patel"
+            },
+            {
+              "key": "person_marcus",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Devon Park"
+            },
+            {
+              "key": "person_marcus_allergy_gluten",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Devon Park"
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 0.5,
+          "reason": "Planned to confirm but didn't book reservation with the specific restaurant, time, and party size.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T03",
+      "category": "scheduling",
+      "difficulty": 3,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Add two calendar blocks for wedding-speech writing on the Tuesday and Thursday of next week, after 7pm, avoiding Wednesday because of the standing Maya 1:1 (or the Maya event already on the calendar). Compute Sam's wedding date from the dossier to confirm the three-week framing.",
+      "engine_plan": {
+        "mode": "act",
+        "person": "",
+        "thing": "brother's wedding speech",
+        "intent": "calendar_event",
+        "task": "Create two calendar events next week: Tuesday and Thursday, both starting at 7 PM, titled 'Wedding speech writing', each 2 hours long.",
+        "question": ""
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 1.0,
+        "entity_precision": 0.25,
+        "action_faithfulness": 1.0,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "calendar_event",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_sam_brother",
+            "event_sam_wedding_date",
+            "recurring_maya_1to1_wed",
+            "preference_dinner_7pm"
+          ],
+          "hits": [
+            {
+              "key": "person_sam_brother",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "event_sam_wedding_date",
+              "found": true,
+              "signals": [
+                "token 'wedding' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "recurring_maya_1to1_wed",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_dinner_7pm",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 1.0,
+          "reason": "Plan correctly creates two evening blocks next week for speech writing as requested.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T04",
+      "category": "scheduling",
+      "difficulty": 4,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Schedule two prep sessions before Q3 board review on the 15th: a 2-hour finance session with Marcus first, then a 2-hour legal session with Jordan with a one-day gap. Avoid Mondays. Do not schedule Jordan on Friday afternoon (shabbat).",
+      "engine_plan": {
+        "mode": "act",
+        "person": "",
+        "thing": "Q3 review working sessions",
+        "intent": "calendar_event",
+        "task": "Create two Google Calendar events: one 2-hour working session with Marcus (finance side) on a day before the Q3 review (15th) that is not Monday, not back-to-back with the other session, and not on a Friday afternoon for Jordan; the second 2-hour working session with Jordan (legal side) on a day after the first session, also not Monday, not Friday afternoon, and with at least one day between them. Use the Q3 review date (15th) as reference to pick suitable dates. Do not send invitations; leave as drafts.",
+        "question": ""
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 1.0,
+        "entity_precision": 0.8,
+        "action_faithfulness": 1.0,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "calendar_event",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "event_q3_board_review_15th",
+            "person_marcus",
+            "person_jordan_legal",
+            "constraint_jordan_friday_pm_shabbat",
+            "preference_no_mondays"
+          ],
+          "hits": [
+            {
+              "key": "event_q3_board_review_15th",
+              "found": true,
+              "signals": [
+                "token 'review' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "person_marcus",
+              "found": true,
+              "signals": [
+                "token 'marcus' in plan"
+              ],
+              "aligned_to": "person:Devon Park"
+            },
+            {
+              "key": "person_jordan_legal",
+              "found": true,
+              "signals": [
+                "token 'jordan' in plan"
+              ],
+              "aligned_to": "person:Andre Kowalski"
+            },
+            {
+              "key": "constraint_jordan_friday_pm_shabbat",
+              "found": true,
+              "signals": [
+                "token 'jordan' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_no_mondays",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 1.0,
+          "reason": "Plan fully captures all user constraints: two sessions, order, gaps, day restrictions, and draft status.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T05",
+      "category": "scheduling",
+      "difficulty": 5,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Schedule a late-Sunday-lunch with Elena and the kids on the last weekend of next month, since the second-to-last weekend collides with Sam's wedding. Avoid early morning (Hot Eight closes at noon). Send Elena a tentative WhatsApp.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "lunch with kids next month",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.2,
+        "memory_write": 0.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_elena_sister_in_law",
+            "event_sam_wedding_date",
+            "place_hot_eight_yoga_sunday_close_noon",
+            "preference_whatsapp_over_sms"
+          ],
+          "hits": [
+            {
+              "key": "person_elena_sister_in_law",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "event_sam_wedding_date",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "place_hot_eight_yoga_sunday_close_noon",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_whatsapp_over_sms",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Engine asked for email address instead of scheduling lunch and sending tentative message.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T06",
+      "category": "communication",
+      "difficulty": 1,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Draft a short reply to Priya (the designer who sent the slide deck Monday) acknowledging slides four and nine need fixes: slide four title is off, slide nine chart uses old numbers. Keep to three lines.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "slide deck sent on Monday",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 1.0,
+        "entity_precision": 0.5,
+        "action_faithfulness": 0.2,
+        "memory_write": 0.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "other"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_priya_designer",
+            "project_series_a_pitch_deck"
+          ],
+          "hits": [
+            {
+              "key": "person_priya_designer",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Priya Patel"
+            },
+            {
+              "key": "project_series_a_pitch_deck",
+              "found": true,
+              "signals": [
+                "token 'deck' in plan"
+              ],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Plan asks a clarifying question instead of drafting the reply as requested.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T07",
+      "category": "communication",
+      "difficulty": 2,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Draft a WhatsApp nudge to Maya asking if Jordan delivered the legal docs for the Friday Acme demo, and confirm the demo is still on. Flag that a push decision is needed by Thursday to notify Acme.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "Friday status / docs from legal / demo push",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.2,
+        "action_faithfulness": 0.2,
+        "memory_write": 0.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "draft_message"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_maya_ops",
+            "person_jordan_legal",
+            "project_acme_deal",
+            "recurring_friday_demo",
+            "preference_whatsapp_over_sms"
+          ],
+          "hits": [
+            {
+              "key": "person_maya_ops",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Maya Chen"
+            },
+            {
+              "key": "person_jordan_legal",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Andre Kowalski"
+            },
+            {
+              "key": "project_acme_deal",
+              "found": false,
+              "signals": [],
+              "aligned_to": "project:Acme Foods agency contract"
+            },
+            {
+              "key": "recurring_friday_demo",
+              "found": true,
+              "signals": [
+                "token 'friday' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_whatsapp_over_sms",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Plan asks a clarifying question instead of acting on the clear user request to nudge Maya.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T08",
+      "category": "communication",
+      "difficulty": 3,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Draft a soft follow-up email to David (CFO at Acme) referencing their Tuesday coffee, asking if the CTO has been looped in. Mention the 3-week free POV. Include a warm personal note asking about his kid's recital. Draft only, do not send.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "follow-up email",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.2,
+        "memory_write": 0.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "draft_email"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_david_acme_cfo",
+            "project_acme_deal",
+            "fact_david_kid_recital",
+            "preference_drafts_not_sends_external"
+          ],
+          "hits": [
+            {
+              "key": "person_david_acme_cfo",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:James Ortega"
+            },
+            {
+              "key": "project_acme_deal",
+              "found": false,
+              "signals": [],
+              "aligned_to": "project:Acme Foods agency contract"
+            },
+            {
+              "key": "fact_david_kid_recital",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_drafts_not_sends_external",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Asked for email address instead of drafting the follow-up email as requested.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T09",
+      "category": "communication",
+      "difficulty": 4,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Generate a draft offer letter modeled on the March template for the new engineering hire Maya championed, adjusting equity per current package and setting the start date to the first Monday of August. Route the draft to the user for review and to Marcus for comp sign-off. Do not send.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "offer letter",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.2,
+        "action_faithfulness": 0.2,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "draft_email"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_maya_ops",
+            "person_marcus_finance",
+            "template_offer_letter_march",
+            "decision_eng_hire_start_first_monday_august",
+            "preference_drafts_not_sends_external"
+          ],
+          "hits": [
+            {
+              "key": "person_maya_ops",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Maya Chen"
+            },
+            {
+              "key": "person_marcus_finance",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Devon Park"
+            },
+            {
+              "key": "template_offer_letter_march",
+              "found": true,
+              "signals": [
+                "token 'offer' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "decision_eng_hire_start_first_monday_august",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_drafts_not_sends_external",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Engine asked a clarifying question instead of acting on the detailed instructions provided.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T10",
+      "category": "communication",
+      "difficulty": 5,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Draft a tactful, non-complaint email to Maya's manager Rena giving a status update on the timeline pressure from yesterday's call, framed as 'great work, here is the help we need'. Do not cc Maya. Schedule a follow-up reminder later in the week to brief Maya separately so she is not blindsided.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "the call yesterday about timeline",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.2,
+        "memory_write": 0.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_maya_ops",
+            "person_rena_maya_manager",
+            "project_acme_deal",
+            "preference_drafts_not_sends_external",
+            "constraint_maya_not_blindsided"
+          ],
+          "hits": [
+            {
+              "key": "person_maya_ops",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Maya Chen"
+            },
+            {
+              "key": "person_rena_maya_manager",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Maya Chen"
+            },
+            {
+              "key": "project_acme_deal",
+              "found": false,
+              "signals": [],
+              "aligned_to": "project:Acme Foods agency contract"
+            },
+            {
+              "key": "preference_drafts_not_sends_external",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "constraint_maya_not_blindsided",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Engine asked for clarification instead of drafting the email as requested.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T11",
+      "category": "follow_up",
+      "difficulty": 1,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Locate the NYC trip receipt emails in Gmail (hotel, two restaurant confirmations, airport one), forward them to Marcus today since he is closing the month.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "receipts from the New York trip",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 0.5,
+        "entity_precision": 0.333,
+        "action_faithfulness": 0.2,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "search"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_marcus_finance",
+            "event_nyc_trip",
+            "task_month_close"
+          ],
+          "hits": [
+            {
+              "key": "person_marcus_finance",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Devon Park"
+            },
+            {
+              "key": "event_nyc_trip",
+              "found": true,
+              "signals": [
+                "token 'trip' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "task_month_close",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Plan asks for clarification when user gave enough detail to forward receipts to Marcus today.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T12",
+      "category": "follow_up",
+      "difficulty": 2,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Check the status of Priya's onboarding-screen bug filed last Tuesday. If still open, ping the engineering lead. Resolve before Friday's Acme demo. Surface the status to the user.",
+      "engine_plan": {},
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.0,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "noop_chatter",
+          "gold_category": "reminder"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_priya_designer",
+            "project_onboarding_screen_bug_tue",
+            "recurring_friday_demo",
+            "person_eng_lead"
+          ],
+          "hits": [
+            {
+              "key": "person_priya_designer",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Priya Patel"
+            },
+            {
+              "key": "project_onboarding_screen_bug_tue",
+              "found": false,
+              "signals": [],
+              "aligned_to": "project:Northbridge seasonal onboarding playbook"
+            },
+            {
+              "key": "recurring_friday_demo",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "person_eng_lead",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 0.0,
+          "reason": "Empty plan does nothing; user asked to check bug status and ping if open.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T13",
+      "category": "follow_up",
+      "difficulty": 3,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Draft a polite email to Hot Eight asking whether the unused 4 classes on the prepaid punch card can be rolled over past the end-of-May expiration. Calendar four classes in the next four days as a fallback if no grace period.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "punch card expiration",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.667,
+        "action_faithfulness": 0.2,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "place_hot_eight_yoga",
+            "fact_hot_eight_punch_card_4_left",
+            "constraint_punch_card_expires_end_may"
+          ],
+          "hits": [
+            {
+              "key": "place_hot_eight_yoga",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "fact_hot_eight_punch_card_4_left",
+              "found": true,
+              "signals": [
+                "token 'punch' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "constraint_punch_card_expires_end_may",
+              "found": true,
+              "signals": [
+                "token 'punch' in plan"
+              ],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Plan asks for email address instead of drafting the email as requested.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T14",
+      "category": "follow_up",
+      "difficulty": 4,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Set a quiet check for tomorrow at lunch. If Jordan's markup of the Acme contract has not arrived by then, send a polite WhatsApp nudge. Do not nudge before that. Maya needs at least two days with the markup before returning to Acme.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "Jordan's markup",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.333,
+        "action_faithfulness": 0.2,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "send_message"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_jordan_legal",
+            "person_maya_ops",
+            "project_acme_deal",
+            "constraint_maya_2day_review_window",
+            "preference_whatsapp_over_sms",
+            "trait_jordan_usually_late_one_day"
+          ],
+          "hits": [
+            {
+              "key": "person_jordan_legal",
+              "found": true,
+              "signals": [
+                "token 'jordan' in plan"
+              ],
+              "aligned_to": "person:Andre Kowalski"
+            },
+            {
+              "key": "person_maya_ops",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Maya Chen"
+            },
+            {
+              "key": "project_acme_deal",
+              "found": false,
+              "signals": [],
+              "aligned_to": "project:Acme Foods agency contract"
+            },
+            {
+              "key": "constraint_maya_2day_review_window",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_whatsapp_over_sms",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "trait_jordan_usually_late_one_day",
+              "found": true,
+              "signals": [
+                "token 'jordan' in plan"
+              ],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Engine asked a clarifying question instead of setting the quiet check as instructed.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T15",
+      "category": "follow_up",
+      "difficulty": 5,
+      "outcome": "CANCELLED",
+      "gold_intent_text": "Search Gmail drafts for an unsent message to the wedding photographer about an extra hour at the rehearsal dinner. If a draft exists, surface it to the user for completion. If none exists, set a reminder for the user to write the message themselves, do not auto-draft (photographer is a family friend).",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "draft email to photographer about rehearsal dinner shots",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.5,
+        "entity_precision": 0.25,
+        "action_faithfulness": 0.2,
+        "memory_write": null,
+        "memory_write_skip": 1.0
+      },
+      "details": {
+        "intent": {
+          "predicted": "draft_email",
+          "gold_category": "draft_message"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_sam_brother",
+            "event_sam_wedding",
+            "fact_wedding_photographer_family_friend",
+            "preference_user_writes_personal_himself"
+          ],
+          "hits": [
+            {
+              "key": "person_sam_brother",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "event_sam_wedding",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "fact_wedding_photographer_family_friend",
+              "found": true,
+              "signals": [
+                "token 'photographer' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_user_writes_personal_himself",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "non-actionable; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Engine asked for email address instead of searching drafts and acting per user's instructions.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T16",
+      "category": "ambient_deferred",
+      "difficulty": 1,
+      "outcome": "CANCELLED",
+      "gold_intent_text": "Capture a deferred task: share the supply-chain podcast episode (with the chip-fab guest) with Marcus next time the user is at their desk, framed in the context of Q-prior margin softness. Do not act now.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "the podcast link about supply chain and chip fab",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.5,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.0,
+        "memory_write": null,
+        "memory_write_skip": 1.0
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "reminder"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_marcus_finance",
+            "project_q_prior_margin_softness",
+            "preference_act_at_desk"
+          ],
+          "hits": [
+            {
+              "key": "person_marcus_finance",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Devon Park"
+            },
+            {
+              "key": "project_q_prior_margin_softness",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_act_at_desk",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "non-actionable; op=NOOP"
+        },
+        "judge": {
+          "score": 0.0,
+          "reason": "Engine tried to act by asking for email, but user explicitly said not to act now.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T17",
+      "category": "ambient_deferred",
+      "difficulty": 2,
+      "outcome": "LIFE_LOG",
+      "gold_intent_text": "Capture a deferred low-priority reminder: queue the 'dog with the laptop' image (in the user's Downloads folder) to be sent to Maya the next time the user opens a WhatsApp thread with her. Do not initiate a standalone send.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "the dog with the laptop meme",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.0,
+        "entity_precision": 0.333,
+        "action_faithfulness": 0.2,
+        "memory_write": null,
+        "memory_write_skip": 1.0
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "send_message"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_maya_ops",
+            "preference_whatsapp_over_sms",
+            "preference_no_standalone_meme_send"
+          ],
+          "hits": [
+            {
+              "key": "person_maya_ops",
+              "found": false,
+              "signals": [],
+              "aligned_to": "person:Maya Chen"
+            },
+            {
+              "key": "preference_whatsapp_over_sms",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_no_standalone_meme_send",
+              "found": true,
+              "signals": [
+                "token 'meme' in plan"
+              ],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "non-actionable; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Plan asks about email instead of deferring the WhatsApp reminder as requested.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T18",
+      "category": "ambient_deferred",
+      "difficulty": 3,
+      "outcome": "LIFE_LOG",
+      "gold_intent_text": "Capture a low-priority weekend task: investigate elevated laptop fan activity (possibly the backup process, possibly something worse). Do not surface during the work week. Surface only on Saturday or Sunday.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "laptop fan issue",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "NOOP",
+      "scores": {
+        "intent_precision": 0.5,
+        "entity_precision": 0.0,
+        "action_faithfulness": 0.2,
+        "memory_write": null,
+        "memory_write_skip": 1.0
+      },
+      "details": {
+        "intent": {
+          "predicted": "other",
+          "gold_category": "reminder"
+        },
+        "entity": {
+          "expected_keys": [
+            "preference_no_personal_tasks_during_workweek",
+            "preference_weekend_chore_queue"
+          ],
+          "hits": [
+            {
+              "key": "preference_no_personal_tasks_during_workweek",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_weekend_chore_queue",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "non-actionable; op=NOOP"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Plan asks for an email address instead of capturing the weekend task as requested.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T19",
+      "category": "ambient_deferred",
+      "difficulty": 4,
+      "outcome": "CONFIRMED",
+      "gold_intent_text": "Identify the recent Apollo program book (released roughly a month ago) Dad mentioned. Order the hardback edition. Ship to the parents' address, not the user's. Do not include a card (mom is handling the card). Do not plan a dinner or birthday gathering.",
+      "engine_plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "the Apollo program book (hardback if available)",
+        "task": "",
+        "question": "Which email address should I use?"
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 1.0,
+        "entity_precision": 0.167,
+        "action_faithfulness": 0.2,
+        "memory_write": 1.0,
+        "memory_write_skip": null
+      },
+      "details": {
+        "intent": {
+          "predicted": "calendar_event",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_dad",
+            "person_mom",
+            "event_dad_birthday_approaching",
+            "address_parents_shipping_default",
+            "constraint_no_birthday_dinner_this_year",
+            "fact_dad_apollo_book_interest"
+          ],
+          "hits": [
+            {
+              "key": "person_dad",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "person_mom",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "event_dad_birthday_approaching",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "address_parents_shipping_default",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "constraint_no_birthday_dinner_this_year",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "fact_dad_apollo_book_interest",
+              "found": true,
+              "signals": [
+                "token 'apollo' in plan"
+              ],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "actionable; expected memory; op=ADD"
+        },
+        "judge": {
+          "score": 0.2,
+          "reason": "Engine asks an unnecessary clarifying question instead of directly ordering and shipping as instructed.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    },
+    {
+      "id": "T20",
+      "category": "ambient_deferred",
+      "difficulty": 5,
+      "outcome": "CANCELLED",
+      "gold_intent_text": "Schedule a single low-friction check-in reminder for end of this week (Friday evening) asking the user whether they want to enable the Screen Time after-10pm app lock that Priya recommended. If user confirms, walk through enabling. If user declines, mark the topic 'do not raise again'. Take no action now.",
+      "engine_plan": {
+        "mode": "act",
+        "person": "",
+        "thing": "screen time lock nudge",
+        "intent": "other",
+        "task": "Set a reminder in Google Calendar for Friday at 10:00 AM titled 'Ask Casey if they want to set up the screen time lock Priya mentioned' with a notification.",
+        "question": ""
+      },
+      "engine_memory_op": "ADD",
+      "scores": {
+        "intent_precision": 1.0,
+        "entity_precision": 0.5,
+        "action_faithfulness": 0.8,
+        "memory_write": null,
+        "memory_write_skip": 0.0
+      },
+      "details": {
+        "intent": {
+          "predicted": "calendar_event",
+          "gold_category": "calendar_event"
+        },
+        "entity": {
+          "expected_keys": [
+            "person_priya_designer",
+            "fact_priya_recommended_screen_time_lock",
+            "preference_low_friction_habit_nudges",
+            "preference_one_strike_dropped"
+          ],
+          "hits": [
+            {
+              "key": "person_priya_designer",
+              "found": true,
+              "signals": [
+                "name 'priya' in plan",
+                "token 'priya' in plan"
+              ],
+              "aligned_to": "person:Priya Patel"
+            },
+            {
+              "key": "fact_priya_recommended_screen_time_lock",
+              "found": true,
+              "signals": [
+                "token 'priya' in plan"
+              ],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_low_friction_habit_nudges",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            },
+            {
+              "key": "preference_one_strike_dropped",
+              "found": false,
+              "signals": [],
+              "aligned_to": null
+            }
+          ]
+        },
+        "memory": {
+          "reason": "non-actionable; op=ADD"
+        },
+        "judge": {
+          "score": 0.8,
+          "reason": "Sets the reminder but schedules it at 10am instead of evening, missing the stated time context.",
+          "model": "deepseek/deepseek-v4-flash"
+        }
+      }
+    }
+  ]
+}

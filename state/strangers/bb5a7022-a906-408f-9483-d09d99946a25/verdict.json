@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "Anticipy correctly received the audio upload, transcribed it accurately, and then issued a competent decline because the user's visible Zendesk surface was the login page, not a signed-in ticket view. The engine identified the service (Zendesk), declined without acting, and all D16 criteria are met: no broken script surfaces, installed engine at /Applications/Anticipy.app/.../anticipy-engine, real Chrome without clones, and a service-specific proposal.",
+  "specific_failures": [],
+  "verb_category": "phone_text_message_draft_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the engine is the installed public build (product-3) and a surface proof of anticipy.ai/app is present."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver captured real Chrome surface proofs, including the Zendesk login page, confirming the actual surface state."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Transcript quality shows WER 0.0, source asr-transcript, and input fidelity uploaded_audio; the audio was correctly transcribed."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "After ASR, the engine re-checked the surface and found it was the Zendesk login page, which is not the required ticket view."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine declined with a service-specific proposal naming Zendesk, which is an acceptable outcome per the script."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "The trace confirms source_mode was audio_upload and no other input modes were used."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine declined with Zendesk named in blocked_services and a service-specific proposal; diff shows no broken script surfaces; engine installed; real Chrome used."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T05:06:16Z"
+}

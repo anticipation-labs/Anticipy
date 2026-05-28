@@ -1,0 +1,7 @@
+{
+  "actual": "https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+  "expected": "actual matches: viewSystemUsers",
+  "name": "reset_filter",
+  "passed": false,
+  "primitive_used": "in-place navigate (Reset button click fallback)"
+}

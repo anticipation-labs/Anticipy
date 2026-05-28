@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly paused with a confirm card for Airtable after identifying the sign-in surface and blocked_services, satisfying the D16 competent-pause standard. The installed user-device engine, real Chrome, uploaded audio ASR, and all script moments pass.",
+  "specific_failures": [],
+  "verb_category": "airtable_record_edit_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Real Chrome navigated to https://www.anticipy.ai/app as shown in surface proof."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Surface proof captured Airtable login page, confirming the real surface check."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Uploaded audio was correctly transcribed with WER 0.026 and input fidelity is uploaded_audio."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Engine did not write to Airtable; paused with confirm card, preserving boundary."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine issued an ASKING confirm card for Airtable, an acceptable outcome."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Only uploaded audio was used; no secondary input modes were employed."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with a confirm card for Airtable via blocked_services, meeting D16 competent-pause standard."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T17:20:05Z"
+}

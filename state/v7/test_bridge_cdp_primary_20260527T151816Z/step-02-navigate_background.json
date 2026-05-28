@@ -1,0 +1,6 @@
+{
+  "name": "navigate_background",
+  "ok": true,
+  "detail": "tab navigated to https://example.com/?anticipy_cdp_test=20260527T151816Z; frontmost is https://abrahamjuliot.github.io/creepjs/ (no foreground steal)",
+  "receipt": "{\"ok\": true, \"command\": \"navigate\", \"data\": {\"navigatedTo\": \"https://example.com/?anticipy_cdp_test=20260527T151816Z\", \"url\": \"https://example.com/?anticipy_cdp_test=20260527T151816Z\", \"title\": \"Example Domain\", \"targetId\": \"BEB2D6202EFA0C9AA0CB11AC49EFC19D\", \"in_place\": true, \"background_tab\": false}, \"acquired_via\": \"chrome_cdp_loopback_bridge\", \"bridge_kind\": \"cdp_primary\", \"error\": \"\"}"
+}

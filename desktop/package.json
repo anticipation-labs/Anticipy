@@ -1,0 +1,13 @@
+{
+  "name": "desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "node ./scripts/tauri.mjs",
+    "test:e2e": "node ./scripts/run-popover-e2e.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

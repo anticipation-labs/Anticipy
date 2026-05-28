@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the popover window and main window",
+  "windows": ["main", "popover", "auth-error"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-close",
+    "core:webview:allow-internal-toggle-devtools",
+    "opener:default",
+    "positioner:default",
+    "deep-link:default",
+    "macos-permissions:default"
+  ]
+}

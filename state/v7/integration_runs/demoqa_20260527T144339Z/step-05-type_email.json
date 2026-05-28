@@ -1,0 +1,7 @@
+{
+  "name": "type_email",
+  "ok": true,
+  "detail": "email=anticipy@test.dev via CDP",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144339Z/step-05-type_email.png",
+  "receipt": "{\"value\": \"anticipy@test.dev\", \"type\": \"string\", \"exception\": null}"
+}

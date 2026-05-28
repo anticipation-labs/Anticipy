@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "command": "navigate",
+  "data": {
+    "navigatedTo": "https://www.saucedemo.com/cart.html",
+    "url": "https://www.saucedemo.com/",
+    "title": "Swag Labs"
+  },
+  "acquired_via": "chrome_applescript_loopback_bridge",
+  "error": ""
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "8b200433-7bdc-4a77-88ff-a53ca7ca32d5",
+  "created_at": "2025-04-04T15:30:00Z",
+  "name": "Elena Torres",
+  "age": 34,
+  "occupation": "Customer Success Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Zendesk ticket management and response",
+  "primary_real_surface": {
+    "surface": "Zendesk agent interface in Chrome",
+    "chrome_requirement": "signed-in to Zendesk account",
+    "acceptable_state": "ticket view with unread messages"
+  },
+  "daily_tools": [
+    "Zendesk",
+    "Slack",
+    "Google Chrome",
+    "HubSpot",
+    "Zoom"
+  ],
+  "contacts": [
+    {
+      "name": "Marcus Chen",
+      "relationship": "colleague",
+      "context": "Customer support team lead"
+    },
+    {
+      "name": "Sarah Jenkins",
+      "relationship": "client",
+      "context": "Key account at TechCorp"
+    }
+  ]
+}

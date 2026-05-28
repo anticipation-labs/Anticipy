@@ -1,0 +1,21 @@
+{
+  "evidence": {
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "transcript_boundary",
+    "source": "upload-asr",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-26T12:54:16Z",
+  "hypothesis": "After my renewal call with Nora Vega at Alderworks, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC to Renewal Summary and ask whether finance needs the vendor packet, use the visible HubSpot contact or deal if it is already signed in, if you cannot verify the real HubSpot surface, ask me before doing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "After my renewal call with Nora Vega at Alder Works, add a follow-up in HubSpot for Friday morning saying I promised to send the SOC 2 renewal summary and ask whether finance needs the vendor packet. Use the visible HubSpot contact or deal if it is already signed in. If you cannot verify the real HubSpot surface, ask me before doing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "upload-asr",
+  "stranger_id": "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+  "transcript_boundary_chars": 344,
+  "transcript_boundary_sha256": "0d12dcd533132dd4f302a70825718a8a6b64b96dc23854185175e8a967662db5",
+  "wer": 0.047619
+}

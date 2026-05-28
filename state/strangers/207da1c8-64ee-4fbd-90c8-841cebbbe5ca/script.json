@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "207da1c8-64ee-4fbd-90c8-841cebbbe5ca",
+  "created_at": "2025-04-08T15:30:00Z",
+  "title": "Shopify Reply Draft from Audio",
+  "category": "shopify_admin_reply",
+  "verb_category": "shopify_admin_reply_decline",
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Shopify order management",
+  "breadth_reason": "This script tests audio upload ASR path for a real Shopify admin surface, extending breadth beyond text-only input modes.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on user's computer",
+    "surface_rule": "Must use user's signed-in Chrome profile with Shopify admin open",
+    "proof_rule": "Fresh proof of visible Shopify order surface and signed-in admin account required"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage is required for proof; transcript paste and live mic do not provide verifiable audio artifact."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Shopify Admin Dashboard",
+      "kind": "web_app",
+      "surface": "Shopify admin orders page (order 2204)",
+      "proof_needed": "screenshot of orders page with order 2204 visible and user logged in"
+    },
+    {
+      "name": "Chrome Browser",
+      "kind": "browser",
+      "surface": "Chrome with user's signed-in profile",
+      "proof_needed": "Chrome profile indicator or tab showing Shopify admin"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to https://www.anticipy.ai/app and signs in."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that user's Chrome has signed-in Shopify admin open to order 2204."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "On the Shopify order page for order 2204, please verify the shipping address and draft a customer reply about the delayed shipment. If you cannot prove the visible Shopify order surface or my signed-in admin account, decline without changing anything.",
+      "delivery_instruction": "The stranger must produce a per-run audio artifact via the say instruction containing the exact spoken_reference_text, then upload it through /api/listen/upload.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that ASR output matches the spoken reference text within boundary."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act (draft reply in Shopify admin)",
+        "ask (request clarification from user)",
+        "decline (if surface unreadable or not verifiable)"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that secondary input modes (transcript paste, live mic) are visible but not used as primary."
+    }
+  ],
+  "success_criteria": [
+    "Audio file is uploaded successfully and ASR transcription matches the spoken reference text within acceptable bounds.",
+    "Engine accesses the real Shopify admin surface in the user's signed-in Chrome profile and verifies order 2204 is visible.",
+    "Engine drafts a customer reply about the delayed shipment or declines with a clear reason if the surface is not verifiable.",
+    "All proof artifacts (screenshot, audio file, ASR output, decision log) are generated and linked to this run.",
+    "The script completes without errors and the decision is consistent with surface verification status."
+  ],
+  "failure_triggers": [
+    "Audio upload fails due to network error, file corruption, or incorrect format (not mp3).",
+    "ASR output does not match the spoken reference text or has significant transcription errors.",
+    "Engine cannot find the Shopify admin surface or user is not signed in, but proceeds with an action instead of declining.",
+    "Engine uses stale screenshots, mocked data, or cloned Chrome profile as proof.",
+    "Engine attempts to modify the Shopify order without proving the surface is visible and signed-in."
+  ]
+}

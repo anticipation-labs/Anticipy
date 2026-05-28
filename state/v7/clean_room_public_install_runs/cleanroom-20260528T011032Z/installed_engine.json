@@ -1,0 +1,1 @@
+{"command": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine", "command_token": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine", "health": {"listening": false, "ok": true, "onboarded": true, "pid": 17978, "port": 8731, "profile_error": "", "service": "anticipy-local-engine", "version": "product-3"}, "ok": true, "pid": 17978, "port": 8731}

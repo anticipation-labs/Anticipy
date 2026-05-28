@@ -1,0 +1,7 @@
+{
+  "name": "click_cancel",
+  "ok": true,
+  "detail": "url=https://www.saucedemo.com/inventory.html",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T061651Z/step-10-click_cancel.png",
+  "receipt": "{\"value\": \"OK\", \"type\": \"string\", \"exception\": null}"
+}

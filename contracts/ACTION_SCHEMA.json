@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Anticipy Action Plan",
+  "type": "object",
+  "required": ["surface", "verb", "risk_tier", "steps", "confirmation"],
+  "properties": {
+    "surface": {"type": "string"},
+    "verb": {"type": "string"},
+    "risk_tier": {"type": "integer", "minimum": 0, "maximum": 4},
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "description"],
+        "properties": {
+          "kind": {"type": "string"},
+          "description": {"type": "string"},
+          "selector": {"type": "string"},
+          "text": {"type": "string"}
+        }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "required": ["required", "reason"],
+      "properties": {
+        "required": {"type": "boolean"},
+        "reason": {"type": "string"}
+      }
+    }
+  }
+}

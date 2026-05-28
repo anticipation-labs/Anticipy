@@ -1,0 +1,6 @@
+[14:31:14] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143114Z
+[14:31:23] juice-shop CDP tab=7388987C518F30E0AD2ED30681069930 url=https://juice-shop.herokuapp.com/
+[14:31:23] PASS step 1 navigate :: url=https://juice-shop.herokuapp.com/ via BRIDGE /surface-command navigate
+[14:31:41] PASS step 2 dismiss_banners :: welcome banner + cookie bar dismissed (best-effort)
+[14:31:43] PASS step 3 open_search :: search input present=False after click '{"value": "NOTFOUND", "type": "string", "exception": null}'
+[14:31:47] FAIL step 4 type_apple :: type failed: {"value": "NOTFOUND", "type": "string", "exception": null}

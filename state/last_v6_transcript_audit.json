@@ -1,0 +1,6 @@
+{
+  "verdict": "pass",
+  "sample_count": 20,
+  "average_wer": 0.026264,
+  "wer_ceiling": 0.05
+}

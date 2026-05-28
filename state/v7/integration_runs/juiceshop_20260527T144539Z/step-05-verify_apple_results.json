@@ -1,0 +1,7 @@
+{
+  "name": "verify_apple_results",
+  "ok": false,
+  "detail": "no apple cards after 8s",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144539Z/step-05-verify_results.png",
+  "receipt": "count=0"
+}

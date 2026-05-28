@@ -1,0 +1,294 @@
+Explore
+Image
+Video
+Audio
+Supercomputer
+New
+MCP & CLI
+New
+Collab
+Marketing Studio
+Cinema Studio
+AI Influencer
+Canvas
+Apps
+Pricing30% OFF
+Login
+Sign up
+Turn
+NemoClaw
+NemoClaw
+into a creative engine
+Connect Higgsfield to Claude, OpenClaw, Hermes, NemoClaw and generate cinematic images and videos right from your conversations.
+
+MCP
+CLI
+Skill
+Github
+1
+Install the CLI
+One line — auth, uploads, and polling are handled for you.
+
+npm install -g @higgsfield/cli
+2
+Sign in
+Opens a browser, takes 5 seconds. Run higgsfield auth login and you're authenticated.
+
+higgsfield auth login
+3
+Plug skills into your agent
+Works with Claude Code, Cursor, Codex, and 12+ other agents. Then just say: "Generate an image with Higgsfield."
+
+npx skills add higgsfield-ai/skills
+THE COMMAND SET
+auth · account
+Device-code OAuth, credit balance, transactions, and team-workspace switching.
+
+auth
+account
+workspace
+version
+model
+Live catalog of all 35+ models. Inspect parameter schemas, defaults, and enums.
+
+list
+get
+generate
+The workhorse. Submit, estimate cost, wait, fetch, and list jobs across every model.
+
+create
+cost
+wait
+get
+list
+upload
+Push an image, video, or audio file. Returns a UUID to plug into any generation.
+
+image
+video
+audio
+soul-id
+Train a face-faithful identity from 3–5 reference photos.
+
+create
+wait
+list
+marketing-studio
+Score engagement, hook strength, retention risk, and creative performance.
+
+virality_predictor
+A COMPLETE CREATIVE STUDIO INSIDE CLAUDE
+Image generation, video creation, character training, and asset management in a single connection
+
+Generative media
+Image & Video Generation
+From static stills to full cinematic video - choose your model, set the parameters, and generate. Soul and Nano Banana for images. Seedance, Kling, Veo for video. Up to 4K, any aspect ratio, any duration.
+
+Image & Video Generation
+Ad engine
+One prompt replaces your entire agency
+Finds top-spending niches, generates videos across formats UGC, TV spot, Wild Card - writes outreach, and delivers a weekly report. Replaces a $5K/mo retainer - from one brief.
+
+One prompt replaces your entire agency
+MODES
+Pick a format, skip the setup
+Choose from 10+ ready-made modes - product shots, lifestyle scenes, hero banners, Pinterest pins, ad packs and more. Claude picks the right preset and passes it into generation automatically.
+
+PRODUCT ADS & VIDEOS, INSTANTLY
+Brand builder
+From zero to a profitable brand
+Finds an underserved product, sources a factory, generates listing photos and hero video, mines reviews for counter-narrative ads, builds the D2C site.
+
+From zero to a profitable brand
+A COMPLETE CREATIVE STUDIO INSIDE YOUR AGENT
+Image generation, video creation, character training, and asset management in a single connection
+
+Every marketing asset
+Every marketing asset
+Turn any product into a campaign in seconds. Drop a URL or photo, pick a format - Marketing Studio handles the rest. Posters, ads, lifestyle shots, social posts - whatever the channel needs.
+
+Your brand, inside every prompt
+Your brand, inside every prompt
+Connect Marketing Studio to Claude or any MCP client. Your brand kit - colors, fonts, tone of voice - loads automatically with every generation. No re-uploading, no drift. On-brand by default.
+
+Automated content for any niche
+Automated content for any niche
+Pulls listings or trends, generates a polished video per item, and distributes via WhatsApp, YouTube, or wherever your audience lives. A full channel on autopilot - zero agency fees.
+
+Engagement score
+Engagement score
+One number for how long people will actually watch. Not a guess, not a vibe check - a modeled read on whether your clip earns the scroll or loses it. The closest thing to a test screening before you hit publish.
+
+
+
+FROM CONCEPT TO CONTENT IN ONE CONVERSATION
+Tell Claude what you're working on. It picks the right models and delivers production-ready results
+
+Interactive card background image
+E-Commerce & Product
+
+Interactive card background image
+Social Media & Content Creation
+
+Interactive card background image
+Marketing Agencies
+
+Interactive card background image
+Filmmaking
+
+Interactive card background image
+Infographics & Visual Data
+
+
+
+From idea to campaign in one conversation
+Start small with a quick generation, or go deep with multi-model comparisons, character training, and full campaign workflows. Claude handles the complexity
+
+Asset Creation
+Generate one asset in seconds
+Describe what you need and Claude picks the best model, sets the parameters, and delivers the result. Images, videos, or both.
+
+Generate a cinematic wide shot of a neon-lit Tokyo alley at night
+
+Full Production
+Build a visual system from a conversation
+Train a character, generate scenes across locations and styles, produce videos, and manage everything from your generation history.
+
+Train a Soul Character from these photos, then generate a 10-image lookbook
+
+Multi-Model
+Compare the best AI models side by side
+Run the same prompt through Flux, Soul, Cinema Studio, and Seedream in one go. Pick the winner and iterate from there.
+
+Generate this scene on 4 different models and show me the results
+
+Got any questions left?
+We’ve answered the most frequently asked questions
+
+How does Higgsfield connect to AI agents?
+Which agents are supported?
+What models are available?
+What can I create?
+Do I need an API key?
+How does pricing work?
+How long does generation take?
+Can I use previous generations as input?
+Can I use Higgsfield with my own agent setup?
+
+YOUR AI STACK JUST LEVELED UP
+Connect Claude, OpenClaw, Hermes, or NemoClaw to Higgsfield in seconds. Videos, images, characters — on demand.
+
+Get started
+Explore more ai features
+Manus
+Cursor
+Claude MCP
+Claude Skills
+Claude AI Image Generator
+Claude AI Video Generator
+AI Image Generator
+AI Video Generator
+Cinematic Video Generator
+Image Editing
+Enterprise
+Team Plan
+Soul Intro
+Mixed Media Intro
+AI Ad Generator
+AI Avatar Generator
+Marketing Automation
+Marketing Studio Intro
+Soul
+Community
+Chat Intro
+Trending Templates
+Kling 3.0
+Seedance 2.0
+GPT 2
+Wan 2.6
+Nano Banana Pro Intro
+Grok Imagine
+THE ULTIMATE AI-POWERED CAMERA CONTROL FOR FILMMAKERS & CREATORS
+Higgsfield AI
+About
+Trust
+Careers
+Contact
+Pricing
+Apps
+Supercomputer
+Cinema Studio
+Marketing Studio
+Higgsfield Canvas
+Higgsfield Collab
+Higgsfield MCP
+AI Influencer
+Community
+Enterprise
+Team
+Copilot
+Reference Extension
+Blog
+Contests
+Discord
+Image
+AI Image
+Soul ID Character
+Draw to Edit
+Fashion Factory
+Edit Image
+Image Upscale
+Photodump Studio
+Higgsfield Popcorn
+Nano Banana
+Prompt Guide
+Flux 2
+Seedream 5
+GPT Image 2
+Inpaint
+Soul 2.0
+Soul Cinema
+Soul Cast
+Video
+AI Video
+Mixed media
+Sora 2 Introduction
+Veo 3.1 Introduction
+Create Video
+Lipsync Studio
+Talking Avatar
+Draw to Video
+UGC Factory
+Video Upscale
+Kling 3.0
+WAN 2.6
+Seedance 2.0
+Edit
+Banana Placement
+Product Placement
+Edit Image
+Multi Reference
+Upscale
+Sora 2 Upscale
+535 Mission St, 14th floor, San Francisco, CA, 94105
+
+X / Twitter
+Youtube
+Instagram
+LinkedIn
+Tiktok
+© 2026 Higgsfield AI™. All rights reserved.
+
+Press
+Creative Challenge
+Privacy
+Terms
+Cookie Notice
+Cookie Settings
+Higgsfield CLI | AI Image & Video Generation for Any Agent
+×
+This website uses cookies
+Our website uses cookies and similar technologies to improve our service, analyze usage, and personalize content and advertising. We only use non-essential cookies if you enable them. By choosing Accept, you agree to our Privacy Policy, Terms of Use, and Cookie Policy. Manage your preferences at any time.
+Accept all
+Reject all
+ Customize

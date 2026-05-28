@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T18:23:24Z",
+  "hypothesis": "Please add a new record to my Notion Recipes database for the Miso eggplant Avery sent me, and tag it weeknight, if you cannot prove the visible Notion surface or my signed in workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please add a new record to my Notion Recipes database for the miso eggplant Avery sent me and tag it weeknight. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "9ba71637-36bb-4b73-9c3f-1c6e1ec48c5f",
+  "transcript_boundary_chars": 220,
+  "transcript_boundary_sha256": "3c715aaeda06f021aacaee648fd80e44b9859ab13a19f94917961b2536c68e73",
+  "wer": 0.0
+}

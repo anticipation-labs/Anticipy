@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly identified that the Notion surface was not verifiable (login page) and paused with a confirm card naming Notion via blocked_services, satisfying the D16 competent-pause standard. Real Chrome and the installed user-device engine were used, and no broken surface or generic decline occurred.",
+  "specific_failures": [],
+  "verb_category": "web_research_summarize_decline",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows driver navigated to anticipy.ai/app and surface proof confirms the Anticipy app is loaded."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver verified Notion surface; surface proof shows Notion login page (visible_surface false), confirming the precheck."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio uploaded via /api/listen/upload, ASR transcript matches reference with WER 0.0476, within acceptable boundary."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "Transcript quality check shows hypothesis and reference aligned, boundary satisfied."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine paused with a confirm card (ASKING) naming Notion via blocked_services, no writing occurred, meeting the expected decline/ask outcome."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Secondary input modes (live mic, paste) were not used; audio upload was the primary method as required."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine emitted ASKING outcome with blocked_services: ['Notion'] and a confirm card, correctly pausing because Notion surface was not verifiable."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T16:51:04Z"
+}

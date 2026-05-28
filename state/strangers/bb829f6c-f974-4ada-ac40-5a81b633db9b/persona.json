@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "bb829f6c-f974-4ada-ac40-5a81b633db9b",
+  "created_at": "2025-04-05T14:28:00Z",
+  "name": "Jordan Chen",
+  "age": 32,
+  "occupation": "Product Manager",
+  "location": "Seattle, Washington",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "crm",
+  "hard_category_focus": "Linear task management in signed-in Chrome",
+  "primary_real_surface": {
+    "surface": "Linear web app",
+    "chrome_requirement": "Signed-in Chrome profile with Linear workspace active",
+    "acceptable_state": "Issue creation dialog open on a relevant project"
+  },
+  "daily_tools": [
+    "Linear",
+    "Slack",
+    "Notion",
+    "Chrome",
+    "Figma"
+  ],
+  "contacts": [
+    {
+      "name": "Alex Rivera",
+      "relationship": "Engineering Lead",
+      "context": "Direct teammate on feature prioritization"
+    },
+    {
+      "name": "Sam Patel",
+      "relationship": "Design Partner",
+      "context": "Collaborates on UX improvements tracked in Linear"
+    },
+    {
+      "name": "Morgan Lee",
+      "relationship": "Customer Success Manager",
+      "context": "Provides user feedback that becomes Linear issues"
+    }
+  ]
+}

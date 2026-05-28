@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "a6f9bb1f-d3b5-4f12-8bf9-1cf8d2e71500",
+  "created_at": "2025-04-13T12:00:00Z",
+  "name": "David Chen",
+  "age": 35,
+  "occupation": "Project Manager",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion CRM for client tracking",
+  "primary_real_surface": {
+    "surface": "notion",
+    "chrome_requirement": "signed-in Chrome profile",
+    "acceptable_state": "open to correct workspace"
+  },
+  "daily_tools": [
+    "Notion",
+    "Slack",
+    "Google Calendar",
+    "Zoom",
+    "Outlook"
+  ],
+  "contacts": [
+    {
+      "name": "Sarah Johnson",
+      "relationship": "colleague",
+      "context": "works on same project team"
+    },
+    {
+      "name": "Mike Lee",
+      "relationship": "client",
+      "context": "primary contact at client company"
+    },
+    {
+      "name": "Emily Brown",
+      "relationship": "manager",
+      "context": "reports to her"
+    }
+  ]
+}

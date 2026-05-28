@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "f15d7af0-aa46-4964-b047-bcc20f261751",
+  "created_at": "2025-04-13T14:30:00Z",
+  "name": "Tara Jenkins",
+  "age": 34,
+  "occupation": "Personal Trainer",
+  "location": "Austin, Texas",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "crm",
+  "hard_category_focus": "Notion used as CRM for client scheduling and notes",
+  "primary_real_surface": {
+    "surface": "Notion",
+    "chrome_requirement": "signed-in Chrome profile with Notion workspace open",
+    "acceptable_state": "Notion page displaying client workout history or contact database"
+  },
+  "daily_tools": [
+    "Notion",
+    "Google Calendar",
+    "Slack",
+    "Apple Health",
+    "Spotify"
+  ],
+  "contacts": [
+    {
+      "name": "Jake Morrison",
+      "relationship": "client",
+      "context": "weekly training sessions, logs progress in shared Notion page"
+    },
+    {
+      "name": "Leah Carter",
+      "relationship": "colleague",
+      "context": "co-owns the training studio, coordinates schedules via Notion"
+    },
+    {
+      "name": "Dr. Anika Patel",
+      "relationship": "referral partner",
+      "context": "sends clients my way, we share a Notion referral tracker"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "7a240edb-4141-452b-97db-4931ddeaaa2d",
+  "created_at": "2025-04-10T14:00:00Z",
+  "title": "Amazon return and refund request via uploaded audio",
+  "category": "e-commerce-amazon-return",
+  "verb_category": "purchase_lookup_decline",
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Amazon order history lookup for refund",
+  "breadth_reason": "This script extends breadth by testing the full pipeline from uploaded audio ASR through real Amazon signed-in surface verification, including decline if surface is not visible.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed via public download",
+    "surface_rule": "Amazon.com signed-in Chrome profile with order history page visible",
+    "proof_rule": "Fresh screenshot of Amazon order page showing order details and signed-in user, captured by the user-device engine"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Using uploaded audio ASR ensures the system handles real speech input from a file, covering a key use case where users provide audio recordings rather than live dictation."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Amazon signed-in Chrome",
+      "kind": "browser_profile",
+      "surface": "Chrome profile signed into Amazon.com",
+      "proof_needed": "screenshot showing Amazon user menu with email/name"
+    },
+    {
+      "name": "Amazon order history page",
+      "kind": "web_page",
+      "surface": "https://www.amazon.com/gp/css/order-history",
+      "proof_needed": "screenshot of order history page with list of orders"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to https://www.anticipy.ai/app and signs in, completes onboarding, and downloads the public installer."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver checks that the user has Amazon.com open in a Chrome tab with their signed-in profile and order history page accessible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "On the Amazon order page for the running shoes I bought last month, please check the return window and draft a customer message to support to refund the order. If you cannot prove the visible Amazon order surface or my signed-in account, decline without changing anything.",
+      "delivery_instruction": "The stranger will upload an MP3 audio file via /api/listen/upload containing the spoken reference text.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine verifies that the ASR transcript corresponds to the current live Amazon surface and that no stale or fake data is used."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "description": "Engine decides whether to act (draft refund request), ask (for clarification), or decline (if surface not verifiable).",
+      "acceptable_outcomes": [
+        "act",
+        "ask",
+        "decline"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that the primary input mode is audio upload and notes that other modes (transcript paste, live mic) are not primary, but still visible as options."
+    }
+  ],
+  "success_criteria": [
+    "User successfully uploads an MP3 audio file.",
+    "ASR produces accurate transcript matching the spoken reference text.",
+    "Engine matches the request to the Amazon order history page visible in the user's signed-in Chrome.",
+    "Engine either drafts a refund message or properly declines if surface is not verifiable.",
+    "All proofs are fresh and sourced from the public build."
+  ],
+  "failure_triggers": [
+    "If the user does not have Amazon signed-in in Chrome, the engine must decline.",
+    "If ASR fails to transcribe the audio, the engine must not proceed.",
+    "If the surface is not the real user's profile, the engine must decline.",
+    "If the engine attempts to bypass surface verification, that is a failure.",
+    "If the proof uses stale or fake data, it fails."
+  ]
+}

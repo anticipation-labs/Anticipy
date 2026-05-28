@@ -1,0 +1,115 @@
+{
+  "schema": "anticipy.v7.proposed_verifier.canonical_proactive_runtime",
+  "pass": false,
+  "generated_at": "2026-05-27T04:36:44Z",
+  "completed_at": "2026-05-27T04:39:13Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "assertions": [
+    {
+      "name": "P1_single_proactive_runtime_endpoint",
+      "pass": true,
+      "evidence": {
+        "primary_count": 1,
+        "secondary_status": 404
+      },
+      "failure": null
+    },
+    {
+      "name": "P2_text_and_upload_same_proactive_shape",
+      "pass": true,
+      "evidence": {
+        "positive_items_found": 2,
+        "common_keys": [
+          "created_at",
+          "created_at_iso",
+          "due_at",
+          "due_at_iso",
+          "fired_at",
+          "id",
+          "metadata",
+          "plan",
+          "reason",
+          "status",
+          "transcript"
+        ],
+        "parser_tags": [
+          "product_scheduler_v1"
+        ],
+        "reason_kinds": [
+          "future_time_reference"
+        ],
+        "text_response_status": 200,
+        "upload_response_status": 200
+      },
+      "failure": null
+    },
+    {
+      "name": "P3_hard_negatives_silent_or_decline",
+      "pass": false,
+      "evidence": {
+        "negatives": [
+          {
+            "label": "joke",
+            "outcome": "DECLINED",
+            "queue_mentions": 1,
+            "actionable_in_queue": true,
+            "pass": false
+          },
+          {
+            "label": "hypothetical",
+            "outcome": "DECLINED",
+            "queue_mentions": 1,
+            "actionable_in_queue": true,
+            "pass": false
+          },
+          {
+            "label": "third_party",
+            "outcome": "DECLINED",
+            "queue_mentions": 1,
+            "actionable_in_queue": true,
+            "pass": false
+          },
+          {
+            "label": "song_lyric",
+            "outcome": "LIFE_LOG",
+            "queue_mentions": 0,
+            "actionable_in_queue": false,
+            "pass": true
+          }
+        ]
+      },
+      "failure": "At least one hard negative either created an actionable proactive queue item or did not produce a silent/decline outcome"
+    },
+    {
+      "name": "P4_decisions_jsonl_records_silent_and_decline",
+      "pass": false,
+      "evidence": {
+        "rows_found": 0,
+        "decisions_file_exists": false,
+        "sample_keys": []
+      },
+      "failure": "decisions.jsonl absent or rows missing required fields. exists=False"
+    }
+  ],
+  "passed_count": 2,
+  "failed_count": 2,
+  "cleanup": {
+    "removed_queue_sentinels": [
+      "V7_PROPOSED_VERIFIER_PROACTIVE_NEG_song_lyric_a5c3e4c76c"
+    ],
+    "remaining_queue_sentinels": [
+      "V7_PROPOSED_VERIFIER_PROACTIVE_POS_3c2e1f3af6",
+      "V7_PROPOSED_VERIFIER_PROACTIVE_NEG_joke_7571ba4418",
+      "V7_PROPOSED_VERIFIER_PROACTIVE_NEG_hypothetical_e864cd6e33",
+      "V7_PROPOSED_VERIFIER_PROACTIVE_NEG_third_party_f93e1a0b1f"
+    ],
+    "ok": false
+  },
+  "frozen_paths_unlocked": [
+    "engine/app/proactive_day/pipeline.py",
+    "engine/app/proactive/decider.py",
+    "engine/app/proactive/dispatcher.py"
+  ],
+  "v7_gate_guarded": "V7.6_mp3_input_passes, V7.7_text_transcript_input_passes, V7.8_computer_mic_input_passes, V7.20_no_fake_receipts_backdoors_stale_proofs",
+  "spec_cite": "ANTICIPY_V7.md PART 0, PART 1A item 5, PART 2, PART 3, PART 4"
+}

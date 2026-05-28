@@ -1,0 +1,108 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "b501f884-3db0-4434-88aa-eeeb8aa66cb2",
+  "created_at": "2025-04-09T15:00:00Z",
+  "title": "Update Jira Issue via Audio Upload",
+  "category": "jira_update_audio",
+  "verb_category": "code_or_terminal_run_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Jira issue update",
+  "breadth_reason": "This script tests the user's ability to update a Jira issue using uploaded audio, extending coverage beyond keyboard and live mic inputs.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "User-device engine installed on the user's computer",
+    "surface_rule": "The user must have a signed-in Jira instance in their Chrome profile with an issue detail page open.",
+    "proof_rule": "Proof must be a screenshot of the Jira issue page showing the update after action, or a decline notice if surface unverifiable."
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio provides full ASR coverage for the spoken instruction, bypassing live mic uncertainty."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Jira Issue Page",
+      "kind": "browser_tab",
+      "surface": "https://*.atlassian.net/browse/ANL-114",
+      "proof_needed": "Visible issue detail page with ANL-114 number and update field available."
+    },
+    {
+      "name": "Chrome Profile",
+      "kind": "browser_profile",
+      "surface": "signed into Jira",
+      "proof_needed": "Anticipy can detect that the browser profile has Jira session cookies."
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "User navigates to anticipy.ai/app and completes onboarding to download and install the user-device engine."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Anticipy checks that the user's Chrome profile has a signed-in Jira tab with an issue detail page open for ANL-114."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please update the Jira issue ANL-114 for the analytics repo with a comment that pytest is failing on the renewal test and tag it bug. If you cannot prove the visible Jira issue or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "The stranger must produce a new MP3 audio artifact per run using the say command, containing the exact spoken_reference_text.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg",
+      "description": "User uploads the MP3 audio file via /api/listen/upload. ASR transcribes the spoken instruction."
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "The engine checks that the transcribed text contains the Jira issue key ANL-114 and actionable phrases like 'update' and 'comment'."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: Update the Jira issue ANL-114 with the comment and tag it as a bug.",
+        "ask: Request clarification if the Jira surface is ambiguous or incomplete.",
+        "decline: Refuse to update if the Jira issue page is not verifiable or the user is not signed in."
+      ],
+      "description": "The engine decides on the appropriate action based on the surface proof."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "The driver observes that only the audio upload input mode is used; no live mic or paste alternatives are accepted for this test."
+    }
+  ],
+  "success_criteria": [
+    "The user successfully uploads an MP3 audio file containing the spoken instruction.",
+    "Anticipy's ASR correctly transcribes the instruction and extracts the Jira issue key ANL-114.",
+    "If the user's Jira surface is verifiable, Anticipy updates the issue with the comment and tags it as a bug.",
+    "If the Jira surface is not verifiable, Anticipy declines with a clear message.",
+    "All actions are performed on the user's actual signed-in Chrome profile."
+  ],
+  "failure_triggers": [
+    "The audio upload fails due to file format or size issues.",
+    "ASR misinterprets the spoken instruction, e.g., missing the issue key or action.",
+    "The Jira issue page is not visible or the user is not signed in.",
+    "Anticipy attempts to update Jira using a fake or cloned browser profile instead of the real one.",
+    "The proof provided is a stale screenshot or log from a previous session."
+  ]
+}

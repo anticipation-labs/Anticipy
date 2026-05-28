@@ -1,0 +1,107 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "2b937a50-a9d9-492d-8cd9-96f3f547a6d1",
+  "created_at": "2025-04-08T12:00:00Z",
+  "title": "Airtable Expense Categorization via Audio Upload",
+  "category": "expense_tracking_airtable",
+  "verb_category": "expense_or_budget_track_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Airtable expense tracking in Chrome",
+  "breadth_reason": "This script extends breadth by testing the full public product path for an audio-upload expense categorization request against a real signed-in Airtable surface, with explicit decline when surface proof fails.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "public downloadable user-device engine installed on user's computer",
+    "surface_rule": "Must use the user's real signed-in Chrome profile with Airtable tab open and visible expense records",
+    "proof_rule": "Proof must come from a fresh surface-readable capture tied to the public build that produced the action, ask, or decline"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures the audio file is processed through the public /api/listen/upload endpoint, providing a verifiable audio artifact for proof."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Airtable web app in Chrome",
+      "kind": "browser_tab",
+      "surface": "Chrome profile with Airtable signed in and expense base open",
+      "proof_needed": "Visible Airtable record showing the Brookline coffee charge, user's signed-in workspace indicator"
+    },
+    {
+      "name": "Chrome browser",
+      "kind": "browser",
+      "surface": "User's signed-in Chrome profile",
+      "proof_needed": "Chrome window with Airtable tab visible and signed-in state"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "Driver opens the public Anticipy app at https://www.anticipy.ai/app, signs in, completes onboarding, and downloads the installer."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that the user's real signed-in Chrome profile has an Airtable tab open showing expense records."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please update the Airtable Expenses record for the Brookline coffee charge from yesterday and tag it work meetings. If you cannot prove the visible Airtable record or my signed-in workspace, decline without changing anything.",
+      "delivery_instruction": "The stranger must say the spoken_reference_text aloud, record it as an MP3 audio file via the 'say' command, and upload the resulting audio artifact through the /api/listen/upload endpoint. The audio artifact must be preserved per-run for proof.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine checks that the ASR transcript matches the spoken reference text and that the audio was uploaded through the correct endpoint."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: Update the Airtable expense record with the work meetings tag if the surface is verifiable",
+        "ask: Ask the user to confirm the record or provide additional context if ambiguous",
+        "decline: Decline to act if the Airtable surface or signed-in workspace cannot be proven"
+      ],
+      "description": "Engine decides to act, ask, or decline based on surface proof."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver observes that the primary input mode is audio upload and notes that transcript paste or live mic are not used, confirming the gap in secondary input mode coverage."
+    }
+  ],
+  "success_criteria": [
+    "The user's real signed-in Chrome profile with Airtable tab is detected and proven.",
+    "The uploaded MP3 audio is successfully transcribed via ASR and the intent to update the Brookline coffee charge is recognized.",
+    "If the Airtable surface is verifiable, the expense record is updated with the work meetings tag and proof is captured.",
+    "If the surface is not verifiable, the engine declines without making any changes.",
+    "The entire workflow uses the public product path from app to installed engine."
+  ],
+  "failure_triggers": [
+    "The Chrome profile is not signed in or the Airtable tab is not open.",
+    "The uploaded audio file is corrupted, not MP3, or fails ASR processing.",
+    "The engine attempts to act without fresh surface proof (e.g., using stale or mocked data).",
+    "The engine modifies the Airtable record when the surface is not verifiable.",
+    "The secondary input mode (transcript paste, live mic) is incorrectly used as primary."
+  ]
+}

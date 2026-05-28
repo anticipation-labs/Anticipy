@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "b7ba64e9-4048-43b9-8582-34e2e8be1645",
+  "created_at": "2025-04-07T22:15:00Z",
+  "name": "Jenna Kowalski",
+  "age": 34,
+  "occupation": "Digital Marketing Manager",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 6,
+  "default_skepticism_toward_new_ai_products": 5,
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Etsy order page for travel items",
+  "primary_real_surface": {
+    "surface": "Etsy.com order page",
+    "chrome_requirement": "signed-in Chrome profile",
+    "acceptable_state": "user viewing order history or details"
+  },
+  "daily_tools": [
+    "Chrome",
+    "Slack",
+    "Canva",
+    "Google Analytics",
+    "Shopify"
+  ],
+  "contacts": [
+    {
+      "name": "Leo Vega",
+      "relationship": "partner",
+      "context": "collaborates on travel blog"
+    },
+    {
+      "name": "Maya Chen",
+      "relationship": "friend",
+      "context": "recommends Etsy shops"
+    },
+    {
+      "name": "Samir Patel",
+      "relationship": "colleague",
+      "context": "discusses marketing campaigns"
+    }
+  ]
+}

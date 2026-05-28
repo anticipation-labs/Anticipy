@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Anticipy Pendant — Product Render</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0C0C0C; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; color: #F5F0EB; overflow: hidden; }
+canvas { display: block; }
+.overlay {
+  position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+  text-align: center; z-index: 10; pointer-events: none;
+}
+.overlay h1 { font-family: Georgia, serif; font-size: 28px; color: #C8A97E; letter-spacing: 2px; margin-bottom: 8px; }
+.overlay p { font-size: 14px; color: #8A8A8A; letter-spacing: 1px; }
+.specs {
+  position: fixed; top: 40px; right: 40px; text-align: right; z-index: 10;
+  font-size: 12px; color: #666; line-height: 2;
+}
+.specs span { color: #C8A97E; }
+</style>
+</head>
+<body>
+<div class="overlay">
+  <h1>ANTICIPY</h1>
+  <p>AMBIENT INTELLIGENCE PENDANT</p>
+</div>
+<div class="specs">
+  <div><span>38 × 25 × 11 mm</span> — smaller than AirPods</div>
+  <div><span>ESP32-S3</span> — dual-core 240MHz, 8MB PSRAM</div>
+  <div><span>INMP441</span> — MEMS microphone, 61dB SNR</div>
+  <div><span>15+ hours</span> — battery life</div>
+  <div><span>WiFi + BLE 5.0</span> — always connected</div>
+  <div><span>USB-C</span> — fast charging</div>
+  <div><span>On-device VAD</span> — privacy first</div>
+  <div><span>&lt; $100 CAD</span> — BOM cost</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.appendChild(renderer.domElement);
+
+// Lighting
+const ambient = new THREE.AmbientLight(0xC8A97E, 0.3);
+scene.add(ambient);
+const key = new THREE.DirectionalLight(0xffffff, 1.2);
+key.position.set(5, 5, 5);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xC8A97E, 0.4);
+fill.position.set(-3, 2, -3);
+scene.add(fill);
+const rim = new THREE.DirectionalLight(0x4488ff, 0.6);
+rim.position.set(0, -2, -5);
+scene.add(rim);
+
+// Pendant body — titanium-look rounded rectangle
+const group = new THREE.Group();
+
+// Main body (rounded box approximation)
+const bodyGeo = new THREE.BoxGeometry(3.8, 2.5, 1.1, 8, 8, 4);
+// Round the edges
+const pos = bodyGeo.attributes.position;
+for (let i = 0; i < pos.count; i++) {
+  let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+  const r = 0.3;
+  const hx = 1.9 - r, hy = 1.25 - r, hz = 0.55 - r;
+  const dx = Math.max(0, Math.abs(x) - hx);
+  const dy = Math.max(0, Math.abs(y) - hy);
+  const dz = Math.max(0, Math.abs(z) - hz);
+  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  if (dist > 0) {
+    const scale = (r) / (r + dist * 0.5);
+    if (Math.abs(x) > hx) x = Math.sign(x) * (hx + (Math.abs(x) - hx) * scale);
+    if (Math.abs(y) > hy) y = Math.sign(y) * (hy + (Math.abs(y) - hy) * scale);
+    if (Math.abs(z) > hz) z = Math.sign(z) * (hz + (Math.abs(z) - hz) * scale);
+  }
+  pos.setXYZ(i, x, y, z);
+}
+bodyGeo.computeVertexNormals();
+
+const titaniumMat = new THREE.MeshStandardMaterial({
+  color: 0x8A8A8A,
+  metalness: 0.9,
+  roughness: 0.15,
+  envMapIntensity: 1.0,
+});
+const body = new THREE.Mesh(bodyGeo, titaniumMat);
+group.add(body);
+
+// Mic hole
+const micGeo = new THREE.CircleGeometry(0.12, 32);
+const micMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.5, roughness: 0.8 });
+const mic = new THREE.Mesh(micGeo, micMat);
+mic.position.set(-1.2, 0.8, 0.56);
+group.add(mic);
+
+// LED window
+const ledGeo = new THREE.CircleGeometry(0.08, 32);
+const ledMat = new THREE.MeshStandardMaterial({ color: 0xC8A97E, emissive: 0xC8A97E, emissiveIntensity: 0.8 });
+const led = new THREE.Mesh(ledGeo, ledMat);
+led.position.set(1.2, 0.8, 0.56);
+group.add(led);
+
+// USB-C port
+const usbGeo = new THREE.BoxGeometry(0.9, 0.35, 0.2, 4, 4, 1);
+const usbMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.8, roughness: 0.3 });
+const usb = new THREE.Mesh(usbGeo, usbMat);
+usb.position.set(0, -1.26, 0);
+group.add(usb);
+
+// Lanyard loop
+const loopGeo = new THREE.TorusGeometry(0.25, 0.05, 16, 32);
+const loop = new THREE.Mesh(loopGeo, titaniumMat);
+loop.position.set(0, 1.4, 0);
+group.add(loop);
+
+// Anticipy logo text (simple line)
+const logoGeo = new THREE.PlaneGeometry(1.8, 0.2);
+const logoCanvas = document.createElement('canvas');
+logoCanvas.width = 256; logoCanvas.height = 32;
+const ctx = logoCanvas.getContext('2d');
+ctx.fillStyle = '#C8A97E';
+ctx.font = '20px Georgia';
+ctx.textAlign = 'center';
+ctx.fillText('ANTICIPY', 128, 22);
+const logoTex = new THREE.CanvasTexture(logoCanvas);
+const logoMat = new THREE.MeshBasicMaterial({ map: logoTex, transparent: true });
+const logo = new THREE.Mesh(logoGeo, logoMat);
+logo.position.set(0, -0.2, 0.56);
+group.add(logo);
+
+scene.add(group);
+group.rotation.x = 0.15;
+
+camera.position.set(0, 0, 8);
+
+// Environment map (fake)
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+const envScene = new THREE.Scene();
+envScene.background = new THREE.Color(0x111111);
+const envLight = new THREE.HemisphereLight(0xC8A97E, 0x222244, 1);
+envScene.add(envLight);
+const envMap = pmremGenerator.fromScene(envScene).texture;
+scene.environment = envMap;
+
+// Animation
+let time = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  time += 0.005;
+  group.rotation.y = Math.sin(time) * 0.6;
+  group.rotation.x = 0.15 + Math.sin(time * 0.7) * 0.1;
+  
+  // Pulsing LED
+  led.material.emissiveIntensity = 0.5 + Math.sin(time * 4) * 0.3;
+  
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

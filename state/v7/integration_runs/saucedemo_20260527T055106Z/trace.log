@@ -1,0 +1,14 @@
+[05:51:07] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T055106Z
+[05:51:16] saucedemo CDP tab id: 7C797E319E2BC85253132BC3EB5F4228
+Traceback (most recent call last):
+  File "<stdin>", line 3, in <module>
+  File "/Users/omarebrahim/.local/lib/python3.10/site-packages/websocket/_core.py", line 664, in create_connection
+    websock.connect(url, **options)
+  File "/Users/omarebrahim/.local/lib/python3.10/site-packages/websocket/_core.py", line 268, in connect
+    self.handshake_response = handshake(self.sock, url, *addrs, **options)
+  File "/Users/omarebrahim/.local/lib/python3.10/site-packages/websocket/_handshake.py", line 66, in handshake
+    status, resp = _get_resp_headers(sock)
+  File "/Users/omarebrahim/.local/lib/python3.10/site-packages/websocket/_handshake.py", line 158, in _get_resp_headers
+    raise WebSocketBadStatusException(
+websocket._exceptions.WebSocketBadStatusException: Handshake status 403 Forbidden -+-+- {'content-length': '239', 'content-type': 'text/html'} -+-+- b'Rejected an incoming WebSocket connection from the http://127.0.0.1:9222 origin. Use the command line flag --remote-allow-origins=http://127.0.0.1:9222 to allow connections from this origin or --remote-allow-origins=* to allow all origins.'
+[05:51:20] FAIL step 1 navigate_login :: url= resp={"ok": true, "command": "navigate", "data": {"navigatedTo": "https://www.saucedemo.com/", "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-eafe8520c6f9", "title": "Anticipy App"},

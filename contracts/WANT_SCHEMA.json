@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Anticipy Want Decision",
+  "type": "object",
+  "required": [
+    "actionable_probability",
+    "want",
+    "interpretation",
+    "action_binding",
+    "risk",
+    "decision"
+  ],
+  "properties": {
+    "actionable_probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "want": {
+      "type": "object",
+      "required": ["type", "description", "slots", "evidence_spans"],
+      "properties": {
+        "type": {"type": "string"},
+        "description": {"type": "string"},
+        "slots": {"type": "object"},
+        "evidence_spans": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "interpretation": {
+      "type": "object",
+      "required": [
+        "beneficiary",
+        "hypothetical",
+        "quoted_speech",
+        "joke",
+        "media_reference",
+        "already_satisfied"
+      ],
+      "properties": {
+        "beneficiary": {"enum": ["user", "household", "other", "unknown"]},
+        "hypothetical": {"type": "boolean"},
+        "quoted_speech": {"type": "boolean"},
+        "joke": {"type": "boolean"},
+        "media_reference": {"type": "boolean"},
+        "already_satisfied": {"type": "boolean"}
+      }
+    },
+    "action_binding": {
+      "type": "object",
+      "required": ["surface", "skill_id", "binding_confidence"],
+      "properties": {
+        "surface": {"type": "string"},
+        "skill_id": {"type": "string"},
+        "binding_confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "risk": {
+      "type": "object",
+      "required": ["tier", "reason"],
+      "properties": {
+        "tier": {"type": "integer", "minimum": 0, "maximum": 4},
+        "reason": {"type": "string"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["mode", "message"],
+      "properties": {
+        "mode": {
+          "enum": ["silent_execute", "execute_notify", "ask_first", "decline"]
+        },
+        "message": {"type": "string"}
+      }
+    }
+  }
+}

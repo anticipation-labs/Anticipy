@@ -1,0 +1,7 @@
+{
+  "name": "verify_modal",
+  "ok": true,
+  "detail": "modal title='Thanks for submitting the form'",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144449Z/step-09-verify_modal.png",
+  "receipt": "title=Thanks for submitting the form"
+}

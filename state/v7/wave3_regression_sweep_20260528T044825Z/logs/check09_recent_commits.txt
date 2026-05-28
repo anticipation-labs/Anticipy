@@ -1,0 +1,60 @@
+4969d456 supervisor: autocommit progress checkpoint
+5d9d1867 supervisor: autocommit progress checkpoint
+647796eb supervisor: autocommit progress checkpoint
+efa6275d supervisor: autocommit progress checkpoint
+7ca42317 supervisor: autocommit progress checkpoint
+6f61692e supervisor: autocommit progress checkpoint
+92656c14 supervisor: autocommit progress checkpoint
+b1ddd76b supervisor: autocommit progress checkpoint
+c1fcf0a1 supervisor: autocommit progress checkpoint
+837c71d5 v7: supervisor passes ANTICIPY_CDP_PORT=9222 to engine - unblocks plan execution in real Chrome
+a667ba63 v7: engine load profile - 360 concurrent reqs survive, inject p95 30s, intent_extractor:170 bug + 5 mounted-router gaps documented
+5b5a1b93 v7: plan execution validator (engine -> real Chrome side effect proof)
+f735f8fe v7: persistence simulation (cross-session + 7-day stress)
+e3f2fc20 v7: memory precision scorer (5 dims, judge-cascade, mapping alignment)
+48f62651 docs: ARCHITECTURE.md mapping pipeline + M1-M4 + partition + bridge CDP rewrite
+fda6fbf9 W2 bot fingerprint canary rerun and hardening advisory
+be86b4e4 v7: extend hard transcript set T21-T40 across health, finance, family, work_decision
+330a42a6 v7: resolution-trace buffer + /api/inference/trace endpoint (M1 capture)
+36cb50cf supervisor: autocommit progress checkpoint
+d2e707d1 v7: surface probe closes its tab after capture (stop leaking +1 tab per supervisor cycle)
+bf1e04c1 supervisor: autocommit progress checkpoint
+2829eca5 manifest: repoint to current HEAD
+5f00c63e supervisor: autocommit progress checkpoint
+4874a257 supervisor: autocommit progress checkpoint
+b4b6f652 v7: e2e hard-transcript run - 20/20 processed, memory used by name, partition fix proven
+e204e324 supervisor: autocommit progress checkpoint
+3cbfc571 v7: add rich test dossier (10 contacts, 5 projects, 3 patterns) + loader
+349f0241 v7: memory partition fix (account_id vs user_id synonym translation)
+1f15360e supervisor: autocommit progress checkpoint
+6e485c1b v7: 20 hard proactive transcript fixtures for memory + intent resolution
+2aabcf09 supervisor: autocommit progress checkpoint
+002995d4 supervisor: autocommit progress checkpoint
+e054aa60 supervisor: autocommit progress checkpoint
+f0c3a2a6 supervisor: autocommit progress checkpoint
+d77abda2 supervisor: autocommit progress checkpoint
+d4b411a6 supervisor: autocommit progress checkpoint
+519da2f4 supervisor: autocommit progress checkpoint
+8d809942 v7: check_done.sh fetch DMG from R2 direct (not Vercel) with 900s timeout - Vercel proxy was truncating
+26658545 supervisor: autocommit progress checkpoint
+4b230571 supervisor: autocommit progress checkpoint
+f4e81784 v7: check_done.sh use grep -E (rg not installed) so manifest-commit exception actually fires
+66b00049 supervisor: autocommit progress checkpoint
+0c7c45c0 supervisor: autocommit progress checkpoint
+58959541 supervisor: autocommit progress checkpoint
+857161b8 supervisor: autocommit progress checkpoint
+7968d0eb supervisor: autocommit progress checkpoint
+bcf29d4a supervisor: autocommit progress checkpoint
+c8167c20 supervisor: autocommit progress checkpoint
+60fcf29a supervisor: autocommit progress checkpoint
+3edd1c4e v7: fix download route - presigned URL was 403, swap to public R2 bucket URL
+ebaf4102 supervisor: autocommit progress checkpoint
+9682b8c7 supervisor: autocommit progress checkpoint
+9387a8d4 supervisor: autocommit progress checkpoint
+9e203b13 v7: V7.18 green via 3 real clean-room install runs
+0d35b35c supervisor: autocommit progress checkpoint
+fd364965 v7: relax V7.11/V7.14 (>=25 strangers + 90% last-20 pass) + V7.18 theory check per owner
+56eace23 supervisor: autocommit progress checkpoint
+0ff47be8 v7: add parallel_stranger_workers.sh for parallel stranger gating
+3457eeea supervisor: autocommit progress checkpoint
+17a685c8 supervisor: autocommit progress checkpoint

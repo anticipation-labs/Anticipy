@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly identified that the Linear workspace was not signed in (login page visible) and paused with a confirm card naming Linear via ASKING outcome, satisfying D16 competent-pause. All infrastructure checks pass: real Chrome, installed public engine, no broken surfaces, and uploaded audio ASR processed correctly.",
+  "specific_failures": [],
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Trace shows surface proof for anticipy.ai/app, confirming user navigated to the public entry and completed onboarding."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Driver confirmed real Chrome profile with Linear surface; the proof shows linear.app/login, which is the actual visible state, so precheck is valid."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Audio was uploaded via /api/listen/upload, transcript quality shows WER 0.026 matching reference, fresh audio artifact."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "ASR hypothesis matches reference with minor casing differences, confirming boundary check passed."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "Engine issued an ask (confirm card) with outcome ASKING, blocked_services: Linear, which is an acceptable outcome per script. No write occurred."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "Observation correctly notes the script only tested uploaded audio; secondary modes were not used."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with confirm card naming Linear (ASKING outcome) because the visible Linear surface was the login page, not a signed-in workspace, satisfying D16 competent-pause."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T16:31:51Z"
+}

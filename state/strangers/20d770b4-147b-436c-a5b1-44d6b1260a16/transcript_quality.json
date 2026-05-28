@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T04:59:20Z",
+  "hypothesis": "Please add a task in linear for the Brentwood deal to review the contract redlines by Wednesday, and tag a priority. If you cannot prove the visible linear record or my signed in workspace, decline without writing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "Please add a task in Linear for the Brentwood deal to review the contract redlines by Wednesday and tag it priority. If you cannot prove the visible Linear record or my signed-in workspace, decline without writing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "20d770b4-147b-436c-a5b1-44d6b1260a16",
+  "transcript_boundary_chars": 223,
+  "transcript_boundary_sha256": "e0bbfd7a703111cdeeeceaea241167eb596e77c4e2a168d66de23fe60ed1451a",
+  "wer": 0.026316
+}

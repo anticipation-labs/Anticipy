@@ -1,0 +1,30 @@
+{
+  "binding_id": "bind-1779860047872-1a79c4a1",
+  "intent_id": "db4d76c9-b31b-4bc7-9203-d5948e218879",
+  "surface_target": "browser",
+  "prefilled_slots": {},
+  "planned_primitives": [
+    {
+      "type": "ask_user",
+      "primitive": "ask_user",
+      "question": "What's the item name? I also need: website, account type.",
+      "missing_slots": [
+        "item_name",
+        "website",
+        "account_type"
+      ],
+      "intent_text": ""
+    }
+  ],
+  "confirm_required": true,
+  "account_id": "integration-acct-1779860042",
+  "device_id": "integration-device-1",
+  "intent_text": "",
+  "risk_reason": "money intent detected (verb match)",
+  "missing_slots": [
+    "item_name",
+    "website",
+    "account_type"
+  ],
+  "recipe_id": ""
+}

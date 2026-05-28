@@ -1,0 +1,7 @@
+{
+  "name": "verify_cart_item",
+  "ok": true,
+  "detail": "DOM .cart_item count=1 via CDP",
+  "screenshot": "",
+  "receipt": "1"
+}

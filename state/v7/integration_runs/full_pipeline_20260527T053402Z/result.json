@@ -1,0 +1,52 @@
+{
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/full_pipeline_20260527T053402Z",
+  "transport": "direct_python",
+  "transcript": "Buy a Sauce Labs Backpack from saucedemo.com. Use the standard_user account.",
+  "account_id": "integration-acct-1779860042",
+  "device_id": "integration-device-1",
+  "steps": [
+    {
+      "step": "intent_extract",
+      "ok": true,
+      "reason": "type=act target=chrome actionable=True"
+    },
+    {
+      "step": "risk_assess",
+      "ok": true,
+      "reason": "proceed_mode=confirm confirm_required=True"
+    },
+    {
+      "step": "action_bind",
+      "ok": true,
+      "reason": "confirm_required=True reason=money intent detected (verb match)"
+    },
+    {
+      "step": "confirm_create",
+      "ok": true,
+      "reason": "status=pending needs=True risk_level=low"
+    },
+    {
+      "step": "confirm_decide",
+      "ok": true,
+      "reason": "status=denied decided_at=1779860047.875958"
+    },
+    {
+      "step": "navigate",
+      "ok": true,
+      "reason": "url=https://www.saucedemo.com/"
+    },
+    {
+      "step": "surface_proof",
+      "ok": true,
+      "reason": "url=https://www.saucedemo.com/ title=Swag Labs screenshot=/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/full_pipeline_20260527T053402Z/screenshot.png cart_safe=True"
+    }
+  ],
+  "overall": {
+    "ok": true,
+    "proves_no_decline_confirm_no_action_flow": true,
+    "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/full_pipeline_20260527T053402Z/screenshot.png",
+    "card_id": "cc-1779860047875-acc878f3",
+    "binding_id": "bind-1779860047872-1a79c4a1",
+    "intent_id": "db4d76c9-b31b-4bc7-9203-d5948e218879"
+  }
+}

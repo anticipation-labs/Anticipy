@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "The engine correctly processed the uploaded audio, identified the HubSpot intent, and paused with a confirm card naming HubSpot and Outreach because the HubSpot surface was not signed in. The trace shows real Chrome, the installed engine, no broken surfaces, and the D16 competent-pause standard is satisfied via the ASKING+confirm-card path with service-specific blocked_services.",
+  "specific_failures": [],
+  "verb_category": "ambient_buried_intent",
+  "hard_category": "ambient",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "Surface proof shows the public Anticipy app at anticipy.ai/app, confirming public entry and onboarding."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "Surface proofs show real Chrome with signed-in Anticipy app and HubSpot login page visible."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "Transcript quality shows 0% WER and the uploaded audio mode was used; the ASR correctly captured the HubSpot intent."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine identified the buried intent (HubSpot) and prepared a competent pause because the surface was not provably signed in."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine issued an ASKING confirm card with blocked_services HubSpot and Outreach, which is an acceptable outcome (ask/decline) without writing to the service."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "This is a driver observation moment; no engine failure was observed."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine paused with a confirm card (outcome=ASKING, competent_decline=false) that named HubSpot and Outreach in blocked_services, meeting the D16 standard per the 2026-05-26 directive. No third-party surface change was required."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T17:40:23Z"
+}

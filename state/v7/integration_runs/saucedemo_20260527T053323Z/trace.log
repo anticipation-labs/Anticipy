@@ -1,0 +1,6 @@
+[05:33:23] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T053323Z
+[05:33:24] saucedemo window id: 1285463072
+[05:33:28] PASS 0 navigate_login :: url=https://www.saucedemo.com/
+[05:33:32] PASS 0 type_username :: typed via cliclick(720,250)+keystroke
+[05:33:33] PASS 0 type_password :: Tab+keystroke
+[05:33:36] FAIL 0 click_login :: expected /inventory.html got https://www.saucedemo.com/

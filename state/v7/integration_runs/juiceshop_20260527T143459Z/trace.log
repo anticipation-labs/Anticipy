@@ -1,0 +1,9 @@
+[14:34:59] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T143459Z
+[14:35:22] juice-shop CDP tab=E541A83FAAF12F4F414711E1BF790B78 url=https://juice-shop.herokuapp.com/
+[14:35:22] PASS step 1 navigate :: url=https://juice-shop.herokuapp.com/ via BRIDGE /surface-command navigate
+[14:35:27] Heroku Juice Shop is down (http=503 size=567); falling back to preview.owasp-juice.shop
+[14:35:35] PASS step 2 fallback_navigate :: primary down; falling back to preview.owasp-juice.shop title='OWASP Juice Shop' url=https://preview.owasp-juice.shop/#/
+[14:35:35] PASS step 2 target_health :: page title='OWASP Juice Shop' url=https://preview.owasp-juice.shop/#/
+[14:35:38] PASS step 3 dismiss_banners :: welcome banner + cookie bar dismissed (best-effort)
+[14:35:40] PASS step 4 open_search :: search input present=False after click '{"value": "OK", "type": "string", "exception": null}'
+[14:35:43] FAIL step 5 type_apple :: type failed: {"value": "NOTFOUND", "type": "string", "exception": null}

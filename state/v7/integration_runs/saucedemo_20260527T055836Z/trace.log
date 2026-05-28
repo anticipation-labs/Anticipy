@@ -1,0 +1,3 @@
+[05:58:37] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T055836Z
+[06:00:39] saucedemo CDP tab id: C92AEC50830F928170A0C1F927994825 url=
+[06:00:40] FAIL step 1 navigate_login :: url= resp={"ok": true, "command": "navigate", "data": {"navigatedTo": "https://www.saucedemo.com/", "url": "https://www.saucedemo.com/", "title": "Swag Labs"}, "acquired_via": "chrome_applescript_loopback_bridg

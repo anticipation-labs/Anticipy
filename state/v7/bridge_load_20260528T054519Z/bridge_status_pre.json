@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "current_task_running": false,
+  "bridge_closed": false,
+  "pid": 9795,
+  "python": "3.10.14",
+  "platform": "darwin",
+  "acquired_via": "chrome_cdp_loopback_bridge",
+  "bridge_kind": "cdp_primary",
+  "cdp_alive": true,
+  "cdp_base": "http://localhost:9222",
+  "websockets_available": true,
+  "startup_log_tail": [],
+  "last_error": "",
+  "_pre_check_elapsed_s": 0.007
+}

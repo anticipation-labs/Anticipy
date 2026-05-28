@@ -1,0 +1,301 @@
+{
+  "schema": "anticipy.v7.dossier.rich.v1",
+  "account_id": "e2e_rich_test_2026_05_28",
+  "device_id": "macbook_e2e_rich_2026_05_28",
+  "created_at": "2026-05-28T03:00:00-07:00",
+  "owner_summary": "Casey Lin is head of operations at Studio Zero, a 30-person design and ops agency in Vancouver. She runs the Friday digest cadence, owns three live client accounts, and rides the line between Maya (CEO, asks before noon) and Devon (finance partner, asks after 4pm). Anticipy listens through her MacBook mic across her day and her old voice notes app, drafts in her clipped voice, never touches production Stripe or payroll. She booked the dentist twice this year both times the day before. She and Maya have a standing 9am Monday in Yaletown. The Acme Foods deal closes Friday and she has been waiting on docs since April 15.",
+  "name": "Casey Lin",
+  "role_title": "Head of Operations, Studio Zero",
+  "what_they_do": "Runs ops for a 30 person Vancouver agency. Client accounts, vendor billing, weekly digests to leadership, monthly board reports. Lives in Gmail, Linear, Notion, Slack, Calendar.",
+  "timezone": "America/Vancouver",
+  "working_hours": "Mon to Fri 8:30am to 6pm Pacific, Saturday mornings only for urgent client escalations.",
+  "people": [
+    {
+      "name": "Maya Chen",
+      "role": "CEO and co-founder, Studio Zero",
+      "email": "maya@studiozero.ca",
+      "pronouns": "she/her",
+      "aliases": ["Maya", "the boss", "M", "boss"],
+      "last_mentioned": 1779934800.0,
+      "tags": ["leadership", "internal", "fastest_decision"],
+      "communication_pattern": "Expects concise weekly status by Friday 5pm. Wants outcomes not process. Slacks before noon, never after 7pm. Replies same day to threaded Slack DMs, ignores emails over three paragraphs."
+    },
+    {
+      "name": "Devon Park",
+      "role": "Operations Partner and bookkeeping, Studio Zero",
+      "email": "devon@studiozero.ca",
+      "pronouns": "he/him",
+      "aliases": ["Devon", "D", "the ops partner", "Dev"],
+      "last_mentioned": 1779928800.0,
+      "tags": ["internal", "finance", "billing"],
+      "communication_pattern": "Handles all client invoicing and AR. Prefers email with subject lines that start INVOICE or AR. Available 4pm to 9pm Pacific because he has school pickup midday. Slow on Slack, fast on email."
+    },
+    {
+      "name": "Priya Patel",
+      "role": "VP Operations, Northbridge Foods (biggest client)",
+      "email": "priya.patel@northbridgefoods.com",
+      "pronouns": "she/her",
+      "aliases": ["Priya", "the Northbridge contact", "P"],
+      "last_mentioned": 1779921600.0,
+      "tags": ["client", "biggest_account", "VIP", "Northbridge"],
+      "communication_pattern": "Tags urgent things in Slack shared channel #studiozero-northbridge. Anything she flags urgent needs response within 90 minutes during business hours. Polite but direct. Hates back-and-forth, wants three options not five."
+    },
+    {
+      "name": "James Ortega",
+      "role": "Founder and CEO, Acme Foods (deal in legal review)",
+      "email": "james@acmefoods.io",
+      "pronouns": "he/him",
+      "aliases": ["James", "Acme James", "JO"],
+      "last_mentioned": 1779894000.0,
+      "tags": ["client_prospect", "Acme", "deal_in_flight"],
+      "communication_pattern": "Texts more than emails. Responds to text within an hour, email within a day. The Acme deal has been in legal review since 2026-04-15, expecting final docs this Friday. Likes a recap text the morning of every call."
+    },
+    {
+      "name": "Liang Wong",
+      "role": "Founding Designer, Studio Zero (creative lead)",
+      "email": "liang@studiozero.ca",
+      "pronouns": "they/them",
+      "aliases": ["Liang", "L", "the design lead"],
+      "last_mentioned": 1779885600.0,
+      "tags": ["internal", "design", "co-founder"],
+      "communication_pattern": "Works asynchronously, sleeps late. Best to leave Loom or Figma comments rather than ping live. Reviews creative work Wednesday and Friday mornings. Trusts Casey on ops decisions, never wants to be CCed on legal."
+    },
+    {
+      "name": "Dr. Sara Nakamura",
+      "role": "Dentist (Yaletown Dental Co)",
+      "email": "appts@yaletowndental.ca",
+      "pronouns": "she/her",
+      "aliases": ["Dr. Nakamura", "the dentist", "Sara at Yaletown Dental"],
+      "last_mentioned": 1779849600.0,
+      "tags": ["personal", "healthcare", "vancouver"],
+      "communication_pattern": "Office only books Mon Wed Fri. Casey always books day-before, never week-ahead. Last visit was March, due for cleaning in early June. Reminder texts ping 24h before appointment."
+    },
+    {
+      "name": "Tomas Reyes",
+      "role": "Husband",
+      "email": "tomas.reyes@gmail.com",
+      "pronouns": "he/him",
+      "aliases": ["Tomas", "T", "my husband", "Tom"],
+      "last_mentioned": 1779912000.0,
+      "tags": ["personal", "family", "household"],
+      "communication_pattern": "Uses iMessage for everything. Coordinates household, child pickup, weekend plans. Casey copies him on any dinner reservations involving family. Hates schedule changes with under two hours notice."
+    },
+    {
+      "name": "Hannah Burke",
+      "role": "Head of People, Northbridge Foods",
+      "email": "hannah.burke@northbridgefoods.com",
+      "pronouns": "she/her",
+      "aliases": ["Hannah", "HR Hannah at Northbridge", "H"],
+      "last_mentioned": 1779838800.0,
+      "tags": ["client_secondary", "Northbridge", "HR"],
+      "communication_pattern": "Email only, expects within 24 hours. Owns the seasonal onboarding plan they hired Studio Zero to revise. Asks once and then escalates to Priya if no reply by next day. Schedules through Calendly, never live ping."
+    },
+    {
+      "name": "Andre Kowalski",
+      "role": "Legal counsel (external, Bench and Stone LLP)",
+      "email": "andre.kowalski@benchandstone.law",
+      "pronouns": "he/him",
+      "aliases": ["Andre", "our lawyer", "AK", "counsel"],
+      "last_mentioned": 1779871200.0,
+      "tags": ["external", "legal", "vendor"],
+      "communication_pattern": "Email, formal, billable. Includes time entries in every reply. Reviewing the Acme contract. Casey routes any change request through him before signing. Slow turnaround on weekends, normal weekdays."
+    },
+    {
+      "name": "Jules Beaumont",
+      "role": "Brand strategist (independent contractor, Montreal)",
+      "email": "jules@beaumont.studio",
+      "pronouns": "she/her",
+      "aliases": ["Jules", "the Montreal contractor", "JB"],
+      "last_mentioned": 1779826200.0,
+      "tags": ["contractor", "creative", "remote"],
+      "communication_pattern": "Slack first, async-only. Works Eastern time, ends day at 6pm Eastern (3pm Pacific). Submits invoices on the 15th of each month. Quiet on Mondays because she does deep work."
+    }
+  ],
+  "projects": [
+    {
+      "name": "Acme Foods agency contract",
+      "status": "in legal review since 2026-04-15",
+      "blockers": "Waiting on final redlined docs from Andre. Expected by Friday 2026-05-29.",
+      "last_touchpoint": "Sent revised SoW to Andre 2026-05-25. James texted 'getting close' 2026-05-26 evening.",
+      "next_action": "Friday morning: chase Andre by 10am if docs not in. If docs arrive, James gets a heads-up text immediately.",
+      "stakeholders": ["James Ortega", "Andre Kowalski", "Maya Chen"]
+    },
+    {
+      "name": "Northbridge seasonal onboarding playbook",
+      "status": "in delivery, 70 percent done",
+      "blockers": "Hannah owes us the updated org chart and three example onboarding tracks. Asked 2026-05-22, no reply yet. Will escalate to Priya if not in by Wed 2026-05-29.",
+      "last_touchpoint": "Hannah email reply 2026-05-23 promising 'this week'. Internal review with Liang scheduled 2026-06-03.",
+      "next_action": "Wednesday: if no Hannah reply, send polite chase. Thursday: Priya escalation.",
+      "stakeholders": ["Priya Patel", "Hannah Burke", "Liang Wong"]
+    },
+    {
+      "name": "Q2 board pack",
+      "status": "draft in flight, due 2026-06-12",
+      "blockers": "Devon owes finance summary. Maya wants a draft 5 business days before the board meeting (so 2026-06-05).",
+      "last_touchpoint": "Casey outlined sections in Notion on 2026-05-24. Devon committed to first-pass finance numbers by 2026-06-02.",
+      "next_action": "Monday 2026-06-01: full draft skeleton. Tuesday 2026-06-02: Devon finance pass. Friday 2026-06-05: send to Maya for review.",
+      "stakeholders": ["Maya Chen", "Devon Park"]
+    },
+    {
+      "name": "Studio Zero hiring (senior strategist)",
+      "status": "screening phase",
+      "blockers": "Have 4 candidates from Jules referral list, need to schedule second-round panels. Casey owns scheduling, Liang owns portfolio review.",
+      "last_touchpoint": "Jules sent intro emails on 2026-05-20. First-round screens done 2026-05-23 through 2026-05-26.",
+      "next_action": "Friday 2026-05-29: send second-round invites to top 2 candidates. Target offer by 2026-06-19.",
+      "stakeholders": ["Liang Wong", "Maya Chen", "Jules Beaumont"]
+    },
+    {
+      "name": "Tomas and Casey kitchen renovation",
+      "status": "contractor quoting phase",
+      "blockers": "Tomas waiting on three quotes (one in, two outstanding). Decision target before family trip 2026-07-12.",
+      "last_touchpoint": "Quote 1 in from Westside Renovations 2026-05-21 ($42k all-in). Quotes 2 and 3 pending.",
+      "next_action": "This weekend: tour two contractor projects. Tomas drives this, Casey weighs in on layout decisions.",
+      "stakeholders": ["Tomas Reyes"]
+    }
+  ],
+  "recurring_patterns": [
+    {
+      "name": "Friday weekly digest to Maya",
+      "trigger": "Friday by 5pm Pacific",
+      "behavior": "Casey sends Maya a 5-bullet email summary: client status, open risks, ask. Subject always 'Weekly: <week-of date>'. If Casey says anything mid-week like 'I should put that in the Friday note' Anticipy must catch and queue it for the digest draft.",
+      "evidence_seen": "Every Friday since January 2026. Maya replies 'thanks, looks great' or pulls one item into Monday standup."
+    },
+    {
+      "name": "Day-before restaurant reservations",
+      "trigger": "Casey mentions dinner or going out for food",
+      "behavior": "Casey ALWAYS books restaurant reservations the day before, never week-ahead. She finds week-ahead booking annoying. If she says 'we should grab dinner at <place>' Anticipy should not book yet, but should surface a draft the night before with the OpenTable link pre-filled.",
+      "evidence_seen": "Last 8 reservations in her email history, all booked between 4pm and 9pm the day prior."
+    },
+    {
+      "name": "Monday 9am standup at the Bean Around the World on Hamilton",
+      "trigger": "Sunday evening or Monday morning",
+      "behavior": "Casey and Maya have a standing in-person 9am Monday at Bean Around the World (Yaletown branch on Hamilton St). If Casey mentions 'Monday' Anticipy should not propose anything before 10am unless it's about that standup. If she mentions wanting to move it, draft a Slack DM to Maya proposing a swap, never an email.",
+      "evidence_seen": "Every Monday in 2026 except the two weeks she was on holiday in March."
+    }
+  ],
+  "preferences": {
+    "writing_style": "Short, clipped. Five-bullet emails preferred. Subject lines should be eight words or fewer. Sign-off is always 'Casey' or 'C' depending on familiarity, never 'Best' or 'Cheers'. No exclamation marks. Sentence fragments are fine.",
+    "default_response_time": "Same-day reply window 11am to 4pm Pacific. After 4pm, queue for morning unless flagged urgent by Priya or Maya. Personal messages from Tomas: always immediate.",
+    "communication_channels": "Slack for Studio Zero internal. Email for clients and external. iMessage for Tomas and Dr. Nakamura. Phone calls only for closing-deal moments with James.",
+    "draft_review_policy": "Casey reviews every send before it goes. Anticipy drafts go to a confirm card with 20 second countdown. Calendar events: auto-add when confidence over 0.85, otherwise confirm.",
+    "tone_with_clients": "Warm but never gushing. Acknowledge what the client said in one sentence, then deliver next step. Avoid the words 'just', 'super', 'amazing', 'awesome'. Use 'thank you' not 'thanks' for client-facing first email of a thread."
+  },
+  "places": {
+    "named_places": [
+      {
+        "name": "Bean Around the World Yaletown",
+        "address": "1802 Hamilton St, Vancouver BC",
+        "context": "Standing Monday 9am with Maya. Casey orders oat flat white, Maya orders americano. Wifi is bad, plan for offline."
+      },
+      {
+        "name": "Ask for Luigi",
+        "address": "305 Alexander St, Vancouver BC (Strathcona)",
+        "context": "Casey and Tomas date-night spot. Italian. Booked through OpenTable. No reservations on Sundays. Casey's go-to anniversary dinner."
+      },
+      {
+        "name": "Yaletown Dental Co",
+        "address": "1090 Mainland St #210, Vancouver BC",
+        "context": "Dr. Sara Nakamura's office. Casey books day-before. Next due early June 2026."
+      }
+    ],
+    "frequented_locations": [
+      {
+        "name": "Studio Zero office",
+        "address": "470 Granville St 12th floor, Vancouver BC",
+        "context": "Casey is in-office Tue Wed Thu. WFH Mon and Fri unless client visit. Office is dog-friendly, Casey brings Pepper (golden retriever) on Wednesdays."
+      },
+      {
+        "name": "Home (Kitsilano)",
+        "address": "West 6th and Maple, Vancouver BC",
+        "context": "Casey and Tomas. Home office in the back room, north-facing window. Mic setup is a Shure MV7 over USB-C. Quiet hours after 9pm."
+      }
+    ]
+  },
+  "preferences_compat": {
+    "comms": "Slack internal, email client, iMessage personal",
+    "default_response_window": "11am to 4pm Pacific same-day",
+    "writing_style_short": "five-bullet emails, no exclamation marks",
+    "draft_review": "confirm card 20s countdown",
+    "tone_with_clients": "warm not gushing, no fillers"
+  },
+  "do_not_touch": [
+    {
+      "pattern": "production Stripe",
+      "reason": "Never modify charge logic or refunds; finance domain owned by Devon only.",
+      "surfaces": ["browser", "terminal", "email"]
+    },
+    {
+      "pattern": "payroll",
+      "reason": "Devon owns payroll in Wagepoint. Anticipy never edits payroll sheets, never approves runs, never replies in #payroll Slack channel.",
+      "surfaces": ["browser", "sheets", "slack"]
+    },
+    {
+      "pattern": "personal banking",
+      "reason": "RBC online banking never touched. If anything looks like a transfer request, escalate to Tomas.",
+      "surfaces": ["browser"]
+    },
+    {
+      "pattern": "Liang creative work in progress",
+      "reason": "Never reply on Liang's behalf inside Figma comments or design Slack threads. Their authorship is sacred.",
+      "surfaces": ["figma", "slack"]
+    },
+    {
+      "pattern": "Northbridge financial figures",
+      "reason": "NDA covers all Northbridge revenue and unit economics. Never reference numbers in a draft going outside the Studio Zero email domain.",
+      "surfaces": ["email", "slack"]
+    }
+  ],
+  "critical_software": {
+    "Gmail": true,
+    "Google Calendar": true,
+    "Slack": true,
+    "Notion": true,
+    "Linear": true,
+    "Figma": true,
+    "OpenTable": true,
+    "iMessage": true
+  },
+  "mandate": "Listen to Casey's day across MacBook mic and recorded voice notes. Draft client and internal comms in her clipped voice, never send without confirm card. Catch every Friday-digest worthy mention. Surface day-before draft reservations on her behalf. Keep the Bean Around the World Monday 9am sacred. Never touch payroll or Stripe.",
+  "comms_prefs": {
+    "non_critical": "Slack for internal, email for clients, batch into 11am to 4pm Pacific window.",
+    "critical": "iMessage to Casey directly. CC Tomas if it concerns family or evening plans. Never wake her past 9pm except for Northbridge urgent flag from Priya."
+  },
+  "quiet_hours": "9pm to 7am Pacific weekdays. All weekend except Saturday 9am to noon for urgent client escalation only.",
+  "pronoun_map": {
+    "she": "Maya Chen",
+    "her": "Maya Chen",
+    "hers": "Maya Chen",
+    "he": "Devon Park",
+    "him": "Devon Park",
+    "his": "Devon Park",
+    "they": "Liang Wong",
+    "them": "Liang Wong",
+    "their": "Liang Wong"
+  },
+  "aliases": {
+    "the boss": "Maya Chen",
+    "the ops partner": "Devon Park",
+    "the Northbridge contact": "Priya Patel",
+    "the dentist": "Dr. Sara Nakamura",
+    "the lawyer": "Andre Kowalski",
+    "the design lead": "Liang Wong",
+    "my husband": "Tomas Reyes",
+    "Acme James": "James Ortega",
+    "the Montreal contractor": "Jules Beaumont",
+    "HR Hannah at Northbridge": "Hannah Burke",
+    "the usual coffee spot": "Bean Around the World Yaletown",
+    "our spot": "Ask for Luigi",
+    "the office": "Studio Zero office",
+    "home": "Home (Kitsilano)"
+  },
+  "recent_topics": [
+    {"topic": "Acme legal review closing Friday", "ts": 1779894000.0},
+    {"topic": "Northbridge onboarding playbook delivery", "ts": 1779921600.0},
+    {"topic": "Q2 board pack draft", "ts": 1779862800.0},
+    {"topic": "Friday weekly digest to Maya", "ts": 1779934800.0},
+    {"topic": "Dentist appointment due early June", "ts": 1779849600.0},
+    {"topic": "Kitchen renovation quotes", "ts": 1779817200.0},
+    {"topic": "Senior strategist hiring panel", "ts": 1779885600.0},
+    {"topic": "Monday 9am standup at Bean Around the World", "ts": 1779870600.0}
+  ]
+}

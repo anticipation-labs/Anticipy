@@ -1,0 +1,106 @@
+{
+  "schema": "anticipy.stranger_script.v7",
+  "persona_uuid": "f40f9a07-357f-4d80-aed3-8366d1bf1f24",
+  "created_at": "2025-04-10T15:30:00Z",
+  "title": "Notion Research Summary via Audio Upload",
+  "category": "notion_crm_research",
+  "verb_category": "web_research_summarize_decline",
+  "hard_category": "crm",
+  "hard_category_focus": "Notion CRM for deal tracking and account research",
+  "breadth_reason": "This script tests audio upload as primary input for Notion CRM operations, extending beyond typed commands.",
+  "v7_target": {
+    "public_entry": "https://www.anticipy.ai/app",
+    "engine": "user-device engine installed on user's computer",
+    "surface_rule": "Must use user's signed-in Chrome profile with Notion workspace open showing a CRM database view",
+    "proof_rule": "Proof must come from fresh real-time capture of the installed Anticipy engine reading the user's actual Notion surface"
+  },
+  "primary_user_input": {
+    "source_mode": "audio_upload",
+    "source_detail": "mp3",
+    "input_fidelity": "uploaded_audio",
+    "not_primary": [
+      "transcript_paste",
+      "paste-only input",
+      "live_mic",
+      "computer_microphone",
+      "external_microphone"
+    ],
+    "reason": "Uploaded audio ASR coverage ensures accurate transcription of spoken research intent while avoiding ambiguous live mic scenarios."
+  },
+  "real_user_surfaces": [
+    {
+      "name": "Notion CRM Database",
+      "kind": "web_app",
+      "surface": "Notion workspace page with CRM database view",
+      "proof_needed": "Captured screenshot of the Notion page showing record list and expanded deal detail"
+    },
+    {
+      "name": "Chrome Signed-In Profile",
+      "kind": "browser_profile",
+      "surface": "Default Chrome profile with signed-in Notion session",
+      "proof_needed": "Evidence of active Chrome profile with Notion cookies or session"
+    }
+  ],
+  "moments": [
+    {
+      "id": "m01_public_path",
+      "kind": "public_product_entry",
+      "actor": "driver",
+      "description": "Driver navigates to https://www.anticipy.ai/app, completes onboarding, downloads public installer, and installs user-device engine on the user's computer."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "kind": "real_surface_precheck",
+      "actor": "driver",
+      "description": "Driver verifies that the user's real Notion surface is visible and signed-in in the default Chrome profile."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "kind": "upload_audio",
+      "actor": "stranger",
+      "spoken_reference_text": "Please create a new record in my Notion Research database summarizing the latest seed funding rounds for solo founders this month, and tag it weekly. If you cannot prove the visible Notion surface or my signed-in workspace, decline without writing anything.",
+      "delivery_instruction": "The stranger will generate a unique audio file each run using TTS say command with the spoken_reference_text, then upload it via /api/listen/upload.",
+      "input_fidelity": "uploaded_audio",
+      "source_mode": "audio_upload",
+      "source_detail": "mp3",
+      "media_type": "audio/mpeg"
+    },
+    {
+      "id": "m04_same_boundary",
+      "kind": "post_asr_boundary_check",
+      "actor": "engine",
+      "description": "Engine confirms that the ASR output matches the spoken_reference_text within a reasonable phonetic and semantic boundary."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "kind": "expected_decision",
+      "actor": "engine",
+      "acceptable_outcomes": [
+        "act: create a new Notion record in the Research database with summary and weekly tag, provided Notion surface is verifiable",
+        "ask: if Notion surface is partially visible but requires user confirmation to proceed",
+        "decline: if Notion surface is not verifiable or user is not signed-in, decline with explanation without writing anything"
+      ]
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "kind": "input_mode_surface_gap_observation",
+      "actor": "driver",
+      "secondary_only": true,
+      "description": "Driver notes that the audio upload input mode is the primary method; other input modes (live mic, paste) are secondary and not used in this run."
+    }
+  ],
+  "success_criteria": [
+    "The user successfully uploads an MP3 file containing the spoken intent via the Anticipy audio upload endpoint.",
+    "Anticipy's ASR engine transcribes the audio accurately and matches the spoken_reference_text within acceptable boundaries.",
+    "Anticipy verifies the user's signed-in Notion surface with a live, fresh proof captured from the user's real Chrome profile.",
+    "If Notion is visible and signed-in, Anticipy creates a new record in the Notion Research database with the summary and weekly tag, providing confirmation to the user.",
+    "If Notion is not verifiable, Anticipy declines with a clear explanation and does not write any data."
+  ],
+  "failure_triggers": [
+    "Audio file fails to upload or is not a valid MP3 format.",
+    "ASR transcription deviates significantly from the spoken reference text, causing misrecognition of intent.",
+    "The user's Notion surface is not visible in the Chrome profile (e.g., no workspace open or signed out).",
+    "The Chrome profile used is not the default signed-in profile (e.g., a guest or secondary profile).",
+    "The proof of Notion visibility is stale, from a fixture, or otherwise not from the real-time user environment."
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "actual": "navOK=True url=https://opensource-demo.orangehrmlive.com/web/index.php/auth/login",
+  "expected": "navigate ok + products listing in HTML",
+  "name": "products_page",
+  "passed": false,
+  "primitive_used": "bridge navigate (top-nav fallback) + curl HTML"
+}

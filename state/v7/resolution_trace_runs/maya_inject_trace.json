@@ -1,0 +1,77 @@
+{
+    "ok": true,
+    "ingest_id": "asr-transcript-d83e8bb480fb464ab1a4fe242c8d801c",
+    "trace": [
+        {
+            "kind": "compose_task_from_memory",
+            "instruction": "Hey, I should circle back with Maya about Friday.",
+            "dossier_snapshot_keys": [
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "Anticipy transcript proof 477fbb6c. Reme",
+                "Anticipy transcript proof cf13a973. Reme",
+                "Anticipy transcript proof 2050be1c. Reme",
+                "Anticipy audio upload proof, CB820 DFF.",
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "Anticipy transcript proof a8b67bc0. Reme",
+                "Anticipy transcript proof ece47dbd. Reme",
+                "Anticipy transcript proof ba5b39c7. Reme",
+                "boss",
+                "ops partner",
+                "biggest client contact",
+                "Please add a new record to my Notion Rec"
+            ],
+            "profile_keys": [
+                "name",
+                "role_title",
+                "what_they_do",
+                "timezone",
+                "working_hours",
+                "people",
+                "critical_software",
+                "mandate",
+                "do_not_touch",
+                "comms_prefs",
+                "quiet_hours"
+            ],
+            "recent_window_count": 2,
+            "ts": 1779940655.9999208
+        }
+    ],
+    "trace_length": 1,
+    "plan": {
+        "ingest_id": "asr-transcript-d83e8bb480fb464ab1a4fe242c8d801c",
+        "transcript": "Hey, I should circle back with Maya about Friday.",
+        "outcome": "LIFE_LOG",
+        "proposal": null,
+        "plan": {
+            "mode": "clarify",
+            "person": "",
+            "thing": "Friday status",
+            "task": "",
+            "question": "Which email address should I use?"
+        },
+        "source": "asr-transcript",
+        "intent": null,
+        "clarify": false,
+        "ts": 1779940642.7663438
+    }
+}

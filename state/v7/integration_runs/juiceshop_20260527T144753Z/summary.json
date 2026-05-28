@@ -1,0 +1,63 @@
+{
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144753Z",
+  "elapsed_seconds": 49.23,
+  "steps_passed": 12,
+  "steps_failed": 0,
+  "failed_step": "",
+  "final_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/juiceshop_20260527T144753Z/step-11-final.png",
+  "results": [
+    {
+      "name": "navigate",
+      "ok": true
+    },
+    {
+      "name": "fallback_navigate",
+      "ok": true
+    },
+    {
+      "name": "target_health",
+      "ok": true
+    },
+    {
+      "name": "dismiss_banners",
+      "ok": true
+    },
+    {
+      "name": "open_search",
+      "ok": true
+    },
+    {
+      "name": "type_apple",
+      "ok": true
+    },
+    {
+      "name": "verify_apple_results",
+      "ok": true
+    },
+    {
+      "name": "open_product",
+      "ok": true
+    },
+    {
+      "name": "add_to_basket",
+      "ok": true
+    },
+    {
+      "name": "basket_counter",
+      "ok": true
+    },
+    {
+      "name": "open_basket",
+      "ok": true
+    },
+    {
+      "name": "verify_basket_apple",
+      "ok": true
+    }
+  ],
+  "bridge_fallbacks_used": [
+    "CDP fallback: click via Runtime.evaluate(el.click()) because bridge rejects 'click'",
+    "CDP fallback: type via native HTMLInputElement.value setter because bridge rejects 'type'"
+  ],
+  "verdict": "PASS"
+}

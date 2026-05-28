@@ -1,0 +1,122 @@
+{
+  "schema": "anticipy.v7.persistence_sim.cross_session.v1",
+  "account_id": "persistence_sim_2026_05_28_a",
+  "engine": "http://127.0.0.1:8731",
+  "engine_health": {
+    "ok": true,
+    "service": "anticipy-local-engine",
+    "version": "product-3",
+    "pid": 37580,
+    "port": 8731,
+    "onboarded": true,
+    "listening": false,
+    "profile_error": ""
+  },
+  "started_at": "2026-05-28T03:57:57.629433Z",
+  "finished_at": "2026-05-28T03:59:13.313885Z",
+  "duration_s": 75.68,
+  "dossier_path": "/Users/omarebrahim/.anticipy/v7/dossiers/persistence_sim_2026_05_28_a/dossier.json",
+  "transcripts": [
+    {
+      "id": "A1",
+      "text": "Marisol is my new dentist. She moved into the office on Davie.",
+      "person": "Marisol",
+      "role": "dentist",
+      "inject_ok": true,
+      "inject_status": 200,
+      "inject_outcome": "LIFE_LOG",
+      "memory_op": "UPDATE",
+      "ingest_id": "asr-transcript-69ca0fedf67f424fb1de70eedffed9c7",
+      "elapsed_ms": 7275
+    },
+    {
+      "id": "A2",
+      "text": "Friday I am meeting Vik for coffee at three pm at Forty Ninth Parallel.",
+      "person": "Vik",
+      "role": "coffee partner",
+      "inject_ok": true,
+      "inject_status": 200,
+      "inject_outcome": "LIFE_LOG",
+      "memory_op": "ADD",
+      "ingest_id": "asr-transcript-3330f101266d431bbea6f632be111a5e",
+      "elapsed_ms": 11465
+    },
+    {
+      "id": "A3",
+      "text": "Nadia is the new accountant we hired at the studio.",
+      "person": "Nadia",
+      "role": "accountant",
+      "inject_ok": true,
+      "inject_status": 200,
+      "inject_outcome": "LIFE_LOG",
+      "memory_op": "ADD",
+      "ingest_id": "asr-transcript-dc2e5eb172b7470aad7e29798ee44a25",
+      "elapsed_ms": 5957
+    },
+    {
+      "id": "A4",
+      "text": "I have to send a follow up to Tomislav about the deck for Tuesday.",
+      "person": "Tomislav",
+      "role": "client",
+      "inject_ok": true,
+      "inject_status": 200,
+      "inject_outcome": "CONFIRMED",
+      "memory_op": "ADD",
+      "ingest_id": "asr-transcript-122a264b89f54b0c84676159fe67966c",
+      "elapsed_ms": 19363
+    },
+    {
+      "id": "A5",
+      "text": "Birgitta is the editor I am working with on the proposal draft.",
+      "person": "Birgitta",
+      "role": "editor",
+      "inject_ok": true,
+      "inject_status": 200,
+      "inject_outcome": "LIFE_LOG",
+      "memory_op": "ADD",
+      "ingest_id": "asr-transcript-2d40a91d68fa4859b572078236aa8e43",
+      "elapsed_ms": 8283
+    }
+  ],
+  "post_session_reread": {
+    "people_count": 5,
+    "people_names": [
+      "Marisol",
+      "Vik",
+      "Nadia",
+      "Tomislav",
+      "Birgitta"
+    ],
+    "topics_count": 5,
+    "topics": [
+      "marisol_is_dentist",
+      "vik_coffee_friday",
+      "nadia_is_accountant",
+      "tomislav_deck_followup",
+      "birgitta_is_editor"
+    ]
+  },
+  "persistence_score": {
+    "expected_people": 5,
+    "people_persisted": 5,
+    "people_persistence_pct": 100.0,
+    "expected_topics": 5,
+    "topics_persisted": 5,
+    "topics_persistence_pct": 100.0
+  },
+  "cross_reference_resolution": {
+    "transcript": "Remind me to call my dentist this week.",
+    "expected_person": "Marisol",
+    "expected_role": "dentist",
+    "inject_outcome": "ACTED",
+    "intent_summary": "The user wants to be reminded to call their dentist this week.",
+    "intent_type": "remind",
+    "target_person_refs": [
+      "Marisol"
+    ],
+    "intent_confidence": 1.0,
+    "resolved": true,
+    "model": "google/gemini-2.5-flash"
+  },
+  "pass": true
+}

@@ -1,0 +1,366 @@
+{
+  "ts": "20260528T054534Z",
+  "total": 72,
+  "pages": [
+    {
+      "id": "10E11073526F27F1C72C25465B67BA6C",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-545749bca8ba"
+    },
+    {
+      "id": "7670CE190B708D2F1263A2A8C585330D",
+      "type": "page",
+      "url": "https://example.com/"
+    },
+    {
+      "id": "32E6F0D79950A2F64F37D797D49C92F1",
+      "type": "iframe",
+      "url": "https://s.amazon-adsystem.com/iu3?d=amazon.ca&slot=navFooter&a1=Pa0TLzawpBsS0iWTlHN9Ahp1Q&a2=0101a02ba71b97ccb1220e40870"
+    },
+    {
+      "id": "BCD06A9F4BEA7949A99CF56912CF8F1A",
+      "type": "iframe",
+      "url": "https://m.media-amazon.com/images/S/sash/aLYrXsPNBDxplZP.html"
+    },
+    {
+      "id": "EE88A5AFED2241E1F3B2F452C39BDF7E",
+      "type": "iframe",
+      "url": "https://m.media-amazon.com/images/S/sash/aLYrXsPNBDxplZP.html"
+    },
+    {
+      "id": "8C970A2CF2BDE729C4466CEF95EF1E59",
+      "type": "page",
+      "url": "https://www.amazon.ca/s?k=PowerDeWise+lavalier+USB-C"
+    },
+    {
+      "id": "7D97EE29E4643BCB39BBED02D30F1088",
+      "type": "page",
+      "url": "https://mail.google.com/mail/u/0/?fs=1&tf=cm"
+    },
+    {
+      "id": "0D6C655454B6484BB283701E1940D2FF",
+      "type": "iframe",
+      "url": "https://accounts.google.com/RotateCookiesPage?og_pid=23&rot=3&origin=https%3A%2F%2Fmail.google.com&exp_id=0"
+    },
+    {
+      "id": "6887FED1C652C03E9BC6B5D0ECF1D67B",
+      "type": "iframe",
+      "url": "https://chat.google.com/u/0/mole/world?wfi=gtn-brain-iframe-id&hs=%5B%22h_hs%22%2Cnull%2Cnull%2C%5B2%2C0%5D%2Cnull%2Cnul"
+    },
+    {
+      "id": "3FB6AE804CB7CC5D4F58A02F5ABFF172",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app?anticipy_surface_probe=v7-surface-a84c501e9742"
+    },
+    {
+      "id": "1690E92E175420351C98B529CF16926D",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=66&screenY=100&e"
+    },
+    {
+      "id": "AEEA6C5ACA233BC3B276582350C0F631",
+      "type": "iframe",
+      "url": "https://www.google.com/recaptcha/enterprise/anchor?ar=1&k=6Lf1FtQZAAAAAKGsW3JoCdtQfzfCb2umWbEoyOjE&co=aHR0cHM6Ly9hcHAuYX"
+    },
+    {
+      "id": "27D6008BBEF0EB2F4A37A71779844425",
+      "type": "page",
+      "url": "https://app.asana.com/-/login"
+    },
+    {
+      "id": "FFEC38540F7A49D4C6320FD0E8CB413D",
+      "type": "iframe",
+      "url": "https://chat.google.com/u/0/mole/world?wfi=gtn-brain-iframe-id&hs=%5B%22h_hs%22%2Cnull%2Cnull%2C%5B2%2C0%5D%2Cnull%2Cnul"
+    },
+    {
+      "id": "305886A551705857105D784D30080A3C",
+      "type": "page",
+      "url": "https://mail.google.com/mail/u/0/?fs=1&tf=cm"
+    },
+    {
+      "id": "036121650F5EFAAFD4B3BEB8F65E47F1",
+      "type": "iframe",
+      "url": "https://accounts.google.com/RotateCookiesPage?og_pid=23&rot=3&origin=https%3A%2F%2Fmail.google.com&exp_id=0"
+    },
+    {
+      "id": "90413EEF08F0E08FD81766BB36579B4F",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "C2A6BF1CCD6EAFE089C39A947B3408CF",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "2DD29D311B551DEE8BD62E97A19FA65D",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=66&screenY=100&e"
+    },
+    {
+      "id": "2C33B745CC67C27AFC101C46E4C3FC1E",
+      "type": "page",
+      "url": "https://id.atlassian.com/login?application=trello&continue=https%3A%2F%2Ftrello.com%2Fauth%2Fatlassian%2Fcallback%3Fretu"
+    },
+    {
+      "id": "F068D981769ECAE66004F5FE696885E2",
+      "type": "iframe",
+      "url": "https://www.recaptcha.net/recaptcha/enterprise/anchor?ar=1&k=6Le9VxMnAAAAALKRlj8jmKwUYmFTZWcF0y4o9QeD&co=aHR0cHM6Ly9pZC5"
+    },
+    {
+      "id": "5CC9AA827A99F809DBC68D5ECFE276EF",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=66&screenY=100&e"
+    },
+    {
+      "id": "095640B0ED79E805149472CD59C57A49",
+      "type": "iframe",
+      "url": "https://www.recaptcha.net/recaptcha/enterprise/anchor?ar=1&k=6Le9VxMnAAAAALKRlj8jmKwUYmFTZWcF0y4o9QeD&co=aHR0cHM6Ly9pZC5"
+    },
+    {
+      "id": "79669AF24BB4EA11EA2E40E20D698920",
+      "type": "page",
+      "url": "https://id.atlassian.com/login?application=trello&continue=https%3A%2F%2Ftrello.com%2Fauth%2Fatlassian%2Fcallback%3Fretu"
+    },
+    {
+      "id": "92DC4FB53BD6A4D4E9B66CEA7C6395A1",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "C354823C9B719EA6370C726A765E48C2",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "A88F1524D8A2D6DDF2BEEFAA73F7EE3D",
+      "type": "iframe",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/completion_list.html?username=&colorScheme=&screenX=66&screenY=100&e"
+    },
+    {
+      "id": "F78663CA4C843F352D0F2A23FE4A13A5",
+      "type": "iframe",
+      "url": "https://www.google.com/recaptcha/enterprise/anchor?ar=1&k=6Lf1FtQZAAAAAKGsW3JoCdtQfzfCb2umWbEoyOjE&co=aHR0cHM6Ly9hcHAuYX"
+    },
+    {
+      "id": "41B70D119AE0D4A16F6F3448B8BEA5BB",
+      "type": "page",
+      "url": "https://app.asana.com/-/login"
+    },
+    {
+      "id": "33CC9061DA6BE6A7D988996709B9E845",
+      "type": "page",
+      "url": "http://localhost:63894/callback?code=995d01e2-a5d1-4438-a9c6-d884a1f8bc83&state=4vXsguIJnrxRbQVvvjTaYgrnmb-NbT399VTRhmUK"
+    },
+    {
+      "id": "AA2C78DC8C1F6111820613E0F048C13D",
+      "type": "page",
+      "url": "https://app.notion.com/login?assetsVersion=23.13.20260527.2159&__dm_a=1"
+    },
+    {
+      "id": "C47DF5B2D51447E6F3A99DE173DA8CF1",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "0264EFE54CDA6BB886700364484A1E0D",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "7EE09966CDE677040564C8F58372E559",
+      "type": "page",
+      "url": "https://www.zendesk.com/login/"
+    },
+    {
+      "id": "1D3EF81A604EA55284DC67FB4865AF0E",
+      "type": "page",
+      "url": "https://www.zendesk.com/login/"
+    },
+    {
+      "id": "A43C346700A90EA503AF8A76CA82E00C",
+      "type": "page",
+      "url": "https://www.ebay.com/itm/188423328149"
+    },
+    {
+      "id": "C0AEBFF94A8284921CE9466857F306A3",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "88F512AB028A3727934A2D0EFFCACA7F",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "35BFB5CD92D17148D05D69A8D596257A",
+      "type": "page",
+      "url": "https://id.atlassian.com/login?application=trello&continue=https%3A%2F%2Ftrello.com%2Fauth%2Fatlassian%2Fcallback%3Fretu"
+    },
+    {
+      "id": "643A704809D14944AB517BEE850F4B95",
+      "type": "page",
+      "url": "https://id.atlassian.com/login?application=trello&continue=https%3A%2F%2Ftrello.com%2Fauth%2Fatlassian%2Fcallback%3Fretu"
+    },
+    {
+      "id": "921C3572B03D918610C645AE55D0E893",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "7D1D54ECC54C6DDE8EBC7A9FF3E65946",
+      "type": "page",
+      "url": "https://www.anticipy.ai/app"
+    },
+    {
+      "id": "3CBF001A4823AA938EFA25008FE50D5E",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "60A550C4AC04CCCB63B18974D7BB22B0",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "4D38C840AF54DC8390E06AE54763FA64",
+      "type": "page",
+      "url": "https://claude.ai/new"
+    },
+    {
+      "id": "48DE87A73C7A647045F31CA7133B5FEC",
+      "type": "background_page",
+      "url": "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/offscreen.html"
+    },
+    {
+      "id": "4E47F4E85DDA3142C000A722137FB110",
+      "type": "page",
+      "url": "chrome://newtab/"
+    },
+    {
+      "id": "CD4F96B158B6091D5586F247DF3638A1",
+      "type": "page",
+      "url": "https://frontend-iota-gray-49.vercel.app/signup"
+    },
+    {
+      "id": "2FD0137722498D5DCDFB3CD3FF043C69",
+      "type": "page",
+      "url": "https://linear.app/login"
+    },
+    {
+      "id": "2E82DF213A8CF4DEC8B5F4CEB169993A",
+      "type": "page",
+      "url": "https://linear.app/login"
+    },
+    {
+      "id": "105263D61AA82A897CEFF00F23B823CC",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "77E5BF01585A185A3411B31695749180",
+      "type": "page",
+      "url": "https://app.hubspot.com/login"
+    },
+    {
+      "id": "AE0A293BD8712F1B146CB9BE87D86EC5",
+      "type": "worker",
+      "url": ""
+    },
+    {
+      "id": "1E895E4AD69C2FF3142B86A825AA1F9D",
+      "type": "service_worker",
+      "url": "chrome-extension://ejkiikneibegknkgimmihdpcbcedgmpo/service-worker.js"
+    },
+    {
+      "id": "107604A5AD11A2CC55DD3382F2DE691A",
+      "type": "service_worker",
+      "url": "chrome-extension://phkbamefinggmakgklpkljjmgibohnba/service-worker-loader.js"
+    },
+    {
+      "id": "83D1E1440A652C0CE395499597E556B3",
+      "type": "service_worker",
+      "url": "https://chat.google.com/serviceworker.js?xhrRoot=%2Fu%2F0%2F_%2FDynamiteWebUi&mssRowKey=boq-dynamite.DynamiteWebUi.en.Wl"
+    },
+    {
+      "id": "F7E02266BD7886EB9425F46E70D00D77",
+      "type": "service_worker",
+      "url": "chrome-extension://ndnaehgpjlnokgebbaldlmgkapkpjkkb/background.bundle.js"
+    },
+    {
+      "id": "AD23DDCB731FD23AD2358C0C7C2A2BF0",
+      "type": "service_worker",
+      "url": "chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/background/serviceWorker.js"
+    },
+    {
+      "id": "F9518265F64DE2038E946B01D809F8FB",
+      "type": "service_worker",
+      "url": "chrome-extension://jfcmjbboehfdmgbhheahjlnoimbgfdbn/service-worker.js"
+    },
+    {
+      "id": "04EE1C7133F2839605FC89E455780E12",
+      "type": "service_worker",
+      "url": "chrome-extension://majdfhpaihoncoakbjgbdhglocklcgno/service-worker-loader.js"
+    },
+    {
+      "id": "F3D1B10881474547D2F2FCC9A066880B",
+      "type": "service_worker",
+      "url": "chrome-extension://dmkamcknogkgcdfhhbddcghachkejeap/background.bundle.js"
+    },
+    {
+      "id": "73E1F41700A32F8B885D2FC386EC15E0",
+      "type": "service_worker",
+      "url": "https://t-antenna.asana.com/_/service_worker/65d0/sw.js?origin=https%3A%2F%2Fasana.com"
+    },
+    {
+      "id": "F31EBEC0F1851AE23C018FACFAB6AC71",
+      "type": "service_worker",
+      "url": "chrome-extension://ilehaonighjijnmpnagapkhpcdbhclfg/src/background.js"
+    },
+    {
+      "id": "BF3261E826392C17B143D02DD10C1365",
+      "type": "service_worker",
+      "url": "chrome-extension://hehggadaopoacecdllhhajmbjkdcmajg/background.js"
+    },
+    {
+      "id": "B23AE3C82B5284B915684CB07E19D785",
+      "type": "service_worker",
+      "url": "chrome-extension://pejdijmoenmkgeppbflobdenhhabjlaj/background.js"
+    },
+    {
+      "id": "B8EB0188BD96BDEF416FB68ACD810D11",
+      "type": "service_worker",
+      "url": "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/service-worker-loader.js"
+    },
+    {
+      "id": "5BA64926BEC7E64D960E0D0FAA9FA642",
+      "type": "shared_worker",
+      "url": "blob:https://id.atlassian.com/324c3681-bd06-48b7-a21a-59c2d49300d4"
+    },
+    {
+      "id": "CBE0F2B31B0F1281586841EEE6769B66",
+      "type": "service_worker",
+      "url": "https://www.amazon.ca/service-worker.js"
+    },
+    {
+      "id": "2418727F1C00C08145C9187404134B29",
+      "type": "worker",
+      "url": ""
+    },
+    {
+      "id": "63CDDF8ED3300B82755EBFB4B9799FC6",
+      "type": "worker",
+      "url": ""
+    },
+    {
+      "id": "C465C8E23931E79176E126C76BE3BC17",
+      "type": "worker",
+      "url": ""
+    },
+    {
+      "id": "37A807EC493764910640474E184B240A",
+      "type": "shared_worker",
+      "url": "blob:https://id.atlassian.com/6cc7ecab-cd6b-48de-bfc6-f1fe1b826176"
+    }
+  ]
+}

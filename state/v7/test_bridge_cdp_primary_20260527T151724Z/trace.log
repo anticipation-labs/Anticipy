@@ -1,0 +1,14 @@
+[15:17:24] launching dry-run bridge: scripts/v7/anticipy_bridge_fallback_cdp.py on port 7779
+[15:17:24] dry-run bridge pid=94867, waiting up to 6s for HTTP up
+[15:17:25] PASS status_cdp_primary :: bridge_kind=cdp_primary cdp_alive=True
+[15:17:26] frontmost URL before navigate: https://console.firebase.google.com/u/0/project/altuf-cf03d/overview?fb_gclid=CjwKCAjwrNrQBhBjEiwAoR4VO4ZJhw6NAJQvA6SwQB
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/os.py", line 680, in __getitem__
+    raise KeyError(key) from None
+KeyError: 'URL'
+[15:17:30] frontmost URL after navigate: https://console.anthropic.com/settings/keys
+[15:17:30] FAIL navigate_background :: navigated ok but frontmost CHANGED from https://console.firebase.google.com/u/0/project/altuf-cf03d/ to https://console.anthropic.com/settings/keys (regression: not background)
+[15:17:31] PASS eval_js_title :: result='Example Domain' via=chrome_cdp_loopback_bridge (no Apple Events permission needed)
+[15:17:33] PASS click_selector :: selector=a -> result=OK
+[15:17:33] FAIL failed_step=navigate_background

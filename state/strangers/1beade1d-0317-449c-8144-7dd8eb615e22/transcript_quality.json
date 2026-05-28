@@ -1,0 +1,22 @@
+{
+  "evidence": {
+    "actual_input_path": "/api/listen/upload",
+    "audio_delivered": true,
+    "input_mode": "uploaded_audio",
+    "origin": "driver_result.json",
+    "path": "observed_transcript",
+    "source_mode": "audio_upload"
+  },
+  "generated_at": "2026-05-27T05:13:19Z",
+  "hypothesis": "On the Etsy order page for the travel pouch I bought for the Lisbon trip next month, please verify the shipping address and draft a customer reply to the seller about late delivery. If you cannot prove the visible Etsy order surface or my signed and account, decline without changing anything.",
+  "input_fidelity": [
+    "uploaded_audio"
+  ],
+  "reference": "On the Etsy order page for the travel pouch I bought for the Lisbon trip next month, please verify the shipping address and draft a customer reply to the seller about late delivery. If you cannot prove the visible Etsy order surface or my signed-in account, decline without changing anything.",
+  "schema": "anticipy.v6.transcript_quality",
+  "source": "asr-transcript",
+  "stranger_id": "1beade1d-0317-449c-8144-7dd8eb615e22",
+  "transcript_boundary_chars": 293,
+  "transcript_boundary_sha256": "b82582b0ae79ed62cfa56a61e0d52d3a91c96255a00b54a6966275303e439a20",
+  "wer": 0.019608
+}

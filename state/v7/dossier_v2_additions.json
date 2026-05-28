@@ -1,0 +1,232 @@
+{
+  "schema": "anticipy.v7.dossier.rich.v1.additions",
+  "account_id": "e2e_rich_test_2026_05_28",
+  "extends": "state/v7/test_dossier_rich.json",
+  "note": "Append-only additions to support T21-T40 across health, finance, family, work_decision domains. Existing entities (Maya Chen, Devon Park, Priya Patel, James Ortega, Liang Wong, Dr. Sara Nakamura, Tomas Reyes, Hannah Burke, Andre Kowalski, Jules Beaumont) are reused unchanged. Nothing here overwrites or removes prior dossier content. Aliases in pronoun_map and aliases sections should be merged (additions take precedence only for keys not already present).",
+  "people_append": [
+    {
+      "name": "Dr. Roshan Vora",
+      "role": "Family physician (Cambie Medical Clinic)",
+      "email": "reception@cambiemedical.ca",
+      "pronouns": "he/him",
+      "aliases": ["Dr. Vora", "the family doc", "Roshan", "my GP"],
+      "last_mentioned": 1779840000.0,
+      "tags": ["personal", "healthcare", "vancouver", "primary_care"],
+      "communication_pattern": "Books through Pomelo Health portal. Annual physical every May, Casey last went 2025-05-12 and is overdue. Mid-cycle blood panel results land in MyChart inbox. Reception answers email same-day Mon to Thu, never Friday."
+    },
+    {
+      "name": "Anya Volkov",
+      "role": "Physiotherapist (West End Movement)",
+      "email": "anya@westendmove.ca",
+      "pronouns": "she/her",
+      "aliases": ["Anya", "the PT", "the physio"],
+      "last_mentioned": 1779820000.0,
+      "tags": ["personal", "healthcare", "rehab"],
+      "communication_pattern": "Treats Casey's lower-back flare-ups, prescribed two strength sessions per week. Books through Jane App. Cancellation policy 24 hours or full charge. Texts before appointments."
+    },
+    {
+      "name": "Lily Lin",
+      "role": "Mother",
+      "email": "lily.lin1958@gmail.com",
+      "pronouns": "she/her",
+      "aliases": ["Mom", "Mama", "my mother", "Lily"],
+      "last_mentioned": 1779900000.0,
+      "tags": ["personal", "family", "parents"],
+      "communication_pattern": "Uses iMessage and the occasional Facebook Messenger. Hates voice memos. Calls Sunday afternoons. Lives in Coquitlam with Ben (Casey's dad). Health note: Mom is recovering from cataract surgery and cannot drive after dusk."
+    },
+    {
+      "name": "Ben Lin",
+      "role": "Father",
+      "email": "blin1956@telus.net",
+      "pronouns": "he/him",
+      "aliases": ["Dad", "Pop", "my father", "Ben"],
+      "last_mentioned": 1779895000.0,
+      "tags": ["personal", "family", "parents"],
+      "communication_pattern": "Email only, signs every reply 'Dad'. Avid reader, especially history and aviation. Birthday June 14. Lives in Coquitlam, parents share an address."
+    },
+    {
+      "name": "Eli Lin",
+      "role": "Younger brother",
+      "email": "eli.lin@hey.com",
+      "pronouns": "he/him",
+      "aliases": ["Eli", "my brother", "the kid brother", "little bro"],
+      "last_mentioned": 1779885000.0,
+      "tags": ["personal", "family", "sibling"],
+      "communication_pattern": "Lives in Toronto, three hours ahead. Texts a lot, mostly Friday and Saturday nights Eastern. Just got engaged. Casey is paying half of the rehearsal dinner."
+    },
+    {
+      "name": "Mateo Reyes-Lin",
+      "role": "Son, age 6",
+      "email": null,
+      "pronouns": "he/him",
+      "aliases": ["Mateo", "the kid", "our kid", "Teo", "my son"],
+      "last_mentioned": 1779905000.0,
+      "tags": ["personal", "family", "child"],
+      "communication_pattern": "First grade at Bayview Elementary. School pickup is 3:10pm, Tomas owns weekdays except Thursdays when Casey owns it. Severe peanut allergy, EpiPen required at school. Soccer Saturdays 9am at Connaught Park."
+    },
+    {
+      "name": "Sasha Mendez",
+      "role": "Accountant (Mendez and Co, year-end tax)",
+      "email": "sasha@mendezco.tax",
+      "pronouns": "she/her",
+      "aliases": ["Sasha", "the accountant", "tax Sasha"],
+      "last_mentioned": 1779800000.0,
+      "tags": ["external", "finance", "tax"],
+      "communication_pattern": "Email only, secure portal for documents. Files Casey's personal taxes plus Studio Zero corporate. Reminders go out April and October. Charges by the hour. Hates being chased before her own deadline."
+    },
+    {
+      "name": "Westside Renovations",
+      "role": "Contractor candidate, kitchen reno",
+      "email": "ops@westsidereno.ca",
+      "pronouns": "it/its",
+      "aliases": ["Westside", "the reno guys", "the contractor"],
+      "last_mentioned": 1779817200.0,
+      "tags": ["vendor", "home", "kitchen_reno"],
+      "communication_pattern": "Quotes by email, follow up by phone. First quote in at $42k all-in 2026-05-21. Tomas owns the relationship; Casey only weighs in on layout choices."
+    }
+  ],
+  "projects_append": [
+    {
+      "name": "Annual physical and blood panel",
+      "status": "overdue, last May 2025",
+      "blockers": "Need to book through Pomelo portal, prefer Wed midday so Casey can walk from the office.",
+      "last_touchpoint": "Reception emailed reminder 2026-05-12.",
+      "next_action": "Book annual physical, request standing-order labs the morning before so results are in by the visit.",
+      "stakeholders": ["Dr. Roshan Vora"]
+    },
+    {
+      "name": "Lower-back rehab",
+      "status": "active, twice-weekly sessions",
+      "blockers": "Casey skipped two PT sessions during the Acme push, Anya's strength program is behind.",
+      "last_touchpoint": "Last session 2026-05-20 at West End Movement.",
+      "next_action": "Rebook two sessions per week through end of June. Pair with home strength block 6am Tue Thu.",
+      "stakeholders": ["Anya Volkov"]
+    },
+    {
+      "name": "Q2 personal tax instalment",
+      "status": "due 2026-06-15",
+      "blockers": "Sasha needs the latest T4A and Studio Zero T2 draft before she can compute the instalment.",
+      "last_touchpoint": "Sasha emailed 2026-05-18 asking for missing T4A.",
+      "next_action": "Forward T4A to Sasha by Friday, expect instalment estimate within a week.",
+      "stakeholders": ["Sasha Mendez", "Devon Park"]
+    },
+    {
+      "name": "Eli's rehearsal dinner co-pay",
+      "status": "pending, Casey paying half",
+      "blockers": "Venue invoice not yet received from Eli's caterer.",
+      "last_touchpoint": "Eli texted 'about $1800 each, will forward invoice' 2026-05-24.",
+      "next_action": "When invoice lands, e-transfer Eli the half, log under personal not Studio Zero.",
+      "stakeholders": ["Eli Lin", "Tomas Reyes"]
+    },
+    {
+      "name": "Mateo's first-grade IEP review",
+      "status": "scheduled 2026-06-04 at Bayview Elementary",
+      "blockers": "Need to refresh EpiPen prescription, current expires 2026-07-01. Need pickup-handoff plan for Thursday so Casey can attend in-person.",
+      "last_touchpoint": "School counselor sent agenda 2026-05-22.",
+      "next_action": "Refill EpiPen via Dr. Vora. Confirm Tomas covers Thursday pickup that week.",
+      "stakeholders": ["Tomas Reyes", "Dr. Roshan Vora"]
+    }
+  ],
+  "recurring_patterns_append": [
+    {
+      "name": "Monthly Stripe and Telus and BC Hydro auto-debits",
+      "trigger": "Around the 4th, 10th, and 17th of each month respectively",
+      "behavior": "Stripe pulls platform fee on the 4th, Telus mobile on the 10th, BC Hydro on the 17th. Casey reconciles in Notion ledger on the 18th. If any pull is over twenty percent above the trailing-six-month average, Anticipy should flag, not auto-categorize.",
+      "evidence_seen": "Every month since the Studio Zero entity opened the RBC business account, January 2024."
+    },
+    {
+      "name": "Saturday soccer at Connaught Park",
+      "trigger": "Every Saturday 9am unless rained out",
+      "behavior": "Casey takes Mateo to Connaught Park soccer (Field 3). She and Tomas alternate Saturdays. On Casey's weeks she does not book anything before 11am.",
+      "evidence_seen": "Since spring season started 2026-04-04."
+    },
+    {
+      "name": "Thursday school pickup",
+      "trigger": "Thursdays 3:10pm at Bayview Elementary",
+      "behavior": "Casey owns Thursday pickup. Office calendar blocks 2:45 to 3:45pm. Any meeting request that lands in that window auto-declines with a polite note proposing morning or Friday.",
+      "evidence_seen": "Standing block since September 2025."
+    }
+  ],
+  "aliases_append": {
+    "the family doc": "Dr. Roshan Vora",
+    "my GP": "Dr. Roshan Vora",
+    "the PT": "Anya Volkov",
+    "the physio": "Anya Volkov",
+    "Mom": "Lily Lin",
+    "Mama": "Lily Lin",
+    "my mother": "Lily Lin",
+    "Dad": "Ben Lin",
+    "Pop": "Ben Lin",
+    "my father": "Ben Lin",
+    "Eli": "Eli Lin",
+    "my brother": "Eli Lin",
+    "the kid": "Mateo Reyes-Lin",
+    "Teo": "Mateo Reyes-Lin",
+    "the kid brother": "Eli Lin",
+    "the accountant": "Sasha Mendez",
+    "tax Sasha": "Sasha Mendez",
+    "the reno guys": "Westside Renovations",
+    "the contractor": "Westside Renovations"
+  },
+  "places_append": [
+    {
+      "name": "Cambie Medical Clinic",
+      "address": "688 Cambie St, Vancouver BC",
+      "context": "Dr. Roshan Vora's clinic. Walk-in policy Mon to Thu mornings. Casey prefers booked appointments mid-week midday."
+    },
+    {
+      "name": "West End Movement",
+      "address": "1230 Robson St #305, Vancouver BC",
+      "context": "Anya Volkov's PT studio. Twice-weekly strength program for Casey. Jane App booking, 24-hour cancellation policy."
+    },
+    {
+      "name": "Bayview Elementary",
+      "address": "2251 Collingwood St, Vancouver BC",
+      "context": "Mateo's school. Pickup 3:10pm. Thursday pickup is Casey's. EpiPen on file."
+    },
+    {
+      "name": "Connaught Park Field 3",
+      "address": "2900 W 10th Ave, Vancouver BC",
+      "context": "Saturday soccer 9am. Casey and Tomas alternate weeks. Mateo plays U7."
+    },
+    {
+      "name": "Coquitlam parents address",
+      "address": "Austin Heights, Coquitlam BC",
+      "context": "Ben and Lily Lin's home. Where Dad's birthday gifts ship. Casey visits roughly once every six weeks."
+    }
+  ],
+  "constraints_append": [
+    {
+      "id": "constraint_mateo_peanut_allergy_epipen",
+      "note": "Mateo has severe peanut allergy. Any food-related plan involving him must avoid peanuts and confirm venue allergy policy. EpiPen must be in his school bag and on the family fridge."
+    },
+    {
+      "id": "constraint_thursday_pickup_block",
+      "note": "Thursdays 2:45 to 3:45pm Pacific is Mateo pickup. No meetings booked, auto-decline anything that lands in the window with a morning or Friday counter."
+    },
+    {
+      "id": "constraint_mom_no_driving_after_dusk",
+      "note": "Lily Lin recovering from cataract surgery, cannot drive after dusk. Family plans involving her must end while she can still get home before sunset."
+    },
+    {
+      "id": "constraint_dad_birthday_june_14",
+      "note": "Ben Lin's birthday June 14. Gift defaults to a book (history or aviation). Order hardback, ship to Coquitlam parents address. No card from Anticipy; Mom handles cards."
+    },
+    {
+      "id": "constraint_no_finance_action_without_review",
+      "note": "Anticipy never moves money, never approves a transfer, never replies inside RBC banking. Drafts and flags allowed. Final action is always Casey or Tomas in-person."
+    }
+  ],
+  "facts_append": [
+    {"id": "fact_casey_overdue_annual_physical", "value": "Last annual physical 2025-05-12 with Dr. Vora. Overdue."},
+    {"id": "fact_casey_lower_back_flareups", "value": "Casey has chronic lower-back issues, sees Anya Volkov for PT, twice weekly when adherent."},
+    {"id": "fact_stripe_platform_fee_due_4th", "value": "Stripe platform fee auto-debits on the 4th of each month."},
+    {"id": "fact_telus_mobile_due_10th", "value": "Telus mobile bill auto-debits on the 10th of each month."},
+    {"id": "fact_bc_hydro_due_17th", "value": "BC Hydro bill auto-debits on the 17th of each month."},
+    {"id": "fact_t4a_owed_to_sasha", "value": "Sasha asked for the 2025 T4A by Friday 2026-05-29 for Q2 instalment."},
+    {"id": "fact_eli_engagement_rehearsal_split", "value": "Eli engaged, rehearsal dinner cost about 1800 each, Casey paying half."},
+    {"id": "fact_dad_book_apollo", "value": "Dad mentioned wanting the new Apollo program book released roughly a month ago. Hardback preferred."},
+    {"id": "fact_mom_recovering_cataract_surgery", "value": "Mom had cataract surgery April 2026, no night driving."},
+    {"id": "fact_mateo_iep_june_4", "value": "Mateo's first-grade IEP review at Bayview Elementary June 4."}
+  ]
+}

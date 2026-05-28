@@ -1,0 +1,8 @@
+[06:08:13] run dir: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/saucedemo_20260527T060812Z
+[06:08:28] saucedemo CDP tab=A23D7583491C7D13BA5EEC1038A85B18 url=https://www.saucedemo.com/
+[06:08:29] PASS step 1 navigate_login :: url=https://www.saucedemo.com/ via BRIDGE /surface-command navigate
+[06:08:32] PASS step 2 type_username :: CDP fill #user-name (bridge type unsupported)
+[06:08:36] PASS step 3 type_password :: CDP fill #password
+[06:08:43] PASS step 4 click_login :: url=https://www.saucedemo.com/inventory.html
+[06:08:46] PASS step 4 verify_inventory :: title=Swag Labs url contains /inventory.html
+[06:08:54] FAIL step 5 add_to_cart :: expected badge=1 got ''

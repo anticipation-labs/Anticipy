@@ -1,0 +1,7 @@
+{
+  "name": "type_phone",
+  "ok": true,
+  "detail": "phone=5551234567 via CDP",
+  "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/integration_runs/demoqa_20260527T144339Z/step-07-type_phone.png",
+  "receipt": "{\"value\": \"5551234567\", \"type\": \"string\", \"exception\": null}"
+}

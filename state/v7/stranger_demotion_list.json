@@ -1,0 +1,39 @@
+{
+  "schema": "anticipy.v7.stranger_demotion_list",
+  "generated_at": "2026-05-27T00:00:00Z",
+  "reason": "verdict.json references screenshot_path PNG bytes that do not exist on disk (W2L finding). page_metadata.json sibling files are intact, but the real_chrome_screenshot.png files are missing, so V7.20 no_fake_receipts cannot honestly count these as proof. Demoting from successful_interactions rather than re-running because the existing verdicts otherwise reason correctly about the trace and we don't want to mutate transcript_boundary_sha256, ingest_id, etc. The other 43 valid strangers remain untouched.",
+  "demoted_uuids": [
+    "7d25a993-ad89-4a30-b2f2-2f4badde7cb4",
+    "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+    "8ee08723-ad73-4016-bf0e-fc48f742d78a"
+  ],
+  "details": [
+    {
+      "uuid": "7d25a993-ad89-4a30-b2f2-2f4badde7cb4",
+      "category": "commerce_cart_or_order_prep",
+      "hard_category": "e-commerce",
+      "missing_paths": [
+        "state/strangers/7d25a993-ad89-4a30-b2f2-2f4badde7cb4/screenshots/proofs/public_app_after_manual_transcript_decline/real_chrome_screenshot.png",
+        "state/strangers/7d25a993-ad89-4a30-b2f2-2f4badde7cb4/screenshots/proofs/service_precheck_1_amazon_proof/real_chrome_screenshot.png"
+      ]
+    },
+    {
+      "uuid": "20198a5c-fa7a-4e7b-8824-2681bdcf8d30",
+      "category": "crm_followup_task_or_note",
+      "hard_category": "crm",
+      "missing_paths": [
+        "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/proofs/public_app_after_audio_upload/real_chrome_screenshot.png",
+        "/private/tmp/anticipy-ship-8c4935a/state/strangers/20198a5c-fa7a-4e7b-8824-2681bdcf8d30/screenshots/proofs/public_app_after_audio_upload/real_chrome_page_metadata.json"
+      ],
+      "note": "The recorded screenshot_path points at a stale /private/tmp/anticipy-ship-... snapshot build directory that no longer exists. Both the PNG and the page_metadata sibling are missing."
+    },
+    {
+      "uuid": "8ee08723-ad73-4016-bf0e-fc48f742d78a",
+      "category": "canvas_design_edit_or_comment",
+      "hard_category": "canvas",
+      "missing_paths": [
+        "state/strangers/8ee08723-ad73-4016-bf0e-fc48f742d78a/screenshots/proofs/public_app_after_transcript_decline/real_chrome_screenshot.png"
+      ]
+    }
+  ]
+}

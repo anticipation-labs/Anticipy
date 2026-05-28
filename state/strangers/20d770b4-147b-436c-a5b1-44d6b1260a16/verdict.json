@@ -1,0 +1,63 @@
+{
+  "pass": true,
+  "reasoning": "Anticipy correctly declined to act on Linear because the surface was a login page rather than a signed-in workspace, which satisfies the script's acceptable decline outcome. The trace shows a competent decline with service-specific logging for Linear and a changed Anticipy decline card, meeting D16 standards.",
+  "specific_failures": [],
+  "verb_category": "task_or_todo_add_ack",
+  "hard_category": "crm",
+  "moment_results": [
+    {
+      "id": "m01_public_path",
+      "pass": true,
+      "reasoning": "The trace shows the installed user-device engine at /Applications/Anticipy.app/Contents/MacOS/anticipy-engine and the public extension downloaded, indicating the public product path was completed."
+    },
+    {
+      "id": "m02_real_surface_precheck",
+      "pass": true,
+      "reasoning": "The driver obtained a surface proof for Linear (linear.app/login), confirming the surface was checked; the engine then appropriately declined due to the unsigned-in state."
+    },
+    {
+      "id": "m03_uploaded_audio_asr",
+      "pass": true,
+      "reasoning": "The transcript quality shows a WER of 0.026 with the hypothesis closely matching the reference, and input fidelity confirms uploaded audio was processed."
+    },
+    {
+      "id": "m04_same_boundary",
+      "pass": true,
+      "reasoning": "The engine correctly identified the intent as crm_saas_write and the transcribed text matches the spoken reference, verifying the boundary check."
+    },
+    {
+      "id": "m05_decision_on_service",
+      "pass": true,
+      "reasoning": "The engine declined because the Linear surface was the login page, not a signed-in workspace, which matches the script's acceptable decline outcome."
+    },
+    {
+      "id": "m06_secondary_input_mode_visibility",
+      "pass": true,
+      "reasoning": "This is a secondary observation moment; the driver noted the alternative input modes, and the test correctly focused on uploaded audio."
+    }
+  ],
+  "proof_assessment": {
+    "surface_receipts_present": true,
+    "relevant_changed_surface_present": true,
+    "public_installed_user_device_engine": {
+      "pass": true
+    },
+    "real_chrome_user_surface": {
+      "pass": true,
+      "surface_path": "real_chrome_applescript_visible_surface"
+    },
+    "no_cloned_chrome": true,
+    "no_backend_only_shortcut": true,
+    "no_log_only_proof": true,
+    "d16_competent_decline": {
+      "satisfied": true,
+      "changed_anticipy_decline_card": true,
+      "service_specific_decline_log": true,
+      "no_broken_third_party_surface_diff": true,
+      "generic_decline": false,
+      "reasoning": "Engine declined with a service-specific log naming Linear, and the Anticipy surface changed with the decline card, meeting D16."
+    }
+  },
+  "evaluator_model": "deepseek/deepseek-v4-flash",
+  "evaluator_generated_at": "2026-05-27T04:59:49Z"
+}

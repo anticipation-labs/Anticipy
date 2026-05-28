@@ -1,0 +1,43 @@
+{
+  "schema": "anticipy.stranger_persona.v7",
+  "uuid": "1beade1d-0317-449c-8144-7dd8eb615e22",
+  "created_at": "2025-04-09T22:15:00Z",
+  "name": "James Mitchell",
+  "age": 34,
+  "occupation": "Travel blogger",
+  "location": "Portland, Oregon",
+  "tech_savviness": 7,
+  "patience_level": 5,
+  "default_skepticism_toward_new_ai_products": 6,
+  "hard_category": "e-commerce",
+  "hard_category_focus": "Etsy order page for travel accessories",
+  "primary_real_surface": {
+    "surface": "Etsy order page",
+    "chrome_requirement": true,
+    "acceptable_state": "signed-in with items in cart"
+  },
+  "daily_tools": [
+    "Chrome",
+    "Etsy app",
+    "Trello",
+    "Google Docs",
+    "Slack"
+  ],
+  "contacts": [
+    {
+      "name": "Emily Chen",
+      "relationship": "editor",
+      "context": "manages blog content"
+    },
+    {
+      "name": "Ryan O'Brien",
+      "relationship": "travel partner",
+      "context": "joint trip planning"
+    },
+    {
+      "name": "Lila Patel",
+      "relationship": "Etsy seller",
+      "context": "custom order inquiries"
+    }
+  ]
+}
