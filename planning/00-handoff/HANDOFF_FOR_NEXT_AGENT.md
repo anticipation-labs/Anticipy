@@ -1,5 +1,7 @@
 # Handoff for next agent
 
+> **FIRST READ: HANDOFF_COMPLETE.md** in this same folder. It has every micro-detail (components, files, gates, env vars, agents, gaps, commits, memory entries). This file (HANDOFF_FOR_NEXT_AGENT.md) is the architectural rules only.
+
 You are picking up Anticipy planning from a prior planner. Read this first. The prior planner made specific architectural mistakes that you must not repeat.
 
 ## What Anticipy IS
