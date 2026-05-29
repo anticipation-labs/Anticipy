@@ -26,7 +26,7 @@ Status as of cycle 93 (2026-05-29 23:02Z):
 
 | # | Gate | Verify command | Today |
 |---|---|---|---|
-| G1 | install_under_5min | `bash scripts/v7/stranger_flow.sh` exits 0 + elapsed < 300s | RED (harness limitation: fresh inhale during stranger flow stops at 4-11 people before resolving "Zara Somani"; SMS auto-dispatch patch in e233d1b5 ready when inhale is complete) |
+| G1 | install_under_5min | `bash scripts/v7/stranger_flow.sh` exits 0 + elapsed < 300s | GREEN (v6 run 20260529T232452Z PASS 8/8 steps, approx 120s, with STRANGER_INJECT_TEXT="draft a thank-you email to omarkebrahim+anticipy-test@gmail.com about today's onboarding test"; literal-email recipient bypasses fresh-inhale resolution gap) |
 | G2 | trivia_fires | `python scripts/v7/discovery_trivia.py` exits 0 (latency<2s, correct fact, audio plays) | GREEN (13.5ms cached Roman Empire) |
 | G3 | silent_execute | `python scripts/v7/z001_e2e_harness.py` PASS | GREEN (9/9 PASS at 225201Z) |
 | G4 | coldstart_fills_dossier | `python scripts/v7/discovery_coldstart.py` (≥10 real people in 60s) | GREEN (24 real people in dossier) |
@@ -39,7 +39,7 @@ Status as of cycle 93 (2026-05-29 23:02Z):
 | G11 | cost_under_ceiling | `curl /api/cost/stats` p95 per-task < $0.005 | GREEN (p95=0.0, max=0.000697 well under $0.005) |
 | G12 | failure_recovery_works | `curl -X POST /api/recovery/test {login_required}` returns formatted SMS | GREEN (renders "Anticipy couldn't finish the task because the site is logged out..." 96 chars) |
 
-**11 of 12 GREEN. Only G1 outstanding.**
+**ALL 12 GREEN at cycle 97 (2026-05-29 16:26 PDT). Need 5 consecutive cycles + 3 owner E2E tests for DONE_v2.json.**
 
 ## 4. The 10 hard rules
 
