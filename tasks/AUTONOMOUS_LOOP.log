@@ -60,3 +60,6 @@ Holding the edit until CHECK 16 in-flight run completes to avoid disturbing it. 
 
 == 2026-05-29 00:13 PDT cycle ==
 Harness 17:51 on CHECK 16. Within historical 14-25 min window. Pronoun fastpath (commit e8b29686) shipped but not active in running engine. Will swap into installed app right after this CHECK 16 run completes. Vercel = 7afa96588b at this read; e8b29686 still deploying.
+
+== 2026-05-29 00:16 PDT cycle ==
+Harness 20:49 on CHECK 16. agent_reliability still running. Engine alive. Past the historical 14-15 min median but within 25 min ceiling. Either scenarios are running slower today (more clarify-reflex hedging) or stuck on one.
