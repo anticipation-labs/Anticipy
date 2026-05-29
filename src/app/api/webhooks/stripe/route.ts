@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { sendPreorderConfirmation } from "@/lib/email";
+import {
+  sendPreorderConfirmation,
+  sendOwnerPreorderNotification,
+} from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -122,6 +125,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     });
   } catch (err) {
     console.error("Pre-order confirmation email failed:", err);
+  }
+
+  try {
+    await sendOwnerPreorderNotification(email.toLowerCase(), {
+      name: row.name,
+      amount: row.amount_total,
+      currency: row.currency,
+      sessionId: session.id,
+      paymentIntent: row.stripe_payment_intent_id,
+      shippingCity: row.shipping_address_city,
+      shippingState: row.shipping_address_state,
+      shippingCountry: row.shipping_address_country,
+    });
+  } catch (err) {
+    console.error("Pre-order owner notification failed:", err);
   }
 }
 

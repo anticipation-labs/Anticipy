@@ -141,10 +141,10 @@ export default function PrivacyPolicy() {
                   <strong className="text-[var(--text-on-dark)]">
                     Rights you can exercise right now by emailing{" "}
                     <a
-                      href="mailto:privacy@anticipy.ai"
+                      href="mailto:hello@anticipy.ai"
                       className="text-gold hover:underline"
                     >
-                      privacy@anticipy.ai
+                      hello@anticipy.ai
                     </a>
                     :
                   </strong>
@@ -1380,10 +1380,10 @@ export default function PrivacyPolicy() {
               <p className="mt-4">
                 To exercise your CCPA/CPRA rights, contact us at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 . We will verify your identity before processing your request
                 and respond within 45 days, with the option to extend by an
@@ -1461,10 +1461,10 @@ export default function PrivacyPolicy() {
                 Residents of these states may exercise their rights by contacting
                 us at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 . If we deny your request, you may appeal the decision by
                 contacting us at the same address with the subject line
@@ -1556,10 +1556,10 @@ export default function PrivacyPolicy() {
               <p className="mt-4">
                 To exercise your rights, contact our privacy team at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 . We will respond within 30 days. You also have the right to
                 lodge a complaint with a supervisory authority in the EU member
@@ -1586,10 +1586,10 @@ export default function PrivacyPolicy() {
                 (DPO) under Art. 37 of the GDPR, we have designated a privacy
                 lead who can be reached at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 for all data protection inquiries from EU and EEA data subjects.
               </p>
@@ -1704,10 +1704,10 @@ export default function PrivacyPolicy() {
               <p className="mt-4">
                 To exercise your rights under the PDPL, contact us at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 . You also have the right to submit complaints to SDAIA.
               </p>
@@ -1787,10 +1787,10 @@ export default function PrivacyPolicy() {
               <p className="mt-4">
                 Contact us at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 to exercise your rights. You may also lodge complaints with the
                 UAE Data Office.
@@ -1828,10 +1828,10 @@ export default function PrivacyPolicy() {
                 also request that we cease providing your personal data to third
                 parties. To exercise your rights, contact us at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 . You may also file complaints with the Personal Information
                 Protection Commission (PPC) of Japan.
@@ -1848,10 +1848,10 @@ export default function PrivacyPolicy() {
                 information. We will respond to requests within 10 days as
                 required by PIPA. You may contact us at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 or file complaints with the Personal Information Protection
                 Commission (PIPC).
@@ -1930,10 +1930,10 @@ export default function PrivacyPolicy() {
               <p className="mt-4">
                 You may exercise your rights by contacting us at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 . You may also file complaints with the Data Protection Board of
                 India, once established and operational.
@@ -2237,10 +2237,10 @@ export default function PrivacyPolicy() {
                 believe that we have collected personal information from a minor,
                 please contact us immediately at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 .
               </p>
@@ -2264,10 +2264,10 @@ export default function PrivacyPolicy() {
                 All jurisdictions: You may request access to the personal
                 information we hold about you. Contact{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 .
               </p>
@@ -2441,10 +2441,10 @@ export default function PrivacyPolicy() {
                     Privacy Inquiries:
                   </strong>{" "}
                   <a
-                    href="mailto:privacy@anticipy.ai"
+                    href="mailto:hello@anticipy.ai"
                     className="text-gold hover:underline"
                   >
-                    privacy@anticipy.ai
+                    hello@anticipy.ai
                   </a>
                 </li>
                 <li>
@@ -2470,10 +2470,10 @@ export default function PrivacyPolicy() {
                 For GDPR, UK GDPR, and ePrivacy Directive inquiries, our
                 designated privacy lead can be reached at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 .
               </p>
@@ -2481,10 +2481,10 @@ export default function PrivacyPolicy() {
                 For DPDP Act (India) inquiries, our designated Grievance Officer
                 can be reached at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 .
               </p>
@@ -2492,10 +2492,10 @@ export default function PrivacyPolicy() {
                 For PIPL (China) inquiries, our designated personal information
                 protection responsible person can be reached at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 .
               </p>
@@ -2503,10 +2503,10 @@ export default function PrivacyPolicy() {
                 For PIPA (South Korea) inquiries, our designated personal
                 information protection officer can be reached at{" "}
                 <a
-                  href="mailto:privacy@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  privacy@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 .
               </p>

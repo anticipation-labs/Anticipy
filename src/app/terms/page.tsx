@@ -609,7 +609,7 @@ export default function TermsOfService() {
               </h3>
               <p>
                 To make a warranty claim, contact us
-                at <a href="mailto:legal@anticipy.ai" className="text-gold hover:underline">legal@anticipy.ai</a> with
+                at <a href="mailto:hello@anticipy.ai" className="text-gold hover:underline">hello@anticipy.ai</a> with
                 your order number, a description of the defect, and photographic evidence if applicable.
                 We will provide instructions for returning the Hardware. You are responsible for
                 shipping costs to our service center; we will cover return shipping for valid
@@ -705,7 +705,7 @@ export default function TermsOfService() {
               <p>
                 You may stop using the Service at any time. You may cancel your subscription through
                 the mobile application or by contacting us
-                at <a href="mailto:legal@anticipy.ai" className="text-gold hover:underline">legal@anticipy.ai</a>.
+                at <a href="mailto:hello@anticipy.ai" className="text-gold hover:underline">hello@anticipy.ai</a>.
                 Cancellation of your subscription does not entitle you to a refund of any prepaid
                 fees unless required by applicable law.
               </p>
@@ -773,7 +773,7 @@ export default function TermsOfService() {
               </h3>
               <p>
                 Before initiating any formal dispute resolution proceeding, you agree to first contact
-                us at <a href="mailto:legal@anticipy.ai" className="text-gold hover:underline">legal@anticipy.ai</a> and
+                us at <a href="mailto:hello@anticipy.ai" className="text-gold hover:underline">hello@anticipy.ai</a> and
                 attempt to resolve the dispute informally for a period of at least sixty (60) days.
                 Most disputes can be resolved through good-faith discussion.
               </p>
@@ -859,7 +859,7 @@ export default function TermsOfService() {
                 delivery costs. You are responsible for the cost of returning the goods unless we
                 agree otherwise. To exercise your right of withdrawal, you must inform us of your
                 decision by a clear statement (e.g., by email
-                to <a href="mailto:legal@anticipy.ai" className="text-gold hover:underline">legal@anticipy.ai</a>)
+                to <a href="mailto:hello@anticipy.ai" className="text-gold hover:underline">hello@anticipy.ai</a>)
                 before the withdrawal period expires. Nothing in these Terms shall affect your
                 statutory rights under applicable EU consumer protection legislation, including
                 rights regarding non-conforming goods under Directive (EU) 2019/771.
@@ -1049,7 +1049,7 @@ export default function TermsOfService() {
                   <strong className="text-[var(--text-on-dark)]">Anticipation Labs Inc.</strong>
                 </li>
                 <li>
-                  Legal inquiries: <a href="mailto:legal@anticipy.ai" className="text-gold hover:underline">legal@anticipy.ai</a>
+                  Legal inquiries: <a href="mailto:hello@anticipy.ai" className="text-gold hover:underline">hello@anticipy.ai</a>
                 </li>
                 <li>
                   General inquiries: <a href="mailto:omar@anticipy.ai" className="text-gold hover:underline">omar@anticipy.ai</a>

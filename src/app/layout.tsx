@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { DM_Serif_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { LenisProvider } from "@/components/LenisProvider";
+import { PostHogProvider } from "@/components/PostHogProvider";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const dmSerif = DM_Serif_Display({
   subsets: ["latin"],
@@ -100,7 +103,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${dmSerif.variable} ${jakarta.variable}`}>
       <body className="font-sans antialiased">
+        <PostHogProvider />
         <LenisProvider>{children}</LenisProvider>
+        <Analytics />
+        <SpeedInsights />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

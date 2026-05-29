@@ -242,11 +242,11 @@ export default function PreOrderAgreementPage() {
               <p>
                 <Strong>How to request a refund.</Strong> Email{" "}
                 <a
-                  href="mailto:support@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="underline hover:text-[var(--gold)]"
                   style={{ color: "var(--text-on-dark)" }}
                 >
-                  support@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 with the email you used at checkout and the reason for the
                 request. We will respond within seven (7) business days. If
@@ -454,11 +454,11 @@ export default function PreOrderAgreementPage() {
                 <Strong>14.1 Informal resolution first.</Strong> Before you
                 file a claim against us, you agree to first email{" "}
                 <a
-                  href="mailto:legal@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="underline hover:text-[var(--gold)]"
                   style={{ color: "var(--text-on-dark)" }}
                 >
-                  legal@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 with a written description of the claim, the relief you seek,
                 and the email used at checkout. The parties will negotiate
@@ -510,11 +510,11 @@ export default function PreOrderAgreementPage() {
                 <Strong>14.5 Thirty-day right to opt out of arbitration.</Strong>{" "}
                 You may opt out of this Section 14 by emailing{" "}
                 <a
-                  href="mailto:legal@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="underline hover:text-[var(--gold)]"
                   style={{ color: "var(--text-on-dark)" }}
                 >
-                  legal@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 with the subject line &ldquo;Arbitration Opt-Out&rdquo;
                 within thirty (30) days of your pre-order being charged.
@@ -647,11 +647,11 @@ export default function PreOrderAgreementPage() {
               <p>
                 Notices to us must be sent to{" "}
                 <a
-                  href="mailto:legal@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="underline hover:text-[var(--gold)]"
                   style={{ color: "var(--text-on-dark)" }}
                 >
-                  legal@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 with a copy by registered mail to: Anticipation Labs Inc.,
                 West Vancouver, British Columbia, Canada. Notices to you may
@@ -693,20 +693,20 @@ export default function PreOrderAgreementPage() {
                 <br />
                 Customer support:{" "}
                 <a
-                  href="mailto:support@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="underline hover:text-[var(--gold)]"
                   style={{ color: "var(--text-on-dark)" }}
                 >
-                  support@anticipy.ai
+                  hello@anticipy.ai
                 </a>
                 <br />
                 Legal notices:{" "}
                 <a
-                  href="mailto:legal@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="underline hover:text-[var(--gold)]"
                   style={{ color: "var(--text-on-dark)" }}
                 >
-                  legal@anticipy.ai
+                  hello@anticipy.ai
                 </a>
               </p>
             </Section>

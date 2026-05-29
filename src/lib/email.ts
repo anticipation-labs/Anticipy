@@ -3,6 +3,7 @@ import { escapeHtml, sanitizeHeader } from "./escape";
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const FROM_EMAIL = "hello@anticipy.ai";
 const FROM_NAME = "Omar from Anticipy";
+const OWNER_EMAIL = process.env.OWNER_EMAIL || "hello@anticipy.ai";
 const CAL_LINK = "https://cal.com/omar-anticipy/anticipyfundraising30";
 
 async function getSgMail() {
@@ -153,6 +154,117 @@ export async function sendPreorderConfirmation(
   <p style="font-size: 13px; color: #8a8a8a;">
     Anticipation Labs Inc. · <a href="https://anticipy.ai" style="color: #C9A227;">anticipy.ai</a><br/>
     Pre-order terms: <a href="https://anticipy.ai/pre-orders/agreement" style="color: #C9A227;">anticipy.ai/pre-orders/agreement</a>
+  </p>
+</div>
+    `.trim(),
+  });
+}
+
+// ─── OWNER NOTIFICATION: waitlist signup ──────────────────────────
+// Fires every time someone joins the waitlist. High-priority headers.
+export async function sendOwnerWaitlistNotification(
+  email: string,
+  opts: { name?: string | null; source?: string; ip?: string | null; ua?: string | null; referrer?: string | null }
+) {
+  if (!SENDGRID_API_KEY) return;
+
+  const safeEmail = escapeHtml(email);
+  const safeName = escapeHtml(opts.name?.trim() || "(no name)");
+  const safeSource = escapeHtml(opts.source || "website");
+  const safeIp = escapeHtml(opts.ip || "unknown");
+  const safeUa = escapeHtml(opts.ua || "unknown");
+  const safeRef = escapeHtml(opts.referrer || "(direct)");
+
+  const sgMail = await getSgMail();
+  await sgMail.send({
+    to: OWNER_EMAIL,
+    from: { email: FROM_EMAIL, name: "Anticipy Waitlist" },
+    replyTo: email,
+    subject: `[Waitlist] ${opts.name?.trim() || email} joined`,
+    headers: {
+      "X-Priority": "1",
+      "X-MSMail-Priority": "High",
+      Importance: "High",
+    },
+    categories: ["waitlist-owner-notification"],
+    html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.6;">
+  <h2 style="margin: 0 0 8px 0;">New waitlist signup</h2>
+  <p style="color: #6b635b; margin: 0 0 24px 0;">${new Date().toUTCString()}</p>
+
+  <table style="font-size: 14px; border-collapse: collapse; width: 100%;">
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Name</td><td style="padding: 6px 0;">${safeName}</td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Email</td><td style="padding: 6px 0;"><a href="mailto:${safeEmail}" style="color: #C9A227;">${safeEmail}</a></td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Source</td><td style="padding: 6px 0;">${safeSource}</td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Referrer</td><td style="padding: 6px 0;">${safeRef}</td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">IP</td><td style="padding: 6px 0;">${safeIp}</td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">User agent</td><td style="padding: 6px 0; font-size: 12px; color: #6b635b;">${safeUa}</td></tr>
+  </table>
+
+  <p style="margin: 32px 0 8px 0; font-size: 13px; color: #6b635b;">Reply to this email to respond directly. The reply-to header is already set to the signup address.</p>
+</div>
+    `.trim(),
+  });
+}
+
+// ─── OWNER NOTIFICATION: pre-order paid ────────────────────────────
+// Fires when Stripe webhook reports a successful pre-order. High-priority.
+export async function sendOwnerPreorderNotification(
+  email: string,
+  opts: {
+    name?: string | null;
+    amount: number;
+    currency: string;
+    sessionId: string;
+    paymentIntent?: string | null;
+    shippingCity?: string | null;
+    shippingState?: string | null;
+    shippingCountry?: string | null;
+  }
+) {
+  if (!SENDGRID_API_KEY) return;
+
+  const safeEmail = escapeHtml(email);
+  const safeName = escapeHtml(opts.name?.trim() || "(no name)");
+  const amountDisplay = (opts.amount / 100).toFixed(2);
+  const currencyDisplay = (opts.currency || "usd").toUpperCase();
+  const safeSession = escapeHtml(opts.sessionId);
+  const safePI = escapeHtml(opts.paymentIntent || "");
+  const safeShip = escapeHtml(
+    [opts.shippingCity, opts.shippingState, opts.shippingCountry]
+      .filter(Boolean)
+      .join(", ") || "(no address yet)"
+  );
+
+  const sgMail = await getSgMail();
+  await sgMail.send({
+    to: OWNER_EMAIL,
+    from: { email: FROM_EMAIL, name: "Anticipy Pre-Order" },
+    replyTo: email,
+    subject: `[PRE-ORDER PAID] $${amountDisplay} from ${opts.name?.trim() || email}`,
+    headers: {
+      "X-Priority": "1",
+      "X-MSMail-Priority": "High",
+      Importance: "High",
+    },
+    categories: ["preorder-owner-notification"],
+    html: `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a; line-height: 1.6;">
+  <h2 style="margin: 0 0 8px 0;">Pre-order paid: $${amountDisplay} ${currencyDisplay}</h2>
+  <p style="color: #6b635b; margin: 0 0 24px 0;">${new Date().toUTCString()}</p>
+
+  <table style="font-size: 14px; border-collapse: collapse; width: 100%;">
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Name</td><td style="padding: 6px 0;">${safeName}</td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Email</td><td style="padding: 6px 0;"><a href="mailto:${safeEmail}" style="color: #C9A227;">${safeEmail}</a></td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Amount</td><td style="padding: 6px 0;"><strong>$${amountDisplay} ${currencyDisplay}</strong></td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Shipping</td><td style="padding: 6px 0;">${safeShip}</td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Session</td><td style="padding: 6px 0; font-family: monospace; font-size: 11px;">${safeSession}</td></tr>
+    <tr><td style="padding: 6px 12px 6px 0; color: #6b635b; vertical-align: top;">Payment Intent</td><td style="padding: 6px 0; font-family: monospace; font-size: 11px;">${safePI}</td></tr>
+  </table>
+
+  <p style="margin: 32px 0 8px 0; font-size: 13px; color: #6b635b;">
+    Stripe dashboard: <a href="https://dashboard.stripe.com/payments" style="color: #C9A227;">payments</a><br/>
+    Supabase row: query <code>anticipy_preorders</code> where <code>stripe_checkout_session_id = '${safeSession}'</code>
   </p>
 </div>
     `.trim(),

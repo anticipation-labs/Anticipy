@@ -103,10 +103,10 @@ export default function RefundPolicy() {
               <p className="mt-4">
                 To request consideration of a pre-order refund, email{" "}
                 <a
-                  href="mailto:support@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  support@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 with the email used at checkout and the reason for the request. We respond
                 within seven business days. If approved, refunds are issued through Stripe
@@ -145,10 +145,10 @@ export default function RefundPolicy() {
                 <li>
                   <strong className="text-[var(--text-on-dark)]">Initiate your return</strong> by emailing{" "}
                   <a
-                    href="mailto:support@anticipy.ai"
+                    href="mailto:hello@anticipy.ai"
                     className="text-gold hover:underline"
                   >
-                    support@anticipy.ai
+                    hello@anticipy.ai
                   </a>{" "}
                   with your order number and reason for return. No justification is required, we simply appreciate the feedback.
                 </li>
@@ -175,10 +175,10 @@ export default function RefundPolicy() {
               <p className="mt-4">
                 To report a defect, contact us at{" "}
                 <a
-                  href="mailto:support@anticipy.ai"
+                  href="mailto:hello@anticipy.ai"
                   className="text-gold hover:underline"
                 >
-                  support@anticipy.ai
+                  hello@anticipy.ai
                 </a>{" "}
                 with:
               </p>
@@ -361,10 +361,10 @@ export default function RefundPolicy() {
                 <li>
                   <strong className="text-[var(--text-on-dark)]">Customer Support:</strong>{" "}
                   <a
-                    href="mailto:support@anticipy.ai"
+                    href="mailto:hello@anticipy.ai"
                     className="text-gold hover:underline"
                   >
-                    support@anticipy.ai
+                    hello@anticipy.ai
                   </a>
                 </li>
                 <li>
