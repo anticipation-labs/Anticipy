@@ -93,3 +93,6 @@ Harness 11:20, CHECK 16 still in flight, ~5-7 more min.
 
 == 2026-05-29 01:01 PDT cycle ==
 Harness 14:26. CHECK 16 still running. Near the typical 15-17 min mark. Should land any cycle now.
+
+== 2026-05-29 01:04 PDT cycle ==
+Harness 17:22. CHECK 16 still mid-flight. Sometimes runs 20-25 min depending on engine latency per scenario.
