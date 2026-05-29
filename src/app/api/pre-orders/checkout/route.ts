@@ -78,10 +78,6 @@ export async function POST(request: NextRequest) {
             display_name: "Free shipping (US and Canada)",
             type: "fixed_amount",
             fixed_amount: { amount: 0, currency: "usd" },
-            delivery_estimate: {
-              minimum: { unit: "month", value: 3 },
-              maximum: { unit: "month", value: 5 },
-            },
           },
         },
       ],
