@@ -117,7 +117,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-CDP_PORT = _env_int("ANTICIPY_CDP_PORT", 0)
+CDP_PORT = _env_int("ANTICIPY_CDP_PORT", 9222)
 LEGACY_CLONE_CDP_ENABLED = (
     os.environ.get("ANTICIPY_ENABLE_LEGACY_CLONE_CDP", "").strip() == "1"
 )
