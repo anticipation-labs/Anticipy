@@ -51,3 +51,9 @@ After SUMMARY: if pass>=14 then commit manifest + CronDelete; if pass<14 then id
 
 == 2026-05-29 00:07 PDT cycle ==
 B GREEN: Vercel = HEAD f25e4212. CHECK 16 still running (11:50). Dispatched A9 agent to audit clarify-reflex in _COMPOSE_SYS + propose pronoun fastpath. Synthesis on next cycle.
+
+== 2026-05-29 00:08 PDT cycle ==
+A9 report landed at tasks/agent_reports/A9_clarify_reflex_audit.json.
+Key finding: R12 + R17 fail because triggers are pronoun-only ("She is waiting on those notes." / "I should send her the schedule"). The fastpath I shipped (commit 6e02d0a9) only handles explicit name tokens, so it returns None on pronoun triggers and the LLM falls into clarify/empty-mode.
+Proposed next edit (queued, not shipped yet): pronoun-aware fastpath that scans last 3 recent transcripts + cross-references dossier people's `pronouns` field. When the pronoun resolves to exactly one dossier person, build the act plan deterministically. Expected to lift ~8 more scenarios.
+Holding the edit until CHECK 16 in-flight run completes to avoid disturbing it. ETA ~5 min for CHECK 16, then implement and re-run.
