@@ -8173,6 +8173,91 @@ def api_coldstart_status() -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
+# Universal action loop
+# --------------------------------------------------------------------------
+#
+# planning/08-universal-action-agent/DESIGN.md: ONE orchestrator that drives
+# any web surface by reading the DOM accessibility tree plus a screenshot,
+# asking the vision model for the next concrete action, dispatching over
+# CDP against an Anticipy-owned background tab, observing, and repeating.
+# No per-app recipes, no hardcoded skill library, no regex verb whitelists.
+# Calendar, Salesforce, Slack, a law firm's bespoke matter portal all get
+# the same treatment. The route here is the public seam; the loop body is
+# in engine/app/universal/action_loop.py, which wraps the existing
+# DSv4SkillRunner (Ralph Loop) and the generic CDP dispatcher.
+
+
+class _UniversalRun(BaseModel):
+    intent: str
+    surface_hint: str | None = ""
+    deadline_sec: float | None = 60.0
+
+
+@app.post("/api/universal/run")
+def api_universal_run(p: _UniversalRun) -> JSONResponse:
+    """Run the universal action loop against any web surface.
+
+    Body:
+      {"intent": "make a calendar event for next Tuesday at 3pm titled
+                  Anticipy Demo",
+       "surface_hint": "https://calendar.google.com/calendar/u/0/r",
+       "deadline_sec": 60}
+
+    Returns:
+      {"ok": bool, "intent", "surface_hint", "status", "answer",
+       "evidence", "n_iterations", "subtasks", "trajectory_dir",
+       "error", "elapsed_sec", "deadline_sec", "deadline_hit"}
+
+    status is one of SUCCESS, ITERATION_EXHAUSTED, HARD_FAIL, ERROR,
+    DEADLINE_EXCEEDED. SUCCESS means the vision auditor confirmed the
+    intent on the real after-screenshot. The same loop drives Gmail
+    compose, Google Calendar event create, Slack message send, etc.;
+    there is no per-surface code path.
+    """
+    intent = (p.intent or "").strip()
+    if not intent:
+        return JSONResponse({
+            "ok": False,
+            "error": "missing intent",
+        }, status_code=400)
+    if not _ensure_cdp_chrome():
+        return JSONResponse({
+            "ok": False,
+            "gated": True,
+            "error": (
+                "No real Chrome on :9222 and the launchd agent could "
+                "not be kicked. The universal loop drives the user's "
+                "real Chrome over CDP; a running browser is the edge."
+            ),
+        }, status_code=503)
+    try:
+        from app.universal.action_loop import run_until_done
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "universal module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    try:
+        result = run_until_done(
+            intent=intent,
+            surface_hint=(p.surface_hint or "").strip(),
+            deadline_sec=float(p.deadline_sec or 60.0),
+            cdp_port=CDP_PORT,
+        )
+    except Exception as exc:
+        import traceback
+        return JSONResponse({
+            "ok": False,
+            "error": f"run_until_done threw: {type(exc).__name__}: {exc}",
+            "trace": traceback.format_exc()[-1200:],
+        }, status_code=500)
+    return JSONResponse({"ok": result.get("status") == "SUCCESS", **result})
+
+
+# --------------------------------------------------------------------------
 # Notifier delivery test surface
 # --------------------------------------------------------------------------
 #
