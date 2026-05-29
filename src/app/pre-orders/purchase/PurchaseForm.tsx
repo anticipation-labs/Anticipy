@@ -9,8 +9,9 @@ type FormState = "idle" | "loading" | "error";
 export function PurchaseForm({ canceled }: { canceled: boolean }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const [marketingOptIn, setMarketingOptIn] = useState(true);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [state, setState] = useState<FormState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [showCanceled, setShowCanceled] = useState(canceled);
@@ -33,6 +34,10 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
       setError("Enter a valid email address.");
       return;
     }
+    if (!ageConfirmed) {
+      setError("You must confirm that you are at least 18 years old.");
+      return;
+    }
     if (!agreed) {
       setError("Accept the Pre-Order Agreement to continue.");
       return;
@@ -46,6 +51,7 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
         body: JSON.stringify({
           email: trimmedEmail,
           name: name.trim(),
+          ageConfirmed: true,
           agreementAccepted: true,
           marketingOptIn,
         }),
@@ -128,6 +134,19 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
       <label className="flex items-start gap-3 mt-2 text-[14px] text-[var(--text-on-light-muted)] cursor-pointer">
         <input
           type="checkbox"
+          checked={ageConfirmed}
+          onChange={(e) => setAgeConfirmed(e.target.checked)}
+          className="mt-1 w-4 h-4 accent-[var(--text-on-light)]"
+        />
+        <span>
+          I confirm I am at least 18 years old and have the legal capacity to
+          enter a binding contract in my jurisdiction.
+        </span>
+      </label>
+
+      <label className="flex items-start gap-3 text-[14px] text-[var(--text-on-light-muted)] cursor-pointer">
+        <input
+          type="checkbox"
           checked={agreed}
           onChange={(e) => setAgreed(e.target.checked)}
           className="mt-1 w-4 h-4 accent-[var(--text-on-light)]"
@@ -160,7 +179,11 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
           >
             Privacy Policy
           </a>
-          . I understand the estimated ship date is August 2026 and that pre-order refunds are at Anticipation Labs Inc&apos;s sole discretion except where required by applicable law.
+          . I understand the estimated ship date is August 2026, that
+          refunds are at Anticipation Labs Inc&apos;s sole discretion except
+          where required by applicable law, and that the Pre-Order Agreement
+          contains a binding arbitration clause and class action waiver in
+          Section 14 that affect my legal rights (with a 30-day opt-out).
         </span>
       </label>
 
@@ -172,8 +195,8 @@ export function PurchaseForm({ canceled }: { canceled: boolean }) {
           className="mt-1 w-4 h-4 accent-[var(--text-on-light)]"
         />
         <span>
-          Send me product updates and shipping notifications. (You can opt out
-          at any time.)
+          (Optional) Send me product updates and shipping notifications. You
+          can unsubscribe at any time using the link in every email.
         </span>
       </label>
 

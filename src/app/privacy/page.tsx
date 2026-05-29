@@ -112,6 +112,143 @@ export default function PrivacyPolicy() {
               </p>
             </section>
 
+            {/* ───────────────────────────────────────────── 1.5 */}
+            <section>
+              <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">
+                1.5 Your privacy rights at a glance
+              </h2>
+              <div
+                className="px-5 py-4 rounded-card"
+                style={{
+                  background: "var(--dark-elevated)",
+                  border: "1px solid var(--dark-border)",
+                }}
+              >
+                <p>
+                  <strong className="text-[var(--text-on-dark)]">
+                    We do not sell personal information.
+                  </strong>{" "}
+                  We do not share personal information with third parties for
+                  cross-context behavioral advertising. We do not engage in
+                  the &ldquo;sale&rdquo; or &ldquo;sharing&rdquo; of personal
+                  information as those terms are defined in the California
+                  Consumer Privacy Act (Cal. Civ. Code &sect; 1798.140).
+                  Accordingly, no &ldquo;Do Not Sell or Share My Personal
+                  Information&rdquo; opt-out is required, but you may still
+                  exercise your privacy rights below.
+                </p>
+                <p className="mt-3">
+                  <strong className="text-[var(--text-on-dark)]">
+                    Rights you can exercise right now by emailing{" "}
+                    <a
+                      href="mailto:privacy@anticipy.ai"
+                      className="text-gold hover:underline"
+                    >
+                      privacy@anticipy.ai
+                    </a>
+                    :
+                  </strong>
+                </p>
+                <ul className="list-disc pl-6 mt-2 space-y-1">
+                  <li>
+                    <strong className="text-[var(--text-on-dark)]">
+                      Right to know
+                    </strong>{" "}
+                    what personal information we hold about you
+                  </li>
+                  <li>
+                    <strong className="text-[var(--text-on-dark)]">
+                      Right to delete
+                    </strong>{" "}
+                    your personal information (subject to legal retention
+                    requirements such as tax records)
+                  </li>
+                  <li>
+                    <strong className="text-[var(--text-on-dark)]">
+                      Right to correct
+                    </strong>{" "}
+                    inaccurate personal information
+                  </li>
+                  <li>
+                    <strong className="text-[var(--text-on-dark)]">
+                      Right to data portability
+                    </strong>{" "}
+                    in a structured, commonly used format
+                  </li>
+                  <li>
+                    <strong className="text-[var(--text-on-dark)]">
+                      Right to opt out of marketing email
+                    </strong>{" "}
+                    via the unsubscribe link in every commercial message we
+                    send
+                  </li>
+                  <li>
+                    <strong className="text-[var(--text-on-dark)]">
+                      Right to non-discrimination
+                    </strong>{" "}
+                    for exercising any of the above
+                  </li>
+                </ul>
+                <p className="mt-3">
+                  <strong className="text-[var(--text-on-dark)]">
+                    Response timelines.
+                  </strong>{" "}
+                  We acknowledge requests within ten (10) business days. We
+                  substantively respond within forty-five (45) calendar days
+                  (CCPA/CPRA), or within thirty (30) calendar days (GDPR/UK
+                  GDPR, Quebec Law 25, PIPEDA, BC PIPA). We may extend by
+                  forty-five (45) additional days for complex requests with
+                  written notice. We will not charge a fee for a first request
+                  in any twelve-month period.
+                </p>
+                <p className="mt-3">
+                  <strong className="text-[var(--text-on-dark)]">
+                    Authorized agents.
+                  </strong>{" "}
+                  You may designate an authorized agent to submit a request on
+                  your behalf. Provide written authorization and we will
+                  verify the agent&apos;s authority and your identity before
+                  responding.
+                </p>
+                <p className="mt-3">
+                  <strong className="text-[var(--text-on-dark)]">
+                    Data retention.
+                  </strong>{" "}
+                  We retain pre-order transaction records for up to six (6)
+                  years to comply with U.S. and Canadian tax-record-keeping
+                  laws. Waitlist email records are retained until you
+                  unsubscribe. Audio is never retained after intent
+                  extraction. Dossier and memory records persist while your
+                  account is active and are deleted within ninety (90) days
+                  of account closure.
+                </p>
+                <p className="mt-3">
+                  <strong className="text-[var(--text-on-dark)]">
+                    Appeals.
+                  </strong>{" "}
+                  If we deny your request, you may appeal by replying to our
+                  denial. You may also lodge a complaint with your
+                  supervisory authority, including the California Privacy
+                  Protection Agency, the Office of the Privacy Commissioner
+                  of Canada, the Commission d&apos;acc&egrave;s &agrave;
+                  l&apos;information du Qu&eacute;bec, the United Kingdom
+                  Information Commissioner&apos;s Office, your EU member
+                  state Data Protection Authority, or your country&apos;s
+                  equivalent regulator.
+                </p>
+                <p className="mt-3">
+                  <strong className="text-[var(--text-on-dark)]">
+                    Children.
+                  </strong>{" "}
+                  Anticipy is not directed to or intended for children under
+                  thirteen (13) years old, and we do not knowingly collect
+                  personal information from anyone under thirteen.
+                  Pre-orders require an affirmative confirmation that the
+                  customer is at least eighteen (18) years old.
+                </p>
+              </div>
+            </section>
+
             {/* ───────────────────────────────────────────── 2 */}
             <section>
               <h2 className="font-serif text-[22px] text-[var(--text-on-dark)] mb-4">

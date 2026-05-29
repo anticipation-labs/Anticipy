@@ -37,6 +37,6 @@ export const PREORDER_PRICE_ID =
 export const PREORDER_PRODUCT_ID =
   process.env.STRIPE_PREORDER_PRODUCT_ID ?? "prod_Ub9YYo4OVgXz2L";
 
-export const AGREEMENT_VERSION = "v1-2026-05-27";
+export const AGREEMENT_VERSION = "v2-2026-05-28";
 
 export const ALLOWED_SHIPPING_COUNTRIES: Array<"US" | "CA"> = ["US", "CA"];

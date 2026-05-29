@@ -17,11 +17,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
+    const ageConfirmed = body.ageConfirmed === true;
     const agreementAccepted = body.agreementAccepted === true;
-    const marketingOptIn = body.marketingOptIn !== false;
+    const marketingOptIn = body.marketingOptIn === true;
 
     if (!email || !EMAIL_REGEX.test(email)) {
       return NextResponse.json({ error: "Enter a valid email." }, { status: 400 });
+    }
+
+    if (!ageConfirmed) {
+      return NextResponse.json(
+        { error: "You must confirm that you are at least 18 years old." },
+        { status: 400 }
+      );
     }
 
     if (!agreementAccepted) {
@@ -99,6 +107,7 @@ export async function POST(request: NextRequest) {
         product_type: "preorder",
         agreement_version: AGREEMENT_VERSION,
         marketing_opt_in: marketingOptIn ? "true" : "false",
+        age_confirmed: "true",
         ip,
         customer_name: name || "",
       },
