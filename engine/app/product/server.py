@@ -6841,6 +6841,8 @@ def _compose_task_from_memory(instruction: str) -> dict:
     # fall through to the infra_fallback clarify.
     p = None
     res = platform_adapter.model_call(_COMPOSE_SYS, user, 600, 0.0, True)
+    budget_exceeded = (isinstance(res.error, str)
+                       and "BUDGET_EXCEEDED" in res.error)
     if res.ok and res.content:
         s = res.content
         a, b = s.find("{"), s.rfind("}")
@@ -6853,6 +6855,14 @@ def _compose_task_from_memory(instruction: str) -> dict:
             except Exception:
                 pass
     if p is None:
+        if budget_exceeded:
+            # Planner cannot proceed; budget gate fired in the adapter.
+            # Escalate to user instead of generating a vague clarify.
+            return {"mode": "clarify",
+                    "question": ("This task crossed the $0.005 per task "
+                                  "hard cap. Tell me how to proceed."),
+                    "person": "", "thing": "", "task": "",
+                    "_budget_exceeded": True}
         return {"mode": "clarify", "question": "Which one did you "
                 "mean?", "person": "", "thing": "", "task": "",
                 "_infra_fallback": True}
@@ -8821,10 +8831,10 @@ async def act(request: Request) -> JSONResponse:
     direct_draft = parse_draft_intent(instruction)
     if direct_draft is not None:
         if not _ensure_cdp_chrome():
-            return JSONResponse({
+            return _finalize_act_response(JSONResponse({
                 "ran": False, "gated": True,
                 "task": instruction, "intent": "email_draft",
-                "error": "No real Chrome on :9222"})
+                "error": "No real Chrome on :9222"}), status="gated")
         synthetic_plan = {
             "mode": "act",
             "intent": "email_draft",
@@ -8835,20 +8845,30 @@ async def act(request: Request) -> JSONResponse:
         }
         direct = _try_direct_gmail_draft(instruction, synthetic_plan)
         if direct is not None:
-            return _maybe_attach_receipt(direct, instruction)
+            return _finalize_act_response(
+                _maybe_attach_receipt(direct, instruction), status="ok")
     direct_browser = _try_direct_browser_action(instruction)
     if direct_browser is not None:
-        return _maybe_attach_receipt(direct_browser, instruction)
+        return _finalize_act_response(
+            _maybe_attach_receipt(direct_browser, instruction), status="ok")
     plan = pending.get("plan") if (not a.instruction and pending) else None
     if not isinstance(plan, dict):
         plan = _compose_task_from_memory(instruction)
     if plan.get("mode") != "act" or not plan.get("task"):
-        # genuinely ambiguous / absent referent -> ASK, never guess
-        return JSONResponse({
-            "ran": False, "clarify": True,
+        # genuinely ambiguous / absent referent -> ASK, never guess.
+        # If the planner short-circuited because we crossed the budget
+        # the response carries that explicitly so the popover can
+        # surface a real "escalate to user" card instead of a clarify.
+        budget_block = bool(plan.get("_budget_exceeded"))
+        return _finalize_act_response(JSONResponse({
+            "ran": False, "clarify": not budget_block,
+            "budget_exceeded": budget_block,
             "question": plan.get("question")
-            or "Which one did you mean?",
-            "resolved_person": "", "resolved_thing": ""})
+            or ("Task exceeded the $0.005 per task hard cap and was "
+                "paused. Tell me how to proceed."
+                if budget_block else "Which one did you mean?"),
+            "resolved_person": "", "resolved_thing": ""}),
+            status=("budget_exceeded" if budget_block else "clarify"))
 
     # US-017: irreversible intents pause the frozen engine until the
     # user clicks Approve in the popover Confirm card. The reversible
@@ -8858,7 +8878,17 @@ async def act(request: Request) -> JSONResponse:
     if intent in _load_irreversible_intents():
         task_id = _register_confirm(plan, instruction, intent)
         confirm = _confirm_payload(intent, plan, instruction)
-        return JSONResponse({
+        # Stash the cost telemetry task id so the confirm resume path
+        # can re-bind to the same accumulator (otherwise approve would
+        # start a fresh task counter and we would under-report cost).
+        try:
+            with _CONFIRMS_LOCK:
+                rec = _CONFIRMS.get(task_id)
+                if isinstance(rec, dict):
+                    rec["cost_task_id"] = cost_task_id
+        except Exception:
+            pass
+        return _finalize_act_response(JSONResponse({
             "ran": False,
             "confirm_required": True,
             "event": "confirm_required",
@@ -8873,7 +8903,7 @@ async def act(request: Request) -> JSONResponse:
                 "task_id": task_id,
                 "timeout_s": _CONFIRM_TIMEOUT_SECONDS,
                 "confirm": confirm}),
-        })
+        }), status="confirm_required")
 
     # SMS pre-confirm gate. Before any irreversible action fires
     # (Gmail click-Send, social post, payment, form submit), send
@@ -8904,20 +8934,23 @@ async def act(request: Request) -> JSONResponse:
                                         plan.get("thing", ""))
                 pending_resp.setdefault("task",
                                         str(plan.get("task") or ""))
-                return JSONResponse(pending_resp)
+                return _finalize_act_response(JSONResponse(pending_resp),
+                                              status="sms_pending_confirm")
         except Exception as exc:
             import traceback as _tb_gate_top
-            return JSONResponse(status_code=500, content={
+            return _finalize_act_response(JSONResponse(status_code=500, content={
                 "ran": False,
                 "error":
                 f"sms_pre_confirm gate failed: "
                 f"{type(exc).__name__}: {exc}",
                 "trace": _tb_gate_top.format_exc()[-1200:],
                 "task": str(plan.get("task") or ""),
-            })
+            }), status="error")
 
-    return _maybe_attach_receipt(
-        _run_action_engine(instruction, plan), instruction)
+    return _finalize_act_response(
+        _maybe_attach_receipt(
+            _run_action_engine(instruction, plan), instruction),
+        status="ok")
 
 
 # --------------------------------------------------------------------------
@@ -9108,7 +9141,58 @@ def act_confirm(task_id: str,
             "expired": expired,
         })
 
-    out = _run_action_engine(rec["instruction"], rec["plan"])
+    # Resume cost telemetry against the SAME task id that the
+    # /api/act response created so the approve path's vision / action
+    # LLM calls accrue against the original budget. Without this the
+    # confirm path would mint a brand new accumulator and the total
+    # task cost would be split across two records.
+    cost_task_id = str((rec.get("cost_task_id") if isinstance(rec, dict)
+                        else None) or "")
+    if _cost_telemetry is not None and cost_task_id:
+        try:
+            _cost_telemetry.start_task(cost_task_id)  # idempotent
+            _cost_telemetry.set_active_for_thread(cost_task_id)
+            from app.anticipy import platform_adapter as _pa_for_resume
+            _pa_for_resume.bind_active_task_id(cost_task_id)
+        except Exception:
+            cost_task_id = ""
+    try:
+        out = _run_action_engine(rec["instruction"], rec["plan"])
+    finally:
+        if _cost_telemetry is not None and cost_task_id:
+            try:
+                final_record = _cost_telemetry.current_task_record(cost_task_id)
+                running_cost = float(final_record.get("cost_usd", 0.0)) if final_record else 0.0
+                vision_calls = int(final_record.get("vision_call_count", 0)) if final_record else 0
+                call_count = int(final_record.get("call_count", 0)) if final_record else 0
+                try:
+                    existing_body = out.body or b"{}"
+                    existing_dict = json.loads(existing_body.decode("utf-8") or "{}")
+                    if isinstance(existing_dict, dict):
+                        existing_dict.setdefault("task_id", cost_task_id)
+                        existing_dict["cost_telemetry"] = {
+                            "task_id": cost_task_id,
+                            "cost_usd": round(running_cost, 6),
+                            "call_count": call_count,
+                            "vision_call_count": vision_calls,
+                            "per_task_ceiling_usd":
+                                _cost_telemetry.PER_TASK_CEILING_USD,
+                            "per_task_hard_cap_usd":
+                                _cost_telemetry.PER_TASK_HARD_CAP_USD,
+                        }
+                        out = JSONResponse(existing_dict, status_code=out.status_code)
+                except Exception:
+                    pass
+                _cost_telemetry.finish_task(cost_task_id, status="ok")
+            except Exception:
+                pass
+            finally:
+                try:
+                    _cost_telemetry.set_active_for_thread(None)
+                    from app.anticipy import platform_adapter as _pa_for_unbind2
+                    _pa_for_unbind2.bind_active_task_id(None)
+                except Exception:
+                    pass
     with _CONFIRMS_LOCK:
         _CONFIRMS.pop(task_id, None)
     return out
