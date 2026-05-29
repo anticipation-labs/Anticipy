@@ -135,3 +135,4 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 43 | 2026-05-29 ~13:07 PDT | cycle 43: G1 fix agent SHIPPED a1d7b096 with REAL root cause: planner wasn't reading active dossier + coldstart account_id was caller-controlled. All 6 verifies green: stranger_flow PASS, dress_rehearsal PASS, Z-001 PASS. Agent done = port race now deterministic toward packaged. Forcing packaged binary to verify G5 GREEN. |
 | 44 | 2026-05-29 ~13:10 PDT | cycle 44: monitoring. |
 | 45 | 2026-05-29 ~13:13 PDT | cycle 45: monitoring per owner directive "leave system as is, do not refactor pricing." Agents still in flight: aa4c462522 (SMS pre-confirm), a46d4baa73 (persistent task queue), a692daa0c1 (handoff ghost + notify receipt). |
+| 46 | 2026-05-29 ~13:16 PDT | cycle 46: monitoring. 3 agents in flight. Tasks 137-139 created tracking them. No destructive moves per owner directive. |
