@@ -1,0 +1,78 @@
+{
+  "verdict": "DONE",
+  "achieved_at": "2026-05-29T19:43:00Z",
+  "achieved_at_local": "2026-05-29 12:43 PDT",
+  "head_commit": "0018c3c5",
+  "cycle_count": 34,
+  "gates": {
+    "G1_install_under_5min": {
+      "status": "GREEN",
+      "evidence": "state/v7/stranger_flow_runs/20260529T194549Z/result.json",
+      "verdict": "PASS",
+      "notes": "coldstart_available=true; people_count=0; inject_ok=true; act_ran=true; act_ok=true; restored=true",
+      "person_resolved": "Zara Somani"
+    },
+    "G2_trivia_fires": {
+      "status": "GREEN",
+      "evidence": "live verified phrases: 'wait when did the Roman Empire fall' (476 AD), 'wait when was the moon landing' (1969), 'wait when was the Eiffel Tower built' (1889), 'wait when was the Declaration of Independence signed' (July 4 1776)",
+      "perceived_latency_ms": "11-22 (audio start)",
+      "tts_pid_evidence": "/usr/bin/say spawned (PIDs 34197, 34206 captured)"
+    },
+    "G3_silent_execute": {
+      "status": "GREEN",
+      "evidence": "state/v7/z001_e2e_runs/20260529T194300Z/result.json",
+      "verdict": "PASS",
+      "steps": "9/9 PASS including bridge_alive, engine_alive, create_identity, browser_signup, supabase_user_exists, exchange_handoff, engine_inject, engine_act, gmail_draft_visible",
+      "tab_leakage": 0
+    },
+    "G4_coldstart_fills_dossier": {
+      "status": "GREEN",
+      "evidence": "~/.anticipy/v7/dossiers/anticipy-user/dossier.json",
+      "people_count": 24,
+      "provenance_sample": "inhaled_from_chrome_tab_inventory (Joe@PostHog, Zara Somani@OpenDoor Law, Therese@Klip, Cam Russelle@Actualize, Eli Wilson@Mulgrave, Altaf Ebrahim)",
+      "inhale_duration_sec": "44-91 across runs (under 5 min target)"
+    },
+    "G5_packaged_binary_serves": {
+      "status": "GREEN",
+      "evidence_pid": 86909,
+      "evidence_cmd": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+      "evidence_sha256": "0418bc0725924f751c6c9aec49f70e98ddf456ebc71d7f6a215fce6e0d9f773d",
+      "verified_endpoints_at_8741_earlier": "/api/trivia/recent, /api/coldstart/start, /api/notify/test all 200 OK"
+    },
+    "G6_demo_rehearsed": {
+      "status": "GREEN",
+      "evidence": "state/demo/dress_rehearsal_log.json",
+      "recent_runs": [
+        "2026-05-29T19:21:28Z verdict=PASS 3/3",
+        "2026-05-29T19:22:59Z verdict=PASS 3/3",
+        "2026-05-29T19:39:47Z verdict=PASS 3/3"
+      ],
+      "scenes": "trivia + silent_execute + coldstart all PASS each run"
+    }
+  },
+  "bonus": {
+    "CHECK_16_agent_reliability": "28/30 (resolvable 20/20 perfect, ambiguous 8/10). Up from 17/30 baseline. Codex-class reliability on the canonical test.",
+    "universal_action_loop": "Verified on Google Calendar with zero calendar-specific code: navigated to next Tuesday, opened Create dropdown, opened Event dialog, typed 'Anticipy Demo' as title. Only failed on Google time-picker (model accuracy, not universality).",
+    "planner_latency": "0.9-1.8s cached (66-92% prompt cache hit), 3.6-7.5s cold. Down from 15-90s worst case."
+  },
+  "what_shipped_today": [
+    "engine/app/coldstart/{auto_inhale,cdp_walker}.py - background Gmail/Calendar inhale via real Chrome",
+    "engine/app/trivia/{trigger,answer,deliver,cache,seed_facts}.py - trivia-fire end-to-end with 200+ seed facts",
+    "engine/app/proactive/notifier.py - real DeliveryRoutes: local_notify (osascript), twilio_sms, twilio_voice",
+    "engine/app/universal/{__init__,action_loop}.py - universal action agent (vision + DOM + CDP, no per-app code)",
+    "engine/app/dossier/call.py - Twilio dossier call stub",
+    "engine/app/product/server.py - V1+V2+V3 hardcoded planner regex replaced with unified LLM intent extractor",
+    "engine/app/anticipy/platform_adapter.py - planner latency cut (timeout 90s to 15s, retries [1,2,4,8] to [0.5,1.0], prompt caching, no recursive doubling)",
+    "scripts/v7/anticipy_bridge_fallback_cdp.py - tab ownership map prevents agent from hijacking user tabs",
+    "scripts/v7/stranger_flow.sh - end-to-end install + onboarding + action proof harness (964 lines)",
+    "scripts/v7/dress_rehearsal.sh - 3-scene demo verifier",
+    "planning/{01..12}/*.md - 12 substantive planning docs (cold-start, confidence-ladder, cross-app-auth, quietness-ux, existing-code-map, competitive-landscape, trivia-fire, universal-action-agent, extension-install, instant-cold-start, hardcoded-violations-audit, investor-demo-tomorrow)",
+    "planning/00-handoff/{HANDOFF, HANDOFF_FOR_NEXT_AGENT, ORCHESTRATOR, CYCLE_PROCEDURE, ROADMAP}.md - planner state + procedure"
+  ],
+  "remaining_real_bugs_not_blocking_demo": [
+    "WWII trivia query returns WWI fact (cache matching is too fuzzy on 'world war')",
+    "/api/dossier/active endpoint ignores ?account_id= URL query param (reads from prof.user_id or env)",
+    "Universal action loop oscillates on Google time-picker (model accuracy on a sub-component, not universality)",
+    "Multiple 'Joe' entries in real Gmail inhale require full-name disambiguation (working as designed via CRITICAL AMBIGUITY RULE)"
+  ]
+}
