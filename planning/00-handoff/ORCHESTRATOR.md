@@ -132,3 +132,4 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 40 | 2026-05-29 ~12:59 PDT | cycle 40: SAFETY FIX REGRESSION CHECK CLEAN. Z-001 9/9 PASS at 20260529T200610Z after closing accumulated test tabs. Confirms dsv4_skill_runner DRAFT-ONLY prompt change does NOT break the gmail_compose draft path. Real-send safety guard is live + verified harmless. |
 | 41 | 2026-05-29 ~13:01 PDT | cycle 41: monitoring. DONE.json + safety fix hold. |
 | 42 | 2026-05-29 ~13:04 PDT | cycle 42: monitoring. |
+| 43 | 2026-05-29 ~13:07 PDT | cycle 43: G1 fix agent SHIPPED a1d7b096 with REAL root cause: planner wasn't reading active dossier + coldstart account_id was caller-controlled. All 6 verifies green: stranger_flow PASS, dress_rehearsal PASS, Z-001 PASS. Agent done = port race now deterministic toward packaged. Forcing packaged binary to verify G5 GREEN. |
