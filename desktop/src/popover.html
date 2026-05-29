@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=480, initial-scale=1.0" />
+    <title>Anticipy</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --charcoal: #0C0C0C;
+        --cream: #F5F0EB;
+        --gold: #C8A97E;
+        --warm-gray: #6B635B;
+        --card-bg: #161616;
+        --hairline: #232323;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        background: var(--charcoal);
+        color: var(--cream);
+        font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        width: 480px;
+        height: 600px;
+        overflow: hidden;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding: 16px 20px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        -webkit-app-region: drag;
+      }
+      .brand {
+        font-family: "DM Serif Display", Georgia, serif;
+        font-size: 20px;
+        color: var(--cream);
+        letter-spacing: 0.5px;
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--warm-gray);
+        -webkit-app-region: no-drag;
+      }
+      .dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--gold);
+      }
+      .dot.alive { background: #8BC34A; }
+      .dot.dead { background: #E57373; }
+
+      .body {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-app-region: no-drag;
+      }
+      .body::-webkit-scrollbar { width: 4px; }
+      .body::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 2px; }
+
+      /* Onboarding (empty dossier) view */
+      .welcome { padding: 8px 0; }
+      .welcome h1 {
+        font-family: "DM Serif Display", Georgia, serif;
+        font-size: 22px;
+        color: var(--cream);
+        margin-bottom: 8px;
+      }
+      .welcome p {
+        font-size: 13px;
+        color: var(--warm-gray);
+        margin-bottom: 20px;
+      }
+      .onboard-options {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .onboard-card {
+        background: var(--card-bg);
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+        padding: 14px 16px;
+        cursor: pointer;
+        transition: border-color 0.15s, transform 0.05s;
+      }
+      .onboard-card:hover {
+        border-color: var(--gold);
+      }
+      .onboard-card:active {
+        transform: scale(0.99);
+      }
+      .onboard-card .title {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--cream);
+        margin-bottom: 4px;
+      }
+      .onboard-card .sub {
+        font-size: 12px;
+        color: var(--warm-gray);
+      }
+
+      /* Populated dossier view: three columns Now / Next / Past */
+      .columns {
+        display: grid;
+        grid-template-rows: auto 1fr 1fr;
+        gap: 14px;
+        height: 100%;
+      }
+      .col {
+        background: var(--card-bg);
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+        padding: 12px 14px;
+      }
+      .col h2 {
+        font-size: 10px;
+        color: var(--warm-gray);
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        margin-bottom: 8px;
+        font-weight: 500;
+      }
+      .col-now .now-title {
+        font-family: "DM Serif Display", Georgia, serif;
+        font-size: 17px;
+        color: var(--cream);
+        line-height: 1.3;
+      }
+      .col-now .now-sub {
+        font-size: 12px;
+        color: var(--warm-gray);
+        margin-top: 4px;
+      }
+      .col-now .idle {
+        color: var(--warm-gray);
+        font-style: italic;
+        font-size: 13px;
+      }
+      .col-now .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .btn {
+        padding: 6px 12px;
+        font-size: 12px;
+        font-family: inherit;
+        background: var(--cream);
+        color: var(--charcoal);
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      .btn.ghost {
+        background: transparent;
+        color: var(--cream);
+        border: 1px solid var(--hairline);
+      }
+      .btn:hover { opacity: 0.9; }
+
+      .col ul { list-style: none; }
+      .col li {
+        padding: 6px 0;
+        border-bottom: 1px solid var(--hairline);
+        font-size: 12px;
+        color: var(--cream);
+      }
+      .col li:last-child { border-bottom: none; }
+      .col li .sub {
+        font-size: 11px;
+        color: var(--warm-gray);
+        margin-top: 2px;
+      }
+      .col .empty {
+        font-size: 12px;
+        color: var(--warm-gray);
+        font-style: italic;
+      }
+
+      .mic-card {
+        background: rgba(229, 115, 115, 0.08);
+        border: 1px solid rgba(229, 115, 115, 0.3);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+      }
+      .mic-card .title {
+        color: #E57373;
+        font-size: 12px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .mic-card .sub {
+        color: var(--warm-gray);
+        font-size: 11px;
+        margin-bottom: 8px;
+      }
+
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <span class="brand">Anticipy</span>
+        <span class="status-pill" id="status-pill">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">Connecting</span>
+        </span>
+      </header>
+
+      <div id="mic-card" class="mic-card hidden">
+        <div class="title">Microphone access needed</div>
+        <div class="sub">Anticipy listens to your day so it can act on the things you mention. macOS needs to approve this once.</div>
+        <button class="btn" id="mic-open-settings">Open System Settings</button>
+      </div>
+
+      <div class="body">
+
+        <!-- Welcome state: shown when dossier is empty -->
+        <section id="welcome" class="welcome hidden">
+          <h1>Welcome to Anticipy.</h1>
+          <p>Let's get to know you. Pick one. Takes about ten minutes.</p>
+          <div class="onboard-options">
+            <div class="onboard-card" data-onboard="call">
+              <div class="title">Have Anticipy call you</div>
+              <div class="sub">Quick friend-style interview on your phone. Hands-free, no typing.</div>
+            </div>
+            <div class="onboard-card" data-onboard="audio">
+              <div class="title">Drop in an MP3 of your day</div>
+              <div class="sub">If you already recorded yourself, give Anticipy that. It will figure out the rest.</div>
+            </div>
+            <div class="onboard-card" data-onboard="chat">
+              <div class="title">Type a short chat</div>
+              <div class="sub">Five quick questions in a browser tab. Best if you want it done in five minutes.</div>
+            </div>
+            <div class="onboard-card" data-onboard="ambient">
+              <div class="title">Skip onboarding, just listen</div>
+              <div class="sub">Anticipy will pick things up from your day as you go. No interview now.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Populated state: Now / Next / Past columns -->
+        <section id="columns" class="columns hidden">
+          <div class="col col-now">
+            <h2>Now</h2>
+            <div id="now-content" class="idle">Quiet right now.</div>
+          </div>
+          <div class="col col-next">
+            <h2>Next</h2>
+            <ul id="next-list"><li class="empty">Nothing queued.</li></ul>
+          </div>
+          <div class="col col-past">
+            <h2>Past</h2>
+            <ul id="past-list"><li class="empty">No recent actions.</li></ul>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <script>
+      // Tauri invoke shim. Works whether the popover is loaded inside
+      // Tauri or stand-alone in a browser for design preview.
+      const invoke = (cmd, args = {}) => {
+        if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
+          return window.__TAURI__.core.invoke(cmd, args);
+        }
+        if (window.__TAURI__ && window.__TAURI__.invoke) {
+          return window.__TAURI__.invoke(cmd, args);
+        }
+        // Browser preview fallback: return mock empty values.
+        const mocks = {
+          fetch_active_task: () => null,
+          fetch_next_tasks: () => [],
+          fetch_past_tasks: () => [],
+          fetch_dossier_summary: () => ({ field_count: 0, people: [], last_call: null }),
+          fetch_mic_permission_state: () => ({ authorized: true }),
+        };
+        return Promise.resolve((mocks[cmd] || (() => null))());
+      };
+
+      const $ = (id) => document.getElementById(id);
+
+      function setStatus(state, text) {
+        const dot = $("status-dot");
+        dot.classList.remove("alive", "dead");
+        if (state === "alive") dot.classList.add("alive");
+        if (state === "dead") dot.classList.add("dead");
+        $("status-text").textContent = text;
+      }
+
+      function renderWelcome() {
+        $("welcome").classList.remove("hidden");
+        $("columns").classList.add("hidden");
+      }
+
+      function renderColumns() {
+        $("welcome").classList.add("hidden");
+        $("columns").classList.remove("hidden");
+      }
+
+      function renderNow(active) {
+        const el = $("now-content");
+        if (!active) {
+          el.className = "idle";
+          el.textContent = "Quiet right now. Anticipy is listening.";
+          return;
+        }
+        el.className = "";
+        el.innerHTML = `
+          <div class="now-title">${escapeHtml(active.goal || active.task_name || "Working on something")}</div>
+          <div class="now-sub">${escapeHtml(active.status || "running")}</div>
+          <div class="actions">
+            <button class="btn" id="now-yes">Yes, do it</button>
+            <button class="btn ghost" id="now-no">No</button>
+          </div>`;
+      }
+
+      function renderList(elId, items, labelFn) {
+        const ul = $(elId);
+        ul.innerHTML = "";
+        if (!items || items.length === 0) {
+          const li = document.createElement("li");
+          li.className = "empty";
+          li.textContent = elId === "next-list" ? "Nothing queued." : "No recent actions.";
+          ul.appendChild(li);
+          return;
+        }
+        for (const it of items.slice(0, 6)) {
+          const li = document.createElement("li");
+          li.innerHTML = labelFn(it);
+          ul.appendChild(li);
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s || "").replace(/[&<>"']/g, (c) => ({
+          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+        }[c]));
+      }
+
+      async function refresh() {
+        try {
+          const dossier = await invoke("fetch_dossier_summary");
+          const empty = !dossier || (dossier.field_count || 0) === 0;
+          if (empty) {
+            renderWelcome();
+            setStatus("alive", "Ready to set up");
+            return;
+          }
+          renderColumns();
+          setStatus("alive", "Listening");
+
+          const [active, next, past] = await Promise.all([
+            invoke("fetch_active_task"),
+            invoke("fetch_next_tasks", { limit: 5 }),
+            invoke("fetch_past_tasks", { limit: 6 }),
+          ]);
+          renderNow(active);
+          renderList("next-list", next, (it) => {
+            const goal = escapeHtml(it.goal || it.task_name || it.description || "Pending task");
+            const when = escapeHtml(it.when || it.scheduled_for || "");
+            return `${goal}${when ? `<div class="sub">${when}</div>` : ""}`;
+          });
+          renderList("past-list", past, (it) => {
+            const goal = escapeHtml(it.goal || it.task_name || "Action");
+            const status = escapeHtml(it.status || "");
+            return `${goal}${status ? `<div class="sub">${status}</div>` : ""}`;
+          });
+        } catch (e) {
+          setStatus("dead", "Engine not responding");
+        }
+      }
+
+      async function checkMicPermission() {
+        try {
+          const state = await invoke("fetch_mic_permission_state");
+          if (state && state.authorized === false) {
+            $("mic-card").classList.remove("hidden");
+          } else {
+            $("mic-card").classList.add("hidden");
+          }
+        } catch (e) {
+          // ignore; mic state unknown is not an error to surface
+        }
+      }
+
+      function wireOnboardCards() {
+        document.querySelectorAll(".onboard-card").forEach((card) => {
+          card.addEventListener("click", async () => {
+            const choice = card.dataset.onboard;
+            const urls = {
+              call: "https://www.anticipy.ai/onboarding/call",
+              audio: "https://www.anticipy.ai/onboarding/audio",
+              chat: "https://www.anticipy.ai/onboarding/chat",
+            };
+            if (urls[choice]) {
+              try {
+                if (window.__TAURI__ && window.__TAURI__.opener) {
+                  await window.__TAURI__.opener.openUrl(urls[choice]);
+                } else if (window.__TAURI__ && window.__TAURI__.shell) {
+                  await window.__TAURI__.shell.open(urls[choice]);
+                } else {
+                  window.open(urls[choice], "_blank");
+                }
+              } catch (e) {
+                window.open(urls[choice], "_blank");
+              }
+              return;
+            }
+            if (choice === "ambient") {
+              // No interview: just mark setup as deferred and refresh.
+              try {
+                await invoke("set_ambient_only_mode");
+              } catch (e) {}
+              refresh();
+            }
+          });
+        });
+      }
+
+      document.getElementById("mic-open-settings").addEventListener("click", async () => {
+        try {
+          await invoke("open_mic_system_settings");
+        } catch (e) {}
+      });
+
+      wireOnboardCards();
+      refresh();
+      checkMicPermission();
+      setInterval(refresh, 5000);
+      setInterval(checkMicPermission, 8000);
+    </script>
+  </body>
+</html>
