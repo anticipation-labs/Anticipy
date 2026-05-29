@@ -87,7 +87,6 @@ export async function POST(request: NextRequest) {
       ],
       consent_collection: {
         terms_of_service: "required",
-        promotions: marketingOptIn ? "auto" : "none",
       },
       custom_text: {
         terms_of_service_acceptance: {
