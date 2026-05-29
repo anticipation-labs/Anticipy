@@ -2187,6 +2187,148 @@ _LISTEN: dict = {
 }
 
 
+# --------------------------------------------------------------------------
+# Persistent task queue glue (see app/task_queue/store.py).
+#
+# Every utterance that produces a pending instruction is mirrored into a
+# durable JSONL queue so the engine can resume mid-flight tasks across
+# restarts, fire delayed reminders weeks later, and retry failures with
+# exponential backoff. The in-memory _LISTEN["pending"] field stays as
+# the hot-path channel for the popover; the queue is the durable spine.
+# --------------------------------------------------------------------------
+
+def _task_queue_enqueue_from_pending(
+        instruction: str,
+        *,
+        wake_at: float | None = None,
+        metadata: dict | None = None) -> dict | None:
+    """Persist a pending instruction into the durable task queue. Best
+    effort: a queue write failure must not crash the inject pipeline.
+    Returns the TaskRecord-as-dict on success, None on skip/error.
+    """
+    text = (instruction or "").strip()
+    if not text:
+        return None
+    try:
+        from app import task_queue as _tq
+    except Exception:
+        return None
+    try:
+        meta = dict(metadata or {})
+        meta.setdefault("source", "listen_pending")
+        rec = _tq.enqueue(
+            text,
+            account_id=USER_ID,
+            wake_at=wake_at,
+            metadata=meta,
+        )
+        return rec.to_dict()
+    except Exception:
+        return None
+
+
+def _task_queue_executor(rec) -> dict:
+    """Background executor for re-firing a queued task. Invoked by
+    app.task_queue.dispatcher when a sleeping task's wake_at lands or
+    on engine restart for in_progress tasks. We re-issue the instruction
+    through the same path /api/act would have run: compose plan from
+    memory, then _run_action_engine. Returns the dispatcher contract
+    dict (ok / waiting / error / result).
+    """
+    try:
+        instruction = (rec.instruction or "").strip()
+        if not instruction:
+            return {"ok": False, "error": "empty_instruction"}
+        try:
+            plan = _compose_task_from_memory(instruction)
+        except Exception as exc:
+            return {"ok": False,
+                    "error": f"compose_failed: {type(exc).__name__}: {exc}"}
+        if not isinstance(plan, dict) or plan.get("mode") != "act":
+            # The task needs clarification from the user but the user is
+            # not at the keyboard; park as waiting so we do not burn
+            # retries on the same unanswerable plan.
+            return {
+                "ok": False,
+                "waiting": True,
+                "waiting_reason": "needs_user_clarification",
+            }
+        # Irreversible intents require explicit user confirmation.
+        # We cannot auto-confirm; park waiting and surface via pending.
+        intent = str(plan.get("intent") or "").strip()
+        if intent in _load_irreversible_intents():
+            task_id = _register_confirm(plan, instruction, intent)
+            confirm = _confirm_payload(intent, plan, instruction)
+            with _LISTEN["lock"]:
+                _LISTEN["pending"] = {
+                    "instruction": instruction,
+                    "proposal": confirm.get("description") or instruction,
+                    "ask_user": True,
+                    "require_confirm": True,
+                    "plan": plan,
+                    "confirm_card_id": task_id,
+                    "ts": time.time(),
+                    "from_task_queue": True,
+                }
+            return {
+                "ok": False,
+                "waiting": True,
+                "waiting_reason": f"confirm_required:{intent}",
+            }
+        response = _run_action_engine(instruction, plan)
+        body = {}
+        try:
+            body = json.loads(response.body.decode("utf-8"))
+        except Exception:
+            body = {}
+        if body.get("ran"):
+            return {"ok": True, "result": body}
+        if body.get("gated"):
+            return {
+                "ok": False,
+                "waiting": True,
+                "waiting_reason": str(body.get("error") or "gated"),
+            }
+        return {
+            "ok": False,
+            "error": str(body.get("error")
+                          or body.get("status")
+                          or "action_engine_no_run"),
+        }
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"executor_unhandled: {type(exc).__name__}: {exc}"}
+
+
+@app.on_event("startup")
+def _task_queue_startup() -> None:
+    """Resume mid-flight persistent tasks and start the periodic
+    scheduler. This is the wake-up scheduling spine: every 60 seconds
+    the scanner pulls due tasks off the queue and re-fires them.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception:
+        return
+    try:
+        _tq.dispatcher.register_executor(_task_queue_executor)
+        recovered = _tq.dispatcher.schedule_engine_restart_recovery()
+        interval_s = float(
+            os.environ.get("ANTICIPY_TASK_QUEUE_INTERVAL_SECONDS", "60")
+            or 60.0
+        )
+        _tq.dispatcher.start_scanner(interval_seconds=interval_s)
+        # Surface count so it appears in startup logs without spam.
+        print(
+            f"[task_queue] startup ok recovered={len(recovered)} "
+            f"interval_seconds={interval_s:.1f}",
+            flush=True,
+        )
+    except Exception as exc:
+        print(f"[task_queue] startup failed: {type(exc).__name__}: {exc}",
+              flush=True)
+
+
 def _audio_cb(indata, frames, time_info, status) -> None:
     import numpy as np
     chunk = np.asarray(indata).reshape(-1).copy()
@@ -4903,7 +5045,30 @@ def listen_inject(i: Inject) -> JSONResponse:
                 "proposal": text,
                 "ts": time.time(),
             }
+    # Persist into the durable task queue so a long-deferred task
+    # (e.g. "remind me to send the contract in 3 weeks") survives
+    # engine restarts. If the proactive scheduler tagged a due_at we
+    # use that as wake_at; otherwise the task is immediately runnable.
     scheduled = rec.get("scheduled")
+    if (not rec.get("error")) and text:
+        wake_at = None
+        if isinstance(scheduled, dict):
+            try:
+                wake_at = float(scheduled.get("due_at") or 0) or None
+            except Exception:
+                wake_at = None
+        queued = _task_queue_enqueue_from_pending(
+            text,
+            wake_at=wake_at,
+            metadata={
+                "source": "listen_inject",
+                "ingest_id": rec.get("ingest_id"),
+                "scheduled_id": (scheduled or {}).get("id")
+                if isinstance(scheduled, dict) else None,
+            },
+        )
+        if queued:
+            rec["task_queue_id"] = queued.get("task_id")
     return JSONResponse({"on": _LISTEN.get("on", False),
                          "window": rec["window"],
                          "ingest_id": rec.get("ingest_id"),
@@ -4916,6 +5081,7 @@ def listen_inject(i: Inject) -> JSONResponse:
                          "resolution_trace_sync": rec.get(
                              "resolution_trace_sync"),
                          "pending": _LISTEN.get("pending"),
+                         "task_queue_id": rec.get("task_queue_id"),
                          "scheduled": scheduled})
 
 
@@ -5184,6 +5350,119 @@ def proactive_reset() -> JSONResponse:
     from app.product.scheduler import get_scheduler
     get_scheduler().reset()
     return JSONResponse({"ok": True})
+
+
+# --------------------------------------------------------------------------
+# Persistent task queue surfaces
+# --------------------------------------------------------------------------
+
+class _TaskQueueEnqueue(BaseModel):
+    instruction: str
+    wake_at: float | None = None
+    wake_in_seconds: float | None = None
+    metadata: dict | None = None
+
+
+@app.post("/api/task_queue/enqueue")
+def task_queue_enqueue(body: _TaskQueueEnqueue) -> JSONResponse:
+    """Manually enqueue a persistent task. Used by tests and by the
+    UI when the user explicitly says "remind me in N days / on date".
+    Either wake_at (absolute epoch seconds) or wake_in_seconds (relative
+    delay) may be supplied.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    text = (body.instruction or "").strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "instruction required"},
+                            status_code=400)
+    wake_at = body.wake_at
+    if wake_at is None and body.wake_in_seconds is not None:
+        wake_at = time.time() + float(body.wake_in_seconds)
+    try:
+        rec = _tq.enqueue(
+            text,
+            account_id=USER_ID,
+            wake_at=wake_at,
+            metadata=body.metadata or {"source": "api_task_queue_enqueue"},
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"{type(exc).__name__}: {exc}"},
+                            status_code=500)
+    return JSONResponse({"ok": True, "task": rec.to_dict()})
+
+
+@app.get("/api/task_queue/list")
+def task_queue_list(status: str | None = None,
+                     limit: int = 200) -> JSONResponse:
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    filt = [s.strip() for s in (status or "").split(",") if s.strip()]
+    rows = _tq.list_tasks(status=filt or None, limit=max(1, int(limit)))
+    return JSONResponse({
+        "ok": True,
+        "count": len(rows),
+        "tasks": [r.to_dict() for r in rows],
+    })
+
+
+@app.get("/api/task_queue/{task_id}")
+def task_queue_get(task_id: str) -> JSONResponse:
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    rec = _tq.get(task_id)
+    if rec is None:
+        return JSONResponse({"ok": False, "error": "not_found"},
+                            status_code=404)
+    return JSONResponse({"ok": True, "task": rec.to_dict()})
+
+
+@app.post("/api/task_queue/{task_id}/cancel")
+def task_queue_cancel(task_id: str) -> JSONResponse:
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    rec = _tq.cancel(task_id, reason="manual_cancel")
+    if rec is None:
+        return JSONResponse({"ok": False, "error": "not_found"},
+                            status_code=404)
+    return JSONResponse({"ok": True, "task": rec.to_dict()})
+
+
+@app.post("/api/task_queue/scan")
+def task_queue_scan() -> JSONResponse:
+    """Force the scheduler to scan once immediately rather than waiting
+    for the 60-second tick. Used by tests to drive wake-up behaviour
+    deterministically.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    fired = _tq.dispatcher.scan_once()
+    return JSONResponse({
+        "ok": True,
+        "fired_count": len(fired),
+        "fired": [r.to_dict() for r in fired],
+    })
 
 
 @app.post("/api/stt/local")
@@ -7489,6 +7768,29 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
         if ran:
             _LISTEN["acted"] = {"instruction": instruction, "task": task,
                                  "status": status, "ts": time.time()}
+            # Resolve the task_queue record (if one exists) so a
+            # successful action terminates the queue entry rather than
+            # leaving it pending. Best effort; failure to mark complete
+            # never gates the user-visible response.
+            try:
+                pending_meta = _LISTEN.get("pending") or {}
+                tq_id = pending_meta.get("task_queue_id")
+                if not tq_id:
+                    from app import task_queue as _tq_lookup
+                    for r in _tq_lookup.list_tasks(
+                            status=("pending", "in_progress"), limit=64):
+                        if r.instruction.strip() == instruction.strip():
+                            tq_id = r.task_id
+                            break
+                if tq_id:
+                    from app import task_queue as _tq_done
+                    _tq_done.complete(tq_id, {
+                        "status": status,
+                        "task": task,
+                        "answer": out.get("answer"),
+                    })
+            except Exception:
+                pass
             _LISTEN["pending"] = None
         return JSONResponse(out)
     except Exception as e:
@@ -7866,6 +8168,19 @@ async def act(request: Request) -> JSONResponse:
     if not instruction:
         return JSONResponse({"ran": False,
                              "error": "no instruction to act on"})
+    # Persist to the durable task queue if this instruction did not
+    # already arrive via the listen pipeline. The queue tracks the
+    # instruction across engine restarts; the in-memory pending dict
+    # tracks the in-flight popover state.
+    pending_tq_id = pending.get("task_queue_id") if pending else None
+    queue_task_id = pending_tq_id
+    if not queue_task_id:
+        queued = _task_queue_enqueue_from_pending(
+            instruction,
+            metadata={"source": "api_act_direct"},
+        )
+        if queued:
+            queue_task_id = queued.get("task_id")
     # Fast path: a fully-specified draft request can be executed
     # deterministically without burning an LLM round trip on plan
     # composition. The DSv4SkillRunner stays as the fallback for
