@@ -40,3 +40,6 @@ checks done, on CHECK_11 currently). Possibly a stray harness kick. Letting both
 land. CHECK 16 (the slow one) will gate the result.
 Z-001 latest still FAIL (interrupted run from sidecar swap); will re-run after
 acceptance finishes to free Chrome 9222.
+
+== 2026-05-29 00:01 PDT cycle ==
+Acceptance harness now on CHECK 16 (12 of 15 done). Harness PID 22971 alive 5:49. Cannot probe engine directly without risking CHECK 16 scenarios that are mid-flight on Chrome 9222. CHECK_16.json lands in 5-20 min based on the historical 14-25 min CHECK 16 wall time, then SUMMARY.json after CHECK 17 and 18 complete (both are seconds).
