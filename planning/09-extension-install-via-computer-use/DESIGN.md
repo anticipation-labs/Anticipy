@@ -1,14 +1,14 @@
 # Extension install via computer-use
 
-Owner: Omar. Drafted 2026-05-29. This is a forward-looking planning doc, not a shipped feature. The prior planner deferred this work behind the false claim "we cannot inject a Chrome extension into the user's already-running Chrome." That excuse is wrong. Anticipy has computer-use available at build time and at runtime via the `mcp__computer-use__*` tool family. The agent can drive the user's Mac end-to-end: open Chrome, type into the omnibar, click toggles, drag files, navigate Finder dialogs. The extension at `extension_v4/manifest.json` ships in the DMG. The missing piece is install automation, not Chrome capability.
+Owner: Omar. Drafted 2026-05-29. The prior planner deferred this work behind the false claim "we cannot inject a Chrome extension into the user's already-running Chrome." Wrong. Anticipy has computer-use via `mcp__computer-use__*`. The agent can drive the user's Mac end-to-end: open Chrome, type into the omnibar, click toggles, drag files, navigate Finder dialogs. The extension at `extension_v4/manifest.json` ships in the DMG. The missing piece is install automation, not Chrome capability.
 
 ## 1. Problem precisely stated
 
-Anticipy drives the user's real Chrome on port 9222 via CDP. Without the extension, the bridge at `scripts/v7/anticipy_bridge_fallback_cdp.py:528-554` calls `_cdp_navigate(url, prefer_in_place=True)`, which looks for any existing tab matching the URL's scheme+host and reuses it via `Page.navigate`. If the user has Gmail open in tab 3 and the agent goes to `mail.google.com/mail/u/0/#inbox`, the agent overwrites their open compose, scroll position, and read state. The tab hijack bug. User opens laptop, sees their Gmail draft has changed under their hands, trust dies in a single frame.
+Anticipy drives the user's real Chrome on port 9222 via CDP. Without the extension, the bridge at `scripts/v7/anticipy_bridge_fallback_cdp.py:528-554` calls `_cdp_navigate(url, prefer_in_place=True)`, which finds any tab matching the URL's scheme+host and reuses it via `Page.navigate`. If the user has Gmail open in tab 3 and the agent goes to `mail.google.com/mail/u/0/#inbox`, the agent overwrites their open compose, scroll position, and read state. The tab hijack bug. User opens laptop, sees their Gmail draft changed under their hands, trust dies in a single frame.
 
-The fix already exists. `extension_v4/background.js:504-517` implements `ensureGroupWith(tabId)`, which calls `chrome.tabs.group({ tabIds: [tabId] })` on every Anticipy-created tab and `chrome.tabGroups.update(groupId, { title: "Anticipy", color: "blue" })` to name it. Every Anticipy tab lands in a blue "Anticipy" group at the right of the strip; user tabs sit untouched at the left. The only missing input is loading the extension into the user's Chrome.
+The fix exists. `extension_v4/background.js:504-517` implements `ensureGroupWith(tabId)`: `chrome.tabs.group({ tabIds: [tabId] })` then `chrome.tabGroups.update(groupId, { title: "Anticipy", color: "blue" })`. Every Anticipy tab lands in a blue "Anticipy" group at the right of the strip; user tabs sit untouched at the left. The only missing input is loading the extension.
 
-The prior excuse, "we can't inject," conflates two facts. We cannot programmatically write to `~/Library/Application Support/Google/Chrome/Default/Preferences` to inject an extension ID (the `extensions.settings` block is HMAC-signed and Chrome wipes tampered entries on next start). True. But computer-use does what a human does: click through `chrome://extensions`, toggle Developer Mode, click "Load unpacked," select the folder. Chrome treats a synthetic event from `mcp__computer-use__left_click` identically to a human finger. The OS does not distinguish.
+The prior excuse, "we can't inject," conflates two facts. We cannot programmatically write the extension ID into `~/Library/Application Support/Google/Chrome/Default/Preferences` (the `extensions.settings` block is HMAC-signed, Chrome wipes tampered entries on next start). True. But computer-use does what a human does: click through `chrome://extensions`, toggle Developer Mode, click "Load unpacked," select the folder. Chrome treats a synthetic `mcp__computer-use__left_click` identically to a human finger. The OS does not distinguish.
 
 ## 2. Computer-use install flow at first launch
 
@@ -68,9 +68,9 @@ if not await verify_extension_loaded_via_cdp():
 
 ## 5. Permission and TCC dialogs
 
-On the first `mcp__computer-use__request_access`, macOS surfaces "Anticipy wants to control Google Chrome" (System Settings, Privacy and Security, Accessibility and Automation). The Tauri popover at `desktop/src/popover.html` already has the TCC explainer from commit `fcde9857`. Add a bullet: "We open `chrome://extensions` once to install our helper. You will see the toggle flip and a file picker. 10 seconds. We never touch this again unless Chrome turns the extension off on update." User clicks Allow once, grant persists across re-installs.
+First `request_access` surfaces "Anticipy wants to control Google Chrome" (System Settings, Privacy and Security, Accessibility and Automation). The Tauri popover at `desktop/src/popover.html` already has the TCC explainer from commit `fcde9857`. Add a bullet: "We open `chrome://extensions` once to install our helper. You will see the toggle flip and a file picker. 10 seconds. We never touch this again unless Chrome turns the extension off on update." User clicks Allow once, grant persists.
 
-If the user clicks Deny: popover degrades to "Anticipy needs to control Chrome to install its helper. Open System Settings, Privacy and Security, Accessibility, check Anticipy, click Retry." The Retry button re-fires the install flow.
+If Deny: popover degrades to "Anticipy needs to control Chrome to install its helper. Open System Settings, Privacy and Security, Accessibility, check Anticipy, click Retry." The Retry button re-fires the install flow.
 
 ## 6. Reliability and failure handling
 
@@ -94,7 +94,7 @@ Long term, Google's announced `--load-extension` phase-out (sliding, currently a
 
 ## 8. Why this beats asking the user to install manually
 
-Manual install: 6 ordered clicks across two surfaces, one toggle, one Finder navigation into `/Applications/Anticipy.app/Contents/Resources/extension/` (a folder most users have never opened), plus Chrome's "Are you sure?" developer-extension dialog. ~90 s flow with a 30 to 50% drop-off based on comparable self-install extensions (Loom, Honey, Grammarly). The investor demo cannot survive a 30% install-step drop. Computer-use lifts success rate above 95% (TCC denial is the only failure, and it is recoverable) and time-to-value below 15 s. Trust impact is positive: user watches Anticipy do something visibly competent at first contact.
+Manual install: 6 ordered clicks across two surfaces, one toggle, one Finder navigation into `/Applications/Anticipy.app/Contents/Resources/extension/` (a folder most users have never opened), plus Chrome's developer-extension confirmation dialog. ~90 s flow with 30 to 50% drop-off based on comparable self-install extensions (Loom, Honey, Grammarly). The investor demo cannot survive that. Computer-use lifts success rate above 95% (TCC denial is the only failure, recoverable) and time-to-value below 15 s. User watches Anticipy do something visibly competent at first contact.
 
 ## 9. Runtime use of the tab group, wire protocol
 

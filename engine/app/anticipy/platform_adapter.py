@@ -202,7 +202,7 @@ def model_call(
     max_tokens: int = 1024,
     temperature: float = 0.0,
     json_mode: bool = True,
-    timeout_s: float = 90.0,
+    timeout_s: float = 15.0,
     model: Optional[str] = None,
     _retry_on_empty: bool = True,
 ) -> ModelResult:
@@ -282,7 +282,7 @@ def model_call(
         _log_model_call({"ts": time.time(), "error": result.error, "ok": False})
         return result
 
-    backoffs = [1.0, 2.0, 4.0, 8.0]
+    backoffs = [0.5, 1.0]
     attempt = 0
     t0 = time.monotonic()
     last_err = "unknown"
@@ -334,18 +334,15 @@ def model_call(
         c_tok = int(usage.get("completion_tokens", 0))
         cost = _estimate_cost(model, p_tok, c_tok)
 
-        # Reasoning model starvation: a 200 with empty content (the
-        # internal chain of thought consumed the whole budget). The
-        # frozen action engine proved the universal fix is one retry
-        # with a doubled token budget. Without this the cascade fails
-        # closed on a recoverable transient and over reports under
-        # action. This is a port robustness fix, not cascade logic.
-        if (not content) and _retry_on_empty:
+        # Empty content path: previously this recursed with doubled
+        # tokens, which added 15-90s of latency for the worst case.
+        # Per the roadmap planner-latency item: drop the recursive
+        # retry. If content is empty we return empty and the caller
+        # decides what to do (server.py has its own one-shot logic).
+        if not content:
             _log_model_call({"ts": time.time(), "model": model, "prompt_tokens": p_tok,
                              "completion_tokens": c_tok, "cost_usd": round(cost, 6),
-                             "ok": False, "starved_retry": True, "finish": finish})
-            return model_call(system, user, max_tokens * 2, temperature, json_mode,
-                              timeout_s, model, _retry_on_empty=False)
+                             "ok": False, "empty_content": True, "finish": finish})
 
         res = ModelResult(content, bool(content), None if content else "empty content", p_tok, c_tok, cost, time.monotonic() - t0)
         _log_model_call(
