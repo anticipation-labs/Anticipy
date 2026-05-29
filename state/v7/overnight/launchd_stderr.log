@@ -1,0 +1,1 @@
+/Users/omarebrahim/Developer/Anticipy-V7/tools/finish_overnight.sh: line 216:  5094 Terminated: 15          python3 engine/tests/anticipy_acceptance.py --skip 6,9,10 > "$LOG_DIR/check18_${ITER}.log" 2>&1

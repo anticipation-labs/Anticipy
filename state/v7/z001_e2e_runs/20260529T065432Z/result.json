@@ -1,0 +1,54 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T065432Z",
+  "started_at": "20260529T065432Z",
+  "account_id": "z001_e2e_2560c7c0f974",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "448B27D500BCE2D84FA817D2359A1407",
+    "BBB7D81B2633566B45DE6A6113562308"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 9724
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": true,
+      "provisioned": false
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_7666a7b9031a@anticipy-test.local",
+      "password_len": 16
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "create_identity",
+  "error": "signup did not advance to /app/download; final_url='https://www.anticipy.ai/app' inline_error='Enter your email to continue.'",
+  "finished_at": "20260529T065513Z",
+  "opened_targets": [
+    "430B80F43B90E0B1B3ABD4F61AF4CBE0"
+  ],
+  "closed_targets": {
+    "430B80F43B90E0B1B3ABD4F61AF4CBE0": true
+  },
+  "cdp_pages_after": [
+    "448B27D500BCE2D84FA817D2359A1407",
+    "BBB7D81B2633566B45DE6A6113562308"
+  ],
+  "leaked_target_ids": [],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}
