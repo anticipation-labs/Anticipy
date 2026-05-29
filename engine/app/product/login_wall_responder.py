@@ -154,23 +154,50 @@ def _build_twiml(service_label: str, task_description: str) -> str:
 
 
 def _maybe_local_say(text: str) -> dict[str, Any]:
-    """macOS `say` fallback: best-effort local audio notification when
-    Twilio is not configured. No-op on non-mac or if `say` missing.
+    """Real-voice local audio fallback. Used when Twilio is not
+    configured so the user still hears something through the Mac.
+
+    Routes through ``app.product.tts`` which prefers ElevenLabs (cloud
+    real-voice), falls back to Polly, then finally to macOS ``say``.
+    Returns the TTS module's record annotated for the caller's
+    existing log shape so existing tests and dashboards keep parsing
+    the same fields.
     """
     if sys.platform != "darwin":
         return {"ok": False, "skipped": True, "reason": "not macOS"}
-    say_bin = shutil.which("say") or "/usr/bin/say"
-    if not Path(say_bin).exists():
-        return {"ok": False, "skipped": True, "reason": "say binary missing"}
     try:
-        subprocess.Popen(
-            [say_bin, "-r", "180", text],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        return {"ok": True, "spoken": True}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        from app.product import tts as _tts
+    except Exception as exc:
+        # Hard fallback if the TTS module fails to import for any
+        # reason. Preserve the legacy say behavior so the login wall
+        # notification still fires.
+        say_bin = shutil.which("say") or "/usr/bin/say"
+        if not Path(say_bin).exists():
+            return {"ok": False, "skipped": True,
+                    "reason": "say binary missing",
+                    "tts_import_error": f"{type(exc).__name__}: {exc}"}
+        try:
+            subprocess.Popen(
+                [say_bin, "-r", "180", text],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return {"ok": True, "spoken": True, "provider": "say",
+                    "tts_import_error": f"{type(exc).__name__}: {exc}"}
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    rec = _tts.play_speech(text)
+    return {
+        "ok": bool(rec.get("ok")),
+        "spoken": bool(rec.get("ok")),
+        "provider": rec.get("provider", "none"),
+        "cache_hit": bool(rec.get("cache_hit", False)),
+        "synth_ms": rec.get("synth_ms", 0.0),
+        "play_ms": rec.get("play_ms", 0.0),
+        "total_ms": rec.get("total_ms", 0.0),
+        "path": rec.get("path", ""),
+        "error": rec.get("error", ""),
+    }
 
 
 def place_login_wall_call(

@@ -2,21 +2,25 @@
 
 Two surfaces:
 
-1. macOS TTS via ``/usr/bin/say``. Fires in a background thread so the
-   trigger pipeline never blocks on the audio device. The brief calls
-   out the Mac TTS as the demo surface; the BLE / APNs surfaces from
-   the planning doc are out of scope for this commit.
+1. Real-voice TTS via ``app.product.tts``. Cloud providers
+   (ElevenLabs primary, Polly fallback) produce human-sounding audio
+   for the user's earbud. The macOS ``/usr/bin/say`` path is kept as
+   a last-resort failsafe so the trigger pipeline never fails silent
+   when neither cloud provider is configured. The hot-path latency
+   is preserved by pre-seeding the cache: a fresh ElevenLabs synth is
+   300 to 700 ms over ``say``, but a cache hit (the common case for
+   seeded trivia answers) plays in well under 50 ms.
 
 2. ``recent_fires()`` returns the last N (default 10) fires. The
    popover polls ``GET /api/trivia/recent`` for this list. Each fire
    includes the raw utterance, the answer, the source, latencies, and
    a UTC timestamp.
 
-The TTS process is forked and we do not wait on it. macOS's ``say``
-buffers the entire phrase before emitting audio, so we measure
-"speech-ready latency" as the time from call to subprocess spawn,
-which is what the user perceives as the answer arriving. The actual
-audio plays asynchronously.
+The TTS process is spawned and we do not wait on it; the call returns
+once playback has been kicked off. We measure "speech-ready latency"
+as the time from call to subprocess spawn (afplay for cached audio,
+say for the failsafe), which is what the user perceives as the
+answer arriving. The actual audio plays asynchronously.
 
 Disabled by ``ANTICIPY_TRIVIA_DISABLE_TTS=1`` for headless test
 environments. The recent-fires log still records the event.
@@ -54,7 +58,9 @@ def _spawn_say(text: str, *, voice: Optional[str] = None,
                rate: Optional[int] = None) -> dict:
     """Fire ``say`` in the background. Returns spawn metadata.
 
-    On non-Mac (or when ``ANTICIPY_TRIVIA_DISABLE_TTS=1``) this returns
+    Kept as the last-resort failsafe inside ``_deliver_audio`` when no
+    real-voice provider is available. On non-Mac (or when
+    ``ANTICIPY_TRIVIA_DISABLE_TTS=1``) this returns
     ``{"spawned": False, "reason": "..."}`` so callers can degrade
     gracefully without raising.
     """
@@ -108,6 +114,42 @@ def _spawn_say(text: str, *, voice: Optional[str] = None,
     }
 
 
+def _deliver_audio(text: str, *, voice: Optional[str] = None,
+                   rate: Optional[int] = None) -> dict:
+    """Route the spoken answer through the real-voice TTS module,
+    falling back to ``say`` if the new module is unavailable.
+
+    Returns a dict with the same shape as ``_spawn_say`` so the
+    deliver record schema does not change: ``spawned``, ``pid``,
+    ``spawn_ms``, plus the new ``provider``, ``cache_hit``,
+    ``synth_ms``, and ``total_ms`` from the cloud path.
+    """
+    if os.environ.get("ANTICIPY_TRIVIA_DISABLE_TTS", "").strip() == "1":
+        return {"spawned": False, "reason": "tts_disabled_env",
+                "provider": "none"}
+    try:
+        from app.product import tts as _tts  # lazy import
+    except Exception as exc:
+        # Fallback path: legacy say. Keeps trivia speaking even if
+        # the new module is broken at import time.
+        out = _spawn_say(text, voice=voice, rate=rate)
+        out["provider"] = "say"
+        out["tts_import_error"] = f"{type(exc).__name__}: {exc}"
+        return out
+    rec = _tts.play_speech(text)
+    return {
+        "spawned": bool(rec.get("ok")),
+        "pid": rec.get("pid"),
+        "spawn_ms": float(rec.get("play_ms", 0.0)),
+        "synth_ms": float(rec.get("synth_ms", 0.0)),
+        "total_ms": float(rec.get("total_ms", 0.0)),
+        "provider": rec.get("provider", "none"),
+        "cache_hit": bool(rec.get("cache_hit", False)),
+        "path": rec.get("path", ""),
+        "reason": rec.get("error", "") or "ok",
+    }
+
+
 def deliver(utterance: str, answer_payload: dict,
             *,
             trigger_result: Optional[dict] = None,
@@ -126,7 +168,7 @@ def deliver(utterance: str, answer_payload: dict,
         text = str(answer_payload.get("answer") or "")
     if not text:
         text = "I do not know that one."
-    tts = _spawn_say(text, voice=voice, rate=rate)
+    tts = _deliver_audio(text, voice=voice, rate=rate)
     now = time.time()
     rcv = float(received_at if received_at is not None else now)
     total_ms = round(max(0.0, (now - rcv) * 1000.0), 2)
