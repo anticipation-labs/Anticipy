@@ -57,3 +57,6 @@ A9 report landed at tasks/agent_reports/A9_clarify_reflex_audit.json.
 Key finding: R12 + R17 fail because triggers are pronoun-only ("She is waiting on those notes." / "I should send her the schedule"). The fastpath I shipped (commit 6e02d0a9) only handles explicit name tokens, so it returns None on pronoun triggers and the LLM falls into clarify/empty-mode.
 Proposed next edit (queued, not shipped yet): pronoun-aware fastpath that scans last 3 recent transcripts + cross-references dossier people's `pronouns` field. When the pronoun resolves to exactly one dossier person, build the act plan deterministically. Expected to lift ~8 more scenarios.
 Holding the edit until CHECK 16 in-flight run completes to avoid disturbing it. ETA ~5 min for CHECK 16, then implement and re-run.
+
+== 2026-05-29 00:13 PDT cycle ==
+Harness 17:51 on CHECK 16. Within historical 14-25 min window. Pronoun fastpath (commit e8b29686) shipped but not active in running engine. Will swap into installed app right after this CHECK 16 run completes. Vercel = 7afa96588b at this read; e8b29686 still deploying.
