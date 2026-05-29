@@ -81,3 +81,6 @@ Major progress: CHECK 16 standalone landed 17/30 (resolvable 10/20, ambiguous 7/
 
 == 2026-05-29 00:50 PDT cycle ==
 Harness 2:21, 8 checks done. CHECK 01-08 + 11 all PASS so far. SSL + CDP_PORT defaults validated. CHECK 12-18 remaining. 16 is the slow one (~17 min).
+
+== 2026-05-29 00:52 PDT cycle ==
+CHECK 15 PLAYWRIGHT FIX VERIFIED PASS. 12/12 PASS so far. CHECK 16 next (the slow one ~17 min). Projected D >= 14/15.
