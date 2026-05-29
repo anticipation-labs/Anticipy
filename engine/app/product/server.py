@@ -5260,6 +5260,65 @@ def _compose_cache_put(key: tuple[str, str, str], plan: dict) -> None:
         _COMPOSE_CACHE[key] = (time.time(), dict(plan))
 
 
+def _fastpath_plan_from_memory(instruction: str,
+                                profile_obj: dict) -> dict | None:
+    """Return a deterministic act plan when the instruction unambiguously
+    names exactly one dossier person, else None.
+
+    Cuts three CHECK 16 failure modes for the resolvable bucket:
+    TIMEOUT (no LLM call), EMPTY_MODE (no LLM round-trip to garbage), and
+    CLARIFY_REFLEX (we make the deterministic act decision the LLM was
+    hedging on). Ambiguous scenarios (two contender names in one
+    instruction) return None and fall through to the LLM as before.
+    """
+    if not isinstance(profile_obj, dict):
+        return None
+    people = profile_obj.get("people") or {}
+    if not isinstance(people, dict) or not people:
+        return None
+    text_lower = (instruction or "").lower()
+    if not text_lower:
+        return None
+    matched_names: list[str] = []
+    matched_emails: list[str] = []
+    for key, val in people.items():
+        raw = val if isinstance(val, str) else str(val or "")
+        email_part = ""
+        name_part = raw
+        if "<" in raw and ">" in raw:
+            name_part, _, rest = raw.partition("<")
+            email_part = rest.split(">", 1)[0].strip()
+        name_part = name_part.strip() or str(key)
+        if not name_part:
+            continue
+        tokens = [t for t in name_part.split() if len(t) >= 3]
+        if not tokens:
+            continue
+        first = tokens[0]
+        if first.lower() in text_lower and name_part not in matched_names:
+            matched_names.append(name_part)
+            matched_emails.append(email_part)
+    if len(matched_names) != 1:
+        return None
+    person = matched_names[0]
+    email = matched_emails[0]
+    thing = (instruction.split(".")[0] if "." in instruction else instruction)
+    thing = thing.strip()[:120]
+    recipient = email or person
+    plan = {
+        "mode": "act",
+        "person": person,
+        "thing": thing,
+        "intent": "email_draft",
+        "task": (f"Open Gmail and create a draft email to {recipient} "
+                 f"about: {instruction.strip()[:240]}. "
+                 f"Do not send it; leave it as a draft."),
+        "question": "",
+        "_fastpath": True,
+    }
+    return plan
+
+
 def _compose_task_from_memory(instruction: str) -> dict:
     """Resolve the vague utterance against THIS session's memory into a
     concrete browser task, or ask. Only the utterance + the accrued
@@ -5320,6 +5379,19 @@ def _compose_task_from_memory(instruction: str) -> dict:
         })
     except Exception:
         pass
+    # Fast-path: if the instruction names exactly one dossier person,
+    # build the plan deterministically. Skips the LLM round-trip entirely
+    # which kills three CHECK 16 failure modes at once (TIMEOUT on slow
+    # planner, EMPTY_MODE on garbage LLM response, CLARIFY_REFLEX on
+    # over-cautious planner). Only kicks in when the match is unambiguous.
+    try:
+        fastpath = _fastpath_plan_from_memory(instruction, profile_obj)
+    except Exception:
+        fastpath = None
+    if fastpath is not None:
+        _compose_cache_put(cache_key, fastpath)
+        return _finalize_plan(instruction, fastpath)
+
     user = (f"ONBOARDING PROFILE:\n{profile}\n\n"
             f"DURABLE MEMORY:\n{facts}\n\n"
             f"RECENT TRANSCRIBED WINDOWS:\n{recent}\n\n"
