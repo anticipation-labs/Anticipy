@@ -20,3 +20,10 @@ Root cause for both: engine quality on listen-inject -> plan -> act trajectory. 
 Loop is stopping at 13/15 instead of forcing a 14/15 it cannot reach without an engine fix. The remaining work is real engineering, not test plumbing.
 
 Cron 01508667 deleted at this entry.
+
+== 2026-05-28 23:53 PST cycle ==
+Built engine sidecar from HEAD 6e02d0a9, swapped into /Applications/Anticipy.app/Contents/MacOS/anticipy-engine, codesigned, restarted.
+Verified running PID 21520 is the swapped binary (sha 382c910 post-codesign).
+Quick fastpath smoke: inject "I should email Maya the friday update." returned outcome=DEFERRED with no plan after 24s. Fastpath did NOT fire because outcome=DEFERRED never reaches _compose_task_from_memory. Needs deeper inspection of the inject classification path to learn why a single explicit utterance was treated as deferred. Next cycle: read listen_inject endpoint flow, identify the path that calls _compose_task_from_memory vs the DEFERRED branch.
+
+Z-001 baseline still PASS (state/v7/z001_e2e_runs/20260529T064738Z).
