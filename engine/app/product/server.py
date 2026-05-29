@@ -5344,6 +5344,125 @@ def _fastpath_plan_from_memory(instruction: str,
     return plan
 
 
+_FEMALE_PRONOUNS = ("she", "her", "hers", "herself")
+_MALE_PRONOUNS = ("he", "him", "his", "himself")
+_NEUTRAL_PRONOUNS = ("they", "them", "their", "theirs", "themself", "themselves")
+
+
+def _has_pronoun(text: str) -> str | None:
+    """Return 'female', 'male', 'neutral' or None for the first pronoun
+    detected in text. Word-boundary match to avoid 'history' -> 'his'."""
+    import re as _re
+    if not text:
+        return None
+    lower = text.lower()
+    for word in _FEMALE_PRONOUNS:
+        if _re.search(rf"\b{word}\b", lower):
+            return "female"
+    for word in _MALE_PRONOUNS:
+        if _re.search(rf"\b{word}\b", lower):
+            return "male"
+    for word in _NEUTRAL_PRONOUNS:
+        if _re.search(rf"\b{word}\b", lower):
+            return "neutral"
+    return None
+
+
+def _pronoun_matches(person_pronouns: str, gender: str) -> bool:
+    """Check whether a dossier person's `pronouns` field (e.g. 'she/her',
+    'he/him', 'they/them') is compatible with a detected gender bucket."""
+    if not person_pronouns:
+        return False
+    raw = person_pronouns.lower()
+    if gender == "female":
+        return "she" in raw or "her" in raw
+    if gender == "male":
+        return "he" in raw or "him" in raw
+    if gender == "neutral":
+        return "they" in raw or "them" in raw
+    return False
+
+
+def _fastpath_pronoun_resolve(instruction: str, profile_obj: dict,
+                               recent_list: list[str]) -> dict | None:
+    """Pronoun fast-path. When the instruction is a pronoun-only trigger
+    ("she is waiting on those notes", "I should send her the schedule")
+    and exactly one dossier person whose pronouns match was named in the
+    last 3 recent transcript windows, build the act plan deterministically.
+
+    Without this, CHECK 16 R10/R12/R13/R15/R16/R17/R18/R19 fall into the
+    LLM planner which is slow and often returns empty/clarify on the
+    pronoun-only utterance.
+
+    Returns None on ambiguity (zero or multiple candidates).
+    """
+    if not isinstance(profile_obj, dict):
+        return None
+    raw_people = profile_obj.get("people")
+    if not raw_people:
+        return None
+    gender = _has_pronoun(instruction)
+    if gender is None:
+        return None
+    candidates: list[tuple[str, str, str, list[str]]] = []
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            email = str(entry.get("email") or "").strip()
+            pronouns = str(entry.get("pronouns") or "").strip()
+            aliases_raw = entry.get("aliases") or []
+            aliases = [str(a).strip() for a in aliases_raw if a]
+            if not name:
+                continue
+            candidates.append((name, email, pronouns, aliases))
+    elif isinstance(raw_people, dict):
+        # The dict shape carries no structured pronoun field; we cannot
+        # safely pronoun-resolve from it. Return None and let the LLM
+        # path handle.
+        return None
+    if not candidates:
+        return None
+    matching_gender = [(n, e, a) for (n, e, p, a) in candidates
+                       if _pronoun_matches(p, gender)]
+    if not matching_gender:
+        return None
+    recent_window = " ".join(recent_list[-3:]) if recent_list else ""
+    recent_lower = recent_window.lower()
+    if not recent_lower:
+        return None
+    surfaced: list[tuple[str, str]] = []
+    for name, email, aliases in matching_gender:
+        first = name.split()[0].lower() if name.split() else ""
+        haystack_tokens = []
+        if first and len(first) >= 3:
+            haystack_tokens.append(first)
+        for alias in aliases:
+            if alias and len(alias) >= 3:
+                haystack_tokens.append(alias.lower())
+        if any(tok in recent_lower for tok in haystack_tokens):
+            surfaced.append((name, email))
+    if len(surfaced) != 1:
+        return None
+    person, email = surfaced[0]
+    recipient = email or person
+    thing = (instruction.split(".")[0] if "." in instruction else instruction)
+    thing = thing.strip()[:120]
+    plan = {
+        "mode": "act",
+        "person": person,
+        "thing": thing,
+        "intent": "email_draft",
+        "task": (f"Open Gmail and create a draft email to {recipient} "
+                 f"about: {instruction.strip()[:240]}. "
+                 f"Do not send it; leave it as a draft."),
+        "question": "",
+        "_fastpath": "pronoun",
+    }
+    return plan
+
+
 def _compose_task_from_memory(instruction: str) -> dict:
     """Resolve the vague utterance against THIS session's memory into a
     concrete browser task, or ask. Only the utterance + the accrued
@@ -5413,6 +5532,12 @@ def _compose_task_from_memory(instruction: str) -> dict:
         fastpath = _fastpath_plan_from_memory(instruction, profile_obj)
     except Exception:
         fastpath = None
+    if fastpath is None:
+        try:
+            fastpath = _fastpath_pronoun_resolve(
+                instruction, profile_obj, recent_list)
+        except Exception:
+            fastpath = None
     if fastpath is not None:
         _compose_cache_put(cache_key, fastpath)
         return _finalize_plan(instruction, fastpath)
