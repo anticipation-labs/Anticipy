@@ -30,8 +30,18 @@ record of what the agent considered.
 
 from __future__ import annotations
 
+import asyncio
+import base64
+import json
 import logging
+import os
+import shutil
+import subprocess
+import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Protocol
@@ -86,6 +96,297 @@ class DeliveryRoutes:
     push: DeliverFn | None = None
     sms: DeliverFn | None = None
     voice: DeliverFn | None = None
+
+
+# --- Real delivery implementations ---------------------------------------------
+#
+# Three concrete deliveries the cascade hands off to. These plug into the
+# empty `DeliveryRoutes` slots above via `build_default_routes()` below. The
+# cascade picks the channel; these functions actually fire the notification.
+
+
+_TWILIO_BASE = "https://api.twilio.com/2010-04-01"
+
+
+def _osascript_available() -> bool:
+    """True if macOS `osascript` is on PATH. False on non-mac hosts."""
+    return sys.platform == "darwin" and shutil.which("osascript") is not None
+
+
+def _applescript_quote(value: str) -> str:
+    """Escape a string for safe use inside an AppleScript literal."""
+    # AppleScript strings are double-quoted; only backslash and double-quote
+    # need escaping. Newlines are not allowed inside a string literal, so
+    # collapse them to spaces.
+    cleaned = (value or "").replace("\r", " ").replace("\n", " ")
+    return cleaned.replace("\\", "\\\\").replace("\"", "\\\"")
+
+
+async def local_notify(title: str, body: str) -> dict:
+    """Fire a native macOS notification banner via `osascript`.
+
+    The production default for IN_APP and PUSH decisions when the user
+    is on their Mac. Returns a dict with `ok` plus diagnostics so the
+    test endpoint and callers can introspect what happened. Raises on
+    non-macOS hosts so the notifier escalates down the ladder.
+    """
+    if not _osascript_available():
+        raise RuntimeError(
+            "local_notify requires macOS osascript (not available on this host)"
+        )
+    safe_title = _applescript_quote(title or "Anticipy")
+    safe_body = _applescript_quote(body or "")
+    script = (
+        f'display notification "{safe_body}" with title "{safe_title}"'
+    )
+
+    def _run() -> tuple[int, str, str]:
+        proc = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+    rc, stdout, stderr = await asyncio.to_thread(_run)
+    if rc != 0:
+        raise RuntimeError(
+            f"osascript display notification failed: rc={rc} stderr={stderr.strip()[:200]}"
+        )
+    return {
+        "ok": True,
+        "channel": "local",
+        "title": title,
+        "body": body,
+        "stdout": stdout.strip(),
+        "stderr": stderr.strip(),
+    }
+
+
+def _twilio_credentials() -> tuple[str, str, str]:
+    """Read Twilio creds from env. Raises if any are missing.
+
+    Returns (account_sid, auth_token, from_number). The from_number is
+    only required for SMS/voice; callers that don't need it can ignore.
+    """
+    sid = (os.environ.get("TWILIO_ACCOUNT_SID") or "").strip()
+    tok = (os.environ.get("TWILIO_AUTH_TOKEN") or "").strip()
+    src = (os.environ.get("TWILIO_PHONE_NUMBER") or "").strip()
+    if not sid or not tok:
+        raise RuntimeError(
+            "twilio creds missing: set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN"
+        )
+    return sid, tok, src
+
+
+def _twilio_basic_auth(sid: str, tok: str) -> str:
+    token = base64.b64encode(f"{sid}:{tok}".encode("utf-8")).decode("ascii")
+    return f"Basic {token}"
+
+
+def _twilio_post_form(path: str, fields: list[tuple[str, str]],
+                      timeout: float = 20.0) -> dict:
+    """Blocking POST to a Twilio REST endpoint. Returns parsed JSON or
+    raises RuntimeError with the Twilio error body on a non-2xx status.
+    """
+    sid, tok, _ = _twilio_credentials()
+    url = f"{_TWILIO_BASE}/Accounts/{sid}/{path}"
+    body = urllib.parse.urlencode(fields).encode("utf-8")
+    req = urllib.request.Request(
+        url=url,
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": _twilio_basic_auth(sid, tok),
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            status = resp.status
+    except urllib.error.HTTPError as exc:
+        raw = exc.read() if exc.fp is not None else b""
+        status = exc.code
+        try:
+            parsed = json.loads(raw.decode("utf-8") or "{}")
+        except Exception:
+            parsed = {"raw": raw.decode("utf-8", "replace")[:400]}
+        raise RuntimeError(
+            f"twilio POST {path} failed: status={status} body={parsed}"
+        )
+    except Exception as exc:
+        raise RuntimeError(f"twilio POST {path} transport error: {exc}")
+    try:
+        data = json.loads(raw.decode("utf-8") or "{}")
+    except Exception:
+        data = {"raw": raw.decode("utf-8", "replace")[:400]}
+    if status >= 300:
+        raise RuntimeError(
+            f"twilio POST {path} non-2xx: status={status} body={data}"
+        )
+    return {"status": status, "response": data}
+
+
+async def twilio_sms(to: str, body: str) -> dict:
+    """Send a real SMS via Twilio.
+
+    `to` and `from` are E.164 phone numbers; `from` is read from the
+    TWILIO_PHONE_NUMBER env var. Returns the Twilio response dict on
+    success; raises RuntimeError on failure so the cascade can fall
+    down the ladder.
+    """
+    sid, tok, src = _twilio_credentials()
+    if not src:
+        raise RuntimeError(
+            "TWILIO_PHONE_NUMBER missing; required for outbound SMS"
+        )
+    to_clean = (to or "").strip()
+    if not to_clean:
+        raise RuntimeError("twilio_sms: 'to' phone number is required")
+    fields = [
+        ("To", to_clean),
+        ("From", src),
+        ("Body", (body or "")[:1600]),  # Twilio SMS hard cap
+    ]
+    out = await asyncio.to_thread(_twilio_post_form, "Messages.json", fields)
+    sid_msg = (out.get("response") or {}).get("sid", "")
+    return {
+        "ok": True,
+        "channel": "sms",
+        "to": to_clean,
+        "from": src,
+        "twilio_sid": sid_msg,
+        "twilio_status": out.get("status"),
+        "twilio_response": out.get("response"),
+    }
+
+
+def _twiml_for_body(body: str) -> str:
+    """Build a Twilio-fetchable URL whose response is minimal TwiML that
+    speaks the body with the `alice` voice and hangs up. Used as the
+    call URL when no externally hosted TwiML endpoint is configured so
+    the demo path still places a real call without needing a webhook.
+    """
+    safe = (body or "Anticipy calling.").replace("\r", " ").replace("\n", " ")
+    safe = (
+        safe.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+    )
+    twiml = (
+        "<Response>"
+        f"<Say voice=\"alice\">{safe}</Say>"
+        "<Hangup/>"
+        "</Response>"
+    )
+    return (
+        "http://twimlets.com/echo?Twiml="
+        + urllib.parse.quote(twiml, safe="")
+    )
+
+
+async def twilio_voice(to: str, twiml_url: str | None = None,
+                       body: str | None = None) -> dict:
+    """Place a real outbound Twilio voice call.
+
+    `twiml_url` is a URL Twilio will GET for call instructions. When
+    omitted, we fall back to an inline `<Say>{body}</Say>` TwiML hosted
+    via twimlets.com so the call still completes for the demo path.
+    Raises RuntimeError on failure.
+    """
+    sid, tok, src = _twilio_credentials()
+    if not src:
+        raise RuntimeError(
+            "TWILIO_PHONE_NUMBER missing; required for outbound voice"
+        )
+    to_clean = (to or "").strip()
+    if not to_clean:
+        raise RuntimeError("twilio_voice: 'to' phone number is required")
+    url = (twiml_url or "").strip() or _twiml_for_body(body or "")
+    fields = [
+        ("To", to_clean),
+        ("From", src),
+        ("Url", url),
+    ]
+    out = await asyncio.to_thread(_twilio_post_form, "Calls.json", fields)
+    call_sid = (out.get("response") or {}).get("sid", "")
+    return {
+        "ok": True,
+        "channel": "voice",
+        "to": to_clean,
+        "from": src,
+        "twiml_url": url,
+        "twilio_sid": call_sid,
+        "twilio_status": out.get("status"),
+        "twilio_response": out.get("response"),
+    }
+
+
+# --- Default wiring -------------------------------------------------------------
+
+
+def _default_local_notify_title(decision_kind: DecisionKind | None) -> str:
+    """Brand-consistent title for the macOS banner. Decisions don't
+    carry a title field so synthesize one from the kind.
+    """
+    if decision_kind == DecisionKind.EXECUTE:
+        return "Anticipy: done"
+    if decision_kind == DecisionKind.ASK:
+        return "Anticipy: needs you"
+    if decision_kind == DecisionKind.REFUSE:
+        return "Anticipy: held off"
+    return "Anticipy"
+
+
+def build_default_routes(
+    *,
+    enable_local: bool = True,
+    enable_twilio_sms: bool = True,
+    enable_twilio_voice: bool = True,
+    contact_phone: str | None = None,
+) -> DeliveryRoutes:
+    """Wire the default production delivery routes.
+
+    - IN_APP and PUSH both bind to `local_notify` so the cascade's
+      IN_APP/PUSH decisions fire as macOS notification banners when
+      the user is on their Mac.
+    - SMS and VOICE bind to Twilio when credentials are present in env
+      AND `contact_phone` is supplied. Otherwise those slots are left
+      unwired and the notifier ladder falls down to PUSH.
+    """
+    local: DeliverFn | None = None
+    if enable_local and _osascript_available():
+        async def _local(user_id: str, body: str) -> None:
+            await local_notify(_default_local_notify_title(None), body)
+        local = _local
+
+    sms_fn: DeliverFn | None = None
+    voice_fn: DeliverFn | None = None
+    if (enable_twilio_sms or enable_twilio_voice) and contact_phone:
+        try:
+            _twilio_credentials()
+            creds_ok = True
+        except Exception as exc:
+            logger.info("twilio_creds_missing", extra={"error": str(exc)})
+            creds_ok = False
+        if creds_ok and enable_twilio_sms:
+            async def _sms(user_id: str, body: str) -> None:
+                await twilio_sms(contact_phone, body)
+            sms_fn = _sms
+        if creds_ok and enable_twilio_voice:
+            async def _voice(user_id: str, body: str) -> None:
+                await twilio_voice(contact_phone, body=body)
+            voice_fn = _voice
+
+    return DeliveryRoutes(
+        in_app=local,
+        push=local,
+        sms=sms_fn,
+        voice=voice_fn,
+    )
 
 
 # --- "Things I noticed" feed sink -----------------------------------------------

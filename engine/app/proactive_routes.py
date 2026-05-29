@@ -37,6 +37,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+import os
+
 from app import auth as auth_module
 from app import messages as msg
 from app.bridge_extension import RealtimePublishExecutor
@@ -44,6 +46,7 @@ from app.memory import make_memory_store
 from app.proactive.engine import ProactiveEngine
 from app.proactive.llm_adapter import make_json_llm_call
 from app.proactive.memory_extractor import MemoryExtractor
+from app.proactive.notifier import build_default_routes
 from app.proactive.types import Decision, TranscriptChunk
 from app.verifier import make_default_verifier
 
@@ -85,10 +88,25 @@ class UserSession:
             verifier=make_default_verifier(),
             on_wearer_message=self._on_wearer_message,
         )
+        # Wire real delivery for the cascade. local_notify handles IN_APP
+        # and PUSH (macOS notification banner); Twilio handles SMS and
+        # VOICE when creds + the contact phone are present. The notifier's
+        # ladder falls down through any slot left None, so absent Twilio
+        # creds simply route SMS/VOICE traffic into PUSH.
+        contact_phone = (
+            os.environ.get("ANTICIPY_USER_PHONE")
+            or os.environ.get("TWILIO_NOTIFY_TO")
+            or os.environ.get("TWILIO_TEST_TO_REAL_NUMBER_E164")
+            or None
+        )
+        delivery_routes = build_default_routes(
+            contact_phone=contact_phone,
+        )
         self.engine = ProactiveEngine(
             user_id=user_id,
             llm_call=make_json_llm_call(max_tokens=1024),
             executor=executor,
+            delivery_routes=delivery_routes,
         )
 
         # Cross-session memory ("second brain"). Per-chunk extraction runs in

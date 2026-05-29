@@ -218,11 +218,51 @@ def model_call(
 
     model = model or _TEXT_MODEL
     max_tokens = max(max_tokens, _MIN_TOKENS)
+
+    # OpenRouter prompt caching (Anthropic-shaped cache_control). The
+    # planner cascade sends the same system rubric on every utterance,
+    # and the user payload often repeats a large static profile JSON
+    # across the burst. Marking the system message with
+    # cache_control: ephemeral lets compatible providers (DeepSeek,
+    # Anthropic, Gemini via OpenRouter) charge cached input tokens at
+    # a 75-90% discount on warm hits, and skip the prefix
+    # tokenization, which is the single biggest cut in median planner
+    # latency (per the W2O latency budget; see roadmap planner-latency
+    # item). Threshold gate: only cache when the system block is large
+    # enough to be worth the breakpoint (1000 char floor, matching
+    # OpenRouter's recommended min). Below that we send a bare string
+    # to avoid spending one of the 4 cache breakpoints on a tiny
+    # rubric.
+    if isinstance(system, str) and len(system) >= 1000:
+        system_content: Any = [{
+            "type": "text",
+            "text": system,
+            "cache_control": {"type": "ephemeral"},
+        }]
+    else:
+        system_content = system
+
+    # Same caching logic for the user payload. The compose_task user
+    # payload concatenates the onboarding profile JSON + durable
+    # memory ahead of the per-utterance instruction, so the leading
+    # prefix is shared across an entire session. Mark the whole user
+    # block as cacheable when it crosses the 1000 char floor; the
+    # cache breakpoint covers the matching prefix and any new tail
+    # (the per-utterance suffix) is billed at the normal rate.
+    if isinstance(user, str) and len(user) >= 1000:
+        user_content: Any = [{
+            "type": "text",
+            "text": user,
+            "cache_control": {"type": "ephemeral"},
+        }]
+    else:
+        user_content = user
+
     payload: dict[str, Any] = {
         "model": model,
         "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content},
         ],
         "max_tokens": max_tokens,
         "temperature": temperature,
@@ -332,6 +372,18 @@ def model_call(
         usage = j.get("usage", {})
         p_tok = int(usage.get("prompt_tokens", 0))
         c_tok = int(usage.get("completion_tokens", 0))
+        # Cache instrumentation: OpenRouter surfaces cached prefix tokens
+        # under usage.prompt_tokens_details.cached_tokens (Anthropic
+        # passthrough) or top-level cache_creation_input_tokens /
+        # cache_read_input_tokens depending on provider. Pull both
+        # shapes so the log can answer "is the cache warm yet" without
+        # a second hop. These do not affect cost (already billed
+        # inside prompt_tokens) but they let the latency story be
+        # measured per call.
+        ptd = usage.get("prompt_tokens_details") or {}
+        cache_read_tok = int(ptd.get("cached_tokens", 0)
+                             or usage.get("cache_read_input_tokens", 0) or 0)
+        cache_write_tok = int(usage.get("cache_creation_input_tokens", 0) or 0)
         cost = _estimate_cost(model, p_tok, c_tok)
 
         # Empty content path: previously this recursed with doubled
@@ -352,6 +404,8 @@ def model_call(
                 "credential_mode": credential_mode,
                 "prompt_tokens": p_tok,
                 "completion_tokens": c_tok,
+                "cache_read_tokens": cache_read_tok,
+                "cache_write_tokens": cache_write_tok,
                 "cost_usd": round(cost, 6),
                 "latency_s": round(res.latency_s, 3),
                 "ok": res.ok,

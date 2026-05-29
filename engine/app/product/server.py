@@ -5476,6 +5476,388 @@ def _fastpath_pronoun_resolve(instruction: str, profile_obj: dict,
     return plan
 
 
+# ============================================================================
+# V1+V2+V3 EXCISION: unified LLM intent extractor.
+#
+# Replaces three hardcoded violations from
+# planning/11-hardcoded-violations-audit/EXCISE_LIST.md:
+#   V1 _is_actionish regex verb whitelist (40 verbs)
+#   V2 _fastpath_plan_from_memory deterministic name+gmail template
+#   V3 _fastpath_pronoun_resolve hardcoded pronoun tuples + buckets
+#
+# ONE call to DeepSeek V4 Flash via platform_adapter.model_call. The
+# system prompt is invariant across a session so DeepSeek's prompt cache
+# kicks in transparently (no cache_control directives needed; DeepSeek
+# caches matching prefixes automatically). The dossier people list is
+# embedded in the system prompt because it only changes when onboarding
+# fires, so it caches with the prompt body. Only the user message
+# (utterance + recent transcript) varies.
+#
+# Returns the unified JSON shape:
+#   {"is_actionish": bool,
+#    "intent_verb": str,
+#    "person": {"name": str, "email": str} | null,
+#    "surface_hint": str,
+#    "required_slots": {"subject": str, "body_outline": str},
+#    "plan_shape": "act" | "clarify" | "ignore",
+#    "clarify_question": str | null}
+#
+# Wired into _compose_task_from_memory BEFORE the regex fastpaths.
+# Fastpaths stay as a regression safety net but the LLM-driven path
+# takes priority when available.
+# ============================================================================
+
+_INTENT_EXTRACT_SYS_PREFIX = """\
+You are the listening intent extractor of a wearable that has heard
+the user this session. Decide three things for the latest utterance:
+(a) is it actionish (does it imply something the user wants the agent
+to do later, even latently like "I should email Karen"); (b) which
+specific dossier person if any does it reference (resolve pronouns,
+relations like "my boss", role aliases like "the strategy advisor",
+or first names); (c) what concrete intent and surface should the agent
+target (a Gmail draft, a Google Calendar event, a Slack message, a
+domain-specific app like epic.com, etc.).
+
+DECISION PROCEDURE (follow exactly):
+
+STEP 1 - actionish gate. Mark is_actionish=true ONLY if the utterance
+plausibly contains an action the user wants Anticipy to attempt on
+their behalf. Includes latent wishes ("I should email Karen", "those
+notes are still sitting in my drafts", "I owe her the deck"), explicit
+requests ("draft an email to ..."), and follow-up obligations ("get
+that over to her tonight", "let her know about the schedule"). EXCLUDE
+third-party requests where the actor is someone else ("he asked her if
+she could send it"), pure observations ("she is presenting Thursday"),
+ambient chatter, and idle musings. Free-form latent wishes from any
+domain count: a lawyer's "file the motion", a doctor's "order the
+labs", a PM's "pull the trust deed" are all is_actionish=true even
+though the verbs aren't in any preset list. If unsure, lean
+is_actionish=true and let the planner downstream decide.
+
+STEP 2 - person resolution. Use the DOSSIER PEOPLE block that follows
+this prompt. For each candidate person you have name, email, role/title,
+pronouns, and aliases. Resolve:
+  - Explicit first/last names ("Maya", "Maya Chen") to that person.
+  - Roles or relations ("my boss", "the operations partner") to the
+    matching dossier entry.
+  - Pronouns ("she", "him", "they") to the dossier person whose
+    pronouns field matches AND who was named in the RECENT TRANSCRIPT
+    earlier in this session. If the pronouns string is empty for some
+    person, do not exclude them based on pronouns. Free-form pronoun
+    strings (neopronouns like "ze/zir", language-mixed, etc.) are
+    handled by literal compatibility with the dossier pronouns field,
+    not by a fixed pronoun-to-gender mapping.
+  - When TWO OR MORE different dossier people fit the reference
+    equally and no contextual cue (transcript content, role mention,
+    dossier metadata) breaks the tie, set plan_shape="clarify",
+    person=null, and write a short clarify_question naming the
+    contenders by first name (e.g. "Did you mean Dana or Priya?").
+  - When ZERO dossier people fit (utterance does not reference a
+    known contact at all but is still actionish), set person=null
+    and plan_shape="act" if the agent can still execute the verb
+    against the chosen surface (e.g. "open the lab portal and pull
+    today's results" needs no recipient).
+
+STEP 3 - intent_verb, surface_hint, required_slots. Pick free-form
+snake_case strings; do not coerce into a closed enum:
+  - intent_verb examples: "draft_email", "send_slack_message",
+    "create_calendar_event", "file_motion", "order_labs",
+    "post_to_chartchex", "follow_up", "pull_trust_deed".
+  - surface_hint examples: "mail.google.com" (Gmail),
+    "calendar.google.com", "slack.com", "epic.com",
+    "salesforce.com", "linear.app", "native_macos_reminders".
+    Pick the most specific surface the utterance implies; default
+    to "mail.google.com" for email-shaped intents and let downstream
+    routing override if the dossier contradicts.
+  - required_slots is an object whose keys describe what the agent
+    needs to fill in. For an email draft: {"subject": "...",
+    "body_outline": "..."}. For a calendar event: {"title": "...",
+    "start_time": "...", "guests": "..."}. For a domain-specific
+    surface: whatever slots make sense ({"matter_id": "..."} etc.).
+    Use empty strings for slots you cannot infer yet.
+
+STEP 4 - plan_shape. Choose ONE of:
+  - "act": the action can be attempted now. Use this when the
+    person + intent + surface are clear OR when the action does not
+    require a specific person (e.g. "pull today's labs" with one
+    candidate surface).
+  - "clarify": exactly TWO OR MORE comparable candidate people fit
+    and no cue picks one. Write a short clarify_question naming the
+    contenders by first name.
+  - "ignore": the utterance is not actionish at all (chatter,
+    third-party request the user is not the actor for, an
+    observation with no obligation).
+
+STEP 5 - DO NOT enumerate generic verbs. Trust the utterance
+semantics, the dossier shape, and your judgment about whether the
+utterance implies an action.
+
+Return STRICT JSON ONLY (no prose, no markdown):
+{"is_actionish": <bool>,
+ "intent_verb": "<free-form snake_case>",
+ "person": {"name": "<dossier name>", "email": "<dossier email>"} | null,
+ "surface_hint": "<free-form host or surface name>",
+ "required_slots": {"<slot_name>": "<slot_value or empty>"},
+ "plan_shape": "act" | "clarify" | "ignore",
+ "clarify_question": "<short question> | null"}
+"""
+
+
+def _intent_extract_dossier_block(dossier_people: list[dict]) -> str:
+    """Stable per-person block embedded inside the system prompt so the
+    DeepSeek prompt cache covers the dossier as well as the deciding
+    instructions. The dossier changes only when onboarding writes new
+    people, so this block is invariant across normal listening runs.
+    """
+    if not dossier_people:
+        return "DOSSIER PEOPLE:\n(empty)"
+    lines = ["DOSSIER PEOPLE:"]
+    for p in dossier_people:
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get("name") or "").strip()
+        email = str(p.get("email") or "").strip()
+        role = str(p.get("role") or p.get("relation")
+                   or p.get("role_title") or "").strip()
+        pronouns = str(p.get("pronouns") or "").strip()
+        aliases_raw = p.get("aliases") or []
+        aliases = [str(a).strip() for a in aliases_raw if a]
+        parts = [f"- name: {name}"]
+        if email:
+            parts.append(f"email: {email}")
+        if role:
+            parts.append(f"role: {role}")
+        if pronouns:
+            parts.append(f"pronouns: {pronouns}")
+        if aliases:
+            parts.append(f"aliases: {', '.join(aliases)}")
+        lines.append(" | ".join(parts))
+    return "\n".join(lines)
+
+
+def _intent_extract_normalize_people(profile_obj: dict) -> list[dict]:
+    """Coerce the two dossier shapes (list-of-dicts from v7 active loader,
+    dict-of-strings from the older onboarding profile) into a single
+    list of {name, email, role, pronouns, aliases} dicts that the
+    LLM-prompt block can render.
+    """
+    if not isinstance(profile_obj, dict):
+        return []
+    raw_people = profile_obj.get("people")
+    if not raw_people:
+        return []
+    out: list[dict] = []
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                continue
+            out.append({
+                "name": name,
+                "email": str(entry.get("email") or "").strip(),
+                "role": str(entry.get("role")
+                            or entry.get("role_title")
+                            or entry.get("relation") or "").strip(),
+                "pronouns": str(entry.get("pronouns") or "").strip(),
+                "aliases": [str(a).strip()
+                            for a in (entry.get("aliases") or []) if a],
+            })
+    elif isinstance(raw_people, dict):
+        for relation, val in raw_people.items():
+            raw = val if isinstance(val, str) else str(val or "")
+            email_part = ""
+            name_part = raw
+            if "<" in raw and ">" in raw:
+                name_part, _, rest = raw.partition("<")
+                email_part = rest.split(">", 1)[0].strip()
+            name_part = name_part.strip()
+            if not name_part:
+                continue
+            out.append({
+                "name": name_part,
+                "email": email_part,
+                "role": str(relation).strip(),
+                "pronouns": "",
+                "aliases": [],
+            })
+    return out
+
+
+def _intent_extract_llm(utterance: str,
+                        recent_context: list[str],
+                        dossier_people: list[dict]) -> dict | None:
+    """Single combined LLM call replacing V1 + V2 + V3.
+
+    System prompt = invariant instructions + dossier people block. Both
+    pieces are stable across a session so DeepSeek's prompt cache covers
+    the bulk of the input. The user message is just the utterance plus
+    up to 3 recent transcript lines.
+
+    Returns the unified intent dict described in the docstring above the
+    function (matches the spec from EXCISE_LIST.md V1+V2+V3 combined
+    call). Returns None on any LLM failure so the caller can fall back
+    to the regex fastpaths or the existing _COMPOSE_SYS planner round.
+    """
+    if not utterance:
+        return None
+    from app.anticipy import platform_adapter
+    if not platform_adapter.model_provisioned():
+        return None
+    system_prompt = (_INTENT_EXTRACT_SYS_PREFIX + "\n"
+                     + _intent_extract_dossier_block(dossier_people))
+    recent_lines = [t for t in (recent_context or [])[-3:] if t]
+    recent_block = ("\n".join(f"- {t}" for t in recent_lines)
+                    if recent_lines else "(none)")
+    user_msg = (f"RECENT TRANSCRIPT (last {len(recent_lines)} windows):\n"
+                f"{recent_block}\n\n"
+                f"LATEST UTTERANCE: {utterance!r}\n\n"
+                "Return STRICT JSON only.")
+    try:
+        res = platform_adapter.model_call(
+            system_prompt, user_msg, 512, 0.0, True, timeout_s=10.0)
+    except Exception:
+        return None
+    if not res.ok or not res.content:
+        return None
+    raw = res.content
+    a, b = raw.find("{"), raw.rfind("}")
+    if a == -1 or b == -1 or b <= a:
+        return None
+    try:
+        parsed = json.loads(raw[a:b + 1])
+    except Exception:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    # Light coercion so downstream code can assume the keys exist.
+    parsed.setdefault("is_actionish", False)
+    parsed.setdefault("intent_verb", "")
+    parsed.setdefault("surface_hint", "")
+    parsed.setdefault("required_slots", {})
+    parsed.setdefault("plan_shape", "ignore")
+    parsed.setdefault("clarify_question", None)
+    if "person" not in parsed:
+        parsed["person"] = None
+    person = parsed.get("person")
+    if isinstance(person, dict):
+        person.setdefault("name", "")
+        person.setdefault("email", "")
+    return parsed
+
+
+def _intent_extract_to_plan(extract: dict, instruction: str,
+                            dossier_people: list[dict]) -> dict | None:
+    """Convert the unified intent extractor JSON into the plan dict that
+    _compose_task_from_memory and downstream _finalize_plan understand
+    ({mode, person, thing, intent, task, question}).
+
+    Returns None when the extractor said is_actionish=false or
+    plan_shape="ignore" so the caller knows to skip the action wiring.
+    """
+    if not isinstance(extract, dict):
+        return None
+    if not extract.get("is_actionish"):
+        return None
+    plan_shape = str(extract.get("plan_shape") or "ignore").lower()
+    if plan_shape == "ignore":
+        return None
+    if plan_shape == "clarify":
+        q = str(extract.get("clarify_question") or "").strip()
+        if not q:
+            q = "Which one did you mean?"
+        return {
+            "mode": "clarify",
+            "person": "",
+            "thing": "",
+            "intent": str(extract.get("intent_verb") or ""),
+            "task": "",
+            "question": q,
+            "_intent_extract": True,
+        }
+    # plan_shape == "act"
+    person_obj = extract.get("person")
+    person_name = ""
+    person_email = ""
+    if isinstance(person_obj, dict):
+        person_name = str(person_obj.get("name") or "").strip()
+        person_email = str(person_obj.get("email") or "").strip()
+    # If the model named someone, cross-reference the dossier to
+    # canonicalize the email so the downstream draft has a real address.
+    if person_name and not person_email and dossier_people:
+        low_name = person_name.lower()
+        for p in dossier_people:
+            pname = (p.get("name") or "").strip()
+            if not pname:
+                continue
+            if (pname.lower() == low_name
+                    or (pname.lower().split()
+                        and low_name.split()
+                        and pname.lower().split()[0]
+                            == low_name.split()[0])):
+                person_email = str(p.get("email") or "").strip()
+                break
+    intent_verb = str(extract.get("intent_verb") or "").strip().lower()
+    surface_hint = str(extract.get("surface_hint") or "").strip().lower()
+    # Map free-form intent_verb + surface_hint to the plan.intent strings
+    # _finalize_plan and the rest of the engine recognize. The legacy
+    # values are "email_draft", "calendar_event", "lookup", "other".
+    # The extractor is free-form so we infer from the verb + surface.
+    is_email = (
+        "mail.google.com" in surface_hint
+        or "gmail" in surface_hint
+        or intent_verb.endswith("_email")
+        or "draft" in intent_verb
+        or intent_verb in {"send_email", "send_message", "email", "draft",
+                           "follow_up", "share", "let_know"}
+    )
+    is_calendar = (
+        "calendar" in surface_hint
+        or intent_verb in {"create_calendar_event", "schedule",
+                           "book_meeting"}
+    )
+    if is_email:
+        intent_token = "email_draft"
+    elif is_calendar:
+        intent_token = "calendar_event"
+    else:
+        intent_token = intent_verb or "other"
+    thing = (instruction.split(".")[0]
+             if "." in instruction else instruction)
+    thing = thing.strip()[:120]
+    # Build a free-form task description. For an email path we use the
+    # same shape the legacy fastpath used so downstream
+    # _draft_task_from_plan picks it up without modification.
+    if intent_token == "email_draft":
+        recipient = person_email or person_name or "the resolved contact"
+        task = (f"Open Gmail and create a draft email to {recipient} "
+                f"about: {instruction.strip()[:240]}. "
+                f"Do not send it; leave it as a draft.")
+    elif intent_token == "calendar_event":
+        task = (f"Open Google Calendar and create an event for: "
+                f"{instruction.strip()[:240]}.")
+    else:
+        slots = extract.get("required_slots") or {}
+        slot_summary = ""
+        if isinstance(slots, dict) and slots:
+            slot_summary = ("; slots: "
+                            + ", ".join(f"{k}={v}" for k, v in slots.items()
+                                        if v))
+        surface_label = surface_hint or "the appropriate app"
+        task = (f"Open {surface_label} and {intent_verb or 'act on'} "
+                f"the request: {instruction.strip()[:240]}{slot_summary}.")
+    return {
+        "mode": "act",
+        "person": person_name,
+        "thing": thing,
+        "intent": intent_token,
+        "task": task,
+        "question": "",
+        "_intent_extract": True,
+    }
+
+
 def _compose_task_from_memory(instruction: str) -> dict:
     """Resolve the vague utterance against THIS session's memory into a
     concrete browser task, or ask. Only the utterance + the accrued
@@ -5536,11 +5918,32 @@ def _compose_task_from_memory(instruction: str) -> dict:
         })
     except Exception:
         pass
-    # Fast-path: if the instruction names exactly one dossier person,
-    # build the plan deterministically. Skips the LLM round-trip entirely
-    # which kills three CHECK 16 failure modes at once (TIMEOUT on slow
-    # planner, EMPTY_MODE on garbage LLM response, CLARIFY_REFLEX on
-    # over-cautious planner). Only kicks in when the match is unambiguous.
+    # V1+V2+V3 EXCISION: the single combined LLM intent extractor runs
+    # FIRST. ONE DeepSeek V4 Flash call (~200-400ms cached) replaces
+    # the hardcoded _is_actionish verb whitelist, the
+    # _fastpath_plan_from_memory first-name substring + Gmail template,
+    # and the _fastpath_pronoun_resolve pronoun bucket matcher. The
+    # legacy fastpaths run as a regression safety net ONLY when the
+    # extractor returns None (no provisioned model, transport error,
+    # garbled JSON, etc.).
+    extract_plan: dict | None = None
+    try:
+        dossier_people = _intent_extract_normalize_people(profile_obj)
+        extract = _intent_extract_llm(instruction, recent_list,
+                                       dossier_people)
+        if extract is not None:
+            extract_plan = _intent_extract_to_plan(
+                extract, instruction, dossier_people)
+    except Exception:
+        extract_plan = None
+    if extract_plan is not None:
+        _compose_cache_put(cache_key, extract_plan)
+        return _finalize_plan(instruction, extract_plan)
+
+    # Fast-path safety net (V1+V2+V3 legacy implementations): only
+    # reached when the LLM extractor returns None. Kept so the engine
+    # still resolves the simplest first-name match even with no model
+    # provisioned (offline / no OPENROUTER_API_KEY mode).
     try:
         fastpath = _fastpath_plan_from_memory(instruction, profile_obj)
     except Exception:
@@ -5562,32 +5965,27 @@ def _compose_task_from_memory(instruction: str) -> dict:
     # Robust: under the session's burst of model calls OpenRouter can
     # return a transient empty/garbled completion. A transient infra
     # failure must NOT masquerade as a legitimate "ambiguous -> ask"
-    # (that wrongly fails a resolvable scenario). Retry once, with a
-    # short backoff; the platform_adapter.model_call already cascades
-    # across deepseek/kimi/gemini internally for transient OpenRouter
-    # failures, so an extra layer of retry-with-sleep here just stalls
-    # inject latency without improving correctness.
-    # W2O cut: 4 attempts with cumulative ~10.5s backoff -> 2 attempts
-    # with 1s backoff. Cumulative worst case ~1s, not 10s.
-    import time as _t
+    # (that wrongly fails a resolvable scenario). The platform_adapter
+    # model_call already handles transport retries (backoffs
+    # [0.5, 1.0]) and 429/5xx cascades internally, so an extra outer
+    # retry layer here just compounds 0 to 30s of dead latency on the
+    # injection hot path without changing correctness. Per the W2O
+    # planner-latency cut: drop the outer retry to one attempt and
+    # rely on the in-adapter cascade. If we still get back empty,
+    # fall through to the infra_fallback clarify.
     p = None
-    for attempt in range(2):
-        res = platform_adapter.model_call(_COMPOSE_SYS, user, 600, 0.0,
-                                          True)
-        if res.ok and res.content:
-            s = res.content
-            a, b = s.find("{"), s.rfind("}")
-            if a != -1 and b != -1 and b > a:
-                try:
-                    cand = json.loads(s[a:b + 1])
-                    if isinstance(cand, dict) and cand.get("mode") in (
-                            "act", "clarify"):
-                        p = cand
-                        break
-                except Exception:
-                    pass
-        if attempt == 0:
-            _t.sleep(1.0)
+    res = platform_adapter.model_call(_COMPOSE_SYS, user, 600, 0.0, True)
+    if res.ok and res.content:
+        s = res.content
+        a, b = s.find("{"), s.rfind("}")
+        if a != -1 and b != -1 and b > a:
+            try:
+                cand = json.loads(s[a:b + 1])
+                if isinstance(cand, dict) and cand.get("mode") in (
+                        "act", "clarify"):
+                    p = cand
+            except Exception:
+                pass
     if p is None:
         return {"mode": "clarify", "question": "Which one did you "
                 "mean?", "person": "", "thing": "", "task": "",
