@@ -135,9 +135,66 @@ _PRICING = {
 
 _call_log_lock = threading.Lock()
 
+# Thread local active task id. The product layer (server.py /api/act)
+# wraps each task with cost_telemetry.start_task which calls
+# bind_active_task_id; any model_call made on that thread without an
+# explicit task_id inherits this id and the cost telemetry aggregator
+# in app.product.cost_telemetry can attribute the call to the right
+# task. This avoids threading task_id through every existing call site
+# (memory.py, onboarding.py, taxonomy.py, comms.py, etc.) and keeps the
+# adapter the single seam.
+_active_task = threading.local()
+
+
+def bind_active_task_id(task_id: Optional[str]) -> None:
+    """Set the active task id for the current thread. Pass None to
+    clear. Any subsequent model_call on this thread that does not
+    explicitly set task_id will inherit this id."""
+    if task_id:
+        _active_task.task_id = str(task_id)
+    else:
+        if hasattr(_active_task, "task_id"):
+            try:
+                del _active_task.task_id
+            except Exception:
+                pass
+
+
+def get_active_task_id() -> Optional[str]:
+    """Return the active task id for the current thread, or None."""
+    return getattr(_active_task, "task_id", None)
+
 
 def _model_call_log_path() -> Path:
     return data_dir() / "model_calls.jsonl"
+
+
+# Optional telemetry sink. The product layer sets this so every model
+# call cost is forwarded to the per task cost aggregator. We keep it
+# optional and best effort so the adapter has no upward import (the
+# product depends on the adapter, not the other way round).
+_telemetry_sink: Optional[Callable[[dict], None]] = None
+# Optional budget gate. Returns truthy reason string to block the call.
+_budget_gate: Optional[Callable[[Optional[str]], Optional[str]]] = None
+
+
+def set_telemetry_sink(sink: Optional[Callable[[dict], None]]) -> None:
+    """Wire the per task cost aggregator. The sink receives every
+    completed model_call row (the same dict that goes to the JSONL
+    log). Errors raised by the sink are swallowed because telemetry
+    must never break a decision."""
+    global _telemetry_sink
+    _telemetry_sink = sink
+
+
+def set_budget_gate(gate: Optional[Callable[[Optional[str]], Optional[str]]]) -> None:
+    """Wire the per task budget enforcer. The gate is called BEFORE the
+    LLM HTTP request with the effective task_id. Returning a non-empty
+    string aborts the call with that reason (the ModelResult comes
+    back with ok=False and content=''). Returning None lets the call
+    proceed. Errors raised by the gate are swallowed (fail open)."""
+    global _budget_gate
+    _budget_gate = gate
 
 
 def _log_model_call(row: dict) -> None:
@@ -149,6 +206,12 @@ def _log_model_call(row: dict) -> None:
         # Logging must never break a decision. A poisoned flywheel is a
         # P11 concern surfaced by the trajectory logger, not here.
         pass
+    sink = _telemetry_sink
+    if sink is not None:
+        try:
+            sink(dict(row))
+        except Exception:
+            pass
 
 
 class ModelResult:
@@ -205,6 +268,7 @@ def model_call(
     timeout_s: float = 15.0,
     model: Optional[str] = None,
     _retry_on_empty: bool = True,
+    task_id: Optional[str] = None,
 ) -> ModelResult:
     """One blocking chat completion against the portable model endpoint.
 
@@ -213,11 +277,37 @@ def model_call(
     when json_mode is True). On any failure ``ok`` is False and
     ``content`` is empty, so every cascade stage falls to its documented
     safe default rather than crashing or emitting a wrong ACT.
+
+    ``task_id`` tags this call for per-task cost telemetry. If not
+    provided we inherit the active task id bound to the current thread
+    (see bind_active_task_id) so legacy call sites still attribute.
     """
     import requests  # imported here so the dependency lives only in the adapter
 
     model = model or _TEXT_MODEL
     max_tokens = max(max_tokens, _MIN_TOKENS)
+    effective_task_id = task_id or get_active_task_id()
+
+    # Per-task budget gate. If the product wired a gate and it returns
+    # a reason, refuse the call so the task can escalate to the user
+    # instead of burning more money. We log the refusal so it shows up
+    # in the cost report.
+    gate = _budget_gate
+    if gate is not None and effective_task_id:
+        try:
+            gate_reason = gate(effective_task_id)
+        except Exception:
+            gate_reason = None
+        if gate_reason:
+            res = ModelResult("", False, f"BUDGET_EXCEEDED: {gate_reason}",
+                              0, 0, 0.0, 0.0)
+            _log_model_call({"ts": time.time(), "model": model,
+                             "task_id": effective_task_id,
+                             "ok": False, "cost_usd": 0.0,
+                             "budget_exceeded": True,
+                             "reason": str(gate_reason),
+                             "is_vision": False})
+            return res
 
     # OpenRouter prompt caching (Anthropic-shaped cache_control). The
     # planner cascade sends the same system rubric on every utterance,
@@ -319,7 +409,9 @@ def model_call(
             0.0,
             0.0,
         )
-        _log_model_call({"ts": time.time(), "error": result.error, "ok": False})
+        _log_model_call({"ts": time.time(), "error": result.error, "ok": False,
+                         "task_id": effective_task_id, "model": model,
+                         "cost_usd": 0.0, "is_vision": False})
         return result
 
     backoffs = [0.5, 1.0]
@@ -341,7 +433,10 @@ def model_call(
                 attempt += 1
                 continue
             res = ModelResult("", False, last_err, 0, 0, 0.0, time.monotonic() - t0)
-            _log_model_call({"ts": time.time(), "error": last_err, "ok": False, "latency_s": round(res.latency_s, 3)})
+            _log_model_call({"ts": time.time(), "error": last_err, "ok": False,
+                             "latency_s": round(res.latency_s, 3),
+                             "task_id": effective_task_id, "model": model,
+                             "cost_usd": 0.0, "is_vision": False})
             return res
 
         if r.status_code == 429 or r.status_code >= 500:
@@ -351,19 +446,26 @@ def model_call(
                 attempt += 1
                 continue
             res = ModelResult("", False, last_err, 0, 0, 0.0, time.monotonic() - t0)
-            _log_model_call({"ts": time.time(), "error": last_err, "ok": False, "latency_s": round(res.latency_s, 3)})
+            _log_model_call({"ts": time.time(), "error": last_err, "ok": False,
+                             "latency_s": round(res.latency_s, 3),
+                             "task_id": effective_task_id, "model": model,
+                             "cost_usd": 0.0, "is_vision": False})
             return res
 
         if r.status_code != 200:
             res = ModelResult("", False, f"http {r.status_code}: {r.text[:160]}", 0, 0, 0.0, time.monotonic() - t0)
-            _log_model_call({"ts": time.time(), "error": res.error, "ok": False})
+            _log_model_call({"ts": time.time(), "error": res.error, "ok": False,
+                             "task_id": effective_task_id, "model": model,
+                             "cost_usd": 0.0, "is_vision": False})
             return res
 
         j = r.json()
         choices = j.get("choices") or []
         if not choices:
             res = ModelResult("", False, "no choices", 0, 0, 0.0, time.monotonic() - t0)
-            _log_model_call({"ts": time.time(), "error": "no choices", "ok": False})
+            _log_model_call({"ts": time.time(), "error": "no choices", "ok": False,
+                             "task_id": effective_task_id, "model": model,
+                             "cost_usd": 0.0, "is_vision": False})
             return res
 
         msg = choices[0].get("message", {})
@@ -394,7 +496,8 @@ def model_call(
         if not content:
             _log_model_call({"ts": time.time(), "model": model, "prompt_tokens": p_tok,
                              "completion_tokens": c_tok, "cost_usd": round(cost, 6),
-                             "ok": False, "empty_content": True, "finish": finish})
+                             "ok": False, "empty_content": True, "finish": finish,
+                             "task_id": effective_task_id, "is_vision": False})
 
         res = ModelResult(content, bool(content), None if content else "empty content", p_tok, c_tok, cost, time.monotonic() - t0)
         _log_model_call(
@@ -410,21 +513,27 @@ def model_call(
                 "latency_s": round(res.latency_s, 3),
                 "ok": res.ok,
                 "json_mode": json_mode,
+                "task_id": effective_task_id,
+                "is_vision": False,
             }
         )
         return res
 
     res = ModelResult("", False, last_err, 0, 0, 0.0, time.monotonic() - t0)
-    _log_model_call({"ts": time.time(), "error": last_err, "ok": False})
+    _log_model_call({"ts": time.time(), "error": last_err, "ok": False,
+                     "task_id": effective_task_id, "model": model,
+                     "cost_usd": 0.0, "is_vision": False})
     return res
 
 
-def adversarial_model_call(system: str, user: str, max_tokens: int = 512) -> ModelResult:
+def adversarial_model_call(system: str, user: str, max_tokens: int = 512,
+                           task_id: Optional[str] = None) -> ModelResult:
     """A second, deliberately different model used only by the grader's
     anti self deception check. It must never be the decider model or the
     check is not independent.
     """
-    return model_call(system, user, max_tokens=max_tokens, json_mode=True, model=_ADVERSARIAL_MODEL)
+    return model_call(system, user, max_tokens=max_tokens, json_mode=True,
+                      model=_ADVERSARIAL_MODEL, task_id=task_id)
 
 
 # ---------------------------------------------------------------------------

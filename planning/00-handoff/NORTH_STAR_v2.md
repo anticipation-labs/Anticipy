@@ -30,7 +30,7 @@ The pendant always listens. **Wake-word is NOT the primary input.** A user who h
 9. **Pendant is always-on capture.** No wake-word. No push-to-talk. The engine decides what matters; the user is never asked to invoke.
 10. **Confirm + receipt for every external action.** Pre-action SMS confirm with YES/NO/EDIT, default to draft on no reply. Post-action receipt with verifiable identifier (Gmail Message-ID, calendar event link, etc).
 
-## The 6 user-facing gates (mechanical 100% marker)
+## The 7 user-facing gates (mechanical 100% marker)
 
 | Gate | Verify command | Pass criterion |
 |---|---|---|
@@ -40,6 +40,7 @@ The pendant always listens. **Wake-word is NOT the primary input.** A user who h
 | **G4 coldstart_fills_dossier** | active dossier has at least 10 people inhaled within 60 seconds | day-zero useful |
 | **G5 packaged_binary_serves** | engine on 8731 is `/Applications/Anticipy.app/Contents/MacOS/anticipy-engine` | the DMG-shipped binary actually serves on a clean Mac |
 | **G6 demo_rehearsed** | two consecutive dress-rehearsal PASS in last 4 hours | demo is not theoretical |
+| **G7 non_google_surfaces_work** | `bash scripts/v7/universal_beyond_google.sh` exits 0 | the universal action loop completes a real action on at least 3 non-Google surfaces (saucedemo, the-internet.herokuapp, wikipedia). Per memory/feedback_test_beyond_google.md: Gmail-only proof does not prove universality. |
 
 ## What is shipped today (verified mechanically)
 
@@ -121,7 +122,7 @@ When the P0 list is shipped, run all three. The user runs them. The user confirm
 ## When the user says "done"
 
 The cron writes `state/orchestrator/DONE_v2.json` only when:
-- All 6 gates GREEN simultaneously for 5 consecutive cycles
+- All 7 gates GREEN simultaneously for 5 consecutive cycles
 - All 3 full E2E tests above PASS without manual intervention
 - The user has signed off in writing in the orchestrator log
 

@@ -24,11 +24,26 @@ _DATE = re.compile(r"\b(today|tomorrow|monday|tuesday|wednesday|thursday|"
 # condition -> deferred until a dependency/place/event
 _AFTER_EVT = re.compile(r"\bafter (the )?(meeting|standup|sync|call|review)\b",
                         re.I)
+# the mirror of _AFTER_EVT: phrases that anchor the action to the
+# moments leading up to a calendar event. Calendar auto-prep reuses
+# this pattern to recognise "prep for the 3pm" / "before the call"
+# style utterances and the scheduler logic below schedules the action
+# at event_start - 30 min (the default prep window) rather than the
+# event end the AFTER variant uses.
+_BEFORE_EVT = re.compile(r"\b(before|prep(?:are)? (?:me )?for|"
+                          r"brief me (?:on|for)|ahead of) "
+                          r"(the )?(meeting|standup|sync|call|review|"
+                          r"appointment)\b", re.I)
 _OPPORTUNISTIC = re.compile(r"\b(when you get a chance|later|at some point|"
                             r"when you can|whenever)\b", re.I)
 _DEP_READY = re.compile(r"\bonce .* (ready|done|back|landed)\b", re.I)
 _STANDING = re.compile(r"\b(every|always|the regular|each (day|week)|"
                        r"from now on)\b", re.I)
+
+# Default lead time the calendar_prep scheduler uses when "before the
+# meeting" appears in a free-form utterance. The endpoint /api/calendar
+# /prep/trigger lets callers override on a per-request basis.
+PREP_LEAD_MINUTES_DEFAULT = 30
 
 
 @dataclass
@@ -45,6 +60,20 @@ def _next_event_end(world: SimWorld) -> Optional[float]:
     if not upcoming:
         return None
     return min(upcoming, key=lambda c: c.get("start", 0)).get("end")
+
+
+def _next_event_start(world: SimWorld) -> Optional[float]:
+    """Mirror of _next_event_end for the "before the meeting" case.
+
+    The calendar auto-prep path schedules a brief at
+    ``start - PREP_LEAD_MINUTES_DEFAULT``; this returns the start
+    of the very next upcoming event so the scheduler has the anchor.
+    """
+    upcoming = [c for c in world.calendar
+                if c.get("start", 0) >= world.now_s]
+    if not upcoming:
+        return None
+    return min(upcoming, key=lambda c: c.get("start", 0)).get("start")
 
 
 def classify(action, event: dict, world: SimWorld) -> TimePlan:
@@ -70,6 +99,22 @@ def classify(action, event: dict, world: SimWorld) -> TimePlan:
         return TimePlan("deferred",
                         f"after {_AFTER_EVT.search(txt).group(0)}",
                         end, "after a calendar event")
+
+    # "before the meeting" / "prep for the call" etc. Schedule the
+    # action to fire PREP_LEAD_MINUTES_DEFAULT minutes ahead of the
+    # next upcoming calendar event. Calendar auto-prep is the canonical
+    # caller; if no upcoming event is present we still mark this as
+    # scheduled with at_s=None so the orchestrator knows the user asked
+    # for a prep but the calendar has nothing to anchor to.
+    if _BEFORE_EVT.search(txt):
+        start = _next_event_start(world)
+        anchor = None
+        if start is not None:
+            anchor = max(world.now_s,
+                          start - (PREP_LEAD_MINUTES_DEFAULT / 60.0))
+        return TimePlan("scheduled",
+                        f"before {_BEFORE_EVT.search(txt).group(0)}",
+                        anchor, "before a calendar event")
 
     if _DEP_READY.search(txt):
         return TimePlan("deferred", _DEP_READY.search(txt).group(0), None,

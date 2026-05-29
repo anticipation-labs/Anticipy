@@ -113,5 +113,51 @@
     "fail_count": 0,
     "total_elapsed_sec": 65,
     "finished_at": "2026-05-29T19:24:04Z"
+  },
+  {
+    "run_id": "20260529T193947Z",
+    "started_at": "2026-05-29T19:39:47Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260529T193518Z age=193s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 65,
+    "finished_at": "2026-05-29T19:40:52Z"
+  },
+  {
+    "run_id": "20260529T200155Z",
+    "started_at": "2026-05-29T20:01:55Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260529T194300Z age=1060s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=done"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 64,
+    "finished_at": "2026-05-29T20:02:59Z"
   }
 ]}

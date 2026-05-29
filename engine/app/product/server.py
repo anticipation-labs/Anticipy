@@ -2178,6 +2178,33 @@ def api_recovery_test(p: RecoveryTest) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
+# Per task cost telemetry endpoint (G11 verify)
+# --------------------------------------------------------------------------
+# CYCLE_PROCEDURE.md G11: GET /api/cost/stats must return p95 per-task
+# cost. Pass = p95 < $0.005 (2.5x the $0.002/task ceiling that gives
+# $200/user/year on 100k tasks).
+
+@app.get("/api/cost/stats")
+def api_cost_stats(last_n: int = 100) -> JSONResponse:
+    """Returns per-task cost statistics from cost_telemetry.
+    Used by the G11 mechanical verify. Pass criterion: stats.p95_cost_usd
+    below the hard cap (currently $0.005)."""
+    if _cost_telemetry is None:
+        return JSONResponse(
+            {"ok": False, "error": "cost_telemetry module not loaded"},
+            status_code=500,
+        )
+    try:
+        stats = _cost_telemetry.get_per_task_stats(last_n=last_n)
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"{type(exc).__name__}: {exc}"},
+            status_code=500,
+        )
+    return JSONResponse({"ok": True, "stats": stats})
+
+
+# --------------------------------------------------------------------------
 # microphone permission probe
 # --------------------------------------------------------------------------
 
@@ -8689,6 +8716,66 @@ async def act(request: Request) -> JSONResponse:
     instruction = (a.instruction
                    or pending.get("instruction")
                    or "").strip()
+    # Per-task cost telemetry. Mint a task id at the top so EVERY model
+    # call made during this request (planner, memory reconcile, vision)
+    # is attributed to the same task. Caller may pre-supply the id (the
+    # confirm-card resume path does) via body.task_id; otherwise we
+    # mint a fresh one. We bind it both on the asyncio request thread
+    # AND in the cost_telemetry per-thread store so the budget gate
+    # can read it without an explicit argument.
+    cost_task_id = ""
+    if _cost_telemetry is not None:
+        try:
+            existing = str(body_obj.get("task_id") or "").strip()
+            cost_task_id = existing or f"act-{uuid.uuid4().hex[:12]}"
+            _cost_telemetry.start_task(cost_task_id)
+            _cost_telemetry.set_active_for_thread(cost_task_id)
+            from app.anticipy import platform_adapter as _pa_for_bind
+            _pa_for_bind.bind_active_task_id(cost_task_id)
+        except Exception:
+            cost_task_id = ""
+
+    def _finalize_act_response(resp: JSONResponse, status: str = "ok") -> JSONResponse:
+        """Attach the task id + running cost to the response payload
+        and close the cost telemetry record. Idempotent on a second
+        call (finish_task pops the active record)."""
+        if _cost_telemetry is None or not cost_task_id:
+            return resp
+        try:
+            record = _cost_telemetry.current_task_record(cost_task_id)
+            running_cost = float(record.get("cost_usd", 0.0)) if record else 0.0
+            vision_calls = int(record.get("vision_call_count", 0)) if record else 0
+            call_count = int(record.get("call_count", 0)) if record else 0
+            try:
+                existing_body = resp.body or b"{}"
+                existing_dict = json.loads(existing_body.decode("utf-8") or "{}")
+                if isinstance(existing_dict, dict):
+                    existing_dict.setdefault("task_id", cost_task_id)
+                    existing_dict["cost_telemetry"] = {
+                        "task_id": cost_task_id,
+                        "cost_usd": round(running_cost, 6),
+                        "call_count": call_count,
+                        "vision_call_count": vision_calls,
+                        "per_task_ceiling_usd":
+                            _cost_telemetry.PER_TASK_CEILING_USD,
+                        "per_task_hard_cap_usd":
+                            _cost_telemetry.PER_TASK_HARD_CAP_USD,
+                    }
+                    resp = JSONResponse(existing_dict, status_code=resp.status_code)
+            except Exception:
+                pass
+            _cost_telemetry.finish_task(cost_task_id, status=status)
+        except Exception:
+            pass
+        finally:
+            try:
+                _cost_telemetry.set_active_for_thread(None)
+                from app.anticipy import platform_adapter as _pa_for_unbind
+                _pa_for_unbind.bind_active_task_id(None)
+            except Exception:
+                pass
+        return resp
+
     # Omar 2026-05-26 directive: never flat-decline. The competent_decline
     # / decline flags on a pending record now only fire AFTER the user has
     # explicitly answered no on a surfaced confirm card. When we see them
@@ -8696,7 +8783,7 @@ async def act(request: Request) -> JSONResponse:
     # the user instead of refusing. New requests go through the universal
     # dispatcher below.
     if pending.get("competent_decline") or pending.get("decline"):
-        return JSONResponse({
+        return _finalize_act_response(JSONResponse({
             "ran": False,
             "status": "ask_user",
             "ask_user": True,
@@ -8708,10 +8795,11 @@ async def act(request: Request) -> JSONResponse:
             "options": pending.get("options") or ["proceed", "cancel"],
             "confirm_card_id": pending.get("confirm_card_id"),
             "task": instruction,
-        })
+        }), status="ask_user")
     if not instruction:
-        return JSONResponse({"ran": False,
-                             "error": "no instruction to act on"})
+        return _finalize_act_response(JSONResponse({"ran": False,
+                             "error": "no instruction to act on"}),
+                                       status="empty")
     # Persist to the durable task queue if this instruction did not
     # already arrive via the listen pipeline. The queue tracks the
     # instruction across engine restarts; the in-memory pending dict
@@ -10153,6 +10241,246 @@ def api_coldstart_status() -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
+# Calendar auto-prep
+# --------------------------------------------------------------------------
+#
+# When the user says "prep for the 3pm with Sarah" or the background
+# scheduler notices a meeting starting in the next 30 min, the engine
+# pulls together the calendar event, the latest Gmail thread with the
+# primary attendee, recent Drive docs that mention the attendee, and
+# any past Anticipy dossier notes about that person. DeepSeek V4
+# Flash (via the platform_adapter broker, prompt-cached) compresses
+# that into a one-page markdown brief. The brief is returned to the
+# caller AND delivered through the channel router (macOS local
+# notification + popover activity feed entry).
+#
+# Implementation lives in app.product.calendar_prep so this surface is
+# the thin route wrapper. See planning/00-handoff/HANDOFF_FOR_NEXT_AGENT
+# for the architectural constraints; no per-app recipes, no service
+# API calls, CDP only.
+# --------------------------------------------------------------------------
+
+
+class _CalendarPrepRequest(BaseModel):
+    meeting_id: str | None = None
+    attendee_email: str | None = None
+    deliver: bool = False
+
+
+@app.post("/api/calendar/prep")
+def api_calendar_prep(p: _CalendarPrepRequest) -> JSONResponse:
+    """Compose a brief for one calendar meeting.
+
+    Body:
+      {"meeting_id": "evt:abc123" | "" (find next),
+       "attendee_email": "sarah@example.com" (optional),
+       "deliver": false (no notification, just return the brief)}
+
+    Returns:
+      {"ok": bool, "brief": "...markdown...", "meeting": {...},
+       "context": {...}, "delivered": [...], "error": ""}
+
+    When meeting_id is provided we try to read the previously persisted
+    brief first (so a popover reopen does not re-pay the LLM cost).
+    When it is missing or no persisted brief exists, we find the next
+    upcoming meeting via CDP and prep it fresh.
+    """
+    try:
+        from app.product import calendar_prep as _cal
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+
+    meeting_id = (p.meeting_id or "").strip()
+    attendee_email = (p.attendee_email or "").strip()
+
+    # Fast path: caller knows the event_id and the brief is cached.
+    if meeting_id and not p.deliver:
+        cached = _cal.read_persisted_brief(meeting_id)
+        if cached:
+            return JSONResponse({
+                "ok": True,
+                "brief": cached,
+                "meeting": {"event_id": meeting_id,
+                            "from_cache": True},
+                "context": {"warnings": ["served_from_disk_cache"]},
+                "delivered": [],
+            })
+
+    # Find a fresh meeting. We always scan the next 60 min when the
+    # caller asks for a specific prep; the trigger endpoint below
+    # constrains the window for the background scheduler use case.
+    try:
+        meeting = _cal.find_upcoming_meeting(within_minutes=60)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"find_upcoming_meeting: "
+                     f"{type(exc).__name__}: {exc}",
+        }, status_code=500)
+    if meeting is None:
+        return JSONResponse({
+            "ok": False,
+            "error": "no upcoming meeting found in next 60 min",
+            "brief": "",
+            "meeting": None,
+            "context": {},
+            "delivered": [],
+        })
+    try:
+        result = _cal.prep_meeting(meeting,
+                                    attendee_email=attendee_email,
+                                    deliver=bool(p.deliver))
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"prep_meeting: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": result.ok,
+        "brief": result.brief,
+        "meeting": result.meeting.to_dict() if result.meeting else None,
+        "context": result.context,
+        "delivered": result.delivered,
+        "error": result.error,
+        "requested_meeting_id": meeting_id,
+    })
+
+
+class _CalendarPrepTriggerRequest(BaseModel):
+    within_minutes: int = 30
+    attendee_email: str | None = None
+
+
+@app.post("/api/calendar/prep/trigger")
+def api_calendar_prep_trigger(
+    p: _CalendarPrepTriggerRequest,
+) -> JSONResponse:
+    """Find the next meeting in the window and auto-prep + deliver.
+
+    Body:
+      {"within_minutes": 30 (default),
+       "attendee_email": "sarah@example.com" (optional override)}
+
+    Returns:
+      {"ok": bool, "brief": "...markdown...", "meeting": {...},
+       "context": {...}, "delivered": [...]}
+
+    This is the endpoint the background scheduler calls every 5 min,
+    and the one a popover button labelled "prep me for the next
+    meeting" maps to. When no meeting falls in the window the
+    response carries ``ok=false`` and an empty brief; the popover
+    surfaces this as a quiet "nothing coming up".
+    """
+    try:
+        from app.product import calendar_prep as _cal
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    within_minutes = max(1, int(p.within_minutes or 30))
+    attendee_email = (p.attendee_email or "").strip()
+    try:
+        meeting = _cal.find_upcoming_meeting(within_minutes=within_minutes)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"find_upcoming_meeting: "
+                     f"{type(exc).__name__}: {exc}",
+        }, status_code=500)
+    if meeting is None:
+        return JSONResponse({
+            "ok": False,
+            "brief": "",
+            "meeting": None,
+            "context": {},
+            "delivered": [],
+            "within_minutes": within_minutes,
+            "reason": "no upcoming meeting in window",
+        })
+    try:
+        result = _cal.prep_meeting(meeting,
+                                    attendee_email=attendee_email,
+                                    deliver=True)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"prep_meeting: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": result.ok,
+        "brief": result.brief,
+        "meeting": result.meeting.to_dict() if result.meeting else None,
+        "context": result.context,
+        "delivered": result.delivered,
+        "within_minutes": within_minutes,
+    })
+
+
+@app.get("/api/calendar/prep/scheduler/status")
+def api_calendar_prep_scheduler_status() -> JSONResponse:
+    """Snapshot of the background prep scheduler."""
+    try:
+        from app.product.calendar_prep import scheduler_state
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    return JSONResponse({"ok": True, **scheduler_state()})
+
+
+class _CalendarPrepSchedulerStart(BaseModel):
+    within_minutes: int = 30
+    scan_interval_s: float = 300.0
+
+
+@app.post("/api/calendar/prep/scheduler/start")
+def api_calendar_prep_scheduler_start(
+    p: _CalendarPrepSchedulerStart,
+) -> JSONResponse:
+    """Idempotent: start (or report on) the background prep scheduler.
+
+    The startup hook below already calls this on process start so most
+    callers do NOT need to invoke this. Exposed for test harnesses
+    that boot the scheduler with a different window / interval.
+    """
+    try:
+        from app.product.calendar_prep import start_scheduler
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    try:
+        snapshot = start_scheduler(
+            within_minutes=max(1, int(p.within_minutes or 30)),
+            scan_interval_s=max(10.0, float(p.scan_interval_s or 300.0)),
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"start_scheduler: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({"ok": True, "state": snapshot})
+
+
+# --------------------------------------------------------------------------
 # Universal action loop
 # --------------------------------------------------------------------------
 #
@@ -10702,6 +11030,69 @@ def _start_sms_pre_confirm_sweeper() -> None:
         daemon=True,
     )
     t.start()
+
+
+# --------------------------------------------------------------------------
+# Calendar auto-prep background scheduler bootstrap
+# --------------------------------------------------------------------------
+#
+# Scans the user's Google Calendar via CDP every 5 minutes for
+# meetings starting in the next 30 minutes. When it finds one (and we
+# have not already briefed it) it composes a prep brief and delivers
+# it through the channel router (macOS notify banner + popover feed
+# entry).
+#
+# Disabled by ANTICIPY_CALENDAR_PREP_DISABLE=1 for headless test
+# environments. The endpoints above remain usable regardless.
+
+_CALENDAR_PREP_SCHEDULER_STARTED = False
+
+
+@app.on_event("startup")
+def _start_calendar_prep_scheduler() -> None:
+    global _CALENDAR_PREP_SCHEDULER_STARTED
+    if _CALENDAR_PREP_SCHEDULER_STARTED:
+        return
+    disabled = (
+        os.environ.get("ANTICIPY_CALENDAR_PREP_DISABLE", "")
+        .strip()
+        in {"1", "true", "yes", "on"}
+    )
+    if disabled:
+        return
+    try:
+        from app.product.calendar_prep import start_scheduler
+    except Exception as exc:
+        print(
+            "[anticipy.calendar_prep] scheduler bootstrap import failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        return
+    try:
+        within = int(
+            os.environ.get("ANTICIPY_CALENDAR_PREP_WITHIN_MIN", "30")
+        )
+    except ValueError:
+        within = 30
+    try:
+        interval = float(
+            os.environ.get("ANTICIPY_CALENDAR_PREP_INTERVAL_S", "300")
+        )
+    except ValueError:
+        interval = 300.0
+    try:
+        start_scheduler(
+            within_minutes=max(1, within),
+            scan_interval_s=max(10.0, interval),
+        )
+        _CALENDAR_PREP_SCHEDULER_STARTED = True
+    except Exception as exc:
+        print(
+            "[anticipy.calendar_prep] scheduler start failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":
