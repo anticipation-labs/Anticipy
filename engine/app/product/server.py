@@ -2329,6 +2329,57 @@ def _task_queue_startup() -> None:
               flush=True)
 
 
+@app.on_event("startup")
+def _sms_inbound_poller_startup() -> None:
+    """Start the inbound SMS poller. The website's Twilio webhook stores
+    each inbound reply in public.anticipy_sms_inbound; we poll every
+    10 seconds, claim new rows for our account, and POST them to the
+    local /api/sms/inbound handler. The poller is silent when no
+    website URL is configured."""
+    try:
+        from app.product import sms_pre_confirm as _sms_pre
+    except Exception as exc:
+        print(
+            f"[sms_inbound_poller] sms_pre_confirm import failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        return
+    try:
+        result = _sms_pre.start_inbound_poller()
+        if result.get("ok"):
+            print(
+                f"[sms_inbound_poller] startup ok "
+                f"interval_seconds="
+                f"{result.get('interval_seconds')} "
+                f"engine_id={result.get('engine_id')} "
+                f"account_id={result.get('account_id')} "
+                f"website_url={result.get('website_url')}",
+                flush=True,
+            )
+        else:
+            print(
+                f"[sms_inbound_poller] startup skipped: "
+                f"{result.get('reason') or result}",
+                flush=True,
+            )
+    except Exception as exc:
+        print(
+            f"[sms_inbound_poller] startup failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+
+
+@app.on_event("shutdown")
+def _sms_inbound_poller_shutdown() -> None:
+    try:
+        from app.product import sms_pre_confirm as _sms_pre
+        _sms_pre.stop_inbound_poller()
+    except Exception:
+        pass
+
+
 def _audio_cb(indata, frames, time_info, status) -> None:
     import numpy as np
     chunk = np.asarray(indata).reshape(-1).copy()
@@ -8746,6 +8797,24 @@ def sms_expire_run() -> JSONResponse:
     expired = _sms_pre.expire_pending()
     return JSONResponse({"expired_count": len(expired),
                          "expired": expired})
+
+
+@app.get("/api/sms/inbound_poller/status")
+def sms_inbound_poller_status() -> JSONResponse:
+    """Report on the background inbound-SMS poller. Used by tests and
+    the popover to confirm the relay is healthy."""
+    from app.product import sms_pre_confirm as _sms_pre
+
+    return JSONResponse(_sms_pre.inbound_poller_status())
+
+
+@app.post("/api/sms/inbound_poller/start")
+def sms_inbound_poller_start() -> JSONResponse:
+    """Re-arm the inbound-SMS poller after an env change or test
+    teardown. Idempotent."""
+    from app.product import sms_pre_confirm as _sms_pre
+
+    return JSONResponse(_sms_pre.start_inbound_poller())
 
 
 # --------------------------------------------------------------------------

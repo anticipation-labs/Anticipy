@@ -73,6 +73,9 @@ import os
 import re
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -786,10 +789,318 @@ def expire_pending(now_ts: Optional[float] = None,
 
 
 # ----------------------------------------------------------------------
+# Inbound SMS poller. The engine cannot accept inbound Twilio webhooks
+# directly because it lives on 127.0.0.1 on user laptops. Instead, the
+# website (anticipy.ai) exposes POST /api/twilio/sms-inbound which
+# verifies the Twilio signature and stores the payload in
+# public.anticipy_sms_inbound. We poll that table every 10 seconds, claim
+# any unconsumed rows for our account, and forward each one to the local
+# /api/sms/inbound handler so the existing YES/NO/EDIT pipeline runs
+# unchanged.
+# ----------------------------------------------------------------------
+
+DEFAULT_INBOUND_POLL_INTERVAL_SECONDS = 10.0
+
+
+def _website_base_url() -> str:
+    """The public HTTPS host that owns /api/twilio/sms-inbound."""
+    return (
+        os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+        or os.environ.get("NEXT_PUBLIC_SITE_URL", "").strip()
+        or os.environ.get("VERCEL_URL", "").strip()
+        or "https://www.anticipy.ai"
+    ).rstrip("/")
+
+
+def _local_engine_base_url() -> str:
+    return (
+        os.environ.get("ANTICIPY_ENGINE_URL", "").strip()
+        or "http://127.0.0.1:8731"
+    ).rstrip("/")
+
+
+def _engine_id() -> str:
+    """Stable per-engine identifier so the website knows which engine
+    claimed which inbound rows. Persists across restarts."""
+    cached = os.environ.get("ANTICIPY_ENGINE_ID", "").strip()
+    if cached:
+        return cached
+    state_dir = Path(
+        os.environ.get("ANTICIPY_DATA_DIR", "")
+        or os.path.expanduser("~/.anticipy/v7")
+    )
+    state_dir.mkdir(parents=True, exist_ok=True)
+    id_path = state_dir / "engine_id"
+    if id_path.exists():
+        try:
+            return id_path.read_text(encoding="utf-8").strip() or "anticipy-engine"
+        except Exception:
+            pass
+    new_id = f"engine-{uuid.uuid4().hex[:12]}"
+    try:
+        id_path.write_text(new_id, encoding="utf-8")
+    except Exception:
+        pass
+    return new_id
+
+
+def _poller_account_id() -> str:
+    """The dossier account this engine owns. The website filters
+    anticipy_sms_inbound rows by account_id when the From-number maps
+    to a known user."""
+    return (
+        os.environ.get("ANTICIPY_ACCOUNT_ID", "").strip()
+        or os.environ.get("ANTICIPY_USER_ID", "").strip()
+        or "anticipy-user"
+    )
+
+
+def _poll_inbound_rows(timeout_seconds: float = 8.0) -> list[dict[str, Any]]:
+    """One blocking call to the website poll surface.
+
+    Returns the list of new inbound rows (each row already claimed by
+    this engine). Empty on no rows, on network error, or when the
+    website URL is unconfigured. Never raises.
+    """
+    base = _website_base_url()
+    if not base:
+        return []
+    account_id = _poller_account_id()
+    # include_unmapped=1 so dev engines without a phone-to-account map
+    # still receive replies they can route by latest_pending().
+    qs = urllib.parse.urlencode(
+        {
+            "account_id": account_id,
+            "include_unmapped": "1",
+            "limit": "50",
+        }
+    )
+    url = f"{base}/api/twilio/sms-inbound?{qs}"
+    req = urllib.request.Request(
+        url,
+        method="GET",
+        headers={
+            "Accept": "application/json",
+            "x-engine-id": _engine_id(),
+        },
+    )
+    try:
+        with urllib.request.urlopen(
+            req, timeout=float(timeout_seconds)
+        ) as resp:
+            body = resp.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return []
+    except Exception:
+        return []
+    try:
+        obj = json.loads(body)
+    except Exception:
+        return []
+    if not isinstance(obj, dict) or not obj.get("ok"):
+        return []
+    rows = obj.get("rows") or []
+    if not isinstance(rows, list):
+        return []
+    return rows
+
+
+def _forward_inbound_to_local_engine(row: dict[str, Any],
+                                     timeout_seconds: float = 5.0
+                                     ) -> dict[str, Any]:
+    """POST one inbound row to the engine's own /api/sms/inbound.
+
+    The local handler runs the existing YES/NO/EDIT pipeline. We send
+    form-encoded fields shaped like Twilio's native webhook payload so
+    the existing parser does not need to know it was relayed.
+    """
+    base = _local_engine_base_url()
+    if not base:
+        return {"ok": False, "error": "engine_url_unset"}
+    fields = {
+        "Body": str(row.get("body") or ""),
+        "From": str(row.get("from_number") or ""),
+        "To": str(row.get("to_number") or ""),
+        "MessageSid": str(row.get("message_sid") or ""),
+    }
+    raw = row.get("raw_form") or {}
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            if k in fields:
+                continue
+            try:
+                fields[str(k)] = str(v) if v is not None else ""
+            except Exception:
+                continue
+    data = urllib.parse.urlencode(fields).encode("utf-8")
+    req = urllib.request.Request(
+        f"{base}/api/sms/inbound",
+        data=data,
+        method="POST",
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(
+            req, timeout=float(timeout_seconds)
+        ) as resp:
+            try:
+                payload = resp.read().decode("utf-8", "replace")
+            except Exception:
+                payload = ""
+            status = getattr(resp, "status", 200)
+            return {
+                "ok": 200 <= int(status) < 300,
+                "status_code": int(status),
+                "body_excerpt": payload[:400],
+            }
+    except urllib.error.HTTPError as exc:
+        return {
+            "ok": False,
+            "status_code": int(getattr(exc, "code", 0) or 0),
+            "error": "http_error",
+        }
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+_POLLER_STATE: dict[str, Any] = {
+    "thread": None,
+    "stop": threading.Event(),
+    "started_at": None,
+    "polls_total": 0,
+    "rows_relayed": 0,
+    "last_poll_at": None,
+    "last_error": "",
+}
+
+
+def _poller_loop(interval_seconds: float) -> None:
+    state = _POLLER_STATE
+    while not state["stop"].is_set():
+        state["polls_total"] = int(state.get("polls_total") or 0) + 1
+        state["last_poll_at"] = time.time()
+        try:
+            rows = _poll_inbound_rows()
+            for row in rows:
+                try:
+                    res = _forward_inbound_to_local_engine(row)
+                    if res.get("ok"):
+                        state["rows_relayed"] = (
+                            int(state.get("rows_relayed") or 0) + 1
+                        )
+                    else:
+                        state["last_error"] = (
+                            f"forward_failed: "
+                            f"{res.get('error') or res.get('status_code')}"
+                        )
+                except Exception as exc:
+                    state["last_error"] = (
+                        f"forward_unhandled: {type(exc).__name__}: {exc}"
+                    )
+        except Exception as exc:
+            state["last_error"] = (
+                f"poll_unhandled: {type(exc).__name__}: {exc}"
+            )
+        if state["stop"].wait(timeout=float(interval_seconds)):
+            return
+
+
+def start_inbound_poller(
+    interval_seconds: Optional[float] = None,
+) -> dict[str, Any]:
+    """Start (idempotent) the background poller thread.
+
+    Returns a status dict. Safe to call on engine startup. The poller
+    is a no-op when ANTICIPY_INBOUND_SMS_POLL=0 or when no website URL
+    is configured."""
+    if os.environ.get("ANTICIPY_INBOUND_SMS_POLL", "1") == "0":
+        return {"ok": False, "reason": "disabled_via_env"}
+    state = _POLLER_STATE
+    if state.get("thread") is not None:
+        t = state["thread"]
+        if hasattr(t, "is_alive") and t.is_alive():
+            return {"ok": True, "already_running": True,
+                    "started_at": state.get("started_at")}
+    interval = float(
+        interval_seconds
+        if interval_seconds is not None
+        else os.environ.get(
+            "ANTICIPY_INBOUND_SMS_POLL_INTERVAL_SECONDS",
+            DEFAULT_INBOUND_POLL_INTERVAL_SECONDS,
+        )
+    )
+    state["stop"] = threading.Event()
+    state["started_at"] = time.time()
+    state["polls_total"] = 0
+    state["rows_relayed"] = 0
+    state["last_error"] = ""
+    t = threading.Thread(
+        target=_poller_loop,
+        name="anticipy-sms-inbound-poller",
+        args=(interval,),
+        daemon=True,
+    )
+    state["thread"] = t
+    t.start()
+    return {
+        "ok": True,
+        "started_at": state["started_at"],
+        "interval_seconds": interval,
+        "engine_id": _engine_id(),
+        "account_id": _poller_account_id(),
+        "website_url": _website_base_url(),
+    }
+
+
+def stop_inbound_poller(timeout: float = 5.0) -> None:
+    state = _POLLER_STATE
+    if state.get("stop"):
+        try:
+            state["stop"].set()
+        except Exception:
+            pass
+    t = state.get("thread")
+    if t is not None and hasattr(t, "is_alive") and t.is_alive():
+        try:
+            t.join(timeout=float(timeout))
+        except Exception:
+            pass
+    state["thread"] = None
+
+
+def inbound_poller_status() -> dict[str, Any]:
+    state = _POLLER_STATE
+    t = state.get("thread")
+    return {
+        "running": bool(t is not None
+                        and hasattr(t, "is_alive")
+                        and t.is_alive()),
+        "started_at": state.get("started_at"),
+        "polls_total": int(state.get("polls_total") or 0),
+        "rows_relayed": int(state.get("rows_relayed") or 0),
+        "last_poll_at": state.get("last_poll_at"),
+        "last_error": str(state.get("last_error") or ""),
+        "interval_seconds": float(
+            os.environ.get(
+                "ANTICIPY_INBOUND_SMS_POLL_INTERVAL_SECONDS",
+                DEFAULT_INBOUND_POLL_INTERVAL_SECONDS,
+            )
+        ),
+        "engine_id": _engine_id(),
+        "account_id": _poller_account_id(),
+        "website_url": _website_base_url(),
+    }
+
+
+# ----------------------------------------------------------------------
 # back-compat surface used by the server.py /api/act gate.
 # ----------------------------------------------------------------------
 __all__ = [
     "DEFAULT_TTL_SECONDS",
+    "DEFAULT_INBOUND_POLL_INTERVAL_SECONDS",
     "PendingConfirm",
     "PendingConfirmStore",
     "STATUS_APPROVED",
@@ -800,9 +1111,12 @@ __all__ = [
     "build_proposal_text",
     "create_pending_confirm",
     "expire_pending",
+    "inbound_poller_status",
     "parse_reply",
     "resolve_destination_number",
     "resolve_inbound",
     "send_sms_sync",
     "should_pre_confirm",
+    "start_inbound_poller",
+    "stop_inbound_poller",
 ]
