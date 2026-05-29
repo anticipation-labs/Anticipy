@@ -155,3 +155,4 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 63 | 2026-05-29 ~14:01 PDT | cycle 63: monitoring. |
 | 64 | 2026-05-29 ~14:04 PDT | cycle 64: monitoring. |
 | 65 | 2026-05-29 ~14:07 PDT | cycle 65: NORTH_STAR_v2 written. 3 demo moments + 10 hard rules + 6 mechanical gates + P0/P1/P2 missing-work taxonomy + 3 full E2E tests user runs to confirm done. Spawned P0 wave agent (cross-repo deploy task queue + inbound SMS webhook + audit-trail receipts). Wake-word EXPLICITLY demoted to P2 nice-to-have. |
+| 66 | 2026-05-29 ~14:10 PDT | cycle 66: monitoring, P0 agent in flight. |
