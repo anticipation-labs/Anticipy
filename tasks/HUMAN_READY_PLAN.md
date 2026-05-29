@@ -14,7 +14,6 @@ A brand-new human installs Anticipy from anticipy.ai, opens the Mac app, gets wa
 
 ## Items, in priority order
 
-1. **Build `desktop/src/popover.html`** so the Mac app actually has a visible UI when the user clicks the tray icon. Show: empty-dossier onboarding nudge (3 buttons: call me, drop an MP3, type a chat) OR a Now / Next / Past 3-column layout if dossier is populated. Tauri commands `fetch_active_task` / `fetch_next_tasks` / `fetch_past_tasks` already exist in `desktop/src-tauri/src/lib.rs:1547-1549` — wire them.
 
 2. **Replace status row jargon on `/app` and Mac app**. Currently visible: `REAL localhost engine | pending=mic-asr windows=18`. Replace with plain `"Anticipy is listening"` plus a small subtle "details" hover for the technical state. File: `src/app/app/page.tsx` for the website, `desktop/src/main.js` for the Mac app.
 
@@ -24,7 +23,7 @@ A brand-new human installs Anticipy from anticipy.ai, opens the Mac app, gets wa
 
 5. **Pre-prompt TCC permissions in Mac app**. macOS shows scary Allow/Deny dialogs cold when engine first uses mic/screen/Automation. Add a welcome screen in the Mac app explaining what permissions Anticipy needs and why, before the OS dialog fires.
 
-6. **MP3 upload UX**. The `/onboarding/audio` page exists but verify it actually accepts a real .mp3 upload, sends it to the engine, the engine transcribes it via parakeet-mlx, and the dossier is populated from it. End-to-end smoke test.
+6. **MP3 upload UX**. DONE 2026-05-29. End-to-end smoke verified: POST /api/onboarding/from_audio with audio/mpeg body, engine transcribed via parakeet-mlx (66 chars on a 12.5KB sample), broker extracted profile (people resolved). Evidence: proof-artifacts/mp3_upload_20260529/from_audio_response.json. Z-001 9/9 PASS after (state/v7/z001_e2e_runs/20260529T010807Z). Root cause of earlier ModuleNotFoundError _lzma was source engine launched with pyenv 3.10.14 (built without xz); restart with engine/.venv/bin/python3 (3.11.12) fixed it. Packaged engine in /Applications/Anticipy.app bundles its own Python via PyInstaller so users are unaffected.
 
 7. **Ambient mic UX**. On first launch, prompt the user "Want Anticipy to listen ambiently?" → on yes, kick off /api/listen/start. On no, leave it in pull-only mode.
 
