@@ -178,3 +178,4 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 86 | 2026-05-29 ~15:05 PDT | cycle 86: monitoring G7 + demo agents. |
 | 87 | 2026-05-29 ~15:08 PDT | cycle 87: monitoring. |
 | 88 | 2026-05-29 ~15:09 PDT | cycle 88: PARALLEL WAVE 6 agents spawned: phone-call channel + Apple popover polish + calendar auto-prep + cost telemetry + failure recovery transparency + real-voice TTS. Combined with in-flight G7 + demo-scenarios = 8 active. Under 16 cap. |
+| 89 | 2026-05-29 ~15:13 PDT | cycle 89: OWNER CORRECTED. Added gates G8-G12 (real-world scenarios, proactive fires unprompted, channel-by-urgency routes, cost under ceiling, failure recovery works). 12-gate mechanical bar instead of 7. The 8 in-flight agents cover most of these. NEW gates expose what was unmeasured. |

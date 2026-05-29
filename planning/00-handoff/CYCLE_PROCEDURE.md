@@ -41,9 +41,9 @@ If the agent claims success but verify fails:
 
 ## Step 3. Advance the scoreboard (mechanical, not vibe)
 
-Compute the 6 user-facing gate states from the verify commands below. Update the scorecard section of ORCHESTRATOR.md. NO percentage estimates. ONLY GREEN or RED per gate.
+Compute the 12 user-facing gate states from the verify commands below. Update the scorecard section of ORCHESTRATOR.md. NO percentage estimates. ONLY GREEN or RED per gate.
 
-The 6 user-facing gates (the new mechanical 100% marker):
+The 7 user-facing gates (the new mechanical 100% marker):
 
 | Gate | Mechanical verify | Pass criterion |
 |---|---|---|
@@ -53,12 +53,13 @@ The 6 user-facing gates (the new mechanical 100% marker):
 | **G4 coldstart_fills_dossier** | `python scripts/v7/discovery_coldstart.py` exits 0 (wipe + inhale + ≥10 real people in 60s) | day-0 useful |
 | **G5 packaged_binary_serves** | `ps -p $(lsof -t :8731) -o command=` matches `/Applications/Anticipy.app/Contents/MacOS/anticipy-engine` AND `curl /api/trivia/recent` returns 200 (not 404) | the DMG-shipped binary actually has the new features |
 | **G6 demo_rehearsed** | `state/demo/dress_rehearsal_log.json` shows two consecutive PASS runs within the last 4 hours | demo isn't theoretical |
+| **G7 non_google_surfaces_work** | `bash scripts/v7/universal_beyond_google.sh` exits 0 (aggregate result.json verdict=PASS, all 3 surfaces SUCCESS) | the universal action loop completes a real action on saucedemo + the-internet.herokuapp + wikipedia. Per memory/feedback_test_beyond_google.md: Gmail-only proof does not prove universality. |
 
-Stop the cron only when ALL 6 are GREEN.
+Stop the cron only when ALL 7 are GREEN.
 
 ## Step 4. Check the done criteria
 
-If all 6 gates GREEN: write `state/orchestrator/DONE.json`. Set cron message to "DONE. Notify user." End cycle.
+If all 12 gates GREEN: write `state/orchestrator/DONE.json`. Set cron message to "DONE. Notify user." End cycle.
 
 ## Step 5. Schedule new work
 
@@ -78,7 +79,7 @@ For each `in-flight` unit older than 15 minutes:
 ## Step 7. Write status line + count stagnation
 
 Single-line status to the bottom of the status log in ORCHESTRATOR.md. Format:
-`cycle <N> | <time> | discovery: <found_X_or_clean> | gates: <G1..G6 GR pattern> | next action: <what> | stagnation: <0|1|2|3>`
+`cycle <N> | <time> | discovery: <found_X_or_clean> | gates: <G1..G12 GR pattern> | next action: <what> | stagnation: <0|1|2|3>`
 
 Increment stagnation if BOTH:
 - No new commit landed since the last cycle that was not just a status log.
@@ -88,7 +89,7 @@ Reset stagnation to 0 on any commit or discovery hit.
 
 ## Step 8. Self-arm OR escalate
 
-If 6 gates GREEN: declare DONE. Notify user. Cron remains active for monitoring but produces no new work.
+If 12 gates GREEN: declare DONE. Notify user. Cron remains active for monitoring but produces no new work.
 If stagnation hits 3: write `state/orchestrator/STUCK.json`. Set cron message to "STUCK. Need owner attention." Continue running but only re-verifying, not spawning new work, until owner intervenes.
 Otherwise: the cron will fire again in 3 min.
 
@@ -99,7 +100,7 @@ Otherwise: the cron will fire again in 3 min.
 - Does NOT skip verify steps. Mechanical verify is the basis of trust.
 - Does NOT claim done on its own authority. Only verify commands flip status.
 - Does NOT use em-dashes. Owner rejects on sight.
-- Does NOT report scorecard percentages. Only the 6 user-facing gates count.
+- Does NOT report scorecard percentages. Only the 7 user-facing gates count.
 
 ## Trust contract with the owner
 
