@@ -55,7 +55,7 @@ TIMEOUT_ACT_S="${STRANGER_TIMEOUT_ACT_S:-120}"
 # produced. If the dossier has a contact, the planner resolves to the first
 # person. If the dossier is empty, the engine surfaces a clarify or pending
 # instruction; either way the run completes honestly.
-DEFAULT_INJECT_TEXT="I should send Joe a quick thanks for the PostHog walkthrough"
+DEFAULT_INJECT_TEXT="I should send Zara Somani a thank-you note for the OpenDoor Law walkthrough"
 INJECT_TEXT="${STRANGER_INJECT_TEXT:-$DEFAULT_INJECT_TEXT}"
 
 TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
