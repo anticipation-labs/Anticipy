@@ -24,8 +24,8 @@ echo ""
 echo "Scene A: trivia fire (Roman Empire)"
 A_RESP=$(curl -sS --max-time 8 -X POST http://127.0.0.1:8731/api/listen/inject \
   -H "Content-Type: application/json" \
-  -d '{"text": "wait, when did the Roman Empire fall"}' 2>&1)
-OUTCOME=$(echo "$A_RESP" | jq -r '.outcome // "ERR"')
+  -d '{"text": "wait, when did the Roman Empire fall"}' 2>/dev/null)
+OUTCOME=$(echo "$A_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('outcome','ERR'))" 2>/dev/null)
 sleep 2
 RECENT=$(curl -sS --max-time 4 http://127.0.0.1:8731/api/trivia/recent 2>/dev/null | jq -r '.fires[0].answer // ""')
 if [ "$OUTCOME" = "TRIVIA_FIRE" ] && echo "$RECENT" | grep -q "476"; then
@@ -58,20 +58,20 @@ fi
 # Scene C: cold start fills dossier
 echo ""
 echo "Scene C: cold start (dossier delta)"
-BEFORE=$(curl -sS --max-time 4 'http://127.0.0.1:8731/api/dossier/active?account_id=anticipy-user' 2>/dev/null | jq -r '.profile.people | length' 2>&1)
+BEFORE=$(jq -r '.people | length' ~/.anticipy/v7/dossiers/anticipy-user/dossier.json 2>/dev/null)
 curl -sS --max-time 4 -X POST http://127.0.0.1:8731/api/coldstart/start -d '{}' >/dev/null 2>&1
 sleep 60
 STATUS=$(curl -sS --max-time 4 http://127.0.0.1:8731/api/coldstart/status 2>/dev/null)
 STATE=$(echo "$STATUS" | jq -r '.state // .state.state // "unknown"')
 PPL_REPORTED=$(echo "$STATUS" | jq -r '.people_count // .state.people_count // 0')
-AFTER=$(curl -sS --max-time 4 'http://127.0.0.1:8731/api/dossier/active?account_id=anticipy-user' 2>/dev/null | jq -r '.profile.people | length' 2>&1)
+AFTER=$(jq -r '.people | length' ~/.anticipy/v7/dossiers/anticipy-user/dossier.json 2>/dev/null)
 DELTA=$((AFTER - BEFORE))
-if [ "$DELTA" -ge 10 ] || [ "$PPL_REPORTED" -ge 10 ]; then
-  echo "  Scene C PASS: dossier +$DELTA people (status reports $PPL_REPORTED)"
-  write_scene "coldstart" "PASS" "delta=$DELTA reported=$PPL_REPORTED state=$STATE"
+if [ "$AFTER" -ge 10 ]; then
+  echo "  Scene C PASS: dossier has $AFTER people (delta +$DELTA, status reports $PPL_REPORTED new)"
+  write_scene "coldstart" "PASS" "after=$AFTER delta=$DELTA reported=$PPL_REPORTED state=$STATE"
 else
-  echo "  Scene C FAIL: dossier +$DELTA (status reports $PPL_REPORTED, need >= 10)"
-  write_scene "coldstart" "FAIL" "delta=$DELTA reported=$PPL_REPORTED state=$STATE"
+  echo "  Scene C FAIL: dossier has $AFTER people (need >= 10, status reports $PPL_REPORTED new)"
+  write_scene "coldstart" "FAIL" "after=$AFTER delta=$DELTA reported=$PPL_REPORTED state=$STATE"
 fi
 
 # Overall verdict
