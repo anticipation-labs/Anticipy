@@ -1670,9 +1670,43 @@ def onboarding_call_stub(p: CallStub) -> JSONResponse:
             {"ok": False, "error": f"{type(e).__name__}: {e}"},
             status_code=500,
         )
+    # If real Twilio + opt-in flag are set in env, spawn the actual
+    # outbound call in the background so the human gets called instead
+    # of just having their intent logged. Stays a stub from the API's
+    # perspective; the real call is fire-and-forget on a worker.
+    real_call_spawned = False
+    real_call_error = ""
+    try:
+        twilio_ready = all([
+            os.environ.get("TWILIO_ACCOUNT_SID"),
+            os.environ.get("TWILIO_AUTH_TOKEN"),
+            os.environ.get("TWILIO_PHONE_NUMBER"),
+        ])
+        opted_in = os.environ.get("TWILIO_TEST_TO_REAL_NUMBER", "").strip() == "1"
+        twilio_mock = os.environ.get("TWILIO_MOCK", "").strip().lower() in ("1", "true", "yes")
+        if twilio_ready and opted_in and not twilio_mock:
+            script_path = (
+                Path(__file__).resolve().parents[3]
+                / "scripts" / "v7" / "twilio_onboarding_call.py"
+            )
+            if script_path.exists():
+                env = os.environ.copy()
+                env.setdefault("ANTICIPY_TEST_PHONE", phone)
+                subprocess.Popen(
+                    [sys.executable, str(script_path)],
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                real_call_spawned = True
+    except Exception as e:
+        real_call_error = f"{type(e).__name__}: {e}"
     return JSONResponse({
         "ok": True,
-        "is_stub": True,
+        "is_stub": not real_call_spawned,
+        "real_call_spawned": real_call_spawned,
+        "real_call_error": real_call_error,
         "queued_at": row["ts"],
         "phone": phone,
         "log_path": str(_call_stub_log_path()),
