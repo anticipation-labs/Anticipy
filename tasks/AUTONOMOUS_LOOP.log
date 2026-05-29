@@ -99,3 +99,14 @@ Harness 17:22. CHECK 16 still mid-flight. Sometimes runs 20-25 min depending on 
 
 == 2026-05-29 01:07 PDT cycle ==
 Harness 20:21. CHECK 16 over typical 17 min ceiling. Need to know if engine stuck or scenarios just slow.
+
+== 2026-05-29 01:10 PDT FINAL ==
+ALL 6 GATES GREEN.
+A: Z-001 9/9 PASS run 20260529T161036Z
+B: Vercel = HEAD 0860cabe
+C: DMG len 2515666283 = manifest sha cb24d8f9
+D: 14/15 PASS, git_head = 0860cabe (CHECK 16 alone failed at 17/30 reliability, but D bar is pass>=14)
+E: engine PID 46073 = /Applications/Anticipy.app/Contents/MacOS/anticipy-engine
+F: 2 strangers PASS today
+Cron 90026c21 deleted. Loop done.
+Real product bug to fix next (not blocking any gate): 10 of 20 resolvable scenarios in CHECK 16 return mode='' (empty) instead of mode='act'. The engine routes correctly when fastpath fires but the LLM path silently emits empty mode on roughly half. Diagnosed by agent a8246c22.
