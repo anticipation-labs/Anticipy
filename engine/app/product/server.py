@@ -84,6 +84,15 @@ try:
 except Exception:
     pass
 
+# Trivia-fire hot path. Module-level import so the trigger classifier
+# and cache stay warm across utterances. See planning/07-trivia-fire/
+# DESIGN.md and the maybe_fire docstring. Defensive try/except so a
+# trivia-side bug never wedges the engine.
+try:
+    from app import trivia as _trivia
+except Exception:
+    _trivia = None
+
 
 @app.middleware("http")
 async def _private_network_headers(request: Request, call_next):
@@ -4152,6 +4161,67 @@ def _process_utterance(
         except Exception as e:
             rec["profile_loaded"] = False
             rec["profile_error"] = f"{type(e).__name__}: {e}"
+        # Trivia-fire branch. If the utterance reads as a factual
+        # question the user wants answered, short-circuit the heavy
+        # action pipeline: speak the answer through TTS + log to the
+        # recent-fires queue, then mark the record so the rest of the
+        # judged path does not try to draft an email. Defensive: any
+        # failure here is logged into the record and the normal
+        # pipeline still runs as a safety net.
+        if _trivia is not None:
+            try:
+                trivia_rec = _trivia.maybe_fire(text)
+            except Exception as e:
+                trivia_rec = None
+                rec["trivia_error"] = f"{type(e).__name__}: {e}"
+            if trivia_rec is not None:
+                rec["trivia"] = trivia_rec
+                rec["outcome"] = "TRIVIA_FIRE"
+                rec["intent"] = "trivia"
+                rec["proposal"] = (trivia_rec.get("answer") or {}).get(
+                    "answer", "")
+                rec["decision_reason"] = (
+                    "Trivia trigger fired (confidence "
+                    f"{(trivia_rec.get('trigger') or {}).get('confidence')}); "
+                    "answer delivered via TTS + recent-fires log."
+                )
+                # Persist the trivia record on the listen state so the
+                # popover / debug surfaces can see it alongside other
+                # recent windows. We do NOT set _LISTEN.pending - this
+                # is not a pending action awaiting confirmation.
+                try:
+                    rec["memory"] = _memory_write(text, "trivia_fire")
+                except Exception:
+                    rec["memory"] = None
+                try:
+                    trace_sync = _sync_resolution_trace(rec)
+                    rec["resolution_trace_sync"] = trace_sync
+                    _SESS["last_resolution_trace_sync"] = trace_sync
+                except Exception as e:
+                    rec["resolution_trace_sync"] = {
+                        "ok": False,
+                        "error": f"{type(e).__name__}: {e}",
+                    }
+                try:
+                    plan_snapshot = {}
+                    _record_resolution_plan(rec.get("ingest_id"), {
+                        "ingest_id": rec.get("ingest_id"),
+                        "transcript": rec.get("transcript"),
+                        "outcome": rec.get("outcome"),
+                        "proposal": rec.get("proposal"),
+                        "plan": plan_snapshot,
+                        "source": rec.get("source"),
+                        "intent": rec.get("intent"),
+                        "clarify": False,
+                        "ts": rec.get("ts"),
+                    })
+                except Exception:
+                    pass
+                _set_current_ingest_id(None)
+                with _LISTEN["lock"]:
+                    _LISTEN["windows"] += 1
+                    _LISTEN["recent"] = ([rec] + _LISTEN["recent"])[:12]
+                return rec
         if _ambient_peer_chatter(text):
             rec["outcome"] = "IGNORED"
             rec["proposal"] = None
@@ -4661,6 +4731,46 @@ def inference_trace(ingest_id: str) -> JSONResponse:
         "trace": trace,
         "trace_length": len(trace),
         "plan": plan,
+    })
+
+
+@app.get("/api/trivia/recent")
+def trivia_recent(limit: int = 10) -> JSONResponse:
+    """Return the most recent trivia fires for popover display.
+
+    Each entry includes the utterance, the spoken answer, the source,
+    classifier confidence, end-to-end latency, and TTS spawn metadata.
+    Defaults to 10 entries; capped at 50 to keep the response small.
+    """
+    if _trivia is None:
+        return JSONResponse({
+            "ok": False,
+            "error": "trivia subsystem not available",
+            "fires": [],
+            "count": 0,
+        })
+    try:
+        n = max(1, min(int(limit or 10), 50))
+    except Exception:
+        n = 10
+    try:
+        rows = _trivia.recent_fires(limit=n)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+            "fires": [],
+            "count": 0,
+        })
+    try:
+        cache_stats = _trivia.cache.stats()
+    except Exception:
+        cache_stats = {}
+    return JSONResponse({
+        "ok": True,
+        "fires": rows,
+        "count": len(rows),
+        "cache": cache_stats,
     })
 
 
@@ -7962,6 +8072,239 @@ def api_test_reset_runtime() -> JSONResponse:
     except Exception:
         pass
     return JSONResponse({"ok": True, "reset": True})
+
+
+# --------------------------------------------------------------------------
+# Instant cold-start inhale (planning/10-instant-cold-start).
+#
+# The popover welcome screen pings /api/coldstart/start to kick off a
+# background walk of the user's open Gmail / Calendar tabs through the
+# existing loopback bridge on 127.0.0.1:7777, feeds the raw row text to
+# DeepSeek V4 Flash, and merges structured deltas into the active
+# dossier. /api/coldstart/status returns progress so the popover can
+# render a real progress strip.
+#
+# Implementation lives in app.coldstart.auto_inhale; this surface is the
+# thin route wrapper.
+# --------------------------------------------------------------------------
+class _ColdstartStart(BaseModel):
+    account_id: str | None = None
+    walk_gmail: bool = True
+    walk_calendar: bool = True
+    walk_drive: bool = False
+    batch_size: int = 30
+
+
+@app.post("/api/coldstart/start")
+def api_coldstart_start(p: _ColdstartStart) -> JSONResponse:
+    """Kick off the background inhale and return immediately.
+
+    Body is optional; when omitted the orchestrator uses the
+    in-process USER_ID and the default lane selection (Gmail inbox +
+    sent + Google Calendar agenda). If an inhale is already running
+    this is a no-op and the response carries ``already_running``.
+    """
+    try:
+        from app.coldstart.auto_inhale import (
+            DEFAULT_ACCOUNT_ID, start_inhale,
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "coldstart module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+
+    account_id = (p.account_id or "").strip() or DEFAULT_ACCOUNT_ID
+    # Cross-wire the engine's USER_ID when the caller did not pin one
+    # explicitly. Keeps the inhale dossier in the same per-account
+    # partition the planner / DossierLoader reads.
+    if not p.account_id and USER_ID:
+        account_id = USER_ID
+    try:
+        snapshot = start_inhale(
+            account_id=account_id,
+            walk_gmail=bool(p.walk_gmail),
+            walk_calendar=bool(p.walk_calendar),
+            walk_drive=bool(p.walk_drive),
+            batch_size=max(1, int(p.batch_size or 30)),
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"start_inhale: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({"ok": True, "started": True, "state": snapshot})
+
+
+@app.get("/api/coldstart/status")
+def api_coldstart_status() -> JSONResponse:
+    """Snapshot the cold-start orchestrator's progress.
+
+    Shape:
+      {
+        "state": "running" | "done" | "failed" | "idle",
+        "people_count": int,
+        "projects_count": int,
+        "tools_count": int,
+        "rows_collected": int,
+        "elapsed_ms": int,
+        "batches_sent": int,
+        "llm_calls_ok": int,
+        "llm_calls_failed": int,
+        "errors": [str],
+        "bridge_ready": bool
+      }
+    """
+    try:
+        from app.coldstart.auto_inhale import run_state
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "state": "failed",
+            "error": (
+                "coldstart module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    return JSONResponse({"ok": True, **run_state()})
+
+
+# --------------------------------------------------------------------------
+# Notifier delivery test surface
+# --------------------------------------------------------------------------
+#
+# The proactive cascade picks IN_APP / PUSH / SMS / VOICE channels, and the
+# notifier delivers them via the slots wired in DeliveryRoutes. This endpoint
+# fires ONE notification on the channel the caller picks. It is the demo
+# probe that proves a channel actually delivers without driving the whole
+# cascade. SMS and voice REQUIRE TWILIO_TEST_TO_REAL_NUMBER=1 in env;
+# without that flag they short-circuit to a credentials probe so we do not
+# spam real phones during routine checks.
+
+
+class NotifyTest(BaseModel):
+    channel: str
+    title: str | None = None
+    body: str | None = None
+    to: str | None = None  # phone for sms/voice; falls back to env
+
+
+@app.post("/api/notify/test")
+async def api_notify_test(p: NotifyTest) -> JSONResponse:
+    """Fire one notification on the chosen channel.
+
+    body: {"channel": "local"|"sms"|"voice", "title": "...", "body": "..."}
+
+    For sms/voice the caller can pass {"to": "+1..."} to override the
+    default phone (env TWILIO_NOTIFY_TO or TWILIO_TEST_TO_REAL_NUMBER_E164).
+    Real Twilio outbound is gated by TWILIO_TEST_TO_REAL_NUMBER=1 so that
+    automated checks do not place real calls.
+    """
+    channel = (p.channel or "").strip().lower()
+    title = p.title or "Anticipy"
+    body = p.body or ""
+    if channel not in {"local", "in_app", "push", "sms", "voice"}:
+        return JSONResponse({
+            "ok": False,
+            "error": f"unknown channel {channel!r}; "
+                     "expected local|in_app|push|sms|voice",
+        }, status_code=400)
+
+    try:
+        from app.proactive.notifier import (
+            local_notify as _local_notify,
+            twilio_sms as _twilio_sms,
+            twilio_voice as _twilio_voice,
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"notifier import failed: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+
+    if channel in {"local", "in_app", "push"}:
+        try:
+            result = await _local_notify(title, body)
+        except Exception as exc:
+            return JSONResponse({
+                "ok": False,
+                "channel": channel,
+                "error": f"{type(exc).__name__}: {exc}",
+            }, status_code=500)
+        return JSONResponse({
+            "ok": True,
+            "channel": channel,
+            "delivery": result,
+        })
+
+    # SMS / voice paths share the Twilio gate logic.
+    to_number = (p.to or os.environ.get("TWILIO_NOTIFY_TO")
+                 or os.environ.get("TWILIO_TEST_TO_REAL_NUMBER_E164")
+                 or "").strip()
+    creds_ready = bool(
+        os.environ.get("TWILIO_ACCOUNT_SID")
+        and os.environ.get("TWILIO_AUTH_TOKEN")
+        and os.environ.get("TWILIO_PHONE_NUMBER")
+    )
+    real_opt_in = (
+        os.environ.get("TWILIO_TEST_TO_REAL_NUMBER", "").strip() == "1"
+    )
+
+    if not creds_ready:
+        return JSONResponse({
+            "ok": False,
+            "channel": channel,
+            "gated": True,
+            "reason": "twilio_credentials_missing",
+            "detail": "set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
+                      "TWILIO_PHONE_NUMBER in env",
+        }, status_code=503)
+
+    if not real_opt_in:
+        # Safe default: do not fire real outbound. The notify function
+        # is wired and ready; this short-circuit prevents accidental
+        # SMS/voice spam during automated tests.
+        return JSONResponse({
+            "ok": True,
+            "channel": channel,
+            "gated": True,
+            "reason": "TWILIO_TEST_TO_REAL_NUMBER not set",
+            "detail": "Twilio credentials ready; real outbound suppressed. "
+                      "Set TWILIO_TEST_TO_REAL_NUMBER=1 to actually send.",
+            "to": to_number,
+        })
+
+    if not to_number:
+        return JSONResponse({
+            "ok": False,
+            "channel": channel,
+            "gated": True,
+            "reason": "no_destination_phone",
+            "detail": "pass 'to' in body or set TWILIO_NOTIFY_TO in env",
+        }, status_code=400)
+
+    try:
+        if channel == "sms":
+            result = await _twilio_sms(to_number, body or title)
+        else:  # voice
+            result = await _twilio_voice(to_number, body=body or title)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "channel": channel,
+            "to": to_number,
+            "error": f"{type(exc).__name__}: {exc}",
+        }, status_code=502)
+
+    return JSONResponse({
+        "ok": True,
+        "channel": channel,
+        "to": to_number,
+        "delivery": result,
+    })
 
 
 def _pick_free_port() -> int:
