@@ -91,3 +91,4 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 |---|---|---|
 | 0 | 2026-05-29 ~10:55 PDT | orchestrator created, 5 planning agents launched, 11 execution agents queued |
 | 1 | 2026-05-29 ~11:18 PDT | user accidentally killed all sub-agents; salvaged 3-of-5 platform_adapter.py fixes (a4c707b9), Z-001 9/9 PASS, respawned 7 exec agents in worktrees (units 06, 08-remainder, 09+10 combined, 12, 13, 14, 16) |
+| 2 | 2026-05-29 ~11:21 PDT | cycle 2: all 7 exec agents alive (jsonl files growing), no commits landed yet, capacity 7/16, engine alive on 8731, no new work to spawn (queue exhausted of dep-clear units), self-arm. Engine onboarded flipped to false (probably from a cold-start agent wiping dossier for testing); will re-verify Z-001 after agents land. |
