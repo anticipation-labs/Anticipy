@@ -41,7 +41,7 @@ export function Footer() {
             </Link>
           </nav>
           <p className="text-[13px] text-[var(--text-on-dark-muted)]">
-            omar@anticipy.ai
+            hello@anticipy.ai
           </p>
         </div>
       </div>

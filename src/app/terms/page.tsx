@@ -1052,7 +1052,7 @@ export default function TermsOfService() {
                   Legal inquiries: <a href="mailto:hello@anticipy.ai" className="text-gold hover:underline">hello@anticipy.ai</a>
                 </li>
                 <li>
-                  General inquiries: <a href="mailto:omar@anticipy.ai" className="text-gold hover:underline">omar@anticipy.ai</a>
+                  General inquiries: <a href="mailto:hello@anticipy.ai" className="text-gold hover:underline">hello@anticipy.ai</a>
                 </li>
               </ul>
             </section>

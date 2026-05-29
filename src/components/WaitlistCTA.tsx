@@ -151,7 +151,7 @@ export function WaitlistCTA() {
 
         <ScrollReveal delay={0.3}>
           <p className="text-[15px] text-[var(--text-on-dark-muted)] font-light mt-12">
-            omar@anticipy.ai · anticipy.ai
+            hello@anticipy.ai · anticipy.ai
           </p>
         </ScrollReveal>
       </div>

@@ -2452,10 +2452,10 @@ export default function PrivacyPolicy() {
                     General Inquiries:
                   </strong>{" "}
                   <a
-                    href="mailto:omar@anticipy.ai"
+                    href="mailto:hello@anticipy.ai"
                     className="text-gold hover:underline"
                   >
-                    omar@anticipy.ai
+                    hello@anticipy.ai
                   </a>
                 </li>
                 <li>
