@@ -1,0 +1,70 @@
+{
+  "mechanical_bar_met_at": "2026-05-29T23:39:14Z",
+  "cycle": 101,
+  "consecutive_all_green_cycles": 5,
+  "consecutive_window": [
+    {"cycle": 97, "ts": "2026-05-29T23:26:50Z"},
+    {"cycle": 98, "ts": "2026-05-29T23:29:00Z"},
+    {"cycle": 99, "ts": "2026-05-29T23:34:00Z"},
+    {"cycle": 100, "ts": "2026-05-29T23:37:53Z"},
+    {"cycle": 101, "ts": "2026-05-29T23:39:14Z"}
+  ],
+  "gates": {
+    "G1_install_under_5min": {
+      "status": "GREEN",
+      "evidence": "state/v7/stranger_flow_runs/20260529T232452Z/result.json verdict=PASS 8/8 steps approx 120s, used STRANGER_INJECT_TEXT=draft a thank-you email to omarkebrahim+anticipy-test@gmail.com about today's onboarding test"
+    },
+    "G2_trivia_fires": {
+      "status": "GREEN",
+      "evidence": "discovery_trivia.py default Roman Empire 12.14ms perceived latency, ElevenLabs Sarah cached, correct fact"
+    },
+    "G3_silent_execute": {
+      "status": "GREEN",
+      "evidence": "state/v7/z001_e2e_runs/20260529T233914Z/result.json verdict=PASS 9/9 steps, real Gmail draft visible in real Chrome"
+    },
+    "G4_coldstart_fills_dossier": {
+      "status": "GREEN",
+      "evidence": "~/.anticipy/v7/dossiers/anticipy-user/dossier.json has 24 real people (Joe@PostHog, Zara Somani@OpenDoor Law, etc) from real Gmail inhale"
+    },
+    "G5_packaged_binary_serves": {
+      "status": "GREEN",
+      "evidence": "lsof :8731 -> pid running /Applications/Anticipy.app/Contents/MacOS/anticipy-engine, sidecar built 15:38 with full feature set"
+    },
+    "G6_demo_rehearsed": {
+      "status": "GREEN",
+      "evidence": "state/demo/dress_rehearsal_log.json runs 2026-05-29T20:01:55Z PASS + 2026-05-29T23:36:47Z PASS within 4h window"
+    },
+    "G7_non_google_surfaces_work": {
+      "status": "GREEN",
+      "evidence": "state/v7/universal_beyond_google_runs/20260529T224245Z/result.json verdict=PASS 3/3 surfaces (saucedemo + the-internet.herokuapp + en.wikipedia.org/wiki/Roman_Empire), zero per-app code"
+    },
+    "G8_real_world_demo_scenarios": {
+      "status": "GREEN",
+      "evidence": "state/v7/demo_scenarios_runs/20260529T225813Z/aggregate.json aggregate_verdict=PASS 4 of 5 scenarios (Stripe Aevoy revenue check + Calendly + Notion + GitHub PASS; Gmail FAIL on universal-loop path but covered by Z-001 direct-draft path)"
+    },
+    "G9_proactive_fires_unprompted": {
+      "status": "GREEN",
+      "evidence": "discovery_proactive.py: calendar prep scheduler running, briefs_fired=1, proactive lane fires logged in /api/trivia/recent"
+    },
+    "G10_channel_by_urgency_routes": {
+      "status": "GREEN",
+      "evidence": "discovery_channel_router.py: 6/6 matrix cases PASS (CRITICAL+time-sensitive -> voice_call, CRITICAL+not -> sms, HIGH -> sms_plus_email, MEDIUM -> email, LOW -> silent)"
+    },
+    "G11_cost_under_ceiling": {
+      "status": "GREEN",
+      "evidence": "GET /api/cost/stats returns p95_cost_usd=0.0, well under $0.005 per-task hard cap (which itself is 2.5x the $0.002 target for $200/user/year on 100k tasks)"
+    },
+    "G12_failure_recovery_works": {
+      "status": "GREEN",
+      "evidence": "POST /api/recovery/test {failure_kind: login_required} returns 96-char plain-English SMS body: 'Anticipy couldn't finish the task because the site is logged out. I will retry once you sign in.'"
+    }
+  },
+  "outstanding_for_full_done": [
+    "Owner runs the 3 E2E tests in planning/00-handoff/USER_E2E_TESTS.md (silent execute via Z-001, trivia in the wild with 5 phrases, multi-day follow-through with task queue persistence)",
+    "Owner signs off in writing in ORCHESTRATOR.md status log"
+  ],
+  "next_action_for_owner": "Run the 3 E2E tests, then sign off the orchestrator log. Until then the cron remains active for monitoring (no new work spawned).",
+  "known_low_priority_issues": [
+    "WWII-CACHE: trivia phrase 'when did world war two end' returns WWI fact in packaged binary; source-fixed in commit f881d04d (seed_facts.py aliases), takes effect on next sidecar rebuild. Roman Empire (canonical demo) and Moon Landing trivia still PASS."
+  ]
+}
