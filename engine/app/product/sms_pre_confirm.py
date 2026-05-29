@@ -143,6 +143,13 @@ class PendingConfirm:
     decided_at: Optional[float] = None
     decided_via: str = ""
     reply_body: str = ""
+    # Channel router output (engine/app/product/channel_router.py)
+    # serialised so the audit trail can replay the decision. Default
+    # is "sms" to preserve the historical behaviour for any older
+    # record that predates the channel router.
+    channel: str = "sms"
+    criticality: str = ""
+    time_sensitivity: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -161,6 +168,9 @@ class PendingConfirm:
             "decided_at": self.decided_at,
             "decided_via": self.decided_via,
             "reply_body": self.reply_body,
+            "channel": self.channel or "sms",
+            "criticality": self.criticality or "",
+            "time_sensitivity": self.time_sensitivity or "",
         }
 
     @classmethod
@@ -182,6 +192,9 @@ class PendingConfirm:
                         else float(d.get("decided_at") or 0.0)),
             decided_via=str(d.get("decided_via") or ""),
             reply_body=str(d.get("reply_body") or ""),
+            channel=str(d.get("channel") or "sms"),
+            criticality=str(d.get("criticality") or ""),
+            time_sensitivity=str(d.get("time_sensitivity") or ""),
         )
 
 
@@ -588,6 +601,306 @@ def send_sms_sync(to_number: str, body: str) -> dict[str, Any]:
 
 
 # ----------------------------------------------------------------------
+# Voice confirm: place a Twilio Programmable Voice call whose TwiML
+# Says the proposal and Gathers spoken YES / NO / EDIT. The Gather
+# action target is /api/sms/inbound so the existing inbound webhook
+# resolves the reply through the same pipeline as text replies.
+# ----------------------------------------------------------------------
+def _xml_escape(value: str) -> str:
+    return (
+        (value or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def _gather_action_url() -> str:
+    """The public URL Twilio POSTs the speech result to.
+
+    Voice flows need a publicly reachable webhook target. The engine
+    cannot host one (it lives on 127.0.0.1) so we point at the
+    website's /api/twilio/sms-inbound relay. That relay drops the row
+    into Supabase, the engine poller picks it up, and the local
+    /api/sms/inbound runs the existing YES/NO/EDIT pipeline. When
+    ANTICIPY_VOICE_GATHER_URL is set we honour the override
+    (operator-test path).
+    """
+    override = os.environ.get("ANTICIPY_VOICE_GATHER_URL", "").strip()
+    if override:
+        return override
+    base = (
+        os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+        or os.environ.get("NEXT_PUBLIC_SITE_URL", "").strip()
+        or "https://www.anticipy.ai"
+    ).rstrip("/")
+    return f"{base}/api/twilio/sms-inbound"
+
+
+def build_voice_confirm_twiml(proposal_text: str) -> str:
+    """The TwiML payload Twilio fetches when the call connects.
+
+    Speaks the proposal with the `alice` voice, then opens a Gather
+    block configured for speech so the user can say YES / NO / EDIT
+    out loud. Twilio POSTs the SpeechResult back to action= so the
+    /api/sms/inbound parser can run on it.
+    """
+    safe = _xml_escape(proposal_text or "Anticipy is calling.")
+    action_url = _xml_escape(_gather_action_url())
+    return (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<Response>"
+        f"<Say voice=\"alice\">{safe}</Say>"
+        f"<Gather input=\"speech\" action=\"{action_url}\" "
+        "method=\"POST\" speechTimeout=\"auto\" "
+        "hints=\"yes,no,edit,cancel,send,confirm\">"
+        "<Say voice=\"alice\">Please say YES to send, "
+        "NO to cancel, or EDIT to revise.</Say>"
+        "</Gather>"
+        "<Say voice=\"alice\">No reply heard. I will save this as "
+        "a draft for review.</Say>"
+        "</Response>"
+    )
+
+
+def _send_voice_confirm(to_number: str, proposal_text: str,
+                        *, twiml_url: Optional[str] = None
+                        ) -> dict[str, Any]:
+    """Place a Programmable Voice call carrying the proposal. Same
+    mock/credentials/opt-in semantics as send_sms_sync so the dev
+    flow keeps working without a real Twilio account.
+
+    Returns {"ok": bool, "twilio_sid": "...", "twilio_status": ...,
+    "error": "..." | None, "mock": bool, "twiml": "<...>",
+    "twiml_url": "..."}.
+
+    When `twiml_url` is None we host the TwiML inline via twimlets
+    (the same fallback `twilio_voice` already uses). The TwiML is
+    also returned in the response so the audit trail captures the
+    exact content the user heard.
+    """
+    twiml = build_voice_confirm_twiml(proposal_text)
+    if not to_number:
+        return {"ok": False, "twilio_sid": "", "twilio_status": 0,
+                "mock": False, "error": "no destination phone",
+                "twiml": twiml, "twiml_url": twiml_url or ""}
+    mock_env = (os.environ.get("TWILIO_MOCK") or "").strip().lower()
+    twilio_mock = mock_env in {"1", "true", "yes", "on"}
+    real_opt_in = (
+        (os.environ.get("TWILIO_TEST_TO_REAL_NUMBER") or "").strip()
+        == "1"
+    )
+    creds_ready = _twilio_credentials_ready()
+    if twilio_mock or not creds_ready or not real_opt_in:
+        reason_parts = []
+        if twilio_mock:
+            reason_parts.append("TWILIO_MOCK=1")
+        if not creds_ready:
+            reason_parts.append("twilio_credentials_missing")
+        if not real_opt_in:
+            reason_parts.append("TWILIO_TEST_TO_REAL_NUMBER!=1")
+        reason = ", ".join(reason_parts) or "unknown"
+        logger.info(
+            "voice_pre_confirm_mock to=%s body=%r reason=%s",
+            to_number, proposal_text[:120], reason,
+        )
+        return {"ok": True, "twilio_sid": "", "twilio_status": 0,
+                "mock": True, "error": None, "mock_reason": reason,
+                "twiml": twiml, "twiml_url": twiml_url or ""}
+    try:
+        from app.proactive.notifier import twilio_voice as _twilio_voice
+    except Exception as exc:
+        return {"ok": False, "twilio_sid": "", "twilio_status": 0,
+                "mock": False, "error":
+                f"notifier_import_failed: {type(exc).__name__}: {exc}",
+                "twiml": twiml, "twiml_url": twiml_url or ""}
+    import asyncio
+
+    async def _do_call() -> dict[str, Any]:
+        return await _twilio_voice(to_number, twiml_url=twiml_url,
+                                   body=proposal_text)
+    try:
+        result = asyncio.run(_do_call())
+    except RuntimeError as exc:
+        if "asyncio.run() cannot be called from a running event loop" \
+                in str(exc):
+            container: dict[str, Any] = {}
+
+            def _runner() -> None:
+                loop = asyncio.new_event_loop()
+                try:
+                    asyncio.set_event_loop(loop)
+                    container["result"] = loop.run_until_complete(
+                        _do_call()
+                    )
+                except Exception as inner:
+                    container["error"] = inner
+                finally:
+                    loop.close()
+            t = threading.Thread(target=_runner, daemon=True)
+            t.start()
+            t.join(timeout=30)
+            if "error" in container:
+                exc_inner = container["error"]
+                return {"ok": False, "twilio_sid": "",
+                        "twilio_status": 0, "mock": False,
+                        "error":
+                        f"{type(exc_inner).__name__}: {exc_inner}",
+                        "twiml": twiml,
+                        "twiml_url": twiml_url or ""}
+            result = container.get("result") or {}
+        else:
+            return {"ok": False, "twilio_sid": "", "twilio_status": 0,
+                    "mock": False, "error":
+                    f"{type(exc).__name__}: {exc}",
+                    "twiml": twiml, "twiml_url": twiml_url or ""}
+    except Exception as exc:
+        return {"ok": False, "twilio_sid": "", "twilio_status": 0,
+                "mock": False, "error":
+                f"{type(exc).__name__}: {exc}",
+                "twiml": twiml, "twiml_url": twiml_url or ""}
+    return {
+        "ok": bool(result.get("ok")),
+        "twilio_sid": str(result.get("twilio_sid") or ""),
+        "twilio_status": result.get("twilio_status"),
+        "mock": False,
+        "error": None,
+        "twiml": twiml,
+        "twiml_url": str(result.get("twiml_url") or twiml_url or ""),
+    }
+
+
+def _send_email_confirm(proposal_text: str) -> dict[str, Any]:
+    """Best-effort email dispatch for the channel router's EMAIL and
+    SMS_PLUS_EMAIL paths.
+
+    The packaged engine drives the user's real Gmail via CDP for
+    sends (see _send_receipt_email_via_cdp in server.py). That helper
+    needs a live Chrome attached at port 9222 which is not always
+    present in dev. Instead of importing it here (and forcing a hard
+    dep on CDP from a pure-Python module) we log the would-have-sent
+    body and mark the dispatch as `mock=True`. The popover surfaces
+    the same proposal text so the user still sees the request, and
+    the channel selection is captured on the persisted record so an
+    operator can replay through the real Gmail path if needed.
+    """
+    if not proposal_text:
+        return {"ok": False, "mock": False,
+                "error": "no proposal body"}
+    logger.info(
+        "email_pre_confirm_dispatch body=%r",
+        proposal_text[:240],
+    )
+    # When ANTICIPY_USER_EMAIL is set we record it so the audit trail
+    # captures the intended recipient even though we are not opening
+    # Chrome from this thread.
+    to_email = (os.environ.get("ANTICIPY_USER_EMAIL", "")
+                or os.environ.get("ANTICIPY_NOTIFY_EMAIL", "")
+                or "").strip()
+    return {"ok": True, "mock": True, "error": None,
+            "to_email": to_email,
+            "note": "engine logs email proposal; popover surfaces "
+                    "the same text. Live Gmail send happens via the "
+                    "receipt path on user request."}
+
+
+# ----------------------------------------------------------------------
+# Channel selection
+# ----------------------------------------------------------------------
+def _criticality_from_plan(plan: dict[str, Any],
+                           instruction: str) -> tuple[str, str]:
+    """Run the risk assessor on (plan, instruction) and return a
+    (criticality, time_sensitivity) pair the channel router can
+    consume.
+
+    The risk assessor's `level` (low/medium/high) does not map
+    1:1 to the matrix's CRITICAL / HIGH / MEDIUM / LOW tiers. The
+    feedback (feedback_channel_by_urgency.md) calls out:
+      - money irreversible -> CRITICAL
+      - personal-name signature legal doc -> CRITICAL
+      - patient lab order / medical -> CRITICAL
+      - email send to external client about deal -> HIGH
+      - calendar reschedule with multi-party impact -> HIGH
+      - email draft saved -> MEDIUM
+      - routine reminder / status update -> LOW
+
+    We promote risk_assessor's level using the additional signals it
+    already computes: money_amount > 0 marks the action irreversible
+    in dollar terms; irreversibility_score >= 0.9 marks the delete /
+    wipe / destroy class. third_party_impact promotes the otherwise-
+    medium send-to-external-recipient class to HIGH so a real email
+    going out the door gets BOTH SMS and email confirms instead of
+    email-only.
+
+    Pure-Python; no network.
+    """
+    try:
+        from app.product.risk_assessor import assess as _assess
+    except Exception:
+        # Conservative fallback so a packaging miss never breaks the
+        # gate. Treat everything as HIGH so the user is at least
+        # notified via SMS + email.
+        return "high", "not_time_sensitive"
+    binding: dict[str, Any] = {}
+    intent_text = instruction or str(plan.get("task") or "")
+    person = str(plan.get("person") or "").strip()
+    if "@" in person and "." in person:
+        binding["recipients"] = [person]
+    elif person:
+        binding["contact"] = person
+    surface = str(plan.get("surface_target") or "").strip()
+    if surface:
+        binding["surface_target"] = surface
+    try:
+        assessment = _assess(intent_text, binding, {})
+    except Exception:
+        return "high", "not_time_sensitive"
+    # CRITICAL promotions (money irreversible, delete-class).
+    if assessment.money_amount and assessment.money_amount > 0:
+        crit = "critical"
+    elif (assessment.irreversibility_score or 0.0) >= 0.9:
+        crit = "critical"
+    elif assessment.level == "high":
+        # risk_assessor only emits level=high for the delete-class
+        # and money paths, both already caught above. This branch is
+        # the safety net.
+        crit = "critical"
+    elif (assessment.level == "medium"
+          and (assessment.third_party_impact
+               or (assessment.irreversibility_score or 0.0) >= 0.5)):
+        # External send / publish / post: gets both SMS + email so
+        # the user has receipt-and-reach before the message hits the
+        # outside world.
+        crit = "high"
+    elif assessment.level == "medium":
+        crit = "medium"
+    elif assessment.level == "low":
+        crit = "low"
+    else:
+        crit = "medium"
+    return crit, assessment.time_sensitivity or "not_time_sensitive"
+
+
+def _channel_for_plan(plan: dict[str, Any], instruction: str
+                      ) -> tuple[str, str, str]:
+    """Return (channel_value, criticality, time_sensitivity).
+
+    `channel_value` is the string form of channel_router.Channel so
+    callers can persist it on the PendingConfirm record.
+    """
+    crit, ts = _criticality_from_plan(plan, instruction)
+    try:
+        from app.product.channel_router import select_channel
+        channel = select_channel(crit, ts)
+        return channel.value, crit, ts
+    except Exception:
+        # Conservative fallback: SMS, the historical behaviour.
+        return "sms", crit, ts
+
+
+# ----------------------------------------------------------------------
 # pre-confirm orchestration
 # ----------------------------------------------------------------------
 def create_pending_confirm(plan: dict[str, Any], instruction: str,
@@ -595,18 +908,39 @@ def create_pending_confirm(plan: dict[str, Any], instruction: str,
                            ttl_seconds: int = DEFAULT_TTL_SECONDS,
                            extra_payload: Optional[dict[str, Any]] = None
                            ) -> dict[str, Any]:
-    """Build a PendingConfirm record, send the SMS, persist.
+    """Build a PendingConfirm record, dispatch via the channel router,
+    persist.
 
-    Returns the dict shape the /api/act handler returns to the caller:
+    The channel router (engine/app/product/channel_router.py) picks
+    one of voice_call / sms / sms_plus_email / email / silent based
+    on the action's criticality and time-sensitivity. We use the
+    risk_assessor as the source of truth for both signals. The
+    chosen channel determines which Twilio surface fires:
+      - voice_call         -> _send_voice_confirm (Programmable
+                              Voice; TwiML Says proposal +
+                              Gathers spoken YES/NO/EDIT)
+      - sms                -> send_sms_sync (single SMS)
+      - sms_plus_email     -> send_sms_sync + _send_email_confirm
+      - email              -> _send_email_confirm only
+      - silent             -> persist record, no outbound dispatch
+                              (the popover still surfaces the
+                              proposal for in-app review)
+
+    Returns the dict shape the /api/act handler returns to the
+    caller:
 
       {
         "ran": false,
         "awaiting_sms_confirm": true,
+        "channel": "voice_call|sms|sms_plus_email|email|silent",
+        "criticality": "critical|high|medium|low",
+        "time_sensitivity": "time_sensitive|not_time_sensitive",
         "task_id": "...",
         "expires_at": <unix>,
         "proposal_text": "...",
         "to_number": "...",
-        "twilio": {"ok": bool, "twilio_sid": "...", "mock": bool},
+        "twilio": {"ok": bool, "twilio_sid": "...", "mock": bool,
+                   "channel": "..."},
       }
     """
     store = store or PendingConfirmStore()
@@ -614,6 +948,8 @@ def create_pending_confirm(plan: dict[str, Any], instruction: str,
     task_id = uuid.uuid4().hex[:16]
     to_number = resolve_destination_number()
     proposal = build_proposal_text(plan, instruction)
+    channel_value, crit, time_sensitivity = _channel_for_plan(
+        plan, instruction)
     rec = PendingConfirm(
         task_id=task_id,
         created_at=now,
@@ -630,10 +966,39 @@ def create_pending_confirm(plan: dict[str, Any], instruction: str,
             "plan": plan,
             **(extra_payload or {}),
         },
+        channel=channel_value,
+        criticality=crit,
+        time_sensitivity=time_sensitivity,
     )
-    sms_result = send_sms_sync(to_number, rec.proposal_text)
-    rec.twilio_sid = str(sms_result.get("twilio_sid") or "")
+    sms_result: dict[str, Any] = {}
+    voice_result: dict[str, Any] = {}
+    email_result: dict[str, Any] = {}
+    if channel_value == "voice_call":
+        voice_result = _send_voice_confirm(to_number, rec.proposal_text)
+        rec.twilio_sid = str(voice_result.get("twilio_sid") or "")
+    elif channel_value == "sms":
+        sms_result = send_sms_sync(to_number, rec.proposal_text)
+        rec.twilio_sid = str(sms_result.get("twilio_sid") or "")
+    elif channel_value == "sms_plus_email":
+        sms_result = send_sms_sync(to_number, rec.proposal_text)
+        rec.twilio_sid = str(sms_result.get("twilio_sid") or "")
+        email_result = _send_email_confirm(rec.proposal_text)
+    elif channel_value == "email":
+        email_result = _send_email_confirm(rec.proposal_text)
+    elif channel_value == "silent":
+        # Record only; popover handles in-app surfacing. No twilio
+        # round-trip.
+        sms_result = {"ok": True, "twilio_sid": "", "twilio_status": 0,
+                      "mock": True, "error": None,
+                      "mock_reason": "silent channel selected"}
+    else:
+        # Defense in depth: unknown channel falls back to SMS so we
+        # never silently drop a CRITICAL action.
+        sms_result = send_sms_sync(to_number, rec.proposal_text)
+        rec.twilio_sid = str(sms_result.get("twilio_sid") or "")
     store.save(rec)
+    primary = (voice_result if channel_value == "voice_call"
+               else (sms_result if sms_result else email_result))
     return {
         "ran": False,
         "awaiting_sms_confirm": True,
@@ -646,12 +1011,19 @@ def create_pending_confirm(plan: dict[str, Any], instruction: str,
         "subject": rec.subject,
         "preview": rec.preview,
         "intent": str(plan.get("intent") or ""),
+        "channel": channel_value,
+        "criticality": crit,
+        "time_sensitivity": time_sensitivity,
         "twilio": {
-            "ok": bool(sms_result.get("ok")),
-            "twilio_sid": sms_result.get("twilio_sid", ""),
-            "mock": bool(sms_result.get("mock")),
-            "error": sms_result.get("error"),
-            "mock_reason": sms_result.get("mock_reason"),
+            "ok": bool(primary.get("ok")),
+            "twilio_sid": primary.get("twilio_sid", ""),
+            "mock": bool(primary.get("mock")),
+            "error": primary.get("error"),
+            "mock_reason": primary.get("mock_reason"),
+            "channel": channel_value,
+            "voice": voice_result or None,
+            "sms": sms_result or None,
+            "email": email_result or None,
         },
     }
 
@@ -1109,6 +1481,7 @@ __all__ = [
     "STATUS_EXPIRED",
     "STATUS_PENDING",
     "build_proposal_text",
+    "build_voice_confirm_twiml",
     "create_pending_confirm",
     "expire_pending",
     "inbound_poller_status",
