@@ -67,6 +67,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Per task cost telemetry. We wire the sink + budget gate into
+# platform_adapter at module import time so EVERY model_call (planner,
+# memory reconcile, onboarding extract, addressee, comms, taxonomy,
+# grader adversarial) is captured against the active task with zero
+# changes at the individual call sites. The gate then mechanically
+# refuses the next planner call once a task has crossed the $0.005
+# hard cap (2.5x the $0.002 / task ceiling).
+try:
+    from app.product import cost_telemetry as _cost_telemetry
+    from app.anticipy import platform_adapter as _pa_for_telemetry
+    _pa_for_telemetry.set_telemetry_sink(_cost_telemetry.record_call_from_log_row)
+    _pa_for_telemetry.set_budget_gate(_cost_telemetry.budget_gate)
+except Exception:
+    _cost_telemetry = None  # type: ignore
+
 # Engine-side handoff convenience routes (GET /api/auth/handoff/session,
 # POST /api/auth/handoff/exchange). The website still mints + exchanges
 # tokens; these endpoints let the engine inspect or perform an exchange
@@ -2081,6 +2096,85 @@ def action_login_wall_detect(url: str, title: str = "") -> JSONResponse:
         )
     det = LWR.detect_login_wall(url, title)
     return JSONResponse({"ok": True, "detection": det})
+
+
+# --------------------------------------------------------------------------
+# Failure recovery transparency
+# --------------------------------------------------------------------------
+# When the action engine cannot finish (Gmail logged out, MFA prompt,
+# CAPTCHA, rate limit, network blip), the user finds out via a friendly
+# SMS and the task stays alive in the persistent queue. The
+# /api/recovery/test endpoint renders an SMS body for any failure_kind
+# WITHOUT firing a real failure or sending a real SMS, so the
+# verification harness and the agent itself can sanity-check the
+# wording. The real wiring lives in _run_action_engine where caught
+# exceptions get classified and routed.
+
+class RecoveryTest(BaseModel):
+    failure_kind: str
+    surface_url: str = ""
+    task_id: str = ""
+    instruction: str = ""
+    recipient_hint: str = ""
+    fire_route: bool = False
+
+
+@app.post("/api/recovery/test")
+def api_recovery_test(p: RecoveryTest) -> JSONResponse:
+    """Render the recovery SMS body for a given failure_kind WITHOUT
+    firing a real failure. When fire_route=true also exercises the
+    full route_recovery path (SMS send + queue park) so the persisted
+    task record can be inspected. The SMS send is mock-friendly so
+    routine test calls do not spam a real phone.
+
+    body: {
+      "failure_kind": "login_required|mfa_challenge|captcha_blocked|"
+                      "rate_limited|network_error|unknown_error",
+      "surface_url": "https://mail.google.com/...",
+      "task_id": "optional existing task id",
+      "instruction": "optional originating instruction text",
+      "recipient_hint": "optional recipient label for the SMS body",
+      "fire_route": false
+    }
+    """
+    try:
+        from app.product import failure_recovery as FR
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"failure_recovery import: "
+                                   f"{type(exc).__name__}: {exc}"},
+            status_code=500,
+        )
+    kind = (p.failure_kind or "").strip()
+    surface_url = (p.surface_url or "").strip()
+    sms_body = FR.format_recovery_sms(
+        kind, surface_url,
+        instruction=p.instruction or "",
+        recipient_hint=p.recipient_hint or "",
+    )
+    out: dict[str, Any] = {
+        "ok": True,
+        "failure_kind": kind,
+        "surface_url": surface_url,
+        "sms_body": sms_body,
+        "sms_body_len": len(sms_body),
+        "fire_route": bool(p.fire_route),
+    }
+    if p.fire_route:
+        try:
+            route = FR.route_recovery(
+                p.task_id or "",
+                kind,
+                surface_url,
+                instruction=p.instruction or "",
+                recipient_hint=p.recipient_hint or "",
+            )
+        except Exception as exc:
+            out["route"] = {"ok": False, "error": f"{type(exc).__name__}: "
+                                                    f"{exc}"}
+        else:
+            out["route"] = route
+    return JSONResponse(out)
 
 
 # --------------------------------------------------------------------------
@@ -7844,12 +7938,101 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
             except Exception:
                 pass
             _LISTEN["pending"] = None
+        else:
+            # Soft failure (ran=False but no exception thrown). Classify
+            # the error / evidence so the user gets a friendly SMS and
+            # the persisted task stays alive for retry on next inject.
+            try:
+                recovery = _maybe_route_recovery(
+                    instruction=instruction,
+                    plan=plan,
+                    error_text=(out.get("error") or "")
+                                + " " + str(res.get("evidence", "")),
+                    surface_url=str(res.get("trajectory_dir", "") or ""),
+                )
+                if recovery:
+                    out["recovery"] = recovery
+                    out["waiting_for_recovery"] = True
+            except Exception:
+                # Recovery is a transparency improvement, never a gate.
+                pass
         return JSONResponse(out)
     except Exception as e:
         import traceback
-        return JSONResponse(status_code=500, content={
+        # Failure-recovery wiring: classify the exception, send a
+        # friendly SMS, park the persisted task in waiting status so
+        # the dispatcher does not burn retries on the same unfixable
+        # cause. Never let a recovery failure mask the original error.
+        recovery: dict[str, Any] | None = None
+        try:
+            recovery = _maybe_route_recovery(
+                instruction=instruction,
+                plan=plan,
+                error_text=f"{type(e).__name__}: {e}",
+                surface_url="",
+            )
+        except Exception:
+            recovery = None
+        content = {
             "ran": False, "error": f"{type(e).__name__}: {e}",
-            "trace": traceback.format_exc()[-1200:]})
+            "trace": traceback.format_exc()[-1200:]}
+        if recovery:
+            content["recovery"] = recovery
+            content["waiting_for_recovery"] = True
+        return JSONResponse(status_code=500, content=content)
+
+
+def _maybe_route_recovery(
+    *, instruction: str, plan: dict,
+    error_text: str, surface_url: str,
+) -> dict[str, Any] | None:
+    """Helper: classify the failure and call failure_recovery.route_recovery
+    when the error matches one of the recoverable kinds. Returns the
+    route_recovery result dict on success, None on skip / import error.
+
+    The caller wraps this in try/except so an unhandled exception here
+    never re-enters the original failure path.
+    """
+    text = (error_text or "").strip()
+    if not text:
+        return None
+    try:
+        from app.product import failure_recovery as FR
+    except Exception:
+        return None
+    kind = FR.classify_failure(text)
+    if kind == FR.FAILURE_UNKNOWN_ERROR:
+        # Unknown errors do not get a recovery SMS by default; they
+        # are usually genuine bugs the user cannot fix by re-auth. We
+        # still surface the trace in the normal response.
+        return None
+    # Resolve the task_queue record so the recovery parks the right
+    # row. Match by instruction string; the listen pipeline mirrors
+    # every utterance into the queue, so the most recent pending or
+    # in_progress row for this exact instruction is the right target.
+    tq_id = ""
+    try:
+        pending_meta = _LISTEN.get("pending") or {}
+        tq_id = str(pending_meta.get("task_queue_id") or "")
+        if not tq_id:
+            from app import task_queue as _tq_lookup
+            for r in _tq_lookup.list_tasks(
+                    status=("pending", "in_progress"), limit=64):
+                if r.instruction.strip() == (instruction or "").strip():
+                    tq_id = r.task_id
+                    break
+    except Exception:
+        tq_id = ""
+    recipient_hint = ""
+    if isinstance(plan, dict):
+        recipient_hint = str(plan.get("person") or "").strip()
+    return FR.route_recovery(
+        tq_id,
+        kind,
+        surface_url,
+        instruction=instruction or "",
+        recipient_hint=recipient_hint,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -8934,13 +9117,31 @@ async def sms_inbound(request: Request) -> Response:
                               if v is not None}
             except Exception:
                 fields = {}
-    body_text = fields.get("Body") or fields.get("body") or ""
+    # Twilio Programmable Voice with <Gather input="speech"> POSTs
+    # SpeechResult (transcribed user speech) and Confidence in
+    # addition to the standard SMS fields. We accept either, with
+    # SpeechResult winning when both are present so a voice-channel
+    # callback never gets misclassified as a text reply.
+    speech_result = (
+        fields.get("SpeechResult")
+        or fields.get("speech_result")
+        or ""
+    )
+    body_text = (
+        speech_result
+        or fields.get("Body")
+        or fields.get("body")
+        or ""
+    )
     from_number = fields.get("From") or fields.get("from") or ""
     task_id_hint = (
         fields.get("task_id")
         or fields.get("TaskId")
         or ""
     ).strip()
+    is_voice_callback = bool(speech_result) or bool(
+        fields.get("CallSid") or fields.get("call_sid")
+    )
     decision = _sms_pre.resolve_inbound(
         body_text, task_id=task_id_hint)
     twiml_message = ""
@@ -8994,6 +9195,8 @@ async def sms_inbound(request: Request) -> Response:
         "dispatched": dispatched,
         "message": twiml_message,
         "decision_error": decision.get("error"),
+        "channel": ("voice" if is_voice_callback else "sms"),
+        "speech_result": speech_result,
     }
     accept = request.headers.get("accept", "")
     wants_json = (
@@ -9006,12 +9209,24 @@ async def sms_inbound(request: Request) -> Response:
         .replace("&", "&amp;") \
         .replace("<", "&lt;") \
         .replace(">", "&gt;")
-    twiml = (
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-        "<Response>"
-        f"<Message>{safe_msg}</Message>"
-        "</Response>"
-    )
+    if is_voice_callback:
+        # Voice channel: speak the acknowledgement and hang up. Using
+        # <Message> here would be a Twilio error because the call
+        # context expects voice verbs.
+        twiml = (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<Response>"
+            f"<Say voice=\"alice\">{safe_msg}</Say>"
+            "<Hangup/>"
+            "</Response>"
+        )
+    else:
+        twiml = (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<Response>"
+            f"<Message>{safe_msg}</Message>"
+            "</Response>"
+        )
     return Response(
         content=twiml,
         media_type="text/xml",
