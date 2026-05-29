@@ -7422,6 +7422,36 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
     structured = _try_structured_gmail_draft(plan)
     if structured is not None:
         return structured
+    # Defense-in-depth SMS pre-confirm gate. The /api/act top-level
+    # gate already handles every plan that flows through the public
+    # endpoint, but any internal caller that hands a plan directly to
+    # _run_action_engine (popover dispatch, automation, future code
+    # paths) needs the same guarantee: the DSv4SkillRunner below
+    # CLICKS Send in Gmail and can fire a real third-party message.
+    # The __sms_confirmed marker on plan dict means we already got
+    # YES from the user; skip the gate so dispatch can proceed.
+    if not plan.get("__sms_confirmed"):
+        try:
+            from app.product import sms_pre_confirm as _sms_pre_inner
+            if _sms_pre_inner.should_pre_confirm(plan, instruction):
+                pending_resp = _sms_pre_inner.create_pending_confirm(
+                    plan, instruction)
+                pending_resp.setdefault("resolved_person",
+                                        plan.get("person", ""))
+                pending_resp.setdefault("resolved_thing",
+                                        plan.get("thing", ""))
+                pending_resp.setdefault("task", task)
+                return JSONResponse(pending_resp)
+        except Exception as exc:
+            import traceback as _tb_gate_inner
+            return JSONResponse(status_code=500, content={
+                "ran": False,
+                "error":
+                f"sms_pre_confirm gate failed: "
+                f"{type(exc).__name__}: {exc}",
+                "trace": _tb_gate_inner.format_exc()[-1200:],
+                "task": task,
+            })
     try:
         from app.anticipy.action_handoff import make_real_action_engine
         # Gmail draft creation has to navigate authenticated UI, compose,
@@ -7466,6 +7496,320 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
         return JSONResponse(status_code=500, content={
             "ran": False, "error": f"{type(e).__name__}: {e}",
             "trace": traceback.format_exc()[-1200:]})
+
+
+# --------------------------------------------------------------------------
+# Post-action receipt
+# --------------------------------------------------------------------------
+#
+# After Anticipy successfully drives a real side-effect (especially a
+# Gmail send), the user should get a RECEIPT so they know what happened
+# on their behalf without having to open the mailbox to check. Two
+# channels, both safe defaults:
+#
+#   SMS via Twilio. Only fires when env opt-ins are present:
+#     TWILIO_TEST_TO_REAL_NUMBER=1
+#     TWILIO_TEST_TO_REAL_NUMBER_E164=+1...   (or TWILIO_NOTIFY_TO)
+#     TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER
+#   Without those flags this short-circuits to a gated reason so
+#   automated tests never spam a real phone.
+#
+#   Self-email. Always safe because we send to the user's OWN address
+#   (ANTICIPY_USER_EMAIL, falling back to omarkebrahim@gmail.com which
+#   is the active wearer of this dev engine). Uses the SAME Gmail CDP
+#   path that just ran the action, so there is no second auth surface
+#   to maintain. Opens a draft prefilled with the receipt text and
+#   triggers Gmail's autosave so the draft lands in Drafts. The user
+#   sees a row in their Drafts folder titled "Anticipy: <subject>".
+#   Self-send (actually clicking Send) is gated by
+#   ANTICIPY_RECEIPT_SEND=1 because the dev safety guard
+#   ANTICIPY_ALLOW_REAL_SEND already restricts outbound clicks.
+#
+# The receipt helper NEVER raises. Failures are recorded in the
+# returned dict so the caller can see what happened. The action that
+# triggered the receipt is never affected by a receipt failure.
+
+
+def _user_self_email() -> str:
+    return (os.environ.get("ANTICIPY_USER_EMAIL", "").strip()
+            or "omarkebrahim@gmail.com")
+
+
+def _receipt_phone() -> str:
+    return (os.environ.get("TWILIO_NOTIFY_TO", "").strip()
+            or os.environ.get("TWILIO_TEST_TO_REAL_NUMBER_E164", "").strip())
+
+
+def _twilio_creds_ready() -> bool:
+    return bool(
+        os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+        and os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+        and os.environ.get("TWILIO_PHONE_NUMBER", "").strip()
+    )
+
+
+def _twilio_opt_in() -> bool:
+    return os.environ.get(
+        "TWILIO_TEST_TO_REAL_NUMBER", "").strip() == "1"
+
+
+def _receipt_summary_text(recipient: str, subject: str) -> str:
+    """One short line, SMS-friendly. 'Reply STOP to silence' is the
+    standard opt-out line Twilio recommends for transactional SMS."""
+    rec = (recipient or "the recipient").strip()
+    subj = (subject or "(no subject)").strip()
+    return (
+        f"Anticipy just sent {rec} an email about {subj}. "
+        "Reply STOP to silence."
+    )
+
+
+def _extract_recipient_subject(instruction: str,
+                               response_obj: dict) -> tuple[str, str]:
+    """Pull recipient + subject from the response or, failing that,
+    from the original instruction text via the same parser the
+    direct_gmail_draft fast path uses. Returns ("", "") when we
+    cannot identify either, in which case the receipt helper still
+    sends a generic confirmation.
+    """
+    rec = str(response_obj.get("resolved_person") or "").strip()
+    subj = str(response_obj.get("resolved_thing") or "").strip()
+    if rec and subj:
+        return rec, subj
+    try:
+        from app.action_engine.gmail_compose import parse_draft_intent
+        parsed = parse_draft_intent(instruction)
+        if parsed is not None:
+            return parsed.to, parsed.subject
+    except Exception:
+        pass
+    return rec, subj
+
+
+def _send_receipt_sms_sync(body: str) -> dict:
+    """Synchronous Twilio SMS send for the receipt path.
+
+    Mirrors the gating logic of /api/notify/test: no creds -> 503-like
+    gated response; no opt-in -> gated suppress; happy path -> real
+    Twilio POST. Returns a structured dict (never raises) so the
+    receipt helper can include the result in its summary.
+    """
+    phone = _receipt_phone()
+    if not _twilio_creds_ready():
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "reason": "twilio_credentials_missing",
+            "to": phone,
+        }
+    if not _twilio_opt_in():
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "reason": "TWILIO_TEST_TO_REAL_NUMBER not set",
+            "to": phone,
+        }
+    if not phone:
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "reason": "no_destination_phone",
+        }
+    try:
+        from app.proactive.notifier import twilio_sms as _twilio_sms
+    except Exception as exc:
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "error": (f"notifier import: {type(exc).__name__}: {exc}"),
+            "to": phone,
+        }
+    # twilio_sms is async (it offloads via asyncio.to_thread). Drive
+    # it from a fresh event loop so the synchronous receipt helper
+    # can call it without disturbing the request loop. If we are
+    # already inside an event loop the caller wraps via to_thread.
+    try:
+        result = asyncio.run(_twilio_sms(phone, body))
+        return {
+            "channel": "sms",
+            "attempted": True,
+            "ok": bool(result.get("ok")),
+            "to": phone,
+            "delivery": result,
+        }
+    except RuntimeError as exc:
+        # already-running loop -> caller must offload us via thread
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "error": f"loop_conflict: {exc}",
+            "to": phone,
+        }
+    except Exception as exc:
+        return {
+            "channel": "sms",
+            "attempted": True,
+            "ok": False,
+            "to": phone,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _send_receipt_email_via_cdp(subject: str, body: str) -> dict:
+    """Drop a receipt-summary email into the user's Gmail Drafts
+    (or send, when ANTICIPY_RECEIPT_SEND=1) via the same Gmail CDP
+    composer the action path already uses.
+
+    Sends to the user's OWN address so a misdelivery is impossible.
+    The dev safety guard in dsv4_skill_runner restricts outbound
+    sends, so the default behavior here is draft-only. Returns a
+    structured dict (never raises).
+    """
+    self_email = _user_self_email()
+    if not self_email:
+        return {
+            "channel": "self_email",
+            "attempted": False,
+            "gated": True,
+            "reason": "no_self_email",
+        }
+    if CDP_PORT <= 0:
+        return {
+            "channel": "self_email",
+            "attempted": False,
+            "gated": True,
+            "reason": f"cdp_port_disabled ({CDP_PORT})",
+            "to": self_email,
+        }
+    try:
+        from app.action_engine.gmail_compose import (
+            DraftRequest, create_gmail_draft,
+        )
+    except Exception as exc:
+        return {
+            "channel": "self_email",
+            "attempted": False,
+            "error": (
+                f"gmail_compose import: {type(exc).__name__}: {exc}"),
+            "to": self_email,
+        }
+    try:
+        result = create_gmail_draft(
+            DraftRequest(
+                to=self_email,
+                subject=f"Anticipy: {subject or '(action completed)'}",
+                body=body,
+            ),
+            cdp_port=CDP_PORT,
+            marker="",
+        )
+    except Exception as exc:
+        return {
+            "channel": "self_email",
+            "attempted": True,
+            "ok": False,
+            "to": self_email,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    # Encourage Gmail to autosave so the draft lands. Best-effort.
+    typing_evidence: dict = {}
+    if result.ok and CDP_PORT > 0:
+        target_id = ""
+        for _attempt in range(10):
+            time.sleep(0.5)
+            try:
+                target_id = _gmail_find_compose_target(CDP_PORT)
+            except Exception:
+                target_id = ""
+            if target_id:
+                break
+        if target_id:
+            try:
+                typing_evidence = _gmail_type_into_compose_body(
+                    CDP_PORT, target_id, body,
+                    to_text=self_email,
+                    subject_text=f"Anticipy: "
+                                 f"{subject or '(action completed)'}",
+                )
+            except Exception as exc:
+                typing_evidence = {
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+    return {
+        "channel": "self_email",
+        "attempted": True,
+        "ok": bool(result.ok),
+        "to": self_email,
+        "compose_url": result.compose_url,
+        "error": result.error,
+        "typing_evidence": typing_evidence,
+    }
+
+
+def _emit_action_receipt(instruction: str,
+                         response_obj: dict) -> dict:
+    """Fire the SMS + self-email receipt for an action that just ran.
+
+    Called from the /api/act post-success path and from the new
+    /api/dispatch/with_receipt endpoint. Returns a structured dict
+    summarizing what each channel did. NEVER raises: a receipt
+    failure must not roll back a successful real-world action.
+    """
+    try:
+        recipient, subject = _extract_recipient_subject(
+            instruction, response_obj)
+        text = _receipt_summary_text(recipient, subject)
+        sms_result = _send_receipt_sms_sync(text)
+        email_result = _send_receipt_email_via_cdp(subject, text)
+        return {
+            "ok": True,
+            "recipient": recipient,
+            "subject": subject,
+            "summary_text": text,
+            "sms": sms_result,
+            "self_email": email_result,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _maybe_attach_receipt(response: JSONResponse,
+                          instruction: str) -> JSONResponse:
+    """Inspect a JSONResponse returned from the action path; if the
+    body indicates SUCCESS, attach a receipt summary. Returns the
+    same response object (mutated) for convenience.
+
+    Receipt firing is gated by ANTICIPY_RECEIPT_ON_SUCCESS=1 so that
+    routine test runs do not produce side-effect notifications. The
+    /api/dispatch/with_receipt endpoint flips this gate per-call.
+    """
+    enabled = os.environ.get(
+        "ANTICIPY_RECEIPT_ON_SUCCESS", "").strip() == "1"
+    if not enabled:
+        return response
+    try:
+        raw = response.body
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8", "replace")
+        data = json.loads(raw or "{}")
+    except Exception:
+        return response
+    if not isinstance(data, dict):
+        return response
+    ran = bool(data.get("ran"))
+    status = str(data.get("status") or "").upper()
+    if not (ran and status == "SUCCESS"):
+        return response
+    receipt = _emit_action_receipt(instruction, data)
+    data["receipt"] = receipt
+    return JSONResponse(data)
 
 
 @app.post("/api/act")
@@ -7544,10 +7888,10 @@ async def act(request: Request) -> JSONResponse:
         }
         direct = _try_direct_gmail_draft(instruction, synthetic_plan)
         if direct is not None:
-            return direct
+            return _maybe_attach_receipt(direct, instruction)
     direct_browser = _try_direct_browser_action(instruction)
     if direct_browser is not None:
-        return direct_browser
+        return _maybe_attach_receipt(direct_browser, instruction)
     plan = pending.get("plan") if (not a.instruction and pending) else None
     if not isinstance(plan, dict):
         plan = _compose_task_from_memory(instruction)
@@ -7584,7 +7928,176 @@ async def act(request: Request) -> JSONResponse:
                 "confirm": confirm}),
         })
 
-    return _run_action_engine(instruction, plan)
+    # SMS pre-confirm gate. Before any irreversible action fires
+    # (Gmail click-Send, social post, payment, form submit), send
+    # the user an SMS with the proposed action and wait for YES /
+    # NO / EDIT. The popover confirm card alone is not enough
+    # because the user is not always at their Mac (pendant / phone).
+    # SMS is the universal-reach channel per the SMS_PRE_CONFIRM
+    # directive (feedback_sms_pre_confirm.md).
+    #
+    # Z-001 uses the explicit "Draft an email to lara@... saying"
+    # shape, which `parse_draft_intent` catches above and returns
+    # at _try_direct_gmail_draft. That early return runs BEFORE this
+    # gate, so Z-001's draft-only path is unaffected.
+    #
+    # The `__sms_confirmed` marker on the plan is set when the
+    # inbound webhook dispatches a previously-approved task; it
+    # bypasses the gate so a YES reply does not loop back into
+    # another SMS round-trip.
+    if not plan.get("__sms_confirmed"):
+        try:
+            from app.product import sms_pre_confirm as _sms_pre_top
+            if _sms_pre_top.should_pre_confirm(plan, instruction):
+                pending_resp = _sms_pre_top.create_pending_confirm(
+                    plan, instruction)
+                pending_resp.setdefault("resolved_person",
+                                        plan.get("person", ""))
+                pending_resp.setdefault("resolved_thing",
+                                        plan.get("thing", ""))
+                pending_resp.setdefault("task",
+                                        str(plan.get("task") or ""))
+                return JSONResponse(pending_resp)
+        except Exception as exc:
+            import traceback as _tb_gate_top
+            return JSONResponse(status_code=500, content={
+                "ran": False,
+                "error":
+                f"sms_pre_confirm gate failed: "
+                f"{type(exc).__name__}: {exc}",
+                "trace": _tb_gate_top.format_exc()[-1200:],
+                "task": str(plan.get("task") or ""),
+            })
+
+    return _maybe_attach_receipt(
+        _run_action_engine(instruction, plan), instruction)
+
+
+# --------------------------------------------------------------------------
+# Dispatch + receipt wrapper
+# --------------------------------------------------------------------------
+#
+# Wraps /api/act so a caller (UI, test harness, post-success automation)
+# can fire one POST and get back BOTH the action result and the receipt
+# summary. Useful when the caller wants the receipt regardless of the
+# ANTICIPY_RECEIPT_ON_SUCCESS env gate (which keeps the default /api/act
+# safe for routine probes).
+#
+# Body:
+#   {
+#     "instruction": "Draft an email to lara@... with subject ... saying ...",
+#     "to_phone": "+15555550100",     # optional, overrides env phone
+#     "to_self_email": "you@..."      # optional, overrides ANTICIPY_USER_EMAIL
+#   }
+#
+# Returns:
+#   {
+#     "action": <full /api/act response body>,
+#     "receipt": <_emit_action_receipt summary>,
+#     "skipped_reason": "..."          # only when action did not succeed
+#   }
+#
+# Behavior:
+#   1. Calls the same internal action path /api/act uses.
+#   2. If the action result indicates SUCCESS, fires the receipt
+#      unconditionally (no env gate). If not, returns the action
+#      response untouched with skipped_reason set.
+#   3. Temporary overrides for TWILIO_NOTIFY_TO and
+#      ANTICIPY_USER_EMAIL are applied only for the duration of the
+#      receipt call so the env stays clean.
+
+
+class DispatchWithReceipt(BaseModel):
+    instruction: str | None = None
+    to_phone: str | None = None
+    to_self_email: str | None = None
+
+
+@app.post("/api/dispatch/with_receipt")
+async def dispatch_with_receipt(p: DispatchWithReceipt,
+                                request: Request) -> JSONResponse:
+    instruction = (p.instruction or "").strip()
+    if not instruction:
+        pending = _LISTEN.get("pending") or {}
+        instruction = (pending.get("instruction") or "").strip()
+    if not instruction:
+        return JSONResponse({
+            "ok": False,
+            "error": ("no instruction provided in body and no "
+                      "pending instruction queued"),
+        }, status_code=400)
+
+    # Run the action via the exact same path /api/act uses by calling
+    # act() directly with a fabricated Request that carries our body.
+    class _FauxRequest:
+        def __init__(self, payload: dict) -> None:
+            self._payload = payload
+
+        async def body(self) -> bytes:
+            return json.dumps(self._payload).encode("utf-8")
+
+    action_resp = await act(_FauxRequest({"instruction": instruction}))
+    # act() may return a JSONResponse that already passed through
+    # _maybe_attach_receipt. Decode the body so we can branch.
+    try:
+        raw = action_resp.body
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8", "replace")
+        action_data = json.loads(raw or "{}")
+        if not isinstance(action_data, dict):
+            action_data = {}
+    except Exception:
+        action_data = {}
+
+    ran = bool(action_data.get("ran"))
+    status = str(action_data.get("status") or "").upper()
+    if not (ran and status == "SUCCESS"):
+        return JSONResponse({
+            "ok": False,
+            "action": action_data,
+            "receipt": None,
+            "skipped_reason": (
+                f"action did not succeed (ran={ran}, status={status!r})"
+            ),
+        })
+
+    # If /api/act already attached a receipt (env-gated), reuse it.
+    # Otherwise force one through, with optional per-call env overrides
+    # for phone + self_email so the caller can target a different number
+    # without restarting the engine.
+    existing_receipt = action_data.get("receipt") if isinstance(
+        action_data.get("receipt"), dict) else None
+    if existing_receipt:
+        return JSONResponse({
+            "ok": True,
+            "action": action_data,
+            "receipt": existing_receipt,
+            "receipt_source": "act_post_success",
+        })
+
+    saved_phone = os.environ.get("TWILIO_NOTIFY_TO")
+    saved_email = os.environ.get("ANTICIPY_USER_EMAIL")
+    if p.to_phone:
+        os.environ["TWILIO_NOTIFY_TO"] = p.to_phone
+    if p.to_self_email:
+        os.environ["ANTICIPY_USER_EMAIL"] = p.to_self_email
+    try:
+        receipt = _emit_action_receipt(instruction, action_data)
+    finally:
+        if saved_phone is None:
+            os.environ.pop("TWILIO_NOTIFY_TO", None)
+        else:
+            os.environ["TWILIO_NOTIFY_TO"] = saved_phone
+        if saved_email is None:
+            os.environ.pop("ANTICIPY_USER_EMAIL", None)
+        else:
+            os.environ["ANTICIPY_USER_EMAIL"] = saved_email
+    return JSONResponse({
+        "ok": True,
+        "action": action_data,
+        "receipt": receipt,
+        "receipt_source": "wrapper_forced",
+    })
 
 
 class ConfirmDecision(BaseModel):
@@ -7679,6 +8192,245 @@ def act_confirm_status(task_id: str) -> JSONResponse:
         "status": ("pending" if rec.get("approved") is None
                    else ("approved" if rec["approved"] else "user_rejected")),
     })
+
+
+# --------------------------------------------------------------------------
+# SMS pre-confirm: inbound webhook + status surface
+# --------------------------------------------------------------------------
+#
+# Twilio posts inbound SMS to /api/sms/inbound as form-encoded fields
+# (Body, From, To, MessageSid, ...). We classify the body as
+# YES / NO / EDIT / unknown, resolve against the most recent pending
+# task, and either dispatch (YES) or cancel (NO) or stash (EDIT).
+#
+# The response body is TwiML so Twilio plays a friendly acknowledgement
+# back to the user. Twilio expects a 200 with Content-Type=text/xml.
+#
+# Companion endpoints:
+#   GET  /api/sms/pending              list currently pending tasks
+#   GET  /api/sms/pending/{task_id}    inspect a single task
+#   POST /api/sms/pending/{task_id}/dispatch  operator-resume after YES
+#   POST /api/sms/expire/run           force the expiry sweeper
+#
+# See engine/app/product/sms_pre_confirm.py for the persistence
+# layer and the SMS_PRE_CONFIRM directive
+# (feedback_sms_pre_confirm.md) for the policy.
+
+
+@app.post("/api/sms/inbound")
+async def sms_inbound(request: Request) -> Response:
+    """Twilio inbound-SMS webhook.
+
+    Twilio posts application/x-www-form-urlencoded with at least:
+      Body            the user's reply text
+      From            the user's phone (E.164)
+      To              our Twilio number
+      MessageSid      Twilio message identifier
+
+    The handler classifies Body, persists the decision on the most
+    recent pending task, and triggers dispatch when the user said
+    YES. Returns TwiML so Twilio messages back the user with a
+    friendly acknowledgement. JSON callers (tests, the popover) get
+    the same payload as JSON when they send Accept: application/json
+    or include format=json in the form.
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    raw = await request.body()
+    fields: dict[str, str] = {}
+    if raw:
+        try:
+            parsed = urllib.parse.parse_qs(
+                raw.decode("utf-8", "replace"),
+                keep_blank_values=True,
+            )
+            for k, v in parsed.items():
+                fields[str(k)] = str((v or [""])[0])
+        except Exception:
+            fields = {}
+        if not fields:
+            try:
+                obj = json.loads(
+                    raw.decode("utf-8", "replace") or "{}"
+                )
+                if isinstance(obj, dict):
+                    fields = {str(k): str(v) for k, v in obj.items()
+                              if v is not None}
+            except Exception:
+                fields = {}
+    body_text = fields.get("Body") or fields.get("body") or ""
+    from_number = fields.get("From") or fields.get("from") or ""
+    task_id_hint = (
+        fields.get("task_id")
+        or fields.get("TaskId")
+        or ""
+    ).strip()
+    decision = _sms_pre.resolve_inbound(
+        body_text, task_id=task_id_hint)
+    twiml_message = ""
+    dispatched: dict[str, Any] = {}
+    if decision.get("ok") and decision.get("reply_class") == "yes":
+        payload = decision.get("action_payload") or {}
+        instruction = str(payload.get("instruction") or "")
+        plan = (payload.get("plan")
+                if isinstance(payload.get("plan"), dict) else {})
+        if instruction and plan:
+            try:
+                dispatched_resp = (
+                    _run_action_engine_post_sms_confirm(
+                        instruction, plan)
+                )
+                dispatched = {
+                    "ok": True,
+                    "status_code": dispatched_resp.status_code,
+                    "body": (json.loads(
+                        bytes(dispatched_resp.body).decode("utf-8"))
+                             if dispatched_resp.body else {}),
+                }
+            except Exception as exc:
+                dispatched = {
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+        twiml_message = "Anticipy: confirmed. Dispatching now."
+    elif decision.get("ok") and decision.get("reply_class") == "no":
+        twiml_message = "Anticipy: cancelled. Nothing was sent."
+    elif decision.get("ok") and decision.get("reply_class") == "edit":
+        twiml_message = (
+            "Anticipy: saved as draft for review in the popover."
+        )
+    elif decision.get("reply_class") == "unknown":
+        twiml_message = (
+            "Anticipy: did not recognise that. Reply YES to send, "
+            "NO to cancel, EDIT to revise."
+        )
+    else:
+        twiml_message = (
+            "Anticipy: no pending action to confirm."
+        )
+    payload_dict = {
+        "ok": bool(decision.get("ok")),
+        "from": from_number,
+        "task_id": decision.get("task_id", ""),
+        "reply_class": decision.get("reply_class", ""),
+        "previous_status": decision.get("previous_status", ""),
+        "new_status": decision.get("new_status", ""),
+        "dispatched": dispatched,
+        "message": twiml_message,
+        "decision_error": decision.get("error"),
+    }
+    accept = request.headers.get("accept", "")
+    wants_json = (
+        "application/json" in accept.lower()
+        or fields.get("format", "").lower() == "json"
+    )
+    if wants_json:
+        return JSONResponse(payload_dict)
+    safe_msg = (twiml_message or "") \
+        .replace("&", "&amp;") \
+        .replace("<", "&lt;") \
+        .replace(">", "&gt;")
+    twiml = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<Response>"
+        f"<Message>{safe_msg}</Message>"
+        "</Response>"
+    )
+    return Response(
+        content=twiml,
+        media_type="text/xml",
+        headers={"X-Anticipy-Decision": json.dumps(
+            payload_dict, ensure_ascii=False)},
+    )
+
+
+def _run_action_engine_post_sms_confirm(instruction: str,
+                                        plan: dict) -> JSONResponse:
+    """Dispatch a previously SMS-confirmed task.
+
+    Calling _run_action_engine directly would re-enter the
+    should_pre_confirm gate and start another SMS round-trip. We
+    annotate the plan with __sms_confirmed=True so the gate respects
+    the prior approval.
+    """
+    plan = dict(plan or {})
+    plan["__sms_confirmed"] = True
+    return _run_action_engine(instruction, plan)
+
+
+@app.get("/api/sms/pending")
+def sms_pending_list() -> JSONResponse:
+    """Inspect currently-pending SMS pre-confirm tasks.
+
+    Used by the popover and integration tests to verify the gate
+    persisted a record without having to read the JSON files on
+    disk.
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    store = _sms_pre.PendingConfirmStore()
+    rows = [r.to_dict() for r in store.list_pending()]
+    return JSONResponse({"count": len(rows), "rows": rows})
+
+
+@app.get("/api/sms/pending/{task_id}")
+def sms_pending_status(task_id: str) -> JSONResponse:
+    from app.product import sms_pre_confirm as _sms_pre
+
+    store = _sms_pre.PendingConfirmStore()
+    rec = store.get(task_id)
+    if rec is None:
+        return JSONResponse(
+            {"task_id": task_id, "status": "unknown"},
+            status_code=410)
+    return JSONResponse(rec.to_dict())
+
+
+@app.post("/api/sms/pending/{task_id}/dispatch")
+def sms_pending_dispatch(task_id: str) -> JSONResponse:
+    """Operator path: dispatch an already-approved pending task.
+
+    The inbound webhook normally calls _run_action_engine itself on
+    YES; this endpoint is for manual recovery (e.g. when the user
+    approved via the popover instead of SMS, or the inbound webhook
+    failed mid-flight).
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    store = _sms_pre.PendingConfirmStore()
+    rec = store.get(task_id)
+    if rec is None:
+        return JSONResponse({"task_id": task_id, "error": "unknown"},
+                            status_code=410)
+    if rec.status != _sms_pre.STATUS_APPROVED:
+        return JSONResponse({
+            "task_id": task_id,
+            "error":
+            f"task status is {rec.status}, expected "
+            f"{_sms_pre.STATUS_APPROVED}",
+        }, status_code=409)
+    payload = rec.action_payload or {}
+    instruction = str(payload.get("instruction") or "")
+    plan = (payload.get("plan")
+            if isinstance(payload.get("plan"), dict) else {})
+    if not instruction or not plan:
+        return JSONResponse({
+            "task_id": task_id,
+            "error": "persisted payload missing instruction/plan",
+        }, status_code=500)
+    return _run_action_engine_post_sms_confirm(instruction, plan)
+
+
+@app.post("/api/sms/expire/run")
+def sms_expire_run() -> JSONResponse:
+    """Force the expiry sweeper on demand. The background thread
+    runs every 60s; this lets the popover or a test force-run it.
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    expired = _sms_pre.expire_pending()
+    return JSONResponse({"expired_count": len(expired),
+                         "expired": expired})
 
 
 # --------------------------------------------------------------------------
@@ -8999,6 +9751,48 @@ def api_deferred_attach_status() -> JSONResponse:
         "ok": all(v.get("ok") for v in _DEFERRED_ATTACH_STATUS.values()),
         "status": dict(_DEFERRED_ATTACH_STATUS),
     })
+
+
+# --------------------------------------------------------------------------
+# SMS pre-confirm expiry sweeper
+# --------------------------------------------------------------------------
+#
+# A small background thread runs every 60s, marks any pending
+# pre-confirm task whose 5 min TTL has elapsed as EXPIRED, and sends
+# the user one follow-up SMS so they know the action did not fire.
+# The thread is daemon and idempotent: re-entry from a second startup
+# hook would not double-spawn because we guard with
+# _SMS_SWEEPER_STARTED.
+
+_SMS_SWEEPER_STARTED = False
+_SMS_SWEEPER_INTERVAL_S = 60
+
+
+def _sms_pre_confirm_sweeper_loop() -> None:
+    from app.product import sms_pre_confirm as _sms_pre
+    while True:
+        try:
+            _sms_pre.expire_pending()
+        except Exception:
+            # Best-effort. Sweeper failure must never wedge the
+            # engine nor crash the daemon thread; the next tick
+            # retries.
+            pass
+        time.sleep(_SMS_SWEEPER_INTERVAL_S)
+
+
+@app.on_event("startup")
+def _start_sms_pre_confirm_sweeper() -> None:
+    global _SMS_SWEEPER_STARTED
+    if _SMS_SWEEPER_STARTED:
+        return
+    _SMS_SWEEPER_STARTED = True
+    t = threading.Thread(
+        target=_sms_pre_confirm_sweeper_loop,
+        name="sms-pre-confirm-sweeper",
+        daemon=True,
+    )
+    t.start()
 
 
 if __name__ == "__main__":
