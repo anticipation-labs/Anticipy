@@ -4265,25 +4265,51 @@ def _process_utterance(
                                 if outcome in ("ACTED", "DEFERRED", "CONFIRMED")
                                 else "fact")
                         rec["memory"] = _memory_write(text, kind)
-                        if proposal:
+                        # V1+V2+V3 EXCISION (priority): the unified LLM
+                        # intent extractor inside _compose_task_from_memory
+                        # is the authoritative resolver for any actionish
+                        # utterance referencing dossier people. We run it
+                        # whenever the text is actionish OR whenever the
+                        # legacy _run_pipeline emitted a proposal (because
+                        # the pipeline can guess wrong on ambiguous
+                        # references; the LLM extractor's CRITICAL
+                        # AMBIGUITY RULE prevents that). If the extractor
+                        # returns a usable plan (act with task or
+                        # clarify), that takes priority over the legacy
+                        # proposal. Falls back to the legacy proposal
+                        # path when extractor has nothing to say.
+                        plan_for_pending: dict | None = None
+                        if proposal or _is_actionish(text):
+                            try:
+                                plan_for_pending = _compose_task_from_memory(
+                                    text)
+                                plan_for_pending = _finalize_plan(
+                                    text, plan_for_pending)
+                            except Exception:
+                                plan_for_pending = None
+                        if plan_for_pending and plan_for_pending.get(
+                                "mode") == "clarify":
+                            rec["plan"] = plan_for_pending
+                            _LISTEN["pending"] = {
+                                "instruction": text,
+                                "proposal": _proposal_from_plan(
+                                    plan_for_pending),
+                                "clarify": True, "plan": plan_for_pending,
+                                "ts": rec["ts"]}
+                        elif (plan_for_pending
+                              and plan_for_pending.get("mode") == "act"
+                              and plan_for_pending.get("task")):
+                            rec["plan"] = plan_for_pending
+                            _LISTEN["pending"] = {
+                                "instruction": text,
+                                "proposal": _proposal_from_plan(
+                                    plan_for_pending),
+                                "plan": plan_for_pending,
+                                "ts": rec["ts"]}
+                        elif proposal:
                             _LISTEN["pending"] = {
                                 "instruction": text, "proposal": proposal,
                                 "ts": rec["ts"]}
-                        elif _is_actionish(text):
-                            plan = _compose_task_from_memory(text)
-                            plan = _finalize_plan(text, plan)
-                            rec["plan"] = plan
-                            if plan.get("mode") == "clarify":
-                                _LISTEN["pending"] = {
-                                    "instruction": text,
-                                    "proposal": _proposal_from_plan(plan),
-                                    "clarify": True, "plan": plan,
-                                    "ts": rec["ts"]}
-                            elif plan.get("mode") == "act" and plan.get("task"):
-                                _LISTEN["pending"] = {
-                                    "instruction": text,
-                                    "proposal": _proposal_from_plan(plan),
-                                    "plan": plan, "ts": rec["ts"]}
                     except Exception as e:
                         rec["error"] = f"{type(e).__name__}: {e}"
         try:
@@ -5650,23 +5676,43 @@ pronouns, and aliases. Resolve:
   - Explicit first/last names ("Maya", "Maya Chen") to that person.
   - Roles or relations ("my boss", "the operations partner") to the
     matching dossier entry.
-  - Pronouns ("she", "him", "they") to the dossier person whose
-    pronouns field matches AND who was named in the RECENT TRANSCRIPT
-    earlier in this session. If the pronouns string is empty for some
-    person, do not exclude them based on pronouns. Free-form pronoun
+  - Pronouns ("she", "him", "they") to the dossier person who was
+    named (or referenced via role/alias) in the RECENT TRANSCRIPT
+    earlier in this session. The recent transcript is the PRIMARY
+    cue for pronoun resolution. If the pronouns field is non-empty
+    for a dossier person, use it as a TIEBREAKER when multiple
+    transcript-named candidates fit. If the pronouns field is empty
+    for all candidates, do NOT exclude on pronouns; rely purely on
+    who was named in the recent transcript. Free-form pronoun
     strings (neopronouns like "ze/zir", language-mixed, etc.) are
     handled by literal compatibility with the dossier pronouns field,
     not by a fixed pronoun-to-gender mapping.
-  - When TWO OR MORE different dossier people fit the reference
-    equally and no contextual cue (transcript content, role mention,
-    dossier metadata) breaks the tie, set plan_shape="clarify",
-    person=null, and write a short clarify_question naming the
-    contenders by first name (e.g. "Did you mean Dana or Priya?").
-  - When ZERO dossier people fit (utterance does not reference a
-    known contact at all but is still actionish), set person=null
-    and plan_shape="act" if the agent can still execute the verb
-    against the chosen surface (e.g. "open the lab portal and pull
-    today's results" needs no recipient).
+  - If exactly ONE dossier person was named/referenced in the recent
+    transcript and the utterance contains a pronoun, resolve the
+    pronoun to that person. Do NOT clarify just because the dossier
+    has multiple people of the same gender; the transcript already
+    picked one.
+  - CRITICAL AMBIGUITY RULE: when TWO OR MORE different dossier people
+    are each named/referenced in the recent transcript AND each is
+    associated with the SAME thing/topic the utterance refers to (for
+    example transcript says "Dana asked for the launch recap. Priya
+    also asked for the launch recap." and utterance says "I should
+    get that over to her"), you MUST set plan_shape="clarify",
+    person=null, and write a clarify_question naming the contenders
+    by first name (e.g. "Did you mean Dana or Priya?"). Picking ONE
+    of the two equally-fitting candidates is a GUESS = the worst
+    outcome. Do NOT favor whichever name appears first; do NOT pick
+    based on alphabetical order; do NOT pick based on which person
+    has more recent activity. If two dossier people each separately
+    own / asked for / are associated with their own instance of the
+    same kind of thing, the only correct answer is clarify.
+  - When ZERO dossier people fit the reference (the utterance names
+    no one in the dossier and pronouns/relations do not resolve to a
+    dossier person), set person=null. Still set plan_shape="act" if
+    the agent can execute the verb against the chosen surface without
+    a specific contact (e.g. "open the lab portal and pull today's
+    results"). Otherwise plan_shape="clarify" with a question that
+    asks who the user means.
 
 STEP 3 - intent_verb, surface_hint, required_slots. Pick free-form
 snake_case strings; do not coerce into a closed enum:
