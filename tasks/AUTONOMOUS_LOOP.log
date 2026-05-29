@@ -27,3 +27,8 @@ Verified running PID 21520 is the swapped binary (sha 382c910 post-codesign).
 Quick fastpath smoke: inject "I should email Maya the friday update." returned outcome=DEFERRED with no plan after 24s. Fastpath did NOT fire because outcome=DEFERRED never reaches _compose_task_from_memory. Needs deeper inspection of the inject classification path to learn why a single explicit utterance was treated as deferred. Next cycle: read listen_inject endpoint flow, identify the path that calls _compose_task_from_memory vs the DEFERRED branch.
 
 Z-001 baseline still PASS (state/v7/z001_e2e_runs/20260529T064738Z).
+
+== 2026-05-28 23:55 PST cycle ==
+Z-001 latest = FAIL (run 20260529T065432Z) but only 3 steps recorded; this is an interrupted run (got killed when I restarted engine for sidecar swap), NOT an engine regression. The prior clean Z-001 run 20260529T064738Z is still the most recent valid PASS evidence.
+CHECK 16 standalone re-run started in background after sidecar swap. PIDs 22971/23132/23164 alive. Result lands in proof-artifacts/acceptance_<timestamp>/CHECK_16.json in ~14-25 min.
+Vercel still on 6e02d0a9 (push of 811247a5 still propagating).
