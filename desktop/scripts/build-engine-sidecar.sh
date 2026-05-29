@@ -51,13 +51,35 @@ if [[ ! -f "$MLX_JACCL" ]]; then
   exit 2
 fi
 
+EXCLUDES=(
+  # Transitive deps that the engine never imports. Dropping them shrinks
+  # the PyInstaller bundle and reduces peak RAM during the final CArchive
+  # build step (which was OOM-killing the box).
+  # NOTE: sklearn is NOT excluded because app/memory_v2/draw.py imports
+  # _local_embed (TF-IDF) at memory-lookup time and the caller does not
+  # catch ImportError. Exclude it only after that path is hardened.
+  --exclude-module skimage
+  --exclude-module matplotlib
+  --exclude-module IPython
+  --exclude-module jupyter
+  --exclude-module notebook
+  --exclude-module pytest
+  --exclude-module tkinter
+  --exclude-module PyQt5
+  --exclude-module PyQt6
+  --exclude-module PySide2
+  --exclude-module PySide6
+)
+
 pyinstaller \
   --onefile \
+  --noupx \
   --target-arch arm64 \
   --collect-all mlx \
   --collect-all parakeet_mlx \
   --add-binary "$MLX_JACCL:." \
   --name anticipy-engine \
+  "${EXCLUDES[@]}" \
   app/product/server.py
 
 if [[ ! -f "$ENGINE_DIR/dist/anticipy-engine" ]]; then
