@@ -1,0 +1,22 @@
+
+== 2026-05-28 20:14 PST cycle ==
+CHECK 15: PASS (chrome-headless-shell installed; verified standalone in 12.6s)
+CHECK 08: still red. Packaged engine alive + onboarded but /api/act returns no status. Engine resolves person (Dana Bright) + thing (Friday launch update) correctly via memory; the act execution step is broken. Z-001 (which exercises a different /api/act path with explicit handoff) PASSES, so the regression is specific to the listen-inject -> act trajectory, not the engine engine. Not chasable in a single 5-min cycle. Deferring.
+CHECK 16: untouched this cycle. Next cycle.
+
+== 2026-05-28 21:09 PST final cycle ==
+Fresh acceptance against today HEAD 09f82a7e: 13/15 PASS (bar 14/15, one short).
+
+Progress this loop:
++ CHECK 15 brand_audit: FIX SHIPPED. playwright chromium-headless-shell installed.
++ CHECK 16 agent_reliability: timeout raised 900s -> 1800s (commit 09f82a7e), now CHECK 16 runs to completion instead of timing out, but the actual content score is too low to pass.
+
+Persistent reds (not fixable in cron cycles, need engine work):
+- CHECK 08 input_paste: engine /api/act returns null status. Engine resolves person + thing correctly but action execution returns no status. Z-001 passes a different /api/act path so the regression is specific to listen-inject -> act trajectory.
+- CHECK 16 agent_reliability: 8/20 resolvable + 5/10 ambiguous. Multiple ReadTimeouts (engine sometimes blocks >30s on HTTP). Some scenarios trip the clarify-reflex on resolvable inputs (task #85 said this was fixed; CHECK 16 disagrees on certain scenarios).
+
+Root cause for both: engine quality on listen-inject -> plan -> act trajectory. Symptoms: HTTP request stalls + over-clarification + null act status. These do not show up in Z-001 because Z-001 hands the engine a fully-pinned handoff token + specific recipient + skips the intent-resolution layer.
+
+Loop is stopping at 13/15 instead of forcing a 14/15 it cannot reach without an engine fix. The remaining work is real engineering, not test plumbing.
+
+Cron 01508667 deleted at this entry.
