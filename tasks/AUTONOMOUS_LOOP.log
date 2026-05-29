@@ -96,3 +96,6 @@ Harness 14:26. CHECK 16 still running. Near the typical 15-17 min mark. Should l
 
 == 2026-05-29 01:04 PDT cycle ==
 Harness 17:22. CHECK 16 still mid-flight. Sometimes runs 20-25 min depending on engine latency per scenario.
+
+== 2026-05-29 01:07 PDT cycle ==
+Harness 20:21. CHECK 16 over typical 17 min ceiling. Need to know if engine stuck or scenarios just slow.
