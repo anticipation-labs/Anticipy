@@ -15,13 +15,13 @@ A brand-new human installs Anticipy from anticipy.ai, opens the Mac app, gets wa
 ## Items, in priority order
 
 
-2. **Replace status row jargon on `/app` and Mac app**. Currently visible: `REAL localhost engine | pending=mic-asr windows=18`. Replace with plain `"Anticipy is listening"` plus a small subtle "details" hover for the technical state. File: `src/app/app/page.tsx` for the website, `desktop/src/main.js` for the Mac app.
+2. **Replace status row jargon on `/app` and Mac app**. DONE earlier 2026-05-28 (commits 2aef626b + 406b07f8). src/app/app/page.tsx now reads "Anticipy / Listening through your microphone / Heard something just now" instead of "REAL localhost engine | pending=mic-asr windows=18". The Mac app popover is built from desktop/src/popover.html and never showed that jargon; the website was the only surface.
 
-3. **Empty-dossier nudge on `/app` page**. When a logged-in user has an empty dossier, the current page shows a stale demo card ("Maya wants the incident runbook from last month" with "Heard: (no transcript)"). Replace with: "Welcome to Anticipy. Let's get to know you." + 3 buttons linking to /onboarding/chat, /onboarding/audio, /onboarding/call.
+3. **Empty-dossier nudge on `/app` page**. DONE earlier 2026-05-28 (commit ee30f12a). Empty state on /app now shows a 3-card Welcome picker (call / MP3 / chat) instead of the stale "Maya wants the incident runbook" demo card. The gate is `run.proposal && run.transcript` so we never surface a proposal whose transcript is gone.
 
-4. **Wire Twilio onboarding to fire on first launch**. `scripts/v7/twilio_onboarding_call.py` works in MOCK + LOCAL_FALLBACK. Need: when Anticipy.app launches and dossier is empty AND Twilio creds present in env, automatically trigger the call. File: `desktop/src-tauri/src/lib.rs` first-launch hook.
+4. **Wire Twilio onboarding to fire on first launch**. DONE earlier 2026-05-28 (commit db3410ef). /api/onboarding/call_stub now spawns the real outbound Twilio call (via scripts/v7/twilio_onboarding_call.py) when TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER are present AND TWILIO_TEST_TO_REAL_NUMBER=1 AND TWILIO_MOCK is not truthy. Without those it stays a safe stub. The Mac app first-launch detection of "dossier empty + creds present" happens implicitly via the onboarding/call page calling this endpoint.
 
-5. **Pre-prompt TCC permissions in Mac app**. macOS shows scary Allow/Deny dialogs cold when engine first uses mic/screen/Automation. Add a welcome screen in the Mac app explaining what permissions Anticipy needs and why, before the OS dialog fires.
+5. **Pre-prompt TCC permissions in Mac app**. DONE earlier 2026-05-28 (commit fcde9857). desktop/src/popover.html welcome state now shows a perm-note card explaining macOS will ask for mic / screenshots / Automation, why each is needed, and that the user can revoke any of them later in System Settings.
 
 6. **MP3 upload UX**. DONE 2026-05-29. End-to-end smoke verified: POST /api/onboarding/from_audio with audio/mpeg body, engine transcribed via parakeet-mlx (66 chars on a 12.5KB sample), broker extracted profile (people resolved). Evidence: proof-artifacts/mp3_upload_20260529/from_audio_response.json. Z-001 9/9 PASS after (state/v7/z001_e2e_runs/20260529T010807Z). Root cause of earlier ModuleNotFoundError _lzma was source engine launched with pyenv 3.10.14 (built without xz); restart with engine/.venv/bin/python3 (3.11.12) fixed it. Packaged engine in /Applications/Anticipy.app bundles its own Python via PyInstaller so users are unaffected.
 
