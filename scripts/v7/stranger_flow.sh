@@ -598,6 +598,37 @@ step_act_and_verify() {
     act_error="$(read_field "$resp_path" error)"
     act_compose_url="$(read_field "$resp_path" compose_url)"
     act_resolved_person="$(read_field "$resp_path" resolved_person)"
+    # If the SMS pre-confirm gate fired, auto-dispatch YES so the test
+    # harness can complete end-to-end. In production the user replies
+    # YES via SMS. In dev/test we simulate that via /api/sms/inbound.
+    local awaiting_sms_confirm pending_task_id
+    awaiting_sms_confirm="$(read_field "$resp_path" awaiting_sms_confirm)"
+    pending_task_id="$(read_field "$resp_path" task_id)"
+    if [ "$awaiting_sms_confirm" = "true" ] && [ -n "$pending_task_id" ]; then
+      local inbound_resp="${RUN_DIR}/inbound_yes_response.json"
+      curl -sS -o "$inbound_resp" -w '%{http_code}' \
+          -X POST \
+          -H 'Content-Type: application/x-www-form-urlencoded' \
+          --data-urlencode "Body=YES" \
+          --data-urlencode "task_id=$pending_task_id" \
+          --data-urlencode "format=json" \
+          --max-time 90 \
+          "${ENGINE_URL}/api/sms/inbound" 2>/dev/null > /dev/null
+      # Re-read ran from the dispatched action result if present.
+      local disp_ran
+      disp_ran="$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$inbound_resp'))
+    disp = d.get('dispatched') or {}
+    print('true' if (disp.get('status') == 'SUCCESS' or disp.get('ran')) else 'false')
+except Exception:
+    print('false')
+" 2>/dev/null)"
+      if [ "$disp_ran" = "true" ]; then
+        ran="true"
+      fi
+    fi
   fi
   ACT_RAN="$ran"
 
