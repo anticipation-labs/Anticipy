@@ -70,20 +70,28 @@ const USER_CHROME_DEFAULT_REL: &str =
     "Library/Application Support/Google/Chrome/Default";
 const CHROME_CDP_TIMEOUT_SECS: u64 = 15;
 const CHROME_SETUP_COPY_MESSAGE: &str =
-    "Setting up Anticipy Chrome, this takes about 30 seconds, only happens once.";
+    "Setting up Anticipy. This takes about 30 seconds and only happens once.";
 const CHROME_SIGNIN_MESSAGE: &str =
-    "Sign in to Gmail and Calendar in this Chrome window to enable Anticipy.";
+    "Sign in to Gmail and Calendar in this Chrome window so Anticipy can act on your behalf.";
 
 // US-019 microphone permission constants. The usage string is also the
 // exact NSMicrophoneUsageDescription value in Info.plist.
 const MIC_PERMISSION_USAGE: &str =
     "Anticipy listens for ambient conversational intent. Microphone access is required for the product to work.";
+// Plain-English copy shown in the popover one beat before the macOS Allow
+// or Deny dialog renders. Apple-quality polish item 8: explain the prompt
+// to the user BEFORE the system dialog appears.
+const MIC_PERMISSION_PRE_PROMPT_MESSAGE: &str =
+    "Anticipy needs to hear what people ask you to do. macOS will ask you to allow microphone access in a moment.";
 const MIC_SYSTEM_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone";
 const MIC_GRACE_PERIOD_MS: u64 = 1_200;
 const MIC_POLL_INTERVAL_MS: u64 = 1_500;
 const MIC_POLL_MAX_SECS: u64 = 1_800;
 const MIC_PROMPT_DELAY_MS: u64 = 1_000;
+// Window in which the popover can render the pre-prompt explainer before
+// the actual macOS Allow/Deny dialog fires.
+const MIC_PRE_PROMPT_LEAD_MS: u64 = 1_400;
 const MIC_DENIED_MESSAGE: &str = "Microphone access required";
 
 // US-023 dossier section constants. The popover invokes these commands
@@ -870,6 +878,19 @@ fn bootstrap_mic_permission(app: &AppHandle) {
         record_and_emit(app, &store, MicPermissionState::Granted);
         return;
     }
+
+    // Apple-quality polish item 8: pre-prompt explainer. Emit a clear,
+    // plain-English heads-up so the popover can show a one-line banner
+    // BEFORE macOS surfaces its own opaque Allow/Deny dialog. Then sleep
+    // briefly so the user actually has a chance to read it.
+    let _ = app.emit(
+        "mic-permission-about-to-prompt",
+        serde_json::json!({
+            "message": MIC_PERMISSION_PRE_PROMPT_MESSAGE,
+            "usage": MIC_PERMISSION_USAGE,
+        }),
+    );
+    std::thread::sleep(Duration::from_millis(MIC_PRE_PROMPT_LEAD_MS));
 
     // Trigger the system Allow/Deny dialog. If status is NotDetermined
     // the user sees the prompt; if it is Denied/Restricted the request
