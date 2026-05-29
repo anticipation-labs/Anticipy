@@ -3505,6 +3505,43 @@ def _draft_task_from_plan(instruction: str, plan: dict) -> str:
     thing = str(plan.get("thing") or "").strip()
     email = _extract_email(person)
     if not email:
+        # G1 install_under_5min fix: prefer an exact full-name (or full
+        # name + last-name) match against the active dossier before
+        # falling back to the legacy substring match against
+        # _profile_people(). Otherwise "Maya Patel" would substring-
+        # match the legacy "Maya Chen" entry and the draft would use
+        # the wrong email even after the planner correctly resolved
+        # the person from the merged dossier.
+        if person:
+            low = person.lower()
+            parts = low.split()
+            for entry in _active_dossier_people_dicts():
+                nm = (entry.get("name") or "").strip()
+                if not nm:
+                    continue
+                nm_low = nm.lower()
+                # Exact full-name match wins.
+                if nm_low == low:
+                    if entry.get("email"):
+                        email = entry["email"]
+                        person = nm
+                        break
+                    continue
+                # Else match when the resolved person string contains
+                # the FULL dossier name (handles "Maya Patel" vs
+                # dossier "Maya Patel <maya@...>") - but only when both
+                # the first AND last token agree (no partial "Maya"
+                # matches against unrelated dossier rows).
+                if len(parts) >= 2:
+                    e_parts = nm_low.split()
+                    if (len(e_parts) >= 2
+                            and parts[0] == e_parts[0]
+                            and parts[-1] == e_parts[-1]):
+                        if entry.get("email"):
+                            email = entry["email"]
+                            person = nm
+                            break
+    if not email:
         for p in _profile_people():
             if person and (person.lower() in p["value"].lower()
                            or person.lower() in p["label"].lower()
@@ -3638,6 +3675,149 @@ def _resolve_person_from_active_dossier(instruction: str) -> tuple[
         return "", ""
     name, email = next(iter(uniq.items()))
     return name, email
+
+
+# G1 install_under_5min fix: the inject hot path (_compose_task_from_memory
+# below) historically only saw _profile_json() — the legacy onboarding
+# profile_obj that holds at most 3 dict-shaped people. The instant
+# cold-start inhale (planning/10) writes the discovered dossier to
+# ~/.anticipy/v7/dossiers/<account_id>/dossier.json (24+ people in the
+# stranger_flow proof), but the planner never picked them up because
+# the active dossier lives in a different shape and a different file.
+# This helper returns the active dossier people as the canonical v7
+# list-of-dicts shape, with the same source-of-truth account_id
+# resolution that auto_inhale.merge_delta uses (env override first,
+# then in-process USER_ID, then "local"). Returns [] on any error.
+def _active_dossier_people_dicts() -> list[dict]:
+    """Read the on-disk active dossier and return its people as
+    list[{name, email, role, pronouns, aliases}].
+
+    Account_id resolution mirrors what cold-start writes to:
+    - ANTICIPY_ACCOUNT_ID env wins (deterministic override).
+    - Else the in-process USER_ID (default "anticipy-user", which is
+      also auto_inhale.DEFAULT_ACCOUNT_ID).
+    - Else the legacy profile_obj.user_id when set.
+    The DossierLoader's _candidate_paths fallback chain still applies,
+    so if the per-account file is absent it will pick up a global
+    ~/.anticipy/v7/dossier.json or ~/.anticipy/dossier.json.
+    """
+    try:
+        from app.product.dossier_active_loader import DossierLoader
+    except Exception:
+        return []
+    # Priority chain identical to auto_inhale's writer side.
+    account_id = (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+    if not account_id:
+        account_id = (USER_ID or "").strip()
+    if not account_id:
+        try:
+            prof = (_SESS.get("profile_obj")
+                    if isinstance(_SESS, dict) else None)
+            if prof is not None:
+                account_id = str(getattr(prof, "user_id", "") or "").strip()
+        except Exception:
+            account_id = ""
+    if not account_id:
+        account_id = "local"
+    try:
+        loader = DossierLoader(account_id=account_id)
+    except Exception:
+        return []
+    try:
+        people = loader.people()
+    except Exception:
+        return []
+    out: list[dict] = []
+    for p in people:
+        name = (p.name or "").strip()
+        if not name:
+            continue
+        out.append({
+            "name": name,
+            "email": (p.email or "").strip(),
+            "role": (p.role or "").strip(),
+            "pronouns": (p.pronouns or "").strip(),
+            "aliases": [str(a).strip() for a in (p.aliases or []) if a],
+        })
+    return out
+
+
+def _merged_profile_people(profile_obj: dict) -> list[dict]:
+    """Merge the legacy profile_obj.people (dict-or-list) with the
+    active dossier's people into ONE canonical list-of-dicts.
+
+    Dedup by (lowercased email) when present, else lowercased name.
+    The legacy profile entries win on collision because the user
+    explicitly named them at onboarding; dossier entries supplement.
+    Returns [] when both sources are empty.
+    """
+    merged: list[dict] = []
+    seen_keys: set[str] = set()
+
+    def _key(entry: dict) -> str:
+        em = str(entry.get("email") or "").strip().lower()
+        if em:
+            return f"e:{em}"
+        nm = re.sub(r"\s+", " ", str(entry.get("name") or "")).strip().lower()
+        return f"n:{nm}" if nm else ""
+
+    # Pass 1: legacy profile (dict-shaped {role: "Name <email>"} or
+    # already list-shaped).
+    raw_people = (profile_obj or {}).get("people")
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            nm = str(entry.get("name") or "").strip()
+            if not nm:
+                continue
+            normalized = {
+                "name": nm,
+                "email": str(entry.get("email") or "").strip(),
+                "role": (str(entry.get("role")
+                              or entry.get("role_title")
+                              or entry.get("relation") or "")).strip(),
+                "pronouns": str(entry.get("pronouns") or "").strip(),
+                "aliases": [str(a).strip()
+                            for a in (entry.get("aliases") or []) if a],
+            }
+            k = _key(normalized)
+            if not k or k in seen_keys:
+                continue
+            seen_keys.add(k)
+            merged.append(normalized)
+    elif isinstance(raw_people, dict):
+        for relation, val in raw_people.items():
+            raw = val if isinstance(val, str) else str(val or "")
+            email_part = ""
+            name_part = raw
+            if "<" in raw and ">" in raw:
+                name_part, _, rest = raw.partition("<")
+                email_part = rest.split(">", 1)[0].strip()
+            name_part = name_part.strip()
+            if not name_part:
+                continue
+            normalized = {
+                "name": name_part,
+                "email": email_part,
+                "role": str(relation).strip(),
+                "pronouns": "",
+                "aliases": [],
+            }
+            k = _key(normalized)
+            if not k or k in seen_keys:
+                continue
+            seen_keys.add(k)
+            merged.append(normalized)
+
+    # Pass 2: active dossier supplements.
+    for entry in _active_dossier_people_dicts():
+        k = _key(entry)
+        if not k or k in seen_keys:
+            continue
+        seen_keys.add(k)
+        merged.append(entry)
+    return merged
 
 
 # FIX (W2A clarify-reflex, supplementary): extract a likely recipient
@@ -5458,6 +5638,41 @@ def _fastpath_plan_from_memory(instruction: str,
             candidates.append((name_part, email_part, []))
     if not candidates:
         return None
+    # G1 install_under_5min fix: prefer full-name matches first. When
+    # the user said "Maya Patel" verbatim and the dossier has Maya
+    # Patel, that's a unique resolution even when a second "Maya
+    # Chen" exists in the legacy profile. Falling back to first-name
+    # matching only when no full-name uniquely matches preserves the
+    # original behavior for utterances like "send Maya the deck."
+    full_name_matches: list[tuple[str, str]] = []
+    for name, email, _aliases in candidates:
+        full = name.strip().lower()
+        if not full or " " not in full:
+            continue
+        # Whole-word boundary match for the full name. re.escape so
+        # punctuation in dossier names (Dr., O'Brien) does not break.
+        pat = r"\b" + re.escape(full) + r"\b"
+        if re.search(pat, text_lower):
+            if name not in [n for n, _ in full_name_matches]:
+                full_name_matches.append((name, email))
+    if len(full_name_matches) == 1:
+        person = full_name_matches[0][0]
+        email = full_name_matches[0][1]
+        thing = (instruction.split(".")[0]
+                 if "." in instruction else instruction)
+        thing = thing.strip()[:120]
+        recipient = email or person
+        return {
+            "mode": "act",
+            "person": person,
+            "thing": thing,
+            "intent": "email_draft",
+            "task": (f"Open Gmail and create a draft email to {recipient} "
+                     f"about: {instruction.strip()[:240]}. "
+                     f"Do not send it; leave it as a draft."),
+            "question": "",
+            "_fastpath": "fullname",
+        }
     matched_names: list[str] = []
     matched_emails: list[str] = []
     for name, email, aliases in candidates:
@@ -6032,6 +6247,21 @@ def _compose_task_from_memory(instruction: str) -> dict:
     recent_list = _recent_transcripts(12)
     recent = "\n".join(f"- {t}" for t in recent_list) or "(none)"
     profile_obj = _profile_json() or {}
+    # G1 install_under_5min fix: enrich the planner's people list with
+    # whatever the instant cold-start inhale wrote to the active dossier
+    # on disk. Before this fix the LLM intent extractor (and the legacy
+    # fastpaths) only saw the 3-person legacy profile.people dict,
+    # so any name not in that hand-curated dict reflexively clarified
+    # ("Who do you mean by Maya Patel? I don't see that name in your
+    # contacts"). The merged list keeps the legacy entries first (user
+    # explicitly named them at onboarding) and supplements with dossier
+    # entries (auto-discovered from Gmail/Calendar inhale). Returned
+    # in the canonical v7 list-of-dicts shape that the downstream
+    # extractor + fastpaths both understand.
+    merged_people = _merged_profile_people(profile_obj)
+    if merged_people:
+        profile_obj = dict(profile_obj)
+        profile_obj["people"] = merged_people
     profile = json.dumps(profile_obj, ensure_ascii=False, indent=2)
     # FIX (W2O): 60-second cache keyed by (text_hash, profile_hash,
     # recent_hash). Same hard transcript in the same session state =>
@@ -6092,6 +6322,25 @@ def _compose_task_from_memory(instruction: str) -> dict:
                 extract, instruction, dossier_people)
     except Exception:
         extract_plan = None
+    # G1 install_under_5min fix: when the LLM returns clarify but the
+    # utterance contains an EXPLICIT FULL NAME that uniquely matches
+    # exactly ONE dossier person, prefer the deterministic resolution.
+    # Otherwise non-determinism in the LLM produces clarify cards even
+    # when the user said the full disambiguating name out loud
+    # ("Maya Patel" -> resolves Maya Patel, not Maya Chen). This only
+    # promotes ACT when the fastpath has a unique fullname match;
+    # ambiguous fastpath returns None and the LLM clarify stands.
+    if (extract_plan is not None
+            and extract_plan.get("mode") == "clarify"):
+        try:
+            fastpath_fullname = _fastpath_plan_from_memory(
+                instruction, profile_obj)
+        except Exception:
+            fastpath_fullname = None
+        if (fastpath_fullname is not None
+                and fastpath_fullname.get("mode") == "act"
+                and fastpath_fullname.get("_fastpath") == "fullname"):
+            extract_plan = fastpath_fullname
     if extract_plan is not None:
         _compose_cache_put(cache_key, extract_plan)
         return _finalize_plan(instruction, extract_plan)
@@ -8163,12 +8412,19 @@ def api_coldstart_start(p: _ColdstartStart) -> JSONResponse:
             ),
         }, status_code=500)
 
-    account_id = (p.account_id or "").strip() or DEFAULT_ACCOUNT_ID
-    # Cross-wire the engine's USER_ID when the caller did not pin one
-    # explicitly. Keeps the inhale dossier in the same per-account
-    # partition the planner / DossierLoader reads.
-    if not p.account_id and USER_ID:
-        account_id = USER_ID
+    # G1 install_under_5min fix: always cross-wire the cold-start
+    # writer to the engine's USER_ID. There is ONE user per engine
+    # process; honoring a caller-provided account_id "hint" silently
+    # writes the inhaled dossier to a different on-disk path than the
+    # one the planner / DossierLoader reads on the inject hot path,
+    # which produced the "Maya Patel is not in your contact list"
+    # clarify even after a successful inhale. The hint is logged in
+    # the response so callers can verify (and tests still partition
+    # via ANTICIPY_ACCOUNT_ID + ANTICIPY_V7_DOSSIER_ROOT envs when
+    # they need per-test isolation).
+    caller_account_hint = (p.account_id or "").strip()
+    account_id = (USER_ID or caller_account_hint
+                  or DEFAULT_ACCOUNT_ID)
     try:
         snapshot = start_inhale(
             account_id=account_id,
@@ -8182,7 +8438,15 @@ def api_coldstart_start(p: _ColdstartStart) -> JSONResponse:
             "ok": False,
             "error": f"start_inhale: {type(exc).__name__}: {exc}",
         }, status_code=500)
-    return JSONResponse({"ok": True, "started": True, "state": snapshot})
+    return JSONResponse({
+        "ok": True,
+        "started": True,
+        "state": snapshot,
+        "account_id": account_id,
+        "caller_account_hint": caller_account_hint,
+        "cross_wired_to_user_id": bool(
+            caller_account_hint and caller_account_hint != account_id),
+    })
 
 
 @app.get("/api/coldstart/status")
