@@ -616,12 +616,12 @@ export default function AnticipyApp() {
         pending: status?.pending ?? null,
         stages: [
           {
-            name: "localhost engine",
+            name: "Anticipy",
             real: Boolean(started?.on && !started?.error),
             gated: Boolean(started?.error),
             detail: started?.error
               ? String(started.error)
-              : `listening=${Boolean(status?.on)} windows=${status?.windows ?? 0} source=${String(started?.audio_device?.name || "default")}`,
+              : `Listening through ${String(started?.audio_device?.name || "your microphone")}.`,
           },
         ],
         gated: Boolean(started?.error),
@@ -662,10 +662,10 @@ export default function AnticipyApp() {
       action: status?.acted ?? null,
       stages: [
         {
-          name: "localhost engine",
+          name: "Anticipy",
           real: Boolean((status?.on || acceptedInput) && !status?.error),
           gated: Boolean(status?.error),
-          detail: stageDetail || `listening=${Boolean(status?.on)} windows=${status?.windows ?? 0}`,
+          detail: stageDetail || (status?.on ? "Listening." : "Idle."),
         },
       ],
       gated: Boolean(status?.error),
@@ -702,10 +702,10 @@ export default function AnticipyApp() {
         action: status?.acted ?? null,
         stages: [
           {
-            name: "localhost engine",
+            name: "Anticipy",
             real: true,
             gated: false,
-            detail: `pending=${String(status?.recent?.[0]?.source || "local-engine")} windows=${status?.windows ?? 0}`,
+            detail: "Heard something just now.",
           },
         ],
         gated: false,
