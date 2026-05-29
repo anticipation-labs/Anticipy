@@ -47,6 +47,8 @@ echo "[demo_scenarios.sh] engine = http://127.0.0.1:8731"
 echo "[demo_scenarios.sh] bridge = http://127.0.0.1:7777"
 echo "[demo_scenarios.sh] cdp    = http://localhost:9222"
 
+# Inline killer lives inside demo_scenarios.py so it dies with the
+# Python process. See _killer_loop in the python file.
 # Forward any CLI args (e.g. --only notion_idea_capture,stripe_revenue_check).
 "$PY_BIN" "$SCRIPT" "$@"
 RC=$?
