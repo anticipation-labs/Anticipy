@@ -43,7 +43,7 @@ If the agent claims success but verify fails:
 
 Compute the 12 user-facing gate states from the verify commands below. Update the scorecard section of ORCHESTRATOR.md. NO percentage estimates. ONLY GREEN or RED per gate.
 
-The 7 user-facing gates (the new mechanical 100% marker):
+The 12 user-facing gates (the mechanical 100% marker):
 
 | Gate | Mechanical verify | Pass criterion |
 |---|---|---|
@@ -54,8 +54,13 @@ The 7 user-facing gates (the new mechanical 100% marker):
 | **G5 packaged_binary_serves** | `ps -p $(lsof -t :8731) -o command=` matches `/Applications/Anticipy.app/Contents/MacOS/anticipy-engine` AND `curl /api/trivia/recent` returns 200 (not 404) | the DMG-shipped binary actually has the new features |
 | **G6 demo_rehearsed** | `state/demo/dress_rehearsal_log.json` shows two consecutive PASS runs within the last 4 hours | demo isn't theoretical |
 | **G7 non_google_surfaces_work** | `bash scripts/v7/universal_beyond_google.sh` exits 0 (aggregate result.json verdict=PASS, all 3 surfaces SUCCESS) | the universal action loop completes a real action on saucedemo + the-internet.herokuapp + wikipedia. Per memory/feedback_test_beyond_google.md: Gmail-only proof does not prove universality. |
+| **G8 real_world_demo_scenarios** | `bash scripts/v7/demo_scenarios.sh` exits 0 with verdict=PASS (≥4 of 5 scenarios complete with screenshots) | proves the agent does REAL work in REAL apps a lawyer/sales rep/student would use, not just synthetic test sites |
+| **G9 proactive_fires_unprompted** | `python scripts/v7/discovery_proactive.py` exits 0 (engine fires at least one notify via the cascade based on calendar/dossier signal without user prompting) | proves the proactive layer (not just reactive request/response) actually fires in production |
+| **G10 channel_by_urgency_routes** | `python scripts/v7/discovery_channel_router.py` exits 0 (CRITICAL+time-sensitive → voice_call, CRITICAL+not → sms, HIGH → sms+email, MEDIUM → email, LOW → silent) | proves the 4-channel matrix per feedback_channel_by_urgency.md picks the right channel mechanically |
+| **G11 cost_under_ceiling** | `curl http://127.0.0.1:8731/api/cost/stats` returns p95 per-task cost < $0.005 | proves we mechanically meet $200/user/year on 100k-task ceiling |
+| **G12 failure_recovery_works** | `curl -X POST /api/recovery/test {"failure_kind":"login_required"}` returns formatted SMS body + queue parks task | proves the user gets told when Anticipy can't finish + the task survives for retry instead of dying silently |
 
-Stop the cron only when ALL 7 are GREEN.
+Stop the cron only when ALL 12 are GREEN.
 
 ## Step 4. Check the done criteria
 
