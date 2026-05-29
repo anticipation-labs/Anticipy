@@ -118,6 +118,8 @@ SEED_FACTS: list[dict[str, Any]] = [
         "topic": "World War 1 start",
         "aliases": [
             "when did World War 1 start",
+            "when did World War one start",
+            "when did World War I start",
             "when did WWI begin",
             "when did the First World War start",
             "when did the great war begin",
@@ -132,6 +134,8 @@ SEED_FACTS: list[dict[str, Any]] = [
         "topic": "World War 1 end",
         "aliases": [
             "when did World War 1 end",
+            "when did World War one end",
+            "when did World War I end",
             "when did WWI end",
             "when did the First World War end",
             "armistice day",
@@ -146,6 +150,8 @@ SEED_FACTS: list[dict[str, Any]] = [
         "topic": "World War 2 start",
         "aliases": [
             "when did World War 2 start",
+            "when did World War two start",
+            "when did World War II start",
             "when did WWII begin",
             "when did the Second World War start",
         ],
@@ -159,6 +165,9 @@ SEED_FACTS: list[dict[str, Any]] = [
         "topic": "World War 2 end",
         "aliases": [
             "when did World War 2 end",
+            "when did World War two end",
+            "when did World War II end",
+            "when did the Second World War end",
             "when did WWII end",
             "VE day",
             "VJ day",
