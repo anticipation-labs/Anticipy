@@ -2548,9 +2548,22 @@ def _recent_transcripts(limit: int = 8) -> list[str]:
 def _is_actionish(text: str) -> bool:
     low = (text or "").lower()
     return bool(re.search(
-        r"\b(should|need|needs|owe|draft|email|mail|send|share|"
-        r"get .* over|follow up|let .* know|schedule|calendar|"
-        r"book|remind|tell|ask)\b", low))
+        r"\b(should|need|needs|owe|owes|owed|"
+        r"draft|drafts|drafted|drafting|"
+        r"email|emails|emailed|emailing|"
+        r"mail|mails|mailed|mailing|"
+        r"send|sends|sent|sending|"
+        r"share|shares|shared|sharing|"
+        r"forward|forwards|forwarded|forwarding|"
+        r"told|tell|tells|telling|"
+        r"ask|asks|asked|asking|"
+        r"remind|reminds|reminded|reminding|"
+        r"schedule|schedules|scheduled|scheduling|"
+        r"book|books|booked|booking|"
+        r"calendar|"
+        r"waiting|pending|outstanding|due|"
+        r"sitting in (my )?drafts?|still in (my )?drafts?|"
+        r"get .* over|follow up|let .* know)\b", low))
 
 
 def _extract_email(text: str) -> str:
