@@ -32,3 +32,11 @@ Z-001 baseline still PASS (state/v7/z001_e2e_runs/20260529T064738Z).
 Z-001 latest = FAIL (run 20260529T065432Z) but only 3 steps recorded; this is an interrupted run (got killed when I restarted engine for sidecar swap), NOT an engine regression. The prior clean Z-001 run 20260529T064738Z is still the most recent valid PASS evidence.
 CHECK 16 standalone re-run started in background after sidecar swap. PIDs 22971/23132/23164 alive. Result lands in proof-artifacts/acceptance_<timestamp>/CHECK_16.json in ~14-25 min.
 Vercel still on 6e02d0a9 (push of 811247a5 still propagating).
+
+== 2026-05-28 23:58 PST cycle ==
+CHECK 16 standalone re-run was launched but a full --skip 6,9,10 acceptance run
+appears to also be active (proof-artifacts/acceptance_20260528_235514/ has 8
+checks done, on CHECK_11 currently). Possibly a stray harness kick. Letting both
+land. CHECK 16 (the slow one) will gate the result.
+Z-001 latest still FAIL (interrupted run from sidecar swap); will re-run after
+acceptance finishes to free Chrome 9222.
