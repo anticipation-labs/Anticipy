@@ -222,6 +222,24 @@
         margin-bottom: 8px;
       }
 
+      .ambient-status {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .ambient-status.ok {
+        background: rgba(139, 195, 74, 0.10);
+        border: 1px solid rgba(139, 195, 74, 0.30);
+        color: var(--cream);
+      }
+      .ambient-status.err {
+        background: rgba(229, 115, 115, 0.10);
+        border: 1px solid rgba(229, 115, 115, 0.30);
+        color: var(--cream);
+      }
+
       .hidden { display: none !important; }
     </style>
   </head>
@@ -268,6 +286,7 @@
               <div class="sub">Anticipy will pick things up from your day as you go. No interview now.</div>
             </div>
           </div>
+          <div id="ambient-status" class="ambient-status hidden"></div>
         </section>
 
         <!-- Populated state: Now / Next / Past columns -->
@@ -440,14 +459,38 @@
               return;
             }
             if (choice === "ambient") {
-              // No interview: just mark setup as deferred and refresh.
-              try {
-                await invoke("set_ambient_only_mode");
-              } catch (e) {}
-              refresh();
+              await startAmbientListening();
             }
           });
         });
+      }
+
+      async function startAmbientListening() {
+        const box = $("ambient-status");
+        box.className = "ambient-status";
+        box.classList.remove("hidden");
+        box.textContent = "Asking macOS for microphone access...";
+        try {
+          const res = await fetch("http://127.0.0.1:8731/api/listen/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          const data = await res.json();
+          if (data && data.on) {
+            box.classList.add("ok");
+            const dev = (data.audio_device && data.audio_device.name) || "default microphone";
+            box.textContent = "Listening through " + dev + ". Close this and get on with your day. Anticipy will pick things up.";
+          } else {
+            box.classList.add("err");
+            box.textContent = (data && data.error)
+              ? "Could not start listening. " + data.error
+              : "Could not start listening.";
+          }
+        } catch (e) {
+          box.classList.add("err");
+          box.textContent = "Local engine is not reachable. Make sure Anticipy is running.";
+        }
       }
 
       document.getElementById("mic-open-settings").addEventListener("click", async () => {
