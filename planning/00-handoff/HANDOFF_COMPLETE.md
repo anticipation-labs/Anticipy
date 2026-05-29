@@ -33,13 +33,13 @@ Status as of cycle 93 (2026-05-29 23:02Z):
 | G5 | packaged_binary_serves | `lsof :8731` = Anticipy.app sidecar + `/api/trivia/recent` 200 | GREEN (pid 12121 = /Applications/Anticipy.app/Contents/MacOS/anticipy-engine on 8731) |
 | G6 | demo_rehearsed | 2 consecutive `dress_rehearsal.sh` PASS in last 4h | GREEN (19:39 + 20:01 PASS, within 4h window) |
 | G7 | non_google_surfaces_work | `bash scripts/v7/universal_beyond_google.sh` exits 0 | GREEN (aggregate=PASS at 223332Z: saucedemo + herokuapp + wikipedia) |
-| G8 | real_world_demo_scenarios | `bash scripts/v7/demo_scenarios.sh` exits 0 (≥4 of 5 scenarios) | IN FLIGHT v3 (skip stripe, 4 scenarios, threshold=3/4) |
+| G8 | real_world_demo_scenarios | `bash scripts/v7/demo_scenarios.sh` exits 0 (≥4 of 5 scenarios) | GREEN (aggregate_verdict=PASS at 20260529T225813Z, 4 of 5: stripe+calendly+notion+github PASS, gmail FAIL; threshold=4 met) |
 | G9 | proactive_fires_unprompted | `python scripts/v7/discovery_proactive.py` exits 0 | GREEN (calendar prep scheduler running, briefs_fired=1, proactive_fire logged) |
 | G10 | channel_by_urgency_routes | `python scripts/v7/discovery_channel_router.py` exits 0 | GREEN (6/6 matrix PASS) |
 | G11 | cost_under_ceiling | `curl /api/cost/stats` p95 per-task < $0.005 | GREEN (p95=0.0, max=0.000697 well under $0.005) |
 | G12 | failure_recovery_works | `curl -X POST /api/recovery/test {login_required}` returns formatted SMS | GREEN (renders "Anticipy couldn't finish the task because the site is logged out..." 96 chars) |
 
-**10 of 12 GREEN. G1 + G8 outstanding.**
+**11 of 12 GREEN. Only G1 outstanding.**
 
 ## 4. The 10 hard rules
 
