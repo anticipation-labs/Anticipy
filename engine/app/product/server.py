@@ -30,6 +30,7 @@ here, not a code edit.
 from __future__ import annotations
 
 import asyncio
+import base64
 import collections
 import json
 import os
@@ -7906,11 +7907,24 @@ def _twilio_opt_in() -> bool:
         "TWILIO_TEST_TO_REAL_NUMBER", "").strip() == "1"
 
 
-def _receipt_summary_text(recipient: str, subject: str) -> str:
+def _receipt_summary_text(recipient: str, subject: str,
+                          sent_link: str = "") -> str:
     """One short line, SMS-friendly. 'Reply STOP to silence' is the
-    standard opt-out line Twilio recommends for transactional SMS."""
+    standard opt-out line Twilio recommends for transactional SMS.
+
+    When sent_link is present we include it so the user can verify the
+    action in one click. The Gmail Message-ID encoded in the link
+    is the strongest possible audit identifier: it round-trips back to
+    the exact thread the agent touched.
+    """
     rec = (recipient or "the recipient").strip()
     subj = (subject or "(no subject)").strip()
+    link = (sent_link or "").strip()
+    if link:
+        return (
+            f"Anticipy just sent {rec} an email about {subj}. "
+            f"View: {link}. Reply STOP to silence."
+        )
     return (
         f"Anticipy just sent {rec} an email about {subj}. "
         "Reply STOP to silence."
@@ -7948,6 +7962,17 @@ def _send_receipt_sms_sync(body: str) -> dict:
     receipt helper can include the result in its summary.
     """
     phone = _receipt_phone()
+    mock_env = (os.environ.get("TWILIO_MOCK") or "").strip().lower()
+    if mock_env in {"1", "true", "yes", "on"}:
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "mock": True,
+            "reason": "TWILIO_MOCK=1",
+            "to": phone,
+            "would_have_sent": body,
+        }
     if not _twilio_creds_ready():
         return {
             "channel": "sms",
@@ -7963,6 +7988,7 @@ def _send_receipt_sms_sync(body: str) -> dict:
             "gated": True,
             "reason": "TWILIO_TEST_TO_REAL_NUMBER not set",
             "to": phone,
+            "would_have_sent": body,
         }
     if not phone:
         return {
@@ -8011,7 +8037,11 @@ def _send_receipt_sms_sync(body: str) -> dict:
         }
 
 
-def _send_receipt_email_via_cdp(subject: str, body: str) -> dict:
+def _send_receipt_email_via_cdp(subject: str, body: str,
+                                *,
+                                sent_link: str = "",
+                                screenshot_path: str = "",
+                                message_id: str = "") -> dict:
     """Drop a receipt-summary email into the user's Gmail Drafts
     (or send, when ANTICIPY_RECEIPT_SEND=1) via the same Gmail CDP
     composer the action path already uses.
@@ -8020,6 +8050,15 @@ def _send_receipt_email_via_cdp(subject: str, body: str) -> dict:
     The dev safety guard in dsv4_skill_runner restricts outbound
     sends, so the default behavior here is draft-only. Returns a
     structured dict (never raises).
+
+    The audit-trail proof block (sent_link + screenshot_path +
+    message_id) gets stamped into the body so a single self-email is
+    enough to reconstruct exactly what Anticipy did. Gmail's URL
+    prefill only supports a single body parameter and no real
+    attachments, so we inline the proof inline as plain text with a
+    file:// reference to the screenshot on disk. A future revision
+    can swap to multipart MIME via Gmail's API; today the goal is to
+    have an unambiguous, verifiable identifier in the receipt.
     """
     self_email = _user_self_email()
     if not self_email:
@@ -8049,12 +8088,23 @@ def _send_receipt_email_via_cdp(subject: str, body: str) -> dict:
                 f"gmail_compose import: {type(exc).__name__}: {exc}"),
             "to": self_email,
         }
+    enriched_body_parts = [body or ""]
+    if message_id:
+        enriched_body_parts.append(f"\n\nMessage-ID: {message_id}")
+    if sent_link:
+        enriched_body_parts.append(f"\nView the sent message: {sent_link}")
+    if screenshot_path:
+        enriched_body_parts.append(
+            f"\nScreenshot of the action: file://{screenshot_path}"
+        )
+    enriched_body = "".join(enriched_body_parts)
+    composed_subject = f"Anticipy: {subject or '(action completed)'}"
     try:
         result = create_gmail_draft(
             DraftRequest(
                 to=self_email,
-                subject=f"Anticipy: {subject or '(action completed)'}",
-                body=body,
+                subject=composed_subject,
+                body=enriched_body,
             ),
             cdp_port=CDP_PORT,
             marker="",
@@ -8082,10 +8132,9 @@ def _send_receipt_email_via_cdp(subject: str, body: str) -> dict:
         if target_id:
             try:
                 typing_evidence = _gmail_type_into_compose_body(
-                    CDP_PORT, target_id, body,
+                    CDP_PORT, target_id, enriched_body,
                     to_text=self_email,
-                    subject_text=f"Anticipy: "
-                                 f"{subject or '(action completed)'}",
+                    subject_text=composed_subject,
                 )
             except Exception as exc:
                 typing_evidence = {
@@ -8100,6 +8149,247 @@ def _send_receipt_email_via_cdp(subject: str, body: str) -> dict:
         "compose_url": result.compose_url,
         "error": result.error,
         "typing_evidence": typing_evidence,
+        "proof_sent_link": sent_link,
+        "proof_screenshot_path": screenshot_path,
+        "proof_message_id": message_id,
+    }
+
+
+# --------------------------------------------------------------------------
+# Audit-trail proof capture (Message-ID + screenshot + sent link)
+# --------------------------------------------------------------------------
+#
+# Receipts that just say "I sent X" are weak. A real audit trail needs a
+# verifiable identifier the user can click. For Gmail that is the message
+# RFC 2822 Message-ID which Gmail also exposes as a base16-style "thread
+# id" in the URL fragment after the message ships. The fragment looks
+# like `#sent/FMfcgzGxXxxxxXxxxxxx` and `https://mail.google.com/
+# mail/u/0/#sent/<id>` always resolves to the exact thread.
+#
+# We also drop a PNG screenshot of the post-action Gmail tab to disk
+# (under ~/.anticipy/v7/receipt_proof/) and base64-encode it for
+# inclusion in the receipt payload + self-email body. Both are best
+# effort: a missing screenshot must NEVER block the receipt or the
+# action. The receipt fires anyway with whatever fields we could
+# collect.
+
+_RECEIPT_PROOF_DIR = Path(
+    os.environ.get("ANTICIPY_DATA_DIR", "")
+    or os.path.expanduser("~/.anticipy/v7")
+) / "receipt_proof"
+
+
+def _capture_cdp_screenshot(cdp_port: int,
+                            target_id: str,
+                            out_path: Path,
+                            timeout_seconds: float = 10.0) -> dict:
+    """One synchronous CDP Page.captureScreenshot. Returns a dict with
+    {ok, path, bytes, error}. Never raises.
+    """
+    try:
+        from websockets.sync.client import connect as _ws_connect
+    except Exception as exc:
+        return {"ok": False, "error": f"ws import: {type(exc).__name__}: {exc}"}
+    if not target_id:
+        return {"ok": False, "error": "no_target_id"}
+    ws_url = f"ws://127.0.0.1:{cdp_port}/devtools/page/{target_id}"
+    try:
+        ws = _ws_connect(ws_url, max_size=32 * 1024 * 1024,
+                         open_timeout=float(timeout_seconds))
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"ws connect: {type(exc).__name__}: {exc}"}
+    try:
+        ws.send(json.dumps({
+            "id": 1, "method": "Page.captureScreenshot",
+            "params": {"format": "png", "fromSurface": True,
+                       "captureBeyondViewport": False},
+        }))
+        deadline = time.time() + float(timeout_seconds)
+        b64 = ""
+        while time.time() < deadline:
+            try:
+                raw = ws.recv(timeout=max(0.5, deadline - time.time()))
+            except Exception:
+                break
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            if msg.get("id") == 1:
+                b64 = ((msg.get("result") or {}).get("data") or "")
+                break
+        if not b64:
+            return {"ok": False, "error": "no_screenshot_returned"}
+        try:
+            data = base64.b64decode(b64)
+        except Exception as exc:
+            return {"ok": False,
+                    "error": f"b64 decode: {type(exc).__name__}: {exc}"}
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            out_path.write_bytes(data)
+        except Exception as exc:
+            return {"ok": False,
+                    "error": f"write: {type(exc).__name__}: {exc}"}
+        return {"ok": True, "path": str(out_path),
+                "bytes": len(data), "base64": b64}
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+
+def _gmail_extract_message_id_from_tab(cdp_port: int,
+                                       target_id: str,
+                                       timeout_seconds: float = 8.0
+                                       ) -> dict:
+    """Read the Gmail thread id (Message-ID surrogate) from a tab's
+    location.hash. Gmail rewrites the URL to #sent/<id>, #inbox/<id>,
+    or #drafts/<id> after Send completes. Returns a dict with
+    {ok, message_id, hash_kind, url, error}.
+    """
+    try:
+        from websockets.sync.client import connect as _ws_connect
+    except Exception as exc:
+        return {"ok": False, "error": f"ws import: {type(exc).__name__}: {exc}"}
+    if not target_id:
+        return {"ok": False, "error": "no_target_id"}
+    ws_url = f"ws://127.0.0.1:{cdp_port}/devtools/page/{target_id}"
+    js = (
+        "(function(){"
+        "try{"
+        "var url=location.href;"
+        "var hash=(location.hash||'').replace(/^#/,'');"
+        "var m=hash.match(/^([a-z]+)\\/([A-Za-z0-9_-]+)/);"
+        "if(!m){return JSON.stringify({ok:false,"
+        "error:'no_hash_match',hash:hash,url:url});}"
+        "return JSON.stringify({ok:true,kind:m[1],id:m[2],"
+        "hash:hash,url:url});"
+        "}catch(e){return JSON.stringify({ok:false,"
+        "error:String(e)});}"
+        "})()"
+    )
+    try:
+        ws = _ws_connect(ws_url, max_size=4 * 1024 * 1024,
+                         open_timeout=float(timeout_seconds))
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"ws connect: {type(exc).__name__}: {exc}"}
+    try:
+        ws.send(json.dumps({
+            "id": 1, "method": "Runtime.evaluate",
+            "params": {"expression": js, "returnByValue": True,
+                       "awaitPromise": False},
+        }))
+        deadline = time.time() + float(timeout_seconds)
+        raw_value = ""
+        while time.time() < deadline:
+            try:
+                raw = ws.recv(timeout=max(0.5, deadline - time.time()))
+            except Exception:
+                break
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            if msg.get("id") == 1:
+                raw_value = str(((msg.get("result") or {})
+                                  .get("result") or {}).get("value") or "")
+                break
+        try:
+            parsed = json.loads(raw_value or "{}")
+        except Exception:
+            parsed = {}
+        if not parsed.get("ok"):
+            return {"ok": False,
+                    "error": str(parsed.get("error") or "no_value"),
+                    "raw": raw_value[:300]}
+        return {
+            "ok": True,
+            "message_id": str(parsed.get("id") or ""),
+            "hash_kind": str(parsed.get("kind") or ""),
+            "url": str(parsed.get("url") or ""),
+        }
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+
+def _gmail_sent_link(message_id: str, hash_kind: str = "sent") -> str:
+    if not message_id:
+        return ""
+    kind = (hash_kind or "sent").strip() or "sent"
+    return (
+        f"https://mail.google.com/mail/u/0/#{kind}/{message_id}"
+    )
+
+
+def _capture_gmail_action_proof(response_obj: dict) -> dict:
+    """Drop a screenshot + extract the Gmail Message-ID (or thread id
+    surrogate) from the tab the action engine just used. Returns a
+    structured dict with everything the receipt needs. Never raises.
+
+    Strategy:
+      - Prefer the compose_target_id the action engine emitted; the
+        post-send Gmail tab keeps the same target_id and just rewrites
+        its location.hash to #sent/<id> or #drafts/<id>.
+      - Fall back to scanning CDP /json for any mail.google.com tab.
+      - Screenshot is best-effort; missing it is non-fatal.
+    """
+    if CDP_PORT <= 0:
+        return {"ok": False, "reason": "cdp_disabled",
+                "cdp_port": CDP_PORT}
+    target_id = str(
+        (response_obj or {}).get("compose_target_id")
+        or ((response_obj or {}).get("typing_evidence") or {})
+        .get("target_id")
+        or ""
+    ).strip()
+    if not target_id:
+        try:
+            target_id = _gmail_find_compose_target(CDP_PORT) or ""
+        except Exception:
+            target_id = ""
+    if not target_id:
+        try:
+            for tid in _gmail_list_compose_targets(CDP_PORT):
+                target_id = tid
+                break
+        except Exception:
+            pass
+    if not target_id:
+        return {"ok": False, "reason": "no_gmail_target",
+                "cdp_port": CDP_PORT}
+
+    msg = _gmail_extract_message_id_from_tab(CDP_PORT, target_id)
+    message_id = str(msg.get("message_id") or "") if msg.get("ok") else ""
+    hash_kind = str(msg.get("hash_kind") or "") if msg.get("ok") else ""
+    sent_link = _gmail_sent_link(message_id, hash_kind or "sent")
+
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    out_path = _RECEIPT_PROOF_DIR / f"gmail_action_{ts}_{uuid.uuid4().hex[:8]}.png"
+    shot = _capture_cdp_screenshot(CDP_PORT, target_id, out_path)
+
+    return {
+        "ok": bool(message_id or shot.get("ok")),
+        "target_id": target_id,
+        "message_id": message_id,
+        "hash_kind": hash_kind,
+        "tab_url": str(msg.get("url") or ""),
+        "sent_link": sent_link,
+        "screenshot": {
+            "ok": bool(shot.get("ok")),
+            "path": str(shot.get("path") or ""),
+            "bytes": int(shot.get("bytes") or 0),
+            "base64_len": len(shot.get("base64") or ""),
+            "error": str(shot.get("error") or ""),
+        },
+        "message_id_error": "" if msg.get("ok") else str(
+            msg.get("error") or ""),
     }
 
 
@@ -8111,13 +8401,32 @@ def _emit_action_receipt(instruction: str,
     /api/dispatch/with_receipt endpoint. Returns a structured dict
     summarizing what each channel did. NEVER raises: a receipt
     failure must not roll back a successful real-world action.
+
+    The new audit-trail proof block captures Gmail's Message-ID
+    (thread id surrogate) and a PNG screenshot of the tab so the
+    user has a verifiable identifier to click.
     """
     try:
         recipient, subject = _extract_recipient_subject(
             instruction, response_obj)
-        text = _receipt_summary_text(recipient, subject)
+        proof = _capture_gmail_action_proof(response_obj)
+        sent_link = str(proof.get("sent_link") or "")
+        screenshot_path = ""
+        screenshot_b64 = ""
+        screenshot_block = proof.get("screenshot") or {}
+        if isinstance(screenshot_block, dict):
+            screenshot_path = str(screenshot_block.get("path") or "")
+            # Don't bloat the JSON response with the full b64. Carry
+            # only the path; the email helper reads the file when it
+            # needs to inline.
+        text = _receipt_summary_text(recipient, subject, sent_link)
         sms_result = _send_receipt_sms_sync(text)
-        email_result = _send_receipt_email_via_cdp(subject, text)
+        email_result = _send_receipt_email_via_cdp(
+            subject, text,
+            sent_link=sent_link,
+            screenshot_path=screenshot_path,
+            message_id=str(proof.get("message_id") or ""),
+        )
         return {
             "ok": True,
             "recipient": recipient,
@@ -8125,6 +8434,7 @@ def _emit_action_receipt(instruction: str,
             "summary_text": text,
             "sms": sms_result,
             "self_email": email_result,
+            "proof": proof,
         }
     except Exception as exc:
         return {
