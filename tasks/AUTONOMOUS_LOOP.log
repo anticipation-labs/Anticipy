@@ -48,3 +48,6 @@ Acceptance harness now on CHECK 16 (12 of 15 done). Harness PID 22971 alive 5:49
 Harness 8:49 on CHECK 16. No new CHECK_*.json artifacts since last probe (none expected; CHECK 16 emits only after agent_reliability returns). proof-artifacts/agent_reliability.json shows interim 2 resolvable + 0 ambiguous which is early scenarios (R01-R04 range).
 ETA: CHECK 16 should complete in 6-12 more minutes, then CHECK 17 + 18 land in seconds, then SUMMARY.json.
 After SUMMARY: if pass>=14 then commit manifest + CronDelete; if pass<14 then identify remaining failing checks and target the lowest-numbered.
+
+== 2026-05-29 00:07 PDT cycle ==
+B GREEN: Vercel = HEAD f25e4212. CHECK 16 still running (11:50). Dispatched A9 agent to audit clarify-reflex in _COMPOSE_SYS + propose pronoun fastpath. Synthesis on next cycle.
