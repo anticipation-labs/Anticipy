@@ -84,3 +84,6 @@ Harness 2:21, 8 checks done. CHECK 01-08 + 11 all PASS so far. SSL + CDP_PORT de
 
 == 2026-05-29 00:52 PDT cycle ==
 CHECK 15 PLAYWRIGHT FIX VERIFIED PASS. 12/12 PASS so far. CHECK 16 next (the slow one ~17 min). Projected D >= 14/15.
+
+== 2026-05-29 00:55 PDT cycle ==
+Harness 8:22, CHECK 16 running. Need ~10 more min for it to land. Then 17 + 18 in <1 min each.
