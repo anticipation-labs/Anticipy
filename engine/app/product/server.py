@@ -2016,6 +2016,55 @@ async def onboarding_from_audio(request: Request) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
+# Login-wall fallback (Item 8 per HUMAN_READY_PLAN)
+# When the action engine wrapper hits an auth wall on a real site, it
+# can POST here and the user gets a Twilio voice call + local `say`
+# nudge to come finish the sign-in.
+# --------------------------------------------------------------------------
+
+class LoginWallNotify(BaseModel):
+    url: str
+    title: str | None = None
+    task_description: str = ""
+    phone: str | None = None
+
+
+@app.post("/api/action/login_wall_notify")
+def action_login_wall_notify(p: LoginWallNotify) -> JSONResponse:
+    try:
+        from app.product import login_wall_responder as LWR
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": f"login_wall_responder import: "
+                                   f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
+    out = LWR.notify_login_wall(
+        url=p.url, title=p.title or "",
+        task_description=p.task_description or "",
+        phone=p.phone,
+    )
+    return JSONResponse({"ok": True, **out})
+
+
+@app.get("/api/action/login_wall_detect")
+def action_login_wall_detect(url: str, title: str = "") -> JSONResponse:
+    """Pure detection. No side effects. Useful for the action engine
+    wrapper to check before deciding to call the notify endpoint.
+    """
+    try:
+        from app.product import login_wall_responder as LWR
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": f"login_wall_responder import: "
+                                   f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
+    det = LWR.detect_login_wall(url, title)
+    return JSONResponse({"ok": True, "detection": det})
+
+
+# --------------------------------------------------------------------------
 # microphone permission probe
 # --------------------------------------------------------------------------
 

@@ -1,0 +1,10 @@
+{
+  "detect_gmail_signin": {"is_login_wall": true, "service": "Google", "reason": "url matched known host fragment 'accounts.google.com'"},
+  "detect_gmail_inbox": {"is_login_wall": false, "service": null, "reason": "no match"},
+  "detect_title_only": {"is_login_wall": true, "service": "www.example.com", "reason": "title looked like a sign-in page"},
+  "notify_no_phone_no_creds": {
+    "twilio": {"ok": false, "skipped": true, "reason": "no phone supplied"},
+    "fallback_say": {"ok": true, "spoken": true}
+  },
+  "z001_after_change_run": "state/v7/z001_e2e_runs/20260529T011856Z/result.json"
+}
