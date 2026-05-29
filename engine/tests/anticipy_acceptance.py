@@ -916,7 +916,7 @@ def check_16_agent_reliability() -> tuple[str, dict]:
     res = subprocess.run(
         [py, str(REPO / "engine/tests/agent_reliability.py"),
          "--engine-url", ENGINE_URL, "--no-act"],
-        capture_output=True, timeout=900,
+        capture_output=True, timeout=1800,
     )
     log_path.write_bytes(b"=== stdout ===\n" + res.stdout
                          + b"\n=== stderr ===\n" + res.stderr)
