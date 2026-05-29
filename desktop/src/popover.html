@@ -82,7 +82,17 @@
       .welcome p {
         font-size: 13px;
         color: var(--warm-gray);
-        margin-bottom: 20px;
+        margin-bottom: 14px;
+      }
+      .perm-note {
+        font-size: 12px;
+        color: var(--cream);
+        background: rgba(200, 169, 126, 0.06);
+        border: 1px solid rgba(200, 169, 126, 0.18);
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin-bottom: 18px;
+        line-height: 1.5;
       }
       .onboard-options {
         display: flex;
@@ -237,6 +247,9 @@
         <section id="welcome" class="welcome hidden">
           <h1>Welcome to Anticipy.</h1>
           <p>Let's get to know you. Pick one. Takes about ten minutes.</p>
+          <div class="perm-note">
+            Heads up. macOS will ask Anticipy for permission to use your microphone, take screenshots, and control other apps. That is so Anticipy can hear what you mention and act in your real Chrome. Click Allow when macOS asks. You can revoke any of these later in System Settings > Privacy and Security.
+          </div>
           <div class="onboard-options">
             <div class="onboard-card" data-onboard="call">
               <div class="title">Have Anticipy call you</div>
