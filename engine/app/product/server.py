@@ -66,14 +66,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Handoff token round-trip endpoints (POST /api/auth/handoff/mint,
-# POST /api/auth/exchange). Implementation lives in app.anticipy.handoff
-# so the engine route surface stays a thin attach point.
+# Engine-side handoff convenience routes (GET /api/auth/handoff/session,
+# POST /api/auth/handoff/exchange). The website still mints + exchanges
+# tokens; these endpoints let the engine inspect or perform an exchange
+# locally and cache a non-sensitive session record at ~/.anticipy/
+# session.json. See app.anticipy.handoff for the full docstring. Hard
+# import: a failure here means the route surface is wrong, not silent.
 try:
     from app.anticipy.handoff import attach_to as _attach_handoff_routes
     _attach_handoff_routes(app)
-except Exception:
-    pass
+except Exception as _e_handoff:
+    import traceback as _tb_handoff
+    print(
+        f"[anticipy.handoff] attach failed: "
+        f"{type(_e_handoff).__name__}: {_e_handoff}",
+        flush=True,
+    )
+    _tb_handoff.print_exc()
 
 # Live streaming STT via Deepgram Nova-3 (WebSocket /api/stt/stream).
 # Implementation lives in app.listen.stream so the route surface stays
