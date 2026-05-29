@@ -1319,7 +1319,7 @@ export default function AnticipyApp() {
               </>
             ) : run ? (
               <div className="w-full fade-up">
-                {run.proposal ? (
+                {run.proposal && run.transcript ? (
                   <div className="rounded-card border border-dark-border bg-dark-elevated px-8 py-9 text-left">
                     <p className="text-[11px] uppercase tracking-[0.22em] text-gold/80 mb-4">
                       {runDecline
@@ -1330,8 +1330,7 @@ export default function AnticipyApp() {
                       {run.proposal}
                     </p>
                     <p className="mt-5 text-[12.5px] text-cream/45 leading-relaxed">
-                      Heard: {run.transcript || "(no transcript)"}. Reasoning
-                      decision: {run.engine_decision || "n/a"}.
+                      Heard: {run.transcript}. {run.engine_decision ? `Reasoning decision: ${run.engine_decision}.` : ""}
                     </p>
                     {runDecline ? (
                       <div className="mt-8 flex gap-3">
@@ -1361,17 +1360,33 @@ export default function AnticipyApp() {
                     )}
                   </div>
 	                ) : (
-	                  <div className="rounded-card border border-dark-border bg-dark-elevated px-8 py-9 text-left">
-	                    <p className="text-[13px] text-cream/80 font-medium">
-	                      No proposal this run, honestly.
-                    </p>
-	                    <p className="mt-3 text-[12.5px] text-cream/45 leading-relaxed">
-	                      {run.reason ||
-	                        "The pipeline ran but did not surface a proposal."}
+	                  <div className="rounded-card border border-dark-border bg-dark-elevated px-8 py-10 text-left">
+	                    <p className="text-[11px] uppercase tracking-[0.22em] text-gold/80 mb-4">
+	                      Welcome to Anticipy
 	                    </p>
+	                    <p className="font-serif text-[clamp(22px,3vw,30px)] text-cream leading-snug mb-2">
+	                      Let&apos;s get to know you.
+	                    </p>
+	                    <p className="text-[13px] text-cream/55 leading-relaxed mb-7">
+	                      Pick one. Takes about ten minutes. Anticipy gets sharper once it knows who you spend time with and what you&apos;re working on.
+	                    </p>
+	                    <div className="grid gap-3">
+	                      <a href="/onboarding/call" className="rounded-card border border-dark-border bg-dark px-5 py-4 hover:border-gold transition-colors block">
+	                        <p className="text-[14px] text-cream font-medium">Have Anticipy call you</p>
+	                        <p className="text-[12px] text-cream/55 mt-1">Quick friend-style interview on your phone. Hands-free.</p>
+	                      </a>
+	                      <a href="/onboarding/audio" className="rounded-card border border-dark-border bg-dark px-5 py-4 hover:border-gold transition-colors block">
+	                        <p className="text-[14px] text-cream font-medium">Drop in an MP3 of your day</p>
+	                        <p className="text-[12px] text-cream/55 mt-1">If you already recorded yourself, give Anticipy that.</p>
+	                      </a>
+	                      <a href="/onboarding/chat" className="rounded-card border border-dark-border bg-dark px-5 py-4 hover:border-gold transition-colors block">
+	                        <p className="text-[14px] text-cream font-medium">Type a short chat</p>
+	                        <p className="text-[12px] text-cream/55 mt-1">Five quick questions in your browser. Five minutes.</p>
+	                      </a>
+	                    </div>
                       {run.action && (
-                        <p className="mt-4 text-[12px] text-cream/45 leading-relaxed">
-                          Action: {String(run.action.status || run.action.error || run.action.question || "recorded")}.
+                        <p className="mt-6 text-[12px] text-cream/45 leading-relaxed">
+                          Last action: {String(run.action.status || run.action.error || run.action.question || "recorded")}.
                         </p>
                       )}
 	                  </div>
