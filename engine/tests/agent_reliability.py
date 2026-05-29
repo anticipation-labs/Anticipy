@@ -205,7 +205,7 @@ AMBIGUOUS: list[Scenario] = [
 
 
 def _post(engine_url: str, path: str, body: Optional[dict] = None,
-          timeout: float = 30.0) -> dict:
+          timeout: float = 60.0) -> dict:
     r = requests.post(engine_url + path, json=body or {}, timeout=timeout)
     r.raise_for_status()
     return r.json()

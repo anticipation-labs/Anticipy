@@ -92,6 +92,20 @@ ACQUIRED_VIA_APPLESCRIPT = "chrome_applescript_loopback_bridge"
 # -----------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------
+def _ws_alive(ws) -> bool:
+    """Backward-compat liveness check across websockets v11 (.closed bool)
+    and v16 (.state enum). The pyenv 3.10.14 env that runs this bridge
+    was upgraded mid-session and now has v16, where ClientConnection no
+    longer exposes .closed.
+    """
+    if ws is None:
+        return False
+    if hasattr(ws, "closed"):
+        return not ws.closed
+    state = getattr(ws, "state", None)
+    return state is not None and getattr(state, "name", "") != "CLOSED"
+
+
 def _log_dir() -> Path:
     home = Path.home()
     if sys.platform == "darwin":
@@ -232,10 +246,10 @@ class _CDPClient:
         return next(self._id_counter)
 
     async def _ensure_connected(self) -> None:
-        if self._ws is not None and not self._ws.closed:
+        if self._ws is not None and _ws_alive(self._ws):
             return
         async with self._connect_lock:
-            if self._ws is not None and not self._ws.closed:
+            if self._ws is not None and _ws_alive(self._ws):
                 return
             try:
                 self._browser_ws_url = await _browser_ws_url()
