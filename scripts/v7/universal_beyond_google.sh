@@ -37,6 +37,80 @@ RUN_DIR="${REPO}/state/v7/universal_beyond_google_runs/${TS}"
 mkdir -p "${RUN_DIR}"
 LOG="${RUN_DIR}/run.log"
 
+# Coordinate with the sibling demo_scenarios.sh script (G8 gate). Both
+# scripts POST to /api/universal/run and the engine has no internal
+# serialization, so two concurrent runs corrupt each other's
+# Anticipy-owned background tab. demo_scenarios.sh holds an fcntl
+# advisory lock at /tmp/anticipy_demo_scenarios.lock for the whole
+# run; we acquire the SAME lock so the two gates serialize. We hold
+# it via a background python helper for the lifetime of this shell.
+_LOCK_PATH="/tmp/anticipy_demo_scenarios.lock"
+_LOCK_PID=""
+_lock_acquire() {
+  # Background python that fcntl.flock's the lock with LOCK_EX|NB
+  # (non-blocking on poll-cycle inside the helper), exits if signaled.
+  # We track the helper PID and SIGTERM it on exit.
+  ( python3 - "${_LOCK_PATH}" "$$" <<'PY' >/tmp/anticipy_universal_beyond_lock.log 2>&1 &
+import fcntl, os, signal, sys, time
+lock_path = sys.argv[1]
+parent_pid = int(sys.argv[2])
+fh = open(lock_path, "w")
+got = False
+# Try up to 10 minutes with 2-second polls to acquire the lock
+deadline = time.time() + 600
+while time.time() < deadline:
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        got = True
+        break
+    except OSError:
+        time.sleep(2)
+if not got:
+    print("could not acquire lock in 600s", flush=True)
+    sys.exit(2)
+print(f"acquired lock at {time.time()}", flush=True)
+# Hold lock; release on SIGTERM. Also release if parent dies.
+def _bye(signum, frame):
+    try: fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    except Exception: pass
+    fh.close()
+    sys.exit(0)
+signal.signal(signal.SIGTERM, _bye)
+signal.signal(signal.SIGINT, _bye)
+while True:
+    try:
+        os.kill(parent_pid, 0)  # 0 == liveness probe
+    except ProcessLookupError:
+        _bye(0, 0)
+    time.sleep(2)
+PY
+  echo $! ) > /tmp/anticipy_universal_beyond_lock.pid
+  _LOCK_PID="$(cat /tmp/anticipy_universal_beyond_lock.pid 2>/dev/null || echo '')"
+  # Poll the lock helper log up to 600s for "acquired lock"
+  local t0 cap
+  t0=$(date +%s)
+  cap=600
+  while [ $(( $(date +%s) - t0 )) -lt "${cap}" ]; do
+    if grep -q "acquired lock" /tmp/anticipy_universal_beyond_lock.log 2>/dev/null; then
+      log "lock acquired (sibling demo_scenarios.sh serialized)"
+      return 0
+    fi
+    if grep -q "could not acquire" /tmp/anticipy_universal_beyond_lock.log 2>/dev/null; then
+      log "WARNING: could not acquire ${_LOCK_PATH} in ${cap}s"
+      return 1
+    fi
+    sleep 2
+  done
+  log "WARNING: lock helper did not report status in ${cap}s; proceeding"
+  return 1
+}
+_lock_release() {
+  if [ -n "${_LOCK_PID}" ]; then
+    kill -TERM "${_LOCK_PID}" 2>/dev/null || true
+  fi
+}
+trap _lock_release EXIT
+
 # Per-surface deadline (wall clock seconds). 120s is enough for the
 # focused single-action intents below: each iteration is ~10-15s
 # (vision LLM read + CDP dispatch + after-screenshot capture). The
@@ -247,6 +321,12 @@ PY
 check_engine || { log "ABORT: engine down"; exit 1; }
 check_chrome || { log "ABORT: chrome :9222 down"; exit 1; }
 check_bridge
+
+# Acquire the demo_scenarios lock to serialize with the sibling G8
+# script. Without this, demo_scenarios.sh's background killer kills
+# this script when it runs concurrently (see scripts/v7/demo_scenarios.sh:
+# "Background killer" pgreps universal_beyond and kill -9's the pid).
+_lock_acquire || log "WARNING: proceeding without sibling lock; expect possible interference"
 
 # --- the three picks --------------------------------------------------------
 # Each intent is concrete and verifiable by reading the after-screenshot.
