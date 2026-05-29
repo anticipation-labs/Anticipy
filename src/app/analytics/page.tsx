@@ -258,7 +258,7 @@ export default async function AnalyticsPage() {
                         >
                           {timeAgo(p.created_at)}
                         </td>
-                        <td className="px-4 py-3">{p.name || "—"}</td>
+                        <td className="px-4 py-3">{p.name || "n/a"}</td>
                         <td
                           className="px-4 py-3"
                           style={{ color: "var(--text-on-dark-muted)" }}
@@ -275,7 +275,7 @@ export default async function AnalyticsPage() {
                             p.shipping_address_country,
                           ]
                             .filter(Boolean)
-                            .join(", ") || "—"}
+                            .join(", ") || "n/a"}
                         </td>
                         <td
                           className="px-4 py-3 text-right"
@@ -338,7 +338,7 @@ export default async function AnalyticsPage() {
                         >
                           {timeAgo(w.created_at)}
                         </td>
-                        <td className="px-4 py-3">{w.name || "—"}</td>
+                        <td className="px-4 py-3">{w.name || "n/a"}</td>
                         <td
                           className="px-4 py-3"
                           style={{ color: "var(--text-on-dark-muted)" }}

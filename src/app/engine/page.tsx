@@ -92,11 +92,11 @@ function friendlyError(raw: unknown): string {
   )
     return "Network hiccup. Check your connection and try again.";
   if (lower.includes("rate") || lower.includes("429"))
-    return "Lots of activity right now — try again in a moment.";
+    return "Lots of activity right now. Try again in a moment.";
   if (lower.includes("unauthorized") || lower.includes("401") || lower.includes("403"))
     return "Your session expired. Please sign in again.";
   if (lower.includes("transcription dropped") || lower.includes("dropped"))
-    return "We're still recording — finish and we'll process the audio.";
+    return "We're still recording. Finish and we'll process the audio.";
   // Anything else: don't leak it.
   return "Something didn't go through. Give it another sec and try again.";
 }
@@ -2624,8 +2624,8 @@ export default function EnginePage() {
               "Press record and have a real conversation. Anticipy listens, transcribes, and surfaces every actionable moment."}
             {state === "recording" &&
               (intents.length === 0 && duration >= 30
-                ? `Recording — ${formatDuration(duration)} · listening for actions`
-                : `Recording — ${formatDuration(duration)}`)}
+                ? `Recording ${formatDuration(duration)} · listening for actions`
+                : `Recording ${formatDuration(duration)}`)}
             {state === "transcribing" &&
               "Cleaning up your audio..."}
             {state === "analyzing" &&
@@ -3139,7 +3139,7 @@ export default function EnginePage() {
                                       ? "Confirmed."
                                       : checkIn.resolved === "reject"
                                         ? "Skipped."
-                                        : "Time's up — using default."}
+                                        : "Time's up. Using default."}
                                   </div>
                                 )}
                               </div>
@@ -3252,7 +3252,7 @@ export default function EnginePage() {
                                 color: "#9DD49F",
                               }}
                             >
-                              Got it — I&rsquo;ll try again with that.
+                              Got it. I&rsquo;ll try again with that.
                             </div>
                           )}
 

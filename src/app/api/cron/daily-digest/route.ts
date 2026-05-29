@@ -118,7 +118,7 @@ export async function GET(req: Request) {
     lines.push("EXPENSES");
     lines.push(`- ${formatMoney(expTotalCents)} total across ${expRows.length} receipt${expRows.length === 1 ? "" : "s"}`);
     if (top) {
-      lines.push(`- Top: ${top.vendor?.name || "—"} ${formatMoney(top.amount_cents || 0)} for ${top.category || "—"}`);
+      lines.push(`- Top: ${top.vendor?.name || "n/a"} ${formatMoney(top.amount_cents || 0)} for ${top.category || "n/a"}`);
     }
     if (pending > 0) lines.push(`- ${pending} still pending review`);
     lines.push("");
