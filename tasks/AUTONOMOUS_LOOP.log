@@ -66,3 +66,6 @@ Harness 20:49 on CHECK 16. agent_reliability still running. Engine alive. Past t
 
 == 2026-05-29 00:32 PDT cycle ==
 Z-001 refreshed: 9/9 PASS (run_id 20260529T073111Z). A gate is GREEN. Probing all 6.
+
+== 2026-05-29 00:35 PDT cycle ==
+Stopped launchd respawners. Killed source uvicorn. Launched packaged Anticipy.app fresh. Engine PID 46073 confirmed running /Applications/Anticipy.app/Contents/MacOS/anticipy-engine binary (sha e20d3da, today fastpath + pronoun resolver). Kicked CHECK 16 only in background (faster than full --skip 6,9,10). Result lands in ~14-25 min.
