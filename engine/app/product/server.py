@@ -5270,34 +5270,59 @@ def _fastpath_plan_from_memory(instruction: str,
     CLARIFY_REFLEX (we make the deterministic act decision the LLM was
     hedging on). Ambiguous scenarios (two contender names in one
     instruction) return None and fall through to the LLM as before.
+
+    Handles two dossier shapes: list-of-dicts (the v7 dossier loader
+    canonical shape with name/email/aliases fields) and dict-of-strings
+    (the older onboarding profile shape "<name> <email>").
     """
     if not isinstance(profile_obj, dict):
         return None
-    people = profile_obj.get("people") or {}
-    if not isinstance(people, dict) or not people:
+    raw_people = profile_obj.get("people")
+    if not raw_people:
         return None
     text_lower = (instruction or "").lower()
     if not text_lower:
         return None
+    candidates: list[tuple[str, str, list[str]]] = []
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            email = str(entry.get("email") or "").strip()
+            aliases_raw = entry.get("aliases") or []
+            aliases = [str(a).strip() for a in aliases_raw if a]
+            if not name:
+                continue
+            candidates.append((name, email, aliases))
+    elif isinstance(raw_people, dict):
+        for key, val in raw_people.items():
+            raw = val if isinstance(val, str) else str(val or "")
+            email_part = ""
+            name_part = raw
+            if "<" in raw and ">" in raw:
+                name_part, _, rest = raw.partition("<")
+                email_part = rest.split(">", 1)[0].strip()
+            name_part = name_part.strip() or str(key)
+            if not name_part:
+                continue
+            candidates.append((name_part, email_part, []))
+    if not candidates:
+        return None
     matched_names: list[str] = []
     matched_emails: list[str] = []
-    for key, val in people.items():
-        raw = val if isinstance(val, str) else str(val or "")
-        email_part = ""
-        name_part = raw
-        if "<" in raw and ">" in raw:
-            name_part, _, rest = raw.partition("<")
-            email_part = rest.split(">", 1)[0].strip()
-        name_part = name_part.strip() or str(key)
-        if not name_part:
-            continue
-        tokens = [t for t in name_part.split() if len(t) >= 3]
-        if not tokens:
-            continue
-        first = tokens[0]
-        if first.lower() in text_lower and name_part not in matched_names:
-            matched_names.append(name_part)
-            matched_emails.append(email_part)
+    for name, email, aliases in candidates:
+        haystack_tokens = []
+        first = name.split()[0] if name.split() else ""
+        if first and len(first) >= 3:
+            haystack_tokens.append(first.lower())
+        for alias in aliases:
+            if alias and len(alias) >= 3:
+                haystack_tokens.append(alias.lower())
+        if any(t in text_lower for t in haystack_tokens):
+            if name not in matched_names:
+                matched_names.append(name)
+                matched_emails.append(email)
     if len(matched_names) != 1:
         return None
     person = matched_names[0]
