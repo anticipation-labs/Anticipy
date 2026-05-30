@@ -23,7 +23,10 @@ export const dynamic = "force-dynamic";
  *   6. Enforces account-wide $5/day SMS spend cap by counting recent
  *      anticipy_twilio_sends inserts in the trailing 24h window.
  *   7. Sends via the shared Anticipy Twilio number using server-side
- *      creds in TWILIO_BROKER_SID / TWILIO_BROKER_TOKEN /
+ *      creds in TWILIO_BROKER_ACCOUNT_SID (URL path) +
+ *      TWILIO_BROKER_SID (Basic Auth username, either the Account SID
+ *      or an API Key SID) + TWILIO_BROKER_TOKEN (Basic Auth password,
+ *      either the Account Auth Token or an API Key Secret) +
  *      TWILIO_BROKER_FROM.
  *   8. Logs each send to public.anticipy_twilio_sends for audit and
  *      cost reconciliation, then increments the per-user counter.
@@ -33,9 +36,19 @@ export const dynamic = "force-dynamic";
  * set for the only field where the engine has freedom (the kind tag).
  *
  * Env required (Vercel):
- *   TWILIO_BROKER_SID
- *   TWILIO_BROKER_TOKEN
- *   TWILIO_BROKER_FROM    (E.164, the Anticipy public number)
+ *   TWILIO_BROKER_ACCOUNT_SID  (Account SID, starts with "AC"; used
+ *                              in the Twilio Messages.json URL path.
+ *                              Falls back to TWILIO_BROKER_SID for
+ *                              backward compat with deploys that set
+ *                              the single combined var to an AC...
+ *                              Account SID.)
+ *   TWILIO_BROKER_SID          (Basic Auth username. Either an API
+ *                              Key SID starting with "SK" (preferred)
+ *                              or the Account SID starting with "AC".)
+ *   TWILIO_BROKER_TOKEN        (Basic Auth password. Either an API
+ *                              Key Secret (preferred) or the Account
+ *                              Auth Token.)
+ *   TWILIO_BROKER_FROM         (E.164, the Anticipy public number)
  *   NEXT_PUBLIC_SUPABASE_URL
  *   NEXT_PUBLIC_SUPABASE_ANON_KEY
  *   SUPABASE_SERVICE_ROLE_KEY
@@ -248,12 +261,33 @@ export async function POST(req: Request) {
     );
   }
 
+  const accountSid = (
+    process.env.TWILIO_BROKER_ACCOUNT_SID
+    || process.env.TWILIO_BROKER_SID
+    || ""
+  ).trim();
   const sid = (process.env.TWILIO_BROKER_SID || "").trim();
   const token = (process.env.TWILIO_BROKER_TOKEN || "").trim();
   const from = (process.env.TWILIO_BROKER_FROM || "").trim();
-  if (!sid || !token || !from) {
+  if (!accountSid || !sid || !token || !from) {
     return NextResponse.json(
       { ok: false, error: "Anticipy Twilio broker is not configured." },
+      { status: 503 },
+    );
+  }
+  // The URL path MUST be the Account SID. API Key SIDs start with "SK"
+  // and would resolve to a 404 on api.twilio.com. The Basic Auth pair
+  // (sid:token) can be either an API Key (SK + secret, preferred for
+  // least privilege) or the Account SID + Auth Token (legacy path).
+  if (!accountSid.startsWith("AC")) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Anticipy Twilio broker is misconfigured: account SID must "
+          + "start with 'AC'. Set TWILIO_BROKER_ACCOUNT_SID to the "
+          + "Twilio Account SID (the URL path requires it).",
+      },
       { status: 503 },
     );
   }
@@ -296,7 +330,7 @@ export async function POST(req: Request) {
 
   const auth = Buffer.from(`${sid}:${token}`).toString("base64");
   const twilioUrl =
-    `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`;
+    `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
 
   let upstream: Response;
   try {
