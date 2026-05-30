@@ -2082,6 +2082,26 @@ def _normalize_phone(raw: str) -> str:
     return s
 
 
+# B039: same posture as src/app/api/twilio/relay/route.ts. Stranger installs
+# must not be able to trigger a UK / Australia / premium-line call by POSTing
+# to /api/onboarding/call_stub. We mirror the +1-only and premium-prefix
+# block from the broker.
+_E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
+_PREMIUM_PHONE_PREFIXES = ("+1900", "+1976")
+
+
+def _is_allowed_destination(to: str) -> tuple[bool, str]:
+    if not _E164_RE.match(to or ""):
+        return False, "phone number must be E.164 (e.g. +14155551212)"
+    if not to.startswith("+1"):
+        return False, ("only +1 (US/CA) numbers are accepted; "
+                       "international calls are disabled")
+    for pfx in _PREMIUM_PHONE_PREFIXES:
+        if to.startswith(pfx):
+            return False, f"premium prefix {pfx} is blocked"
+    return True, ""
+
+
 @app.post("/api/onboarding/call_stub")
 def onboarding_call_stub(p: CallStub) -> JSONResponse:
     """Path 3a: log the intent to place a voice-onboarding call.
@@ -2095,6 +2115,12 @@ def onboarding_call_stub(p: CallStub) -> JSONResponse:
     if not phone:
         return JSONResponse(
             {"ok": False, "error": "invalid phone number"},
+            status_code=400,
+        )
+    allowed, reason = _is_allowed_destination(phone)
+    if not allowed:
+        return JSONResponse(
+            {"ok": False, "error": reason},
             status_code=400,
         )
     row = {
@@ -2551,7 +2577,50 @@ class ChatTurn(BaseModel):
 
 
 class ChatComplete(BaseModel):
-    transcript: list[ChatTurn]
+    """Body for /api/onboarding/chat_complete.
+
+    Two accepted shapes (B038):
+      1. List of objects: [{"speaker_id": "WEARER"|"AGENT", "text": "..."}]
+      2. Flat string transcript: "WEARER: hi\\nAGENT: ..."
+
+    The string form is normalized into the list form at the boundary so
+    the rest of the path is unchanged. Empty transcript is rejected with 400.
+    """
+
+    transcript: list[ChatTurn] | str
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {"transcript": [
+                    {"speaker_id": "WEARER", "text": "My name is Alex"},
+                    {"speaker_id": "AGENT", "text": "Got it."},
+                ]},
+                {"transcript": "WEARER: My name is Alex\nAGENT: Got it."},
+            ]
+        }
+
+
+def _coerce_chat_transcript(raw: list[ChatTurn] | str) -> list[ChatTurn]:
+    """Normalize either form into a list of ChatTurn. A bare string is
+    split on newlines and parsed for "SPEAKER: text" lines. Anything
+    without a colon prefix is treated as a WEARER turn."""
+    if isinstance(raw, list):
+        return raw
+    out: list[ChatTurn] = []
+    for line in (raw or "").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if ":" in s:
+            sp, _, body = s.partition(":")
+            sp_clean = sp.strip().upper()
+            if sp_clean not in ("AGENT", "WEARER"):
+                sp_clean = "WEARER"
+            out.append(ChatTurn(speaker_id=sp_clean, text=body.strip()))
+        else:
+            out.append(ChatTurn(speaker_id="WEARER", text=s))
+    return out
 
 
 def _flatten_chat_transcript(turns: list[ChatTurn]) -> str:
@@ -2586,8 +2655,9 @@ def onboarding_chat_complete(c: ChatComplete) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "empty transcript"},
                             status_code=400)
 
+    chat_turns = _coerce_chat_transcript(c.transcript)
     transcript = [{"speaker_id": t.speaker_id, "text": t.text}
-                  for t in c.transcript
+                  for t in chat_turns
                   if (t.text or "").strip()]
     if not transcript:
         return JSONResponse({"ok": False, "error": "no non-empty turns"},
