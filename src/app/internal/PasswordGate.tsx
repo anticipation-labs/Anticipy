@@ -4,7 +4,13 @@ import { useState, useEffect } from "react";
 
 /**
  * Posts the passcode to /api/internal-gate, which compares it server-side
- * and sets a signed httpOnly cookie. The expected code is the literal "123".
+ * and sets a signed httpOnly cookie. In NODE_ENV=development the expected
+ * code is the literal "123". In production GATE_PASSCODE_INTERNAL must be
+ * set on the host (Vercel env) - the route fails secure with 401 if it is
+ * missing or too short (< 6 chars).
+ *
+ * B064: cookie name and field name (`passcode`) must stay in sync with
+ * the route and with src/middleware.ts which gates /internal/* server-side.
  */
 export default function PasswordGate({ children }: { children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState(false);
