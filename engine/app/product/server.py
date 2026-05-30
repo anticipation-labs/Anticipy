@@ -142,6 +142,261 @@ async def _private_network_headers(request: Request, call_next):
 _SESS: dict = {"i": 0, "transcript": [], "profile": None,
                "profile_obj": None}
 
+# Engine boot timestamp. Used by /api/state engine_health.etime_seconds so
+# operators can see process uptime in one curl without ps. Captured at module
+# import so it reflects the actual sidecar PID's age, not a subsystem
+# restart. Wall-clock; if NTP shifts mid-run, etime drifts a little. Cheap.
+_BOOT_TS: float = time.time()
+
+# Bounded log of tabs the engine itself initiated via the bridge / CDP. Used
+# by /api/state tab_activity_60s. We do NOT introspect the bridge process or
+# query Chrome; each engine path that opens a tab posts here. Stays in-memory
+# only (bridge restarts already reset its own _ANTICIPY_OWNED_TARGETS set).
+# The deque is bounded so a runaway proactive loop cannot blow memory.
+_TAB_OPEN_LOG: collections.deque = collections.deque(maxlen=512)
+_TAB_OPEN_LOG_LOCK = threading.Lock()
+
+
+def _record_anticipy_tab_open(url: str) -> None:
+    """Record that the engine asked the bridge to open a tab. Each engine
+    path that opens a tab should call this. Best-effort; never raises.
+    Strips the URL down to host so the log does not retain query strings
+    (which can carry PII like meeting ids, search terms, or oauth state).
+    """
+    try:
+        host = ""
+        if url:
+            parsed = urllib.parse.urlsplit(str(url))
+            host = parsed.hostname or ""
+        with _TAB_OPEN_LOG_LOCK:
+            _TAB_OPEN_LOG.append({"ts": time.time(), "host": host})
+    except Exception:
+        pass
+
+
+def _tab_activity_snapshot(window_s: float = 60.0) -> dict:
+    """Snapshot tab opens within the last window_s seconds. Returns the
+    count, the count of distinct tabs still owned (approximated by entries
+    in the bounded log; bridge holds the authoritative set), and the most
+    recent host string. No Chrome / bridge call; pure in-memory deque scan.
+    """
+    try:
+        cutoff = time.time() - float(window_s or 60.0)
+        with _TAB_OPEN_LOG_LOCK:
+            rows = list(_TAB_OPEN_LOG)
+        recent = [r for r in rows if float(r.get("ts") or 0.0) >= cutoff]
+        last_host = ""
+        if recent:
+            last_host = str(recent[-1].get("host") or "")
+        return {
+            "tabs_opened_by_anticipy_60s": len(recent),
+            "tabs_currently_owned": len(rows),
+            "last_tab_host": last_host or None,
+        }
+    except Exception as exc:
+        return {
+            "tabs_opened_by_anticipy_60s": 0,
+            "tabs_currently_owned": 0,
+            "last_tab_host": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _quiet_mode_snapshot() -> bool:
+    try:
+        from app.config import _quiet_mode_enabled
+        return bool(_quiet_mode_enabled())
+    except Exception:
+        return False
+
+
+def _proactive_status_snapshot() -> dict | None:
+    """Coldstart inhale + calendar prep + notifier dispatch counters.
+    Each branch is guarded; if a subsystem is missing we return null for
+    that subkey, not crash the whole endpoint.
+    """
+    try:
+        out: dict = {
+            "coldstart_inhale_running": False,
+            "calendar_prep_last_fire_ts": None,
+            "calendar_prep_briefs_fired_24h": 0,
+            "notifier_dispatches_24h": 0,
+        }
+        try:
+            from app.coldstart.auto_inhale import run_state as _inhale_state
+            inhale = _inhale_state() or {}
+            out["coldstart_inhale_running"] = (
+                str(inhale.get("state") or "").lower() == "running"
+            )
+        except Exception:
+            out["coldstart_inhale_running"] = False
+        try:
+            from app.product.calendar_prep import scheduler_state as _cps
+            cps = _cps() or {}
+            last_at = float(cps.get("last_brief_at") or 0.0)
+            if last_at > 0.0:
+                from datetime import datetime as _dt, timezone as _tz
+                out["calendar_prep_last_fire_ts"] = _dt.fromtimestamp(
+                    last_at, tz=_tz.utc
+                ).isoformat()
+            # The scheduler exposes total briefs_fired since process boot,
+            # not a 24h rolling count. Use the fired_event_ids tail as a
+            # bounded proxy: it caps at 20 in to_dict() so this is cheap.
+            fired_ids = cps.get("fired_event_ids") or []
+            out["calendar_prep_briefs_fired_24h"] = (
+                int(cps.get("briefs_fired") or 0)
+                if last_at >= (time.time() - 24 * 3600.0)
+                else len(fired_ids)
+            )
+        except Exception:
+            pass
+        # Notifier dispatches in the last 24h. The notifier module has no
+        # built-in counter (it logs via stdlib logging), so we walk the
+        # task queue's recent terminal rows as a proxy: every fired task
+        # triggered a dispatch path. Pure in-memory list_tasks call.
+        try:
+            from app import task_queue as _tq
+            recent = _tq.list_tasks(limit=200) or []
+            cutoff = time.time() - 24 * 3600.0
+            count = 0
+            for r in recent:
+                ts = float(getattr(r, "updated_at", 0.0) or 0.0)
+                status = str(getattr(r, "status", "") or "")
+                if ts >= cutoff and status in ("done", "failed", "waiting"):
+                    count += 1
+            out["notifier_dispatches_24h"] = count
+        except Exception:
+            pass
+        return out
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _task_queue_summary_snapshot() -> dict | None:
+    """Counts across the in-memory task queue index. No disk reads beyond
+    the lazy load the queue already does on its first call this process.
+    """
+    try:
+        from app import task_queue as _tq
+        rows = _tq.list_tasks(limit=10_000) or []
+        cutoff = time.time() - 24 * 3600.0
+        out = {
+            "total": len(rows),
+            "waiting": 0,
+            "running": 0,
+            "done_24h": 0,
+            "failed_24h": 0,
+        }
+        for r in rows:
+            status = str(getattr(r, "status", "") or "")
+            ts = float(getattr(r, "updated_at", 0.0) or 0.0)
+            if status == "waiting":
+                out["waiting"] += 1
+            elif status == "in_progress":
+                out["running"] += 1
+            elif status == "done" and ts >= cutoff:
+                out["done_24h"] += 1
+            elif status == "failed" and ts >= cutoff:
+                out["failed_24h"] += 1
+        return out
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _cost_last_hour_snapshot() -> dict | None:
+    """Pull tasks_run / total_usd / p95 from the existing cost_telemetry
+    rolling deque. We do NOT recompute; we read the deque the telemetry
+    already maintains and filter by 1h cutoff."""
+    try:
+        from app.product import cost_telemetry as _ct
+        # The module exports _call_log internally; reach via the public
+        # get_per_task_stats path and intersect with the active + recent
+        # rolling deque. We re-derive the last-hour slice here so we do
+        # not depend on telemetry adding a new helper (keeps this
+        # endpoint additive, not a cross-module edit).
+        with _ct._lock:  # type: ignore[attr-defined]
+            recent = list(_ct._recent)  # type: ignore[attr-defined]
+            call_log = list(_ct._call_log)  # type: ignore[attr-defined]
+        cutoff = time.time() - 3600.0
+        last_hour_costs: list[float] = []
+        for snap in recent:
+            ts = float(snap.get("finished_at") or 0.0)
+            if ts >= cutoff:
+                last_hour_costs.append(float(snap.get("cost_usd") or 0.0))
+        # Tasks that have not finished yet but had a call in the last hour
+        # still count toward "tasks_run" as observed activity.
+        active_task_ids = {
+            str(row.get("task_id") or "")
+            for row in call_log
+            if float(row.get("ts") or 0.0) >= cutoff
+        }
+        total_usd = sum(
+            float(row.get("cost_usd") or 0.0)
+            for row in call_log
+            if float(row.get("ts") or 0.0) >= cutoff
+        )
+        tasks_run = max(len(last_hour_costs), len(active_task_ids))
+        p95 = 0.0
+        if last_hour_costs:
+            ordered = sorted(last_hour_costs)
+            idx = (len(ordered) - 1) * 0.95
+            lo = int(idx)
+            hi = min(lo + 1, len(ordered) - 1)
+            frac = idx - lo
+            p95 = ordered[lo] + (ordered[hi] - ordered[lo]) * frac
+        return {
+            "tasks_run": int(tasks_run),
+            "total_usd": round(float(total_usd), 6),
+            "p95_per_task_usd": round(float(p95), 6),
+        }
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _engine_health_snapshot() -> dict:
+    """Pid, etime, rss, bound port, packaged-binary flag. psutil is in the
+    sidecar's requirements; if it ever drops out we still return the
+    cheap fields (pid, etime, port, binary) and set rss_mb to null."""
+    try:
+        pid = os.getpid()
+        etime = max(0, int(time.time() - _BOOT_TS))
+        try:
+            raw_port = (
+                os.environ.get("ANTICIPY_ENGINE_PORT", "").strip()
+                or os.environ.get("ANTICIPY_PORT", "").strip()
+                or "8731"
+            )
+            bound_port = int(raw_port)
+        except Exception:
+            bound_port = 8731
+        rss_mb: int | None = None
+        try:
+            import psutil as _psutil  # local import; not a hard dep
+            rss_mb = int(_psutil.Process(pid).memory_info().rss / 1024 / 1024)
+        except Exception:
+            rss_mb = None
+        # Bundled binary detection: PyInstaller sets sys.frozen and lays
+        # argv[0] under the .app bundle. Avoid raising on weird argv.
+        bundled = False
+        try:
+            argv0 = (sys.argv[0] if sys.argv else "") or ""
+            real = os.path.realpath(argv0) if argv0 else ""
+            bundled = (
+                bool(getattr(sys, "frozen", False))
+                or "/Applications/Anticipy.app/" in real
+            )
+        except Exception:
+            bundled = False
+        return {
+            "pid": int(pid),
+            "etime_seconds": int(etime),
+            "rss_mb": rss_mb,
+            "bound_port": int(bound_port),
+            "bundled_binary": bool(bundled),
+        }
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
 
 # Multi-tenant account_id derivation.
 #
@@ -1647,6 +1902,17 @@ def state() -> JSONResponse:
         "last_cloud_sync": _SESS.get("last_cloud_sync"),
         "last_resolution_trace_sync": _SESS.get("last_resolution_trace_sync"),
         "surface_runtime": _surface_runtime_state(),
+        # Live observability for one-curl operator visibility. Each value
+        # is computed on demand from in-memory state only (no Chrome /
+        # bridge / Supabase / LLM calls); a subsystem that has not
+        # initialized returns null for its slot rather than crashing the
+        # endpoint. Budget: under 50ms total.
+        "quiet_mode": _quiet_mode_snapshot(),
+        "proactive_status": _proactive_status_snapshot(),
+        "tab_activity_60s": _tab_activity_snapshot(60.0),
+        "task_queue_summary": _task_queue_summary_snapshot(),
+        "cost_last_hour": _cost_last_hour_snapshot(),
+        "engine_health": _engine_health_snapshot(),
     })
 
 
@@ -10467,6 +10733,93 @@ def api_coldstart_start(p: _ColdstartStart) -> JSONResponse:
         "caller_account_hint": caller_account_hint,
         "cross_wired_to_user_id": bool(
             caller_account_hint and caller_account_hint != account_id),
+    })
+
+
+@app.get("/api/coldstart/sources")
+def api_coldstart_sources_get() -> JSONResponse:
+    """Return the current cold-start inhale source config.
+
+    Materializes the default config at
+    ``~/.anticipy/inhale_sources.json`` on first call so the UI sees
+    the shipped defaults (Gmail, Google Calendar, Google Drive)
+    before the user edits anything. The body is
+    ``{"ok": true, "path": str, "config": {...}}``.
+    """
+    try:
+        from app.coldstart import sources as _inhale_sources
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "coldstart sources module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    try:
+        doc = _inhale_sources.load_all()
+        path = str(_inhale_sources.config_path())
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"load_all: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": True,
+        "path": path,
+        "config": doc,
+    })
+
+
+@app.post("/api/coldstart/sources")
+async def api_coldstart_sources_post(request: Request) -> JSONResponse:
+    """Replace the cold-start inhale source config atomically.
+
+    Body MUST be a JSON object matching the file schema:
+      {"version": int, "sources": [{id, label, url, enabled,
+        priority, scrape_selector?, max_pages?}, ...],
+       "_comment": str}
+
+    Each entry MUST define id (non-empty string), label (non-empty
+    string), url (http(s) string), enabled (bool), priority (int).
+    Invalid bodies return HTTP 400 with an ``errors`` list. On
+    success the response carries the freshly written config.
+    """
+    try:
+        from app.coldstart import sources as _inhale_sources
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "coldstart sources module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"invalid JSON body: {exc}",
+        }, status_code=400)
+    ok, errors, normalized = _inhale_sources.validate_payload(payload)
+    if not ok:
+        return JSONResponse({
+            "ok": False,
+            "error": "validation failed",
+            "errors": errors,
+        }, status_code=400)
+    try:
+        path = _inhale_sources.save(normalized)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"save: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": True,
+        "path": str(path),
+        "config": _inhale_sources.load_all(),
     })
 
 

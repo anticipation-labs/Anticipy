@@ -306,8 +306,26 @@ def find_upcoming_meeting(within_minutes: int = 30,
         if hasattr(walker, "bridge_ready") and not walker.bridge_ready():
             _logger.info("find_upcoming_meeting: bridge not ready")
             return None
+        # Resolve the calendar URL from the user config. URL CHOICES
+        # live in ~/.anticipy/inhale_sources.json, not in source code.
+        cal_url = ""
         try:
-            rows = walker.walk_calendar(per_tab_budget_s=12.0)
+            from app.coldstart import sources as _inhale_sources
+            for s in _inhale_sources.load_enabled():
+                if "calendar" in str(s.get("id") or "").lower():
+                    cal_url = str(s.get("url") or "")
+                    break
+        except Exception as exc:
+            _logger.warning(
+                "find_upcoming_meeting: load_enabled failed: %s", exc)
+        if not cal_url:
+            _logger.info(
+                "find_upcoming_meeting: no calendar source enabled in "
+                "inhale_sources.json")
+            return None
+        try:
+            rows = walker.walk_calendar(
+                url=cal_url, per_tab_budget_s=12.0)
         except Exception as exc:
             _logger.warning(
                 "find_upcoming_meeting: walk_calendar failed: %s", exc)
@@ -1013,6 +1031,23 @@ def start_scheduler(within_minutes: int = 30,
     ``running``.
     """
     global _THREAD
+    # ANTICIPY_QUIET=1 short-circuits the loop spawn so the engine
+    # never auto-opens Calendar / Gmail / Drive tabs. Defence-in-depth
+    # for the startup-hook gate: this same function is reachable via
+    # the /api/calendar/prep/scheduler/start route. Audit:
+    # planning/00-handoff/TAB_OPEN_AUDIT.md.
+    try:
+        from app.config import _quiet_mode_enabled
+    except Exception:
+        _quiet_mode_enabled = lambda: False  # noqa: E731
+    if _quiet_mode_enabled():
+        _logger.info("quiet_mode_skipped path=calendar_prep_start_scheduler")
+        print(
+            "[anticipy.calendar_prep] quiet_mode_skipped "
+            "path=calendar_prep_start_scheduler",
+            flush=True,
+        )
+        return scheduler_state() | {"quiet_mode_skipped": True}
     with _STATE_LOCK:
         if _STATE.state == "running" and _THREAD is not None \
                 and _THREAD.is_alive():

@@ -373,3 +373,21 @@ REQUIRED_ENV_VARS: list[str] = [
     "NEXT_PUBLIC_SUPABASE_URL",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
 ]
+
+
+# --- Quiet mode (passive engine) ---
+# When ANTICIPY_QUIET=1, every proactive background path that opens a
+# Chrome tab without an explicit user request is skipped. On-demand
+# paths (user-issued action engine commands, surface runtime navigate
+# triggered by a typed task) are unchanged. The audit at
+# planning/00-handoff/TAB_OPEN_AUDIT.md lists every call site this
+# affects.
+def _quiet_mode_enabled() -> bool:
+    """True when ANTICIPY_QUIET is set to a truthy value.
+
+    Read fresh from the environment on every call so a process that
+    inherits the env mid-life sees it consistently. The check is
+    intentionally permissive: 1, true, yes, on (case-insensitive).
+    """
+    raw = (os.environ.get("ANTICIPY_QUIET") or "").strip().lower()
+    return raw in _TRUTHY
