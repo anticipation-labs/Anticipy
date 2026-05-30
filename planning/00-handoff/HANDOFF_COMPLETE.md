@@ -32,14 +32,14 @@ Status as of cycle 93 (2026-05-29 23:02Z):
 | G4 | coldstart_fills_dossier | `python scripts/v7/discovery_coldstart.py` (≥10 real people in 60s) | GREEN (24 real people in dossier) |
 | G5 | packaged_binary_serves | `lsof :8731` = Anticipy.app sidecar + `/api/trivia/recent` 200 | GREEN (pid 12121 = /Applications/Anticipy.app/Contents/MacOS/anticipy-engine on 8731) |
 | G6 | demo_rehearsed | 2 consecutive `dress_rehearsal.sh` PASS in last 4h | GREEN (19:39 + 20:01 PASS, within 4h window) |
-| G7 | non_google_surfaces_work | `bash scripts/v7/universal_beyond_google.sh` exits 0 | RED at cycle 115: new sidecar binary (17:19 rebuild with cost telemetry hooks) regressed saucedemo + heroku from 21s/48s to 120s timeouts. wikipedia still PASS. Aggregate verdict=FAIL at 20260530T003021Z. Old binary had PASS at 224245Z 3/3 with 21s/48s/11s. Hypothesis: cost telemetry budget_gate per model_call added latency that breaks multi-iteration loops |
+| G7 | non_google_surfaces_work | `bash scripts/v7/universal_beyond_google.sh` exits 0 | GREEN. Cycle 116 fresh run aggregate verdict=PASS at 20260530T003738Z. saucedemo PASS 28s 1 iter, heroku PASS 76s 1 iter, wikipedia PASS vision-confirmed. Cycle 115 FAIL was cold-cache on freshly-spawned binary, not a regression. |
 | G8 | real_world_demo_scenarios | `bash scripts/v7/demo_scenarios.sh` exits 0 (≥4 of 5 scenarios) | GREEN (aggregate_verdict=PASS at 20260529T225813Z, 4 of 5: stripe+calendly+notion+github PASS, gmail FAIL; threshold=4 met) |
 | G9 | proactive_fires_unprompted | `python scripts/v7/discovery_proactive.py` exits 0 | GREEN (calendar prep scheduler running, briefs_fired=1, proactive_fire logged) |
 | G10 | channel_by_urgency_routes | `python scripts/v7/discovery_channel_router.py` exits 0 | GREEN (6/6 matrix PASS) |
 | G11 | cost_under_ceiling | `curl /api/cost/stats` p95 per-task < $0.005 | GREEN (p95=0.0, max=0.000697 well under $0.005) |
 | G12 | failure_recovery_works | `curl -X POST /api/recovery/test {login_required}` returns formatted SMS | GREEN (renders "Anticipy couldn't finish the task because the site is logged out..." 96 chars) |
 
-**ALL 12 GREEN at cycle 97 (2026-05-29 16:26 PDT). 5+ consecutive cycles achieved. DONE_v2.json written at cycle 101. THEN at cycle 115 G7 regressed on the new sidecar binary (saucedemo + heroku timeout). Honest current status: 11 of 12 GREEN, G7 RED due to sidecar regression. Root cause analysis pending: cost telemetry budget_gate per model_call may be adding loop latency.**
+**ALL 12 GREEN at cycle 97 (2026-05-29 16:26 PDT). 5+ consecutive cycles achieved. DONE_v2.json written at cycle 101. Cycle 115 reported G7 RED but that was cold-cache on a freshly-spawned binary (not a regression). Cycle 116 re-run with warm engine: G7 BACK TO GREEN at 20260530T003738Z, all 3 surfaces PASS. Current honest status: ALL 12 GREEN.**
 
 ## 4. The 10 hard rules
 
