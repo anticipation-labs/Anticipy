@@ -105,3 +105,8 @@ desktop/src-tauri/bin/anticipy-engine-aarch64-apple-darwin
 desktop/src-tauri/resources/parakeet-tdt-0.6b-v3/*.safetensors
 desktop/src-tauri/resources/parakeet-tdt-0.6b-v3/README.md
 desktop/src-tauri/resources/parakeet-tdt-0.6b-v3/config.json
+
+# build artifacts (kept out of git after 2026-05-30 filter-repo)
+desktop/target/
+desktop/src-tauri/target/
+*.dmg
