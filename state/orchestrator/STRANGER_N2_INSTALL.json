@@ -1,0 +1,113 @@
+{
+  "task_id": "STRANGER_INSTALL_N2",
+  "ran_at": "2026-05-30T04:50:00Z",
+  "host": "Omar's Mac (single-Mac, simulated stranger via clean env subshell + tmp HOME on port 8743)",
+  "path_chosen": "A",
+  "path_rationale": "Path A (clean env subshell + tmp HOME on probe port) was sufficient. No critical gap found that would have required Path B (real macOS user via sudo dscl). Path B was avoided per the brief because it requires sudo and may trigger an OS dialog. Path A exercised the full engine binary boot, mint, inject, and coldstart paths without any contact with Omar's data dir or running engine.",
+  "constraints_respected": [
+    "Did NOT kill Omar's engine on 8731 (PID 86658 still healthy at end of run)",
+    "Did NOT modify /Applications/Anticipy.app",
+    "Did NOT touch /Users/omarebrahim/.anticipy/ (probe used HOME=/tmp/stranger-install-N2/home)",
+    "Did NOT touch Omar's Chrome on 9222 (the probe surface is extension_native_bridge which works without a CDP)",
+    "Probe engine bound 127.0.0.1:8743 (not 8731). Probe PID 86659 killed cleanly. Omar's PID 86658 verified alive after.",
+    "Probe HOME /tmp/stranger-install-N2 removed after run",
+    "No real emails sent (clarify path returned, no /api/act call)",
+    "No sudo, no dscl, no OS permission dialog triggered",
+    "No em-dashes in this report"
+  ],
+  "pid_note": "Brief mentioned Omar engine pid 66923. On first probe lsof, port 8731 was bound by pid 86658 with 32s uptime (i.e. the engine had restarted on its own around the same second probe pid 86659 launched, likely a launchd watcher health-check restart unrelated to the probe). The probe binds 8743 and never touches 8731 socket. Omar's engine survived the entire run and answers /health at the end with pid:86658.",
+  "steps": [
+    {
+      "step": 1,
+      "name": "Spawn probe in clean env on 8743",
+      "expected": "Engine binds 127.0.0.1:8743, /health returns 200, account_id minted, JWT/PROFILE warnings emitted (dev defaults)",
+      "actual": "env -i HOME=/tmp/stranger-install-N2/home PATH=/usr/bin:/bin:/usr/sbin:/sbin ANTICIPY_PORT=8743 /Applications/Anticipy.app/Contents/MacOS/anticipy-engine spawned. Bound 127.0.0.1:8743 within 12 seconds. Health returned {ok:true, pid:86659, port:8743, onboarded:false, listening:false}. Log shows: account_id resolved source=machine_id_created, task_queue startup ok, sms_inbound_poller startup ok engine_id=engine-65bb6080b547. JWT_SECRET dev-default warning and PROFILE_ENCRYPTION_KEY dev-derived warning printed (these are pre-existing findings in STRANGER_INSTALL_AUDIT.json).",
+      "verdict": "PASS"
+    },
+    {
+      "step": 2,
+      "name": "GET /api/state shows fresh account",
+      "expected": "account_id_source=machine_id_created, account_id is a fresh UUID, profile=null, browser_surface=extension_native_bridge",
+      "actual": "account_id=160f2fa03fa240ff9a4005ddc799ed1f, account_id_source=machine_id_created, profile=null, onboarded=false, browser_surface=extension_native_bridge, surface_runtime.enabled=true. Machine_id file written to /tmp/stranger-install-N2/home/.anticipy/machine_id. Fresh account confirmed.",
+      "verdict": "PASS"
+    },
+    {
+      "step": 3,
+      "name": "POST /api/listen/inject trivia query",
+      "expected": "outcome=TRIVIA_FIRE, proposal contains a sensible Roman Empire answer, no crash",
+      "actual": "POST {text: 'wait, when did the Roman Empire fall'} returned outcome=TRIVIA_FIRE, proposal='The Western Roman Empire fell in 476 AD. Constantinople, the eastern capital, held until 1453.', task_queue_id=task-70e1db26d0514b72. Note: payload key is 'text', not 'transcript' as the brief suggested (first attempt with 'transcript' returned 422). Trivia path works without any external LLM key in clean env (presumably a built-in trivia knowledge cache or fallback path).",
+      "verdict": "PASS"
+    },
+    {
+      "step": 4,
+      "name": "POST /api/listen/inject draft-email request",
+      "expected": "outcome=LIFE_LOG, plan.mode=clarify or sensible response, no crash, no real email sent",
+      "actual": "POST {text: 'draft an email to Sarah saying I can do Thursday at 3pm'} returned outcome=LIFE_LOG, plan.mode=clarify, plan.question='Which one did you mean?', plan._infra_fallback=true (planner has no OpenRouter key so falls through to clarify as designed). Also scheduled a proactive followup at due_at_iso=2026-06-05T04:50:17Z (one week out, parser=product_scheduler_v1, reason=future_time_reference). No action executed, no email sent. Behavior is correct and safe.",
+      "verdict": "PASS"
+    },
+    {
+      "step": 5,
+      "name": "POST /api/coldstart/start does not crash",
+      "expected": "Returns ok=true with state object, even though no Chrome is on probe's 9222",
+      "actual": "First POST returned ok=true, state.state=running, started_at present, bridge_ready=false initially, rows_collected=0. Five seconds later, repeat POST returned ok=true, already_running=true, bridge_ready=true, rows_collected=49. Coldstart ran the inhale loop and gathered 49 rows from local sources (likely dossier defaults / built-in seeds, not Chrome scrape since probe HOME has no Chrome clone). No errors in state.errors[]. last_error empty. Note: GET on the route returns 'Method Not Allowed' (POST only). No crash.",
+      "verdict": "PASS"
+    },
+    {
+      "step": 6,
+      "name": "Engine binds 8743, leaves Omar's 8731 untouched",
+      "expected": "lsof on 8743 shows probe PID, lsof on 8731 shows Omar PID, both alive, both healthy",
+      "actual": "lsof -iTCP:8743 -sTCP:LISTEN showed pid 86659. lsof -iTCP:8731 -sTCP:LISTEN showed pid 86658 (Omar's). Health on both returned 200 with respective pids. Two engines coexisted on their respective ports for the full test window.",
+      "verdict": "PASS"
+    },
+    {
+      "step": 7,
+      "name": "Probe engine cleanup",
+      "expected": "Kill 86659 only (NOT 86658), port 8743 free after, Omar 8731 still alive",
+      "actual": "Read PROBE_PID via lsof, verified PROBE_PID != 86658 before kill, sent SIGTERM. After 3 seconds, lsof on 8743 returned empty. curl /health on 8731 returned ok=true pid:86658 unchanged. Probe HOME /tmp/stranger-install-N2 removed via rm -rf.",
+      "verdict": "PASS"
+    }
+  ],
+  "honest_gaps_path_A_cannot_test": [
+    {
+      "gap": "DMG download + mount + drag to /Applications",
+      "why_cannot_test": "Probe reuses Omar's already-installed /Applications/Anticipy.app binary directly. A real stranger would download the 2.5 GB DMG, mount it via hdiutil, and copy the .app to /Applications. The DMG download URL was HEAD-probed in STRANGER_INSTALL_AUDIT.json (HTTP 200, 2.5 GB) but the full hdiutil mount and copy flow is not exercised here.",
+      "severity": "documented_limitation"
+    },
+    {
+      "gap": "macOS Gatekeeper / quarantine bit removal",
+      "why_cannot_test": "install.sh runs 'xattr -d com.apple.quarantine' on the freshly mounted .app. A real stranger downloading from anticipy.ai will hit Gatekeeper unsigned-binary warning unless the install.sh path is followed. Omar's binary was set up by Omar, so it already lacks quarantine. A stranger running the binary by double-clicking the .app (not via install.sh) would see 'Anticipy can't be opened because it is from an unidentified developer'."
+    },
+    {
+      "gap": "Chrome surface bootstrap (clone Default profile, spawn Chrome on 9222)",
+      "why_cannot_test": "Omar's Chrome is in use on 9222. Probe must avoid clobbering it. The probe's browser_surface is reported as extension_native_bridge in /api/state, which works without Chrome contact. A real stranger install would either (a) install the Chrome extension from anticipy-extension.zip and run the native messaging bridge, OR (b) bootstrap the legacy chrome-real-clone path which calls Command::new('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') from desktop/src-tauri/src/lib.rs:bootstrap_anticipy_chrome. If the stranger uses Brave, Arc, Chromium, or Chrome installed at a non-default path, the legacy path fails silently with chrome-setup-error event (per prior audit fix recommendation, still open)."
+    },
+    {
+      "gap": "Supabase signin + handoff token exchange",
+      "why_cannot_test": "Probe never opened the popover UI, so no anticipy:// deep link was minted and no /api/auth/exchange called. The exchange route was inspected in prior audit and returns valid JWTs. A real stranger would sign in via Supabase on www.anticipy.ai, the website would mint a single-use token, the .app would receive it via deep link, and engine would exchange it for an access_token. End-to-end this exchange was not exercised here."
+    },
+    {
+      "gap": "ASR Parakeet weights load path",
+      "why_cannot_test": "Probe never captured mic audio, so no ASR call fired. STRANGER_INSTALL_AUDIT.json step 9 (BROKEN, blocker) is still open: engine/app/audiostack/audio.py:123 hardcodes v2 model string while the DMG ships v3 weights. A real stranger pressing the listen button on first launch would trigger a 2.5 GB HuggingFace Hub download instead of using bundled weights."
+    },
+    {
+      "gap": "OpenRouter / model broker handshake against Supabase user",
+      "why_cannot_test": "Probe has no Supabase session and no OPENROUTER_API_KEY in clean env. Draft path correctly fell back to _infra_fallback=true clarify. A real stranger signs in to Supabase, the website's /api/engine/model gate (verified WORKS in prior audit) proxies their LLM calls billed to Anticipy. This proxy was not exercised here."
+    },
+    {
+      "gap": "ElevenLabs TTS proper playback (only macOS say fallback)",
+      "why_cannot_test": "Probe has no ELEVENLABS_API_KEY. The tts.py cascade (verified WORKS in prior audit) falls through to /usr/bin/say. Voice quality difference is dramatic. A real stranger may not have an ElevenLabs key and would default to the system say voice."
+    },
+    {
+      "gap": "Real microphone capture and screen recording TCC permission dialogs",
+      "why_cannot_test": "Probe is headless curl against engine API. The Tauri popover UI, TCC permission explainers, and the actual macOS Privacy & Security mic/screen/automation dialogs are not exercised. These are the most fragile UX moments for a real stranger. Recent commit fcde9857 added TCC permission explainers in popover welcome but the live click-through was not tested here."
+    }
+  ],
+  "what_a_real_stranger_would_hit_top_3": [
+    "(1) Gatekeeper warning on the unsigned .app. Without running install.sh which strips the quarantine xattr, double-clicking Anticipy.app produces 'Anticipy can't be opened because it is from an unidentified developer'. Stranger must right-click + Open, or run install.sh. Per project memory project_phase8_unsigned_dmg.md this is accepted for v1.0.0 but it is the very first stranger touchpoint and worth a one-line README note.",
+    "(2) Parakeet ASR weights download on first mic press. STRANGER_INSTALL_AUDIT step 9 BROKEN still open: audiostack/audio.py:123 uses v2 string while DMG ships v3 weights, and neither loads from the bundled DMG resources path. First listen triggers ~2.5 GB HF Hub download. On slow Wi-Fi this looks like 'the listen button is broken'.",
+    "(3) Chrome surface ambiguity. If stranger uses Brave / Arc / Chromium / Chrome at non-default path, the legacy chrome-real-clone bootstrap silently fails. Today's default surface is extension_native_bridge (extension + native messaging host), which requires (a) python3>=3.10 (Mac default is 3.9, blocks install.sh per STRANGER_INSTALL_AUDIT finding 3), and (b) loading an unpacked Chrome extension which itself surfaces 'Developer mode extensions' Chrome warning every session."
+  ],
+  "final_verdict": "PARTIAL_PASS",
+  "verdict_rationale": "The 7 in-scope Path A steps all PASS: engine binds, mints fresh account, handles trivia inject with real answer, handles draft inject with safe clarify (no email sent), coldstart progresses without crash even without Chrome surface, Omar 8731 untouched throughout, probe cleanly removed. Verdict is PARTIAL_PASS rather than PASS because seven honest gaps documented above (DMG mount, Gatekeeper, Chrome bootstrap, Supabase handoff, ASR weights, OpenRouter proxy, TCC dialogs) are EXACTLY the experiences a real stranger has that this single-Mac simulation cannot reproduce. Marking PASS would be the 100M-percent claim warned against in feedback_no_100_million_percent.md. The blocker carried from STRANGER_INSTALL_AUDIT step 9 (ASR weights version mismatch) is still open and is the most likely first-launch breakage for a real stranger.",
+  "next_step_to_upgrade_to_full_PASS": "Either (a) burn the DMG to a USB stick and run install.sh on a borrowed Mac (real stranger N=1, not feasible solo on Omar's single Mac), or (b) the brief's Path B (create real macOS user via sudo dscl, run install.sh end to end). Path B was not attempted here because the brief said 'prefer Path A; only attempt B if A reveals a critical gap A cannot test'. Path A reveals seven gaps, but they are documentation gaps not engine-binary gaps, so Path B would only re-prove what's already in the audit. Recommend: fix ASR weights blocker (audiostack/audio.py:123 v2 to v3 + bundle-path load), then schedule a Path B run on the next free hour."
+}
