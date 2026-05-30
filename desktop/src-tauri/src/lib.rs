@@ -68,8 +68,30 @@ const USER_ID_FILE: &str = "session_user.json";
 // V7 because cloned Chrome cannot count as product proof.
 const CHROME_PROFILE_DIR_NAME: &str = "chrome-real-clone";
 const CHROME_REMOTE_DEBUG_PORT: u16 = 9222;
+// Per STRANGER_INSTALL_AUDIT W6 cycle 130: support Chromium-family
+// browsers beyond Google Chrome so stranger users who installed
+// Brave / Arc / Edge / Chromium / Vivaldi can still run the agent
+// without a separate Google Chrome install. _resolve_chrome_binary
+// returns the first one that exists on disk.
+const CHROME_BINARY_CANDIDATES: &[&str] = &[
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Arc.app/Contents/MacOS/Arc",
+    "/Applications/Vivaldi.app/Contents/MacOS/Vivaldi",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+];
 const CHROME_BINARY_PATH: &str =
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+
+fn _resolve_chrome_binary() -> Option<&'static str> {
+    for candidate in CHROME_BINARY_CANDIDATES {
+        if std::path::Path::new(candidate).exists() {
+            return Some(*candidate);
+        }
+    }
+    None
+}
 const USER_CHROME_DEFAULT_REL: &str =
     "Library/Application Support/Google/Chrome/Default";
 const CHROME_CDP_TIMEOUT_SECS: u64 = 15;
@@ -632,7 +654,11 @@ fn wait_for_chrome_cdp(port: u16, timeout: Duration) -> Result<String, String> {
 fn launch_anticipy_chrome(profile_dir: &Path) -> std::io::Result<()> {
     let port_arg = format!("--remote-debugging-port={CHROME_REMOTE_DEBUG_PORT}");
     let user_data_arg = format!("--user-data-dir={}", profile_dir.display());
-    Command::new(CHROME_BINARY_PATH)
+    // Find the first Chromium-family browser the user has installed.
+    // Falls back to the hardcoded Google Chrome path if none detected
+    // (Tauri spawn will then surface ENOENT which the caller logs).
+    let bin = _resolve_chrome_binary().unwrap_or(CHROME_BINARY_PATH);
+    Command::new(bin)
         .args([
             port_arg.as_str(),
             user_data_arg.as_str(),
