@@ -439,6 +439,21 @@ if not ok:
 PY
 }
 
+# Warm up the engine LLM cache + connection pool before scoring the
+# first surface. A freshly-spawned packaged binary has cold prompt
+# cache and cold OpenRouter connection, which can blow the 120s
+# per-surface deadline on the FIRST iteration even though subsequent
+# iterations run in 20-30s. The warm-up is a single short universal
+# call against a non-graded URL so the budget for surface 1 starts
+# warm. See orchestrator queued unit WARMUP-VERIFY.
+log "warm-up: priming engine LLM + connection (about:blank no-op)"
+curl -sS --max-time 60 \
+  -X POST "${ENGINE}/api/universal/run" \
+  -H 'Content-Type: application/json' \
+  -d '{"intent":"Look at the current page and report whether it is blank.","surface_hint":"about:blank","deadline_sec":45}' \
+  > "${RUN_DIR}/warmup.json" 2>&1 || true
+log "warm-up done"
+
 log "==== SURFACE 1: saucedemo ===="
 run_test "saucedemo" "${SAUCE_INTENT}" "https://www.saucedemo.com/"
 log "wait for runner thread to quiesce before next surface"
