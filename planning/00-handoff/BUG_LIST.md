@@ -7,6 +7,65 @@
 
 ## Iteration Log
 - Iter 1 (2026-05-30 09:47 PDT): Fresh start of catalog; previous "iter 5" narrative had no persisted artifact. Beginning B001+.
+- Iter 2-24 (2026-05-30 09:53-10:41 PDT): 22 commits adding B001-B475. ~90 min wall budget; ~54 min used.
+
+## Severity Summary (as of B475)
+
+- **P0** (security/data loss/prod broken): 60 bugs
+- **P1** (functional break for users): 66 bugs
+- **P2** (poor UX/perf/SEO): 154 bugs
+- **P3** (cosmetic/minor): 195 bugs
+- **TOTAL**: 475 bugs cataloged
+
+## Top P0 Findings (Most Critical)
+
+1. **B089** — `/internal/layout.tsx` client-side password gate "123"/"onetwothree" + pages render server-side. Curl reveals full Bill of Materials, supplier list (Bittele Toronto, ShipBob Surrey), proprietary hardware specs.
+2. **B048 + B178** — Cerebras free-tier API key `csk-jw66w...` hardcoded in TWO files (extension/auth route + src/lib/cerebras.ts).
+3. **B049** — `/api/extension/auth` returns ALL LLM API keys (Cerebras, Groq, Gemini, Mistral, DeepSeek) raw to ANY extension presenting valid access code. Keys persist in chrome.storage.local (B216).
+4. **B101 + B430** — Extension subscribes to `realtime:anticipy-intents` with anon key — anyone listening sees ALL users' intents + evidence quotes + user_ids in real-time.
+5. **B001** — Default analytics password "Anticipy123" in source (Anticipy + year).
+6. **B042** — `/api/twilio/sms-inbound` GET endpoint is UNAUTHENTICATED — anyone polls + consumes any user's inbound SMS replies.
+7. **B069** — `/api/cron/daily-digest` `!secret` fallback authorizes ALL callers when CRON_SECRET unset. Email spam DoS vector.
+8. **B070** — `/api/admin/backfill-sessions` timing fallback "guesses" user by signup proximity, attaches PRIVATE session+intent to WRONG user. Irrecoverable PII leak.
+9. **B076** + **B077** — `/api/crm/users?for=login` returns user_id+email of every CRM user pre-auth + first-time login claims any account with first typed password.
+10. **B195** — `engine/app/server.py` second FastAPI app with `allow_origins=["*"]` + open `/journey/run` endpoint. Any visited website POSTs to user's local engine.
+11. **B198** — `/engine/page.tsx` contains direct `wss://api.deepgram.com` client code (Deepgram forbidden per v-final-prototype memory).
+12. **B021 + B022** — `/api/engine/model` broker accepts arbitrary client `provider` object + allowlist contains FAKE OpenRouter model IDs (deepseek-v4-flash, kimi-k2.6 don't exist).
+13. **B143** — Stripe `PREORDER_PRICE_ID` and `PREORDER_PRODUCT_ID` hardcoded; any fork charges Omar's Aevoy account.
+14. **B161** — `public/install.sh` strips macOS Gatekeeper quarantine flag + downloads DMG with NO sha256/GPG verification. Compromised CDN = malware install.
+15. **B202 + B237** — AES-256-CBC encrypts Google tokens WITHOUT HMAC. Padding-oracle vulnerable.
+16. **B236** — `getAnyStoredTokens` returns globally most-recent Google tokens, NOT caller's. Cross-tenant calendar + contacts leak.
+17. **B242 + B243** — `/demo` page uses NEXT_PUBLIC_DEMO_PASSCODE (client-bundle) + hardcoded fallback `https://anticipy-engine.up.railway.app` (cloud engine violates "scale by distribution" memory).
+18. **B268** — `/crm` PasswordGate fetches list of ALL CRM users + emails BEFORE login. Combined with B076, trivial account takeover.
+19. **B291** — `/admin/trigger-task` accepts `JWT_SECRET` as fallback admin secret. JWT_SECRET universally used for sessions; leak = arbitrary task injection for any user.
+20. **B319 + B320 + B325 + B326** — Privacy.tsx, HowItWorks.tsx, for/founders/page.tsx contain FALSE marketing claims about "on-device only", "no transcripts", "high confidence threshold" — contradicted by engine code that cloud-routes transcripts to Gemini + stores anticipy_transcripts table.
+21. **B333** — `crm-files` Supabase bucket is PUBLIC (publicFileUrl helper exists). Expense receipts + voice memos accessible without auth.
+22. **B351-B354** — `BRIDGE_SECRET` defaults to literal "local-dev" in FOUR engine modules (cdp_walker, universal_surface_runtime, surface_dom_extractor, surface_runtime). Any local process commands Chrome via CDP.
+23. **B398** — `subprocess.run(["osascript", "-e", script])` with user-influenced data via `_apple_quote`. AppleScript injection if any path skips quoting.
+24. **B415** — Anticipy comms `3-hour rule` agent ACTS on user behalf after 3 hours silence for "high risk" actions. Direct contradiction of `SMS pre-confirm` user memory.
+25. **B424** — CRM tables have NO RLS by design comment; gate cookie + B252 header spoof gives zero defense in depth.
+26. **B437** — Audio anchor encryption key derived from `"anticipy-anchor-v1:" + data_dir()` (predictable). Anyone with disk access decrypts wearer voice anchor.
+27. **B441** — `/api/auth/exchange` CORS `*` + handoff token reusable from any origin once intercepted.
+28. **B465** — Chromium launches with `--no-sandbox` flag. Disables renderer sandbox; any compromised content escapes to engine process.
+
+## Surfaces Walked
+
+- Next.js API routes (80 routes including admin, agent, analytics, api/app, api/auth, api/crm, api/cron, api/dossiers, api/engine, api/engine/twilio, api/extension, api/flash, api/health, api/internal-gate, api/log, api/pre-orders, api/release-meta, api/resolution-traces, api/test-meta-monitor, api/twilio, api/waitlist, api/webhooks)
+- 59 page.tsx files (pre-orders, demo, admin, internal, engine, ambient-intent, compare, crm, for/*, vs/*, onboarding, refund, terms, privacy, etc.)
+- Engine Python modules (engine/app/*.py: main, auth, agent, browser, code_sandbox, config, models, safety, planner, router, supabase_client, ws_bridge, cost_watch, bridge, bridge_extension, proactive_routes; subdirs: anticipy/, audiostack/, coldstart/, costctl/, dossier/, middle/, product/, proactive/, safetyx/, task_queue/)
+- Extension (manifest.json, background.js, agent.js, popup.js, content.js, engine_handshake.js, world_patch.js)
+- src/lib (43 files: analytics-auth, gate-cookie, engine-transfer-gate, supabase, supabase-admin, require-auth, api-auth, escape, html-escape, notification-adapter, twilio-notify, twilio-verify, resend-notify, email, stripe, llm-cascade, agent-llm, cerebras, groq, mistral, gemini, voyage, confirm-token, handoff-token, handoff-token-store, dedup, memory-recall, memory-extract, preference-record, preference-recall, episode-recall, intent-extract, intent-prompt, intent-gates, meta-monitor, execute-action, google-calendar, release-meta, rate-limit, brand, animation, crm/*)
+- public/ (install.sh, robots.txt, llms.txt, manifest.json)
+- next.config.mjs, vercel.json, middleware.ts, sitemap.ts, layout.tsx
+- desktop/src-tauri/src/lib.rs
+
+## Notes
+
+- Per task constraint: catalog only, no fixes applied
+- Iteration commits are in git history (24 commits, B001-B475)
+- All findings sourced from actual code lines, not inferred
+- B287 was retracted (proactive routes actually have JWT auth per L211-220); B308 documents the retraction
+- Several bugs flagged for follow-up audit (B317, B318)
 
 ## Bug Table
 
