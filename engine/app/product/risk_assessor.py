@@ -117,6 +117,14 @@ class RiskAssessment:
     reasons: list[str] = field(default_factory=list)
     money_amount: Optional[float] = None
     irreversibility_score: float = 0.0
+    # B031: callers thought 0.7 was a sentinel masking a no-op classifier.
+    # `irreversibility_source` makes the origin explicit:
+    #   "verb_match" - the score came from a matched IRREVERSIBLE_VERBS token
+    #   "money_floor" - the score was bumped to 0.7 because money was detected
+    #   "dnt_floor" - the score was floored to 0.9 by a do_not_touch match
+    #   "third_party_floor" - the score was floored to 0.4 by a 3rd-party recipient
+    #   "no_match" - no signal triggered; score is the genuine 0.0
+    irreversibility_source: str = "no_match"
     third_party_impact: bool = False
     surface_target: str = ""
     time_sensitivity: str = "not_time_sensitive"  # "time_sensitive" |
@@ -131,6 +139,7 @@ class RiskAssessment:
             "money_amount": (None if self.money_amount is None
                              else float(self.money_amount)),
             "irreversibility_score": float(self.irreversibility_score),
+            "irreversibility_source": str(self.irreversibility_source),
             "third_party_impact": bool(self.third_party_impact),
             "surface_target": str(self.surface_target or ""),
             "time_sensitivity": str(self.time_sensitivity
@@ -187,15 +196,45 @@ def _words_to_number(phrase: str) -> Optional[int]:
     return (total + current) if matched else None
 
 
+_NUMERIC_QUALIFIERS = {
+    "k": 1_000,
+    "thousand": 1_000,
+    "m": 1_000_000,
+    "mm": 1_000_000,
+    "million": 1_000_000,
+    "b": 1_000_000_000,
+    "bn": 1_000_000_000,
+    "billion": 1_000_000_000,
+}
+
+
+def _apply_qualifier(blob: str, amount: float, match_end: int) -> float:
+    """B014: if the number is immediately followed by 'million', 'thousand',
+    'k', 'M', etc., scale by that factor. Without this, '$1 million' parses
+    as $1 and risk decisions miss the magnitude entirely.
+    """
+    tail = blob[match_end:match_end + 40]
+    m = re.match(r"\s*([a-z]+)", tail)
+    if not m:
+        return amount
+    word = m.group(1).lower()
+    factor = _NUMERIC_QUALIFIERS.get(word)
+    if factor:
+        return amount * factor
+    return amount
+
+
 def parse_money_amount(text: str) -> Optional[float]:
-    """Handles $50, $1,200.50, 50 dollars, fifty dollars, one thousand dollars."""
+    """Handles $50, $1,200.50, 50 dollars, fifty dollars, one thousand dollars,
+    plus B014 qualifiers ($1 million, $5k, $2.5M, $1 billion)."""
     if not text:
         return None
     blob = text.lower()
-    matches = re.findall(r"\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)", blob)
-    if matches:
+    m = re.search(r"\$\s*([0-9][0-9,]*(?:\.[0-9]+)?)", blob)
+    if m:
         try:
-            return float(matches[0].replace(",", ""))
+            amount = float(m.group(1).replace(",", ""))
+            return _apply_qualifier(blob, amount, m.end())
         except ValueError:
             pass
     m = re.search(
@@ -287,13 +326,24 @@ def assess(intent: Any, binding: Any = None,
     time_sensitivity = detect_time_sensitivity(combined)
 
     def build(level, mode, *, confirm, reasons,
-              irr_floor=None, tp=None) -> RiskAssessment:
+              irr_floor=None, tp=None,
+              irr_source: str | None = None) -> RiskAssessment:
+        final_score = (
+            max(irr, irr_floor) if irr_floor is not None else irr)
+        if irr_source:
+            src = irr_source
+        elif irr_floor is not None and irr_floor > irr:
+            src = "money_floor" if irr_floor == 0.7 else f"floor_{irr_floor}"
+        elif irr > 0:
+            src = "verb_match"
+        else:
+            src = "no_match"
         return RiskAssessment(
             level=level, proceed_mode=mode,
             confirm_card_required=confirm, reasons=list(reasons),
             money_amount=money_amount,
-            irreversibility_score=(
-                max(irr, irr_floor) if irr_floor is not None else irr),
+            irreversibility_score=final_score,
+            irreversibility_source=src,
             third_party_impact=(third_party if tp is None else tp),
             surface_target=surface_target,
             time_sensitivity=time_sensitivity,
@@ -301,12 +351,14 @@ def assess(intent: Any, binding: Any = None,
 
     if dnt_hits:
         return build("high", "ask", confirm=True, irr_floor=0.9,
+                     irr_source="dnt_floor",
                      reasons=[
                          f"do_not_touch matched: {', '.join(dnt_hits)[:200]}"])
     if money_hit:
         reason = (f"money intent detected (amount={money_amount})"
                   if money_amount else "money intent detected (verb match)")
         return build("high", "confirm", confirm=True, irr_floor=0.7,
+                     irr_source="money_floor",
                      reasons=[reason])
     if missing:
         return build("medium", "ask", confirm=False,
@@ -322,7 +374,8 @@ def assess(intent: Any, binding: Any = None,
         if sensitive:
             msg += " (relationship marked sensitive)"
         return build("medium", "confirm" if sensitive else "notify",
-                     confirm=sensitive, irr_floor=0.4, reasons=[msg])
+                     confirm=sensitive, irr_floor=0.4,
+                     irr_source="third_party_floor", reasons=[msg])
     if irr >= 0.3:
         return build("medium", "confirm", confirm=True,
                      reasons=["medium-risk irreversible verb detected"])
