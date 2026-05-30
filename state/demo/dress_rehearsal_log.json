@@ -182,5 +182,235 @@
     "fail_count": 0,
     "total_elapsed_sec": 65,
     "finished_at": "2026-05-29T23:37:52Z"
+  },
+  {
+    "run_id": "20260530T011309Z",
+    "started_at": "2026-05-30T01:13:09Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T010857Z age=161s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported= state="
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 70,
+    "finished_at": "2026-05-30T01:14:19Z"
+  },
+  {
+    "run_id": "20260530T014821Z",
+    "started_at": "2026-05-30T01:48:21Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "FAIL",
+        "detail": "verdict=PASS age=2271s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "FAIL",
+    "pass_count": 2,
+    "fail_count": 1,
+    "total_elapsed_sec": 64,
+    "finished_at": "2026-05-30T01:49:25Z"
+  },
+  {
+    "run_id": "20260530T015126Z",
+    "started_at": "2026-05-30T01:51:26Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T014943Z age=14s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 66,
+    "finished_at": "2026-05-30T01:52:32Z"
+  },
+  {
+    "run_id": "20260530T015244Z",
+    "started_at": "2026-05-30T01:52:44Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T014943Z age=92s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 66,
+    "finished_at": "2026-05-30T01:53:50Z"
+  },
+  {
+    "run_id": "20260530T021107Z",
+    "started_at": "2026-05-30T02:11:07Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T020917Z age=25s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 69,
+    "finished_at": "2026-05-30T02:12:16Z"
+  },
+  {
+    "run_id": "20260530T022009Z",
+    "started_at": "2026-05-30T02:20:09Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T021716Z age=80s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 66,
+    "finished_at": "2026-05-30T02:21:15Z"
+  },
+  {
+    "run_id": "20260530T023458Z",
+    "started_at": "2026-05-30T02:34:58Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T023314Z age=15s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 66,
+    "finished_at": "2026-05-30T02:36:04Z"
+  },
+  {
+    "run_id": "20260530T025003Z",
+    "started_at": "2026-05-30T02:50:03Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T024814Z age=19s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 66,
+    "finished_at": "2026-05-30T02:51:09Z"
+  },
+  {
+    "run_id": "20260530T030555Z",
+    "started_at": "2026-05-30T03:05:55Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T030410Z age=15s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 67,
+    "finished_at": "2026-05-30T03:07:02Z"
+  },
+  {
+    "run_id": "20260530T032323Z",
+    "started_at": "2026-05-30T03:23:23Z",
+    "scenes": {
+      "trivia_roman": {
+        "status": "PASS",
+        "detail": "outcome=TRIVIA_FIRE answer_contains=476"
+      },
+      "silent_execute": {
+        "status": "PASS",
+        "detail": "z001_run=20260530T032123Z age=30s"
+      },
+      "coldstart": {
+        "status": "PASS",
+        "detail": "after=24 delta=0 reported=0 state=idle"
+      }
+    },
+    "verdict": "PASS",
+    "pass_count": 3,
+    "fail_count": 0,
+    "total_elapsed_sec": 66,
+    "finished_at": "2026-05-30T03:24:29Z"
   }
 ]}
