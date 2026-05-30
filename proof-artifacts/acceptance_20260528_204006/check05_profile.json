@@ -1,0 +1,30 @@
+{
+  "name": "Omar Ebrahim",
+  "role_title": "Founder & Product Lead",
+  "what_they_do": "Runs product at Anticipy.",
+  "timezone": "UTC",
+  "working_hours": "Yes, watch for Friday launch updates and ops handoffs",
+  "people": {
+    "boss": "Dana Bright <omarkebrahim+anticipy-dana@gmail.com>",
+    "us": "Omar Ebrahim",
+    "strategy advisor": "Priya Shah <omarkebrahim+anticipy-priya@gmail.com>",
+    "operations partner": "Maya Chen <omarkebrahim+anticipy-maya@gmail.com>"
+  },
+  "critical_software": {
+    "gmail": true,
+    "email": true
+  },
+  "mandate": "Run product.",
+  "do_not_touch": [
+    "payroll",
+    "investor cap table",
+    "email anyone outside the company without me"
+  ],
+  "comms_prefs": {
+    "non_critical": "",
+    "critical": ""
+  },
+  "quiet_hours": "",
+  "pronoun_map": {},
+  "well_populated": true
+}

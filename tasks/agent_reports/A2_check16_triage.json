@@ -1,0 +1,59 @@
+{
+  "source_log_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/check16_agent_reliability.log",
+  "source_json_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/CHECK_16.json",
+  "totals": {
+    "resolvable_pass": 8,
+    "resolvable_total": 20,
+    "ambiguous_pass": 5,
+    "ambiguous_total": 10,
+    "total_pass": 13,
+    "total_fail": 17
+  },
+  "buckets": {
+    "PASS": {
+      "count": 13,
+      "scenarios": ["R01", "R03", "R05", "R06", "R09", "R11", "R14", "R19", "A02", "A04", "A07", "A08", "A10"],
+      "intervention": "n/a"
+    },
+    "TIMEOUT": {
+      "count": 12,
+      "scenarios": ["R02", "R04", "R07", "R08", "R13", "R15", "R18", "R20", "A01", "A03", "A05", "A06", "A09"],
+      "note": "All show 'request error: ReadTimeout' at exactly ~30.00-30.01s. Default `_post` timeout is 30s (engine/tests/agent_reliability.py:208). The trigger inject already uses 120s, but LRESET (line 249) and per-context INJECT calls (line 251) fall through to the 30s default. When the engine warms slowly mid-suite, these calls trip the 30s ceiling and the scenario aborts before reaching the trigger.",
+      "intervention": "Raise default _post timeout from 30.0 to 60.0 in engine/tests/agent_reliability.py:208, AND explicitly pass timeout=60.0 to the LRESET call (line 249) and the context INJECT loop (line 251). Cheapest single-line fix likely to recover 12 of 17 failures."
+    },
+    "EMPTY_MODE": {
+      "count": 2,
+      "scenarios": ["R12", "R17"],
+      "note": "Trigger returned mode='' q='' (planner produced no plan). R12 took 51.92s and R17 took 89.50s, so this is not a timeout. Planner returned empty pending.plan dict.",
+      "intervention": "Add planner-empty-output retry in engine/app/planner.py: when plan.mode is empty string after first LLM call, retry once with a stricter prompt or fall back to a default mode=act with the salient person from context. Log empty-plan events to a new counter for visibility."
+    },
+    "CLARIFY_REFLEX": {
+      "count": 2,
+      "scenarios": ["R10", "R16"],
+      "note": "Resolvable scenarios where the planner produced mode='clarify' instead of mode='act'. R10 q='Do you mean Dana Bright or [Priya]', R16 q='Do you mean share the onboa[rding doc]'. Planner over-clarifies on single-person resolvables.",
+      "intervention": "Tighten the planner's clarify gate (engine/app/planner.py): only emit clarify when 2+ contender people score above threshold, not when a single candidate is merely uncertain. Add unit test covering R10/R16 trigger phrasings."
+    },
+    "WRONG_PERSON": {
+      "count": 0,
+      "scenarios": [],
+      "intervention": "n/a (no person-mismatch failures in this run)"
+    },
+    "AMBIGUOUS_FAIL": {
+      "count": 0,
+      "scenarios": [],
+      "note": "All 5 ambiguous failures were TIMEOUT, not wrong-clarify behavior. When ambiguous scenarios did complete, they correctly produced clarify output (5/5 of the non-timeout ambiguous runs passed).",
+      "intervention": "n/a — fixing TIMEOUT bucket also recovers all 5 ambiguous failures"
+    }
+  },
+  "highest_yield_fix": {
+    "bucket": "TIMEOUT",
+    "scenario_count": 12,
+    "intervention": "Raise default `_post` timeout from 30.0 to 60.0 in /Users/omarebrahim/Developer/Anticipy-V7/engine/tests/agent_reliability.py:208 and pass timeout=60.0 to LRESET (line 249) and the context INJECT loop (line 251). Recovers up to 12 of 17 failures (8 resolvable + 4 ambiguous), projecting resolvable to ~16/20 and ambiguous to ~9/10 if no other regressions emerge.",
+    "projected_after_fix": {
+      "resolvable_pass": "8 -> ~16 / 20",
+      "ambiguous_pass": "5 -> ~9 / 10",
+      "total_pass": "13 -> ~25 / 30"
+    },
+    "residual_failures_after_fix": ["R10 CLARIFY_REFLEX", "R12 EMPTY_MODE", "R16 CLARIFY_REFLEX", "R17 EMPTY_MODE"]
+  }
+}

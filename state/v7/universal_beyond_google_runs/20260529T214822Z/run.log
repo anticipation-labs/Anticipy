@@ -1,0 +1,10 @@
+[21:48:22Z] ENGINE up: http://127.0.0.1:8731/health -> 200
+[21:48:22Z] CHROME up: http://localhost:9222/json/version -> 200
+[21:48:22Z] BRIDGE up: http://127.0.0.1:7777/status ok
+[21:48:22Z] ==== SURFACE 1: saucedemo ====
+[21:48:22Z] BEGIN saucedemo :: intent=Log in to SauceDemo using username standard_user and password secret_sauce. Then add the first item on the inventory page to the cart. The task is complete when the shopping cart icon in the top right shows a badge with the number 1.
+[21:48:22Z] BEGIN saucedemo :: hint=https://www.saucedemo.com/ deadline=180s
+[21:51:23Z] END saucedemo :: http=200 elapsed=180.213s
+[21:51:23Z] ==== SURFACE 2: the_internet_herokuapp ====
+[21:51:23Z] BEGIN the_internet_herokuapp :: intent=Log in to the login form using username tomsmith and password SuperSecretPassword!. The task is complete when the page URL contains /secure and you see a green flash message that says 'You logged into a secure area!'.
+[21:51:23Z] BEGIN the_internet_herokuapp :: hint=https://the-internet.herokuapp.com/login deadline=180s

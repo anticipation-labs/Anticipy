@@ -1,0 +1,33 @@
+{
+  "consecutive_green_iterations": 44,
+  "consecutive_red_iterations": 0,
+  "gates": {
+    "G10_channel_routes": {
+      "evidence": "6/6",
+      "status": "GREEN"
+    },
+    "G11_cost_ceiling": {
+      "evidence": "p95=0.0",
+      "status": "GREEN"
+    },
+    "G12_failure_recovery": {
+      "evidence": "96 char SMS",
+      "status": "GREEN"
+    },
+    "G2_trivia_fires": {
+      "evidence": "14.18 ms",
+      "status": "GREEN"
+    },
+    "G3_silent_execute": {
+      "evidence": "age=1113s (fresh)",
+      "status": "GREEN"
+    },
+    "engine_alive": {
+      "evidence": "pid 13272 etime 08:52:47",
+      "status": "GREEN"
+    }
+  },
+  "last_check_ts": "2026-05-30T15:43:39Z",
+  "verdict": "GREEN",
+  "z001_age_seconds": 1113
+}

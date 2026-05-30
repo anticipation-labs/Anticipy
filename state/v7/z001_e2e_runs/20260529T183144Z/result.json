@@ -1,0 +1,70 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T183144Z",
+  "started_at": "20260529T183144Z",
+  "account_id": "z001_e2e_8fd51a6927a5",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "0B7E41C6B09461033478F9D61FDA78BC",
+    "1E767E33FA4724D6D582A32569A1C05B",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "59FDBE38F88A7765B58841ADCC3A0088",
+    "5D1703E6D147EBFB03E7DF981069E971",
+    "89CB84A09C7FF53BBA2517DF163D83B1",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 66959
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": true,
+      "provisioned": true
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_d110ab9447b6@anticipy-test.local",
+      "password_len": 16
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "create_identity",
+  "error": "signup form not found on page after 25s; probe={\"hasEmail\": false, \"hasPassword\": false, \"url\": \"https://www.anticipy.ai/app/download?token=09cb2df1fc35d4f9f44aaeecb8eebc8fe460fb976a7bfa86125f7ad7b046b512\", \"title\": \"Anticipy App\", \"buttons\": []}",
+  "finished_at": "20260529T183213Z",
+  "opened_targets": [
+    "8FC414927CE45EEC923B8A9958921A5F"
+  ],
+  "closed_targets": {
+    "8FC414927CE45EEC923B8A9958921A5F": true
+  },
+  "cdp_pages_after": [
+    "1E767E33FA4724D6D582A32569A1C05B",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "59FDBE38F88A7765B58841ADCC3A0088",
+    "89CB84A09C7FF53BBA2517DF163D83B1",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "leaked_target_ids": [],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

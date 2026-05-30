@@ -1,0 +1,17 @@
+{
+  "surface": "wikipedia",
+  "intent": "Use the search box at the top of the Wikipedia main page to search for 'Roman Empire' and open the resulting article. The task is complete when the article page is loaded and the page heading reads 'Roman Empire'.",
+  "surface_hint": "https://en.wikipedia.org/wiki/Main_Page",
+  "status": "ERROR",
+  "verdict": "FAIL",
+  "n_iterations": 0,
+  "elapsed_sec": 0.641,
+  "deadline_sec": 300.0,
+  "http_code": "000000",
+  "answer": "",
+  "evidence_text": "",
+  "evidence_screenshot_path": "",
+  "trajectory_dir": "",
+  "trajectory_recovered_from_disk": false,
+  "error": null
+}

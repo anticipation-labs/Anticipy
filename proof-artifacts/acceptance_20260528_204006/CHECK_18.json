@@ -1,0 +1,55 @@
+{
+  "check_number": 18,
+  "check_name": "cleanup_passes",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/CHECK_18.json",
+  "key_contents": {
+    "actions": [],
+    "backup_dir": "/tmp/anticipy_backup_20260528_210815",
+    "fresh_state_onboarded": false,
+    "fresh_state": {
+      "key_ok": false,
+      "provisioned": false,
+      "onboarded": false,
+      "profile": null,
+      "total_questions": 7,
+      "window_seconds": 2.0,
+      "cdp_port": 9222,
+      "chrome_user_data_dir": "",
+      "legacy_clone_cdp_enabled": false,
+      "clone_config_rejected": true,
+      "browser_surface": "extension_native_bridge",
+      "local_env_fallback": false,
+      "dossier_sync_url": "",
+      "resolution_trace_sync_url": "",
+      "last_cloud_sync": null,
+      "last_resolution_trace_sync": null,
+      "surface_runtime": {
+        "enabled": true,
+        "global_skill_catalog_required": false,
+        "proof_requires_visible_surface_receipt": true,
+        "surfaces": [
+          "browser_dom",
+          "browser_canvas",
+          "native_ax",
+          "terminal",
+          "file_system",
+          "notification",
+          "unknown"
+        ],
+        "default_browser_evidence": [
+          "dom_snapshot",
+          "cdp_target",
+          "screenshot",
+          "vision_answer"
+        ],
+        "canvas_evidence": [
+          "screenshot",
+          "vision_answer",
+          "dom_snapshot"
+        ]
+      }
+    }
+  },
+  "ts": "2026-05-28T21:08:17.447863"
+}

@@ -1,0 +1,14 @@
+{
+  "check_number": 16,
+  "check_name": "agent_reliability",
+  "status": "FAIL",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_003506/CHECK_16.json",
+  "key_contents": {
+    "log_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_003506/check16_agent_reliability.log",
+    "exit_code": 1,
+    "resolvable_pass": 10,
+    "ambiguous_pass": 7,
+    "stdout_tail": " 11  R11-priya-roadmap-review          resolvable  FAIL    25.56  resolvable: expected mode=act, got mode='' q=''\n 12  R12-priya-pricing-notes           resolvable  FAIL    20.87  resolvable: expected mode=act, got mode='' q=''\n 13  R13-priya-board-feedback          resolvable  PASS    42.65  Priya Shah\n 14  R14-maya-ops-checklist            resolvable  PASS    20.48  Maya Chen\n 15  R15-maya-vendor-list              resolvable  PASS    34.02  Maya Chen\n 16  R16-maya-onboarding-doc           resolvable  FAIL    33.59  resolvable: expected mode=act, got mode='clarify' q='Which document do you mean?\n 17  R17-maya-payroll                  resolvable  FAIL    42.50  resolvable: expected mode=act, got mode='' q=''\n 18  R18-maya-runbook                  resolvable  PASS    48.44  Maya Chen\n 19  R19-maya-team-expenses            resolvable  FAIL    22.61  resolvable: expected mode=act, got mode='' q=''\n 20  R20-maya-tooling                  resolvable  FAIL    45.09  resolvable: expected mode=act, got mode='' q=''\n 21  A01-dana-vs-priya-launch-recap    ambiguous   PASS    46.07  Which launch recap do you mean: Dana's or Priya's?\n 22  A02-priya-vs-maya-planning-notes  ambiguous   PASS    44.62  Do you mean send the planning notes to Priya or to Maya?\n 23  A03-dana-vs-maya-onboarding-doc   ambiguous   PASS    65.14  Which 'her' do you mean \u2014 Dana Bright or Maya Chen \u2014 both asked for the onboardi\n 24  A04-dana-vs-priya-board-deck      ambiguous   FAIL    37.48  expected clarify naming ['Dana', 'Priya'], got mode='' q=''\n 25  A05-priya-vs-maya-pricing         ambiguous   FAIL    32.37  expected clarify naming ['Priya', 'Maya'], got mode='act' q=''\n 26  A06-dana-vs-priya-roadmap         ambiguous   FAIL    67.77  expected clarify naming ['Dana', 'Priya'], got mode='act' q=''\n 27  A07-dana-vs-maya-budget           ambiguous   PASS    37.20  Which person do you mean: Dana Bright or Maya Chen?\n 28  A08-priya-vs-maya-investor-prep   ambiguous   PASS    26.50  Do you mean Dana, Priya, or Maya?\n 29  A09-dana-vs-priya-positioning     ambiguous   PASS    24.68  Do you mean Dana or Priya?\n 30  A10-dana-vs-maya-followups        ambiguous   PASS    23.55  Do you mean Dana's follow-ups or Maya's post-call ops follow-ups?\n\nresolvable: 10/20\nambiguous:  7/10\nverdict:    FAIL\nsummary written to proof-artifacts/agent_reliability.json"
+  },
+  "ts": "2026-05-29T00:52:41.937457"
+}

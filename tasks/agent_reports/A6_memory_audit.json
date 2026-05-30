@@ -1,0 +1,28 @@
+{
+  "m1": {
+    "profile_name": null,
+    "people_count": 2,
+    "well_populated": true,
+    "ok": true,
+    "notes": "dossier loaded for anticipy-user; profile.name field not present in response; 2 people (Maya Patel, Jordan Lee); preferences + do_not_touch + pronoun_map all populated"
+  },
+  "m2": {
+    "durable_contacts": 0,
+    "with_alias_count": 0,
+    "ok": false,
+    "notes": "no kind=contact rows; 39 kind=anchor rows act as person/alias resolver (boss, strategy advisor, operations partner, etc.); aliases field absent on jsonl entries (aliases live in dossier.json instead)"
+  },
+  "m3": {
+    "outbox_files_found": [],
+    "ok": false,
+    "notes": "zero files matching *outbox* or *cloud_sync* under ~/.anticipy; cloud sync not yet wired on disk"
+  },
+  "m4": {
+    "sampled_rows": 5,
+    "with_provenance": 5,
+    "ok": true,
+    "notes": "all 5 sampled rows have active + ts + evidence; explicit source field is null on all rows (provenance carried via evidence string instead)"
+  },
+  "verdict": "WARN",
+  "reason": "M1+M4 green; M2 contacts schema mismatch (anchors not kind=contact, no aliases field); M3 cloud sync outbox absent on disk."
+}

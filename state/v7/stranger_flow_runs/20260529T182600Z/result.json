@@ -1,0 +1,79 @@
+{
+  "story": "stranger_flow",
+  "run_id": "20260529T182600Z",
+  "started_at": "20260529T182600Z",
+  "finished_at": "20260529T182735Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T182600Z",
+  "anticipy_home": "/Users/omarebrahim/.anticipy/v7",
+  "inject_text": "draft a thank-you email to the first person in my contacts",
+  "steps": [
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "duration_ms": 0,
+      "raw_extra": "{\\}"
+    },
+    {
+      "name": "snapshot",
+      "ok": true,
+      "duration_ms": 228,
+      "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T182600Z",
+      "file_count": 17,
+      "size_kb": 4616,
+      "source_existed": true
+    },
+    {
+      "name": "wipe",
+      "ok": true,
+      "duration_ms": 244,
+      "wiped_dir": "/Users/omarebrahim/.anticipy/v7"
+    },
+    {
+      "name": "coldstart_start",
+      "ok": true,
+      "duration_ms": 179,
+      "http_code": 404,
+      "skipped": true,
+      "note": "/api/coldstart/start not implemented yet (unit 12 work per planning/10-instant-cold-start/DESIGN.md). Continuing without inhale; dossier will be empty for the inject/act steps."
+    },
+    {
+      "name": "coldstart_status",
+      "ok": true,
+      "duration_ms": 267,
+      "final_status": "skipped",
+      "people_count": 0,
+      "note": "/api/coldstart/status not available; people_count read from on-disk dossier files (after the wipe this is expected to be 0)."
+    },
+    {
+      "name": "inject",
+      "ok": true,
+      "duration_ms": 27435,
+      "http_code": 200,
+      "outcome": "CONFIRMED",
+      "ingest_id": "asr-transcript-32eb2443aee54f39920deedad56db692",
+      "has_pending": true,
+      "pending_instruction": "draft a thank-you email to the first person in my contacts",
+      "proposal": null,
+      "transcript": "draft a thank-you email to the first person in my contacts"
+    },
+    {
+      "name": "act_and_verify",
+      "ok": false,
+      "duration_ms": 63724,
+      "raw_extra": "{\\}"
+    },
+    {
+      "name": "restore",
+      "ok": true,
+      "duration_ms": 227,
+      "restored_dir": "/Users/omarebrahim/.anticipy/v7",
+      "file_count": 17,
+      "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T182600Z"
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "act_and_verify",
+  "notes": " coldstart_available=false; people_count=0; inject_ok=true; act_ran=false; act_ok=false; restored=true"
+}

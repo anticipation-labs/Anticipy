@@ -1,0 +1,24 @@
+{
+  "story": "stranger_flow",
+  "run_id": "20260529T183016Z",
+  "started_at": "20260529T183016Z",
+  "finished_at": "20260529T183023Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T183016Z",
+  "anticipy_home": "/Users/omarebrahim/.anticipy/v7",
+  "inject_text": "draft a thank-you email to the first person in my contacts",
+  "steps": [
+    {
+      "name": "engine_alive",
+      "ok": false,
+      "duration_ms": 0,
+      "error": "engine /health did not return a pid",
+      "http_code": 0,
+      "health_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T183016Z/engine_health.json"
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "engine_alive",
+  "notes": "coldstart_available=false; people_count=0; inject_ok=false; act_ran=false; act_ok=false; restored=false"
+}

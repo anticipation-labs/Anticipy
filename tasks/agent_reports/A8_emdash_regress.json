@@ -1,0 +1,87 @@
+{
+  "scan_dirs": ["src/app/", "desktop/src/", "public/"],
+  "extensions": [".tsx", ".ts", ".js", ".html", ".css"],
+  "total_hits": 290,
+  "hits_by_dir": {
+    "src/app/api/**": 113,
+    "src/app/engine/page.tsx": 35,
+    "src/app/internal/**": 138,
+    "src/app/admin/**": 2,
+    "src/app/globals.css": 1,
+    "src/app/download/route.ts": 1,
+    "desktop/src/**": 0,
+    "public/**": 0
+  },
+  "blocker_count": 0,
+  "blocker_examples": [],
+  "likely_visible_count": 140,
+  "likely_visible_examples": [
+    {
+      "file": "src/app/admin/layout.tsx",
+      "line": 4,
+      "snippet": "title: \"Admin — Anticipy\"",
+      "surface": "HEAD <title> (Next metadata) on password-gated /admin"
+    },
+    {
+      "file": "src/app/admin/page.tsx",
+      "line": 258,
+      "snippet": "{entry.referrer || \"—\"}",
+      "surface": "JSX text node fallback in admin waitlist table"
+    },
+    {
+      "file": "src/app/internal/layout.tsx",
+      "line": 22,
+      "snippet": "<p>Internal — Enter access code</p>",
+      "surface": "JSX text on password-gated /internal gate"
+    },
+    {
+      "file": "src/app/internal/PasswordGate.tsx",
+      "line": 40,
+      "snippet": "<p>Internal — Enter access code</p>",
+      "surface": "JSX text on password-gated /internal gate"
+    },
+    {
+      "file": "src/app/internal/docs/hardware/page.tsx",
+      "line": 18,
+      "snippet": "Anticipy Ambient AI Pendant — Version 1.0.0 ...",
+      "surface": "JSX subtitle on /internal/docs/hardware"
+    },
+    {
+      "file": "src/app/internal/docs/packaging/page.tsx",
+      "line": 18,
+      "snippet": "Anticipy Pendant — v1.0 · Updated 2026-04-15 ...",
+      "surface": "JSX subtitle on /internal/docs/packaging"
+    },
+    {
+      "file": "src/app/internal/docs/competitive/page.tsx",
+      "line": 40,
+      "snippet": "Competitor Analysis — All 8",
+      "surface": "JSX <h2> on /internal/docs/competitive"
+    },
+    {
+      "file": "src/app/internal/page.tsx",
+      "line": 161,
+      "snippet": "title: \"Order via Bittele (Toronto) — Zero Touch\"",
+      "surface": "card title rendered on /internal index"
+    }
+  ],
+  "likely_visible_notes": "All 140 LIKELY-VISIBLE hits live under /admin, /internal, and its nested /internal/docs/* pages. These surfaces are password-gated dev tooling that only Omar logs into; no public marketing or onboarding page contains an em-dash. None of these are toast/error constants on edge paths — they are static JSX page bodies and titles in internal hardware/packaging/competitive/BOM/schematic/manufacturing/assembly/pendant-upload docs.",
+  "noise_count": 150,
+  "noise_breakdown": {
+    "src/app/api/**/route.ts code comments, console.log strings, LLM system prompts": 113,
+    "src/app/engine/page.tsx JS // and JSX {/* */} comments only": 35,
+    "src/app/globals.css /* comment */": 1,
+    "src/app/download/route.ts JSDoc comment": 1
+  },
+  "public_surfaces_clean": {
+    "marketing_root_/": "clean",
+    "/waitlist": "clean",
+    "/flash": "clean",
+    "/onboarding/*": "clean",
+    "/app, /buy, /pre-order surfaces": "clean",
+    "desktop/src (popover, menubar, welcome)": "clean",
+    "public/**": "clean"
+  },
+  "verdict": "WARN",
+  "verdict_rationale": "Zero em-dashes on any public marketing, onboarding, app-download, or desktop popover surface (BLOCKER=0). However 140 em-dashes remain on password-gated dev surfaces (/admin metadata title, /admin table fallback, /internal gate copy, /internal/docs/* hardware/packaging/competitive/BOM/schematic/manufacturing/assembly pages). Omar still sees these when working on the engine. Strict reading of the no-em-dash rule (\"any surface a user sees\") makes them LIKELY-VISIBLE. The other 150 hits are pure NOISE (code comments, console.logs, LLM system prompts) and do not reach any rendered surface."
+}

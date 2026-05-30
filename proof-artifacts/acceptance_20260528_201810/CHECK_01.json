@@ -1,0 +1,58 @@
+{
+  "check_number": 1,
+  "check_name": "site_live",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_201810/CHECK_01.json",
+  "key_contents": {
+    "engine_status": "ready",
+    "mic_status": "ready",
+    "response": {
+      "build": {
+        "commit": "9afd37f97b30790b96e3406e9f7e736610fd453e",
+        "commit_short": "9afd37f"
+      },
+      "release": {
+        "name": "Anticipy_1.0.0_aarch64.dmg",
+        "path": "/dl/Anticipy_1.0.0_aarch64.dmg",
+        "url": "/dl/Anticipy_1.0.0_aarch64.dmg",
+        "sha256": "cb24d8f9c6eed3b55a22df9a45249ee1f8b4cb9fb8d70ae1791b8d4453e8aa2e",
+        "manifest_commit": "659d5c433989d734bd6f5ca53a0db16136b37462",
+        "built_at": "2026-05-29T02:27:17Z"
+      },
+      "account": {
+        "status": "needs_user",
+        "detail": "Account creation and sign-in are done by you. The screens are real; the credential step is yours by design (never automated, never a faked success)."
+      },
+      "download": {
+        "status": "ready",
+        "detail": "The desktop app download is available."
+      },
+      "onboarding": {
+        "chrome": {
+          "status": "needs_user",
+          "detail": "Connect Chrome is a one-time grant you perform; the frontend reflects its real connected state, it does not fake it."
+        },
+        "microphone": {
+          "status": "ready",
+          "detail": "The terminal-launched local engine uses the already-authorized terminal microphone path; the browser shell only reports that real local state."
+        },
+        "autonomy": {
+          "status": "ready",
+          "detail": "Progressive-autonomy first run: the first days are conservative by design (MH-P10: confirm-first, earns trust, never floods)."
+        }
+      },
+      "engine": {
+        "status": "ready",
+        "detail": "The deployed shell probes the user-device engine directly from the browser at http://127.0.0.1:8731. Vercel does not proxy the local engine."
+      },
+      "proposals": {
+        "status": "ready",
+        "detail": "The browser connects to the local engine directly; no proposal is fabricated by Vercel."
+      },
+      "safety": {
+        "detail": "Every hard safety binding holds at zero (chatter false-action, double-action, act-after-cancel, act-on-unresolved, unrecoverable wrong action). Uncertain input is confirmed or logged, never silently acted on."
+      }
+    }
+  },
+  "ts": "2026-05-28T20:18:10.520423"
+}

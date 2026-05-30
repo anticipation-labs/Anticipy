@@ -1,0 +1,17 @@
+{"poll": 1, "http_code": 200, "t": 1780095319.389846, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 1979, "rows_collected": 0, "batches_sent": 0}
+{"poll": 2, "http_code": 200, "t": 1780095323.323264, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 6045, "rows_collected": 0, "batches_sent": 0}
+{"poll": 3, "http_code": 200, "t": 1780095325.757098, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 8457, "rows_collected": 0, "batches_sent": 0}
+{"poll": 4, "http_code": 200, "t": 1780095328.136642, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 10919, "rows_collected": 0, "batches_sent": 0}
+{"poll": 5, "http_code": 200, "t": 1780095331.050449, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 13283, "rows_collected": 50, "batches_sent": 0}
+{"poll": 6, "http_code": 200, "t": 1780095339.235424, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 20078, "rows_collected": 50, "batches_sent": 0}
+{"poll": 7, "http_code": 200, "t": 1780095342.947967, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 25222, "rows_collected": 100, "batches_sent": 0}
+{"poll": 8, "http_code": 200, "t": 1780095345.879671, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 28547, "rows_collected": 100, "batches_sent": 0}
+{"poll": 9, "http_code": 200, "t": 1780095348.3963299, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 31136, "rows_collected": 126, "batches_sent": 1}
+{"poll": 10, "http_code": 200, "t": 1780095350.9209442, "state": "running", "people_count": 0, "projects_count": 0, "elapsed_ms": 33632, "rows_collected": 126, "batches_sent": 1}
+{"poll": 11, "http_code": 200, "t": 1780095353.4732711, "state": "running", "people_count": 7, "projects_count": 4, "elapsed_ms": 36221, "rows_collected": 126, "batches_sent": 2}
+{"poll": 12, "http_code": 200, "t": 1780095355.929193, "state": "running", "people_count": 7, "projects_count": 4, "elapsed_ms": 38640, "rows_collected": 126, "batches_sent": 2}
+{"poll": 13, "http_code": 200, "t": 1780095358.623104, "state": "running", "people_count": 8, "projects_count": 5, "elapsed_ms": 41359, "rows_collected": 126, "batches_sent": 3}
+{"poll": 14, "http_code": 200, "t": 1780095361.016511, "state": "running", "people_count": 8, "projects_count": 5, "elapsed_ms": 43766, "rows_collected": 126, "batches_sent": 3}
+{"poll": 15, "http_code": 200, "t": 1780095363.6777768, "state": "running", "people_count": 8, "projects_count": 5, "elapsed_ms": 46197, "rows_collected": 126, "batches_sent": 3}
+{"poll": 16, "http_code": 200, "t": 1780095366.4236438, "state": "running", "people_count": 8, "projects_count": 7, "elapsed_ms": 49005, "rows_collected": 126, "batches_sent": 4}
+{"poll": 17, "http_code": 200, "t": 1780095368.9236732, "state": "done", "people_count": 11, "projects_count": 8, "elapsed_ms": 51182, "rows_collected": 126, "batches_sent": 5}

@@ -1,0 +1,17 @@
+{
+  "surface": "the_internet_herokuapp",
+  "intent": "On this Add/Remove Elements page, click the button labeled Add Element. The task is complete when a new button labeled Delete appears on the page below the Add Element button.",
+  "surface_hint": "https://the-internet.herokuapp.com/add_remove_elements/",
+  "status": "SUCCESS",
+  "verdict": "PASS",
+  "n_iterations": 1,
+  "elapsed_sec": 17.644,
+  "deadline_sec": 120.0,
+  "http_code": "200",
+  "answer": "A new button labeled Delete appears on the page below the Add Element button.",
+  "evidence_text": "vision-confirmed: The page shows an 'Add Element' button at the top, and below it there is a 'Delete' button already present on the page. The task was to click 'Add Element' and have a new 'Delete' button appear below ",
+  "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094059_b52ae7/s0_i00_after.png",
+  "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094059_b52ae7",
+  "trajectory_recovered_from_disk": false,
+  "error": null
+}

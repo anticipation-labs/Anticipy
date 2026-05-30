@@ -1,0 +1,11 @@
+{
+  "agent_id": "fake-agent-test",
+  "claimed_commit_sha": "f17515c5",
+  "claimed_verify_command": "true",
+  "commit_resolved": "f17515c5a999f7c477c755f5cef29b184895a590",
+  "reason": "verify ok and sentinel GREEN",
+  "sentinel_verdict": "GREEN",
+  "ts": "2026-05-30T04:57:02Z",
+  "verdict": "VERIFIED",
+  "verify_exit_code": 0
+}

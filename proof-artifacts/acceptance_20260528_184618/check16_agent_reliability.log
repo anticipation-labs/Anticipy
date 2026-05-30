@@ -1,0 +1,59 @@
+=== stdout ===
+
+=== stderr ===
+Traceback (most recent call last):
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/connectionpool.py", line 534, in _make_request
+    response = conn.getresponse()
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/connection.py", line 516, in getresponse
+    httplib_response = super().getresponse()
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/http/client.py", line 1375, in getresponse
+    response.begin()
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/http/client.py", line 318, in begin
+    version, status, reason = self._read_status()
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/http/client.py", line 279, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+TimeoutError: timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/requests/adapters.py", line 667, in send
+    resp = conn.urlopen(
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/util/retry.py", line 474, in increment
+    raise reraise(type(error), error, _stacktrace)
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/util/util.py", line 39, in reraise
+    raise value
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/connectionpool.py", line 536, in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/urllib3/connectionpool.py", line 367, in _raise_timeout
+    raise ReadTimeoutError(
+urllib3.exceptions.ReadTimeoutError: HTTPConnectionPool(host='127.0.0.1', port=8731): Read timed out. (read timeout=10.0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/agent_reliability.py", line 403, in <module>
+    sys.exit(main())
+  File "/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/agent_reliability.py", line 339, in main
+    _preflight(args.engine_url)
+  File "/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/agent_reliability.py", line 221, in _preflight
+    state = _get(engine_url, STATE)
+  File "/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/agent_reliability.py", line 215, in _get
+    r = requests.get(engine_url + path, timeout=timeout)
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/requests/api.py", line 73, in get
+    return request("get", url, params=params, **kwargs)
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+  File "/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/site-packages/requests/adapters.py", line 713, in send
+    raise ReadTimeout(e, request=request)
+requests.exceptions.ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=8731): Read timed out. (read timeout=10.0)

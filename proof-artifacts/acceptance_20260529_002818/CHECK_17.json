@@ -1,0 +1,11 @@
+{
+  "check_number": 17,
+  "check_name": "frozen_paths_clean",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_002818/CHECK_17.json",
+  "key_contents": {
+    "diff_output": "",
+    "stderr": ""
+  },
+  "ts": "2026-05-29T00:29:14.911847"
+}

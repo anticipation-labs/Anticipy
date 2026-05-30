@@ -1,0 +1,83 @@
+{
+  "id": "notion_workspace_read",
+  "surface": "Notion",
+  "url": "https://app.notion.com/",
+  "intent": "Read the Notion workspace currently open in the agent window. Report which workspace is signed in and list the first three sidebar items you can see. Do not click any page. Do not create anything yet. Just read and report.",
+  "started_at": "20260529T230118Z",
+  "verdict": "PASS",
+  "skip_reason": "",
+  "probe": {
+    "logged_in": true,
+    "skip_reason": "",
+    "url": "https://app.notion.com/p/To-Do-List-1913db04f70741e28cc9867c28676b70",
+    "title": "To-Do List | Notion",
+    "body_snippet": "skip to content\no\nomize ten\u2019s space\nhome\nchat\nmeetings\ninbox\nmeetings\nconnect your calendar\nsee all your events and start meeting notes for them.\nnew ai meeting note\nrecents\n\u2705\nto-do list\n\ud83d\udfe7\nanticipy hq\ninvestor crm\nexpenses\ncreate and link to-do list\nto do list\nmeeting @monday 9:31 pm\n\u2705\nto-do\ntasks\n\ud83d\udcc1",
+    "body_chars": 1085,
+    "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/notion_workspace_read/login_probe.png",
+    "probe_target_id": "F7DA21BD5D6FFF8D837DE4E5F27966B3"
+  },
+  "act_probe": {
+    "ok": true,
+    "skipped": true,
+    "reason": "scenario not routed via /api/act"
+  },
+  "agent_window_prewarm": {
+    "prewarmed": true,
+    "url": "https://app.notion.com/",
+    "target_id": "81C9A312084271CBBB4DAA7B4971EDD3",
+    "settle_seconds": 18.0
+  },
+  "universal_result": {
+    "ok": true,
+    "intent": "Read the Notion workspace currently open in the agent window. Report which workspace is signed in and list the first three sidebar items you can see. Do not click any page. Do not create anything yet. Just read and report.",
+    "surface_hint": "https://app.notion.com/",
+    "status": "SUCCESS",
+    "answer": "The Notion workspace currently open in the agent window is identified.; The signed-in workspace name is reported.; The first three sidebar items visible are listed.",
+    "evidence": "vision-confirmed: Workspace signed in: 'Omize Ten's Space' (visible in top-left corner). First three sidebar items visible: 1) 'Home' with house icon, 2) 'Meetings' section header with 'Connect your calendar' item belo",
+    "n_iterations": 0,
+    "subtasks": [
+      {
+        "subgoal": "Read the Notion workspace currently open in the agent window. Report which workspace is signed in and list the first three sidebar items you can see. Do not click any page. Do not create anything yet. Just read and report.",
+        "status": "SUCCESS",
+        "answer": "The Notion workspace currently open in the agent window is identified.; The signed-in workspace name is reported.; The first three sidebar items visible are listed.",
+        "evidence": "vision-confirmed: Workspace signed in: 'Omize Ten's Space' (visible in top-left corner). First three sidebar items visible: 1) 'Home' with house icon, 2) 'Meetings' section header with 'Connect your calendar' item belo",
+        "iters": 0
+      }
+    ],
+    "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780095709_a67b91",
+    "error": null,
+    "elapsed_sec": 38.322,
+    "deadline_sec": 300.0,
+    "deadline_hit": false
+  },
+  "universal_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_sec": 38.463,
+      "status": "SUCCESS",
+      "answer_snip": "The Notion workspace currently open in the agent window is identified.; The signed-in workspace name is reported.; The first three sidebar items visible are listed.",
+      "error": null,
+      "deadline_hit": false,
+      "n_iterations": 0
+    }
+  ],
+  "universal_elapsed_sec": 38.463,
+  "verify": {
+    "engine_status": "SUCCESS",
+    "engine_answer": "The Notion workspace currently open in the agent window is identified.; The signed-in workspace name is reported.; The first three sidebar items visible are listed.",
+    "engine_evidence": "vision-confirmed: Workspace signed in: 'Omize Ten's Space' (visible in top-left corner). First three sidebar items visible: 1) 'Home' with house icon, 2) 'Meetings' section header with 'Connect your calendar' item belo",
+    "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780095709_a67b91",
+    "elapsed_sec": 38.322,
+    "deadline_hit": false,
+    "n_iterations": 0,
+    "after_screenshot": "",
+    "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/notion_workspace_read/agent_window_after.png",
+    "success_signal_present": null,
+    "trajectory_copy": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/notion_workspace_read/trajectory",
+    "screenshot_count": 1,
+    "screenshot_paths": [
+      "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/notion_workspace_read/trajectory/s0_i00_before.png"
+    ]
+  },
+  "finished_at": "20260529T230227Z"
+}

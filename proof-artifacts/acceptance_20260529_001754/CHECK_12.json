@@ -1,0 +1,28 @@
+{
+  "check_number": 12,
+  "check_name": "ambiguity_trap",
+  "status": "FAIL",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_001754/CHECK_12.json",
+  "key_contents": {
+    "is_clarify": true,
+    "question": "Which one did you mean?",
+    "names_both": false,
+    "drafts_before": -1,
+    "drafts_after": -1,
+    "pending": {
+      "instruction": "I should get that over to her before tomorrow.",
+      "proposal": "Which one did you mean?",
+      "clarify": true,
+      "plan": {
+        "mode": "clarify",
+        "question": "Which one did you mean?",
+        "person": "",
+        "thing": "",
+        "task": "",
+        "_infra_fallback": true
+      },
+      "ts": 1780039150.073489
+    }
+  },
+  "ts": "2026-05-29T00:19:11.231355"
+}

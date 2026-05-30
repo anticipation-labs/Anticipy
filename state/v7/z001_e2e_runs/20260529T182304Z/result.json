@@ -1,0 +1,65 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T182304Z",
+  "started_at": "20260529T182304Z",
+  "account_id": "z001_e2e_d1baec84d130",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "0B8AEC36BC06266D89F65C39BFD76941",
+    "0C1DABFC36DF6EBCCBA90D7FBFFA2E1F",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "DF467B5160AEF21C5420AC2AA1198A7B",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 59811
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": false,
+      "provisioned": true
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_f99851be550c@anticipy-test.local",
+      "password_len": 16
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "create_identity",
+  "error": "signup form not found on page after 25s; probe={\"hasEmail\": false, \"hasPassword\": false, \"url\": \"https://www.anticipy.ai/app/download?token=4ccb146d14484033d84240f765c8a5ff26961364892858c49952ba96a7a2c142\", \"title\": \"Anticipy App\", \"buttons\": []}",
+  "finished_at": "20260529T182332Z",
+  "opened_targets": [
+    "76A34D8B6F7343A9D341DE6DB69D0B88"
+  ],
+  "closed_targets": {
+    "76A34D8B6F7343A9D341DE6DB69D0B88": true
+  },
+  "cdp_pages_after": [
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "4502959E08853C1FFA5B5F137675D499",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "DF467B5160AEF21C5420AC2AA1198A7B",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "leaked_target_ids": [
+    "4502959E08853C1FFA5B5F137675D499"
+  ],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

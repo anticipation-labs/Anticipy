@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const R2_PUBLIC_URL =
   "https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/Anticipy_1.0.0_aarch64.dmg";
 
-const DMG_BYTES = 2515666283;
+const DMG_BYTES = 2516060536;
 
 export function GET(): NextResponse {
   return NextResponse.redirect(R2_PUBLIC_URL, { status: 302 });

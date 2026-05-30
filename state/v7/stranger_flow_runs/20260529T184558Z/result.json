@@ -1,0 +1,97 @@
+{
+  "story": "stranger_flow",
+  "run_id": "20260529T184558Z",
+  "started_at": "20260529T184558Z",
+  "finished_at": "20260529T184727Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T184558Z",
+  "anticipy_home": "/Users/omarebrahim/.anticipy/v7",
+  "inject_text": "draft a thank-you email to the first person in my contacts",
+  "steps": [
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "duration_ms": 13181,
+      "engine_pid": 97341,
+      "engine_url": "http://127.0.0.1:8731",
+      "health_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T184558Z/engine_health.json"
+    },
+    {
+      "name": "snapshot",
+      "ok": true,
+      "duration_ms": 248,
+      "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T184558Z",
+      "file_count": 17,
+      "size_kb": 4692,
+      "source_existed": true
+    },
+    {
+      "name": "wipe",
+      "ok": true,
+      "duration_ms": 193,
+      "wiped_dir": "/Users/omarebrahim/.anticipy/v7"
+    },
+    {
+      "name": "coldstart_start",
+      "ok": true,
+      "duration_ms": 266,
+      "http_code": 200,
+      "available": true,
+      "response_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T184558Z/coldstart_start.json"
+    },
+    {
+      "name": "coldstart_status",
+      "ok": true,
+      "duration_ms": 49342,
+      "final_status": "done",
+      "people_count": 14,
+      "poll_count": 20,
+      "timeout_s": 90,
+      "poll_log": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T184558Z/coldstart_status_poll.jsonl"
+    },
+    {
+      "name": "inject",
+      "ok": true,
+      "duration_ms": 20065,
+      "http_code": 200,
+      "outcome": "CONFIRMED",
+      "ingest_id": "asr-transcript-a414898e70b046b8880795363ca33111",
+      "has_pending": true,
+      "pending_instruction": "draft a thank-you email to the first person in my contacts",
+      "proposal": "",
+      "transcript": "draft a thank-you email to the first person in my contacts"
+    },
+    {
+      "name": "act_and_verify",
+      "ok": false,
+      "duration_ms": 1059,
+      "act_http_code": 200,
+      "act_ran": false,
+      "act_clarify": false,
+      "act_confirm_required": false,
+      "act_status": "",
+      "act_intent": "",
+      "act_error": "no instruction to act on",
+      "act_compose_url": "",
+      "act_resolved_person": "",
+      "draft_verify_ok": false,
+      "drafts_url": "",
+      "drafts_title": "",
+      "drafts_body_chars": 0,
+      "draft_marker_present": false,
+      "cdp_drafts_dump": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T184558Z/cdp_drafts_scan.json"
+    },
+    {
+      "name": "restore",
+      "ok": true,
+      "duration_ms": 264,
+      "restored_dir": "/Users/omarebrahim/.anticipy/v7",
+      "file_count": 17,
+      "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T184558Z"
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "act_and_verify",
+  "notes": "coldstart_available=true; people_count=14; inject_ok=true; act_ran=false; act_ok=false; restored=true"
+}

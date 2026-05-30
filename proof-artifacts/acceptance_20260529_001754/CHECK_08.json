@@ -1,0 +1,32 @@
+{
+  "check_number": 8,
+  "check_name": "input_paste",
+  "status": "FAIL",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_001754/CHECK_08.json",
+  "key_contents": {
+    "reason": "inject did not produce an act plan",
+    "plan": {
+      "mode": "clarify",
+      "question": "Which one did you mean?",
+      "person": "",
+      "thing": "",
+      "task": "",
+      "_infra_fallback": true
+    },
+    "pending": {
+      "instruction": "I really should get that over to her before the week ends.",
+      "proposal": "Which one did you mean?",
+      "clarify": true,
+      "plan": {
+        "mode": "clarify",
+        "question": "Which one did you mean?",
+        "person": "",
+        "thing": "",
+        "task": "",
+        "_infra_fallback": true
+      },
+      "ts": 1780039149.02865
+    }
+  },
+  "ts": "2026-05-29T00:19:10.045874"
+}

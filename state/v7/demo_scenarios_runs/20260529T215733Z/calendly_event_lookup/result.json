@@ -1,0 +1,58 @@
+{
+  "id": "calendly_event_lookup",
+  "surface": "Calendly",
+  "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+  "intent": "Read the Calendly event types page and report back the names of the first three event types listed (for example '30 Minute Meeting', 'Quick Call', etc). Do not click any event. Do not delete anything. Just read and report.",
+  "started_at": "20260529T220019Z",
+  "verdict": "FAIL",
+  "skip_reason": "",
+  "agent_window_wipe": {
+    "closed": true,
+    "removed_state": true,
+    "target_id": "4E88339EC59F40B1DEDBE3837F80128F"
+  },
+  "probe": {
+    "logged_in": true,
+    "skip_reason": "",
+    "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+    "title": "Event types - Scheduling - Calendly",
+    "body_snippet": "create\nscheduling\nmeetings\navailability\ncontacts\nworkflows\npayments\nnew\nintegrations & apps\nrouting\nupgrade plan\nanalytics\nadmin center\nhelp\no\nreview our updated terms of use\nwe've updated our terms of use to reflect how calendly works today. take a moment to review what's changed.\naccept terms\nrevi",
+    "body_chars": 701,
+    "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/calendly_event_lookup/login_probe.png",
+    "probe_target_id": "40571EFC731E191BEAAB07C563F6B817"
+  },
+  "act_probe": {
+    "ok": true,
+    "skipped": true,
+    "reason": "scenario not routed via /api/act"
+  },
+  "universal_result": {
+    "ok": false,
+    "intent": "Read the Calendly event types page and report back the names of the first three event types listed (for example '30 Minute Meeting', 'Quick Call', etc). Do not click any event. Do not delete anything. Just read and report.",
+    "surface_hint": "https://calendly.com/app/scheduling/meeting_types/user/me",
+    "status": "DEADLINE_EXCEEDED",
+    "answer": "",
+    "evidence": "wall-clock 150.0s exceeded before the loop returned",
+    "n_iterations": 0,
+    "subtasks": [],
+    "trajectory_dir": "",
+    "error": "deadline_exceeded",
+    "elapsed_sec": 150.002,
+    "deadline_sec": 150.0,
+    "deadline_hit": true
+  },
+  "universal_elapsed_sec": 150.014,
+  "verify": {
+    "engine_status": "DEADLINE_EXCEEDED",
+    "engine_answer": "",
+    "engine_evidence": "wall-clock 150.0s exceeded before the loop returned",
+    "trajectory_dir": "",
+    "elapsed_sec": 150.002,
+    "deadline_hit": true,
+    "n_iterations": 0,
+    "after_screenshot": "",
+    "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/calendly_event_lookup/agent_window_after.png",
+    "success_signal_present": null
+  },
+  "finished_at": "20260529T220301Z"
+}

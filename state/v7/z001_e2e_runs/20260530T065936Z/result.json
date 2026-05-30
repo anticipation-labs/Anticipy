@@ -1,0 +1,91 @@
+{
+  "story": "Z-001",
+  "run_id": "20260530T065936Z",
+  "started_at": "20260530T065936Z",
+  "account_id": "z001_e2e_dca2d2527b4a",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "0E69D53A039D9F4599B94C6F3EAAF598",
+    "283C3538680F2E94D30BA26FF5675813",
+    "296B2E00FE2654BACDB7AB31231288B5",
+    "2BB04B1A9135AA5F0ADF9CFA684401D5",
+    "3417D3563C7B040731D7D617A8B46764",
+    "3839F7090FD3D8088B68E4BB71A5EA87",
+    "398CDD6E1A2A6EE3E2CECA6079EB8718",
+    "52840823B4A2B1C899BCEF5D7831DC40",
+    "6BD7D6B829570FE9D6143537380E66AE",
+    "70350277BE22870848DF9E753166576B",
+    "83D0BE5AA396D39D6DF2D61E9871380A",
+    "A118DBCFD0E6A369CFC71C5FB863AF3B",
+    "D4A5E078C512E84A811D88D6230BA1CB",
+    "E7CF4EE2ABFC0DD333D84BD8E838D4EA",
+    "EA697FFCD550C8FC03C4BB5799BAFBC5",
+    "EB80BA50B657160BDE76F62C251BAF65"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 3624
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": false,
+      "provisioned": false
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_e44d0b1c6f8e@anticipy-test.local",
+      "password_len": 16
+    },
+    {
+      "name": "browser_signup",
+      "ok": true,
+      "targetId": "927C7C236F1978FD18B8C8BE429D72D3",
+      "final_url": "https://www.anticipy.ai/app/download?token=90795d711c81af2afd146e078a5a6f3df9a2a6913f18cb520eac67219553cb70",
+      "handoff_token": "90795d711c81af2afd146e078a5a6f3df9a2a6913f18cb520eac67219553cb70",
+      "handoff_token_present": true,
+      "short_circuit": "direct_to_download"
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "browser_signup",
+  "error": "auth.users row not found for email='z001_test_e44d0b1c6f8e@anticipy-test.local'",
+  "finished_at": "20260530T065940Z",
+  "opened_targets": [
+    "927C7C236F1978FD18B8C8BE429D72D3"
+  ],
+  "closed_targets": {
+    "927C7C236F1978FD18B8C8BE429D72D3": true
+  },
+  "cdp_pages_after": [
+    "0E69D53A039D9F4599B94C6F3EAAF598",
+    "283C3538680F2E94D30BA26FF5675813",
+    "296B2E00FE2654BACDB7AB31231288B5",
+    "2BB04B1A9135AA5F0ADF9CFA684401D5",
+    "3417D3563C7B040731D7D617A8B46764",
+    "3839F7090FD3D8088B68E4BB71A5EA87",
+    "398CDD6E1A2A6EE3E2CECA6079EB8718",
+    "52840823B4A2B1C899BCEF5D7831DC40",
+    "6BD7D6B829570FE9D6143537380E66AE",
+    "70350277BE22870848DF9E753166576B",
+    "83D0BE5AA396D39D6DF2D61E9871380A",
+    "A118DBCFD0E6A369CFC71C5FB863AF3B",
+    "D4A5E078C512E84A811D88D6230BA1CB",
+    "E7CF4EE2ABFC0DD333D84BD8E838D4EA",
+    "EA697FFCD550C8FC03C4BB5799BAFBC5",
+    "EB80BA50B657160BDE76F62C251BAF65"
+  ],
+  "leaked_target_ids": [],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

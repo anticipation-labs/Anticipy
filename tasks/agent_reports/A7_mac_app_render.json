@@ -1,0 +1,10 @@
+{
+  "app_alive": true,
+  "engine_alive": true,
+  "engine_health_ok": true,
+  "popover_card_count": 4,
+  "popover_has_perm_note": true,
+  "popover_has_ambient_listening_fn": true,
+  "app_version": "1.0.0",
+  "verdict": "GREEN"
+}

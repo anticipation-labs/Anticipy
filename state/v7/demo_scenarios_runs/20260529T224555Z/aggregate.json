@@ -1,0 +1,83 @@
+{
+  "run_id": "20260529T224555Z",
+  "started_at": "20260529T224555Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "bridge_url": "http://127.0.0.1:7777",
+  "cdp_base": "http://localhost:9222",
+  "scenarios": [
+    {
+      "id": "stripe_revenue_check",
+      "surface": "Stripe Aevoy",
+      "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+      "intent": "Read the Stripe Aevoy dashboard page that is currently open and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+      "started_at": "20260529T224555Z",
+      "verdict": "FAIL",
+      "skip_reason": "",
+      "probe": {
+        "logged_in": true,
+        "skip_reason": "",
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "title": "Transactions \u2013 Aevoy \u2013 Stripe",
+        "body_snippet": "skip to content\ntransactions\ncreate payment\nanalyze\npayments\npayouts\nall activity\nall\n1\nsucceeded\n0\nrefunded\n0\ndisputed\n0\nfailed\n0\nuncaptured\n0\ndate and time\namount\ncurrency\nstatus\npayment method\nmore filters\nexport\nedit columns\n\t\namount\n\t\n\u200b\n\t\n\u200b\n\t\npayment method\n\t\ndescription\n\t\ncustomer\n\t\ndate\n\t\nref",
+        "body_chars": 600,
+        "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T224555Z/stripe_revenue_check/login_probe.png",
+        "probe_target_id": "0E216C912314607AAA72396E89A3A62E"
+      },
+      "act_probe": {
+        "ok": true,
+        "skipped": true,
+        "reason": "scenario not routed via /api/act"
+      },
+      "agent_window_prewarm": {
+        "prewarmed": false,
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "skip_reason": "no persisted agent window yet"
+      },
+      "agent_window_rewarm": {
+        "prewarmed": true,
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "target_id": "0C403ABC31EE0D1FDD18000B7DB17341",
+        "settle_seconds": 18.0
+      },
+      "universal_result": {
+        "ok": false,
+        "status": "HTTP_ERROR",
+        "error": "URLError: <urlopen error [Errno 61] Connection refused>"
+      },
+      "universal_attempts": [
+        {
+          "attempt": 1,
+          "elapsed_sec": 35.785,
+          "status": "HTTP_ERROR",
+          "answer_snip": "",
+          "error": "RemoteDisconnected: Remote end closed connection without response",
+          "deadline_hit": false,
+          "n_iterations": null
+        },
+        {
+          "attempt": 2,
+          "elapsed_sec": 0.04,
+          "status": "HTTP_ERROR",
+          "answer_snip": "",
+          "error": "URLError: <urlopen error [Errno 61] Connection refused>",
+          "deadline_hit": false,
+          "n_iterations": null
+        }
+      ],
+      "universal_elapsed_sec": 35.824999999999996,
+      "verify": {
+        "engine_status": "HTTP_ERROR",
+        "engine_answer": "",
+        "engine_evidence": "",
+        "trajectory_dir": "",
+        "elapsed_sec": null,
+        "deadline_hit": false,
+        "n_iterations": 0,
+        "after_screenshot": "",
+        "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T224555Z/stripe_revenue_check/agent_window_after.png",
+        "success_signal_present": null
+      },
+      "finished_at": "20260529T224733Z"
+    }
+  ]
+}

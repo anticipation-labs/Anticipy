@@ -1,0 +1,17 @@
+{
+  "surface": "wikipedia",
+  "intent": "Read the page heading and the very first sentence of the article body on this Wikipedia page. The task is complete when you have reported what the heading says and the first sentence of the article.",
+  "surface_hint": "https://en.wikipedia.org/wiki/Roman_Empire",
+  "status": "SUCCESS",
+  "verdict": "PASS",
+  "n_iterations": 0,
+  "elapsed_sec": 10.829,
+  "deadline_sec": 120.0,
+  "http_code": "200",
+  "answer": "The page heading has been read.; The very first sentence of the article body has been read.; The heading text has been reported.; The first sentence of the article has been reported.",
+  "evidence_text": "vision-confirmed: The page heading is 'Roman Empire'. The very first sentence of the article body reads: 'The Roman Empire was a state that dominated the Mediterranean and much of Europe, Western Asia, and North Africa",
+  "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094678_a57edf/s0_i00_before.png",
+  "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094678_a57edf",
+  "trajectory_recovered_from_disk": false,
+  "error": null
+}

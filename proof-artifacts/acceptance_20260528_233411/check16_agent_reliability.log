@@ -1,0 +1,40 @@
+=== stdout ===
+  #  name                              cat         verdict    sec  details
+--------------------------------------------------------------------------
+  1  R01-dana-q3                       resolvable  PASS    54.60  Dana Bright
+  2  R02-dana-friday-update            resolvable  PASS    91.33  Dana Bright
+  3  R03-dana-board-deck               resolvable  PASS    66.92  Dana Bright
+  4  R04-dana-1on1-notes               resolvable  FAIL    20.59  resolvable: expected mode=act, got mode='' q=''
+  5  R05-dana-budget                   resolvable  PASS    24.42  Dana Bright
+  6  R06-dana-followups                resolvable  FAIL    51.42  resolvable: expected mode=act, got mode='clarify' q='Which notes do you mean? Yo
+  7  R07-priya-strategy-memo           resolvable  FAIL    81.58  resolvable: expected person='Priya Shah', got person='Dana Bright'
+  8  R08-priya-market-analysis         resolvable  FAIL    25.68  resolvable: expected mode=act, got mode='' q=''
+  9  R09-priya-positioning             resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 10  R10-priya-investor-prep           resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 11  R11-priya-roadmap-review          resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 12  R12-priya-pricing-notes           resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 13  R13-priya-board-feedback          resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 14  R14-maya-ops-checklist            resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 15  R15-maya-vendor-list              resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 16  R16-maya-onboarding-doc           resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 17  R17-maya-payroll                  resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 18  R18-maya-runbook                  resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 19  R19-maya-team-expenses            resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 20  R20-maya-tooling                  resolvable  FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 21  A01-dana-vs-priya-launch-recap    ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 22  A02-priya-vs-maya-planning-notes  ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 23  A03-dana-vs-maya-onboarding-doc   ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 24  A04-dana-vs-priya-board-deck      ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 25  A05-priya-vs-maya-pricing         ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 26  A06-dana-vs-priya-roadmap         ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 27  A07-dana-vs-maya-budget           ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 28  A08-priya-vs-maya-investor-prep   ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 29  A09-dana-vs-priya-positioning     ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+ 30  A10-dana-vs-maya-followups        ambiguous   FAIL     0.00  request error: ConnectionError(MaxRetryError("HTTPConnectionPool(host='127.0.0.1
+
+resolvable: 4/20
+ambiguous:  0/10
+verdict:    FAIL
+summary written to proof-artifacts/agent_reliability.json
+
+=== stderr ===

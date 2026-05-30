@@ -1,0 +1,1 @@
+{"name": "engine_alive", "ok": false, "duration_ms": 0, "error": "engine /health did not return a pid", "http_code": 0, "health_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T184139Z/engine_health.json"}

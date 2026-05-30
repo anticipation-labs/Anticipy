@@ -5,7 +5,7 @@
       "to": "+15005550006",
       "from": "+16196584447",
       "result": "ACCEPTED",
-      "twilio_sid": "CA...REDACTED...",
+      "twilio_sid": "CAe707...REDACTED...87af",
       "initial_status": "queued",
       "final_status": "busy",
       "expected": "busy (Twilio magic test number always returns busy)",

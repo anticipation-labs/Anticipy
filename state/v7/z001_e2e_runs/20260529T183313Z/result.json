@@ -1,0 +1,77 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T183313Z",
+  "started_at": "20260529T183313Z",
+  "account_id": "z001_e2e_00854ee7d92c",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "1ACED5CEBC77243CAA97FD508A5EC600",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "59FDBE38F88A7765B58841ADCC3A0088",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 66959
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": false,
+      "provisioned": false
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_03aeeda87835@anticipy-test.local",
+      "password_len": 16
+    },
+    {
+      "name": "browser_signup",
+      "ok": true,
+      "targetId": "E4A5078FA0B49CED0C5E4DED5A074D2B",
+      "final_url": "https://www.anticipy.ai/app/download?token=b8681cc42a07a212ecf7b35e26ecd708ee8f4efed2b852375bcdad68feeb6047",
+      "handoff_token": "b8681cc42a07a212ecf7b35e26ecd708ee8f4efed2b852375bcdad68feeb6047",
+      "handoff_token_present": true
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "browser_signup",
+  "error": "auth.users row not found for email='z001_test_03aeeda87835@anticipy-test.local'",
+  "finished_at": "20260529T183322Z",
+  "opened_targets": [
+    "E4A5078FA0B49CED0C5E4DED5A074D2B"
+  ],
+  "closed_targets": {
+    "E4A5078FA0B49CED0C5E4DED5A074D2B": true
+  },
+  "cdp_pages_after": [
+    "1ACED5CEBC77243CAA97FD508A5EC600",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "59FDBE38F88A7765B58841ADCC3A0088",
+    "897FE29778C35DF0F598873E5C45EB46",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "leaked_target_ids": [
+    "897FE29778C35DF0F598873E5C45EB46"
+  ],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

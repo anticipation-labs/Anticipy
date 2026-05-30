@@ -1,0 +1,1 @@
+{"status": "DIVERGED", "evidence": "The page navigated to Home instead of the payments page, showing a loading spinner with no gross volume data visible.", "confidence": 0.9, "fellback": false}

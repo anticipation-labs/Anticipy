@@ -1,0 +1,148 @@
+{
+  "id": "gmail_thoughtful_reply_draft",
+  "surface": "Gmail",
+  "url": "https://mail.google.com/mail/u/0/#inbox",
+  "intent": "Draft an email to cam@example.com with subject 'Q3 roadmap honest update' saying 'Hi Cam, thanks for asking about Q3. Today we shipped the universal action loop, the stranger flow, and the dress rehearsal harness. The one bug still biting us is the trivia engine occasionally returning a WWI fact when asked about WWII. We have a fix landing this week. Happy to walk through anything live. Omar.'",
+  "started_at": "20260529T230811Z",
+  "verdict": "FAIL",
+  "skip_reason": "",
+  "probe": {
+    "logged_in": true,
+    "skip_reason": "",
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3,353) - omarkebrahim@gmail.com - Gmail",
+    "body_snippet": "none selected\n\nskip to content\nusing gmail with screen readers\n\nsearch mail\nactive\nupgrade\nupgrade for premium features\n go to mailsuite settings\n99+\nmail\nchat\nmeet\ncompose\nlabels\ninbox\n3,353\nstarred\nsnoozed\nsent\ndrafts\n407\npurchases\n109\nmore\n\u00a0\nlabels\nlabels\n[gmail]all mail\nclawd-processed\nlater\noma",
+    "body_chars": 14514,
+    "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/gmail_thoughtful_reply_draft/login_probe.png",
+    "probe_target_id": "1BFDA3FDED614EB448E03D6AEE8DA06C"
+  },
+  "act_probe": {
+    "ok": true,
+    "ran": true,
+    "pre_confirm_required": false,
+    "gate_kind": null,
+    "task_id": "act-5476abb77d32",
+    "intent": "email_draft",
+    "status": "SUCCESS",
+    "receipt": {
+      "ok": true,
+      "recipient": "cam@example.com",
+      "subject": "Q3 roadmap honest update",
+      "summary_text": "Anticipy just sent cam@example.com an email about Q3 roadmap honest update. Reply STOP to silence.",
+      "sms": {
+        "channel": "sms",
+        "attempted": false,
+        "gated": true,
+        "mock": true,
+        "reason": "TWILIO_MOCK=1",
+        "to": "",
+        "would_have_sent": "Anticipy just sent cam@example.com an email about Q3 roadmap honest update. Reply STOP to silence."
+      },
+      "self_email": {
+        "channel": "self_email",
+        "attempted": true,
+        "ok": true,
+        "to": "omarkebrahim@gmail.com",
+        "compose_url": "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=omarkebrahim%40gmail.com&su=Anticipy%3A+Q3+roadmap+honest+update&body=Anticipy+just+sent+cam%40example.com+an+email+about+Q3+roadmap+honest+update.+Reply+STOP+to+silence.%0AScreenshot+of+the+action%3A+file%3A%2F%2F%2FUsers%2Fomarebrahim%2F.anticipy%2Fv7%2Freceipt_proof%2Fgmail_action_20260529T230839Z_b97052ad.png",
+        "error": "",
+        "typing_evidence": {
+          "ok": true,
+          "target_id": "7A0E19D5CF7186379560C30A26C72EDE",
+          "body_focused": true,
+          "body_inserted": true,
+          "subject_focused": true,
+          "subject_inserted": true,
+          "to_focused": true,
+          "to_inserted": true,
+          "to_text": "omarkebrahim@gmail.com",
+          "subject_text": "Anticipy: Q3 roadmap honest update",
+          "ws_url": "ws://127.0.0.1:9222/devtools/page/7A0E19D5CF7186379560C30A26C72EDE",
+          "to_chip_created": true,
+          "body_focus_marker": "ok:main"
+        },
+        "proof_sent_link": "",
+        "proof_screenshot_path": "/Users/omarebrahim/.anticipy/v7/receipt_proof/gmail_action_20260529T230839Z_b97052ad.png",
+        "proof_message_id": ""
+      },
+      "proof": {
+        "ok": true,
+        "target_id": "2B1D0EAF3EE19E584150F42D5BB9C3EC",
+        "message_id": "",
+        "hash_kind": "",
+        "tab_url": "",
+        "sent_link": "",
+        "screenshot": {
+          "ok": true,
+          "path": "/Users/omarebrahim/.anticipy/v7/receipt_proof/gmail_action_20260529T230839Z_b97052ad.png",
+          "bytes": 42471,
+          "base64_len": 56628,
+          "error": ""
+        },
+        "message_id_error": "no_hash_match"
+      }
+    },
+    "compose_url": "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=cam%40example.com&su=Q3+roadmap+honest+update&body=%27Hi+Cam%2C+thanks+for+asking+about+Q3.+Today+we+shipped+the+universal+action+loop%2C+the+stranger+flow%2C+and+the+dress+rehearsal+harness.+The+one+bug+still+biting+us+is+the+trivia+engine+occasionally+returning+a+WWI+fact+when+asked+about+WWII.+We+have+a+fix+landing+this+week.+Happy+to+walk+through+anything+live.+Omar.%27",
+    "resolved_person": "cam@example.com"
+  },
+  "agent_window_prewarm": {
+    "prewarmed": true,
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "target_id": "81C9A312084271CBBB4DAA7B4971EDD3",
+    "settle_seconds": 18.0
+  },
+  "agent_window_rewarm": {
+    "prewarmed": true,
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "target_id": "81C9A312084271CBBB4DAA7B4971EDD3",
+    "settle_seconds": 18.0
+  },
+  "universal_result": {
+    "ok": false,
+    "intent": "Draft an email to cam@example.com with subject 'Q3 roadmap honest update' saying 'Hi Cam, thanks for asking about Q3. Today we shipped the universal action loop, the stranger flow, and the dress rehearsal harness. The one bug still biting us is the trivia engine occasionally returning a WWI fact when asked about WWII. We have a fix landing this week. Happy to walk through anything live. Omar.'",
+    "surface_hint": "https://mail.google.com/mail/u/0/#inbox",
+    "status": "DEADLINE_EXCEEDED",
+    "answer": "",
+    "evidence": "wall-clock 240.0s exceeded before the loop returned",
+    "n_iterations": 0,
+    "subtasks": [],
+    "trajectory_dir": "",
+    "error": "deadline_exceeded",
+    "elapsed_sec": 240.052,
+    "deadline_sec": 240.0,
+    "deadline_hit": true
+  },
+  "universal_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_sec": 240.039,
+      "status": "DEADLINE_EXCEEDED",
+      "answer_snip": "",
+      "error": "deadline_exceeded",
+      "deadline_hit": true,
+      "n_iterations": 0
+    },
+    {
+      "attempt": 2,
+      "elapsed_sec": 240.108,
+      "status": "DEADLINE_EXCEEDED",
+      "answer_snip": "",
+      "error": "deadline_exceeded",
+      "deadline_hit": true,
+      "n_iterations": 0
+    }
+  ],
+  "universal_elapsed_sec": 480.147,
+  "verify": {
+    "engine_status": "DEADLINE_EXCEEDED",
+    "engine_answer": "",
+    "engine_evidence": "wall-clock 240.0s exceeded before the loop returned",
+    "trajectory_dir": "",
+    "elapsed_sec": 240.052,
+    "deadline_hit": true,
+    "n_iterations": 0,
+    "after_screenshot": "",
+    "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/gmail_thoughtful_reply_draft/agent_window_after.png",
+    "success_signal_present": null
+  },
+  "finished_at": "20260529T231759Z"
+}

@@ -1,0 +1,12 @@
+{
+  "check_number": 3,
+  "check_name": "install_path_terminal_only",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_03.json",
+  "key_contents": {
+    "status": 200,
+    "forbidden_present": false,
+    "last_20_lines": "\nfor _ in $(seq 1 80); do\n  if curl -fsS \"http://127.0.0.1:8731/health\" >/dev/null 2>&1; then\n    break\n  fi\n  sleep 0.5\ndone\n\nif ! curl -fsS \"http://127.0.0.1:8731/health\" >/dev/null 2>&1; then\n  echo \"Anticipy engine did not become healthy. Log:\"\n  tail -80 \"$LOG\" 2>/dev/null || true\n  exit 1\nfi\n\nlsof -tiTCP:8731 -sTCP:LISTEN > \"$PIDFILE\" 2>/dev/null || true\n\necho \"\"\necho \"Done. Anticipy is installed and the local engine is running.\"\necho \"Health: http://127.0.0.1:8731/health\"\necho \"Log: $LOG\""
+  },
+  "ts": "2026-05-28T23:46:55.488522"
+}

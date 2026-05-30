@@ -1,0 +1,16 @@
+{
+  "surface": "saucedemo",
+  "intent": "Log in to SauceDemo using username standard_user and password secret_sauce. Then add the first item on the inventory page to the cart. The task is complete when the shopping cart icon in the top right shows a badge with the number 1.",
+  "surface_hint": "https://www.saucedemo.com/",
+  "status": "DEADLINE_EXCEEDED",
+  "verdict": "FAIL",
+  "n_iterations": 0,
+  "elapsed_sec": 180.213,
+  "deadline_sec": 180.0,
+  "http_code": "200",
+  "answer": "",
+  "evidence_text": "wall-clock 180.0s exceeded before the loop returned",
+  "evidence_screenshot_path": "",
+  "trajectory_dir": "",
+  "error": "deadline_exceeded"
+}

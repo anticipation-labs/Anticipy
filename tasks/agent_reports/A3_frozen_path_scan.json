@@ -1,0 +1,404 @@
+{
+  "scan_metadata": {
+    "scan_date": "2026-05-28",
+    "repo": "/Users/omarebrahim/Developer/Anticipy-V7",
+    "branch": "main",
+    "git_command": "git log --since='2026-05-28 00:00' --name-only --pretty='COMMIT %h %s' main",
+    "frozen_roots": [
+      "engine/app/anticipy/",
+      "engine/app/action_engine/",
+      "engine/app/proactive_day/",
+      "verifier/"
+    ]
+  },
+  "commits_today": [
+    {
+      "sha": "1d264ba1",
+      "subject": "engine: default CDP_PORT to 9222 so packaged engine drives real Chrome",
+      "files": ["engine/app/product/server.py"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "3f713e68",
+      "subject": "autonomous loop: final state 13/15 PASS, logging engine-quality gaps for CHECK 08 + 16",
+      "files": ["tasks/AUTONOMOUS_LOOP.log"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "09f82a7e",
+      "subject": "acceptance CHECK 16: raise agent_reliability timeout 900s to 1800s",
+      "files": ["engine/tests/anticipy_acceptance.py"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "9afd37f9",
+      "subject": "dispatch_evaluator: default to OpenRouter, codex only when explicitly opted in",
+      "files": ["scripts/v6/dispatch_evaluator.sh"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "d7abb4fb",
+      "subject": "dl route: update DMG_BYTES to today-engine DMG size 2515666283",
+      "files": ["src/app/dl/Anticipy_1.0.0_aarch64.dmg/route.ts"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "cd5bd3a7",
+      "subject": "ship: today-engine DMG live (sha cb24d8f9 from 659d5c43)",
+      "files": ["state/builds/manifest.json"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "659d5c43",
+      "subject": "ship: revert manifest to yesterday-app DMG (working, sha 2f4e8218)",
+      "files": ["state/builds/manifest.json"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "c8e34e68",
+      "subject": "ship: update build manifest for 04f092d5 + em-dash fixes",
+      "files": ["state/builds/manifest.json"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "07fca8b2",
+      "subject": "human-ready: strip em-dashes from user-facing surfaces",
+      "files": [
+        "public/order.html",
+        "public/render_product.html",
+        "src/app/analytics/page.tsx",
+        "src/app/api/auth/google/callback/route.ts",
+        "src/app/api/cron/daily-digest/route.ts",
+        "src/app/api/engine/confirm/route.ts",
+        "src/app/engine-transfer/page.tsx",
+        "src/app/engine/layout.tsx",
+        "src/app/engine/page.tsx",
+        "src/app/funded/layout.tsx",
+        "src/app/funded/page.tsx"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "04f092d5",
+      "subject": "human-ready: backfill DONE markers for items 2-5 (already shipped)",
+      "files": ["tasks/HUMAN_READY_PLAN.md"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "36ad6b16",
+      "subject": "human-ready: Items 9 + 10 ship together",
+      "files": [
+        "_archive/README.md",
+        "_archive/legacy_extension_v1/agent.js",
+        "_archive/legacy_extension_v1/background.js",
+        "_archive/legacy_extension_v1/build.sh",
+        "_archive/legacy_extension_v1/content.js",
+        "_archive/legacy_extension_v1/engine_handshake.js",
+        "_archive/legacy_extension_v1/icons/icon128.png",
+        "_archive/legacy_extension_v1/icons/icon16.png",
+        "_archive/legacy_extension_v1/icons/icon48.png",
+        "_archive/legacy_extension_v1/manifest.json",
+        "_archive/legacy_extension_v1/popup.html",
+        "_archive/legacy_extension_v1/popup.js",
+        "_archive/legacy_extension_v1/test_agent_diff_signals.mjs",
+        "_archive/legacy_extension_v1/test_provider_quota.mjs",
+        "_archive/legacy_extension_v1/world_patch.js",
+        "_archive/legacy_extension_v2/README.md",
+        "_archive/legacy_extension_v2/background.js",
+        "_archive/legacy_extension_v2/content.js",
+        "_archive/legacy_extension_v2/icons/icon128.png",
+        "_archive/legacy_extension_v2/icons/icon16.png",
+        "_archive/legacy_extension_v2/icons/icon48.png",
+        "_archive/legacy_extension_v2/manifest.json",
+        "_archive/legacy_extension_v2/popup.css",
+        "_archive/legacy_extension_v2/popup.html",
+        "_archive/legacy_extension_v2/popup.js",
+        "_archive/legacy_extension_v2/test_message_protocol.js",
+        "_archive/legacy_extension_v3/README.md",
+        "_archive/legacy_extension_v3/background.js",
+        "_archive/legacy_extension_v3/content.js",
+        "_archive/legacy_extension_v3/icons/icon128.png",
+        "_archive/legacy_extension_v3/icons/icon16.png",
+        "_archive/legacy_extension_v3/icons/icon48.png",
+        "_archive/legacy_extension_v3/manifest.json",
+        "_archive/legacy_extension_v3/popup.css",
+        "_archive/legacy_extension_v3/popup.html",
+        "_archive/legacy_extension_v3/popup.js",
+        "_archive/legacy_extension_v3/test_message_protocol.js",
+        "desktop/scripts/build-engine-sidecar.sh",
+        "tasks/HUMAN_READY_PLAN.md"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "dd3a35f4",
+      "subject": "human-ready: Item 8 login-wall Twilio fallback",
+      "files": [
+        "engine/app/product/login_wall_responder.py",
+        "engine/app/product/server.py",
+        "proof-artifacts/login_wall_20260529/probes.json",
+        "tasks/HUMAN_READY_PLAN.md"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "baf9e20d",
+      "subject": "Password-gated /analytics dashboard + omar@ to hello@ user-facing cleanup",
+      "files": [
+        "src/app/analytics/login/page.tsx",
+        "src/app/analytics/page.tsx",
+        "src/app/api/analytics/login/route.ts",
+        "src/app/api/analytics/logout/route.ts",
+        "src/app/funded/page.tsx",
+        "src/app/privacy/page.tsx",
+        "src/app/refund/page.tsx",
+        "src/app/terms/page.tsx",
+        "src/components/Footer.tsx",
+        "src/components/WaitlistCTA.tsx",
+        "src/lib/analytics-auth.ts"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "73dbea6c",
+      "subject": "human-ready: Item 7 ambient mic UX wires to /api/listen/start",
+      "files": ["desktop/src/popover.html", "tasks/HUMAN_READY_PLAN.md"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "2a786924",
+      "subject": "human-ready: Item 6 MP3 upload UX verified end-to-end",
+      "files": [
+        "proof-artifacts/mp3_upload_20260529/from_audio_response.json",
+        "tasks/HUMAN_READY_PLAN.md"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "bef89680",
+      "subject": "Trigger fresh build with PostHog env vars",
+      "files": ["src/components/PostHogProvider.tsx"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "fcde9857",
+      "subject": "human-ready: TCC permissions explainer in popover welcome (mic/screen/automation, pre-prompts the macOS dialog)",
+      "files": ["desktop/src/popover.html"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "96d11a22",
+      "subject": "human-ready: /api/onboarding/call_stub spawns real Twilio call when creds+opt-in present (still safe-stubs without)",
+      "files": ["engine/app/product/server.py"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "3656d830",
+      "subject": "Add analytics + owner notifications + consolidate contact emails",
+      "files": [
+        "package-lock.json",
+        "package.json",
+        "src/app/api/waitlist/route.ts",
+        "src/app/api/webhooks/stripe/route.ts",
+        "src/app/layout.tsx",
+        "src/app/pre-orders/agreement/page.tsx",
+        "src/app/privacy/page.tsx",
+        "src/app/refund/page.tsx",
+        "src/app/terms/page.tsx",
+        "src/components/PostHogProvider.tsx",
+        "src/lib/email.ts"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "ee30f12a",
+      "subject": "human-ready: empty-state shows Welcome onboarding 3-card picker (call/MP3/chat) instead of stale-proposal junk card",
+      "files": ["src/app/app/page.tsx"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "406b07f8",
+      "subject": "human-ready: replace status-row engineer jargon with plain English (Anticipy / Listening through your microphone / Heard something just now)",
+      "files": ["src/app/app/page.tsx"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "3a78fd94",
+      "subject": "Harden pre-order legal posture (v2 agreement)",
+      "files": [
+        "src/app/api/pre-orders/checkout/route.ts",
+        "src/app/pre-orders/agreement/page.tsx",
+        "src/app/pre-orders/purchase/PurchaseForm.tsx",
+        "src/app/privacy/page.tsx",
+        "src/lib/stripe.ts"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "f04904a0",
+      "subject": "popover.html: build human-facing UI - welcome onboarding (4 cards) for empty dossier, Now/Next/Past columns for populated, mic permission card, brand fonts/colors",
+      "files": ["desktop/src/popover.html"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "c6fad95e",
+      "subject": "human-ready loop: plan-fix-test self-driving loop with launchd auto-restart, regression revert, claude-driven replanning",
+      "files": [
+        "tasks/HUMAN_READY_PLAN.md",
+        "tools/anticipy_human_ready_loop.sh"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "34d67c5b",
+      "subject": "Drop shipping delivery_estimate over Stripe 100-day max",
+      "files": ["src/app/api/pre-orders/checkout/route.ts"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "9cd6bc42",
+      "subject": "Drop consent_collection.promotions for Canada-based Stripe account",
+      "files": ["src/app/api/pre-orders/checkout/route.ts"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "47b8656c",
+      "subject": "check_done.sh: cache R2 DMG SHA by ETag - stop downloading 2.5GB on every check (was 60GB/day under heavy looping)",
+      "files": [
+        "scripts/v7/check_done.sh",
+        "state/v7/r2_dmg_sha_cache.json"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "1907a4aa",
+      "subject": "fix: OpenRouter model IDs - deepseek/deepseek-v4-flash (not -chat-v4-flash), google/gemini-3.5-flash (not -1.5) - clears _infra_fallback once wallet has credits",
+      "files": ["engine/app/product/action_planner.py"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "2958604a",
+      "subject": "Z-001 fix: CDP Storage.clearDataForOrigin before signup (was reading logged-in cookies from prior runs) - 9/9 PASS proven",
+      "files": ["scripts/v7/z001_e2e_harness.py"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "62d5bd91",
+      "subject": "Fix Vercel build crash for pre-order routes",
+      "files": [
+        "src/app/api/pre-orders/checkout/route.ts",
+        "src/app/pre-orders/success/page.tsx",
+        "src/lib/stripe.ts"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "eade96aa",
+      "subject": "Add Anticipy pendant pre-order with Stripe Checkout",
+      "files": [
+        ".verifier/screenshots/homepage-pricing.png",
+        ".verifier/screenshots/homepage-v2.png",
+        ".verifier/screenshots/homepage.png",
+        ".verifier/screenshots/preorders-agreement.png",
+        ".verifier/screenshots/preorders-purchase-v2.png",
+        ".verifier/screenshots/preorders-purchase.png",
+        ".verifier/screenshots/preorders-success.png",
+        ".verifier/screenshots/refund.png",
+        ".verifier/screenshots/terms.png",
+        ".verifier/screenshots/waitlist-v2.png",
+        ".verifier/screenshots/waitlist.png",
+        "STRIPE_DASHBOARD_TODO.md",
+        "package-lock.json",
+        "package.json",
+        "src/app/api/pre-orders/checkout/route.ts",
+        "src/app/api/webhooks/stripe/route.ts",
+        "src/app/for/doctors/page.tsx",
+        "src/app/for/founders/page.tsx",
+        "src/app/for/lawyers/page.tsx",
+        "src/app/for/page.tsx",
+        "src/app/for/parents/page.tsx",
+        "src/app/guide/ai-wearables-2026/page.tsx",
+        "src/app/page.tsx",
+        "src/app/pre-orders/agreement/page.tsx",
+        "src/app/pre-orders/layout.tsx",
+        "src/app/pre-orders/page.tsx",
+        "src/app/pre-orders/purchase/Gallery.tsx",
+        "src/app/pre-orders/purchase/PurchaseForm.tsx",
+        "src/app/pre-orders/purchase/page.tsx",
+        "src/app/pre-orders/success/page.tsx",
+        "src/app/privacy/page.tsx",
+        "src/app/refund/page.tsx",
+        "src/app/sitemap.ts",
+        "src/app/terms/page.tsx",
+        "src/app/vs/bee/page.tsx",
+        "src/app/vs/friend/page.tsx",
+        "src/app/vs/limitless/page.tsx",
+        "src/app/waitlist/layout.tsx",
+        "src/app/waitlist/page.tsx",
+        "src/components/ChargingSection.tsx",
+        "src/components/Hero.tsx",
+        "src/components/Nav.tsx",
+        "src/components/Pricing.tsx",
+        "src/components/SizeComparison.tsx",
+        "src/components/Triptych.tsx",
+        "src/components/WaitlistCTA.tsx",
+        "src/lib/email.ts",
+        "src/lib/stripe.ts"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "b021d581",
+      "subject": "worker cycle-5-task-1: restore deploy parity",
+      "files": [],
+      "violates_frozen": false
+    },
+    {
+      "sha": "8f5c41f3",
+      "subject": "overnight: dispatch claude headless per failing CHECK + launchd plist for auto-restart",
+      "files": ["tools/finish_overnight.sh"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "de35e670",
+      "subject": "CHECK 18 fix: SIGKILL fallback when SIGTERM doesnt clear port 8731 in 4s (otherwise test queries old engine)",
+      "files": ["engine/tests/anticipy_acceptance.py"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "b4bba85f",
+      "subject": "CHECK 02 fix: add HEAD handler to /download route (returns DMG headers instead of falling through to /app HTML)",
+      "files": ["src/app/download/route.ts"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "ab3410e6",
+      "subject": "fix CHECK 08/09: inject timeout, websockets origin, mp3 fixture, /download middleware",
+      "files": [
+        "engine/app/product/server.py",
+        "engine/tests/anticipy_acceptance.py",
+        "proof-artifacts/live_omar_browser_goal_20260520_075407/audio/mp3_priya_strategy.mp3",
+        "src/middleware.ts"
+      ],
+      "violates_frozen": false
+    },
+    {
+      "sha": "2d515938",
+      "subject": "overnight: skip audio CHECKs 06/09/10 per owner; success = Z-001 9/9 + 15/15 non-audio",
+      "files": ["tools/finish_overnight.sh"],
+      "violates_frozen": false
+    },
+    {
+      "sha": "93f04cd8",
+      "subject": "overnight: chase Z-001 9/9 AND 18-CHECK 18/18 AND DMG ship (1000% bar)",
+      "files": [
+        "tasks/DONE.morning.partial-z001-only-2026-05-28T0645Z",
+        "tools/finish_overnight.sh"
+      ],
+      "violates_frozen": false
+    }
+  ],
+  "violation_count": 0,
+  "violations_detail": [],
+  "summary": "Scanned 38 commits from 2026-05-28. ZERO frozen-path violations. No commits touched engine/app/anticipy/, engine/app/action_engine/, engine/app/proactive_day/, or verifier/. All engine/* edits today landed under engine/app/product/ (product layer) or engine/tests/ (test layer), which are NOT in the frozen set. Note: .verifier/screenshots/* (dotfile, hyphen-less suffix) was touched in commit eade96aa but is distinct from the frozen 'verifier/' root."
+}

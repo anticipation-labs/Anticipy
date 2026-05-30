@@ -1,0 +1,17 @@
+{
+  "surface": "saucedemo",
+  "intent": "On the SauceDemo login page, type the text standard_user into the Username input field. The task is complete when the Username input shows the text standard_user.",
+  "surface_hint": "https://www.saucedemo.com/",
+  "status": "SUCCESS",
+  "verdict": "PASS",
+  "n_iterations": 1,
+  "elapsed_sec": 28.062,
+  "deadline_sec": 120.0,
+  "http_code": "200",
+  "answer": "standard_user",
+  "evidence_text": "vision-confirmed: The Username input field clearly shows 'standard_user' typed into it, not as a placeholder but as actual entered text.",
+  "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780101460_c5eca3/s0_i00_after.png",
+  "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780101460_c5eca3",
+  "trajectory_recovered_from_disk": false,
+  "error": null
+}

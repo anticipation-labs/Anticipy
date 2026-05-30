@@ -1,0 +1,17 @@
+{
+  "surface": "saucedemo",
+  "intent": "On the SauceDemo login page, type the text standard_user into the Username input field. The task is complete when the Username input shows the text standard_user.",
+  "surface_hint": "https://www.saucedemo.com/",
+  "status": "DEADLINE_EXCEEDED",
+  "verdict": "FAIL",
+  "n_iterations": 2,
+  "elapsed_sec": 120.26,
+  "deadline_sec": 120.0,
+  "http_code": "200",
+  "answer": "",
+  "evidence_text": "wall-clock 120.0s exceeded before the loop returned",
+  "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780101067_02c480/s0_i00_after.png",
+  "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780101067_02c480",
+  "trajectory_recovered_from_disk": true,
+  "error": "deadline_exceeded"
+}

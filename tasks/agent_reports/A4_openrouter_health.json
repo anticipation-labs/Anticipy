@@ -1,0 +1,32 @@
+{
+  "wallet": {
+    "total_credits": 30,
+    "total_usage": 20.435275518,
+    "remaining": 9.564724482
+  },
+  "model_health": [
+    {
+      "model": "deepseek/deepseek-v4-flash",
+      "status": 200,
+      "latency_ms": 831,
+      "ok": true,
+      "error": ""
+    },
+    {
+      "model": "moonshotai/kimi-k2.6",
+      "status": 200,
+      "latency_ms": 496,
+      "ok": true,
+      "error": ""
+    },
+    {
+      "model": "google/gemini-3.5-flash",
+      "status": 200,
+      "latency_ms": 1271,
+      "ok": true,
+      "error": ""
+    }
+  ],
+  "verdict": "GREEN",
+  "verdict_reason": "Wallet $9.56 remaining; all 3 cascade model IDs returned HTTP 200 on 1-token ping."
+}

@@ -1,0 +1,79 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T183108Z",
+  "started_at": "20260529T183108Z",
+  "account_id": "z001_e2e_02b771fbb6a5",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "0B7E41C6B09461033478F9D61FDA78BC",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "45F70C0C7BD58944FD30CD6380EBF7B2",
+    "59FDBE38F88A7765B58841ADCC3A0088",
+    "89CB84A09C7FF53BBA2517DF163D83B1",
+    "A1219D967DAE5DF047CFEA6830DA45DB",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8",
+    "F2A5ADAA8F5B759A0E7F386A3D71DD91"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 66959
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": true,
+      "provisioned": true
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_91b2cb870a05@anticipy-test.local",
+      "password_len": 16
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "create_identity",
+  "error": "signup form not found on page after 25s; probe={\"hasEmail\": false, \"hasPassword\": false, \"url\": \"https://www.anticipy.ai/app/download?token=09cb2df1fc35d4f9f44aaeecb8eebc8fe460fb976a7bfa86125f7ad7b046b512\", \"title\": \"Anticipy App\", \"buttons\": []}",
+  "finished_at": "20260529T183136Z",
+  "opened_targets": [
+    "781A5B29D99EC24CAD8645A98B88055D"
+  ],
+  "closed_targets": {
+    "781A5B29D99EC24CAD8645A98B88055D": true
+  },
+  "cdp_pages_after": [
+    "0B7E41C6B09461033478F9D61FDA78BC",
+    "1E767E33FA4724D6D582A32569A1C05B",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "45F70C0C7BD58944FD30CD6380EBF7B2",
+    "59FDBE38F88A7765B58841ADCC3A0088",
+    "5D1703E6D147EBFB03E7DF981069E971",
+    "89CB84A09C7FF53BBA2517DF163D83B1",
+    "A1219D967DAE5DF047CFEA6830DA45DB",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8",
+    "F2A5ADAA8F5B759A0E7F386A3D71DD91"
+  ],
+  "leaked_target_ids": [
+    "1E767E33FA4724D6D582A32569A1C05B",
+    "5D1703E6D147EBFB03E7DF981069E971"
+  ],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

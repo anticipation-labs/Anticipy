@@ -1,0 +1,89 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T200220Z",
+  "started_at": "20260529T200220Z",
+  "account_id": "z001_e2e_d3783e1bda13",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "08A575F81985611D23BB60A20CC1AD01",
+    "22D1E4E0C9F0D63ECC4F316A9AF1A59D",
+    "23F12AE7CF1D8509F2299B03558288B8",
+    "2904A29A063A93613FD32749CC30FD0C",
+    "2A750F41EC3848F2AC4DA4BF9227E47B",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "342D67D8D74A40B98F15843C16E163B1",
+    "53E94684FC3D804B41381255D8741841",
+    "69733D26D1CEFD6644CD13CA8E217C2D",
+    "74D7A566E257CAA52A626B72877DB489",
+    "79950B103A7E8185DFC96D5AC5F6CDBC",
+    "7A61A59DCA6326DA785D8507524F7399",
+    "825E3EC5D354FF265AB1F944BEDEC319",
+    "84E9DAA94B654EF209768C935AF8126F",
+    "8BD41B2DEDBAB5B842A49E4CC9BD98D8",
+    "95835C40B00ADBF5A6BA2B7F03A117BA",
+    "9E9BEAEBC68B723CE50578D55CCCEF01",
+    "A39FC77F0F4DA66460E98E29D4238E18",
+    "B080B0A8DAD8FF82B5BD6BB52D2F6787",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "C4597F762BB470F3A3DC039011EE1DF8",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "D63062D2CD05BB2D0FE99A3140351EFF",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 89041
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": true,
+      "provisioned": false
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_d1775e1db09a@anticipy-test.local",
+      "password_len": 16
+    },
+    {
+      "name": "browser_signup",
+      "ok": true,
+      "targetId": "76F3777AA4A9A1812D7F9D920DA74DBD",
+      "final_url": "https://www.anticipy.ai/app/download?token=d7090e3344c6ed670302a6d04db3b7778816447ecf64b7dd7695c3edf5dfb179",
+      "handoff_token": "d7090e3344c6ed670302a6d04db3b7778816447ecf64b7dd7695c3edf5dfb179",
+      "handoff_token_present": true
+    },
+    {
+      "name": "supabase_user_exists",
+      "ok": true,
+      "user_id": "45351933-b794-466e-9429-7fdaab111460",
+      "email": "z001_test_d1775e1db09a@anticipy-test.local",
+      "created_at": "2026-05-29T20:02:24.326569Z"
+    },
+    {
+      "name": "exchange_handoff",
+      "ok": true,
+      "status": 200,
+      "has_access_token": true,
+      "has_refresh_token": true,
+      "user_email": "z001_test_d1775e1db09a@anticipy-test.local",
+      "user_id": "45351933-b794-466e-9429-7fdaab111460"
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "",
+  "error": "",
+  "supabase_user_id": "45351933-b794-466e-9429-7fdaab111460"
+}

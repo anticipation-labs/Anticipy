@@ -2,7 +2,7 @@
 
 Date: 2026-05-30
 Tester: claude-code (Opus 4.7) on Anticipy-V7
-Account under test: AC...REDACTED... (Anticipy production broker)
+Account under test: AC6139...REDACTED...5e7d (Anticipy production broker)
 Number: +16196584447 (San Diego CA, US local 619, SMS+MMS+Voice capable, status in-use)
 Broker route: https://www.anticipy.ai/api/twilio/relay (production)
 
@@ -20,10 +20,10 @@ Direct Twilio REST API + production broker route both reachable. Results:
 
 | SID | Path | To | Status | Error | Price | Verdict |
 |---|---|---|---|---|---|---|
-| SM...REDACTED... | direct REST | +15005550006 (success-magic) | undelivered | **30034** | -0.00830 (refunded) | A2P block |
-| SM...REDACTED... | broker /api/twilio/relay | +15005550006 | undelivered | **30034** | -0.00830 (refunded) | A2P block |
-| SM...REDACTED... | broker | +15005550001 (invalid-magic) | delivered | none | -0.00830 (refunded) | Twilio internal short-circuit, not a real delivery |
-| SM...REDACTED... | broker | +15005550004 (not-mobile-magic) | undelivered | **30034** | (none) | A2P block (preempts magic check) |
+| SMf129...REDACTED...c99a | direct REST | +15005550006 (success-magic) | undelivered | **30034** | -0.00830 (refunded) | A2P block |
+| SMa853...REDACTED...3a60 | broker /api/twilio/relay | +15005550006 | undelivered | **30034** | -0.00830 (refunded) | A2P block |
+| SM8939...REDACTED...988b | broker | +15005550001 (invalid-magic) | delivered | none | -0.00830 (refunded) | Twilio internal short-circuit, not a real delivery |
+| SMb078...REDACTED...e485 | broker | +15005550004 (not-mobile-magic) | undelivered | **30034** | (none) | A2P block (preempts magic check) |
 
 Critical observation: error 30034 fires on the magic success number itself. This means the carrier filter is upstream of magic-number handling, the entire account's SMS lane is blocked.
 
@@ -39,7 +39,7 @@ Per the directive's hard rule (do not text random numbers), Phase 2 is **SKIPPED
 
 Outbound voice POST against +15005550006 via direct REST API:
 
-- SID: CA...REDACTED...
+- SID: CA50ea...REDACTED...084b
 - From: +16196584447 → To: +15005550006
 - Status: busy (this is the magic-number expected outcome for the success line, call was routed and reached Twilio's test endpoint)
 - Duration: 0, end_time stamped

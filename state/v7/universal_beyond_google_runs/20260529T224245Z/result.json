@@ -1,0 +1,63 @@
+{
+  "ts": "20260529T224245Z",
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/universal_beyond_google_runs/20260529T224245Z",
+  "surfaces_tested": [
+    "saucedemo",
+    "the_internet_herokuapp",
+    "wikipedia"
+  ],
+  "verdict": "PASS",
+  "per_surface": [
+    {
+      "surface": "saucedemo",
+      "intent": "On the SauceDemo login page, type the text standard_user into the Username input field. The task is complete when the Username input shows the text standard_user.",
+      "surface_hint": "https://www.saucedemo.com/",
+      "status": "SUCCESS",
+      "verdict": "PASS",
+      "n_iterations": 1,
+      "elapsed_sec": 33.23,
+      "deadline_sec": 120.0,
+      "http_code": "200",
+      "answer": "standard_user",
+      "evidence_text": "vision-confirmed: The Username input field clearly shows the text 'standard_user' entered in it.",
+      "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094567_ef143d/s0_i00_after.png",
+      "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094567_ef143d",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    },
+    {
+      "surface": "the_internet_herokuapp",
+      "intent": "On this Add/Remove Elements page, click the button labeled Add Element. The task is complete when a new button labeled Delete appears on the page below the Add Element button.",
+      "surface_hint": "https://the-internet.herokuapp.com/add_remove_elements/",
+      "status": "SUCCESS",
+      "verdict": "PASS",
+      "n_iterations": 1,
+      "elapsed_sec": 15.034,
+      "deadline_sec": 120.0,
+      "http_code": "200",
+      "answer": "A new button labeled Delete appears on the page below the Add Element button.",
+      "evidence_text": "vision-confirmed: The page shows an 'Add Element' button at the top, and below it there is a horizontal divider line followed by a 'Delete' button. This indicates that clicking 'Add Element' has already been performed ",
+      "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094656_4eba15/s0_i00_after.png",
+      "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094656_4eba15",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    },
+    {
+      "surface": "wikipedia",
+      "intent": "Read the page heading and the very first sentence of the article body on this Wikipedia page. The task is complete when you have reported what the heading says and the first sentence of the article.",
+      "surface_hint": "https://en.wikipedia.org/wiki/Roman_Empire",
+      "status": "SUCCESS",
+      "verdict": "PASS",
+      "n_iterations": 0,
+      "elapsed_sec": 10.829,
+      "deadline_sec": 120.0,
+      "http_code": "200",
+      "answer": "The page heading has been read.; The very first sentence of the article body has been read.; The heading text has been reported.; The first sentence of the article has been reported.",
+      "evidence_text": "vision-confirmed: The page heading is 'Roman Empire'. The very first sentence of the article body reads: 'The Roman Empire was a state that dominated the Mediterranean and much of Europe, Western Asia, and North Africa",
+      "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094678_a57edf/s0_i00_before.png",
+      "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094678_a57edf",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "pass": 1,
+  "total": 1,
+  "results": [
+    {
+      "n": 15,
+      "kind": "brand_audit",
+      "status": "PASS",
+      "elapsed_s": 12.57
+    }
+  ],
+  "git_head": "9afd37f97b30790b96e3406e9f7e736610fd453e"
+}
