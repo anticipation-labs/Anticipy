@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.anticipy.engine-watchdog</string>
+
+    <!--
+      Polls 127.0.0.1:8731/health every 30 s and respawns
+      /Applications/Anticipy.app/Contents/MacOS/anticipy-engine after
+      3 consecutive failures. Kill switch: touch ~/.anticipy/.watchdog_off
+      to suspend respawns (useful during planned restarts and dev work).
+
+      Source: desktop/scripts/engine_watchdog.sh in the Anticipy repo.
+      Install copy lives at ~/Library/LaunchAgents/com.anticipy.engine-watchdog.plist.
+      Load with:
+          launchctl load -w ~/Library/LaunchAgents/com.anticipy.engine-watchdog.plist
+      Unload with:
+          launchctl unload -w ~/Library/LaunchAgents/com.anticipy.engine-watchdog.plist
+    -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/omarebrahim/Developer/Anticipy-V7/desktop/scripts/engine_watchdog.sh</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ANTICIPY_WATCHDOG_PORT</key>
+        <string>8731</string>
+        <key>ANTICIPY_WATCHDOG_INTERVAL</key>
+        <string>30</string>
+        <key>ANTICIPY_WATCHDOG_FAIL_THRESHOLD</key>
+        <string>3</string>
+        <key>ANTICIPY_WATCHDOG_HEALTH_TIMEOUT</key>
+        <string>5</string>
+        <key>ANTICIPY_WATCHDOG_BIN</key>
+        <string>/Applications/Anticipy.app/Contents/MacOS/anticipy-engine</string>
+        <key>ANTICIPY_WATCHDOG_KILL_SWITCH</key>
+        <string>/Users/omarebrahim/.anticipy/.watchdog_off</string>
+        <key>HOME</key>
+        <string>/Users/omarebrahim</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/omarebrahim/Library/Logs/anticipy-watchdog.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/omarebrahim/Library/Logs/anticipy-watchdog.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
