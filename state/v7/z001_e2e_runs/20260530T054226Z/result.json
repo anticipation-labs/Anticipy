@@ -1,0 +1,26 @@
+{
+  "story": "Z-001",
+  "run_id": "20260530T054226Z",
+  "started_at": "20260530T054226Z",
+  "account_id": "z001_e2e_b7da211d5695",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "3113308D921121C4DAD98C3FEE6EF33A"
+  ],
+  "steps": [],
+  "verdict": "FAIL",
+  "failed_step": "init",
+  "error": "bridge not ready: {\"ok\": false, \"error\": \"URLError: <urlopen error [Errno 61] Connection refused>\"}",
+  "finished_at": "20260530T054235Z",
+  "opened_targets": [],
+  "closed_targets": {},
+  "cdp_pages_after": [
+    "3113308D921121C4DAD98C3FEE6EF33A"
+  ],
+  "leaked_target_ids": [],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

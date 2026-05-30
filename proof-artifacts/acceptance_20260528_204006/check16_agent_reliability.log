@@ -1,0 +1,40 @@
+=== stdout ===
+  #  name                              cat         verdict    sec  details
+--------------------------------------------------------------------------
+  1  R01-dana-q3                       resolvable  PASS    85.18  Dana Bright
+  2  R02-dana-friday-update            resolvable  FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+  3  R03-dana-board-deck               resolvable  PASS    72.25  Dana Bright
+  4  R04-dana-1on1-notes               resolvable  FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+  5  R05-dana-budget                   resolvable  PASS    57.45  Dana Bright
+  6  R06-dana-followups                resolvable  PASS    60.24  Dana Bright
+  7  R07-priya-strategy-memo           resolvable  FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+  8  R08-priya-market-analysis         resolvable  FAIL    30.01  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+  9  R09-priya-positioning             resolvable  PASS    62.87  Priya Shah
+ 10  R10-priya-investor-prep           resolvable  FAIL    23.57  resolvable: expected mode=act, got mode='clarify' q='Do you mean Dana Bright or 
+ 11  R11-priya-roadmap-review          resolvable  PASS    83.15  Priya Shah
+ 12  R12-priya-pricing-notes           resolvable  FAIL    51.92  resolvable: expected mode=act, got mode='' q=''
+ 13  R13-priya-board-feedback          resolvable  FAIL    30.01  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 14  R14-maya-ops-checklist            resolvable  PASS    73.97  Maya Chen
+ 15  R15-maya-vendor-list              resolvable  FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 16  R16-maya-onboarding-doc           resolvable  FAIL    66.01  resolvable: expected mode=act, got mode='clarify' q='Do you mean share the onboa
+ 17  R17-maya-payroll                  resolvable  FAIL    89.50  resolvable: expected mode=act, got mode='' q=''
+ 18  R18-maya-runbook                  resolvable  FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 19  R19-maya-team-expenses            resolvable  PASS    41.90  Maya Chen
+ 20  R20-maya-tooling                  resolvable  FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 21  A01-dana-vs-priya-launch-recap    ambiguous   FAIL    30.01  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 22  A02-priya-vs-maya-planning-notes  ambiguous   PASS    54.04  Which document do you mean: the launch recap, the planning notes, or something e
+ 23  A03-dana-vs-maya-onboarding-doc   ambiguous   FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 24  A04-dana-vs-priya-board-deck      ambiguous   PASS    82.74  Did you mean Dana or Priya?
+ 25  A05-priya-vs-maya-pricing         ambiguous   FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 26  A06-dana-vs-priya-roadmap         ambiguous   FAIL    30.01  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 27  A07-dana-vs-maya-budget           ambiguous   PASS    101.25  Do you mean Dana or Maya for walking through the numbers?
+ 28  A08-priya-vs-maya-investor-prep   ambiguous   PASS    35.33  Which person do you mean: Dana, Priya, or Maya?
+ 29  A09-dana-vs-priya-positioning     ambiguous   FAIL    30.00  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+ 30  A10-dana-vs-maya-followups        ambiguous   PASS    80.70  Which follow-ups do you mean: Dana's customer call follow-ups or Maya's post-cal
+
+resolvable: 8/20
+ambiguous:  5/10
+verdict:    FAIL
+summary written to proof-artifacts/agent_reliability.json
+
+=== stderr ===

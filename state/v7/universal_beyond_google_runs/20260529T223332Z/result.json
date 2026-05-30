@@ -1,0 +1,63 @@
+{
+  "ts": "20260529T223332Z",
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/universal_beyond_google_runs/20260529T223332Z",
+  "surfaces_tested": [
+    "saucedemo",
+    "the_internet_herokuapp",
+    "wikipedia"
+  ],
+  "verdict": "PASS",
+  "per_surface": [
+    {
+      "surface": "saucedemo",
+      "intent": "On the SauceDemo login page, type the text standard_user into the Username input field. The task is complete when the Username input shows the text standard_user.",
+      "surface_hint": "https://www.saucedemo.com/",
+      "status": "SUCCESS",
+      "verdict": "PASS",
+      "n_iterations": 1,
+      "elapsed_sec": 21.166,
+      "deadline_sec": 120.0,
+      "http_code": "200",
+      "answer": "standard_user",
+      "evidence_text": "vision-confirmed: The Username input field clearly shows the text 'standard_user' entered in it, with the cursor positioned at the end of the text. The Password field below remains empty with its placeholder text 'Pass",
+      "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094013_9bac7d/s0_i00_after.png",
+      "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094013_9bac7d",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    },
+    {
+      "surface": "the_internet_herokuapp",
+      "intent": "On this Add/Remove Elements page, click the button labeled Add Element. The task is complete when a new button labeled Delete appears on the page below the Add Element button.",
+      "surface_hint": "https://the-internet.herokuapp.com/add_remove_elements/",
+      "status": "SUCCESS",
+      "verdict": "PASS",
+      "n_iterations": 1,
+      "elapsed_sec": 17.644,
+      "deadline_sec": 120.0,
+      "http_code": "200",
+      "answer": "A new button labeled Delete appears on the page below the Add Element button.",
+      "evidence_text": "vision-confirmed: The page shows an 'Add Element' button at the top, and below it there is a 'Delete' button already present on the page. The task was to click 'Add Element' and have a new 'Delete' button appear below ",
+      "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094059_b52ae7/s0_i00_after.png",
+      "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094059_b52ae7",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    },
+    {
+      "surface": "wikipedia",
+      "intent": "Read the page heading and the very first sentence of the article body on this Wikipedia page. The task is complete when you have reported what the heading says and the first sentence of the article.",
+      "surface_hint": "https://en.wikipedia.org/wiki/Roman_Empire",
+      "status": "SUCCESS",
+      "verdict": "PASS",
+      "n_iterations": 0,
+      "elapsed_sec": 10.847,
+      "deadline_sec": 120.0,
+      "http_code": "200",
+      "answer": "The page heading has been read and reported.; The first sentence of the article body has been read and reported.",
+      "evidence_text": "vision-confirmed: The page heading is 'Roman Empire' and the first sentence of the article body is 'The Roman Empire was a state that dominated the Mediterranean and much of Europe, Western Asia, and North Africa durin",
+      "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780094087_0594fb/s0_i00_before.png",
+      "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780094087_0594fb",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    }
+  ]
+}

@@ -15,7 +15,7 @@ export default function HardwarePage() {
             <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>Hardware</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-2">Firmware Design Document</h1>
-          <p style={{ color: "#8A8A8A" }}>Anticipy Ambient AI Pendant — Version 1.0.0 · ESP32-S3 · PlatformIO + Arduino · Updated 2026-04-14</p>
+          <p style={{ color: "#8A8A8A" }}>Anticipy Ambient AI Pendant. Version 1.0.0 · ESP32-S3 · PlatformIO + Arduino · Updated 2026-04-14</p>
         </div>
 
         {/* Executive Summary */}
@@ -29,10 +29,10 @@ export default function HardwarePage() {
             </p>
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Privacy-first", value: "Audio never stored on device — uploaded in near-real-time and discarded" },
+                { label: "Privacy-first", value: "Audio never stored on device - uploaded in near-real-time and discarded" },
                 { label: "Jewelry aesthetic", value: "38 × 25 × 11 mm, 18g, matte black PETG, single RGB LED status dot" },
                 { label: "Battery life", value: "15–20 hours of normal conversational use from 400 mAh LiPo" },
-                { label: "Zero-config", value: "Press button to pair via BLE — device handles WiFi and API authentication" },
+                { label: "Zero-config", value: "Press button to pair via BLE - device handles WiFi and API authentication" },
               ].map((p) => (
                 <div key={p.label} className="p-3 rounded-lg" style={{ background: "#0C0C0C" }}>
                   <div className="text-xs font-semibold mb-1" style={{ color: "#C8A97E" }}>{p.label}</div>
@@ -102,10 +102,10 @@ USB-C ──────────────►│  TP4056 + DW01A    LiPo 4
               <tbody>
                 {[
                   { gpio: "GPIO1", signal: "BUTTON_A", dir: "Input (pull-up)", notes: "Tap = toggle record; Hold 3s = pair mode; Hold 8s = factory reset" },
-                  { gpio: "GPIO2", signal: "BATT_ADC", dir: "Input (ADC)", notes: "100k/100k divider — reads 0–1.85V for 0–3.7V cell" },
-                  { gpio: "GPIO3", signal: "BUTTON_B", dir: "Input (pull-up)", notes: "Reserved — double-tap gesture" },
+                  { gpio: "GPIO2", signal: "BATT_ADC", dir: "Input (ADC)", notes: "100k/100k divider - reads 0–1.85V for 0–3.7V cell" },
+                  { gpio: "GPIO3", signal: "BUTTON_B", dir: "Input (pull-up)", notes: "Reserved - double-tap gesture" },
                   { gpio: "GPIO4", signal: "LED_DATA", dir: "Output", notes: "WS2812B/SK6812 single addressable LED via 33Ω R5" },
-                  { gpio: "GPIO5", signal: "—", dir: "—", notes: "Spare / future use" },
+                  { gpio: "GPIO5", signal: ". ", dir: ". ", notes: "Spare / future use" },
                   { gpio: "GPIO6", signal: "I2S_BCLK", dir: "Output", notes: "INMP441 SCK (bit clock)" },
                   { gpio: "GPIO7", signal: "I2S_LRCK", dir: "Output", notes: "INMP441 WS (word select / L/R clock)" },
                   { gpio: "GPIO8", signal: "I2S_DATA", dir: "Input", notes: "INMP441 SD (serial data, 24-bit I2S)" },
@@ -136,10 +136,10 @@ USB-C ──────────────►│  TP4056 + DW01A    LiPo 4
               </thead>
               <tbody>
                 {[
-                  { region: "Flash — app0", size: "3 MB", purpose: "Firmware image (active)" },
-                  { region: "Flash — app1", size: "3 MB", purpose: "OTA update slot" },
-                  { region: "Flash — nvs", size: "20 KB", purpose: "WiFi credentials, device config" },
-                  { region: "Flash — spiffs", size: "1.5 MB", purpose: "Reserved" },
+                  { region: "Flash - app0", size: "3 MB", purpose: "Firmware image (active)" },
+                  { region: "Flash - app1", size: "3 MB", purpose: "OTA update slot" },
+                  { region: "Flash - nvs", size: "20 KB", purpose: "WiFi credentials, device config" },
+                  { region: "Flash - spiffs", size: "1.5 MB", purpose: "Reserved" },
                   { region: "PSRAM", size: "8 MB", purpose: "Audio ring buffer (~960 KB) + WiFi TX buffers" },
                   { region: "SRAM", size: "512 KB", purpose: "Stack, heap, I2S DMA descriptors" },
                 ].map((row) => (
@@ -241,7 +241,7 @@ IDLE × 5min ──► DEEP_SLEEP  (button to wake)`}</pre>
                   { situation: "Upload error", pattern: "3 quick blinks", color: "Orange", dot: "#f97316" },
                   { situation: "Low battery (<20%)", pattern: "Slow pulse", color: "Yellow", dot: "#eab308" },
                   { situation: "Critical battery (<5%)", pattern: "Fast blink", color: "Yellow", dot: "#eab308" },
-                  { situation: "Deep sleep", pattern: "Off", color: "—", dot: "#252525" },
+                  { situation: "Deep sleep", pattern: "Off", color: ". ", dot: "#252525" },
                 ].map((row) => (
                   <tr key={row.situation} className="border-b" style={{ borderColor: "#1A1A1A" }}>
                     <td className="px-4 py-3 text-xs" style={{ color: "#F5F0EB" }}>{row.situation}</td>
@@ -276,7 +276,7 @@ IDLE × 5min ──► DEEP_SLEEP  (button to wake)`}</pre>
                   { gesture: "Single tap", action: "Toggle manual record on/off" },
                   { gesture: "Double tap (<400ms)", action: "Force upload current buffer" },
                   { gesture: "Hold 3 seconds", action: "Enter BLE pairing mode" },
-                  { gesture: "Hold 8 seconds", action: "Factory reset (clear NVS — WiFi creds + device config)" },
+                  { gesture: "Hold 8 seconds", action: "Factory reset (clear NVS. WiFi creds + device config)" },
                 ].map((row) => (
                   <tr key={row.gesture} className="border-b" style={{ borderColor: "#1A1A1A" }}>
                     <td className="px-4 py-3 text-xs font-semibold" style={{ color: "#C8A97E" }}>{row.gesture}</td>
@@ -290,7 +290,7 @@ IDLE × 5min ──► DEEP_SLEEP  (button to wake)`}</pre>
 
         {/* API Contract */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>API Contract — /api/engine/transcribe</h2>
+          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>API Contract - /api/engine/transcribe</h2>
           <div className="space-y-4">
             <div>
               <div className="text-xs font-medium mb-2" style={{ color: "#8A8A8A" }}>Request</div>
@@ -335,7 +335,7 @@ X-Firmware-Version: 1.0.0
                     { code: "200", meaning: "Accepted", action: "Blink green ×2, discard audio" },
                     { code: "400", meaning: "Bad request (audio < 500ms)", action: "Log, discard silently" },
                     { code: "401", meaning: "Invalid token", action: "LED orange, retry with re-auth" },
-                    { code: "413", meaning: "Payload too large (>5MB)", action: "Should never happen — chunk is 10s = 320KB" },
+                    { code: "413", meaning: "Payload too large (>5MB)", action: "Should never happen - chunk is 10s = 320KB" },
                     { code: "429", meaning: "Rate limited", action: "Exponential backoff, LED yellow" },
                     { code: "500", meaning: "Server error", action: "Retry 3×, then discard" },
                     { code: "Timeout", meaning: "No response in 15s", action: "Retry once, then discard" },
@@ -419,7 +419,7 @@ X-Firmware-Version: 1.0.0
                 ].map((p) => (
                   <div key={p.stage} className="flex justify-between text-xs gap-2">
                     <span style={{ color: "#5A5A5A" }}>{p.stage}</span>
-                    <span className="text-right" style={{ color: "#A0A0A0" }}>{p.mat} — {p.note}</span>
+                    <span className="text-right" style={{ color: "#A0A0A0" }}>{p.mat} - {p.note}</span>
                   </div>
                 ))}
               </div>
@@ -427,7 +427,7 @@ X-Firmware-Version: 1.0.0
           </div>
           <div className="rounded-xl overflow-hidden" style={{ background: "#0A0A0A", border: "1px solid #252525" }}>
             <div className="px-4 py-2 border-b text-xs font-medium" style={{ borderColor: "#252525", color: "#5A5A5A" }}>
-              firmware/case/anticipy_pendant.scad — Key parameters
+              firmware/case/anticipy_pendant.scad. Key parameters
             </div>
             <pre className="text-xs p-4 overflow-x-auto" style={{ color: "#A0A0A0", fontFamily: "monospace" }}>{`body_w   = 38;   // Width in mm
 body_h   = 25;   // Height in mm

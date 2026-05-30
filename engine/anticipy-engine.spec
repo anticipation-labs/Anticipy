@@ -1,7 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [
+    # Cold-start inhale source defaults. Without this, the shipped
+    # binary returns an empty sources list on first launch and the
+    # 90s cold-start collects 0 rows. Keeps URLs out of Python source
+    # while still bundling them into the frozen sidecar.
+    ('app/coldstart/data/inhale_sources.default.json',
+     'app/coldstart/data'),
+]
 binaries = [('/Users/omarebrahim/Developer/Anticipy-V7/engine/.venv/lib/python3.11/site-packages/mlx/lib/libjaccl.dylib', '.')]
 hiddenimports = []
 tmp_ret = collect_all('mlx')

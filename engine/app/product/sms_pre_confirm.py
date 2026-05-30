@@ -460,10 +460,16 @@ def build_proposal_text(plan: dict[str, Any], instruction: str) -> dict[str, str
         preview = instruction_text.strip()
     preview = re.sub(r"\s+", " ", preview)[:100]
 
+    # Per SMS_COPY_AUDIT (#1, ship-first list): first person reads as
+    # a teammate texting; "Preview" is plainer than "First 100 chars
+    # of body"; YES is the primary action with EDIT as the escape, and
+    # NO is implicit (no reply == saved as Gmail draft at expiry).
+    # Shorter slices (subject[:60], preview[:60]) keep the common case
+    # under 160 chars so the body lands as a single SMS segment.
     proposal = (
-        f"Anticipy is about to {verb} {recipient} about "
-        f"{subject[:80]}. First 100 chars of body: '{preview}'. "
-        f"Reply YES to send, NO to cancel, EDIT to revise."
+        f"I drafted a {verb} to {recipient} about "
+        f"{subject[:60]}. Preview: \"{preview[:60]}\". "
+        f"Reply YES to send. Reply EDIT to change anything."
     )
     # Twilio SMS is hard-capped at 1600. Aim for 320 so a single
     # message-chunk lands on every carrier.
@@ -1313,10 +1319,15 @@ def expire_pending(now_ts: Optional[float] = None,
             rec.decided_via = "timer"
             store.save(rec)
             if followup_sms and rec.to_number:
+                # Per SMS_COPY_AUDIT (#2, ship-first list): drop the
+                # "Anticipy:" notification-subject prefix, name the
+                # concrete location (Gmail draft), and use plain
+                # "Anticipy on your Mac" instead of "popover".
                 send_sms_sync(
                     rec.to_number,
-                    "Anticipy: no reply, saved as draft. Open the "
-                    "Anticipy popover to review.",
+                    "No reply, so I saved it as a Gmail draft. "
+                    "Open Anticipy on your Mac to send it whenever "
+                    "you are ready.",
                     kind="followup",
                 )
             expired_rows.append(rec.to_dict())

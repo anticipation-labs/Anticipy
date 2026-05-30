@@ -1,0 +1,18 @@
+{
+  "check_number": 5,
+  "check_name": "onboarding_chat",
+  "status": "FAIL",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_001754/CHECK_05.json",
+  "key_contents": {
+    "profile_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_001754/check05_profile.json",
+    "people_count_with_email": 3,
+    "do_not_touch_count": 0,
+    "people_keys": [
+      "boss",
+      "strategy advisor",
+      "partner"
+    ],
+    "do_not_touch": []
+  },
+  "ts": "2026-05-29T00:19:08.870185"
+}

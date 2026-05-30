@@ -1,0 +1,97 @@
+{
+  "pass": 12,
+  "total": 15,
+  "results": [
+    {
+      "n": 1,
+      "kind": "site_live",
+      "status": "FAIL",
+      "elapsed_s": 0.09
+    },
+    {
+      "n": 2,
+      "kind": "dmg_downloadable",
+      "status": "PASS",
+      "elapsed_s": 0.21
+    },
+    {
+      "n": 3,
+      "kind": "install_path_terminal_only",
+      "status": "PASS",
+      "elapsed_s": 0.33
+    },
+    {
+      "n": 4,
+      "kind": "app_runs",
+      "status": "PASS",
+      "elapsed_s": 0.01
+    },
+    {
+      "n": 5,
+      "kind": "onboarding_chat",
+      "status": "PASS",
+      "elapsed_s": 73.01
+    },
+    {
+      "n": 7,
+      "kind": "onboarding_call_stub",
+      "status": "PASS",
+      "elapsed_s": 0.01
+    },
+    {
+      "n": 8,
+      "kind": "input_paste",
+      "status": "PASS",
+      "elapsed_s": 62.75
+    },
+    {
+      "n": 11,
+      "kind": "input_bluetooth_audio_devices_enumerated",
+      "status": "PASS",
+      "elapsed_s": 0.0
+    },
+    {
+      "n": 12,
+      "kind": "ambiguity_trap",
+      "status": "PASS",
+      "elapsed_s": 68.89
+    },
+    {
+      "n": 13,
+      "kind": "flash_page_live",
+      "status": "PASS",
+      "elapsed_s": 0.19
+    },
+    {
+      "n": 14,
+      "kind": "flash_stub_log",
+      "status": "PASS",
+      "elapsed_s": 0.01
+    },
+    {
+      "n": 15,
+      "kind": "brand_audit",
+      "status": "FAIL",
+      "elapsed_s": 1.64
+    },
+    {
+      "n": 16,
+      "kind": "agent_reliability",
+      "status": "FAIL",
+      "elapsed_s": 419.14
+    },
+    {
+      "n": 17,
+      "kind": "frozen_paths_clean",
+      "status": "PASS",
+      "elapsed_s": 0.03
+    },
+    {
+      "n": 18,
+      "kind": "cleanup_passes",
+      "status": "PASS",
+      "elapsed_s": 1.27
+    }
+  ],
+  "git_head": "f992aac1fc6894098fe32f24f027032d36f13a04"
+}

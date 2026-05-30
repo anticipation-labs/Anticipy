@@ -1,0 +1,1 @@
+{"status": "DIVERGED", "evidence": "The action navigated to a blank/white page instead of the Stripe dashboard, showing no visible progress toward reading the gross volume number.", "confidence": 0.9, "fellback": false}

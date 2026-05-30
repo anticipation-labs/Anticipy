@@ -1,0 +1,66 @@
+{
+  "probed_at": "2026-05-28",
+  "pages": [
+    {
+      "url": "https://www.anticipy.ai/onboarding/chat",
+      "http_status": 200,
+      "size_bytes": 17510,
+      "time_sec": 0.111205,
+      "has_anticipy_brand": true,
+      "has_expected_marker": true,
+      "marker_checked": "Type your reply / conversation / font-serif"
+    },
+    {
+      "url": "https://www.anticipy.ai/onboarding/audio",
+      "http_status": 200,
+      "size_bytes": 15794,
+      "time_sec": 0.105993,
+      "has_anticipy_brand": true,
+      "has_expected_marker": true,
+      "marker_checked": "Drop an audio / MP3"
+    },
+    {
+      "url": "https://www.anticipy.ai/onboarding/call",
+      "http_status": 200,
+      "size_bytes": 18265,
+      "time_sec": 0.100806,
+      "has_anticipy_brand": true,
+      "has_expected_marker": true,
+      "marker_checked": "call you / phone"
+    },
+    {
+      "url": "https://www.anticipy.ai/app",
+      "http_status": 200,
+      "size_bytes": 17513,
+      "time_sec": 0.368016,
+      "has_anticipy_brand": true,
+      "has_expected_marker": true,
+      "marker_checked": "Anticipy brand + font-serif (download/install markers not in initial SSR; client-rendered)"
+    },
+    {
+      "url": "https://www.anticipy.ai/funded",
+      "http_status": 200,
+      "size_bytes": 43937,
+      "time_sec": 0.437900,
+      "has_anticipy_brand": true,
+      "has_expected_marker": true,
+      "marker_checked": "Anticipation Labs / funded / investor / raise"
+    },
+    {
+      "url": "https://www.anticipy.ai/flash",
+      "http_status": 200,
+      "size_bytes": 15316,
+      "time_sec": 0.114137,
+      "has_anticipy_brand": true,
+      "has_expected_marker": true,
+      "marker_checked": "Anticipy / flash / lock / screen"
+    }
+  ],
+  "engine": {
+    "health_ok": true,
+    "health_response": {"ok": true, "service": "anticipy-local-engine", "version": "product-3", "pid": 4856, "port": 8731, "onboarded": true, "listening": false},
+    "login_wall_detect_ok": true,
+    "login_wall_detect_response": {"ok": true, "is_login_wall": true, "service": "Google", "reason": "url matched known host fragment 'accounts.google.com'"}
+  },
+  "verdict": "GREEN"
+}

@@ -1,0 +1,122 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T063447Z",
+  "started_at": "20260529T063447Z",
+  "account_id": "z001_e2e_dd8d32e12412",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "BBB7D81B2633566B45DE6A6113562308"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 9724
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": true,
+      "provisioned": false
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_07d98943bd54@anticipy-test.local",
+      "password_len": 16
+    },
+    {
+      "name": "browser_signup",
+      "ok": true,
+      "targetId": "3852BDE86985A173AEA5B962979E504A",
+      "final_url": "https://www.anticipy.ai/app/download?token=23aa8d50679cfa2932dcaa7cb69e4e8c737c9271e9c355c36925fc8a7fdb58e5",
+      "handoff_token": "23aa8d50679cfa2932dcaa7cb69e4e8c737c9271e9c355c36925fc8a7fdb58e5",
+      "handoff_token_present": true
+    },
+    {
+      "name": "supabase_user_exists",
+      "ok": true,
+      "user_id": "350ce7f3-82c3-4cb6-81ce-d08d3377589f",
+      "email": "z001_test_07d98943bd54@anticipy-test.local",
+      "created_at": "2026-05-29T06:34:51.410689Z"
+    },
+    {
+      "name": "exchange_handoff",
+      "ok": true,
+      "status": 200,
+      "has_access_token": true,
+      "has_refresh_token": true,
+      "user_email": "z001_test_07d98943bd54@anticipy-test.local",
+      "user_id": "350ce7f3-82c3-4cb6-81ce-d08d3377589f"
+    },
+    {
+      "name": "engine_inject",
+      "ok": true,
+      "account_id": "z001_e2e_dd8d32e12412",
+      "transcript_in": "Draft an email to lara@anticipy-test.local with subject 'Thursday call confirmation' saying 'Hi Lara, just confirming our call on Thursday. Let me know if the time still works.'.",
+      "outcome": "DEFERRED",
+      "proposal": "Should I save a reminder for this school item: Draft an email to lara@anticipy-test.local with subject 'Thursday call confirmation' saying 'Hi Lara, just confirming our call on Thursday. Let me know if the time still works.'?",
+      "ingest_id": "asr-transcript-7dc6f54f778f4c12924831607418431e",
+      "has_pending": true,
+      "pending_instruction": "Draft an email to lara@anticipy-test.local with subject 'Thursday call confirmation' saying 'Hi Lara, just confirming our call on Thursday. Let me know if the time still works.'."
+    },
+    {
+      "name": "engine_act",
+      "ok": true,
+      "path": "direct_gmail_compose",
+      "via": "engine_direct_cdp",
+      "account_id": "z001_e2e_dd8d32e12412",
+      "status": "SUCCESS",
+      "intent": "email_draft",
+      "compose_url": "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=lara%40anticipy-test.local&su=Thursday+call+confirmation&body=%27Hi+Lara%2C+just+confirming+our+call+on+Thursday.+Let+me+know+if+the+time+still+works.%27.",
+      "resolved_person": "lara@anticipy-test.local",
+      "resolved_thing": "Thursday call confirmation",
+      "compose_target_id": "F661CE1511493ED026539AA18B826986",
+      "evidence_snippet": "{\"body_contains_marker\": false, \"cdp_port\": 9222, \"compose_url\": \"https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=lara%40anticipy-test.local&su=Thursday+call+confirmation&body=%27Hi+Lara%2C+just+confirming+our+call+on+Thursday.+Let+me+know+if+the+time+still+works.%27.\", \"marker_uuid\": \"\", \"subjec"
+    },
+    {
+      "name": "gmail_draft_visible",
+      "ok": true,
+      "subject_marker": "Thursday call confirmation",
+      "subject_present": true,
+      "recipient_present": true,
+      "url": "https://mail.google.com/mail/u/0/#search/in%3Adrafts+to%3Alara%40anticipy-test.local+subject%3A('Thursday+call+confirmation')",
+      "title": "Search results - omarkebrahim@gmail.com - Gmail",
+      "body_chars": 2180,
+      "draft_url": "https://mail.google.com/mail/u/0/#search/in%3Adrafts+to%3Alara%40anticipy-test.local+subject%3A('Thursday+call+confirmation')",
+      "snippet_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/z001_e2e_runs/20260529T063447Z/gmail_drafts_snippet.txt"
+    }
+  ],
+  "verdict": "PASS",
+  "failed_step": "",
+  "error": "",
+  "supabase_user_id": "350ce7f3-82c3-4cb6-81ce-d08d3377589f",
+  "compose_url": "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=lara%40anticipy-test.local&su=Thursday+call+confirmation&body=%27Hi+Lara%2C+just+confirming+our+call+on+Thursday.+Let+me+know+if+the+time+still+works.%27.",
+  "act_via": "engine_direct_cdp",
+  "gmail_draft_url": "https://mail.google.com/mail/u/0/#search/in%3Adrafts+to%3Alara%40anticipy-test.local+subject%3A('Thursday+call+confirmation')",
+  "gmail_draft_subject": "Thursday call confirmation",
+  "finished_at": "20260529T063609Z",
+  "opened_targets": [
+    "3852BDE86985A173AEA5B962979E504A",
+    "F661CE1511493ED026539AA18B826986",
+    "A428938EC4D93CC426D1AF16961DBDE5"
+  ],
+  "closed_targets": {
+    "3852BDE86985A173AEA5B962979E504A": true,
+    "F661CE1511493ED026539AA18B826986": true,
+    "A428938EC4D93CC426D1AF16961DBDE5": true
+  },
+  "cdp_pages_after": [
+    "BBB7D81B2633566B45DE6A6113562308"
+  ],
+  "leaked_target_ids": [],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

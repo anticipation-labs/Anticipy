@@ -1,0 +1,60 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T073322Z",
+  "started_at": "20260529T073322Z",
+  "account_id": "z001_e2e_7a7366395721",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "BBB7D81B2633566B45DE6A6113562308"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 9724
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": true,
+      "provisioned": true
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_361c26b08d4b@anticipy-test.local",
+      "password_len": 16
+    },
+    {
+      "name": "browser_signup",
+      "ok": true,
+      "targetId": "CFA77A1DC9291E54BB0B52770C422A28",
+      "final_url": "https://www.anticipy.ai/app/download?token=9b277fb8500910bbbd6d511378cfed1a7e502eee5ec6dd2a5fa56ead288365ee",
+      "handoff_token": "9b277fb8500910bbbd6d511378cfed1a7e502eee5ec6dd2a5fa56ead288365ee",
+      "handoff_token_present": true
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "browser_signup",
+  "error": "supabase admin list users failed: status=0 err='URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)>'",
+  "finished_at": "20260529T073327Z",
+  "opened_targets": [
+    "CFA77A1DC9291E54BB0B52770C422A28"
+  ],
+  "closed_targets": {
+    "CFA77A1DC9291E54BB0B52770C422A28": true
+  },
+  "cdp_pages_after": [
+    "BBB7D81B2633566B45DE6A6113562308"
+  ],
+  "leaked_target_ids": [],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

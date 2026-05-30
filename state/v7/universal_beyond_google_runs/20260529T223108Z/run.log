@@ -1,0 +1,6 @@
+[22:31:09Z] ENGINE up: http://127.0.0.1:8731/health -> 200
+[22:31:09Z] CHROME up: http://localhost:9222/json/version -> 200
+[22:31:09Z] BRIDGE up: http://127.0.0.1:7777/status ok
+[22:31:10Z] ==== SURFACE 1: saucedemo ====
+[22:31:10Z] BEGIN saucedemo :: intent=On the SauceDemo login page, type the text standard_user into the Username input field. The task is complete when the Username input shows the text standard_user.
+[22:31:10Z] BEGIN saucedemo :: hint=https://www.saucedemo.com/ deadline=120s

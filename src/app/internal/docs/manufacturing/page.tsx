@@ -15,7 +15,7 @@ export default function ManufacturingPage() {
             <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>Orders · Hardware</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-2">Manufacturing Order Guide</h1>
-          <p style={{ color: "#8A8A8A" }}>One-click manufacturing — upload files, confirm quote, pay, sample ships to West Vancouver in ~7 days.</p>
+          <p style={{ color: "#8A8A8A" }}>One-click manufacturing - upload files, confirm quote, pay, sample ships to West Vancouver in ~7 days.</p>
         </div>
 
         {/* Cost per unit summary */}
@@ -68,7 +68,7 @@ export default function ManufacturingPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-bold text-base" style={{ color: "#F5F0EB" }}>JLCPCB</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>RECOMMENDED — Primary</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>RECOMMENDED. Primary</span>
                   </div>
                   <div className="text-xs" style={{ color: "#5A5A5A" }}>Shenzhen, China · ships DHL Express to Canada (5–7 days)</div>
                 </div>
@@ -179,7 +179,7 @@ export default function ManufacturingPage() {
                 <div>
                   <div className="text-xs font-medium mb-2" style={{ color: "#8A8A8A" }}>Why consider Seeed Fusion</div>
                   <ul className="space-y-1 text-xs" style={{ color: "#A0A0A0" }}>
-                    <li>· Same company as XIAO ESP32-S3 — deep familiarity with the module</li>
+                    <li>· Same company as XIAO ESP32-S3 - deep familiarity with the module</li>
                     <li>· 7-business-day PCB + assembly turnaround guaranteed</li>
                     <li>· Open-source hardware friendly (used by makers)</li>
                     <li>· Free DFM check with every order</li>
@@ -257,9 +257,9 @@ export default function ManufacturingPage() {
                   <ul className="space-y-1 text-xs" style={{ color: "#A0A0A0" }}>
                     <li>· Ship all components to their Toronto facility</li>
                     <li>· They assemble, test, flash firmware</li>
-                    <li>· Ship finished units to West Vancouver (domestic — no customs)</li>
+                    <li>· Ship finished units to West Vancouver (domestic - no customs)</li>
                     <li>· 5–10 business day turnaround</li>
-                    <li>· Canadian company — HST applies, no import duties</li>
+                    <li>· Canadian company. HST applies, no import duties</li>
                   </ul>
                 </div>
                 <div>
@@ -289,7 +289,7 @@ export default function ManufacturingPage() {
 
             <div className="p-5 rounded-xl" style={{ background: "#161616", border: "2px solid rgba(200,169,126,0.3)" }}>
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-bold text-sm" style={{ color: "#F5F0EB" }}>ShipBob — Surrey, BC</span>
+                <span className="font-bold text-sm" style={{ color: "#F5F0EB" }}>ShipBob. Surrey, BC</span>
                 <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>Primary</span>
               </div>
               <div className="text-xs mb-3" style={{ color: "#5A5A5A" }}>~30 min from West Vancouver</div>
@@ -310,14 +310,14 @@ export default function ManufacturingPage() {
 
             <div className="p-5 rounded-xl" style={{ background: "#161616", border: "1px solid #252525" }}>
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-bold text-sm" style={{ color: "#F5F0EB" }}>Evolution Fulfillment — Delta, BC</span>
+                <span className="font-bold text-sm" style={{ color: "#F5F0EB" }}>Evolution Fulfillment. Delta, BC</span>
                 <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#161616", color: "#8A8A8A", border: "1px solid #252525" }}>Backup</span>
               </div>
               <div className="text-xs mb-3" style={{ color: "#5A5A5A" }}>~40 min from West Vancouver · Canadian-owned</div>
               <ul className="space-y-1 text-xs mb-4" style={{ color: "#A0A0A0" }}>
-                <li>· Smaller than ShipBob — more personal service</li>
+                <li>· Smaller than ShipBob - more personal service</li>
                 <li>· Better pricing at low volumes (sub-100 units/mo)</li>
-                <li>· Canadian-owned — no US company data requirements</li>
+                <li>· Canadian-owned - no US company data requirements</li>
                 <li>· Handles Canada Post + FedEx + UPS</li>
                 <li>· Contact for quote: evolutionfulfillment.ca</li>
               </ul>
@@ -369,7 +369,7 @@ export default function ManufacturingPage() {
                 items: [
                   "Qty: 5 (+ 2 spares recommended)",
                   "Price: $10.33 CAD each ($72.31 CAD for 7)",
-                  "Ships from Shenzhen via DHL — arrives with JLCPCB order if ordered same day",
+                  "Ships from Shenzhen via DHL - arrives with JLCPCB order if ordered same day",
                 ]
               },
               {
@@ -391,7 +391,7 @@ export default function ManufacturingPage() {
                 items: [
                   "cd firmware",
                   "pio run --target upload  # connect via USB-C, takes 30 seconds",
-                  "Or: send firmware/ as zip to Bittele (7pcb.com) and they do it — add 'flash before shipping' to order notes",
+                  "Or: send firmware/ as zip to Bittele (7pcb.com) and they do it - add 'flash before shipping' to order notes",
                 ]
               },
               {
@@ -400,10 +400,10 @@ export default function ManufacturingPage() {
                 url: "https://www.packlane.com/",
                 urlLabel: "packlane.com →",
                 items: [
-                  "Packlane: custom printed boxes from qty 10 — ~$5–8/box",
+                  "Packlane: custom printed boxes from qty 10 - ~$5–8/box",
                   "noissue.co: eco-friendly startup packaging",
                   "arka.com: custom mailer boxes from 10 units",
-                  "Box specs: 100×70×35mm matte black rigid lid+base — see Packaging spec page for full details",
+                  "Box specs: 100×70×35mm matte black rigid lid+base - see Packaging spec page for full details",
                 ]
               },
               {

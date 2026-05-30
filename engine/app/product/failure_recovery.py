@@ -363,47 +363,47 @@ def format_recovery_sms(
     service = _service_label_from_url(surface_url)
     summary = _action_summary(instruction, recipient_hint)
     link = _action_link(kind, surface_url)
-    tap_clause = f" Tap to fix: {link}." if link else ""
-
+    # Per SMS_COPY_AUDIT (#10-#15): consistent first person ("I paused"
+    # plus "I will pick it back up") reads as a teammate handoff
+    # instead of a bot dropping a log line. CAPTCHA is jargon to most
+    # users, so we say "prove you are human" (which is what they
+    # actually do). Rate-limit and network drop the tap link because
+    # there is nothing for the user to fix in either case.
     if kind == FAILURE_LOGIN_REQUIRED:
+        link_sentence = f" Sign in here: {link}." if link else ""
         body = (
-            f"Anticipy couldn't finish {summary} because {service} "
-            f"is logged out."
-            f"{tap_clause}"
-            f" I will retry once you sign in."
+            f"I paused {summary} because {service} signed out."
+            f"{link_sentence} I will pick it back up."
         )
     elif kind == FAILURE_MFA_CHALLENGE:
+        link_sentence = f" Approve it here: {link}." if link else ""
         body = (
-            f"Anticipy couldn't finish {summary} because {service} "
-            f"asked you to verify your identity."
-            f"{tap_clause}"
-            f" I will retry once you do."
+            f"I paused {summary} because {service} wants a second "
+            f"check from you.{link_sentence} I will keep going as "
+            f"soon as you do."
         )
     elif kind == FAILURE_CAPTCHA_BLOCKED:
+        link_sentence = f" Tap here: {link}." if link else ""
         body = (
-            f"Anticipy couldn't finish {summary} because {service} "
-            f"is showing a CAPTCHA."
-            f"{tap_clause}"
-            f" I will retry once you solve it."
+            f"I paused {summary} because {service} wants you to "
+            f"prove you are human.{link_sentence} I will keep going "
+            f"once you do."
         )
     elif kind == FAILURE_RATE_LIMITED:
         body = (
-            f"Anticipy couldn't finish {summary} because {service} "
-            f"asked us to slow down. I will retry in a few minutes."
-            f"{tap_clause}"
+            f"I paused {summary} because {service} asked me to slow "
+            f"down. I will try again in a few minutes."
         )
     elif kind == FAILURE_NETWORK_ERROR:
         body = (
-            f"Anticipy couldn't finish {summary} because of a "
-            f"network blip on {service}. I will retry shortly."
-            f"{tap_clause}"
+            f"I paused {summary} because of a connection hiccup with "
+            f"{service}. Trying again in a moment."
         )
     else:
+        link_sentence = f" Tap here: {link}." if link else ""
         body = (
-            f"Anticipy paused {summary} on {service} and needs a "
-            f"hand."
-            f"{tap_clause}"
-            f" I will retry once you take a look."
+            f"I hit a snag on {service} with {summary}."
+            f"{link_sentence} Once you take a look I will keep going."
         )
 
     body = re.sub(r"\s+", " ", body).strip()
@@ -541,9 +541,26 @@ def _park_task_in_queue(
         # No queue record (this can happen if the action was driven
         # directly via /api/act without the listen pipeline). Enqueue
         # a fresh entry so the recovery sticks across restarts.
+        # SCALE: resolve account_id via the standard env > USER_ID >
+        # machine_id chain so a stranger's recovery task is enqueued
+        # under THEIR account, not the founder's default.
+        import os as _os
+        try:
+            from app.product.server import USER_ID as _USER_ID
+            from app.product.server import _default_account_id
+        except Exception:
+            _USER_ID = ""
+            _default_account_id = lambda: ""  # noqa: E731
+        _acct = (
+            (_os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or (_USER_ID or "").strip()
+            or _default_account_id()
+            or "wearer"
+        )
         try:
             rec = _tq.enqueue(
                 instruction or f"recovery: {failure_kind}",
+                account_id=_acct,
                 metadata={
                     "source": "failure_recovery_route",
                     "wait_for_recovery": True,

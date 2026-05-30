@@ -1,0 +1,17 @@
+{
+  "check_number": 8,
+  "check_name": "input_paste",
+  "status": "FAIL",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_225213/CHECK_08.json",
+  "key_contents": {
+    "act_status": null,
+    "resolved_person": "Dana Bright",
+    "resolved_thing": "Friday launch update",
+    "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_225213/gmail_draft_paste_success.png",
+    "screenshot_source": "",
+    "screenshot_url": "",
+    "screenshot_saved": false,
+    "screenshot_error": "no Gmail compose tab visible via CDP"
+  },
+  "ts": "2026-05-28T22:53:47.526210"
+}

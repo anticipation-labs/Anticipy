@@ -1,0 +1,22 @@
+{
+  "check_number": 5,
+  "check_name": "onboarding_chat",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_233411/CHECK_05.json",
+  "key_contents": {
+    "profile_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_233411/check05_profile.json",
+    "people_count_with_email": 3,
+    "do_not_touch_count": 3,
+    "people_keys": [
+      "boss",
+      "strategy advisor",
+      "operations partner"
+    ],
+    "do_not_touch": [
+      "payroll",
+      "investor cap table",
+      "email anyone outside the company without me"
+    ]
+  },
+  "ts": "2026-05-28T23:35:25.579997"
+}

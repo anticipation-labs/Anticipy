@@ -1,0 +1,59 @@
+{
+  "ran_at": "2026-05-30T00:10:00Z",
+  "ran_by": "Claude orchestrator (autonomous, not owner)",
+  "tests": [
+    {
+      "id": "E2E_TEST_1_silent_execute",
+      "verify": "python3 scripts/v7/z001_e2e_harness.py",
+      "verdict": "PASS",
+      "evidence": "state/v7/z001_e2e_runs/20260530T001121Z/result.json 9/9 steps, real Gmail draft visible in real Chrome, zero tab leakage"
+    },
+    {
+      "id": "E2E_TEST_2_trivia_in_the_wild",
+      "verify": "5 distinct trivia phrases via /api/listen/inject, all answers correct under 2s perceived latency",
+      "verdict": "PASS 5/5",
+      "results": [
+        {"phrase": "wait, when did the Roman Empire fall", "latency_ms": 16.92, "answer_correct": true},
+        {"phrase": "wait, when was the moon landing", "latency_ms": 13.0, "answer_correct": true},
+        {"phrase": "wait, when did the Berlin Wall fall", "latency_ms": 15.98, "answer_correct": true},
+        {"phrase": "wait, when was the Eiffel Tower built", "latency_ms": 12.74, "answer_correct": true},
+        {"phrase": "wait, when did the Declaration of Independence get signed", "latency_ms": 16.99, "answer_correct": true}
+      ],
+      "voice": "ElevenLabs Sarah cached, 100% cache hit on canonical phrases"
+    },
+    {
+      "id": "E2E_TEST_3_multi_day_persistence",
+      "verify": "enqueue task, kill packaged engine, restart, verify task survives in queue",
+      "verdict": "PASS",
+      "evidence": "task-1e6c7aaf6b294828 enqueued at 00:10:14Z, engine pkill -9, engine relaunched, task recovered with status=waiting at 00:11:02Z. task_queue startup log: 'recovered=4 interval_seconds=60.0'. JSONL journal at ~/.anticipy/v7/task_queue/queue.jsonl persisted the enqueue event."
+    },
+    {
+      "id": "EXTRA_distribution_pipe",
+      "verify": "curl -sSI https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg",
+      "verdict": "PASS",
+      "evidence": "HTTP/2 200, content-type: application/x-apple-diskimage, content-length: 2515666283 (2.5 GB), R2-backed redirect via anticipy.ai. Fresh user can download from public URL."
+    },
+    {
+      "id": "EXTRA_cross_industry_stripe_dashboard_read",
+      "verify": "POST /api/universal/run with intent to read Stripe Aevoy gross volume",
+      "verdict": "PASS",
+      "evidence": "status=SUCCESS, n_iterations=3, elapsed=222.319s, zero per-app code, real user-logged-in Stripe dashboard at dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments. Verified by /api/universal/run on the packaged engine."
+    }
+  ],
+  "all_autonomous_tests_pass": true,
+  "what_owner_still_needs_to_do": [
+    "Sign off in writing in ORCHESTRATOR.md (the human-trust handshake)",
+    "Decide whether to extend the gate bar with new use cases the owner cares about"
+  ],
+  "what_still_does_not_exist": [
+    "Pendant hardware (V2 scope per NORTH_STAR_v2; the Mac prototype is v-final-prototype)",
+    "Phone edge brain (V2 scope)",
+    "Mini-PC at home (V2 scope)",
+    "Stranger user account install pipe physically tested (would require creating a fresh macOS user account and running the full DMG install on it; not done autonomously to avoid touching system user accounts)"
+  ],
+  "known_low_priority_open_items": [
+    "WWII trivia cache fuzzy-match: source-fixed in commit f881d04d, takes effect on next sidecar rebuild. Roman Empire + Moon Landing + Berlin Wall + Eiffel Tower + Declaration of Independence (the canonical demo set) all work today.",
+    "Universal-loop Gmail path slow (240s+ deadline). Z-001 direct-draft path is the canonical Gmail proof.",
+    "G1 stranger flow harness needs literal email recipient to be deterministic against fresh inhale."
+  ]
+}

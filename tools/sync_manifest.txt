@@ -1,0 +1,10 @@
+# V7 -> DEV-FINAL sync manifest
+# Format: <relative-path>    # <why this path syncs>
+# Blank lines and lines starting with # are ignored.
+# Paths are relative to the repo root. Trailing slash means directory (rsync recursive).
+
+engine/                              # Python engine source; V7 is where new engine features land first.
+src/app/api/twilio/                  # Twilio broker route + audit migration; ships with the website.
+public/install.sh                    # Stranger install script served from anticipy.ai/install.sh.
+scripts/v7/                          # V7-specific test + ops scripts owner runs locally.
+desktop/src-tauri/src/lib.rs         # Tauri popover host; engine spawn glue diverges fastest here.

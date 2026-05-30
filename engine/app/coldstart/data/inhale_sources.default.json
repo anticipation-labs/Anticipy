@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "gmail",
+      "label": "Gmail contacts and senders",
+      "url": "https://mail.google.com/mail/u/0/#inbox",
+      "scrape_selector": "[role='row']",
+      "max_pages": 5,
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "id": "google_calendar",
+      "label": "Google Calendar attendees",
+      "url": "https://calendar.google.com/calendar/r/week",
+      "scrape_selector": "[data-eventid]",
+      "max_pages": 1,
+      "enabled": true,
+      "priority": 2
+    },
+    {
+      "id": "google_drive",
+      "label": "Google Drive collaborators",
+      "url": "https://drive.google.com/drive/recent",
+      "scrape_selector": "[data-id]",
+      "max_pages": 3,
+      "enabled": true,
+      "priority": 3
+    }
+  ],
+  "_comment": "Edit this file or use /api/coldstart/sources to change which sources Anticipy reads on cold start. Set enabled=false to skip a source. Add any source you are logged into in Chrome by appending a new entry."
+}

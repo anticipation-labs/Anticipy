@@ -1,0 +1,27 @@
+{
+  "check_number": 12,
+  "check_name": "ambiguity_trap",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260529_084638/CHECK_12.json",
+  "key_contents": {
+    "is_clarify": true,
+    "question": "Did you mean Dana Bright or Priya Shah?",
+    "names_both": true,
+    "drafts_before": -1,
+    "drafts_after": -1,
+    "pending": {
+      "instruction": "I should get that over to her before tomorrow.",
+      "proposal": "Did you mean Dana Bright or Priya Shah?",
+      "clarify": true,
+      "plan": {
+        "mode": "clarify",
+        "person": "",
+        "thing": "launch recap",
+        "task": "",
+        "question": "Did you mean Dana Bright or Priya Shah?"
+      },
+      "ts": 1780069764.281417
+    }
+  },
+  "ts": "2026-05-29T08:49:45.286305"
+}

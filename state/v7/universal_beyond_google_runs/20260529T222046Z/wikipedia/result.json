@@ -1,0 +1,17 @@
+{
+  "surface": "wikipedia",
+  "intent": "Read the page heading and the very first sentence of the article body on this Wikipedia page. The task is complete when you have reported what the heading says and the first sentence of the article.",
+  "surface_hint": "https://en.wikipedia.org/wiki/Roman_Empire",
+  "status": "ERROR",
+  "verdict": "FAIL",
+  "n_iterations": 0,
+  "elapsed_sec": 0.191,
+  "deadline_sec": 120.0,
+  "http_code": "000000",
+  "answer": "",
+  "evidence_text": "",
+  "evidence_screenshot_path": "",
+  "trajectory_dir": "",
+  "trajectory_recovered_from_disk": false,
+  "error": null
+}

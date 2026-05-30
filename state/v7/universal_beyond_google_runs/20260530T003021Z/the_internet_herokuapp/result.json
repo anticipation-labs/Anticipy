@@ -1,0 +1,17 @@
+{
+  "surface": "the_internet_herokuapp",
+  "intent": "On this Add/Remove Elements page, click the button labeled Add Element. The task is complete when a new button labeled Delete appears on the page below the Add Element button.",
+  "surface_hint": "https://the-internet.herokuapp.com/add_remove_elements/",
+  "status": "DEADLINE_EXCEEDED",
+  "verdict": "FAIL",
+  "n_iterations": 11,
+  "elapsed_sec": 120.278,
+  "deadline_sec": 120.0,
+  "http_code": "200",
+  "answer": "",
+  "evidence_text": "wall-clock 120.0s exceeded before the loop returned",
+  "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780101024_f049b3/s0_i09_after.png",
+  "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780101024_f049b3",
+  "trajectory_recovered_from_disk": true,
+  "error": "deadline_exceeded"
+}

@@ -10,20 +10,21 @@ import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
-function expectedPasscode(): string {
+function expectedPasscode(): string | null {
   const env = process.env.GATE_PASSCODE_INTERNAL;
   if (!env || env.length === 0) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "GATE_PASSCODE_INTERNAL must be set in production (refusing to use the dev default)"
-      );
+      // Fail-secure: refuse to unlock anything in production when the
+      // env is missing, but return null instead of throwing so the
+      // route responds with a clean 401, not an uncaught 500 that
+      // leaks a stack trace and signals a config gap to attackers.
+      return null;
     }
     return "123";
   }
   if (env.length < 6 && process.env.NODE_ENV === "production") {
-    throw new Error(
-      "GATE_PASSCODE_INTERNAL must be at least 6 characters in production"
-    );
+    // Same fail-secure posture for a misconfigured (too-short) value.
+    return null;
   }
   return env;
 }
@@ -63,7 +64,13 @@ export async function POST(req: Request) {
   // exact compare to avoid encoding edge cases.
   const raw = (body.passcode || "").toString();
   const stripped = raw.replace(/\s+/g, "").toLowerCase();
-  const expected = expectedPasscode().toLowerCase();
+  const expectedRaw = expectedPasscode();
+  if (expectedRaw === null) {
+    // Fail-secure when env is missing or misconfigured in production.
+    // Same 401 surface as a wrong passcode; do not leak the config gap.
+    return NextResponse.json({ error: "Wrong code" }, { status: 401 });
+  }
+  const expected = expectedRaw.toLowerCase();
   if (!safeEqual(stripped, expected)) {
     return NextResponse.json({ error: "Wrong code" }, { status: 401 });
   }

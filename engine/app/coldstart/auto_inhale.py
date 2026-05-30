@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from . import sources as inhale_sources
 from .cdp_walker import CDPWalker, WalkerRow
 
 
@@ -614,39 +615,44 @@ def _run_inhale(account_id: str,
                        elapsed_ms=int((time.time() - started) * 1000))
             return
 
-        # Lane 1: Gmail inbox
-        if walk_gmail:
-            try:
-                inbox = walker.walk_gmail(kind="inbox", per_tab_budget_s=18.0)
-                rows.extend(inbox)
-                _bump_state(rows_collected=len(inbox))
-            except Exception as exc:
-                _record_error(f"gmail.inbox walk: {exc}")
-            # Lane 2: Gmail sent
-            try:
-                sent = walker.walk_gmail(kind="sent", per_tab_budget_s=12.0)
-                rows.extend(sent)
-                _bump_state(rows_collected=len(sent))
-            except Exception as exc:
-                _record_error(f"gmail.sent walk: {exc}")
+        # Iterate every enabled source from the user config at
+        # ~/.anticipy/inhale_sources.json. URL CHOICES live there,
+        # NOT in this file (rule 1: no per-app code).
+        #
+        # Legacy walk_gmail / walk_calendar / walk_drive flags are
+        # honored as opt-outs against the lane id (any id matching
+        # the family name is skipped when the flag is False). This
+        # preserves the existing /api/coldstart/start contract while
+        # the URL list becomes user-editable data.
+        try:
+            enabled_sources = inhale_sources.load_enabled()
+        except Exception as exc:
+            _record_error(f"sources.load_enabled: {exc}")
+            enabled_sources = []
 
-        # Lane 3: Calendar
-        if walk_calendar:
+        for source in enabled_sources:
+            sid = str(source.get("id") or "").lower()
+            family = (
+                "calendar" if "calendar" in sid
+                else "drive" if ("drive" in sid or "files" in sid)
+                else "gmail"
+            )
+            if family == "gmail" and not walk_gmail:
+                continue
+            if family == "calendar" and not walk_calendar:
+                continue
+            if family == "drive" and not walk_drive:
+                continue
             try:
-                cal = walker.walk_calendar(per_tab_budget_s=12.0)
-                rows.extend(cal)
-                _bump_state(rows_collected=len(cal))
+                collected = walker.walk_source(
+                    source=source,
+                    per_tab_budget_s=18.0 if family == "gmail" else 12.0,
+                )
+                rows.extend(collected)
+                _bump_state(rows_collected=len(collected))
             except Exception as exc:
-                _record_error(f"calendar walk: {exc}")
-
-        # Lane 4 (opt-in): Drive recents
-        if walk_drive:
-            try:
-                drv = walker.walk_drive(per_tab_budget_s=8.0)
-                rows.extend(drv)
-                _bump_state(rows_collected=len(drv))
-            except Exception as exc:
-                _record_error(f"drive walk: {exc}")
+                _record_error(
+                    f"{sid or 'source'} walk: {exc}")
 
         if not rows:
             _record_error("walker collected no rows; nothing to extract")

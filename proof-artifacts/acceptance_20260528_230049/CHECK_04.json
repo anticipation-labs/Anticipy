@@ -1,0 +1,41 @@
+{
+  "check_number": 4,
+  "check_name": "app_runs",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_230049/CHECK_04.json",
+  "key_contents": {
+    "health": {
+      "ok": true,
+      "service": "anticipy-local-engine",
+      "version": "product-3",
+      "pid": 47787,
+      "port": 8731,
+      "onboarded": true,
+      "listening": false,
+      "profile_error": ""
+    },
+    "state_keys": [
+      "key_ok",
+      "provisioned",
+      "onboarded",
+      "profile",
+      "total_questions",
+      "window_seconds",
+      "cdp_port",
+      "chrome_user_data_dir",
+      "legacy_clone_cdp_enabled",
+      "clone_config_rejected",
+      "browser_surface",
+      "local_env_fallback",
+      "dossier_sync_url",
+      "resolution_trace_sync_url",
+      "last_cloud_sync",
+      "last_resolution_trace_sync",
+      "surface_runtime"
+    ],
+    "key_ok": true,
+    "onboarded": true,
+    "last_err": ""
+  },
+  "ts": "2026-05-28T23:00:50.499925"
+}

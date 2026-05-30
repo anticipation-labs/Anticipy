@@ -1,0 +1,146 @@
+{
+  "audit_id": "stranger_install_audit_20260530T010600Z",
+  "commit_sha": "bbaa2495173790f006b51043f29aca2d4614f2c4",
+  "branch": "deploy/preorder-to-main",
+  "ran_at": "2026-05-30T01:06:00Z",
+  "host": "Omar's Mac (no second-Mac available, simulated via clean env subshell + tmp HOME on port 8741)",
+  "constraints_respected": [
+    "Did NOT clobber Omar's :8731 engine (PID 45817 unchanged)",
+    "Did NOT modify /Applications/Anticipy.app",
+    "Used port 8741 + tmp HOME=/tmp/stranger-audit/home for probe binary",
+    "TWILIO_MOCK left unset on probe (no SMS path exercised)",
+    "No real emails sent (LIFE_LOG path, no /api/act call)",
+    "No new macOS user account created",
+    "No em-dashes used in this report"
+  ],
+  "steps": [
+    {
+      "step": 1,
+      "name": "DMG download from https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "curl -fsSI returned HTTP/2 200, content-length 2515666283 (2.5 GB), content-type application/x-apple-diskimage. Vercel CDN served the file. Did not download the full 2.5 GB to avoid wasting bandwidth; HEAD probe confirms file is reachable and full size.",
+      "fix_recommendation": "None"
+    },
+    {
+      "step": 2,
+      "name": "install.sh fetched from https://www.anticipy.ai/install.sh and matches repo",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "curl -fsS to /tmp/stranger-audit/install_remote.sh succeeded, 269 lines. diff against repo public/install.sh produced NO output (byte-identical). Script reads cleanly: deps python3>=3.10, downloads DMG, mounts, copies to /Applications, removes quarantine, starts engine with --server --port 8731, polls /health for 40s. Script clobbers /Applications/Anticipy.app on every run (line 222 rm -rf). Did NOT execute the script against the running Omar install. Instead, read and verified all 269 lines manually.",
+      "fix_recommendation": "Script is hard-wired to /Applications and HOME-based ~/.anticipy. No tmp-prefix mode exists. For a true stranger-install dry run on Omar's Mac, the script needs a --install-root flag, or run it inside a fresh macOS user. Documented limitation, not a product bug."
+    },
+    {
+      "step": 3,
+      "name": "Bundled sidecar /Applications/Anticipy.app/Contents/MacOS/anticipy-engine runs with NO env vars",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "env -i HOME=/tmp/stranger-audit/home PATH=/usr/bin:/bin:/usr/sbin:/sbin bash -c 'ANTICIPY_PORT=8741 /Applications/Anticipy.app/Contents/MacOS/anticipy-engine'. Binary bound 127.0.0.1:8741 within 12 seconds. /health returned {ok:true,service:anticipy-local-engine,version:product-3,pid:54422,port:8741,onboarded:false,listening:false}. /api/trivia/recent returned a real calendar_prep brief from disk (trivia DB created at /tmp/stranger-audit/home/.anticipy/trivia_cache.db). /api/listen/inject with a draft-email transcript returned outcome=LIFE_LOG plan.mode=clarify question='Which one did you mean?' _infra_fallback=true (planner has no OpenRouter key so falls through to clarify, as designed). Warnings in log: 'JWT_SECRET not set using insecure development default. Set this in .env.' and 'PROFILE_ENCRYPTION_KEY not set using derived development key.' Engine did NOT crash on missing OpenRouter key. Probe engine killed after audit (PID 54422 terminated, port 8741 free).",
+      "fix_recommendation": "JWT_SECRET and PROFILE_ENCRYPTION_KEY are surfaced as 'insecure development default' warnings. For a real stranger install, these should be derived from the Supabase user session, generated per-install at first launch, or rolled into the broker handshake. Today they default to dev keys which means any cookie or session encryption is not actually secret. Severity should be warning long-term but ok for v1.0.0 first-launch UX."
+    },
+    {
+      "step": 4,
+      "name": "desktop/src/popover.html loads cleanly when Tauri spawns it",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "Read /Users/omarebrahim/Developer/Anticipy-V7/desktop/src/popover.html lines 1-100 head. Uses pure SF Pro Apple system font stack, no Google Fonts, no external image references. grep for 'omarebrahim|/Users/omar|omarkebrahim' against desktop/src/ and desktop/src-tauri/src/ returned ZERO hits. Brand colors hardcoded as CSS variables. No broken URLs, no missing assets.",
+      "fix_recommendation": "None"
+    },
+    {
+      "step": 5,
+      "name": "Tauri bootstrap_anticipy_chrome at desktop/src-tauri/src/lib.rs:654-722 clones Chrome profile properly",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "Read lib.rs lines 60-75, 230-244, 560-722. Constants are HOME-relative: ANTICIPY_DIR_NAME='.anticipy', CHROME_PROFILE_DIR_NAME='chrome-real-clone', USER_CHROME_DEFAULT_REL='Library/Application Support/Google/Chrome/Default'. anticipy_dir() reads std::env::var_os(HOME). chrome_profile_dir() returns $HOME/.anticipy/chrome-real-clone. user_default_chrome_dir() returns $HOME/Library/Application Support/Google/Chrome/Default. copy_dir_recursive uses cp -R. Empty-profile fallback at line 694 creates an empty Anticipy profile and emits chrome-setup-no-default-profile event. CHROME_BINARY_PATH is hardcoded to /Applications/Google Chrome.app/Contents/MacOS/Google Chrome (no Chromium fallback). Code comment at line 564 marks this path as 'legacy escape hatch' since V7 default surface is the user's actual Chrome via the installed extension and native-messaging bridge. Did NOT run the function to avoid cloning Omar's Chrome twice.",
+      "fix_recommendation": "If a stranger user has Google Chrome installed but in a non-default location (Chromium, Brave, Chrome Beta, Chrome under /Users/<user>/Applications/, or Chrome via Homebrew Cask using a different path), Command::new(CHROME_BINARY_PATH).spawn() will silently fail and the emit will be 'chrome-setup-error'. Add a fallback that probes Chromium/Brave/Edge/Arc binaries. Add a screen-recording permission explainer before the bootstrap_anticipy_chrome runs."
+    },
+    {
+      "step": 6,
+      "name": "Supabase signin pages at /onboarding/audio and /onboarding/chat return 200",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "curl -sSI https://www.anticipy.ai/onboarding/audio returned HTTP/2 200. curl -sSI https://www.anticipy.ai/onboarding/chat returned HTTP/2 200. Both use cache-control public max-age=0 must-revalidate, content-type text/html charset=utf-8. src/app/onboarding/audio/page.tsx imports supabase from @/lib/supabase and calls supabase.auth.getSession() on mount (line 51-59), so signin state is loaded server-side via session check on first render. The page is usable without auth, the engine will surface its own sign-in card if needed.",
+      "fix_recommendation": "None"
+    },
+    {
+      "step": 7,
+      "name": "Website mints anticipy:// deep link and /api/auth/exchange handles single-use token",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "Read src/app/api/auth/exchange/route.ts (92 lines) and src/lib/handoff-token.ts (108 lines). Exchange route accepts {token:string} JSON body, validates with exchangeHandoffToken(store, token), uses createSupabaseHandoffStore against SUPABASE_SERVICE_ROLE_KEY. Returns {access_token, refresh_token, user} on success. Returns 410 Gone with reason='expired'|'consumed' for stale or replayed tokens. Returns 404 for unknown token, 400 for missing/invalid body. mintHandoffToken (handoff-token.ts:53) generates 32 random bytes hex, TTL=300 seconds, builds anticipy://session?token=<hex> deep link. exchangeHandoffToken (handoff-token.ts:90) checks consumed_at and expires_at before markConsumed atomically. CORS headers set on all responses including OPTIONS. Logic is complete and correct.",
+      "fix_recommendation": "None"
+    },
+    {
+      "step": 8,
+      "name": "Model broker /api/engine/model gates by Supabase session",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "Read src/app/api/engine/model/route.ts (99 lines). Calls requireSupabaseUser(req) at line 55; returns 401 if no user. Rate limit per-IP 240/hour and per-user 600/hour via rateLimit lib. Validates OPENROUTER_API_KEY starts with sk-or- and returns 503 'Anticipy model broker is not configured' if missing. ALLOWED_MODELS hardcoded to deepseek-v4-flash, deepseek-v4-pro, kimi-k2.6. Payload size capped at 2 MB (raised from 120 KB to accommodate one vision frame). Forwards to https://openrouter.ai/api/v1/chat/completions with HTTP-Referer https://anticipy.ai and X-Title 'Anticipy Local Engine Broker'. Live probe: curl -sS -X POST https://www.anticipy.ai/api/engine/model -d '{messages:[{role:user,content:hi}]}' returned {error:Unauthorized}. Gate works.",
+      "fix_recommendation": "None"
+    },
+    {
+      "step": 9,
+      "name": "ASR parakeet model loads from a path that exists in packaged DMG resources",
+      "status": "BROKEN",
+      "severity": "blocker",
+      "evidence_path_or_command_output": "ls -la /Applications/Anticipy.app/Contents/Resources/parakeet-tdt-0.6b-v3/ shows the bundled model: config.json (244 KB), model.safetensors (2.5 GB), tokenizer.model, tokenizer.vocab, vocab.txt. THIS IS V3. engine/app/audiostack/audio.py:123 hardcodes _ASR_MODEL = 'mlx-community/parakeet-tdt-0.6b-v2' (V2, NOT V3). _get_asr() at line 179-186 calls from_pretrained(_ASR_MODEL) which downloads from HuggingFace Hub at runtime instead of loading the bundled v3 weights. HF_HOME is redirected to $ANTICIPY_DATA_DIR/models/hf at line 39, so the v3 weights at /Applications/Anticipy.app/Contents/Resources/parakeet-tdt-0.6b-v3/ are NEVER touched. engine/app/proactive/asr.py:51 uses the correct v3 string DEFAULT_MODEL = 'mlx-community/parakeet-tdt-0.6b-v3'. Two bugs: (a) audiostack/audio.py uses v2 not v3, version mismatch with the bundled weights; (b) neither v2 nor v3 path resolves to the bundled DMG resources, so first ASR call requires a 2.5 GB network download to ~/.anticipy/system_v1/models/hf, undercutting the 'works offline first launch' claim. On a fresh stranger Mac the user will wait 5+ minutes for ASR weights to download before the first mic capture transcribes.",
+      "fix_recommendation": "(1) Bump audiostack/audio.py:123 _ASR_MODEL to 'mlx-community/parakeet-tdt-0.6b-v3' to match the bundled weights. (2) Add a bundle-resource path check before falling back to HF Hub: if sys._MEIPASS or /Applications/Anticipy.app/Contents/Resources/parakeet-tdt-0.6b-v3 exists, point HF_HOME at it or call from_pretrained with the local path. (3) Verify parakeet_mlx.from_pretrained supports a filesystem path argument (typical HF loaders do). (4) Add a smoke test that runs a 1-second silent wav through ASR with HF_HUB_OFFLINE=1 to prove the bundled weights are loaded without network."
+    },
+    {
+      "step": 10,
+      "name": "ElevenLabs key fallback in engine/app/product/tts.py routes through macOS say",
+      "status": "WORKS",
+      "severity": "ok",
+      "evidence_path_or_command_output": "Read engine/app/product/tts.py (828 lines). active_provider() at line 229-246 returns 'elevenlabs' if ELEVENLABS_API_KEY env var set, then 'polly' if AWS keys + boto3, then 'say' if running on macOS and /usr/bin/say exists, then 'none'. play_speech() at line 534-686 implements the full cascade: ElevenLabs cache hit, ElevenLabs synth, on synth failure tries Polly as deeper fallback, on all-cloud failure spawns macOS say at line 619-633. _spawn_say at line 480-531 calls /usr/bin/say or shutil.which('say') with optional voice and rate args. Live evidence from the probe engine: /api/trivia/recent fires.0.tts.provider='say' (the probe had no ELEVENLABS_API_KEY set, so the cascade correctly fell through to macOS say, and the brief delivered with spawn_ms=3.25, total_ms=3.54, pid=54609). Real fallback path verified end-to-end against the packaged binary in a clean env.",
+      "fix_recommendation": "None. Optional improvement: when active_provider() returns 'say', emit a one-time UI hint that the user can upgrade to ElevenLabs Sarah by adding their key. Today the fallback is silent and the voice quality difference is dramatic."
+    }
+  ],
+  "additional_findings": [
+    {
+      "finding": "Bridge extension URL https://www.anticipy.ai/anticipy-extension.zip returns HTTP/2 200 with content-type application/zip (referenced from install.sh line 12). install.sh extracts the bundle and installs Chrome native messaging host at $HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.anticipy.agent.json. Path is HOME-relative, correct for any user.",
+      "severity": "ok"
+    },
+    {
+      "finding": "engine/app/product/server.py:8207 falls back to 'omarkebrahim@gmail.com' as the default user email if ANTICIPY_USER_EMAIL env var is unset. This is the only hardcoded Omar-specific value in shipped code. The env var override path works, but the default means every stranger user defaults to mailing Omar.",
+      "severity": "warning",
+      "fix_recommendation": "Replace the hardcoded fallback with the Supabase user email retrieved from the session token exchanged in step 7. Until the user has signed in, the value should be empty and the receipt-email code path should no-op rather than email Omar."
+    },
+    {
+      "finding": "install.sh line 222 unconditionally runs 'rm -rf /Applications/Anticipy.app' on every install. This means re-running the script destroys any user state held inside the .app bundle (none today, but it removes the bundled parakeet weights and requires re-download of the 2.5 GB DMG every time). Also means a corrupted download can wipe a working install before validating the new image is bootable.",
+      "severity": "warning",
+      "fix_recommendation": "Move the destination to a side-by-side stage (e.g. /Applications/Anticipy.app.new), validate it boots, then atomic-rename. Skip the destroy if the new DMG version matches the existing CFBundleShortVersionString."
+    },
+    {
+      "finding": "install.sh requires python3>=3.10 from the system (line 122-126). macOS Tahoe ships with python3 3.9 by default. A stranger user on a stock Mac will hit 'Anticipy: Python 3.10+ is required for the Chrome native bridge (found 3.9).' and the install aborts before the DMG is even downloaded.",
+      "severity": "warning",
+      "fix_recommendation": "Either bundle a Python 3.12 venv inside the DMG and skip the system-python check entirely, or check for python3.11/python3.12 first and degrade gracefully. The native bridge daemon does not need to share python with the user; PyInstaller-freeze it like the engine."
+    },
+    {
+      "finding": "Probe engine startup emits 'JWT_SECRET not set using insecure development default. Set this in .env' and 'PROFILE_ENCRYPTION_KEY not set using derived development key.' These appear in stderr on every cold launch with no env file. For a stranger install with no ~/.anticipy/.env they are the user's permanent state.",
+      "severity": "warning",
+      "fix_recommendation": "Generate per-install JWT_SECRET and PROFILE_ENCRYPTION_KEY at first launch and write them to ~/.anticipy/.env atomically. Today the dev defaults mean every stranger install shares the same secret key, which is a security regression if cookies or browser_profiles ever round-trip across hosts."
+    }
+  ],
+  "blockers_found": [
+    "Step 9: parakeet ASR loads v2 from HuggingFace Hub at runtime instead of v3 from bundled DMG resources. First mic capture on a stranger Mac will block on a 2.5 GB download with no UI indication. Fix _ASR_MODEL string to v3 and add a sys._MEIPASS/Resources path check."
+  ],
+  "warnings_found": [
+    "engine/app/product/server.py:8207 defaults user email to omarkebrahim@gmail.com when ANTICIPY_USER_EMAIL is unset. Stranger users would default to mailing Omar.",
+    "install.sh requires Python 3.10+ from the system; stock macOS ships 3.9 and the install aborts.",
+    "install.sh unconditionally rm -rf the existing app before validating the new download.",
+    "JWT_SECRET and PROFILE_ENCRYPTION_KEY default to dev keys per install with no per-user generation.",
+    "Tauri Chrome bootstrap hardcodes /Applications/Google Chrome.app/Contents/MacOS/Google Chrome with no Chromium/Brave/Edge/Arc fallback.",
+    "No screen-recording / accessibility / automation TCC permission walkthrough exists; only mic is covered (HANDOFF section 5 acknowledges this)."
+  ],
+  "verified_working": [
+    "Step 1: DMG URL serves 2.5 GB image via Vercel CDN",
+    "Step 2: install.sh on disk matches published version byte-identical",
+    "Step 3: Bundled engine binary boots with NO env vars, binds requested port, /health 200",
+    "Step 4: popover.html clean, no Omar paths, no broken assets",
+    "Step 5: Tauri Chrome bootstrap is HOME-relative with empty-profile fallback",
+    "Step 6: /onboarding/audio and /onboarding/chat return HTTP/2 200",
+    "Step 7: /api/auth/exchange single-use token logic complete and correct",
+    "Step 8: /api/engine/model rejects requests without Supabase session (401)",
+    "Step 10: TTS cascade falls through ElevenLabs to Polly to macOS say correctly; probe verified say path live"
+  ]
+}

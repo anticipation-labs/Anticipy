@@ -15,12 +15,12 @@ export default function SchematicPage() {
             <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>Hardware</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-2">PCB Schematic</h1>
-          <p style={{ color: "#8A8A8A" }}>Anticipy Pendant — Rev 1.0 · 40 × 25 mm, 2-layer, 1.0mm FR4, black HASL · Updated 2026-04-15</p>
+          <p style={{ color: "#8A8A8A" }}>Anticipy Pendant. Rev 1.0 · 40 × 25 mm, 2-layer, 1.0mm FR4, black HASL · Updated 2026-04-15</p>
         </div>
 
-        {/* U1 — XIAO ESP32-S3 */}
+        {/* U1. XIAO ESP32-S3 */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>U1 — Seeed XIAO ESP32-S3</h2>
+          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>U1. Seeed XIAO ESP32-S3</h2>
           <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "#252525" }}>
             <table className="w-full text-sm">
               <thead>
@@ -36,18 +36,18 @@ export default function SchematicPage() {
                   { pin: "2", gpio: "GPIO2", net: "BATT_ADC", conn: "R1/R2 voltage divider midpoint", notes: "100k/100k divider; reads 0–1.85V for 0–3.7V cell" },
                   { pin: "3", gpio: "GPIO3", net: "BTN_B", conn: "SW2 pin 1; pull-up to 3V3 via R4 10kΩ", notes: "Reserved (double-tap)" },
                   { pin: "4", gpio: "GPIO4", net: "LED_DATA", conn: "LED1 DIN pin via R5 33Ω", notes: "WS2812/SK6812 data; 33Ω series resistor" },
-                  { pin: "5", gpio: "GPIO5", net: "GPIO5", conn: "—", notes: "Spare / future use" },
+                  { pin: "5", gpio: "GPIO5", net: "GPIO5", conn: ". ", notes: "Spare / future use" },
                   { pin: "6", gpio: "GPIO6", net: "I2S_BCLK", conn: "MIC1 SCK pin", notes: "I2S bit clock output to INMP441" },
                   { pin: "7", gpio: "GPIO7", net: "I2S_LRCK", conn: "MIC1 WS pin", notes: "I2S word select (L/R) output to INMP441" },
                   { pin: "8", gpio: "GPIO8", net: "I2S_DATA", conn: "MIC1 SD pin", notes: "I2S data input from INMP441" },
-                  { pin: "9", gpio: "GPIO9", net: "GPIO9", conn: "—", notes: "Spare" },
-                  { pin: "10", gpio: "GPIO10", net: "GPIO10", conn: "—", notes: "Spare" },
+                  { pin: "9", gpio: "GPIO9", net: "GPIO9", conn: ". ", notes: "Spare" },
+                  { pin: "10", gpio: "GPIO10", net: "GPIO10", conn: ". ", notes: "Spare" },
                   { pin: "11", gpio: "3V3", net: "PWR_3V3", conn: "C1/C2 bypass, MIC1 VDD, LED1 VDD, R3/R4 pull-ups", notes: "3.3V LDO output from XIAO onboard ME6211" },
                   { pin: "12", gpio: "GND", net: "GND", conn: "TP4056 GND, battery –, MIC1 GND, LED1 GND, SW1-2, SW2-2", notes: "System ground" },
                   { pin: "13", gpio: "5V", net: "PWR_5V", conn: "TP4056 OUT+ via SW_PWR SPDT slide switch", notes: "Battery-side 3.7V → XIAO 5V pad (accepts 3.7–5.5V)" },
-                  { pin: "14", gpio: "BAT", net: "PWR_BAT", conn: "NC", notes: "Not connected — XIAO internal LiPo connector, unused" },
-                  { pin: "—", gpio: "USB D+", net: "USB_DP", conn: "USB-C connector via castellated pad", notes: "Programming / debug" },
-                  { pin: "—", gpio: "USB D–", net: "USB_DM", conn: "USB-C connector via castellated pad", notes: "Programming / debug" },
+                  { pin: "14", gpio: "BAT", net: "PWR_BAT", conn: "NC", notes: "Not connected. XIAO internal LiPo connector, unused" },
+                  { pin: ". ", gpio: "USB D+", net: "USB_DP", conn: "USB-C connector via castellated pad", notes: "Programming / debug" },
+                  { pin: ". ", gpio: "USB D–", net: "USB_DM", conn: "USB-C connector via castellated pad", notes: "Programming / debug" },
                 ].map((row) => (
                   <tr key={row.pin + row.gpio} className="border-b" style={{ borderColor: "#1A1A1A" }}>
                     <td className="px-4 py-3 text-xs font-mono" style={{ color: "#5A5A5A" }}>{row.pin}</td>
@@ -64,7 +64,7 @@ export default function SchematicPage() {
 
         {/* MIC1 */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>MIC1 — INMP441 I2S MEMS Microphone Breakout</h2>
+          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>MIC1. INMP441 I2S MEMS Microphone Breakout</h2>
           <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "#252525" }}>
             <table className="w-full text-sm">
               <thead>
@@ -81,7 +81,7 @@ export default function SchematicPage() {
                   { pin: "SCK", net: "I2S_BCLK", conn: "U1 GPIO6 (pin 6)", notes: "Bit clock" },
                   { pin: "WS", net: "I2S_LRCK", conn: "U1 GPIO7 (pin 7)", notes: "Word select / LR clock" },
                   { pin: "SD", net: "I2S_DATA", conn: "U1 GPIO8 (pin 8)", notes: "Serial data output (MISO from mic POV)" },
-                  { pin: "L/R", net: "GND", conn: "System GND", notes: "MUST tie to GND — selects left channel; floating = undefined output" },
+                  { pin: "L/R", net: "GND", conn: "System GND", notes: "MUST tie to GND - selects left channel; floating = undefined output" },
                 ].map((row) => (
                   <tr key={row.pin} className="border-b" style={{ borderColor: "#1A1A1A" }}>
                     <td className="px-4 py-3 text-xs font-mono font-semibold" style={{ color: "#C8A97E" }}>{row.pin}</td>
@@ -97,7 +97,7 @@ export default function SchematicPage() {
 
         {/* LED1 */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>LED1 — SK6812 Mini-E Addressable RGB LED</h2>
+          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>LED1. SK6812 Mini-E Addressable RGB LED</h2>
           <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "#252525" }}>
             <table className="w-full text-sm">
               <thead>
@@ -112,7 +112,7 @@ export default function SchematicPage() {
                   { pin: "VDD", net: "PWR_3V3", conn: "U1 3V3 pin 11 via C3 100nF bypass", notes: "3.3V supply; SK6812 Mini-E rated 3.3–5V; brightness slightly reduced vs 5V but within spec" },
                   { pin: "GND", net: "GND", conn: "System GND", notes: "" },
                   { pin: "DIN", net: "LED_DATA", conn: "U1 GPIO4 (pin 4) via R5 33Ω", notes: "Series resistor protects ESP32 GPIO and dampens ringing" },
-                  { pin: "DOUT", net: "NC", conn: "NC", notes: "No daisy-chain — single LED only" },
+                  { pin: "DOUT", net: "NC", conn: "NC", notes: "No daisy-chain - single LED only" },
                 ].map((row) => (
                   <tr key={row.pin} className="border-b" style={{ borderColor: "#1A1A1A" }}>
                     <td className="px-4 py-3 text-xs font-mono font-semibold" style={{ color: "#C8A97E" }}>{row.pin}</td>
@@ -126,9 +126,9 @@ export default function SchematicPage() {
           </div>
         </section>
 
-        {/* U2 — TP4056 */}
+        {/* U2. TP4056 */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>U2 — TP4056 + DW01A Charging Module (USB-C input)</h2>
+          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>U2. TP4056 + DW01A Charging Module (USB-C input)</h2>
           <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "#252525" }}>
             <table className="w-full text-sm">
               <thead>
@@ -168,7 +168,7 @@ export default function SchematicPage() {
 
             {/* Capacitors */}
             <div>
-              <h3 className="text-sm font-medium mb-3" style={{ color: "#8A8A8A" }}>C1–C6 — Bypass Capacitors</h3>
+              <h3 className="text-sm font-medium mb-3" style={{ color: "#8A8A8A" }}>C1–C6. Bypass Capacitors</h3>
               <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "#252525" }}>
                 <table className="w-full text-sm">
                   <thead>
@@ -202,7 +202,7 @@ export default function SchematicPage() {
 
             {/* Resistors */}
             <div>
-              <h3 className="text-sm font-medium mb-3" style={{ color: "#8A8A8A" }}>R1–R5 — Resistors</h3>
+              <h3 className="text-sm font-medium mb-3" style={{ color: "#8A8A8A" }}>R1–R5. Resistors</h3>
               <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "#252525" }}>
                 <table className="w-full text-sm">
                   <thead>
@@ -280,10 +280,10 @@ export default function SchematicPage() {
           <div className="space-y-3">
             {[
               { n: "1", title: "L/R pin on INMP441 must be tied to GND", body: "If left floating, the I2S output is undefined. Always solder L/R to GND for left-channel selection. Verify with continuity check before powering on." },
-              { n: "2", title: "SK6812 VDD at 3.3V is within spec", body: "SK6812 Mini-E is rated 3.3–5V. Running at 3.3V is fine — brightness is slightly reduced vs 5V but the LED operates correctly. 3.3V simplifies power rail design." },
-              { n: "3", title: "MCU load MUST connect to OUT+ not BAT+", body: "Always route MCU power through TP4056 OUT+ (protected side), never directly to BAT+. The DW01A protection IC cuts OFF on over-discharge at ~2.8V — this only works if load is on OUT+." },
+              { n: "2", title: "SK6812 VDD at 3.3V is within spec", body: "SK6812 Mini-E is rated 3.3–5V. Running at 3.3V is fine - brightness is slightly reduced vs 5V but the LED operates correctly. 3.3V simplifies power rail design." },
+              { n: "3", title: "MCU load MUST connect to OUT+ not BAT+", body: "Always route MCU power through TP4056 OUT+ (protected side), never directly to BAT+. The DW01A protection IC cuts OFF on over-discharge at ~2.8V - this only works if load is on OUT+." },
               { n: "4", title: "Series resistor R5 on LED data line", body: "33Ω resistor between GPIO4 and LED1 DIN prevents GPIO latch-up during power transitions and dampens signal ringing on the LED data line. Do not omit." },
-              { n: "5", title: "No USB-C PD negotiation needed", body: "TP4056 charges at 5V/1A from any USB-A to USB-C or USB-C to USB-C charger without PD negotiation. The XIAO 5V pad receives battery power (3.7–4.2V) via slide switch — charge and run can be simultaneous." },
+              { n: "5", title: "No USB-C PD negotiation needed", body: "TP4056 charges at 5V/1A from any USB-A to USB-C or USB-C to USB-C charger without PD negotiation. The XIAO 5V pad receives battery power (3.7–4.2V) via slide switch - charge and run can be simultaneous." },
             ].map((note) => (
               <div key={note.n} className="flex gap-4 p-4 rounded-xl" style={{ background: "#161616", border: "1px solid #252525" }}>
                 <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"

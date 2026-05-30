@@ -1,0 +1,35 @@
+{
+  "check_number": 14,
+  "check_name": "flash_stub_log",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_184618/CHECK_14.json",
+  "key_contents": {
+    "log_path": "/Users/omarebrahim/.anticipy/system_v1/flash_stubs.jsonl",
+    "rows_total": 11,
+    "new_row": {
+      "ts": "2026-05-28T18:49:22.018782",
+      "device_name": "Anticipy-Acceptance-Probe",
+      "device_id_redacted": "redacted-acceptance",
+      "firmware_version_before": "0.0.0",
+      "firmware_version_after": "0.0.1",
+      "bytes_transferred": 1024,
+      "duration_ms": 250,
+      "success": true,
+      "error": null,
+      "is_stub": true
+    },
+    "last_entry": {
+      "ts": "2026-05-28T18:49:22.018782",
+      "device_name": "Anticipy-Acceptance-Probe",
+      "device_id_redacted": "redacted-acceptance",
+      "firmware_version_before": "0.0.0",
+      "firmware_version_after": "0.0.1",
+      "bytes_transferred": 1024,
+      "duration_ms": 250,
+      "success": true,
+      "error": null,
+      "is_stub": true
+    }
+  },
+  "ts": "2026-05-28T18:49:22.021423"
+}

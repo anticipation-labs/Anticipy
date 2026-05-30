@@ -1,0 +1,20 @@
+{
+  "check_number": 7,
+  "check_name": "onboarding_call_stub",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_194609/CHECK_07.json",
+  "key_contents": {
+    "log_path": "/Users/omarebrahim/.anticipy/system_v1/voice_call_stubs.jsonl",
+    "rows_total": 20,
+    "last_entry": {
+      "ts": 1780022851.725111,
+      "phone": "+15551237777",
+      "name": "Anticipy Acceptance",
+      "system_prompt": "Acceptance harness probe",
+      "expected_duration_seconds": 5,
+      "is_stub": true,
+      "stub_reason": "voice provider (twilio or equivalent) not configured in this build"
+    }
+  },
+  "ts": "2026-05-28T19:47:31.727210"
+}

@@ -1,0 +1,17 @@
+{
+  "surface": "the_internet_herokuapp",
+  "intent": "On this Add/Remove Elements page, click the button labeled Add Element. The task is complete when a new button labeled Delete appears on the page below the Add Element button.",
+  "surface_hint": "https://the-internet.herokuapp.com/add_remove_elements/",
+  "status": "ERROR",
+  "verdict": "FAIL",
+  "n_iterations": 0,
+  "elapsed_sec": 0.187,
+  "deadline_sec": 120.0,
+  "http_code": "000000",
+  "answer": "",
+  "evidence_text": "",
+  "evidence_screenshot_path": "",
+  "trajectory_dir": "",
+  "trajectory_recovered_from_disk": false,
+  "error": null
+}

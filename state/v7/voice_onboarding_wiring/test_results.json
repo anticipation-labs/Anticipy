@@ -1,0 +1,53 @@
+{
+  "test_run_at": "2026-05-30T16:22Z",
+  "phase8_wiring_test": {
+    "twilio_magic_number_test": {
+      "to": "+15005550006",
+      "from": "+16196584447",
+      "result": "ACCEPTED",
+      "twilio_sid": "CAe707...REDACTED...87af",
+      "initial_status": "queued",
+      "final_status": "busy",
+      "expected": "busy (Twilio magic test number always returns busy)",
+      "verdict": "PASS"
+    },
+    "twiml_well_formedness": {
+      "initial": "PASS - 6 children under <Response>",
+      "answer_q2": "PASS - 4 children under <Response>",
+      "answer_final": "PASS - 2 children (<Say> + <Hangup>)"
+    },
+    "engine_endpoint_gates": {
+      "missing_phone": "422 (FastAPI body validation)",
+      "bad_phone": "400 phone contains no digits",
+      "non_plus_one": "400 voice broker accepts +1 US/CA numbers only",
+      "no_session_token": "401 sign in on the website first",
+      "voice_status_missing": "404 no voice-onboarding call recorded"
+    },
+    "tauri_compile": "PASS via cargo check (pre-existing warnings only)",
+    "twilio_caller_id_verified": true,
+    "twilio_caller_id_error_21215_encountered": false,
+    "a2p_10dlc_required_for_voice": false,
+    "broker_creds_valid": true
+  },
+  "shipped_files": [
+    "desktop/src/popover.html",
+    "desktop/src-tauri/src/lib.rs",
+    "engine/app/product/server.py",
+    "src/app/api/twilio/voice-relay/route.ts",
+    "src/app/api/twilio/voice-relay/MIGRATION.sql",
+    "src/app/api/twilio/onboarding/initial/route.ts",
+    "src/app/api/twilio/onboarding/answer/route.ts",
+    "src/app/api/twilio/onboarding/status/route.ts"
+  ],
+  "omar_real_phone_test": {
+    "phone": "+16047245161",
+    "would_receive_call_if_placed": true,
+    "blocked_per_prompt": "Owner explicitly authorized +16047245161 for SMS test only, not voice. Test deferred to magic +15005550006.",
+    "to_actually_call_omar": "POST /api/onboarding/call_start {'phone_e164': '+16047245161'} after Supabase session token is set in env"
+  },
+  "operator_actions_required": [
+    "Apply Supabase migration: src/app/api/twilio/voice-relay/MIGRATION.sql (creates anticipy_voice_onboarding_calls table; service-role only).",
+    "Deploy Next.js (Vercel) so /api/twilio/voice-relay and /api/twilio/onboarding/{initial,answer,status} go live.",
+    "Rebuild + redeploy the engine sidecar (PyInstaller) so /api/onboarding/call_start and /api/onboarding/voice_status are in the shipped binary."
+  ]
+}

@@ -121,6 +121,25 @@ class OpenRouterClient:
         exponential backoff up to ~30s total."""
         max_tokens = max(max_tokens, MIN_TOKENS)
         msgs = [dict(m) for m in messages]
+        # Per-task budget gate. Mirrors platform_adapter.model_call.
+        # If the active task has already crossed the hard cap, refuse
+        # the call so the loop escalates instead of burning more money.
+        # Best-effort: if cost telemetry is not importable (older test
+        # rigs) we fall through transparently.
+        _ct = None
+        _task_id = None
+        try:
+            from app.product import cost_telemetry as _ct  # type: ignore
+            _task_id = _ct.get_active_task_id_for_thread()
+            if _task_id:
+                _gate_reason = _ct.budget_gate(_task_id)
+                if _gate_reason:
+                    return ORResponse(
+                        content="", model=model, latency_s=0.0,
+                        error=f"BUDGET_EXCEEDED: {_gate_reason}",
+                    )
+        except Exception:
+            _ct = None  # cost telemetry optional
         if image_b64:
             # Attach the image to the last user turn.
             for m in reversed(msgs):
@@ -231,6 +250,22 @@ class OpenRouterClient:
                 raw=j,
             )
             resp.raw["_credential_mode"] = credential_mode
+            # Accrue cost into the per-task ledger so the budget gate
+            # has accurate totals for the NEXT call. Best-effort; never
+            # break the call path. is_vision flows through so the vision
+            # abort count keeps working when the image goes via the
+            # action-engine path.
+            try:
+                if _ct is not None and _task_id:
+                    _ct.record_call(
+                        _task_id, resp.model,
+                        int(resp.prompt_tokens or 0),
+                        int(resp.completion_tokens or 0),
+                        float(resp.cost_usd or 0.0),
+                        is_vision=bool(image_b64),
+                    )
+            except Exception:
+                pass
 
             # Reasoning model starved the answer: retry once, 2x budget.
             if (not content and reasoning and finish == "length"

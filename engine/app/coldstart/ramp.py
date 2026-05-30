@@ -57,10 +57,13 @@ def frozen_threshold(days_since_onboard: int,
         return float(act_threshold(UserContext.from_profile(UserProfile(
             user_id="coldstart", name="", role_title="",
             what_they_do="", mandate=""))))
+    # SCALE: generic placeholders, not the founder's profile. The
+    # frozen ramp only needs an onboarded-shaped profile; biasing it
+    # toward "Founder" priors would skew every stranger's ramp.
     return float(act_threshold(UserContext.from_profile(UserProfile(
-        user_id="coldstart", name="Omar", role_title="Founder",
-        what_they_do="runs an AI hardware startup",
-        mandate="Handle scheduling and email proactively.",
+        user_id="coldstart", name="(wearer)", role_title="(role)",
+        what_they_do="(what they do)",
+        mandate="(mandate)",
         days_since_onboard=max(0, int(days_since_onboard)),
         trajectory_confidence=max(0.0, min(1.0,
                                            float(trajectory_confidence)))))))

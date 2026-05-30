@@ -1,0 +1,9 @@
+[2026-05-29T06:29:30Z] overnight loop start, PID 2152
+
+[2026-05-29T06:29:38Z] === iter 1 start ===
+[2026-05-29T06:30:01Z] iter=1 source engine bound on 8731 after 5 polls
+[2026-05-29T06:30:01Z] iter=1 running Z-001 harness
+[2026-05-29T06:30:03Z] iter=1 Z-001 verdict=FAIL 3/3 PASS rc=1 run_dir=state/v7/z001_e2e_runs/20260529T063002Z
+[2026-05-29T06:32:03Z] iter=1 18-CHECK (non-audio) 5/15 PASS dir=proof-artifacts/acceptance_20260528_233003
+[2026-05-29T06:32:03Z] iter=1 dispatching claude for CHECK 01 (site_live)
+[2026-05-29T06:32:08Z] iter=1 dispatched all failing-CHECK fixers; waiting up to 30min for them to land before next iter

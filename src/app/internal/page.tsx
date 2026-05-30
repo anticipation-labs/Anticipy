@@ -14,7 +14,7 @@ interface DocItem {
 }
 
 const DOCS: DocItem[] = [
-  // Hardware docs — now internal pages
+  // Hardware docs - now internal pages
   {
     title: "Firmware Design Doc",
     description: "Complete hardware spec: ESP32-S3, block diagram, pin assignments, state machine, audio pipeline, API contract",
@@ -45,7 +45,7 @@ const DOCS: DocItem[] = [
   },
   {
     title: "Manufacturing Order Guide",
-    description: "JLCPCB, PCBWay, Seeed Fusion, MacroFab, Bittele (Toronto) — 7-day sample checklist with direct order links",
+    description: "JLCPCB, PCBWay, Seeed Fusion, MacroFab, Bittele (Toronto) - 7-day sample checklist with direct order links",
     category: "Hardware",
     href: "/internal/docs/manufacturing",
     badge: "~$37 USD/unit",
@@ -73,13 +73,13 @@ const DOCS: DocItem[] = [
   },
   {
     title: "Firmware Upload (Web Flash)",
-    description: "Flash firmware to the ESP32-S3 pendant directly from Chrome — no drivers, no CLI. Web Serial API one-click upload.",
+    description: "Flash firmware to the ESP32-S3 pendant directly from Chrome - no drivers, no CLI. Web Serial API one-click upload.",
     category: "Hardware",
     href: "/internal/docs/pendant-upload",
     badge: "Web Serial",
   },
 
-  // Research docs — now internal pages
+  // Research docs - now internal pages
   {
     title: "Bill of Materials",
     description: "All 16 components with verified prices and direct buy links. ~$77 CAD prototype. 72% under $100 CAD budget.",
@@ -119,7 +119,7 @@ const DOCS: DocItem[] = [
   },
   {
     title: "Chrome Extension Agent",
-    description: "LLM-powered browser automation in user's Chrome — DOM manipulation, form filling",
+    description: "LLM-powered browser automation in user's Chrome. DOM manipulation, form filling",
     category: "Software",
     href: "https://github.com/omize10/Anticipy/blob/main/extension/agent.js",
     external: true,
@@ -151,14 +151,14 @@ const DOCS: DocItem[] = [
   },
   {
     title: "Order XIAO ESP32-S3",
-    description: "From Seeed Studio — $10.33 CAD each. 5+ recommended. Ships from Shenzhen via DHL.",
+    description: "From Seeed Studio - $10.33 CAD each. 5+ recommended. Ships from Shenzhen via DHL.",
     category: "Orders",
     href: "https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html",
     external: true,
     badge: "$10.33 CAD",
   },
   {
-    title: "Order via Bittele (Toronto) — Zero Touch",
+    title: "Order via Bittele (Toronto). Zero Touch",
     description: "Ship all files + components to Toronto. They assemble, test, flash, ship to West Vancouver. 5–10 days.",
     category: "Orders",
     href: "https://www.7pcb.com/",
@@ -174,7 +174,7 @@ const DOCS: DocItem[] = [
     badge: "$5–8/box",
   },
   {
-    title: "ShipBob Fulfillment — Surrey, BC",
+    title: "ShipBob Fulfillment. Surrey, BC",
     description: "30 min from West Vancouver. Receives from manufacturer, stores inventory, ships to customers.",
     category: "Orders",
     href: "https://www.shipbob.com/",
@@ -205,7 +205,7 @@ const DOCS: DocItem[] = [
 
   // Links
   {
-    title: "GitHub — Anticipy",
+    title: "GitHub. Anticipy",
     description: "Source code repository",
     category: "Links",
     href: "https://github.com/omize10/Anticipy",

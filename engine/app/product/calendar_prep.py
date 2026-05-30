@@ -306,8 +306,26 @@ def find_upcoming_meeting(within_minutes: int = 30,
         if hasattr(walker, "bridge_ready") and not walker.bridge_ready():
             _logger.info("find_upcoming_meeting: bridge not ready")
             return None
+        # Resolve the calendar URL from the user config. URL CHOICES
+        # live in ~/.anticipy/inhale_sources.json, not in source code.
+        cal_url = ""
         try:
-            rows = walker.walk_calendar(per_tab_budget_s=12.0)
+            from app.coldstart import sources as _inhale_sources
+            for s in _inhale_sources.load_enabled():
+                if "calendar" in str(s.get("id") or "").lower():
+                    cal_url = str(s.get("url") or "")
+                    break
+        except Exception as exc:
+            _logger.warning(
+                "find_upcoming_meeting: load_enabled failed: %s", exc)
+        if not cal_url:
+            _logger.info(
+                "find_upcoming_meeting: no calendar source enabled in "
+                "inhale_sources.json")
+            return None
+        try:
+            rows = walker.walk_calendar(
+                url=cal_url, per_tab_budget_s=12.0)
         except Exception as exc:
             _logger.warning(
                 "find_upcoming_meeting: walk_calendar failed: %s", exc)
@@ -491,8 +509,24 @@ def _dossier_notes_for(label: str, max_chars: int = 600) -> list[str]:
         from app.product.dossier_active_loader import DossierLoader
     except Exception:
         return notes
+    # SCALE: resolve the active wearer's account_id via the standard
+    # env > USER_ID > machine_id chain instead of hardcoding the
+    # founder's launchctl value. The loader's _candidate_paths fallback
+    # still applies, so a global dossier still resolves.
     try:
-        loader = DossierLoader("anticipy-user")
+        from app.product.server import _default_account_id
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or _default_account_id()
+            or "wearer"
+        )
+    except Exception:
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or "wearer"
+        )
+    try:
+        loader = DossierLoader(account_id)
     except Exception:
         return notes
     needle = label.lower()

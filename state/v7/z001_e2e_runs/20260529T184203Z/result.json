@@ -1,0 +1,111 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T184203Z",
+  "started_at": "20260529T184203Z",
+  "account_id": "z001_e2e_13d8d8e87934",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "08A575F81985611D23BB60A20CC1AD01",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "53E94684FC3D804B41381255D8741841",
+    "74D7A566E257CAA52A626B72877DB489",
+    "825E3EC5D354FF265AB1F944BEDEC319",
+    "9E9BEAEBC68B723CE50578D55CCCEF01",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 89041
+    },
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "key_ok": true,
+      "onboarded": true,
+      "provisioned": false
+    },
+    {
+      "name": "create_identity",
+      "ok": true,
+      "email": "z001_test_0e9e3dedc7cb@anticipy-test.local",
+      "password_len": 16
+    },
+    {
+      "name": "browser_signup",
+      "ok": true,
+      "targetId": "89CB620880E3A5B502311D8A30253036",
+      "final_url": "https://www.anticipy.ai/app/download?token=3c8ae759c293478b688ec7c2f4b66454026fc916dfbc48e4b91f5deaf55f7730",
+      "handoff_token": "3c8ae759c293478b688ec7c2f4b66454026fc916dfbc48e4b91f5deaf55f7730",
+      "handoff_token_present": true
+    },
+    {
+      "name": "supabase_user_exists",
+      "ok": true,
+      "user_id": "e30f4b36-654a-4e18-8a94-15b93d6cc4ac",
+      "email": "z001_test_0e9e3dedc7cb@anticipy-test.local",
+      "created_at": "2026-05-29T18:42:07.029972Z"
+    },
+    {
+      "name": "exchange_handoff",
+      "ok": true,
+      "status": 200,
+      "has_access_token": true,
+      "has_refresh_token": true,
+      "user_email": "z001_test_0e9e3dedc7cb@anticipy-test.local",
+      "user_id": "e30f4b36-654a-4e18-8a94-15b93d6cc4ac"
+    },
+    {
+      "name": "engine_inject",
+      "ok": true,
+      "account_id": "z001_e2e_13d8d8e87934",
+      "transcript_in": "Draft an email to lara@anticipy-test.local with subject 'Thursday call confirmation' saying 'Hi Lara, just confirming our call on Thursday. Let me know if the time still works.'.",
+      "outcome": "DEFERRED",
+      "proposal": "Should I save a reminder for this school item: Draft an email to lara@anticipy-test.local with subject 'Thursday call confirmation' saying 'Hi Lara, just confirming our call on Thursday. Let me know if the time still works.'?",
+      "ingest_id": "asr-transcript-6416f208c0ba4ac48f45ef9af95fdbda",
+      "has_pending": true,
+      "pending_instruction": "Draft an email to lara@anticipy-test.local with subject 'Thursday call confirmation' saying 'Hi Lara, just confirming our call on Thursday. Let me know if the time still works.'."
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "engine_inject",
+  "error": "engine /api/act failed: status=0 err='RemoteDisconnected: Remote end closed connection without response'",
+  "supabase_user_id": "e30f4b36-654a-4e18-8a94-15b93d6cc4ac",
+  "finished_at": "20260529T184215Z",
+  "opened_targets": [
+    "89CB620880E3A5B502311D8A30253036"
+  ],
+  "closed_targets": {
+    "89CB620880E3A5B502311D8A30253036": true
+  },
+  "cdp_pages_after": [
+    "08A575F81985611D23BB60A20CC1AD01",
+    "1AB262D0388BD804951A9898EBBA6E85",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "53E94684FC3D804B41381255D8741841",
+    "74D7A566E257CAA52A626B72877DB489",
+    "825E3EC5D354FF265AB1F944BEDEC319",
+    "9E9BEAEBC68B723CE50578D55CCCEF01",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8"
+  ],
+  "leaked_target_ids": [
+    "1AB262D0388BD804951A9898EBBA6E85"
+  ],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

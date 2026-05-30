@@ -1,0 +1,83 @@
+{
+  "id": "calendly_event_lookup",
+  "surface": "Calendly",
+  "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+  "intent": "Read the Calendly event types page that is currently open and report back the names of the event types listed. Do not click any event. Do not delete anything. Just read the page and report what you see.",
+  "started_at": "20260529T225957Z",
+  "verdict": "PASS",
+  "skip_reason": "",
+  "probe": {
+    "logged_in": true,
+    "skip_reason": "",
+    "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+    "title": "Event types - Scheduling - Calendly",
+    "body_snippet": "create\nscheduling\nmeetings\navailability\ncontacts\nworkflows\npayments\nnew\nintegrations & apps\nrouting\nupgrade plan\nanalytics\nadmin center\nhelp\no\nreview our updated terms of use\nwe've updated our terms of use to reflect how calendly works today. take a moment to review what's changed.\naccept terms\nrevi",
+    "body_chars": 701,
+    "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/calendly_event_lookup/login_probe.png",
+    "probe_target_id": "261F6293ABAFC88A85D9E21D408465AF"
+  },
+  "act_probe": {
+    "ok": true,
+    "skipped": true,
+    "reason": "scenario not routed via /api/act"
+  },
+  "agent_window_prewarm": {
+    "prewarmed": true,
+    "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+    "target_id": "81C9A312084271CBBB4DAA7B4971EDD3",
+    "settle_seconds": 18.0
+  },
+  "universal_result": {
+    "ok": true,
+    "intent": "Read the Calendly event types page that is currently open and report back the names of the event types listed. Do not click any event. Do not delete anything. Just read the page and report what you see.",
+    "surface_hint": "https://calendly.com/app/scheduling/meeting_types/user/me",
+    "status": "SUCCESS",
+    "answer": "the Calendly event types page is currently open; the names of the event types listed are reported back; no event is clicked; nothing is deleted; the page is read and what is seen is reported",
+    "evidence": "vision-confirmed: The Calendly Event types page is visible and shows one event type listed: '30 Minute Meeting' (30 min, Google Meet, One-on-One, Mon-Sun hours vary) under the user 'Omize Ten'. The page is fully loaded",
+    "n_iterations": 0,
+    "subtasks": [
+      {
+        "subgoal": "Read the Calendly event types page that is currently open and report back the names of the event types listed. Do not click any event. Do not delete anything. Just read the page and report what you see.",
+        "status": "SUCCESS",
+        "answer": "the Calendly event types page is currently open; the names of the event types listed are reported back; no event is clicked; nothing is deleted; the page is read and what is seen is reported",
+        "evidence": "vision-confirmed: The Calendly Event types page is visible and shows one event type listed: '30 Minute Meeting' (30 min, Google Meet, One-on-One, Mon-Sun hours vary) under the user 'Omize Ten'. The page is fully loaded",
+        "iters": 0
+      }
+    ],
+    "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780095628_eaade6",
+    "error": null,
+    "elapsed_sec": 20.323,
+    "deadline_sec": 300.0,
+    "deadline_hit": false
+  },
+  "universal_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_sec": 20.385,
+      "status": "SUCCESS",
+      "answer_snip": "the Calendly event types page is currently open; the names of the event types listed are reported back; no event is clicked; nothing is deleted; the page is read and what is seen is reported",
+      "error": null,
+      "deadline_hit": false,
+      "n_iterations": 0
+    }
+  ],
+  "universal_elapsed_sec": 20.385,
+  "verify": {
+    "engine_status": "SUCCESS",
+    "engine_answer": "the Calendly event types page is currently open; the names of the event types listed are reported back; no event is clicked; nothing is deleted; the page is read and what is seen is reported",
+    "engine_evidence": "vision-confirmed: The Calendly Event types page is visible and shows one event type listed: '30 Minute Meeting' (30 min, Google Meet, One-on-One, Mon-Sun hours vary) under the user 'Omize Ten'. The page is fully loaded",
+    "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780095628_eaade6",
+    "elapsed_sec": 20.323,
+    "deadline_hit": false,
+    "n_iterations": 0,
+    "after_screenshot": "",
+    "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/calendly_event_lookup/agent_window_after.png",
+    "success_signal_present": null,
+    "trajectory_copy": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/calendly_event_lookup/trajectory",
+    "screenshot_count": 1,
+    "screenshot_paths": [
+      "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T225813Z/calendly_event_lookup/trajectory/s0_i00_before.png"
+    ]
+  },
+  "finished_at": "20260529T230048Z"
+}

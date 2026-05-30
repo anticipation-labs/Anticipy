@@ -1,0 +1,14 @@
+{
+  "check_number": 16,
+  "check_name": "agent_reliability",
+  "status": "FAIL",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_184618/CHECK_16.json",
+  "key_contents": {
+    "log_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_184618/check16_agent_reliability.log",
+    "exit_code": 1,
+    "resolvable_pass": -1,
+    "ambiguous_pass": -1,
+    "stdout_tail": ""
+  },
+  "ts": "2026-05-28T18:49:43.289712"
+}

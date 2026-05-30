@@ -130,7 +130,35 @@ const ENGINE_PORT_FILE: &str = "engine.port";
 const DEFAULT_ENGINE_PORT: u16 = 8731;
 const DOSSIER_DEFAULT_USER_ID: &str = "anticipy-mac-user";
 
+// First-launch bootstrap constants. Self-bootstrap replicates what
+// public/install.sh does so a stranger who only drags the .app into
+// /Applications still gets a working bridge + Chrome CDP + venv. The
+// marker file pins idempotence; wiping it triggers re-bootstrap.
+const BOOTSTRAP_MARKER_FILE: &str = ".bootstrap-done";
+const BOOTSTRAP_LOG_FILE: &str = "bootstrap.log";
+const BRIDGE_LOG_FILE: &str = "anticipy-bridge.log";
+const BRIDGE_PID_FILE: &str = "anticipy-bridge.pid";
+const BRIDGE_LAUNCHER_NAME: &str = "anticipy-agent";
+const BRIDGE_PORT: u16 = 7777;
+const ANTICIPY_EXTENSION_ID: &str = "npnpagopediecennpleihemoochikggb";
+const NATIVE_MESSAGING_HOSTS_REL: &str =
+    "Library/Application Support/Google/Chrome/NativeMessagingHosts";
+const NATIVE_MESSAGING_HOST_NAME: &str = "com.anticipy.agent.json";
+const SYSTEM_PYTHON3_PATH: &str = "/usr/bin/python3";
+const BRIDGE_RESOURCE_NAME: &str = "anticipy-bridge.py";
+const EXTENSION_RESOURCE_NAME: &str = "anticipy-extension.zip";
+// Pip packages mirror public/install.sh install_native_bridge(). websockets
+// is what the CDP bridge needs at runtime; the others are inherited from the
+// shipped agent so the same venv works for the full native-host agent later.
+const BRIDGE_PIP_PACKAGES: &[&str] = &[
+    "websockets>=12",
+    "httpx>=0.25",
+    "cryptography>=41",
+    "python-dotenv>=1.0",
+];
+
 static ENGINE_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+static BRIDGE_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
 
 // Embed Supabase coordinates at compile time when available. Falls back to
 // runtime env vars; both being absent yields an empty Past column instead of
@@ -1325,6 +1353,240 @@ fn hangup_dossier_call(app: AppHandle) -> Result<serde_json::Value, String> {
     post_engine_json("/api/dossier/inbound", payload)
 }
 
+/// Start the voice-onboarding flow: validate the user-entered phone,
+/// hit the local engine's /api/onboarding/call_start endpoint, and
+/// emit a `voice-onboarding-status` event so the popover reflects the
+/// transition immediately. The engine is the authority on whether the
+/// outbound Twilio call actually placed; this command just forwards.
+///
+/// Returns the engine's JSON response verbatim so the popover can
+/// surface the call SID and any broker-side error detail.
+#[tauri::command]
+fn start_voice_onboarding(
+    app: AppHandle,
+    phone_e164: String,
+) -> Result<serde_json::Value, String> {
+    let phone = phone_e164.trim().to_string();
+    // Mirror the broker's E.164 + +1-only gate so a typo never wastes a
+    // network round-trip. The engine re-validates.
+    if !phone.starts_with("+1") || phone.len() < 11 || phone.len() > 16 {
+        let err = "phone must be a +1 US/CA E.164 number".to_string();
+        let _ = app.emit(
+            "voice-onboarding-status",
+            serde_json::json!({
+                "phase": "error",
+                "phone": phone,
+                "error": err.clone(),
+                "ts": current_unix_seconds(),
+            }),
+        );
+        return Err(err);
+    }
+    let _ = app.emit(
+        "voice-onboarding-status",
+        serde_json::json!({
+            "phase": "calling",
+            "phone": phone.clone(),
+            "ts": current_unix_seconds(),
+        }),
+    );
+    let payload = serde_json::json!({
+        "phone_e164": phone,
+    });
+    match post_engine_json("/api/onboarding/call_start", payload) {
+        Ok(body) => {
+            let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+            if !ok {
+                let err = body
+                    .get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("engine declined the call")
+                    .to_string();
+                let _ = app.emit(
+                    "voice-onboarding-status",
+                    serde_json::json!({
+                        "phase": "error",
+                        "phone": phone,
+                        "error": err,
+                        "ts": current_unix_seconds(),
+                    }),
+                );
+                return Ok(body);
+            }
+            // Kick off a background poller so the popover sees the
+            // question_N transitions and the final completion event
+            // without the popover needing to wake up. Aborts after 8
+            // minutes (longer than the worst-case 7-question call) so
+            // a dropped call eventually frees the thread.
+            let call_sid = body
+                .get("call_sid")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let account_id = body
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let app_clone = app.clone();
+            let phone_clone = phone.clone();
+            std::thread::spawn(move || {
+                spawn_voice_status_poller(
+                    app_clone, call_sid, account_id, phone_clone,
+                );
+            });
+            Ok(body)
+        }
+        Err(e) => {
+            let _ = app.emit(
+                "voice-onboarding-status",
+                serde_json::json!({
+                    "phase": "error",
+                    "phone": phone,
+                    "error": e.clone(),
+                    "ts": current_unix_seconds(),
+                }),
+            );
+            Err(e)
+        }
+    }
+}
+
+/// Long-poll the engine's /api/onboarding/voice_status endpoint and
+/// emit `voice-onboarding-status` events on every phase transition so
+/// the popover renders live progress. Caps at 8 minutes so a dropped
+/// call eventually frees the polling thread.
+fn spawn_voice_status_poller(
+    app: AppHandle,
+    call_sid: String,
+    account_id: String,
+    phone: String,
+) {
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_secs(8 * 60);
+    let mut last_phase: String = String::new();
+    let mut last_index: i64 = -1;
+    loop {
+        if std::time::Instant::now() >= deadline {
+            let _ = app.emit(
+                "voice-onboarding-status",
+                serde_json::json!({
+                    "phase": "error",
+                    "phone": phone,
+                    "error": "voice onboarding poller timed out after 8 minutes",
+                    "ts": current_unix_seconds(),
+                }),
+            );
+            return;
+        }
+        let path = if !call_sid.is_empty() {
+            format!(
+                "/api/onboarding/voice_status?call_sid={}",
+                urlencode_minimal(&call_sid),
+            )
+        } else {
+            format!(
+                "/api/onboarding/voice_status?account_id={}",
+                urlencode_minimal(&account_id),
+            )
+        };
+        match get_engine_json(&path) {
+            Ok(body) => {
+                let phase = body
+                    .get("phase")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let q_index = body
+                    .get("question_index")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let q_total = body
+                    .get("question_total")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(7);
+                let completed = body
+                    .get("completed")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let error_msg = body
+                    .get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                // Emit on transition. The "question" phase fires once
+                // per index increment; "completed" and "error" fire
+                // once each. "calling" never overrides itself.
+                let should_emit =
+                    phase != last_phase || q_index != last_index;
+                if should_emit {
+                    last_phase = phase.clone();
+                    last_index = q_index;
+                    // Map the website's "in_progress" with a question
+                    // index > 0 to the popover's "question" phase so
+                    // the UI shows "Question N of 7" cleanly.
+                    let ui_phase = if completed {
+                        "completed"
+                    } else if !error_msg.is_empty()
+                        || phase == "error"
+                        || phase == "failed"
+                    {
+                        "error"
+                    } else if phase == "in_progress" && q_index > 0 {
+                        "question"
+                    } else if phase == "calling" {
+                        "calling"
+                    } else {
+                        phase.as_str()
+                    };
+                    let _ = app.emit(
+                        "voice-onboarding-status",
+                        serde_json::json!({
+                            "phase": ui_phase,
+                            "phone": phone,
+                            "question_index": q_index,
+                            "question_total": q_total,
+                            "completed": completed,
+                            "error": if error_msg.is_empty() {
+                                serde_json::Value::Null
+                            } else {
+                                serde_json::Value::String(error_msg.clone())
+                            },
+                            "ts": current_unix_seconds(),
+                        }),
+                    );
+                }
+                if completed || phase == "error" || phase == "failed" {
+                    return;
+                }
+            }
+            Err(_) => {
+                // Transient: keep polling, the engine may be a beat
+                // behind a deferred-attach reload.
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
+}
+
+/// Minimal percent-encoding for the query string. Covers the subset
+/// that appears in a Twilio call SID (alnum) and an account_id
+/// (alnum + dash + underscore), so the only real escapes are spaces
+/// and the literal "+" in case an account_id ever holds one.
+fn urlencode_minimal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+            out.push(ch);
+        } else {
+            for b in ch.to_string().into_bytes() {
+                out.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    out
+}
+
 #[tauri::command]
 fn fetch_dossier_summary(app: AppHandle) -> DossierSummary {
     match get_engine_json("/api/dossier/events") {
@@ -1532,6 +1794,752 @@ fn install_anticipy_button_action(
     }
 }
 
+// ---------------------------------------------------------------------------
+// First-launch bootstrap. Self-contained replacement for public/install.sh
+// so a stranger who only drags Anticipy.app into /Applications still gets a
+// working bridge (port 7777), a venv at ~/.anticipy/venv/, the Chrome native
+// messaging host JSON wired up, and Chrome relaunched on the CDP port.
+// Idempotent: skipped after the marker file is written. Reversible: deleting
+// ~/.anticipy/.bootstrap-done forces a re-run on next launch.
+// ---------------------------------------------------------------------------
+
+fn bootstrap_marker_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BOOTSTRAP_MARKER_FILE))
+}
+
+fn bootstrap_log_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BOOTSTRAP_LOG_FILE))
+}
+
+fn bridge_log_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BRIDGE_LOG_FILE))
+}
+
+fn bridge_pid_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BRIDGE_PID_FILE))
+}
+
+fn bridge_launcher_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BRIDGE_LAUNCHER_NAME))
+}
+
+fn venv_dir() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join("venv"))
+}
+
+fn venv_python_path() -> Option<PathBuf> {
+    venv_dir().map(|v| v.join("bin").join("python"))
+}
+
+fn venv_pip_path() -> Option<PathBuf> {
+    venv_dir().map(|v| v.join("bin").join("pip"))
+}
+
+fn bridge_target_script_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join("anticipy-bridge.py"))
+}
+
+fn native_messaging_host_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    Some(
+        home.join(NATIVE_MESSAGING_HOSTS_REL)
+            .join(NATIVE_MESSAGING_HOST_NAME),
+    )
+}
+
+/// Append a line to the bootstrap log. Best-effort; never panics.
+fn bootstrap_log(line: &str) {
+    if let Some(path) = bootstrap_log_path() {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
+            use std::io::Write;
+            let stamp = current_unix_seconds();
+            let _ = writeln!(f, "[{:.0}] {}", stamp, line);
+        }
+    }
+}
+
+fn emit_bootstrap_progress(app: &AppHandle, phase: &str, message: &str) {
+    bootstrap_log(&format!("{}: {}", phase, message));
+    let _ = app.emit(
+        "bootstrap-progress",
+        serde_json::json!({
+            "phase": phase,
+            "message": message,
+            "ts": current_unix_seconds(),
+        }),
+    );
+}
+
+fn emit_bootstrap_error(app: &AppHandle, phase: &str, message: &str) {
+    bootstrap_log(&format!("ERROR {}: {}", phase, message));
+    let _ = app.emit(
+        "bootstrap-error",
+        serde_json::json!({
+            "phase": phase,
+            "message": message,
+            "ts": current_unix_seconds(),
+        }),
+    );
+}
+
+fn emit_bootstrap_done(app: &AppHandle) {
+    bootstrap_log("bootstrap-done");
+    let _ = app.emit(
+        "bootstrap-done",
+        serde_json::json!({ "ts": current_unix_seconds() }),
+    );
+}
+
+/// Resolve the bundled resource directory. In a built .app this is
+/// Contents/Resources. In dev builds we fall back to the source tree under
+/// desktop/src-tauri/resources/. Falls through to a current_exe()/../Resources
+/// lookup so we still work even if app.path().resource_dir() trips on
+/// canonicalize on copied .app bundles.
+fn bootstrap_resource_dir(app: &AppHandle) -> Option<PathBuf> {
+    // Path 1: Tauri's PathResolver. Canonical for production .app bundles.
+    match app.path().resource_dir() {
+        Ok(p) => {
+            if p.exists() {
+                bootstrap_log(&format!("resource_dir(): {}", p.display()));
+                return Some(p);
+            } else {
+                bootstrap_log(&format!(
+                    "resource_dir() returned {} but does not exist on disk",
+                    p.display()
+                ));
+            }
+        }
+        Err(e) => {
+            bootstrap_log(&format!("resource_dir() failed: {e}"));
+        }
+    }
+    // Path 2: derive from current_exe(). On macOS the canonical layout is
+    // ${.app}/Contents/MacOS/Anticipy with resources at
+    // ${.app}/Contents/Resources. Use literal join("..") so we do not need
+    // canonicalize (which fails on missing intermediate symlinks).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(macos_dir) = exe.parent() {
+            if let Some(contents_dir) = macos_dir.parent() {
+                let resources = contents_dir.join("Resources");
+                if resources.exists() {
+                    bootstrap_log(&format!(
+                        "resource fallback (exe parent): {}",
+                        resources.display()
+                    ));
+                    return Some(resources);
+                }
+            }
+        }
+    }
+    // Path 3: dev fallback. Walk up from current_exe() to find the source
+    // tree under desktop/src-tauri/resources/.
+    let exe = std::env::current_exe().ok()?;
+    let mut cur = exe.as_path();
+    while let Some(parent) = cur.parent() {
+        let candidate = parent.join("desktop").join("src-tauri").join("resources");
+        if candidate.exists() {
+            bootstrap_log(&format!("resource fallback (dev tree): {}", candidate.display()));
+            return Some(candidate);
+        }
+        cur = parent;
+    }
+    bootstrap_log("resource_dir: all three lookup paths failed");
+    None
+}
+
+fn chrome_binary_present() -> bool {
+    _resolve_chrome_binary().is_some()
+}
+
+/// Confirm /usr/bin/python3 (stock macOS Sonoma / Tahoe ship Python 3.9). If
+/// absent the stranger needs Xcode Command Line Tools; we surface a clear
+/// error instead of silently failing.
+fn ensure_system_python3() -> Result<PathBuf, String> {
+    let path = PathBuf::from(SYSTEM_PYTHON3_PATH);
+    if !path.exists() {
+        return Err(format!(
+            "{} not found. Install Xcode Command Line Tools: run xcode-select --install in Terminal.",
+            SYSTEM_PYTHON3_PATH
+        ));
+    }
+    // Sanity check: ensure it actually runs and reports a version >= 3.9.
+    let out = Command::new(&path)
+        .args(["-c", "import sys; print('%d.%d' % sys.version_info[:2])"])
+        .output()
+        .map_err(|e| format!("{} probe failed: {e}", SYSTEM_PYTHON3_PATH))?;
+    if !out.status.success() {
+        return Err(format!(
+            "{} did not return a version string",
+            SYSTEM_PYTHON3_PATH
+        ));
+    }
+    Ok(path)
+}
+
+/// Stage the bundled bridge script into ~/.anticipy/anticipy-bridge.py.
+fn install_bridge_script(app: &AppHandle) -> Result<PathBuf, String> {
+    let res_dir = bootstrap_resource_dir(app)
+        .ok_or_else(|| "bundled resource dir not found".to_string())?;
+    let src = res_dir.join(BRIDGE_RESOURCE_NAME);
+    if !src.exists() {
+        return Err(format!("bundled bridge script missing at {}", src.display()));
+    }
+    let dst = bridge_target_script_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+    }
+    fs::copy(&src, &dst).map_err(|e| format!("copy bridge script: {e}"))?;
+    Ok(dst)
+}
+
+/// Unzip the bundled Chrome extension to ~/.anticipy/extension/ so the user
+/// can load-unpacked from a stable on-disk path if needed, and so install.sh
+/// can pick up the same payload. Also stages native_host helpers next to the
+/// agent script in ~/.anticipy/ for future native-messaging upgrades.
+fn install_chrome_extension_assets(app: &AppHandle) -> Result<(), String> {
+    let res_dir = bootstrap_resource_dir(app)
+        .ok_or_else(|| "bundled resource dir not found".to_string())?;
+    let src = res_dir.join(EXTENSION_RESOURCE_NAME);
+    if !src.exists() {
+        return Err(format!("bundled extension zip missing at {}", src.display()));
+    }
+    let dst_dir = anticipy_dir()
+        .ok_or_else(|| "HOME not set".to_string())?
+        .join("extension");
+    fs::create_dir_all(&dst_dir).map_err(|e| format!("mkdir {}: {e}", dst_dir.display()))?;
+    let status = Command::new("/usr/bin/unzip")
+        .args(["-o", "-q"])
+        .arg(&src)
+        .arg("-d")
+        .arg(&dst_dir)
+        .status()
+        .map_err(|e| format!("unzip spawn: {e}"))?;
+    if !status.success() {
+        return Err(format!("unzip failed with status {status}"));
+    }
+    Ok(())
+}
+
+/// Write the Chrome native messaging host JSON pointing at the launcher
+/// shim. The launcher shim re-execs the venv python on anticipy_agent.py
+/// shipped inside the bundled extension zip; if the agent is missing the
+/// shim exits and Chrome falls back to the loopback bridge on 7777.
+fn install_native_messaging_host(launcher_path: &Path) -> Result<(), String> {
+    let host_path = native_messaging_host_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    if let Some(parent) = host_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+    }
+    let payload = serde_json::json!({
+        "name": "com.anticipy.agent",
+        "description": "Anticipy local agent daemon",
+        "path": launcher_path.display().to_string(),
+        "type": "stdio",
+        "allowed_origins": [
+            format!("chrome-extension://{}/", ANTICIPY_EXTENSION_ID)
+        ],
+    });
+    let body = serde_json::to_string_pretty(&payload)
+        .map_err(|e| format!("serialize host json: {e}"))?;
+    fs::write(&host_path, body + "\n")
+        .map_err(|e| format!("write {}: {e}", host_path.display()))?;
+    Ok(())
+}
+
+/// Write the venv-aware launcher shim used by both the native messaging host
+/// and the bridge daemon. Idempotent rewrite.
+fn install_launcher_shim() -> Result<PathBuf, String> {
+    let launcher = bridge_launcher_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    let venv_py = venv_python_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    let agent_script = anticipy_dir()
+        .ok_or_else(|| "HOME not set".to_string())?
+        .join("anticipy_agent.py");
+    let body = format!(
+        "#!/usr/bin/env bash\n# Anticipy agent launcher generated by Anticipy.app first-launch bootstrap.\n# Chrome speaks native messaging over stdio; do not print anything here.\nexport PYTHONUNBUFFERED=1\nif [ -x \"{venv}\" ] && [ -f \"{agent}\" ]; then\n  exec \"{venv}\" \"{agent}\"\nfi\n# Fallback: exit cleanly so Chrome native messaging does not loop.\nexit 0\n",
+        venv = venv_py.display(),
+        agent = agent_script.display(),
+    );
+    fs::write(&launcher, body).map_err(|e| format!("write launcher: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perm = fs::metadata(&launcher)
+            .map_err(|e| format!("stat launcher: {e}"))?
+            .permissions();
+        perm.set_mode(0o755);
+        fs::set_permissions(&launcher, perm)
+            .map_err(|e| format!("chmod launcher: {e}"))?;
+    }
+    Ok(launcher)
+}
+
+/// Create ~/.anticipy/venv/ and pip-install the bridge dependencies. Skipped
+/// when the venv already exists and the websockets package imports cleanly.
+fn setup_python_venv(app: &AppHandle) -> Result<PathBuf, String> {
+    let py = ensure_system_python3()?;
+    let venv = venv_dir().ok_or_else(|| "HOME not set".to_string())?;
+    let venv_py = venv_python_path().ok_or_else(|| "HOME not set".to_string())?;
+
+    // Fast path: venv exists and websockets imports. Nothing to do.
+    if venv_py.exists() {
+        let probe = Command::new(&venv_py)
+            .args(["-c", "import websockets, sys; print(sys.version_info[:2])"])
+            .output();
+        if let Ok(out) = probe {
+            if out.status.success() {
+                emit_bootstrap_progress(
+                    app,
+                    "venv",
+                    "Python environment already in place. Skipping install.",
+                );
+                return Ok(venv);
+            }
+        }
+    }
+
+    if !venv.exists() {
+        emit_bootstrap_progress(app, "venv", "Creating Python environment...");
+        let out = Command::new(&py)
+            .args(["-m", "venv"])
+            .arg(&venv)
+            .output()
+            .map_err(|e| format!("venv spawn: {e}"))?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+            return Err(format!("python -m venv failed: {stderr}"));
+        }
+    }
+
+    emit_bootstrap_progress(app, "venv", "Upgrading pip...");
+    let _ = Command::new(&venv_py)
+        .args(["-m", "pip", "install", "--upgrade", "pip"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    emit_bootstrap_progress(app, "venv", "Installing bridge dependencies...");
+    let pip = venv_pip_path().ok_or_else(|| "HOME not set".to_string())?;
+    let mut cmd = Command::new(&pip);
+    cmd.arg("install").arg("--quiet");
+    for pkg in BRIDGE_PIP_PACKAGES {
+        cmd.arg(pkg);
+    }
+    let out = cmd
+        .output()
+        .map_err(|e| format!("pip install spawn: {e}"))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        return Err(format!("pip install failed: {stderr}"));
+    }
+    Ok(venv)
+}
+
+fn bridge_port() -> u16 {
+    std::env::var("ANTICIPY_TRIGGER_PORT")
+        .ok()
+        .and_then(|v| v.trim().parse::<u16>().ok())
+        .filter(|p| *p > 0)
+        .unwrap_or(BRIDGE_PORT)
+}
+
+fn bridge_health_ok() -> bool {
+    let endpoint = format!("http://127.0.0.1:{}/status", bridge_port());
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(1))
+        .build();
+    match agent.get(&endpoint).set("Accept", "application/json").call() {
+        Ok(r) => r.status() == 200,
+        Err(_) => false,
+    }
+}
+
+/// Spawn the bridge as a detached child of Anticipy.app. The bridge speaks
+/// the same HTTP surface install.sh expects (port 7777). The child inherits
+/// the venv Python and writes its log + PID under ~/.anticipy/.
+fn start_bridge_daemon(app: &AppHandle) -> Result<(), String> {
+    if bridge_health_ok() {
+        emit_bootstrap_progress(
+            app,
+            "bridge",
+            &format!("Bridge already running on {}.", bridge_port()),
+        );
+        return Ok(());
+    }
+    let venv_py = venv_python_path().ok_or_else(|| "HOME not set".to_string())?;
+    if !venv_py.exists() {
+        return Err(format!(
+            "venv python missing at {}; cannot start bridge",
+            venv_py.display()
+        ));
+    }
+    let script = bridge_target_script_path().ok_or_else(|| "HOME not set".to_string())?;
+    if !script.exists() {
+        return Err(format!("bridge script missing at {}", script.display()));
+    }
+    let log_path = bridge_log_path().ok_or_else(|| "HOME not set".to_string())?;
+    if let Some(parent) = log_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir log dir: {e}"))?;
+    }
+    let log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|e| format!("open bridge log: {e}"))?;
+    let log_err = log
+        .try_clone()
+        .map_err(|e| format!("clone bridge log: {e}"))?;
+    emit_bootstrap_progress(
+        app,
+        "bridge",
+        &format!("Starting bridge daemon on {}...", bridge_port()),
+    );
+    let child = Command::new(&venv_py)
+        .arg(&script)
+        .env("PYTHONUNBUFFERED", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(log_err))
+        .spawn()
+        .map_err(|e| format!("spawn bridge: {e}"))?;
+    let pid = child.id();
+    if let Some(pid_path) = bridge_pid_path() {
+        let _ = fs::write(&pid_path, pid.to_string());
+    }
+    {
+        let slot = BRIDGE_CHILD.get_or_init(|| Mutex::new(None));
+        *slot.lock().unwrap() = Some(child);
+    }
+
+    // Wait up to 8 seconds for the bridge to bind 7777 (or the
+    // ANTICIPY_TRIGGER_PORT override) and answer /status.
+    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    while std::time::Instant::now() < deadline {
+        if bridge_health_ok() {
+            emit_bootstrap_progress(
+                app,
+                "bridge",
+                &format!("Bridge healthy on {}.", bridge_port()),
+            );
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    Err(format!(
+        "bridge did not become healthy on port {}; see {}",
+        bridge_port(),
+        log_path.display()
+    ))
+}
+
+/// INVESTOR-DEMO HARDENING (cycle "live-demo"): keep the engine sidecar
+/// alive without human intervention. Polls `engine_health_ok` every 2
+/// seconds; on the first failure it logs and re-runs `start_engine_sidecar`
+/// which will respawn the binary. A successful probe resets the failure
+/// counter so the watchdog stays quiet during steady state.
+///
+/// The popover already swallows transient engine errors and shows
+/// "Getting ready" while we recover. End-to-end recovery time after a
+/// `kill -9` of the engine: ~2-4 seconds (one watchdog tick to notice,
+/// one start cycle).
+///
+/// Deliberately does NOT cap the restart count. A broken sidecar binary
+/// would hot-loop here at 2s intervals; that is acceptable for the
+/// investor demo (a broken binary would be caught before the demo
+/// started) and adding a cap risks the watchdog quietly giving up
+/// during the demo, which is worse than a tight respawn loop nobody
+/// sees.
+fn spawn_engine_watchdog(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // Give the initial start_engine_sidecar call time to land
+        // before the watchdog starts checking. Otherwise the watchdog
+        // tries to respawn the engine before the first start has even
+        // begun, which double-spawns the sidecar binary.
+        std::thread::sleep(Duration::from_secs(5));
+        let mut consecutive_fail = 0u32;
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            if engine_health_ok(DEFAULT_ENGINE_PORT) {
+                if consecutive_fail > 0 {
+                    // Recovered. Notify the popover so the calm
+                    // "Getting ready" pill flips back to "Listening".
+                    let _ = handle.emit("engine-ready", DEFAULT_ENGINE_PORT);
+                }
+                consecutive_fail = 0;
+                continue;
+            }
+            consecutive_fail += 1;
+            eprintln!(
+                "[watchdog] engine sidecar unhealthy (fail #{consecutive_fail}); respawning"
+            );
+            start_engine_sidecar(&handle);
+        }
+    });
+}
+
+/// INVESTOR-DEMO HARDENING (cycle "live-demo"): the menu bar tray
+/// tooltip mirrors what the popover pill shows. The pendant's LED is
+/// the canonical "we are listening" hardware signal; the tray tooltip
+/// is the calm laptop-only fallback. A real breathing-icon animation
+/// (regenerating the NSStatusItem image every ~600ms) is a bigger
+/// surface than this cycle can absorb safely; the tooltip is the
+/// 90% answer that still reassures a stranger reading the menu bar.
+///
+/// Polls /api/listen/status every 3 seconds. Tooltip transitions:
+///   - listening on, recent acted within 8s -> "Anticipy: just acted"
+///   - listening on, pending steps -> "Anticipy: working"
+///   - listening on -> "Anticipy: listening"
+///   - listening off or unreachable -> "Anticipy" (steady state)
+///
+/// Set-tooltip is a thin AppKit call (NSStatusItem.button.toolTip);
+/// safe to call repeatedly. Failures are logged and swallowed so the
+/// watchdog never crashes the app.
+fn spawn_tray_tooltip_updater(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // Give the tray time to actually exist before the first probe.
+        std::thread::sleep(Duration::from_secs(3));
+        let agent = ureq::AgentBuilder::new()
+            .timeout(Duration::from_secs(2))
+            .build();
+        let mut last_tooltip: Option<String> = None;
+        loop {
+            std::thread::sleep(Duration::from_secs(3));
+            let url = format!(
+                "http://127.0.0.1:{}/api/listen/status",
+                DEFAULT_ENGINE_PORT
+            );
+            let tooltip = match agent.get(&url).set("Accept", "application/json").call() {
+                Ok(resp) if resp.status() == 200 => {
+                    match resp.into_json::<serde_json::Value>() {
+                        Ok(v) => {
+                            let on = v.get("on").and_then(|x| x.as_bool()).unwrap_or(false);
+                            let pending_len = v
+                                .get("pending")
+                                .and_then(|p| p.as_array())
+                                .map(|a| a.len())
+                                .unwrap_or(0);
+                            let acted_recent = v
+                                .get("acted")
+                                .and_then(|a| a.as_array())
+                                .and_then(|a| a.first().cloned())
+                                .and_then(|first| {
+                                    first
+                                        .get("ts")
+                                        .or_else(|| first.get("at"))
+                                        .and_then(|t| t.as_f64())
+                                })
+                                .map(|ts| {
+                                    let now = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .map(|d| d.as_secs_f64())
+                                        .unwrap_or(0.0);
+                                    now - ts < 8.0
+                                })
+                                .unwrap_or(false);
+                            if !on {
+                                "Anticipy".to_string()
+                            } else if acted_recent {
+                                "Anticipy: just acted".to_string()
+                            } else if pending_len > 0 {
+                                "Anticipy: working".to_string()
+                            } else {
+                                "Anticipy: listening".to_string()
+                            }
+                        }
+                        Err(_) => "Anticipy".to_string(),
+                    }
+                }
+                _ => "Anticipy".to_string(),
+            };
+            if last_tooltip.as_deref() != Some(tooltip.as_str()) {
+                if let Some(tray) = handle.tray_by_id("main") {
+                    if let Err(e) = tray.set_tooltip(Some(tooltip.clone())) {
+                        eprintln!("[tray-tooltip] set_tooltip failed: {e}");
+                    } else {
+                        last_tooltip = Some(tooltip);
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// INVESTOR-DEMO HARDENING (cycle "live-demo"): same shape as the
+/// engine watchdog, but for the bridge daemon on port 7777 (or the
+/// `ANTICIPY_TRIGGER_PORT` override). The bridge mediates between the
+/// browser extension and the engine; if it goes down the popover loses
+/// all action-execution affordances. Respawn within ~2 seconds.
+fn spawn_bridge_watchdog(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // Same warm-up logic: bridge takes ~8 seconds to come up on a
+        // cold start, so wait at least that long before the first
+        // watchdog tick.
+        std::thread::sleep(Duration::from_secs(10));
+        let mut consecutive_fail = 0u32;
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            if bridge_health_ok() {
+                consecutive_fail = 0;
+                continue;
+            }
+            consecutive_fail += 1;
+            eprintln!(
+                "[watchdog] bridge daemon unhealthy on port {} (fail #{consecutive_fail}); respawning",
+                bridge_port()
+            );
+            if let Err(e) = start_bridge_daemon(&handle) {
+                eprintln!("[watchdog] bridge respawn failed: {e}");
+            }
+        }
+    });
+}
+
+/// Run the full first-launch setup pipeline. Marker-gated: a successful run
+/// writes ~/.anticipy/.bootstrap-done and short-circuits subsequent launches
+/// (the existing behavior). Restartable: subsequent launches still call
+/// start_bridge_daemon and bootstrap_anticipy_chrome through the launcher,
+/// so the bridge respawns after a reboot or after the user quit the app.
+fn first_launch_bootstrap(app: &AppHandle) {
+    let dir = match anticipy_dir() {
+        Some(d) => d,
+        None => {
+            emit_bootstrap_error(app, "init", "HOME env var not set");
+            return;
+        }
+    };
+    if let Err(e) = fs::create_dir_all(&dir) {
+        emit_bootstrap_error(app, "init", &format!("mkdir {}: {e}", dir.display()));
+        return;
+    }
+
+    let marker = match bootstrap_marker_path() {
+        Some(p) => p,
+        None => {
+            emit_bootstrap_error(app, "init", "marker path not resolvable");
+            return;
+        }
+    };
+    let already_done = marker.exists();
+
+    if !already_done {
+        emit_bootstrap_progress(
+            app,
+            "init",
+            "Setting up Anticipy. This takes about 30 seconds and only happens once.",
+        );
+        if !chrome_binary_present() {
+            emit_bootstrap_error(
+                app,
+                "chrome",
+                "Anticipy needs Chrome. Install from google.com/chrome and reopen Anticipy.",
+            );
+            // Still continue: bridge can install even without Chrome. The
+            // chrome-setup-error event lets the popover raise a recovery
+            // banner, but we should not leave the venv half-built.
+        }
+    }
+
+    // Step A: stage the bundled bridge script. Always runs so the
+    // shipped script tracks the .app version on every launch.
+    if let Err(e) = install_bridge_script(app) {
+        emit_bootstrap_error(app, "bridge-script", &e);
+        return;
+    }
+    emit_bootstrap_progress(app, "bridge-script", "Bridge script staged.");
+
+    // Step B: unzip the bundled extension into ~/.anticipy/extension/.
+    // Failures here are non-fatal (the extension is installed separately
+    // through the Chrome Web Store), but we still log and emit so the
+    // installer-style flow keeps parity with public/install.sh.
+    if let Err(e) = install_chrome_extension_assets(app) {
+        emit_bootstrap_error(app, "extension", &e);
+    } else {
+        emit_bootstrap_progress(app, "extension", "Chrome extension assets staged.");
+    }
+
+    // Step C: create the Python venv and install dependencies.
+    if let Err(e) = setup_python_venv(app) {
+        emit_bootstrap_error(app, "venv", &e);
+        return;
+    }
+
+    // Step D: write the launcher shim now that the venv exists, then the
+    // Chrome native messaging host JSON that points at it.
+    let launcher = match install_launcher_shim() {
+        Ok(p) => p,
+        Err(e) => {
+            emit_bootstrap_error(app, "launcher", &e);
+            return;
+        }
+    };
+    emit_bootstrap_progress(app, "launcher", "Launcher installed.");
+    if let Err(e) = install_native_messaging_host(&launcher) {
+        emit_bootstrap_error(app, "native-host", &e);
+    } else {
+        emit_bootstrap_progress(app, "native-host", "Chrome native messaging host wired.");
+    }
+
+    // Step E: spawn the bridge daemon. Best-effort: failures emit
+    // bridge errors but should not block the welcome view from
+    // rendering.
+    if let Err(e) = start_bridge_daemon(app) {
+        emit_bootstrap_error(app, "bridge", &e);
+    }
+
+    // Step F: previously launched a cloned Chrome on CDP port 9222
+    // (chrome-real-clone). V7 product surface is the user's REAL Chrome
+    // through the installed Anticipy extension + chrome.debugger +
+    // native-messaging bridge (engine/app/bridge_extension.py). Spawning
+    // a separate blank Chrome with --user-data-dir=~/.anticipy/chrome-real-clone
+    // is explicitly forbidden by V7 proof rules
+    // (scripts/v7/check_done.sh, scripts/v7/validate_clean_room_public_install.py)
+    // because it lands the wearer in a blank browser without their cookies
+    // or sessions. The legacy launcher is retained as an opt-in escape
+    // hatch behind ANTICIPY_ENABLE_LEGACY_CLONE_CDP=1 for controlled probes;
+    // the default product path skips it entirely.
+    if std::env::var("ANTICIPY_ENABLE_LEGACY_CLONE_CDP").ok().as_deref() == Some("1") {
+        if chrome_binary_present() {
+            emit_bootstrap_progress(
+                app,
+                "chrome",
+                "Legacy clone CDP requested; starting Chrome on debug port 9222...",
+            );
+            bootstrap_anticipy_chrome(app);
+        } else {
+            emit_bootstrap_progress(
+                app,
+                "chrome",
+                "Legacy clone CDP requested but Chrome not installed; skipping.",
+            );
+        }
+    } else {
+        emit_bootstrap_progress(
+            app,
+            "chrome",
+            "Using your real Chrome through the Anticipy extension. No cloned profile.",
+        );
+    }
+
+    // Marker: write only after the bridge + Chrome attempts. Subsequent
+    // launches skip the venv install but still re-spawn the bridge via
+    // start_bridge_daemon below in run().
+    if !already_done {
+        if let Err(e) = fs::write(&marker, b"ok\n") {
+            emit_bootstrap_error(app, "marker", &format!("write {}: {e}", marker.display()));
+        }
+    }
+    emit_bootstrap_done(app);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -1558,6 +2566,7 @@ pub fn run() {
             open_mic_system_settings,
             start_dossier_call,
             hangup_dossier_call,
+            start_voice_onboarding,
             fetch_dossier_summary
         ])
         .on_window_event(|window, event| {
@@ -1596,6 +2605,15 @@ pub fn run() {
             std::thread::spawn(move || {
                 start_engine_sidecar(&engine_handle);
             });
+
+            // INVESTOR-DEMO HARDENING (cycle "live-demo"): start the
+            // engine + bridge watchdogs. They sleep through the cold
+            // start, then poll /health every 2 seconds and respawn the
+            // sidecar / bridge daemon on the first failed probe so a
+            // mid-demo crash recovers in 2-4 seconds without ever
+            // surfacing a raw error to the room.
+            spawn_engine_watchdog(app.handle());
+            spawn_bridge_watchdog(app.handle());
 
             // US-015: wire the anticipy:// deep-link handler. Hot URLs come
             // through on_open_url, cold-start URLs come through get_current
@@ -1643,6 +2661,22 @@ pub fn run() {
                 let chrome_handle = app.handle().clone();
                 std::thread::spawn(move || {
                     bootstrap_anticipy_chrome(&chrome_handle);
+                });
+            }
+
+            // First-launch self-bootstrap. Replicates public/install.sh so a
+            // stranger who only drags Anticipy.app into /Applications still
+            // gets the bridge on 7777, the venv at ~/.anticipy/venv/, the
+            // Chrome native messaging host JSON, and Chrome relaunched on
+            // the CDP port 9222. Idempotent: subsequent launches skip the
+            // venv install but still re-spawn the bridge and Chrome via
+            // start_bridge_daemon. Set ANTICIPY_SKIP_BOOTSTRAP=1 to opt out
+            // (useful for the integration walker when isolating /tmp HOMEs
+            // with no network).
+            if std::env::var("ANTICIPY_SKIP_BOOTSTRAP").ok().as_deref() != Some("1") {
+                let bootstrap_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    first_launch_bootstrap(&bootstrap_handle);
                 });
             }
 
@@ -1714,6 +2748,12 @@ pub fn run() {
                     }
                 });
             }
+
+            // INVESTOR-DEMO HARDENING (cycle "live-demo"): drive the
+            // tray tooltip from the engine's ambient listen state. The
+            // pendant LED is the canonical "we are listening" signal;
+            // the menu bar tooltip is the calm laptop-only fallback.
+            spawn_tray_tooltip_updater(app.handle());
 
             Ok(())
         })

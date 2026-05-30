@@ -1,0 +1,13 @@
+{
+  "pass": 0,
+  "total": 1,
+  "results": [
+    {
+      "n": 16,
+      "kind": "agent_reliability",
+      "status": "FAIL",
+      "elapsed_s": 1055.17
+    }
+  ],
+  "git_head": "d7bfe3058ee7326c554a22215349755d62124ecb"
+}

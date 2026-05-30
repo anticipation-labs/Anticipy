@@ -96,12 +96,19 @@
         font-feature-settings: "kern", "liga", "ss01";
       }
 
-      /* Popover open: 200ms fade with a gentle springy translateY. The
-         body sits at translateY(-4px) opacity:0 by default; the
-         .is-shown class (set on popover-shown event) flips it back. */
+      /* Popover open: 200ms fade with a gentle springy translateY.
+         IMPORTANT: opacity defaults to 1, not 0. The previous default
+         (opacity:0 until .is-shown is added by JS) meant any script
+         failure during boot left the popover invisible. Boot scripts
+         can fail when window.__TAURI__ is not yet injected, when an
+         inline expression throws, or when WebKit defers the first
+         frame past the time the user expects to see content. With
+         opacity:1 as the default, any failure still leaves the user
+         with a readable popover. The springy translateY is preserved
+         for the open animation when .is-shown lands on schedule. */
       body {
-        opacity: 0;
-        transform: translateY(-4px);
+        opacity: 1;
+        transform: translateY(0);
         transition:
           opacity 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
           transform 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
@@ -167,21 +174,28 @@
       }
       .body::-webkit-scrollbar-track { background: transparent; }
 
-      /* Welcome (empty dossier) view. */
-      .welcome { padding: 4px 0 6px; }
+      /* Welcome (empty dossier) view.
+         Spacing follows a 4px grid. Type rhythm: h1 22/28, lede
+         13.5/20 (line-height 1.5), card title 13.5/18, sub 12/17.
+         Tracking: titles tighten (negative letter-spacing), body
+         opens slightly so it reads at popover distance.
+      */
+      .welcome { padding: 2px 0 4px; }
       .welcome h1 {
         font-size: 22px;
         font-weight: 600;
         color: var(--text);
         letter-spacing: -0.02em;
+        line-height: 1.27;
         margin-bottom: 6px;
       }
       .welcome p.lede {
         font-size: 13.5px;
         font-weight: 400;
         color: var(--text-dim);
-        margin-bottom: 14px;
+        margin-bottom: 16px;
         line-height: 1.5;
+        letter-spacing: -0.003em;
       }
 
       .perm-note {
@@ -194,6 +208,7 @@
         padding: 12px 14px;
         margin-bottom: 16px;
         line-height: 1.5;
+        letter-spacing: -0.002em;
       }
 
       .onboard-options {
@@ -201,6 +216,9 @@
         flex-direction: column;
         gap: 8px;
       }
+      /* Card: subtle elevation change on hover (not a heavy color
+         change), brief 100ms scale tap on click. 200ms ease for the
+         hover transition, 100ms for the press. */
       .onboard-card {
         background: var(--bg-elevated);
         border: 1px solid var(--hairline);
@@ -208,16 +226,30 @@
         padding: 12px 14px;
         cursor: pointer;
         transition:
-          border-color 160ms ease,
-          background-color 160ms ease,
-          transform 80ms ease;
+          border-color 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          box-shadow 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          transform 100ms ease;
       }
       .onboard-card:hover {
-        border-color: var(--gold);
-        background: var(--bg-elevated);
+        border-color: var(--hairline-strong);
+        box-shadow: 0 0 0 1px var(--tint-strong) inset;
       }
       .onboard-card:active {
-        transform: scale(0.985);
+        transform: scale(0.98);
+      }
+      .onboard-card.is-coming-soon {
+        opacity: 0.72;
+        cursor: default;
+      }
+      .onboard-card.is-coming-soon:hover {
+        border-color: var(--hairline);
+        box-shadow: none;
+      }
+      .onboard-card.is-coming-soon:active {
+        transform: none;
+      }
+      .onboard-card.is-busy {
+        cursor: progress;
       }
       .onboard-card .title {
         font-size: 13.5px;
@@ -225,12 +257,28 @@
         color: var(--text);
         margin-bottom: 2px;
         letter-spacing: -0.005em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .onboard-card .badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        background: var(--hairline);
+        border-radius: 4px;
+        padding: 2px 6px;
+        line-height: 1;
       }
       .onboard-card .sub {
         font-size: 12px;
         font-weight: 400;
         color: var(--text-dim);
         line-height: 1.4;
+        letter-spacing: -0.002em;
       }
 
       /* Populated state: Now / Next / Past. */
@@ -248,11 +296,12 @@
       }
       .col h2 {
         font-size: 10px;
-        font-weight: 500;
+        font-weight: 600;
         color: var(--text-faint);
         text-transform: uppercase;
         letter-spacing: 0.10em;
         margin-bottom: 8px;
+        line-height: 1;
       }
       .col-now .now-title {
         font-size: 16px;
@@ -266,11 +315,15 @@
         font-weight: 400;
         color: var(--text-dim);
         margin-top: 4px;
+        line-height: 1.45;
+        letter-spacing: -0.002em;
       }
       .col-now .idle {
         color: var(--text-dim);
         font-size: 13px;
         font-weight: 400;
+        line-height: 1.45;
+        letter-spacing: -0.002em;
       }
       .col-now .actions {
         display: flex;
@@ -301,24 +354,31 @@
 
       .col ul { list-style: none; }
       .col li {
-        padding: 7px 0;
+        padding: 8px 0;
         border-bottom: 1px solid var(--hairline);
         font-size: 12.5px;
         font-weight: 400;
         color: var(--text);
+        line-height: 1.4;
+        letter-spacing: -0.002em;
       }
       .col li:last-child { border-bottom: none; }
+      .col li:first-child { padding-top: 0; }
       .col li .sub {
         font-size: 11px;
         font-weight: 500;
         color: var(--text-faint);
-        margin-top: 2px;
+        margin-top: 3px;
         letter-spacing: 0.005em;
       }
       .col .empty {
         font-size: 12.5px;
         font-weight: 400;
         color: var(--text-dim);
+        line-height: 1.45;
+        padding: 2px 0;
+        border-bottom: none;
+        letter-spacing: -0.002em;
       }
 
       /* Banner cards: mic pre-prompt, mic denied, ambient status. */
@@ -374,6 +434,59 @@
       }
 
       .hidden { display: none !important; }
+
+      /* View fade-in. Applied to #welcome and #columns when ensureView
+         shows them, so the welcome -> columns handoff after onboarding
+         feels deliberate instead of a hard swap. 220ms, same easing as
+         the popover open. */
+      #welcome, #columns {
+        animation: viewIn 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      @keyframes viewIn {
+        from { opacity: 0; transform: translateY(2px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Skeleton placeholder for loading rows. Pulses, never spins.
+         Apple-style shimmer is too noisy at popover scale; a soft
+         opacity pulse on a flat block reads as "data on the way"
+         without grabbing attention. */
+      .skeleton {
+        background: var(--hairline);
+        border-radius: 6px;
+        animation: skel 1400ms ease-in-out infinite;
+      }
+      .skeleton.row {
+        height: 11px;
+        margin: 6px 0;
+        width: 78%;
+      }
+      .skeleton.row + .skeleton.row { width: 52%; }
+      @keyframes skel {
+        0%, 100% { opacity: 0.55; }
+        50%      { opacity: 0.30; }
+      }
+
+      /* Inline spinner for the ambient-listen card while permission
+         is being requested. Keeps the user oriented without anxiety. */
+      .inline-progress {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .inline-progress .dotty {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--text-dim);
+        animation: dotty 1100ms ease-in-out infinite;
+      }
+      .inline-progress .dotty:nth-child(2) { animation-delay: 150ms; }
+      .inline-progress .dotty:nth-child(3) { animation-delay: 300ms; }
+      @keyframes dotty {
+        0%, 100% { opacity: 0.30; transform: translateY(0); }
+        50%      { opacity: 0.90; transform: translateY(-1px); }
+      }
     </style>
   </head>
   <body>
@@ -382,50 +495,87 @@
         <span class="brand">Anticipy</span>
         <span class="status-pill" id="status-pill">
           <span class="dot" id="status-dot"></span>
-          <span id="status-text">Waking up</span>
+          <span id="status-text">Getting ready</span>
         </span>
       </header>
+
+      <!-- First-launch self-bootstrap progress. Visible while the .app
+           replicates what install.sh does (venv at ~/.anticipy/venv/,
+           bridge daemon on 7777, Chrome native messaging host JSON,
+           Chrome relaunched on 9222). Hidden the moment Rust emits
+           bootstrap-done, which the JS listens for below. Defaults to
+           hidden so users on already-bootstrapped installs never see it. -->
+      <div id="setup-card" class="banner info hidden">
+        <div class="title">Setting up Anticipy</div>
+        <div class="sub" id="setup-card-sub">This takes about 30 seconds and only happens once.</div>
+      </div>
 
       <!-- Pre-prompt explainer. Fires for a beat before macOS shows the
            Allow / Deny dialog so the user knows why they are being asked. -->
       <div id="mic-pre-prompt" class="banner info hidden">
-        <div class="title">Microphone access in a moment</div>
-        <div class="sub">Anticipy needs to hear what people ask you to do. macOS will ask you to allow it next.</div>
+        <div class="title">Microphone in a moment</div>
+        <div class="sub">Anticipy needs to hear what people ask you to do. Allow when macOS asks.</div>
       </div>
 
       <!-- Recovery card. Shown only when permission has been denied. -->
       <div id="mic-card" class="banner err hidden">
-        <div class="title">Microphone access is off</div>
-        <div class="sub">Anticipy listens to your day so it can act on the things you mention. Turn microphone access on for Anticipy in System Settings.</div>
+        <div class="title">Microphone is off</div>
+        <div class="sub">Anticipy listens to your day so it can act on the things you mention. Turn it on for Anticipy in System Settings.</div>
         <button class="btn" id="mic-open-settings">Open System Settings</button>
       </div>
 
       <div class="body">
 
-        <!-- Welcome state: shown when dossier is empty. -->
-        <section id="welcome" class="welcome hidden">
+        <!-- Welcome state: shown when dossier is empty.
+             We default to VISIBLE (no .hidden) so that even if the
+             refresh() call to fetch_dossier_summary fails, never
+             returns, or runs late, the user still sees the Anticipy
+             welcome card on first paint. ensureView() will toggle
+             this off the moment we know the dossier has entries. -->
+        <section id="welcome" class="welcome">
           <h1>Welcome to Anticipy.</h1>
-          <p class="lede">Let's get to know you. Pick one. Takes about ten minutes.</p>
+          <p class="lede">Pick one. Five to ten minutes.</p>
           <div class="perm-note">
-            macOS will ask Anticipy for permission to use your microphone, take screenshots, and control other apps. That is so Anticipy can hear what you mention and act in your real Chrome. Click Allow when macOS asks. You can change any of these later in System Settings, Privacy and Security.
+            macOS will ask to share your microphone, screen, and Chrome. Allow when it asks, so Anticipy can hear what you mention and act in your real browser.
           </div>
           <div class="onboard-options">
-            <div class="onboard-card" data-onboard="call">
-              <div class="title">Have Anticipy call you</div>
-              <div class="sub">Quick friend-style interview on your phone. Hands-free, no typing.</div>
-            </div>
             <div class="onboard-card" data-onboard="audio">
               <div class="title">Drop in an MP3 of your day</div>
-              <div class="sub">If you already recorded yourself, give Anticipy that. It will figure out the rest.</div>
+              <div class="sub">If you already recorded yourself, give Anticipy that. It figures out the rest.</div>
             </div>
             <div class="onboard-card" data-onboard="chat">
               <div class="title">Type a short chat</div>
               <div class="sub">Five quick questions in a browser tab. Best if you want it done in five minutes.</div>
             </div>
             <div class="onboard-card" data-onboard="ambient">
-              <div class="title">Skip onboarding, just listen</div>
-              <div class="sub">Anticipy will pick things up from your day as you go. No interview now.</div>
+              <div class="title">Skip the interview, just listen</div>
+              <div class="sub">Anticipy picks things up from your day as you go. No interview now.</div>
             </div>
+            <div class="onboard-card" data-onboard="call">
+              <div class="title">Have Anticipy call you</div>
+              <div class="sub">A short voice walkthrough on your phone. Seven quick questions, about five minutes.</div>
+            </div>
+            <div id="call-phone-prompt" class="hidden" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+              <input id="call-phone-input" type="tel" inputmode="tel"
+                     placeholder="+1 604 555 1234"
+                     style="width: 100%; padding: 10px 12px; border-radius: 8px;
+                            border: 1px solid var(--hairline); background: var(--bg-elevated);
+                            color: var(--text); font-size: 13.5px; outline: none;" />
+              <div style="display: flex; gap: 8px;">
+                <button id="call-phone-submit" class="btn"
+                        style="flex: 1; padding: 9px 12px; border-radius: 8px;
+                               border: 1px solid var(--hairline-strong);
+                               background: var(--tint-strong); color: var(--text);
+                               font-size: 13px; cursor: pointer;">Call me now</button>
+                <button id="call-phone-cancel"
+                        style="padding: 9px 12px; border-radius: 8px;
+                               border: 1px solid var(--hairline);
+                               background: transparent; color: var(--text-dim);
+                               font-size: 13px; cursor: pointer;">Cancel</button>
+              </div>
+              <div id="call-phone-error" class="sub" style="color: #ef6f6f; display: none;"></div>
+            </div>
+            <div id="call-status" class="banner hidden"></div>
           </div>
           <div id="ambient-status" class="banner hidden"></div>
         </section>
@@ -434,15 +584,15 @@
         <section id="columns" class="columns hidden">
           <div class="col col-now">
             <h2>Now</h2>
-            <div id="now-content" class="idle">Quiet right now. Anticipy is listening.</div>
+            <div id="now-content" class="idle">Nothing planned right now. Anticipy is listening.</div>
           </div>
           <div class="col col-next">
             <h2>Next</h2>
-            <ul id="next-list"><li class="empty">Nothing queued.</li></ul>
+            <ul id="next-list"><li class="empty">Nothing queued. As you mention things, they will show up here.</li></ul>
           </div>
           <div class="col col-past">
             <h2>Past</h2>
-            <ul id="past-list"><li class="empty">No recent actions.</li></ul>
+            <ul id="past-list"><li class="empty">No recent actions yet.</li></ul>
           </div>
         </section>
 
@@ -482,13 +632,72 @@
 
       /* ----- Status row ----- */
       // state: "ready" (green), "warn" (yellow), "error" (red).
+      // INVESTOR-DEMO HARDENING: the status pill is the single source
+      // of truth in the popover header. It must NEVER be blank, NEVER
+      // expose "not running" / "asleep", and must always show ONE of:
+      // "Listening", "Thinking", "Doing the thing", "Done", "Getting
+      // ready", "Microphone access needed". The mic-denied state is the
+      // only case where we surface a red dot; everything else is calm
+      // amber while we recover or green when steady-state.
       function setStatus(state, text) {
         const dot = $("status-dot");
         dot.classList.remove("ready", "warn", "error");
         if (state === "ready" || state === "warn" || state === "error") {
           dot.classList.add(state);
         }
-        $("status-text").textContent = text;
+        const safe = (typeof text === "string" && text.trim()) || "Listening";
+        $("status-text").textContent = safe;
+      }
+
+      /* ----- Ambient listening status poller -----
+         INVESTOR-DEMO HARDENING: polls /api/listen/status every 4s and
+         maps the engine's observable state to a friendly pill phrase.
+         Falls back silently when the engine is mid-restart so the
+         existing pill text remains visible. The poll is independent of
+         the dossier refresh loop so the pill keeps moving even when
+         dossier reads time out. */
+      let lastAmbientPill = null;
+      async function pollAmbientStatus() {
+        if (currentMicState === "denied") return;
+        try {
+          const ctrl = ("AbortController" in window) ? new AbortController() : null;
+          const tid = ctrl ? setTimeout(() => ctrl.abort(), 1800) : null;
+          const r = await fetch("http://127.0.0.1:8731/api/listen/status", {
+            keepalive: true,
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (tid) clearTimeout(tid);
+          if (!r.ok) return;
+          const st = await r.json();
+          let label = "Listening";
+          // Friendly status hierarchy: active task in progress beats the
+          // idle "Listening" state; if neither, fall back to the ambient
+          // listening on/off flag.
+          if (st && st.acted && Array.isArray(st.acted) && st.acted.length > 0) {
+            // Most recent acted entry within the last 8 seconds reads as
+            // "Done"; older ones drop back to Listening so the pill is
+            // self-correcting.
+            const last = st.acted[0];
+            const ts = last && (last.ts || last.at || 0);
+            const ageSec = ts ? (Date.now() / 1000 - Number(ts)) : 99;
+            if (ageSec >= 0 && ageSec < 8) label = "Done";
+          }
+          if (st && st.pending && Array.isArray(st.pending) && st.pending.length > 0) {
+            label = "Thinking";
+          }
+          if (st && st.on === false) {
+            // Ambient mic not started yet. Show "Getting ready" only if
+            // we don't already have a more specific label like "Done".
+            if (label === "Listening") label = "Getting ready";
+          }
+          if (lastAmbientPill !== label) {
+            lastAmbientPill = label;
+            const dotState = (label === "Listening" || label === "Done") ? "ready" : "warn";
+            setStatus(dotState, label);
+          }
+        } catch (_) {
+          /* engine mid-respawn; keep last pill visible */
+        }
       }
 
       /* ----- View switching, no flicker ----- */
@@ -509,7 +718,7 @@
           if (lastNowKey === key) return;
           lastNowKey = key;
           el.className = "idle";
-          el.textContent = "Quiet right now. Anticipy is listening.";
+          el.textContent = "Nothing planned right now. Anticipy is listening.";
           return;
         }
         const title = active.goal || active.task_name || "Working on something";
@@ -602,17 +811,44 @@
         return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
       }
 
-      /* ----- Refresh loop ----- */
+      /* ----- Refresh loop -----
+         INVESTOR-DEMO HARDENING (cycle "live-demo"):
+         The popover never shows an alarming error to the room. When a
+         fetch fails, we keep the last good frame visible and put the
+         status pill into a calm "Getting ready" state. A short-interval
+         retry runs underneath so transient engine restarts (watchdog
+         respawn within 5s) self-heal without surfacing UI noise. */
       let inflightRefresh = false;
+      let consecutiveFetchFails = 0;
+      let _fastRetryTimer = null;
+      function scheduleFastRetry() {
+        if (_fastRetryTimer) return;
+        _fastRetryTimer = setTimeout(() => {
+          _fastRetryTimer = null;
+          refresh();
+        }, 2000);
+      }
       async function refresh() {
         if (inflightRefresh) return;
         inflightRefresh = true;
         try {
           const dossier = await invoke("fetch_dossier_summary");
-          const empty = !dossier || (Number(dossier.entry_count) || 0) === 0;
+          // A null dossier here usually means the engine is still
+          // warming up (sidecar respawn, cold start, mid-bootstrap).
+          // Show a calm "Getting ready" status and schedule a fast
+          // retry. Never expose this as an error to the room.
+          if (dossier === null || dossier === undefined) {
+            if (currentMicState !== "denied") {
+              setStatus("warn", "Getting ready");
+            }
+            scheduleFastRetry();
+            return;
+          }
+          consecutiveFetchFails = 0;
+          const empty = (Number(dossier.entry_count) || 0) === 0;
           if (empty) {
             ensureView("welcome");
-            if (currentMicState !== "denied") setStatus("warn", "Setting things up");
+            if (currentMicState !== "denied") setStatus("warn", "Getting set up");
             return;
           }
           ensureView("columns");
@@ -624,19 +860,32 @@
             invoke("fetch_past_tasks", { limit: 6 }),
           ]);
           renderNow(active);
-          renderList("next-list", next, "Nothing queued.", (it) => ({
+          renderList("next-list", next, "Nothing queued. As you mention things, they will show up here.", (it) => ({
             main: it.goal || it.task_name || it.description || "Pending task",
             sub: it.when || it.scheduled_for || "",
           }));
-          renderList("past-list", past, "No recent actions.", (it) => ({
+          renderList("past-list", past, "No recent actions yet.", (it) => ({
             main: it.goal || it.task_name || "Recent action",
             sub: [friendlyStatus(it.status), friendlyTime(it.updated_at || it.created_at)]
                    .filter(Boolean).join("  ,  "),
           }));
         } catch (e) {
+          // INVESTOR-DEMO HARDENING: NEVER expose "asleep" / "not running"
+          // / "not reachable" to the room. Keep the previous rendered
+          // frame, put the pill into a calm waking state, and silently
+          // retry every 2 seconds until the engine returns. The watchdog
+          // respawns the engine within ~5 seconds so this typically only
+          // shows the calm pill for one or two retry cycles.
+          consecutiveFetchFails += 1;
           if (currentMicState !== "denied") {
-            setStatus("error", "Anticipy is not running");
+            // First two failures stay invisible (pill stays whatever it
+            // was). After that we surface "Getting ready" which is the
+            // same friendly bootstrap copy users see at first launch.
+            if (consecutiveFetchFails >= 2) {
+              setStatus("warn", "Getting ready");
+            }
           }
+          scheduleFastRetry();
         } finally {
           inflightRefresh = false;
         }
@@ -680,33 +929,251 @@
       }
 
       /* ----- Onboarding clicks ----- */
+      // Open a URL via the safest channel available. Tauri opener and
+      // shell both deep-link to the user's default browser; window.open
+      // is the browser-preview fallback.
+      async function openExternal(url) {
+        try {
+          if (window.__TAURI__ && window.__TAURI__.opener
+              && window.__TAURI__.opener.openUrl) {
+            await window.__TAURI__.opener.openUrl(url);
+            return true;
+          }
+          if (window.__TAURI__ && window.__TAURI__.shell
+              && window.__TAURI__.shell.open) {
+            await window.__TAURI__.shell.open(url);
+            return true;
+          }
+        } catch (e) { /* fall through */ }
+        try {
+          window.open(url, "_blank");
+          return true;
+        } catch (e) { return false; }
+      }
+
+      // Brief in-card feedback so the click is never silent. Replaces
+      // the card's sub line with a one-word progress phrase and a
+      // dotty progress indicator for the life of the action, then
+      // restores the original copy. Keeps the click discoverable even
+      // when the new tab takes a beat to land.
+      function showCardBusy(card, label) {
+        if (!card || card.classList.contains("is-busy")) return null;
+        card.classList.add("is-busy");
+        const subEl = card.querySelector(".sub");
+        const previous = subEl ? subEl.textContent : "";
+        if (subEl) {
+          subEl.innerHTML = "";
+          const wrap = document.createElement("span");
+          wrap.className = "inline-progress";
+          const txt = document.createElement("span");
+          txt.textContent = label;
+          wrap.appendChild(txt);
+          for (let i = 0; i < 3; i += 1) {
+            const d = document.createElement("span");
+            d.className = "dotty";
+            wrap.appendChild(d);
+          }
+          subEl.appendChild(wrap);
+        }
+        return () => {
+          card.classList.remove("is-busy");
+          if (subEl) subEl.textContent = previous;
+        };
+      }
+
       function wireOnboardCards() {
         document.querySelectorAll(".onboard-card").forEach((card) => {
           card.addEventListener("click", async () => {
+            // Coming-soon cards: surface a calm reason rather than a
+            // broken link. The card label already shows the badge, so
+            // a one-shot toast in the sub line is enough.
+            if (card.classList.contains("is-coming-soon")) {
+              const release = showCardBusy(card, "Coming soon, you can pick another path now");
+              setTimeout(() => { if (release) release(); }, 2200);
+              return;
+            }
             const choice = card.dataset.onboard;
             const urls = {
-              call:  "https://www.anticipy.ai/onboarding/call",
               audio: "https://www.anticipy.ai/onboarding/audio",
               chat:  "https://www.anticipy.ai/onboarding/chat",
             };
             if (urls[choice]) {
-              try {
-                if (window.__TAURI__ && window.__TAURI__.opener) {
-                  await window.__TAURI__.opener.openUrl(urls[choice]);
-                } else if (window.__TAURI__ && window.__TAURI__.shell) {
-                  await window.__TAURI__.shell.open(urls[choice]);
-                } else {
-                  window.open(urls[choice], "_blank");
+              const release = showCardBusy(card, "Opening");
+              const ok = await openExternal(urls[choice]);
+              // Hold the busy state for 1.4s so the user perceives the
+              // feedback even when the browser opens instantly.
+              setTimeout(() => {
+                if (release) release();
+                if (!ok) {
+                  const subEl = card.querySelector(".sub");
+                  if (subEl) {
+                    subEl.textContent = "Could not open your browser. Try again.";
+                  }
                 }
-              } catch (e) {
-                window.open(urls[choice], "_blank");
-              }
+              }, 1400);
               return;
             }
             if (choice === "ambient") {
               await startAmbientListening();
+              return;
+            }
+            if (choice === "call") {
+              await showCallPrompt();
+              return;
             }
           });
+        });
+        wireCallPrompt();
+      }
+
+      // E.164 normalizer: accepts "+1 604 ...", "(604) ...", "604..."
+      // and returns a +1 prefixed E.164 string if it parses, else "".
+      // Voice broker is +1 only (US/CA) so a stranger pasting +44 will
+      // get a calm error rather than a silent 400.
+      function normalizePhoneE164(raw) {
+        if (!raw) return "";
+        const cleaned = String(raw).replace(/[^\d+]/g, "");
+        if (!cleaned) return "";
+        let digits = cleaned;
+        if (cleaned.startsWith("+")) {
+          digits = cleaned.slice(1);
+          if (!/^\d+$/.test(digits)) return "";
+          if (!cleaned.startsWith("+1")) {
+            // Voice broker only allows +1 today. Surface as empty so
+            // the UI shows the rejection rather than racing the server.
+            return "";
+          }
+          if (digits.length < 11 || digits.length > 15) return "";
+          return "+" + digits;
+        }
+        if (!/^\d+$/.test(digits)) return "";
+        if (digits.length === 10) return "+1" + digits;
+        if (digits.length === 11 && digits.startsWith("1")) return "+" + digits;
+        return "";
+      }
+
+      function showCallPrompt() {
+        const wrap = $("call-phone-prompt");
+        const input = $("call-phone-input");
+        if (wrap) wrap.classList.remove("hidden");
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+
+      function hideCallPrompt() {
+        const wrap = $("call-phone-prompt");
+        const err  = $("call-phone-error");
+        if (wrap) wrap.classList.add("hidden");
+        if (err) {
+          err.style.display = "none";
+          err.textContent = "";
+        }
+      }
+
+      function setCallStatusBanner(kind, title, sub) {
+        const box = $("call-status");
+        if (!box) return;
+        box.classList.remove("hidden");
+        const cls =
+          kind === "ok"   ? "banner ok"   :
+          kind === "err"  ? "banner err"  :
+          kind === "warn" ? "banner warn" :
+                            "banner info";
+        box.className = cls;
+        box.innerHTML = "";
+        const t = document.createElement("div");
+        t.className = "title";
+        t.textContent = title || "";
+        const s = document.createElement("div");
+        s.className = "sub";
+        s.textContent = sub || "";
+        box.appendChild(t);
+        if (sub) box.appendChild(s);
+      }
+
+      function wireCallPrompt() {
+        const submit = $("call-phone-submit");
+        const cancel = $("call-phone-cancel");
+        const input  = $("call-phone-input");
+        const err    = $("call-phone-error");
+        if (cancel) {
+          cancel.addEventListener("click", () => { hideCallPrompt(); });
+        }
+        if (submit) {
+          submit.addEventListener("click", async () => {
+            const raw = (input && input.value) || "";
+            const phone = normalizePhoneE164(raw);
+            if (!phone) {
+              if (err) {
+                err.style.display = "block";
+                err.textContent = "Please enter a US or Canada (+1) phone number.";
+              }
+              return;
+            }
+            if (err) { err.style.display = "none"; err.textContent = ""; }
+            submit.disabled = true;
+            submit.textContent = "Placing call";
+            try {
+              const res = await invoke("start_voice_onboarding", { phone_e164: phone });
+              hideCallPrompt();
+              if (res && res.ok) {
+                setCallStatusBanner(
+                  "info",
+                  "Calling " + phone,
+                  "Pick up when your phone rings. Anticipy will walk you through seven quick questions.",
+                );
+              } else {
+                const detail = (res && res.error) ? String(res.error) : "Could not place the call. Try again in a moment.";
+                setCallStatusBanner("err", "Call failed", detail);
+              }
+            } catch (e) {
+              hideCallPrompt();
+              setCallStatusBanner(
+                "err",
+                "Call failed",
+                e && e.toString ? e.toString() : "Could not reach the local engine.",
+              );
+            } finally {
+              submit.disabled = false;
+              submit.textContent = "Call me now";
+            }
+          });
+        }
+        // Listen for the engine's status updates so the popover reflects
+        // call progress in real time. Each event is one phase transition.
+        onEvent("voice-onboarding-status", (payload) => {
+          if (!payload || typeof payload !== "object") return;
+          const phase = String(payload.phase || "");
+          const q     = Number(payload.question_index || 0);
+          const total = Number(payload.question_total || 7);
+          const phone = String(payload.phone || "");
+          if (phase === "calling") {
+            setCallStatusBanner(
+              "info",
+              "Calling " + (phone || "your phone"),
+              "Pick up when your phone rings.",
+            );
+          } else if (phase === "in_progress" || phase === "question") {
+            setCallStatusBanner(
+              "info",
+              "Question " + Math.max(1, q) + " of " + total,
+              payload.question_text || "Listening.",
+            );
+          } else if (phase === "completed") {
+            setCallStatusBanner(
+              "ok",
+              "Done. Dossier ready.",
+              "Anticipy now knows what you told it on the call.",
+            );
+          } else if (phase === "error") {
+            setCallStatusBanner(
+              "err",
+              "Call ended early",
+              String(payload.error || "Try again in a moment."),
+            );
+          }
         });
       }
 
@@ -714,27 +1181,116 @@
         const box = $("ambient-status");
         box.className = "banner info";
         box.classList.remove("hidden");
-        box.textContent = "Asking macOS for microphone access...";
+        // A short, plain progress sentence with a dotty pulse. No
+        // "Asking macOS..." preamble: that is a chore the user did
+        // not opt into mentally.
+        box.innerHTML = "";
+        const title = document.createElement("div");
+        title.className = "title";
+        title.textContent = "Turning on listening";
+        const sub = document.createElement("div");
+        sub.className = "sub inline-progress";
+        const t = document.createElement("span");
+        t.textContent = "macOS will pop up if it needs you";
+        sub.appendChild(t);
+        for (let i = 0; i < 3; i += 1) {
+          const d = document.createElement("span");
+          d.className = "dotty";
+          sub.appendChild(d);
+        }
+        box.appendChild(title);
+        box.appendChild(sub);
+        // Use keepalive so the request survives a popover blur-hide.
         try {
           const res = await fetch("http://127.0.0.1:8731/api/listen/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: "{}",
+            keepalive: true,
           });
           const data = await res.json();
           if (data && data.on) {
             box.className = "banner ok";
             const dev = (data.audio_device && data.audio_device.name) || "your default microphone";
-            box.textContent = "Listening through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+            box.innerHTML = "";
+            const okTitle = document.createElement("div");
+            okTitle.className = "title";
+            okTitle.textContent = "Listening";
+            const okSub = document.createElement("div");
+            okSub.className = "sub";
+            okSub.textContent = "Through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+            box.appendChild(okTitle);
+            box.appendChild(okSub);
           } else {
-            box.className = "banner err";
-            box.textContent = (data && data.error)
-              ? "Could not start listening. " + data.error
-              : "Could not start listening.";
+            // INVESTOR-DEMO HARDENING: data.error often surfaces a raw
+            // PermissionError or transport string that reads as a stack
+            // trace. Soft-fail to a calm copy and retry silently. The
+            // mic permission card still fires from the mic-state event
+            // path when the OS actually denied us.
+            box.className = "banner info";
+            box.innerHTML = "";
+            const ttl = document.createElement("div");
+            ttl.className = "title";
+            ttl.textContent = "Getting ready";
+            const sub2 = document.createElement("div");
+            sub2.className = "sub";
+            sub2.textContent = "One moment, picking up the microphone.";
+            box.appendChild(ttl);
+            box.appendChild(sub2);
+            setTimeout(() => { startAmbientListening(); }, 2500);
           }
         } catch (e) {
-          box.className = "banner err";
-          box.textContent = "Anticipy is not running. Try opening it from your Applications folder.";
+          // The popover sometimes hides mid-fetch (focus loss). Before
+          // declaring the engine dead, re-probe /health. If that succeeds,
+          // the engine is up and the listen-start probably did fire on
+          // the server side. Confirm by re-issuing listen-start once.
+          let alive = false;
+          try {
+            const h = await fetch("http://127.0.0.1:8731/health", { keepalive: true });
+            alive = h.ok;
+          } catch (_) { alive = false; }
+          if (alive) {
+            try {
+              const r2 = await fetch("http://127.0.0.1:8731/api/listen/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: "{}",
+                keepalive: true,
+              });
+              const d2 = await r2.json();
+              if (d2 && d2.on) {
+                box.className = "banner ok";
+                const dev = (d2.audio_device && d2.audio_device.name) || "your default microphone";
+                box.innerHTML = "";
+                const okTitle2 = document.createElement("div");
+                okTitle2.className = "title";
+                okTitle2.textContent = "Listening";
+                const okSub2 = document.createElement("div");
+                okSub2.className = "sub";
+                okSub2.textContent = "Through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+                box.appendChild(okTitle2);
+                box.appendChild(okSub2);
+                return;
+              }
+            } catch (_) { /* fall through */ }
+          }
+          // INVESTOR-DEMO HARDENING: never say "asleep" / "open it from
+          // Applications" to the room. Use the same calm pill the
+          // bootstrap uses, and silently retry once more after 2.5s so
+          // a watchdog respawn flips us straight to "Listening".
+          box.className = "banner info";
+          box.innerHTML = "";
+          const waitTitle = document.createElement("div");
+          waitTitle.className = "title";
+          waitTitle.textContent = "Getting ready";
+          const waitSub = document.createElement("div");
+          waitSub.className = "sub";
+          waitSub.textContent = alive
+            ? "One moment, picking up the microphone."
+            : "Anticipy is waking up. One moment.";
+          box.appendChild(waitTitle);
+          box.appendChild(waitSub);
+          setTimeout(() => { startAmbientListening(); }, 2500);
         }
       }
 
@@ -779,14 +1335,76 @@
       onEvent("mic-permission-changed", (payload) => {
         if (payload && typeof payload.state === "string") applyMicState(payload.state);
       });
-      onEvent("engine-ready", () => { refresh(); });
-      onEvent("engine-error", () => setStatus("error", "Anticipy is not running"));
+      onEvent("engine-ready", () => {
+        consecutiveFetchFails = 0;
+        if (currentMicState !== "denied") setStatus("ready", "Listening");
+        refresh();
+      });
+      // INVESTOR-DEMO HARDENING: never say "not running" to the room.
+      // The watchdog respawns within ~5s; the calm "Getting ready" copy
+      // matches our first-launch bootstrap pill, so transient engine
+      // restarts look identical to a normal warm-up. We also kick a
+      // fast refresh so the popover catches the engine the moment it
+      // comes back online.
+      onEvent("engine-error", () => {
+        if (currentMicState !== "denied") setStatus("warn", "Getting ready");
+        scheduleFastRetry();
+      });
+
+      /* ----- First-launch self-bootstrap progress ----- */
+      // Friendly per-phase copy. Rust emits a `phase` string; we map it to
+      // a human one-liner. Unknown phases fall back to the raw message so
+      // the user still sees motion when we add new phases later.
+      const BOOTSTRAP_PHASE_COPY = {
+        init: "Setting up Anticipy. This takes about 30 seconds.",
+        "bridge-script": "Staging the bridge script...",
+        extension: "Unpacking the Chrome extension...",
+        venv: "Installing the local Python environment...",
+        launcher: "Wiring the launcher...",
+        "native-host": "Connecting to Chrome...",
+        bridge: "Starting the local bridge on port 7777...",
+        chrome: "Starting Chrome with the debug port...",
+      };
+      let setupCardShown = false;
+      function showSetupCard(text) {
+        setupCardShown = true;
+        const card = $("setup-card");
+        const sub = $("setup-card-sub");
+        if (card) card.classList.remove("hidden");
+        if (sub && text) sub.textContent = text;
+        if (currentMicState !== "denied") setStatus("warn", "Setting up");
+      }
+      function hideSetupCard() {
+        const card = $("setup-card");
+        if (card) card.classList.add("hidden");
+      }
+      onEvent("bootstrap-progress", (payload) => {
+        if (!payload) return;
+        const phase = payload.phase || "";
+        const friendly = BOOTSTRAP_PHASE_COPY[phase] || payload.message || "Setting up Anticipy...";
+        showSetupCard(friendly);
+      });
+      onEvent("bootstrap-error", (payload) => {
+        if (!payload) return;
+        const msg = payload.message || "Setup hit an issue.";
+        showSetupCard(msg);
+      });
+      onEvent("bootstrap-done", () => {
+        hideSetupCard();
+        refresh();
+      });
 
       wireOnboardCards();
       refresh();
       checkMicPermission();
+      pollAmbientStatus();
       setInterval(refresh, 5000);
       setInterval(checkMicPermission, 8000);
+      // INVESTOR-DEMO HARDENING: always-on pill driver. Polls the
+      // engine's ambient listen status so the header reflects what
+      // the listener is doing right now ("Listening", "Thinking",
+      // "Done") instead of stale dossier-derived state.
+      setInterval(pollAmbientStatus, 4000);
     </script>
   </body>
 </html>

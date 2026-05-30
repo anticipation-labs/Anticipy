@@ -1,0 +1,77 @@
+{
+  "marker": "SIDECAR_SWAP",
+  "ts_utc": "2026-05-30T06:53:10Z",
+  "reason": "rebuild + swap so receipt-SMS broker delegation from commit 3d9fd7f6 takes effect in the live engine",
+  "source_commit": "3d9fd7f6",
+  "source_files_touched_by_commit": [
+    "engine/app/product/server.py (lines 8625-8681 _send_receipt_sms_sync broker branch; lines 11324-11360 /api/notify/test broker branch)"
+  ],
+  "build": {
+    "script": "desktop/scripts/build-engine-sidecar.sh",
+    "log": "/tmp/sidecar_rebuild_phase2.log",
+    "started_ts": 1780123729,
+    "finished_ts": 1780123797,
+    "elapsed_seconds": 68,
+    "artifact": "desktop/src-tauri/bin/anticipy-engine-aarch64-apple-darwin",
+    "artifact_size_bytes": 172216688
+  },
+  "sha": {
+    "old": "e934cd15e48cd3634f7f67a60aad40d020d359e9",
+    "new": "7174e87906f40418fa759e610f5adcdb14baa5f0",
+    "differ": true
+  },
+  "pids": {
+    "old_engine_pid": 1205,
+    "new_engine_pid": 13272
+  },
+  "swap": {
+    "watchdog_suspended": true,
+    "sentinel_suspended": true,
+    "backup_path": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine.pre-receipt-broker.bak",
+    "backup_sha": "e934cd15e48cd3634f7f67a60aad40d020d359e9",
+    "method": "cp NEW .new then mv -f .new anticipy-engine, chmod +x",
+    "watchdog_rearmed": true,
+    "sentinel_rearmed": true
+  },
+  "launch_env_present_on_new_pid": {
+    "ANTICIPY_TWILIO_BROKER": "1",
+    "TWILIO_MOCK": "0",
+    "ANTICIPY_PORT": "8731",
+    "ANTICIPY_RECEIPT_ON_SUCCESS": "1",
+    "ANTICIPY_QUIET": "1",
+    "ANTICIPY_ALLOW_REAL_SEND": "1"
+  },
+  "verify": {
+    "health_200": true,
+    "health_pid_matches_new": true,
+    "api_state_key_count": 25,
+    "api_state_new_keys_present": [
+      "quiet_mode",
+      "proactive_status",
+      "tab_activity_60s",
+      "task_queue_summary",
+      "cost_last_hour",
+      "engine_health"
+    ],
+    "g2_trivia": {
+      "status": "PASS",
+      "latency_ms": 32.55,
+      "answer": "The Western Roman Empire fell in 476 AD. Constantinople, the eastern capital, held until 1453.",
+      "tts_provider": "elevenlabs",
+      "tts_cache_hit": true
+    },
+    "g12_recovery": {
+      "status": "PASS",
+      "sms_body_length": 96,
+      "sms_body": "Anticipy couldn't finish the task because the site is logged out. I will retry once you sign in."
+    },
+    "broker_branch_observed": {
+      "endpoint": "/api/notify/test",
+      "request": {"channel": "sms", "message": "sidecar-swap probe receipt broker"},
+      "response_code": 400,
+      "response": {"ok": false, "channel": "sms", "gated": true, "reason": "no_destination_phone", "detail": "pass 'to' in body or set TWILIO_NOTIFY_TO in env"},
+      "interpretation": "this 400 detail wording is emitted only by the broker branch (server.py line 11340) after broker_enabled evaluates true on line 11333. Non-broker path returns 503 twilio_credentials_missing instead. Confirms broker code path is live on the new binary."
+    }
+  },
+  "untouched": ["chrome (pid 9222 family)", "native bridge pid 3624"]
+}

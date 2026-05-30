@@ -1,0 +1,40 @@
+=== stdout ===
+  #  name                              cat         verdict    sec  details
+--------------------------------------------------------------------------
+  1  R01-dana-q3                       resolvable  PASS    35.32  Dana Bright
+  2  R02-dana-friday-update            resolvable  PASS    45.41  Dana Bright
+  3  R03-dana-board-deck               resolvable  PASS    45.89  Dana Bright
+  4  R04-dana-1on1-notes               resolvable  FAIL    27.67  resolvable: expected mode=act, got mode='' q=''
+  5  R05-dana-budget                   resolvable  FAIL    28.90  resolvable: expected mode=act, got mode='clarify' q='Which person do you mean: D
+  6  R06-dana-followups                resolvable  PASS    40.32  Dana Bright
+  7  R07-priya-strategy-memo           resolvable  PASS    47.46  Priya Shah
+  8  R08-priya-market-analysis         resolvable  FAIL    39.69  resolvable: expected mode=act, got mode='' q=''
+  9  R09-priya-positioning             resolvable  PASS    46.10  Priya Shah
+ 10  R10-priya-investor-prep           resolvable  FAIL    29.13  resolvable: expected mode=act, got mode='clarify' q='Which person do you want to
+ 11  R11-priya-roadmap-review          resolvable  FAIL    32.39  resolvable: expected mode=act, got mode='' q=''
+ 12  R12-priya-pricing-notes           resolvable  FAIL    40.77  resolvable: expected mode=act, got mode='' q=''
+ 13  R13-priya-board-feedback          resolvable  PASS    43.97  Priya Shah
+ 14  R14-maya-ops-checklist            resolvable  PASS    28.51  Maya Chen
+ 15  R15-maya-vendor-list              resolvable  PASS    39.50  Maya Chen
+ 16  R16-maya-onboarding-doc           resolvable  FAIL    43.24  resolvable: expected mode=act, got mode='clarify' q='Which document do you mean 
+ 17  R17-maya-payroll                  resolvable  FAIL    45.06  resolvable: expected mode=act, got mode='' q=''
+ 18  R18-maya-runbook                  resolvable  PASS    47.51  Maya Chen
+ 19  R19-maya-team-expenses            resolvable  FAIL    34.62  resolvable: expected mode=act, got mode='' q=''
+ 20  R20-maya-tooling                  resolvable  FAIL    54.07  resolvable: expected mode=act, got mode='' q=''
+ 21  A01-dana-vs-priya-launch-recap    ambiguous   PASS    40.38  Did you mean Dana Bright or Priya Shah?
+ 22  A02-priya-vs-maya-planning-notes  ambiguous   PASS    39.08  Do you mean Priya or Maya for the planning notes?
+ 23  A03-dana-vs-maya-onboarding-doc   ambiguous   PASS    48.95  Do you mean Dana or Maya for the onboarding doc?
+ 24  A04-dana-vs-priya-board-deck      ambiguous   FAIL    34.61  expected clarify naming ['Dana', 'Priya'], got mode='' q=''
+ 25  A05-priya-vs-maya-pricing         ambiguous   FAIL    40.97  expected clarify naming ['Priya', 'Maya'], got mode='act' q=''
+ 26  A06-dana-vs-priya-roadmap         ambiguous   FAIL    50.55  expected clarify naming ['Dana', 'Priya'], got mode='act' q=''
+ 27  A07-dana-vs-maya-budget           ambiguous   PASS    28.46  Which person do you mean: Dana, Priya, or Maya?
+ 28  A08-priya-vs-maya-investor-prep   ambiguous   PASS    27.14  Which person do you mean: Dana, Priya, or Maya?
+ 29  A09-dana-vs-priya-positioning     ambiguous   PASS    43.31  Did you mean Dana or Priya for the positioning doc?
+ 30  A10-dana-vs-maya-followups        ambiguous   PASS    32.08  Which follow-ups do you mean: Dana's follow-ups from the customer call or Maya's
+
+resolvable: 10/20
+ambiguous:  7/10
+verdict:    FAIL
+summary written to proof-artifacts/agent_reliability.json
+
+=== stderr ===

@@ -1,0 +1,11 @@
+{
+  "check_number": 16,
+  "check_name": "agent_reliability",
+  "status": "FAIL",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_194609/CHECK_16.json",
+  "key_contents": {
+    "exception": "TimeoutExpired: Command '['/Users/omarebrahim/.pyenv/versions/3.10.14/bin/python3', '/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/agent_reliability.py', '--engine-url', 'http://127.0.0.1:8731', '--no-act']' timed out after 900 seconds",
+    "trace": "t call last):\n  File \"/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/anticipy_acceptance.py\", line 1106, in main\n    status, payload = fn()\n  File \"/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/anticipy_acceptance.py\", line 916, in check_16_agent_reliability\n    res = subprocess.run(\n  File \"/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/subprocess.py\", line 505, in run\n    stdout, stderr = process.communicate(input, timeout=timeout)\n  File \"/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/subprocess.py\", line 1154, in communicate\n    stdout, stderr = self._communicate(input, endtime, timeout)\n  File \"/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/subprocess.py\", line 2022, in _communicate\n    self._check_timeout(endtime, orig_timeout, stdout, stderr)\n  File \"/Users/omarebrahim/.pyenv/versions/3.10.14/lib/python3.10/subprocess.py\", line 1198, in _check_timeout\n    raise TimeoutExpired(\nsubprocess.TimeoutExpired: Command '['/Users/omarebrahim/.pyenv/versions/3.10.14/bin/python3', '/Users/omarebrahim/Developer/Anticipy-V7/engine/tests/agent_reliability.py', '--engine-url', 'http://127.0.0.1:8731', '--no-act']' timed out after 900 seconds\n"
+  },
+  "ts": "2026-05-28T20:03:35.203503"
+}

@@ -1,0 +1,23 @@
+{
+  "story": "stranger_flow",
+  "run_id": "20260529T193100Z",
+  "started_at": "20260529T193100Z",
+  "finished_at": "20260529T193202Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T193100Z",
+  "anticipy_home": "/Users/omarebrahim/.anticipy/v7",
+  "inject_text": "I should send Maya Patel the meeting notes from yesterday",
+  "steps": [
+    {
+      "name": "engine_alive",
+      "ok": false,
+      "duration_ms": 61059,
+      "error": "engine /health did not return a pid within 30 attempts (60s)",
+      "health_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T193100Z/engine_health.json"
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "engine_alive",
+  "notes": "coldstart_available=false; people_count=0; inject_ok=false; act_ran=false; act_ok=false; restored=false"
+}

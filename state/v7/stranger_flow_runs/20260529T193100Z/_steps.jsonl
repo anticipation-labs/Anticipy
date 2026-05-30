@@ -1,0 +1,1 @@
+{"name": "engine_alive", "ok": false, "duration_ms": 61059, "error": "engine /health did not return a pid within 30 attempts (60s)", "health_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T193100Z/engine_health.json"}

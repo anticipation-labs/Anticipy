@@ -1,0 +1,21 @@
+[22:10:28Z] ENGINE up: http://127.0.0.1:8731/health -> 200
+[22:10:28Z] CHROME up: http://localhost:9222/json/version -> 200
+[22:10:28Z] BRIDGE up: http://127.0.0.1:7777/status ok
+[22:10:28Z] ==== SURFACE 1: saucedemo ====
+[22:10:28Z] BEGIN saucedemo :: intent=Log in to SauceDemo using username standard_user and password secret_sauce. Then add the first item on the inventory page to the cart. The task is complete when the shopping cart icon in the top right shows a badge with the number 1.
+[22:10:28Z] BEGIN saucedemo :: hint=https://www.saucedemo.com/ deadline=300s
+[22:14:08Z] END saucedemo :: http=000 elapsed=219.498s
+[22:14:08Z] wait for runner thread to quiesce before next surface
+runner_idle after 0.3s; last_call_age=40.8s
+[22:14:09Z] ==== SURFACE 2: the_internet_herokuapp ====
+[22:14:09Z] BEGIN the_internet_herokuapp :: intent=Log in to the login form using username tomsmith and password SuperSecretPassword!. The task is complete when the page URL contains /secure and you see a green flash message that says 'You logged into a secure area!'.
+[22:14:09Z] BEGIN the_internet_herokuapp :: hint=https://the-internet.herokuapp.com/login deadline=300s
+[22:14:10Z] END the_internet_herokuapp :: http=000000 elapsed=0.674s
+[22:14:10Z] wait for runner thread to quiesce before next surface
+runner_idle after 0.2s; last_call_age=43.0s
+[22:14:11Z] ==== SURFACE 3: wikipedia ====
+[22:14:11Z] BEGIN wikipedia :: intent=Use the search box at the top of the Wikipedia main page to search for 'Roman Empire' and open the resulting article. The task is complete when the article page is loaded and the page heading reads 'Roman Empire'.
+[22:14:11Z] BEGIN wikipedia :: hint=https://en.wikipedia.org/wiki/Main_Page deadline=300s
+[22:14:12Z] END wikipedia :: http=000000 elapsed=0.641s
+[22:14:13Z] AGGREGATE verdict=FAIL
+[22:14:13Z] AGGREGATE result.json: /Users/omarebrahim/Developer/Anticipy-V7/state/v7/universal_beyond_google_runs/20260529T221028Z/result.json

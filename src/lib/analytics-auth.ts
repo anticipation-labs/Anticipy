@@ -28,7 +28,18 @@ export function isAnalyticsAuthed(cookieValue: string | undefined): boolean {
 
 export function checkAnalyticsPassword(input: unknown): boolean {
   const password = typeof input === "string" ? input : "";
-  const expected = process.env.ANALYTICS_PASSWORD || "Anticipy123";
+  // B053: fail-secure when ANALYTICS_PASSWORD is unset. Previously we fell
+  // back to the literal "Anticipy123", which shipped in prod and was a
+  // working default password. In dev we keep the legacy literal so local
+  // /analytics testing still works without env setup.
+  const envValue = process.env.ANALYTICS_PASSWORD || "";
+  let expected = envValue;
+  if (!expected) {
+    if (process.env.NODE_ENV === "production") {
+      return false;
+    }
+    expected = "Anticipy123";
+  }
   if (password.length === 0) return false;
   if (password.length !== expected.length) return false;
   try {

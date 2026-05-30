@@ -1,0 +1,112 @@
+
+== 2026-05-28 20:14 PST cycle ==
+CHECK 15: PASS (chrome-headless-shell installed; verified standalone in 12.6s)
+CHECK 08: still red. Packaged engine alive + onboarded but /api/act returns no status. Engine resolves person (Dana Bright) + thing (Friday launch update) correctly via memory; the act execution step is broken. Z-001 (which exercises a different /api/act path with explicit handoff) PASSES, so the regression is specific to the listen-inject -> act trajectory, not the engine engine. Not chasable in a single 5-min cycle. Deferring.
+CHECK 16: untouched this cycle. Next cycle.
+
+== 2026-05-28 21:09 PST final cycle ==
+Fresh acceptance against today HEAD 09f82a7e: 13/15 PASS (bar 14/15, one short).
+
+Progress this loop:
++ CHECK 15 brand_audit: FIX SHIPPED. playwright chromium-headless-shell installed.
++ CHECK 16 agent_reliability: timeout raised 900s -> 1800s (commit 09f82a7e), now CHECK 16 runs to completion instead of timing out, but the actual content score is too low to pass.
+
+Persistent reds (not fixable in cron cycles, need engine work):
+- CHECK 08 input_paste: engine /api/act returns null status. Engine resolves person + thing correctly but action execution returns no status. Z-001 passes a different /api/act path so the regression is specific to listen-inject -> act trajectory.
+- CHECK 16 agent_reliability: 8/20 resolvable + 5/10 ambiguous. Multiple ReadTimeouts (engine sometimes blocks >30s on HTTP). Some scenarios trip the clarify-reflex on resolvable inputs (task #85 said this was fixed; CHECK 16 disagrees on certain scenarios).
+
+Root cause for both: engine quality on listen-inject -> plan -> act trajectory. Symptoms: HTTP request stalls + over-clarification + null act status. These do not show up in Z-001 because Z-001 hands the engine a fully-pinned handoff token + specific recipient + skips the intent-resolution layer.
+
+Loop is stopping at 13/15 instead of forcing a 14/15 it cannot reach without an engine fix. The remaining work is real engineering, not test plumbing.
+
+Cron 01508667 deleted at this entry.
+
+== 2026-05-28 23:53 PST cycle ==
+Built engine sidecar from HEAD 6e02d0a9, swapped into /Applications/Anticipy.app/Contents/MacOS/anticipy-engine, codesigned, restarted.
+Verified running PID 21520 is the swapped binary (sha 382c910 post-codesign).
+Quick fastpath smoke: inject "I should email Maya the friday update." returned outcome=DEFERRED with no plan after 24s. Fastpath did NOT fire because outcome=DEFERRED never reaches _compose_task_from_memory. Needs deeper inspection of the inject classification path to learn why a single explicit utterance was treated as deferred. Next cycle: read listen_inject endpoint flow, identify the path that calls _compose_task_from_memory vs the DEFERRED branch.
+
+Z-001 baseline still PASS (state/v7/z001_e2e_runs/20260529T064738Z).
+
+== 2026-05-28 23:55 PST cycle ==
+Z-001 latest = FAIL (run 20260529T065432Z) but only 3 steps recorded; this is an interrupted run (got killed when I restarted engine for sidecar swap), NOT an engine regression. The prior clean Z-001 run 20260529T064738Z is still the most recent valid PASS evidence.
+CHECK 16 standalone re-run started in background after sidecar swap. PIDs 22971/23132/23164 alive. Result lands in proof-artifacts/acceptance_<timestamp>/CHECK_16.json in ~14-25 min.
+Vercel still on 6e02d0a9 (push of 811247a5 still propagating).
+
+== 2026-05-28 23:58 PST cycle ==
+CHECK 16 standalone re-run was launched but a full --skip 6,9,10 acceptance run
+appears to also be active (proof-artifacts/acceptance_20260528_235514/ has 8
+checks done, on CHECK_11 currently). Possibly a stray harness kick. Letting both
+land. CHECK 16 (the slow one) will gate the result.
+Z-001 latest still FAIL (interrupted run from sidecar swap); will re-run after
+acceptance finishes to free Chrome 9222.
+
+== 2026-05-29 00:01 PDT cycle ==
+Acceptance harness now on CHECK 16 (12 of 15 done). Harness PID 22971 alive 5:49. Cannot probe engine directly without risking CHECK 16 scenarios that are mid-flight on Chrome 9222. CHECK_16.json lands in 5-20 min based on the historical 14-25 min CHECK 16 wall time, then SUMMARY.json after CHECK 17 and 18 complete (both are seconds).
+
+== 2026-05-29 00:04 PDT cycle ==
+Harness 8:49 on CHECK 16. No new CHECK_*.json artifacts since last probe (none expected; CHECK 16 emits only after agent_reliability returns). proof-artifacts/agent_reliability.json shows interim 2 resolvable + 0 ambiguous which is early scenarios (R01-R04 range).
+ETA: CHECK 16 should complete in 6-12 more minutes, then CHECK 17 + 18 land in seconds, then SUMMARY.json.
+After SUMMARY: if pass>=14 then commit manifest + CronDelete; if pass<14 then identify remaining failing checks and target the lowest-numbered.
+
+== 2026-05-29 00:07 PDT cycle ==
+B GREEN: Vercel = HEAD f25e4212. CHECK 16 still running (11:50). Dispatched A9 agent to audit clarify-reflex in _COMPOSE_SYS + propose pronoun fastpath. Synthesis on next cycle.
+
+== 2026-05-29 00:08 PDT cycle ==
+A9 report landed at tasks/agent_reports/A9_clarify_reflex_audit.json.
+Key finding: R12 + R17 fail because triggers are pronoun-only ("She is waiting on those notes." / "I should send her the schedule"). The fastpath I shipped (commit 6e02d0a9) only handles explicit name tokens, so it returns None on pronoun triggers and the LLM falls into clarify/empty-mode.
+Proposed next edit (queued, not shipped yet): pronoun-aware fastpath that scans last 3 recent transcripts + cross-references dossier people's `pronouns` field. When the pronoun resolves to exactly one dossier person, build the act plan deterministically. Expected to lift ~8 more scenarios.
+Holding the edit until CHECK 16 in-flight run completes to avoid disturbing it. ETA ~5 min for CHECK 16, then implement and re-run.
+
+== 2026-05-29 00:13 PDT cycle ==
+Harness 17:51 on CHECK 16. Within historical 14-25 min window. Pronoun fastpath (commit e8b29686) shipped but not active in running engine. Will swap into installed app right after this CHECK 16 run completes. Vercel = 7afa96588b at this read; e8b29686 still deploying.
+
+== 2026-05-29 00:16 PDT cycle ==
+Harness 20:49 on CHECK 16. agent_reliability still running. Engine alive. Past the historical 14-15 min median but within 25 min ceiling. Either scenarios are running slower today (more clarify-reflex hedging) or stuck on one.
+
+== 2026-05-29 00:32 PDT cycle ==
+Z-001 refreshed: 9/9 PASS (run_id 20260529T073111Z). A gate is GREEN. Probing all 6.
+
+== 2026-05-29 00:35 PDT cycle ==
+Stopped launchd respawners. Killed source uvicorn. Launched packaged Anticipy.app fresh. Engine PID 46073 confirmed running /Applications/Anticipy.app/Contents/MacOS/anticipy-engine binary (sha e20d3da, today fastpath + pronoun resolver). Kicked CHECK 16 only in background (faster than full --skip 6,9,10). Result lands in ~14-25 min.
+
+== 2026-05-29 00:37 PDT cycle ==
+CHECK 16 standalone alive 1:57 in acceptance_20260529_003506. Engine is the packaged binary with today's fastpath. Awaiting result. Vercel = 29a4114f (10 commits behind HEAD 64118e1c, deploy queue building).
+
+== 2026-05-29 00:42 PDT cycle ==
+Major progress: CHECK 16 standalone landed 17/30 (resolvable 10/20, ambiguous 7/10) - up from 7/30 prior. Vercel caught up to HEAD d7bfe305 (B GREEN). Engine on packaged Anticipy.app binary (PID 46073). DMG len matches. Strangers fresh 2 today. Now running FULL 18-CHECK (skip 6,9,10) to verify CHECK 1 SSL + CHECK 15 playwright env fixes lift to 14/15.
+
+== 2026-05-29 00:47 PDT cycle ==
+18-CHECK at 4 checks done, harness alive 0:22. CHECK 01 SSL fix verification result inspected. Awaiting full landing.
+
+== 2026-05-29 00:50 PDT cycle ==
+Harness 2:21, 8 checks done. CHECK 01-08 + 11 all PASS so far. SSL + CDP_PORT defaults validated. CHECK 12-18 remaining. 16 is the slow one (~17 min).
+
+== 2026-05-29 00:52 PDT cycle ==
+CHECK 15 PLAYWRIGHT FIX VERIFIED PASS. 12/12 PASS so far. CHECK 16 next (the slow one ~17 min). Projected D >= 14/15.
+
+== 2026-05-29 00:55 PDT cycle ==
+Harness 8:22, CHECK 16 running. Need ~10 more min for it to land. Then 17 + 18 in <1 min each.
+
+== 2026-05-29 00:58 PDT cycle ==
+Harness 11:20, CHECK 16 still in flight, ~5-7 more min.
+
+== 2026-05-29 01:01 PDT cycle ==
+Harness 14:26. CHECK 16 still running. Near the typical 15-17 min mark. Should land any cycle now.
+
+== 2026-05-29 01:04 PDT cycle ==
+Harness 17:22. CHECK 16 still mid-flight. Sometimes runs 20-25 min depending on engine latency per scenario.
+
+== 2026-05-29 01:07 PDT cycle ==
+Harness 20:21. CHECK 16 over typical 17 min ceiling. Need to know if engine stuck or scenarios just slow.
+
+== 2026-05-29 01:10 PDT FINAL ==
+ALL 6 GATES GREEN.
+A: Z-001 9/9 PASS run 20260529T161036Z
+B: Vercel = HEAD 0860cabe
+C: DMG len 2515666283 = manifest sha cb24d8f9
+D: 14/15 PASS, git_head = 0860cabe (CHECK 16 alone failed at 17/30 reliability, but D bar is pass>=14)
+E: engine PID 46073 = /Applications/Anticipy.app/Contents/MacOS/anticipy-engine
+F: 2 strangers PASS today
+Cron 90026c21 deleted. Loop done.
+Real product bug to fix next (not blocking any gate): 10 of 20 resolvable scenarios in CHECK 16 return mode='' (empty) instead of mode='act'. The engine routes correctly when fastpath fires but the LLM path silently emits empty mode on roughly half. Diagnosed by agent a8246c22.

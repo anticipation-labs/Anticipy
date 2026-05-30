@@ -1,0 +1,40 @@
+=== stdout ===
+  #  name                              cat         verdict    sec  details
+--------------------------------------------------------------------------
+  1  R01-dana-q3                       resolvable  PASS    57.71  Dana Bright
+  2  R02-dana-friday-update            resolvable  FAIL    60.02  request error: ReadTimeout(ReadTimeoutError("HTTPConnectionPool(host='127.0.0.1'
+  3  R03-dana-board-deck               resolvable  PASS    49.12  Dana Bright
+  4  R04-dana-1on1-notes               resolvable  FAIL    47.45  resolvable: expected mode=act, got mode='' q=''
+  5  R05-dana-budget                   resolvable  FAIL    58.82  resolvable: expected mode=act, got mode='clarify' q='Which person do you mean: D
+  6  R06-dana-followups                resolvable  PASS    107.57  Dana Bright
+  7  R07-priya-strategy-memo           resolvable  FAIL    41.18  resolvable: expected mode=act, got mode='clarify' q="Which person and which thin
+  8  R08-priya-market-analysis         resolvable  FAIL    82.30  resolvable: expected mode=act, got mode='' q=''
+  9  R09-priya-positioning             resolvable  FAIL    49.88  resolvable: expected mode=act, got mode='clarify' q='Which person do you mean? D
+ 10  R10-priya-investor-prep           resolvable  PASS    46.06  Priya Shah
+ 11  R11-priya-roadmap-review          resolvable  FAIL    34.43  resolvable: expected mode=act, got mode='' q=''
+ 12  R12-priya-pricing-notes           resolvable  FAIL    40.64  resolvable: expected mode=act, got mode='' q=''
+ 13  R13-priya-board-feedback          resolvable  FAIL    35.08  resolvable: expected mode=act, got mode='clarify' q='Which person do you mean: D
+ 14  R14-maya-ops-checklist            resolvable  PASS    31.60  Maya Chen
+ 15  R15-maya-vendor-list              resolvable  PASS    34.93  Maya Chen
+ 16  R16-maya-onboarding-doc           resolvable  PASS    26.55  Maya Chen
+ 17  R17-maya-payroll                  resolvable  PASS    41.11  Maya Chen
+ 18  R18-maya-runbook                  resolvable  PASS    35.69  Maya Chen
+ 19  R19-maya-team-expenses            resolvable  FAIL    54.52  resolvable: expected mode=act, got mode='' q=''
+ 20  R20-maya-tooling                  resolvable  FAIL    38.07  resolvable: expected mode=act, got mode='' q=''
+ 21  A01-dana-vs-priya-launch-recap    ambiguous   PASS    42.24  Which person do you mean? Dana, Priya, or Maya?
+ 22  A02-priya-vs-maya-planning-notes  ambiguous   PASS    48.95  Which document or item do you need to send over, and to whom (Dana, Priya, or Ma
+ 23  A03-dana-vs-maya-onboarding-doc   ambiguous   PASS    33.73  Did you mean Dana or Maya for the onboarding doc?
+ 24  A04-dana-vs-priya-board-deck      ambiguous   FAIL    32.53  expected clarify naming ['Dana', 'Priya'], got mode='' q=''
+ 25  A05-priya-vs-maya-pricing         ambiguous   FAIL    18.73  expected clarify naming ['Priya', 'Maya'], got mode='act' q=''
+ 26  A06-dana-vs-priya-roadmap         ambiguous   FAIL    30.72  expected clarify naming ['Dana', 'Priya'], got mode='act' q=''
+ 27  A07-dana-vs-maya-budget           ambiguous   FAIL    27.35  expected clarify naming ['Dana', 'Maya'], got mode='act' q=''
+ 28  A08-priya-vs-maya-investor-prep   ambiguous   PASS    28.73  Which person do you mean: Dana, Priya, or Maya?
+ 29  A09-dana-vs-priya-positioning     ambiguous   PASS    24.45  Which person do you mean: Dana (for the all-hands) or Priya (for strategy feedba
+ 30  A10-dana-vs-maya-followups        ambiguous   PASS    20.25  Which notes do you mean? The 1-on-1 notes with Dana, the planning notes for the 
+
+resolvable: 9/20
+ambiguous:  6/10
+verdict:    FAIL
+summary written to proof-artifacts/agent_reliability.json
+
+=== stderr ===

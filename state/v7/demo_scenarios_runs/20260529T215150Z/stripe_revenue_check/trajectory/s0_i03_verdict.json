@@ -1,0 +1,1 @@
+{"status": "DIVERGED", "evidence": "The navigation to Stripe dashboard payments page failed; instead of loading Stripe, the browser shows an unrelated login page for 'Elemental Selenium' at a different URL.", "confidence": 0.95, "fellback": false}

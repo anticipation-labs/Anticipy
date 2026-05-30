@@ -15,7 +15,7 @@ export default function CompetitivePage() {
             <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>Research</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-2">Competitive Market Analysis</h1>
-          <p style={{ color: "#8A8A8A" }}>April 2026 — Sources: TechCrunch, CNBC, Grand View Research, Fortune</p>
+          <p style={{ color: "#8A8A8A" }}>April 2026. Sources: TechCrunch, CNBC, Grand View Research, Fortune</p>
         </div>
 
         {/* Market size */}
@@ -37,7 +37,7 @@ export default function CompetitivePage() {
 
         {/* Competitors */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-6" style={{ color: "#C8A97E" }}>Competitor Analysis — All 8</h2>
+          <h2 className="text-lg font-semibold mb-6" style={{ color: "#C8A97E" }}>Competitor Analysis. All 8</h2>
           <div className="space-y-4">
 
             {/* Humane AI Pin */}
@@ -59,15 +59,13 @@ export default function CompetitivePage() {
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>What happened</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Only ~10,000 units shipped. Returns exceeded sales within weeks of launch. Projector UI was laggy and impractical.
-                    High price + buggy execution = catastrophic failure. HP acquired the assets at bankruptcy prices.
+                    Only ~10,000 units shipped. Returns exceeded sales within weeks of launch. Projector UI was laggy and impractical. High price + buggy execution = catastrophic failure. HP acquired the assets at bankruptcy prices.
                   </p>
                 </div>
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Lesson for Anticipy</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Never ship before the product works. High price raises expectations astronomically.
-                    A projector on your chest is a party trick, not a product. Anticipy: no projector, no screen, no gimmick.
+                    Never ship before the product works. High price raises expectations astronomically. A projector on your chest is a party trick, not a product. Anticipy: no projector, no screen, no gimmick.
                   </p>
                 </div>
               </div>
@@ -92,15 +90,13 @@ export default function CompetitivePage() {
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Status</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    50,000+ units sold. RabbitOS 2.0 dramatically improved reliability and response speed.
-                    Still requires carrying a separate device. LAM (Large Action Model) is improving but slow.
+                    50,000+ units sold. RabbitOS 2.0 dramatically improved reliability and response speed. Still requires carrying a separate device. LAM (Large Action Model) is improving but slow.
                   </p>
                 </div>
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Lesson for Anticipy</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Iterate fast + low price = survival. Users forgive bugs if you ship fixes.
-                    But nobody wants to carry a third device — Anticipy is a pendant, no new form factor burden.
+                    Iterate fast + low price = survival. Users forgive bugs if you ship fixes. But nobody wants to carry a third device. Anticipy is a pendant, no new form factor burden.
                   </p>
                 </div>
               </div>
@@ -125,15 +121,13 @@ export default function CompetitivePage() {
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Why winning</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Form factor is familiar (glasses). Camera + Meta AI integration. Works as actual glasses.
-                    Meta&apos;s distribution, marketing, and brand. Not primarily a &quot;AI assistant&quot; device — it&apos;s glasses that also do AI.
+                    Form factor is familiar (glasses). Camera + Meta AI integration. Works as actual glasses. Meta&apos;s distribution, marketing, and brand. Not primarily a &quot;AI assistant&quot; device - it&apos;s glasses that also do AI.
                   </p>
                 </div>
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Anticipy positioning</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Orthogonal category — audio vs visual. Meta Ray-Ban is for seeing; Anticipy is for doing.
-                    No overlap in use case. Not a competitor — different workflow. Glasses users may also wear Anticipy.
+                    Orthogonal category - audio vs visual. Meta Ray-Ban is for seeing; Anticipy is for doing. No overlap in use case. Not a competitor - different workflow. Glasses users may also wear Anticipy.
                   </p>
                 </div>
               </div>
@@ -158,17 +152,14 @@ export default function CompetitivePage() {
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>What it does</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Magnetic clip that attaches to your phone. Records meetings + conversations.
-                    Produces HIPAA-compliant transcripts for doctors, lawyers, therapists.
-                    Smart summaries. No autonomous task execution whatsoever.
+                    Magnetic clip that attaches to your phone. Records meetings + conversations. Produces HIPAA-compliant transcripts for doctors, lawyers, therapists. Smart summaries. No autonomous task execution whatsoever.
                   </p>
                 </div>
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Anticipy advantage</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
                     Plaud transcribes. Anticipy acts. If you say &quot;book a meeting with Sarah for Thursday&quot;,
-                    Plaud gives you a transcript. Anticipy books the meeting.
-                    That&apos;s a fundamentally different value proposition.
+                    Plaud gives you a transcript. Anticipy books the meeting. That&apos;s a fundamentally different value proposition.
                   </p>
                 </div>
               </div>
@@ -193,17 +184,14 @@ export default function CompetitivePage() {
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>What happened</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Raised $8M, shipped ~5K pendant wearables. Good form factor, decent UX.
-                    Meta saw strategic value in the AI wearable space and acquired it as a defensive play
+                    Raised $8M, shipped ~5K pendant wearables. Good form factor, decent UX. Meta saw strategic value in the AI wearable space and acquired it as a defensive play
                     against Apple&apos;s rumored AI wearable.
                   </p>
                 </div>
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Lesson for Anticipy</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Indie players in AI wearables are acquisition targets. This is an exit path.
-                    Build something that would embarrass a big company not to own.
-                    At $149–$299, you don&apos;t need to beat Meta — you need to be worth buying.
+                    Indie players in AI wearables are acquisition targets. This is an exit path. Build something that would embarrass a big company not to own. At $149–$299, you don&apos;t need to beat Meta - you need to be worth buying.
                   </p>
                 </div>
               </div>
@@ -228,16 +216,14 @@ export default function CompetitivePage() {
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>What went wrong</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Promoted as an &quot;AI friend&quot; that listens to you all day.
-                    Massive privacy backlash — people don&apos;t want an always-on AI companion watching them.
-                    Zero utility value beyond emotional companionship. Branded as dystopian.
+                    Promoted as an &quot;AI friend&quot; that listens to you all day. Massive privacy backlash - people don&apos;t want an always-on AI companion watching them. Zero utility value beyond emotional companionship. Branded as dystopian.
                   </p>
                 </div>
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Lesson for Anticipy</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
                     Always-listening = reputational disaster without clear value. Anticipy: on-device VAD
-                    never sends audio until speech is detected. Utility-first positioning —
+                    never sends audio until speech is detected. Utility-first positioning - 
                     &quot;it does your tasks&quot; not &quot;it&apos;s your friend&quot;. Publish privacy policy before launch.
                   </p>
                 </div>
@@ -264,8 +250,7 @@ export default function CompetitivePage() {
                 <div>
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>What it does</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                    Records ambient conversation. Integrates with Gmail, Google Calendar, Outlook.
-                    Can draft emails, schedule meetings, set reminders. Amazon acquired it for
+                    Records ambient conversation. Integrates with Gmail, Google Calendar, Outlook. Can draft emails, schedule meetings, set reminders. Amazon acquired it for
                     integration with Alexa ecosystem in January 2026.
                   </p>
                 </div>
@@ -273,8 +258,7 @@ export default function CompetitivePage() {
                   <div className="text-xs font-medium mb-1" style={{ color: "#8A8A8A" }}>Anticipy critical advantage</div>
                   <p className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
                     <strong className="font-semibold" style={{ color: "#F5F0EB" }}>Bee does email + calendar. Anticipy does any web task via browser agent.</strong>{" "}
-                    Book a flight. Order dinner. Fill a form. Apply for a job. No API integration needed —
-                    Anticipy operates the browser directly, like a human would.
+                    Book a flight. Order dinner. Fill a form. Apply for a job. No API integration needed. Anticipy operates the browser directly, like a human would.
                   </p>
                 </div>
               </div>
@@ -296,7 +280,7 @@ export default function CompetitivePage() {
                 </div>
               </div>
               <div className="text-xs leading-relaxed" style={{ color: "#A0A0A0" }}>
-                Not a direct competitor — different market (healthcare enterprise), different use case (clinical documentation),
+                Not a direct competitor - different market (healthcare enterprise), different use case (clinical documentation),
                 different buyer (hospital procurement). Validates that the &quot;ambient audio → AI action&quot; concept
                 has institutional buyers. Anticipy targets consumer + SMB.
               </div>
@@ -312,7 +296,7 @@ export default function CompetitivePage() {
             {[
               {
                 title: "1. Autonomous browser execution",
-                body: "Any web task, not just transcription. Bee AI does email/calendar via API. Anticipy operates any website via browser agent — no integration required. Book flights, fill forms, order food, apply for jobs.",
+                body: "Any web task, not just transcription. Bee AI does email/calendar via API. Anticipy operates any website via browser agent - no integration required. Book flights, fill forms, order food, apply for jobs.",
               },
               {
                 title: "2. Under $100 hardware",
@@ -320,7 +304,7 @@ export default function CompetitivePage() {
               },
               {
                 title: "3. Privacy-first architecture",
-                body: "On-device Voice Activity Detection (VAD) — audio never leaves the device until speech is detected. No always-on streaming. Local VAD means zero data transmitted in silence. Directly addresses Friend/Bee backlash.",
+                body: "On-device Voice Activity Detection (VAD) - audio never leaves the device until speech is detected. No always-on streaming. Local VAD means zero data transmitted in silence. Directly addresses Friend/Bee backlash.",
               },
               {
                 title: "4. Learns from failures",
@@ -342,7 +326,7 @@ export default function CompetitivePage() {
             {[
               { n: "1", title: "Position: \"Listens. Understands. Does.\"", body: "Contrast with transcription-only competitors. The word \"does\" is the differentiator. Marketing should show actual web tasks completing in real-time, not abstract AI bubbles." },
               { n: "2", title: "Start B2B before consumer", body: "Enterprise buyers (HR teams, recruiters, ops managers) will pay $299/device + $49/mo for autonomous web tasks. Lower CAC, longer LTV, lower support burden. Build case studies before consumer launch." },
-              { n: "3", title: "Price at $149–$299 consumer", body: "Below Plaud ($159) and Humane ($699). Above Bee ($49.99) — justifiable because Anticipy does more. At $199 with $19/mo you match Rabbit R1 pricing at 3× the utility." },
+              { n: "3", title: "Price at $149–$299 consumer", body: "Below Plaud ($159) and Humane ($699). Above Bee ($49.99) - justifiable because Anticipy does more. At $199 with $19/mo you match Rabbit R1 pricing at 3× the utility." },
               { n: "4", title: "Publish privacy policy before launch", body: "Friend and Bee had massive backlash around always-on recording. Publish a clear, plain-English privacy policy before any press. Explain on-device VAD, what data is sent, retention policy. This is a competitive advantage if done right." },
             ].map((r) => (
               <div key={r.n} className="flex gap-4 p-5 rounded-xl" style={{ background: "#161616", border: "1px solid #252525" }}>

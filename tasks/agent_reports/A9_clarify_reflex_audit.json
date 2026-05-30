@@ -1,0 +1,64 @@
+{
+  "scope": "Read-only audit of non-frozen planner path: engine/app/product/server.py only.",
+  "compose_sys_problematic_phrases": [
+    {
+      "phrase": "Both errors are equally bad and must both be avoided",
+      "lineish": 5190,
+      "why": "Symmetric framing invites the LLM to hedge. Wrong-bind and over-ask are NOT symmetric: a draft is reversible, an unsent clarify is a dead loop. Prompt should bias toward act when count==1."
+    },
+    {
+      "phrase": "Picking one of several equally-fitting candidates (guessing) is a misattribution = the worst outcome.",
+      "lineish": 5168,
+      "why": "Calling guessing 'the worst outcome' (repeated twice) sets a salience asymmetry the prompt then claims is symmetric. LLMs in doubt will default to the loss-aversion side -> clarify."
+    },
+    {
+      "phrase": "Resolving a generic person-less 'the lathe restoration' here is a GUESS = the worst outcome.",
+      "lineish": 5188,
+      "why": "Second 'worst outcome' framing in 20 lines. Reinforces clarify-default. The single-person example R10/R12/R17 should be the more prominent worked example, not the multi-person trap."
+    },
+    {
+      "phrase": "STEP 1 - List the CANDIDATE referents... PER-PERSON INSTANCES (critical)",
+      "lineish": 5146,
+      "why": "Long, dense procedural rules upfront. By the time the model reaches 'A single clear referent MUST be resolved' (line 5163-5164), context dilution makes the loss-averse default win. Move the count==1 -> act rule to the TOP, before the multi-candidate trap."
+    },
+    {
+      "phrase": "Email ADDRESS resolution is NOT your job",
+      "lineish": 5209,
+      "why": "Correct directive but buried at the bottom. Pronoun-only triggers (R12 'She is waiting on those notes.', R17 'I should send her the schedule') fail because the model treats the lack of a name as needing clarification rather than reaching to recent transcript context."
+    }
+  ],
+  "finalize_plan_observations": [
+    "Lines 3711-3818: _finalize_plan ALREADY contains three layered clarify->act promotions (addr_clarify salvage at 3719, dossier salvage at 3737, named-recipient salvage at 3785). Strong machinery but it only activates if plan.intent is email-ish OR plan already says clarify-with-address-question.",
+    "EMPTY_MODE plans (mode='clarify', question='Which one did you mean?', _infra_fallback=True) from line 5454 BYPASS all three salvages because plan.intent is '' and the question text contains 'mean' (not 'address'). Add an _infra_fallback branch in _finalize_plan that re-runs _resolve_person_from_active_dossier + recent-transcript pronoun resolution before returning the generic clarify.",
+    "No demote act->clarify path exists post-LLM (good). The ambiguity_guard at line 3708 only acts on the LLM's own decision, not promoting clarify->act.",
+    "Lines 3806-3814 hard-codes 'Which email address should I use?' as the fallback question. For R12/R17 pattern (pronoun + no name token) this is the wrong question; the real missing slot is the antecedent, not the address."
+  ],
+  "pronoun_fastpath_proposal": {
+    "rule": "In _fastpath_plan_from_memory, when matched_names==0 (no dossier name in the trigger text) AND text contains a pronoun (her/him/them/she/he/they) AND the recent transcript window (last 2-3 lines from _recent_transcripts) contains exactly one dossier person whose pronoun matches via the dossier's pronoun field (or gender hint via first-name-to-gender table), emit mode=act resolving to that person. Fall through to LLM only if 0 or 2+ pronoun-compatible dossier people sit in the recent window.",
+    "expected_scenarios_helped": 8,
+    "rationale": "R10, R12, R13, R15, R16, R17, R18, R19 all use 'her' with exactly one female (Priya OR Maya) in the immediately prior context line. R11/R14/R20 use 'her' explicitly + a name. The pronoun-only ones currently force a 30s+ LLM round-trip with high CLARIFY_REFLEX rate; deterministic pronoun resolution catches them in <5ms."
+  },
+  "r12_scenario_text": "Context: 'Priya asked me to write up the pricing exploration.' Trigger: 'She is waiting on those notes.' Expected: Priya Shah.",
+  "r17_scenario_text": "Context: 'Our operations partner Maya needs the payroll schedule.' Trigger: 'I should send her the schedule before next pay run.' Expected: Maya Chen.",
+  "diagnosis": "Both triggers (a) contain no dossier first-name token so _fastpath_plan_from_memory returns None at line 5326 (matched_names != 1, since matched_names is empty), AND (b) use a third-person pronoun ('she'/'her') whose antecedent sits in the PRECEDING context line, not the trigger itself. The LLM must do two-step pronoun resolution against the recent window. R17 ran 89.5s and R12 51.9s before returning empty/garbage mode — model timed out trying to resolve. The _infra_fallback at line 5454 then returns mode='clarify' question='Which one did you mean?' which is logged as EMPTY_MODE by the test. Pronoun resolution is a deterministic problem the LLM should never see.",
+  "top_3_recommended_edits": [
+    {
+      "file": "/Users/omarebrahim/Developer/Anticipy-V7/engine/app/product/server.py",
+      "lineish": 5263,
+      "change_summary": "Extend _fastpath_plan_from_memory with a pronoun-resolution branch: when no name token matches, scan the trigger for {she, her, hers, he, him, his, they, them, their}; if exactly one dossier person whose pronoun matches sits in the last 3 _recent_transcripts entries, return an act plan bound to that person. Use dossier .pronoun field when present; else infer from first-name table (Priya->she, Maya->she, Dana->she, Marcus->he, etc.) loaded from a small static map.",
+      "expected_impact": "Resolves R12, R17 deterministically; also pre-empts R10, R16 CLARIFY_REFLEX (both use 'her' with single female in context). Projected resolvable PASS lift from current pattern: 4 of the 4 residual non-TIMEOUT failures."
+    },
+    {
+      "file": "/Users/omarebrahim/Developer/Anticipy-V7/engine/app/product/server.py",
+      "lineish": 5126,
+      "change_summary": "Rewrite _COMPOSE_SYS to lead with the count==1->act rule as a one-liner ('If exactly one candidate person fits, mode=act. Period.'), drop the symmetric 'both errors equally bad' framing, and remove the duplicated 'worst outcome' language. Keep the multi-candidate clarify rule but as a single short paragraph after the act rule. Add a worked example: 'memory: Priya (she/her) pricing notes; trigger She is waiting -> mode=act, person=Priya, intent=email_draft.'",
+      "expected_impact": "Reduces CLARIFY_REFLEX on R10, R16 and similar single-female-pronoun triggers when the fastpath misses (e.g., dossier missing pronoun field). Trims prompt by ~30 lines, lowering p95 LLM latency a bit too."
+    },
+    {
+      "file": "/Users/omarebrahim/Developer/Anticipy-V7/engine/app/product/server.py",
+      "lineish": 3711,
+      "change_summary": "Add an _infra_fallback branch at the top of _finalize_plan: if plan.get('_infra_fallback') is True, run _resolve_person_from_active_dossier(instruction) AND a pronoun-against-recent-window resolver before returning the generic 'Which one did you mean?' clarify. On single deterministic match, promote to mode=act email_draft.",
+      "expected_impact": "Last-line defense for EMPTY_MODE plans (R12, R17 today). Even if the LLM times out or returns garbage, deterministic pronoun + dossier resolution kicks in instead of asking the user."
+    }
+  ]
+}

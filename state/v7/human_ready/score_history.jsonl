@@ -1,0 +1,144 @@
+{
+  "iter": 1,
+  "ts": "2026-05-29T06:32:04Z",
+  "engine_ok": true,
+  "bridge_ok": true,
+  "chrome_ok": true,
+  "z001": {
+    "verdict": "FAIL",
+    "pass": 3,
+    "total": 3
+  },
+  "check18_non_audio": {
+    "pass": 5,
+    "total": 15
+  },
+  "mac_app_window": false,
+  "popover_exists": true,
+  "onboarding_pages": {
+    "chat": true,
+    "audio": true,
+    "call": true
+  },
+  "human_ready": false
+}
+{
+  "iter": 2,
+  "ts": "2026-05-29T06:44:41Z",
+  "engine_ok": true,
+  "bridge_ok": true,
+  "chrome_ok": true,
+  "z001": {
+    "verdict": "FAIL",
+    "pass": 3,
+    "total": 3
+  },
+  "check18_non_audio": {
+    "pass": 12,
+    "total": 15
+  },
+  "mac_app_window": false,
+  "popover_exists": true,
+  "onboarding_pages": {
+    "chat": true,
+    "audio": true,
+    "call": true
+  },
+  "human_ready": false
+}
+{
+  "iter": 3,
+  "ts": "2026-05-29T06:52:25Z",
+  "engine_ok": true,
+  "bridge_ok": true,
+  "chrome_ok": true,
+  "z001": {
+    "verdict": "FAIL",
+    "pass": 4,
+    "total": 4
+  },
+  "check18_non_audio": {
+    "pass": 12,
+    "total": 15
+  },
+  "mac_app_window": false,
+  "popover_exists": true,
+  "onboarding_pages": {
+    "chat": true,
+    "audio": true,
+    "call": true
+  },
+  "human_ready": false
+}
+{
+  "iter": 4,
+  "ts": "2026-05-29T07:19:13Z",
+  "engine_ok": true,
+  "bridge_ok": true,
+  "chrome_ok": true,
+  "z001": {
+    "verdict": "FAIL",
+    "pass": 3,
+    "total": 3
+  },
+  "check18_non_audio": {
+    "pass": 12,
+    "total": 15
+  },
+  "mac_app_window": false,
+  "popover_exists": true,
+  "onboarding_pages": {
+    "chat": true,
+    "audio": true,
+    "call": true
+  },
+  "human_ready": false
+}
+{
+  "iter": 5,
+  "ts": "2026-05-29T07:26:05Z",
+  "engine_ok": true,
+  "bridge_ok": true,
+  "chrome_ok": true,
+  "z001": {
+    "verdict": "FAIL",
+    "pass": 3,
+    "total": 3
+  },
+  "check18_non_audio": {
+    "pass": 8,
+    "total": 15
+  },
+  "mac_app_window": false,
+  "popover_exists": true,
+  "onboarding_pages": {
+    "chat": true,
+    "audio": true,
+    "call": true
+  },
+  "human_ready": false
+}
+{
+  "iter": 6,
+  "ts": "2026-05-29T07:31:17Z",
+  "engine_ok": true,
+  "bridge_ok": true,
+  "chrome_ok": true,
+  "z001": {
+    "verdict": "FAIL",
+    "pass": 4,
+    "total": 4
+  },
+  "check18_non_audio": {
+    "pass": 7,
+    "total": 15
+  },
+  "mac_app_window": false,
+  "popover_exists": true,
+  "onboarding_pages": {
+    "chat": true,
+    "audio": true,
+    "call": true
+  },
+  "human_ready": false
+}

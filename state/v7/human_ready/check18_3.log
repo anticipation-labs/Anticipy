@@ -1,0 +1,24 @@
+=== Anticipy acceptance harness ===
+artifacts: /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654
+engine:    http://127.0.0.1:8731
+site:      https://www.anticipy.ai
+cdp:       http://127.0.0.1:9222
+git_head:  6e02d0a9d76f95415e908c7fe8021d01ad4ac89e
+----------------------------------------------------------------------
+CHECK 01  FAIL  site_live  (0.1s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_01.json
+CHECK 02  PASS  dmg_downloadable  (1.0s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_02.json
+CHECK 03  PASS  install_path_terminal_only  (0.3s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_03.json
+CHECK 04  PASS  app_runs  (8.8s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_04.json
+CHECK 05  PASS  onboarding_chat  (98.7s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_05.json
+CHECK 07  PASS  onboarding_call_stub  (0.0s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_07.json
+CHECK 08  PASS  input_paste  (86.2s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_08.json
+CHECK 11  PASS  input_bluetooth_audio_devices_enumerated  (0.0s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_11.json
+CHECK 12  PASS  ambiguity_trap  (33.1s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_12.json
+CHECK 13  PASS  flash_page_live  (0.6s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_13.json
+CHECK 14  PASS  flash_stub_log  (0.0s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_14.json
+CHECK 15  FAIL  brand_audit  (0.8s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_15.json
+CHECK 16  FAIL  agent_reliability  (99.6s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_16.json
+CHECK 17  PASS  frozen_paths_clean  (0.0s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_17.json
+CHECK 18  PASS  cleanup_passes  (1.3s)  -> /Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_234654/CHECK_18.json
+----------------------------------------------------------------------
+12/15 PASS

@@ -1,0 +1,1 @@
+{"ok":true,"state":"done","started_at":1780084776.393168,"finished_at":1780084840.450806,"elapsed_ms":64057,"people_count":0,"projects_count":0,"tools_count":0,"rows_collected":25,"batches_sent":1,"llm_calls_ok":0,"llm_calls_failed":1,"errors":["llm empty: empty content"],"last_error":"llm empty: empty content","bridge_ready":true,"account_id":"anticipy-user"}

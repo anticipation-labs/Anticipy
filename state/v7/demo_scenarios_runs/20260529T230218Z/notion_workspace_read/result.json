@@ -1,0 +1,87 @@
+{
+  "id": "notion_workspace_read",
+  "surface": "Notion",
+  "url": "https://app.notion.com/",
+  "intent": "Read the Notion workspace currently open in the agent window. Report which workspace is signed in and list the first three sidebar items you can see. Do not click any page. Do not create anything yet. Just read and report.",
+  "started_at": "20260529T230424Z",
+  "verdict": "PASS",
+  "skip_reason": "",
+  "probe": {
+    "logged_in": true,
+    "skip_reason": "",
+    "url": "https://app.notion.com/",
+    "title": "Notion",
+    "body_snippet": "",
+    "body_chars": 0,
+    "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/login_probe.png",
+    "probe_target_id": "0617F2A31D7BCEF93253ABBBB31E1700"
+  },
+  "act_probe": {
+    "ok": true,
+    "skipped": true,
+    "reason": "scenario not routed via /api/act"
+  },
+  "agent_window_prewarm": {
+    "prewarmed": true,
+    "url": "https://app.notion.com/",
+    "target_id": "81C9A312084271CBBB4DAA7B4971EDD3",
+    "settle_seconds": 18.0
+  },
+  "universal_result": {
+    "ok": true,
+    "intent": "Read the Notion workspace currently open in the agent window. Report which workspace is signed in and list the first three sidebar items you can see. Do not click any page. Do not create anything yet. Just read and report.",
+    "surface_hint": "https://app.notion.com/",
+    "status": "SUCCESS",
+    "answer": "The Notion workspace currently open in the agent window is identified and its name is reported.; The first three sidebar items visible in the Notion workspace are listed.",
+    "evidence": "vision-confirmed: The workspace signed in is 'Omize Ten's Space' as shown in the top-left corner. The first three sidebar items visible are: 1) 'Home' (with house icon), 2) 'Meetings' section header with 'Connect your ",
+    "n_iterations": 3,
+    "subtasks": [
+      {
+        "subgoal": "Read the Notion workspace currently open in the agent window. Report which workspace is signed in and list the first three sidebar items you can see. Do not click any page. Do not create anything yet. Just read and report.",
+        "status": "SUCCESS",
+        "answer": "The Notion workspace currently open in the agent window is identified and its name is reported.; The first three sidebar items visible in the Notion workspace are listed.",
+        "evidence": "vision-confirmed: The workspace signed in is 'Omize Ten's Space' as shown in the top-left corner. The first three sidebar items visible are: 1) 'Home' (with house icon), 2) 'Meetings' section header with 'Connect your ",
+        "iters": 3
+      }
+    ],
+    "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780095906_f6594e",
+    "error": null,
+    "elapsed_sec": 64.435,
+    "deadline_sec": 300.0,
+    "deadline_hit": false
+  },
+  "universal_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_sec": 64.521,
+      "status": "SUCCESS",
+      "answer_snip": "The Notion workspace currently open in the agent window is identified and its name is reported.; The first three sidebar items visible in the Notion workspace are listed.",
+      "error": null,
+      "deadline_hit": false,
+      "n_iterations": 3
+    }
+  ],
+  "universal_elapsed_sec": 64.521,
+  "verify": {
+    "engine_status": "SUCCESS",
+    "engine_answer": "The Notion workspace currently open in the agent window is identified and its name is reported.; The first three sidebar items visible in the Notion workspace are listed.",
+    "engine_evidence": "vision-confirmed: The workspace signed in is 'Omize Ten's Space' as shown in the top-left corner. The first three sidebar items visible are: 1) 'Home' (with house icon), 2) 'Meetings' section header with 'Connect your ",
+    "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780095906_f6594e",
+    "elapsed_sec": 64.435,
+    "deadline_hit": false,
+    "n_iterations": 3,
+    "after_screenshot": "",
+    "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/agent_window_after.png",
+    "success_signal_present": null,
+    "trajectory_copy": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/trajectory",
+    "screenshot_count": 5,
+    "screenshot_paths": [
+      "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/trajectory/s0_i00_before.png",
+      "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/trajectory/s0_i01_before.png",
+      "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/trajectory/s0_i02_after.png",
+      "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/trajectory/s0_i02_before.png",
+      "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T230218Z/notion_workspace_read/trajectory/s0_i03_before.png"
+    ]
+  },
+  "finished_at": "20260529T230611Z"
+}

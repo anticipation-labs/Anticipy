@@ -1,0 +1,40 @@
+=== stdout ===
+  #  name                              cat         verdict    sec  details
+--------------------------------------------------------------------------
+  1  R01-dana-q3                       resolvable  FAIL     1.07  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+  2  R02-dana-friday-update            resolvable  FAIL     1.04  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+  3  R03-dana-board-deck               resolvable  FAIL     1.09  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+  4  R04-dana-1on1-notes               resolvable  FAIL     0.02  resolvable: expected mode=act, got mode='' q=''
+  5  R05-dana-budget                   resolvable  FAIL     1.09  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+  6  R06-dana-followups                resolvable  FAIL     1.16  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+  7  R07-priya-strategy-memo           resolvable  FAIL     1.18  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+  8  R08-priya-market-analysis         resolvable  FAIL     0.04  resolvable: expected mode=act, got mode='' q=''
+  9  R09-priya-positioning             resolvable  FAIL     1.04  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 10  R10-priya-investor-prep           resolvable  FAIL     1.15  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 11  R11-priya-roadmap-review          resolvable  FAIL     1.17  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 12  R12-priya-pricing-notes           resolvable  FAIL     0.03  resolvable: expected mode=act, got mode='' q=''
+ 13  R13-priya-board-feedback          resolvable  FAIL     1.17  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 14  R14-maya-ops-checklist            resolvable  FAIL     1.18  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 15  R15-maya-vendor-list              resolvable  FAIL     1.17  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 16  R16-maya-onboarding-doc           resolvable  FAIL     1.13  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 17  R17-maya-payroll                  resolvable  FAIL     1.15  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 18  R18-maya-runbook                  resolvable  FAIL     1.18  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 19  R19-maya-team-expenses            resolvable  FAIL     1.11  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 20  R20-maya-tooling                  resolvable  FAIL     1.17  resolvable: expected mode=act, got mode='clarify' q='Which one did you mean?'
+ 21  A01-dana-vs-priya-launch-recap    ambiguous   FAIL     1.16  expected clarify naming ['Dana', 'Priya'], got mode='clarify' q='Which one did y
+ 22  A02-priya-vs-maya-planning-notes  ambiguous   FAIL     1.15  expected clarify naming ['Priya', 'Maya'], got mode='clarify' q='Which one did y
+ 23  A03-dana-vs-maya-onboarding-doc   ambiguous   FAIL     2.30  expected clarify naming ['Dana', 'Maya'], got mode='clarify' q='Which one did yo
+ 24  A04-dana-vs-priya-board-deck      ambiguous   FAIL     2.27  expected clarify naming ['Dana', 'Priya'], got mode='clarify' q='Which one did y
+ 25  A05-priya-vs-maya-pricing         ambiguous   FAIL     1.13  expected clarify naming ['Priya', 'Maya'], got mode='clarify' q='Which one did y
+ 26  A06-dana-vs-priya-roadmap         ambiguous   FAIL     1.11  expected clarify naming ['Dana', 'Priya'], got mode='clarify' q='Which one did y
+ 27  A07-dana-vs-maya-budget           ambiguous   FAIL     2.31  expected clarify naming ['Dana', 'Maya'], got mode='clarify' q='Which one did yo
+ 28  A08-priya-vs-maya-investor-prep   ambiguous   FAIL     1.16  expected clarify naming ['Priya', 'Maya'], got mode='clarify' q='Which one did y
+ 29  A09-dana-vs-priya-positioning     ambiguous   FAIL     1.17  expected clarify naming ['Dana', 'Priya'], got mode='clarify' q='Which one did y
+ 30  A10-dana-vs-maya-followups        ambiguous   FAIL     1.16  expected clarify naming ['Dana', 'Maya'], got mode='clarify' q='Which one did yo
+
+resolvable: 0/20
+ambiguous:  0/10
+verdict:    FAIL
+summary written to proof-artifacts/agent_reliability.json
+
+=== stderr ===

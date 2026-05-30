@@ -1,0 +1,6 @@
+[21:54:35Z] ENGINE up: http://127.0.0.1:8731/health -> 200
+[21:54:35Z] CHROME up: http://localhost:9222/json/version -> 200
+[21:54:35Z] BRIDGE up: http://127.0.0.1:7777/status ok
+[21:54:35Z] ==== SURFACE 1: saucedemo ====
+[21:54:35Z] BEGIN saucedemo :: intent=Log in to SauceDemo using username standard_user and password secret_sauce. Then add the first item on the inventory page to the cart. The task is complete when the shopping cart icon in the top right shows a badge with the number 1.
+[21:54:35Z] BEGIN saucedemo :: hint=https://www.saucedemo.com/ deadline=300s

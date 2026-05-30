@@ -1,6 +1,6 @@
+import * as crypto from "crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
-  verifyTwilioRequest,
   reconstructWebhookUrl,
   formDataToParams,
 } from "@/lib/twilio-verify";
@@ -169,7 +169,6 @@ function verifyWithBrokerToken(
   params: Record<string, string>,
 ): boolean {
   if (!signatureHeader) return false;
-  const crypto = require("crypto") as typeof import("crypto");
   const sortedKeys = Object.keys(params).sort();
   let payload = webhookUrl;
   for (const key of sortedKeys) {

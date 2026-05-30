@@ -1,0 +1,132 @@
+{
+  "run_id": "20260529T215733Z",
+  "started_at": "20260529T215733Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "bridge_url": "http://127.0.0.1:7777",
+  "cdp_base": "http://localhost:9222",
+  "scenarios": [
+    {
+      "id": "stripe_revenue_check",
+      "surface": "Stripe Aevoy",
+      "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+      "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+      "started_at": "20260529T215733Z",
+      "verdict": "FAIL",
+      "skip_reason": "",
+      "agent_window_wipe": {
+        "closed": true,
+        "removed_state": true,
+        "target_id": "E3A6763FAE8F8441D137CCB4D24B43D7"
+      },
+      "probe": {
+        "logged_in": true,
+        "skip_reason": "",
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "title": "Dashboard \u2013 Aevoy \u2013 Stripe",
+        "body_snippet": "",
+        "body_chars": 0,
+        "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/stripe_revenue_check/login_probe.png",
+        "probe_target_id": "C1A5F6A4576ACACE0AF0AD4145997B61"
+      },
+      "act_probe": {
+        "ok": true,
+        "skipped": true,
+        "reason": "scenario not routed via /api/act"
+      },
+      "universal_result": {
+        "ok": false,
+        "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+        "surface_hint": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "status": "DEADLINE_EXCEEDED",
+        "answer": "",
+        "evidence": "wall-clock 150.0s exceeded before the loop returned",
+        "n_iterations": 0,
+        "subtasks": [],
+        "trajectory_dir": "",
+        "error": "deadline_exceeded",
+        "elapsed_sec": 150.003,
+        "deadline_sec": 150.0,
+        "deadline_hit": true
+      },
+      "universal_elapsed_sec": 150.015,
+      "verify": {
+        "engine_status": "DEADLINE_EXCEEDED",
+        "engine_answer": "",
+        "engine_evidence": "wall-clock 150.0s exceeded before the loop returned",
+        "trajectory_dir": "",
+        "elapsed_sec": 150.003,
+        "deadline_hit": true,
+        "n_iterations": 0,
+        "after_screenshot": "",
+        "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/stripe_revenue_check/agent_window_after.png",
+        "success_signal_present": null
+      },
+      "finished_at": "20260529T220019Z"
+    },
+    {
+      "id": "calendly_event_lookup",
+      "surface": "Calendly",
+      "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+      "intent": "Read the Calendly event types page and report back the names of the first three event types listed (for example '30 Minute Meeting', 'Quick Call', etc). Do not click any event. Do not delete anything. Just read and report.",
+      "started_at": "20260529T220019Z",
+      "verdict": "FAIL",
+      "skip_reason": "",
+      "agent_window_wipe": {
+        "closed": true,
+        "removed_state": true,
+        "target_id": "4E88339EC59F40B1DEDBE3837F80128F"
+      },
+      "probe": {
+        "logged_in": true,
+        "skip_reason": "",
+        "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+        "title": "Event types - Scheduling - Calendly",
+        "body_snippet": "create\nscheduling\nmeetings\navailability\ncontacts\nworkflows\npayments\nnew\nintegrations & apps\nrouting\nupgrade plan\nanalytics\nadmin center\nhelp\no\nreview our updated terms of use\nwe've updated our terms of use to reflect how calendly works today. take a moment to review what's changed.\naccept terms\nrevi",
+        "body_chars": 701,
+        "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/calendly_event_lookup/login_probe.png",
+        "probe_target_id": "40571EFC731E191BEAAB07C563F6B817"
+      },
+      "act_probe": {
+        "ok": true,
+        "skipped": true,
+        "reason": "scenario not routed via /api/act"
+      },
+      "universal_result": {
+        "ok": false,
+        "intent": "Read the Calendly event types page and report back the names of the first three event types listed (for example '30 Minute Meeting', 'Quick Call', etc). Do not click any event. Do not delete anything. Just read and report.",
+        "surface_hint": "https://calendly.com/app/scheduling/meeting_types/user/me",
+        "status": "DEADLINE_EXCEEDED",
+        "answer": "",
+        "evidence": "wall-clock 150.0s exceeded before the loop returned",
+        "n_iterations": 0,
+        "subtasks": [],
+        "trajectory_dir": "",
+        "error": "deadline_exceeded",
+        "elapsed_sec": 150.002,
+        "deadline_sec": 150.0,
+        "deadline_hit": true
+      },
+      "universal_elapsed_sec": 150.014,
+      "verify": {
+        "engine_status": "DEADLINE_EXCEEDED",
+        "engine_answer": "",
+        "engine_evidence": "wall-clock 150.0s exceeded before the loop returned",
+        "trajectory_dir": "",
+        "elapsed_sec": 150.002,
+        "deadline_hit": true,
+        "n_iterations": 0,
+        "after_screenshot": "",
+        "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/calendly_event_lookup/agent_window_after.png",
+        "success_signal_present": null
+      },
+      "finished_at": "20260529T220301Z"
+    }
+  ],
+  "finished_at": "20260529T220301Z",
+  "pass_count": 0,
+  "partial_count": 0,
+  "fail_count": 2,
+  "skipped_count": 0,
+  "threshold": 4,
+  "aggregate_verdict": "FAIL"
+}

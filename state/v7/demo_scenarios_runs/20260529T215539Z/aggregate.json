@@ -1,0 +1,86 @@
+{
+  "run_id": "20260529T215539Z",
+  "started_at": "20260529T215539Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "bridge_url": "http://127.0.0.1:7777",
+  "cdp_base": "http://localhost:9222",
+  "scenarios": [
+    {
+      "id": "stripe_revenue_check",
+      "surface": "Stripe Aevoy",
+      "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+      "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+      "started_at": "20260529T215539Z",
+      "verdict": "PASS",
+      "skip_reason": "",
+      "probe": {
+        "logged_in": true,
+        "skip_reason": "",
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "title": "Transactions \u2013 Aevoy \u2013 Stripe",
+        "body_snippet": "skip to content\ntransactions\npayments\npayouts\nall activity\nmore\n\nhome\nbalances\ntransactions\ncustomers\nproduct catalog\nshortcuts\npayment links\nproducts\npayments\nbilling\nreporting\napps\nmore\nsearch\n/",
+        "body_chars": 196,
+        "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/login_probe.png",
+        "probe_target_id": "16F5358C62E1D550974C0A8574ACC538"
+      },
+      "act_probe": {
+        "ok": true,
+        "skipped": true,
+        "reason": "scenario not routed via /api/act"
+      },
+      "universal_result": {
+        "ok": true,
+        "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+        "surface_hint": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "status": "SUCCESS",
+        "answer": "The gross volume number visible at the top of the Stripe Aevoy dashboard payments page is reported.",
+        "evidence": "vision-confirmed: The gross volume number is clearly visible at the top of the page under 'Today' section. It shows '$0.00' with a timestamp of '2:56 PM'. There is also a secondary 'Yesterday' comparison showing '$0.00",
+        "n_iterations": 3,
+        "subtasks": [
+          {
+            "subgoal": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+            "status": "SUCCESS",
+            "answer": "The gross volume number visible at the top of the Stripe Aevoy dashboard payments page is reported.",
+            "evidence": "vision-confirmed: The gross volume number is clearly visible at the top of the page under 'Today' section. It shows '$0.00' with a timestamp of '2:56 PM'. There is also a secondary 'Yesterday' comparison showing '$0.00",
+            "iters": 3
+          }
+        ],
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780091759_087a09",
+        "error": null,
+        "elapsed_sec": 58.368,
+        "deadline_sec": 150.0,
+        "deadline_hit": false
+      },
+      "universal_elapsed_sec": 58.387,
+      "verify": {
+        "engine_status": "SUCCESS",
+        "engine_answer": "The gross volume number visible at the top of the Stripe Aevoy dashboard payments page is reported.",
+        "engine_evidence": "vision-confirmed: The gross volume number is clearly visible at the top of the page under 'Today' section. It shows '$0.00' with a timestamp of '2:56 PM'. There is also a secondary 'Yesterday' comparison showing '$0.00",
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780091759_087a09",
+        "elapsed_sec": 58.368,
+        "deadline_hit": false,
+        "n_iterations": 3,
+        "after_screenshot": "",
+        "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/agent_window_after.png",
+        "success_signal_present": null,
+        "trajectory_copy": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/trajectory",
+        "screenshot_count": 5,
+        "screenshot_paths": [
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/trajectory/s0_i00_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/trajectory/s0_i01_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/trajectory/s0_i02_after.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/trajectory/s0_i02_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215539Z/stripe_revenue_check/trajectory/s0_i03_before.png"
+        ]
+      },
+      "finished_at": "20260529T215657Z"
+    }
+  ],
+  "finished_at": "20260529T215657Z",
+  "pass_count": 1,
+  "partial_count": 0,
+  "fail_count": 0,
+  "skipped_count": 0,
+  "threshold": 4,
+  "aggregate_verdict": "FAIL"
+}

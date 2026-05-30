@@ -1,0 +1,63 @@
+{
+  "check_number": 11,
+  "check_name": "input_bluetooth_audio_devices_enumerated",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_230049/CHECK_11.json",
+  "key_contents": {
+    "count": 5,
+    "default_input": "BlackHole 2ch",
+    "devices": [
+      {
+        "index": 0,
+        "name": "The printer123 Microphone",
+        "max_input_channels": 1,
+        "default_sample_rate": 48000.0,
+        "kind": "unsupported",
+        "source_detail": "unsupported_device",
+        "connection_type": "unsupported",
+        "is_default": false
+      },
+      {
+        "index": 1,
+        "name": "BlackHole 2ch",
+        "max_input_channels": 2,
+        "default_sample_rate": 48000.0,
+        "kind": "virtual",
+        "source_detail": "virtual_loopback",
+        "connection_type": "virtual",
+        "is_default": true
+      },
+      {
+        "index": 2,
+        "name": "External Microphone",
+        "max_input_channels": 1,
+        "default_sample_rate": 48000.0,
+        "kind": "other",
+        "source_detail": "other",
+        "connection_type": "other",
+        "is_default": false
+      },
+      {
+        "index": 4,
+        "name": "MacBook Air Microphone",
+        "max_input_channels": 1,
+        "default_sample_rate": 44100.0,
+        "kind": "builtin",
+        "source_detail": "built_in_mic",
+        "connection_type": "built_in",
+        "is_default": false
+      },
+      {
+        "index": 6,
+        "name": "BlackHole 2ch",
+        "max_input_channels": 1,
+        "default_sample_rate": 44100.0,
+        "kind": "virtual",
+        "source_detail": "virtual_loopback",
+        "connection_type": "virtual",
+        "is_default": true
+      }
+    ]
+  },
+  "ts": "2026-05-28T23:04:35.418278"
+}

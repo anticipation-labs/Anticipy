@@ -1,0 +1,25 @@
+[2026-05-29T06:29:30Z] overnight loop start, PID 2152
+
+[2026-05-29T06:29:38Z] === iter 1 start ===
+[2026-05-29T06:30:01Z] iter=1 source engine bound on 8731 after 5 polls
+[2026-05-29T06:30:01Z] iter=1 running Z-001 harness
+[2026-05-29T06:30:03Z] iter=1 Z-001 verdict=FAIL 3/3 PASS rc=1 run_dir=state/v7/z001_e2e_runs/20260529T063002Z
+[2026-05-29T06:32:03Z] iter=1 18-CHECK (non-audio) 5/15 PASS dir=proof-artifacts/acceptance_20260528_233003
+[2026-05-29T06:32:03Z] iter=1 dispatching claude for CHECK 01 (site_live)
+[2026-05-29T06:32:08Z] iter=1 dispatched all failing-CHECK fixers; waiting up to 30min for them to land before next iter
+[2026-05-29T07:02:08Z] iter 1: Z-001=0/1  18-CHECK=5/18 (best Z-001 step count=3); sleeping 900s
+
+[2026-05-29T07:17:09Z] === iter 2 start ===
+[2026-05-29T07:17:15Z] iter=2 source engine bound on 8731 after 1 polls
+[2026-05-29T07:17:15Z] iter=2 running Z-001 harness
+[2026-05-29T07:17:54Z] iter=2 Z-001 verdict=FAIL 3/3 PASS rc=1 run_dir=state/v7/z001_e2e_runs/20260529T071715Z
+[2026-05-29T07:19:48Z] iter=2 18-CHECK (non-audio) 7/15 PASS dir=proof-artifacts/acceptance_20260529_001754
+[2026-05-29T07:19:48Z] iter=2 dispatching claude for CHECK 01 (site_live)
+[2026-05-29T07:19:53Z] iter=2 dispatching claude for CHECK 04 (app_runs)
+[2026-05-29T07:19:58Z] iter=2 dispatching claude for CHECK 05 (onboarding_chat)
+[2026-05-29T07:20:03Z] iter=2 dispatching claude for CHECK 08 (input_paste)
+[2026-05-29T07:20:09Z] iter=2 dispatching claude for CHECK 11 (input_bluetooth_audio_devices_enumerated)
+[2026-05-29T07:20:14Z] iter=2 dispatching claude for CHECK 12 (ambiguity_trap)
+[2026-05-29T07:20:19Z] iter=2 dispatching claude for CHECK 15 (brand_audit)
+[2026-05-29T07:20:24Z] iter=2 dispatching claude for CHECK 16 (agent_reliability)
+[2026-05-29T07:20:29Z] iter=2 dispatched all failing-CHECK fixers; waiting up to 30min for them to land before next iter

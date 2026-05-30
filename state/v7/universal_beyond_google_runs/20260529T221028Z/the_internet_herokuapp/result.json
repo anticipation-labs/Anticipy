@@ -1,0 +1,17 @@
+{
+  "surface": "the_internet_herokuapp",
+  "intent": "Log in to the login form using username tomsmith and password SuperSecretPassword!. The task is complete when the page URL contains /secure and you see a green flash message that says 'You logged into a secure area!'.",
+  "surface_hint": "https://the-internet.herokuapp.com/login",
+  "status": "ERROR",
+  "verdict": "FAIL",
+  "n_iterations": 0,
+  "elapsed_sec": 0.674,
+  "deadline_sec": 300.0,
+  "http_code": "000000",
+  "answer": "",
+  "evidence_text": "",
+  "evidence_screenshot_path": "",
+  "trajectory_dir": "",
+  "trajectory_recovered_from_disk": false,
+  "error": null
+}

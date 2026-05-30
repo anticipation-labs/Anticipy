@@ -1,0 +1,71 @@
+{
+  "check_number": 15,
+  "check_name": "brand_audit",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/CHECK_15.json",
+  "key_contents": {
+    "per_page": [
+      {
+        "page": "/",
+        "url": "https://www.anticipy.ai/",
+        "bg": "rgb(12, 12, 12)",
+        "color": "rgb(245, 240, 235)",
+        "bg_ok": true,
+        "color_ok": true,
+        "emoji_in_heading": false,
+        "forbidden_hits": [],
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/brand_home.png",
+        "passed": true
+      },
+      {
+        "page": "/app",
+        "url": "https://www.anticipy.ai/app",
+        "bg": "rgb(12, 12, 12)",
+        "color": "rgb(245, 240, 235)",
+        "bg_ok": true,
+        "color_ok": true,
+        "emoji_in_heading": false,
+        "forbidden_hits": [],
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/brand_app.png",
+        "passed": true
+      },
+      {
+        "page": "/flash",
+        "url": "https://www.anticipy.ai/flash",
+        "bg": "rgb(12, 12, 12)",
+        "color": "rgb(245, 240, 235)",
+        "bg_ok": true,
+        "color_ok": true,
+        "emoji_in_heading": false,
+        "forbidden_hits": [],
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/brand_flash.png",
+        "passed": true
+      },
+      {
+        "page": "/onboarding/chat",
+        "url": "https://www.anticipy.ai/onboarding/chat",
+        "bg": "rgb(12, 12, 12)",
+        "color": "rgb(245, 240, 235)",
+        "bg_ok": true,
+        "color_ok": true,
+        "emoji_in_heading": false,
+        "forbidden_hits": [],
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/brand_onboarding_chat.png",
+        "passed": true
+      },
+      {
+        "page": "/onboarding/audio",
+        "url": "https://www.anticipy.ai/onboarding/audio",
+        "bg": "rgb(12, 12, 12)",
+        "color": "rgb(245, 240, 235)",
+        "bg_ok": true,
+        "color_ok": true,
+        "emoji_in_heading": false,
+        "forbidden_hits": [],
+        "screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_204006/brand_onboarding_audio.png",
+        "passed": true
+      }
+    ]
+  },
+  "ts": "2026-05-28T20:42:53.585127"
+}

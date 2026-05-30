@@ -1,0 +1,17 @@
+{
+  "surface": "saucedemo",
+  "intent": "Log in to SauceDemo using username standard_user and password secret_sauce. Then add the first item on the inventory page to the cart. The task is complete when the shopping cart icon in the top right shows a badge with the number 1.",
+  "surface_hint": "https://www.saucedemo.com/",
+  "status": "ERROR",
+  "verdict": "FAIL",
+  "n_iterations": 8,
+  "elapsed_sec": 219.498,
+  "deadline_sec": 300.0,
+  "http_code": "000",
+  "answer": "",
+  "evidence_text": "",
+  "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780092628_9f650a/s0_i06_after.png",
+  "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780092628_9f650a",
+  "trajectory_recovered_from_disk": true,
+  "error": null
+}

@@ -1,0 +1,63 @@
+{
+  "story": "Z-001",
+  "run_id": "20260529T184413Z",
+  "started_at": "20260529T184413Z",
+  "account_id": "z001_e2e_4f78f8e2ef43",
+  "anticipy_app_url": "https://www.anticipy.ai/app",
+  "bridge_url": "http://127.0.0.1:7777",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "cdp_pages_before": [
+    "08A575F81985611D23BB60A20CC1AD01",
+    "1AB262D0388BD804951A9898EBBA6E85",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2CDFC9DCF43695FE3B35C1F945654DEB",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "38508003E5773E938E90633690E90937",
+    "53E94684FC3D804B41381255D8741841",
+    "74D7A566E257CAA52A626B72877DB489",
+    "825E3EC5D354FF265AB1F944BEDEC319",
+    "9E9BEAEBC68B723CE50578D55CCCEF01",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8",
+    "EB5DD9CFAADCE179D8AC66245EA5F5CC"
+  ],
+  "steps": [
+    {
+      "name": "bridge_alive",
+      "ok": true,
+      "bridge_kind": "cdp_primary",
+      "cdp_alive": true,
+      "cdp_base": "http://localhost:9222",
+      "pid": 89041
+    }
+  ],
+  "verdict": "FAIL",
+  "failed_step": "bridge_alive",
+  "error": "engine /api/state unreachable: status=0 err='URLError: <urlopen error [Errno 61] Connection refused>'",
+  "finished_at": "20260529T184413Z",
+  "opened_targets": [],
+  "closed_targets": {},
+  "cdp_pages_after": [
+    "08A575F81985611D23BB60A20CC1AD01",
+    "1AB262D0388BD804951A9898EBBA6E85",
+    "2C328DAC18E42513561EC40B6109E458",
+    "2CDFC9DCF43695FE3B35C1F945654DEB",
+    "2EF186A0A7CE29ABBFCC00998E1EDB63",
+    "2F35C933548B75E448AE47CF9B953396",
+    "38508003E5773E938E90633690E90937",
+    "53E94684FC3D804B41381255D8741841",
+    "74D7A566E257CAA52A626B72877DB489",
+    "825E3EC5D354FF265AB1F944BEDEC319",
+    "9E9BEAEBC68B723CE50578D55CCCEF01",
+    "BBB7D81B2633566B45DE6A6113562308",
+    "D5F67368F87A48F56BD6F46A849D5B51",
+    "EADB97BE776FA85A1D1F04459C2C80C8",
+    "EB5DD9CFAADCE179D8AC66245EA5F5CC"
+  ],
+  "leaked_target_ids": [],
+  "leaked_target_ids_from_us": [],
+  "tab_leakage_count": 0
+}

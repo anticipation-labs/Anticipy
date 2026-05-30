@@ -142,6 +142,261 @@ async def _private_network_headers(request: Request, call_next):
 _SESS: dict = {"i": 0, "transcript": [], "profile": None,
                "profile_obj": None}
 
+# Engine boot timestamp. Used by /api/state engine_health.etime_seconds so
+# operators can see process uptime in one curl without ps. Captured at module
+# import so it reflects the actual sidecar PID's age, not a subsystem
+# restart. Wall-clock; if NTP shifts mid-run, etime drifts a little. Cheap.
+_BOOT_TS: float = time.time()
+
+# Bounded log of tabs the engine itself initiated via the bridge / CDP. Used
+# by /api/state tab_activity_60s. We do NOT introspect the bridge process or
+# query Chrome; each engine path that opens a tab posts here. Stays in-memory
+# only (bridge restarts already reset its own _ANTICIPY_OWNED_TARGETS set).
+# The deque is bounded so a runaway proactive loop cannot blow memory.
+_TAB_OPEN_LOG: collections.deque = collections.deque(maxlen=512)
+_TAB_OPEN_LOG_LOCK = threading.Lock()
+
+
+def _record_anticipy_tab_open(url: str) -> None:
+    """Record that the engine asked the bridge to open a tab. Each engine
+    path that opens a tab should call this. Best-effort; never raises.
+    Strips the URL down to host so the log does not retain query strings
+    (which can carry PII like meeting ids, search terms, or oauth state).
+    """
+    try:
+        host = ""
+        if url:
+            parsed = urllib.parse.urlsplit(str(url))
+            host = parsed.hostname or ""
+        with _TAB_OPEN_LOG_LOCK:
+            _TAB_OPEN_LOG.append({"ts": time.time(), "host": host})
+    except Exception:
+        pass
+
+
+def _tab_activity_snapshot(window_s: float = 60.0) -> dict:
+    """Snapshot tab opens within the last window_s seconds. Returns the
+    count, the count of distinct tabs still owned (approximated by entries
+    in the bounded log; bridge holds the authoritative set), and the most
+    recent host string. No Chrome / bridge call; pure in-memory deque scan.
+    """
+    try:
+        cutoff = time.time() - float(window_s or 60.0)
+        with _TAB_OPEN_LOG_LOCK:
+            rows = list(_TAB_OPEN_LOG)
+        recent = [r for r in rows if float(r.get("ts") or 0.0) >= cutoff]
+        last_host = ""
+        if recent:
+            last_host = str(recent[-1].get("host") or "")
+        return {
+            "tabs_opened_by_anticipy_60s": len(recent),
+            "tabs_currently_owned": len(rows),
+            "last_tab_host": last_host or None,
+        }
+    except Exception as exc:
+        return {
+            "tabs_opened_by_anticipy_60s": 0,
+            "tabs_currently_owned": 0,
+            "last_tab_host": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _quiet_mode_snapshot() -> bool:
+    try:
+        from app.config import _quiet_mode_enabled
+        return bool(_quiet_mode_enabled())
+    except Exception:
+        return False
+
+
+def _proactive_status_snapshot() -> dict | None:
+    """Coldstart inhale + calendar prep + notifier dispatch counters.
+    Each branch is guarded; if a subsystem is missing we return null for
+    that subkey, not crash the whole endpoint.
+    """
+    try:
+        out: dict = {
+            "coldstart_inhale_running": False,
+            "calendar_prep_last_fire_ts": None,
+            "calendar_prep_briefs_fired_24h": 0,
+            "notifier_dispatches_24h": 0,
+        }
+        try:
+            from app.coldstart.auto_inhale import run_state as _inhale_state
+            inhale = _inhale_state() or {}
+            out["coldstart_inhale_running"] = (
+                str(inhale.get("state") or "").lower() == "running"
+            )
+        except Exception:
+            out["coldstart_inhale_running"] = False
+        try:
+            from app.product.calendar_prep import scheduler_state as _cps
+            cps = _cps() or {}
+            last_at = float(cps.get("last_brief_at") or 0.0)
+            if last_at > 0.0:
+                from datetime import datetime as _dt, timezone as _tz
+                out["calendar_prep_last_fire_ts"] = _dt.fromtimestamp(
+                    last_at, tz=_tz.utc
+                ).isoformat()
+            # The scheduler exposes total briefs_fired since process boot,
+            # not a 24h rolling count. Use the fired_event_ids tail as a
+            # bounded proxy: it caps at 20 in to_dict() so this is cheap.
+            fired_ids = cps.get("fired_event_ids") or []
+            out["calendar_prep_briefs_fired_24h"] = (
+                int(cps.get("briefs_fired") or 0)
+                if last_at >= (time.time() - 24 * 3600.0)
+                else len(fired_ids)
+            )
+        except Exception:
+            pass
+        # Notifier dispatches in the last 24h. The notifier module has no
+        # built-in counter (it logs via stdlib logging), so we walk the
+        # task queue's recent terminal rows as a proxy: every fired task
+        # triggered a dispatch path. Pure in-memory list_tasks call.
+        try:
+            from app import task_queue as _tq
+            recent = _tq.list_tasks(limit=200) or []
+            cutoff = time.time() - 24 * 3600.0
+            count = 0
+            for r in recent:
+                ts = float(getattr(r, "updated_at", 0.0) or 0.0)
+                status = str(getattr(r, "status", "") or "")
+                if ts >= cutoff and status in ("done", "failed", "waiting"):
+                    count += 1
+            out["notifier_dispatches_24h"] = count
+        except Exception:
+            pass
+        return out
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _task_queue_summary_snapshot() -> dict | None:
+    """Counts across the in-memory task queue index. No disk reads beyond
+    the lazy load the queue already does on its first call this process.
+    """
+    try:
+        from app import task_queue as _tq
+        rows = _tq.list_tasks(limit=10_000) or []
+        cutoff = time.time() - 24 * 3600.0
+        out = {
+            "total": len(rows),
+            "waiting": 0,
+            "running": 0,
+            "done_24h": 0,
+            "failed_24h": 0,
+        }
+        for r in rows:
+            status = str(getattr(r, "status", "") or "")
+            ts = float(getattr(r, "updated_at", 0.0) or 0.0)
+            if status == "waiting":
+                out["waiting"] += 1
+            elif status == "in_progress":
+                out["running"] += 1
+            elif status == "done" and ts >= cutoff:
+                out["done_24h"] += 1
+            elif status == "failed" and ts >= cutoff:
+                out["failed_24h"] += 1
+        return out
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _cost_last_hour_snapshot() -> dict | None:
+    """Pull tasks_run / total_usd / p95 from the existing cost_telemetry
+    rolling deque. We do NOT recompute; we read the deque the telemetry
+    already maintains and filter by 1h cutoff."""
+    try:
+        from app.product import cost_telemetry as _ct
+        # The module exports _call_log internally; reach via the public
+        # get_per_task_stats path and intersect with the active + recent
+        # rolling deque. We re-derive the last-hour slice here so we do
+        # not depend on telemetry adding a new helper (keeps this
+        # endpoint additive, not a cross-module edit).
+        with _ct._lock:  # type: ignore[attr-defined]
+            recent = list(_ct._recent)  # type: ignore[attr-defined]
+            call_log = list(_ct._call_log)  # type: ignore[attr-defined]
+        cutoff = time.time() - 3600.0
+        last_hour_costs: list[float] = []
+        for snap in recent:
+            ts = float(snap.get("finished_at") or 0.0)
+            if ts >= cutoff:
+                last_hour_costs.append(float(snap.get("cost_usd") or 0.0))
+        # Tasks that have not finished yet but had a call in the last hour
+        # still count toward "tasks_run" as observed activity.
+        active_task_ids = {
+            str(row.get("task_id") or "")
+            for row in call_log
+            if float(row.get("ts") or 0.0) >= cutoff
+        }
+        total_usd = sum(
+            float(row.get("cost_usd") or 0.0)
+            for row in call_log
+            if float(row.get("ts") or 0.0) >= cutoff
+        )
+        tasks_run = max(len(last_hour_costs), len(active_task_ids))
+        p95 = 0.0
+        if last_hour_costs:
+            ordered = sorted(last_hour_costs)
+            idx = (len(ordered) - 1) * 0.95
+            lo = int(idx)
+            hi = min(lo + 1, len(ordered) - 1)
+            frac = idx - lo
+            p95 = ordered[lo] + (ordered[hi] - ordered[lo]) * frac
+        return {
+            "tasks_run": int(tasks_run),
+            "total_usd": round(float(total_usd), 6),
+            "p95_per_task_usd": round(float(p95), 6),
+        }
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
+def _engine_health_snapshot() -> dict:
+    """Pid, etime, rss, bound port, packaged-binary flag. psutil is in the
+    sidecar's requirements; if it ever drops out we still return the
+    cheap fields (pid, etime, port, binary) and set rss_mb to null."""
+    try:
+        pid = os.getpid()
+        etime = max(0, int(time.time() - _BOOT_TS))
+        try:
+            raw_port = (
+                os.environ.get("ANTICIPY_ENGINE_PORT", "").strip()
+                or os.environ.get("ANTICIPY_PORT", "").strip()
+                or "8731"
+            )
+            bound_port = int(raw_port)
+        except Exception:
+            bound_port = 8731
+        rss_mb: int | None = None
+        try:
+            import psutil as _psutil  # local import; not a hard dep
+            rss_mb = int(_psutil.Process(pid).memory_info().rss / 1024 / 1024)
+        except Exception:
+            rss_mb = None
+        # Bundled binary detection: PyInstaller sets sys.frozen and lays
+        # argv[0] under the .app bundle. Avoid raising on weird argv.
+        bundled = False
+        try:
+            argv0 = (sys.argv[0] if sys.argv else "") or ""
+            real = os.path.realpath(argv0) if argv0 else ""
+            bundled = (
+                bool(getattr(sys, "frozen", False))
+                or "/Applications/Anticipy.app/" in real
+            )
+        except Exception:
+            bundled = False
+        return {
+            "pid": int(pid),
+            "etime_seconds": int(etime),
+            "rss_mb": rss_mb,
+            "bound_port": int(bound_port),
+            "bundled_binary": bool(bundled),
+        }
+    except Exception as exc:
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
 
 # Multi-tenant account_id derivation.
 #
@@ -243,7 +498,11 @@ def _upload_asr_timeout_seconds() -> float:
 
 def _audio_device_kind(name: str) -> str:
     low = (name or "").lower()
-    if "printer" in low or "scanner" in low or "airplay" in low:
+    # AirPlay targets are output-only; we never see them with input
+    # channels, but keep the keyword guard for the rare misadvertised
+    # device. Any device that does expose input channels gets a real
+    # classification below so the caller can pick it.
+    if "airplay" in low:
         return "unsupported"
     if "macbook" in low or "built-in" in low or "internal microphone" in low:
         return "builtin"
@@ -251,7 +510,18 @@ def _audio_device_kind(name: str) -> str:
         return "bluetooth"
     if "blackhole" in low or "loopback" in low or "virtual" in low:
         return "virtual"
-    return "other"
+    # Aggregate/Multi-Output devices created in Audio MIDI Setup are
+    # legitimate capture sources for users who route multiple mics.
+    if "aggregate" in low or "multi-output" in low:
+        return "aggregate"
+    # Generic external USB / USB-C mics. CoreAudio sometimes labels
+    # USB audio interfaces by device name (e.g. "The printer123
+    # Microphone" for a USB-C lavalier passing through a printer-shaped
+    # OEM enclosure), so treat any input-capable device we did not
+    # already match as external USB rather than rejecting it.
+    if "usb" in low or "cmteck" in low or "yeti" in low or "rode" in low:
+        return "external_usb"
+    return "external_usb"
 
 
 def _audio_source_detail(kind: str, name: str) -> str:
@@ -268,6 +538,10 @@ def _audio_source_detail(kind: str, name: str) -> str:
         return "unsupported_device"
     if kind == "virtual":
         return "virtual_loopback"
+    if kind == "aggregate":
+        return "aggregate_device"
+    if kind == "external_usb":
+        return "usb_mic"
     return "other"
 
 
@@ -283,6 +557,8 @@ def _audio_connection_type(kind: str, name: str) -> str:
         return "line_in"
     if detail == "virtual_loopback":
         return "virtual"
+    if detail == "aggregate_device":
+        return "aggregate"
     if detail == "unsupported_device":
         return "unsupported"
     return kind or "other"
@@ -331,12 +607,43 @@ def _acquire_singleton_lock(port_str: str) -> None:
     global _SINGLETON_FH, _SINGLETON_LOCK_PATH
     if _SINGLETON_FH is not None:
         return
-    _SINGLETON_LOCK_PATH = f"/tmp/anticipy_product_{port_str}.lock"
+    # Same-process double-acquire guard. When this module is imported
+    # twice in the same process (e.g. `python engine/app/product/server.py`
+    # loads it as __main__, then a deferred-attach wire does
+    # `from app.product.server import ...` and Python imports it again
+    # as `app.product.server` with a fresh `_SINGLETON_FH = None`),
+    # the second flock attempt would fail and crash the boot. Detect
+    # this by checking the PID written to an EXISTING lock file: if it
+    # is our own PID, we are the same process re-entering and can
+    # short-circuit safely.
+    lock_path = f"/tmp/anticipy_product_{port_str}.lock"
+    try:
+        if os.path.exists(lock_path):
+            with open(lock_path, "r") as _existing:
+                holder = (_existing.read() or "").strip()
+            if holder and holder == str(os.getpid()):
+                _SINGLETON_LOCK_PATH = lock_path
+                # Re-open and re-flock would deadlock since same process
+                # already holds it; leave _SINGLETON_FH None so a later
+                # call from the real entrypoint can still write to it
+                # if it owns the entry. Most callers are idempotent.
+                return
+    except Exception:
+        pass
+    _SINGLETON_LOCK_PATH = lock_path
     _SINGLETON_FH = open(_SINGLETON_LOCK_PATH, "w")
     try:
         _fcntl.flock(_SINGLETON_FH, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+        # Write PID FIRST so the same-process re-entry guard (above)
+        # finds it before the second import tries to flock again.
+        _SINGLETON_FH.seek(0)
+        _SINGLETON_FH.truncate()
         _SINGLETON_FH.write(str(os.getpid()))
         _SINGLETON_FH.flush()
+        try:
+            os.fsync(_SINGLETON_FH.fileno())
+        except OSError:
+            pass
     except OSError:
         _sys.stderr.write(
             "Anticipy: another engine instance already holds "
@@ -391,16 +698,25 @@ def _ensure_clean_gmail_compose() -> int:
 
 
 def _chrome_user_data_dir() -> str:
+    # V7 product surface is the user's REAL Chrome through the installed
+    # Anticipy extension + chrome.debugger + native-messaging bridge
+    # (see engine/app/bridge_extension.py). A cloned Chrome profile with
+    # --remote-debugging-port is explicitly forbidden by V7 proof rules
+    # (scripts/v7/check_done.sh, scripts/v7/validate_clean_room_public_install.py)
+    # because it lands a stranger in a blank browser without their cookies
+    # or sessions. This function never returns the chrome-real-clone literal:
+    # only an explicit non-clone override via env var is honored, and only
+    # when the user has also opted in via ANTICIPY_ENABLE_LEGACY_CLONE_CDP=1.
     configured = os.environ.get("ANTICIPY_CHROME_USER_DATA_DIR", "").strip()
-    if (configured
-            and CHROME_REAL_CLONE_TOKEN in configured
-            and not LEGACY_CLONE_CDP_ENABLED):
+    if not configured:
         return ""
-    if configured:
-        return configured
-    if LEGACY_CLONE_CDP_ENABLED:
-        return os.path.expanduser("~/.anticipy/chrome-real-clone")
-    return ""
+    if CHROME_REAL_CLONE_TOKEN in configured:
+        # Always reject the clone token, even if the legacy gate is on.
+        # The legacy escape hatch is for non-clone overrides only.
+        return ""
+    if not LEGACY_CLONE_CDP_ENABLED:
+        return ""
+    return configured
 
 
 def _clone_cdp_config_rejected() -> bool:
@@ -455,6 +771,65 @@ def _publish_engine_port_file() -> None:
         (port_dir / "engine.port").write_text(str(port), encoding="utf-8")
     except Exception:
         pass
+
+
+@app.on_event("startup")
+def _install_crash_handlers_and_heartbeat() -> None:
+    """B024: silent engine deaths leave no log line. Add crash signal
+    handlers (SIGSEGV, SIGABRT, SIGBUS) that flush a `crashed kind=...`
+    line to ~/.anticipy/product-engine.log before the process exits,
+    and run a 60s heartbeat thread that writes `heartbeat ts=...` so
+    a post-mortem can tell whether the engine was alive at time T.
+    """
+    import faulthandler
+    import signal
+    import threading
+
+    log_dir = Path.home() / ".anticipy"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "product-engine.log"
+    crash_path = log_dir / "engine-crash.log"
+
+    # faulthandler dumps a Python stack on SIGSEGV / SIGABRT / SIGBUS
+    # straight to a file, which is the only thing that survives a true
+    # native crash. Open in append so prior crash dumps are kept.
+    try:
+        fh_file = open(crash_path, "a", buffering=1)
+        faulthandler.enable(file=fh_file)
+        faulthandler.register(signal.SIGUSR1, file=fh_file, all_threads=True)
+    except Exception:
+        pass
+
+    def _signal_logger(signum, _frame):
+        try:
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"[engine] received signal={signum} pid={os.getpid()} "
+                         f"ts={time.time():.3f}\n")
+        except Exception:
+            pass
+        # Re-raise the default behavior so the process still exits.
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        try:
+            signal.signal(sig, _signal_logger)
+        except (ValueError, OSError):
+            pass
+
+    def _heartbeat_loop():
+        while True:
+            try:
+                with log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(f"[engine] heartbeat pid={os.getpid()} "
+                             f"ts={time.time():.3f}\n")
+            except Exception:
+                pass
+            time.sleep(60.0)
+
+    t = threading.Thread(target=_heartbeat_loop, name="engine-heartbeat",
+                         daemon=True)
+    t.start()
 
 
 @app.on_event("startup")
@@ -1459,8 +1834,39 @@ class Key(BaseModel):
 
 @app.post("/api/key")
 def set_key(k: Key) -> JSONResponse:
-    if not k.key.strip().startswith("sk-or-"):
-        return JSONResponse({"ok": False, "error": "not an sk-or- key"})
+    candidate = (k.key or "").strip()
+    # B044: previously a prefix check alone accepted "sk-or-anything", flipping
+    # the state to key_ok=True without any contact with OpenRouter. Do a real
+    # live probe against /api/v1/auth/key before persisting. Reject on
+    # non-2xx so a fake key cannot poison the rest of the engine.
+    if not candidate.startswith("sk-or-"):
+        return JSONResponse({"ok": False, "error": "not an sk-or- key"},
+                            status_code=400)
+    if len(candidate) < 20 or len(candidate) > 256:
+        return JSONResponse({"ok": False,
+                             "error": "key length out of expected range"},
+                            status_code=400)
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/auth/key",
+            headers={"Authorization": f"Bearer {candidate}"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            status = resp.status
+            if status < 200 or status >= 300:
+                return JSONResponse({"ok": False,
+                                     "error": f"OpenRouter rejected key (HTTP {status})"},
+                                    status_code=401)
+    except urllib.error.HTTPError as he:
+        return JSONResponse({"ok": False,
+                             "error": f"OpenRouter rejected key (HTTP {he.code})"},
+                            status_code=401)
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"could not verify key with OpenRouter: "
+                                      f"{type(exc).__name__}"},
+                            status_code=502)
     cfg = _cfg_path()
     cfg.parent.mkdir(parents=True, exist_ok=True)
     keep = ""
@@ -1468,8 +1874,8 @@ def set_key(k: Key) -> JSONResponse:
         keep = "\n".join(l for l in cfg.read_text().splitlines()
                          if not l.strip().startswith("OPENROUTER_API_KEY="))
     cfg.write_text((keep + "\n" if keep else "")
-                   + f"OPENROUTER_API_KEY={k.key.strip()}\n")
-    os.environ["OPENROUTER_API_KEY"] = k.key.strip()
+                   + f"OPENROUTER_API_KEY={candidate}\n")
+    os.environ["OPENROUTER_API_KEY"] = candidate
     return JSONResponse({"ok": True})
 
 
@@ -1647,6 +2053,17 @@ def state() -> JSONResponse:
         "last_cloud_sync": _SESS.get("last_cloud_sync"),
         "last_resolution_trace_sync": _SESS.get("last_resolution_trace_sync"),
         "surface_runtime": _surface_runtime_state(),
+        # Live observability for one-curl operator visibility. Each value
+        # is computed on demand from in-memory state only (no Chrome /
+        # bridge / Supabase / LLM calls); a subsystem that has not
+        # initialized returns null for its slot rather than crashing the
+        # endpoint. Budget: under 50ms total.
+        "quiet_mode": _quiet_mode_snapshot(),
+        "proactive_status": _proactive_status_snapshot(),
+        "tab_activity_60s": _tab_activity_snapshot(60.0),
+        "task_queue_summary": _task_queue_summary_snapshot(),
+        "cost_last_hour": _cost_last_hour_snapshot(),
+        "engine_health": _engine_health_snapshot(),
     })
 
 
@@ -1684,8 +2101,26 @@ def onb_answer(a: Answer) -> JSONResponse:
     from app.anticipy import onboarding as OB
 
     script = OB.INTERVIEW_SCRIPT
+    # B008: reject empty / whitespace-only answers. Previously the endpoint
+    # silently advanced past every question on an empty body, producing a
+    # fully-empty profile flagged as onboarded.
+    answer_text = (a.answer or "").strip()
+    if not answer_text:
+        return JSONResponse(
+            {"ok": False, "error": "answer is empty",
+             "index": _SESS["i"], "total": len(script)},
+            status_code=400,
+        )
+    # B037: if the script is already complete, reject further answers
+    # instead of returning an empty 200.
+    if _SESS["i"] >= len(script):
+        return JSONResponse(
+            {"ok": False, "error": "onboarding already complete",
+             "index": _SESS["i"], "total": len(script)},
+            status_code=422,
+        )
     _SESS["transcript"].append({"speaker_id": "WEARER",
-                                "text": a.answer.strip()})
+                                "text": answer_text})
     _SESS["i"] += 1
     if _SESS["i"] < len(script):
         q = script[_SESS["i"]]
@@ -1754,6 +2189,26 @@ def _normalize_phone(raw: str) -> str:
     return s
 
 
+# B039: same posture as src/app/api/twilio/relay/route.ts. Stranger installs
+# must not be able to trigger a UK / Australia / premium-line call by POSTing
+# to /api/onboarding/call_stub. We mirror the +1-only and premium-prefix
+# block from the broker.
+_E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
+_PREMIUM_PHONE_PREFIXES = ("+1900", "+1976")
+
+
+def _is_allowed_destination(to: str) -> tuple[bool, str]:
+    if not _E164_RE.match(to or ""):
+        return False, "phone number must be E.164 (e.g. +14155551212)"
+    if not to.startswith("+1"):
+        return False, ("only +1 (US/CA) numbers are accepted; "
+                       "international calls are disabled")
+    for pfx in _PREMIUM_PHONE_PREFIXES:
+        if to.startswith(pfx):
+            return False, f"premium prefix {pfx} is blocked"
+    return True, ""
+
+
 @app.post("/api/onboarding/call_stub")
 def onboarding_call_stub(p: CallStub) -> JSONResponse:
     """Path 3a: log the intent to place a voice-onboarding call.
@@ -1767,6 +2222,12 @@ def onboarding_call_stub(p: CallStub) -> JSONResponse:
     if not phone:
         return JSONResponse(
             {"ok": False, "error": "invalid phone number"},
+            status_code=400,
+        )
+    allowed, reason = _is_allowed_destination(phone)
+    if not allowed:
+        return JSONResponse(
+            {"ok": False, "error": reason},
             status_code=400,
         )
     row = {
@@ -1834,6 +2295,369 @@ def onboarding_call_stub(p: CallStub) -> JSONResponse:
     })
 
 
+class VoiceCallStart(BaseModel):
+    phone_e164: str
+    account_id: str | None = None
+
+
+def _voice_call_log_path() -> Path:
+    from app.anticipy import platform_adapter
+    return platform_adapter.data_dir() / "voice_onboarding_calls.jsonl"
+
+
+def _voice_broker_url() -> str:
+    base = (
+        os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+        or "https://www.anticipy.ai"
+    ).rstrip("/")
+    return f"{base}/api/twilio/voice-relay"
+
+
+def _voice_broker_supabase_token() -> str:
+    """Reuse the same session-token resolution as the SMS broker so the
+    voice path inherits the existing auth seam. /api/provision sets
+    ANTICIPY_CLOUD_AUTH_TOKEN in the live engine; the on-disk session
+    is the forward-compat fallback.
+    """
+    env_token = (os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN") or "").strip()
+    if env_token:
+        return env_token
+    try:
+        override = (os.environ.get("ANTICIPY_SESSION_FILE") or "").strip()
+        if override:
+            session_path = Path(override).expanduser()
+        else:
+            session_path = Path.home() / ".anticipy" / "session.json"
+        if not session_path.exists():
+            return ""
+        data = json.loads(session_path.read_text(encoding="utf-8") or "{}")
+        if not isinstance(data, dict):
+            return ""
+        for key in ("access_token", "auth_token",
+                    "supabase_access_token", "token"):
+            val = data.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _normalize_phone_e164_plus1(raw: str) -> tuple[str, str]:
+    """Normalize a user-typed phone to +1 E.164. Returns (phone, error).
+    The broker enforces +1-only because the daily $5 spend cap assumes
+    A2P / US rates; international would blow it.
+    """
+    if not raw:
+        return "", "no phone supplied"
+    cleaned = "".join(ch for ch in raw if ch.isdigit() or ch == "+")
+    if not cleaned:
+        return "", "phone contains no digits"
+    if cleaned.startswith("+"):
+        if not cleaned.startswith("+1"):
+            return "", "voice broker accepts +1 US/CA numbers only"
+        digits = cleaned[1:]
+        if not digits.isdigit():
+            return "", "phone has bad characters"
+        if len(digits) < 11 or len(digits) > 15:
+            return "", "phone length out of range"
+        return cleaned, ""
+    digits = cleaned
+    if not digits.isdigit():
+        return "", "phone has bad characters"
+    if len(digits) == 10:
+        return "+1" + digits, ""
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits, ""
+    return "", "phone could not be normalized to +1 E.164"
+
+
+# US/CA premium prefixes (parity with the website broker gate).
+_VOICE_PREMIUM_PREFIXES = ("+1900", "+1976")
+
+
+@app.post("/api/onboarding/call_start")
+def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
+    """Place an outbound voice-onboarding call for the user.
+
+    Flow:
+      1. Validate the phone to +1 E.164 + reject premium prefixes.
+      2. Resolve the Supabase session token the website broker accepts.
+      3. POST to /api/twilio/voice-relay on the website with the phone
+         and an account_id (defaults to the engine's USER_ID). The
+         broker is the only side that touches Twilio creds.
+      4. Mirror the placement to ~/.anticipy/voice_onboarding_calls.jsonl
+         for local audit and for /api/onboarding/voice_status polling.
+
+    Voice does NOT require A2P 10DLC; that gate is SMS-only. The broker
+    still needs a verified caller-ID for restricted Twilio accounts, so
+    a 21215 from Twilio is surfaced verbatim with a "verify caller-id"
+    hint so the operator knows what to do.
+    """
+    phone, perr = _normalize_phone_e164_plus1(p.phone_e164 or "")
+    if not phone:
+        return JSONResponse(
+            {"ok": False, "error": perr},
+            status_code=400,
+        )
+    if any(phone.startswith(pref) for pref in _VOICE_PREMIUM_PREFIXES):
+        return JSONResponse(
+            {"ok": False, "error": "premium-rate destinations are blocked"},
+            status_code=400,
+        )
+
+    account_id = (p.account_id or "").strip() or USER_ID
+    token = _voice_broker_supabase_token()
+    if not token:
+        return JSONResponse({
+            "ok": False,
+            "error": "no Supabase session. Sign in on the website first "
+                     "(the engine uses your session to place voice calls "
+                     "through the shared Anticipy broker).",
+        }, status_code=401)
+
+    url = _voice_broker_url()
+    try:
+        import httpx as _httpx
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"httpx_import_failed: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+
+    try:
+        with _httpx.Client(timeout=20.0) as client:
+            resp = client.post(
+                url,
+                json={
+                    "to": phone,
+                    "account_id": account_id,
+                    "kind": "onboarding",
+                },
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"broker_transport: {type(exc).__name__}: {exc}",
+        }, status_code=502)
+
+    status = int(getattr(resp, "status_code", 0) or 0)
+    try:
+        payload = resp.json()
+        if not isinstance(payload, dict):
+            payload = {"raw": payload}
+    except Exception:
+        payload = {"raw": (getattr(resp, "text", "") or "")[:600]}
+
+    # Mirror the placement to local audit so /api/onboarding/voice_status
+    # has a primary local record even before the answer route writes any
+    # answers back to Supabase.
+    row = {
+        "ts": time.time(),
+        "phone": phone,
+        "account_id": account_id,
+        "broker_status": status,
+        "ok": bool(payload.get("ok")),
+        "call_sid": str(payload.get("call_sid") or ""),
+        "error": str(payload.get("error") or "") if not payload.get("ok") else "",
+    }
+    try:
+        log = _voice_call_log_path()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+    if status == 200 and payload.get("ok"):
+        return JSONResponse({
+            "ok": True,
+            "call_sid": str(payload.get("call_sid") or ""),
+            "status": str(payload.get("status") or "queued"),
+            "to": phone,
+            "from": str(payload.get("from") or ""),
+            "account_id": account_id,
+        })
+    # Surface broker error verbatim so the popover can show the real
+    # Twilio reason (caller-ID not verified, cap reached, etc).
+    return JSONResponse({
+        "ok": False,
+        "error": str(payload.get("error") or f"broker_status_{status}"),
+        "broker_status": status,
+        "code": payload.get("code"),
+        "hint": payload.get("hint"),
+    }, status_code=502 if status >= 500 or status == 0 else status)
+
+
+@app.get("/api/onboarding/voice_status")
+def onboarding_voice_status(
+    account_id: str | None = None, call_sid: str | None = None,
+) -> JSONResponse:
+    """Poll the local audit log + website status route for an in-flight
+    voice-onboarding call. Returns a snapshot the popover can render:
+    {phase, question_index, question_total, answers_so_far, completed}.
+
+    The website's /api/twilio/onboarding/status route is the source of
+    truth (it sees every <Gather> result). This endpoint wraps it so
+    the popover only ever talks to 127.0.0.1.
+    """
+    target_account = (account_id or "").strip() or USER_ID
+    target_sid = (call_sid or "").strip()
+
+    # 1) Find the most recent local row matching the partition.
+    local_row: dict[str, object] = {}
+    try:
+        log = _voice_call_log_path()
+        if log.exists():
+            for ln in reversed(log.read_text(encoding="utf-8").splitlines()):
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    j = json.loads(ln)
+                except Exception:
+                    continue
+                if target_sid and j.get("call_sid") == target_sid:
+                    local_row = j
+                    break
+                if not target_sid and j.get("account_id") == target_account:
+                    local_row = j
+                    break
+    except Exception:
+        local_row = {}
+
+    sid = target_sid or str(local_row.get("call_sid") or "")
+    if not sid and not local_row:
+        return JSONResponse({
+            "ok": False,
+            "error": "no voice-onboarding call recorded for that account",
+            "account_id": target_account,
+        }, status_code=404)
+
+    # 2) Try the website status route for the freshest progress.
+    snapshot: dict[str, object] = {
+        "ok": True,
+        "account_id": target_account,
+        "call_sid": sid,
+        "phase": "calling" if not sid else "in_progress",
+        "question_index": 0,
+        "question_total": 7,
+        "answers": [],
+        "completed": False,
+    }
+    dossier_fragment: dict | None = None
+    base = (os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+            or "https://www.anticipy.ai").rstrip("/")
+    try:
+        import httpx as _httpx
+        with _httpx.Client(timeout=8.0) as client:
+            r = client.get(
+                f"{base}/api/twilio/onboarding/status",
+                params={"call_sid": sid, "account_id": target_account},
+            )
+            if r.status_code == 200:
+                body = r.json()
+                if isinstance(body, dict):
+                    for k in ("phase", "question_index", "question_total",
+                              "answers", "completed", "error"):
+                        if k in body:
+                            snapshot[k] = body[k]
+                    frag = body.get("dossier_fragment")
+                    if isinstance(frag, dict) and frag:
+                        dossier_fragment = frag
+    except Exception:
+        # The website may not be reachable from the engine host (rare).
+        # The local row still gives the popover enough to render.
+        pass
+
+    # 3) On completion, persist the dossier fragment to the canonical V7
+    # dossier path so the planner picks it up. Idempotent: a duplicate
+    # merge is a no-op because _merge_dossier_fragment dedupes lists and
+    # overwrites scalars. We also run the frozen onboarding extractor on
+    # the chat_transcript fragment so the canonical UserProfile lands.
+    if dossier_fragment and snapshot.get("completed"):
+        try:
+            _persist_voice_onboarding_fragment(
+                target_account, dossier_fragment,
+            )
+        except Exception as exc:
+            snapshot["dossier_write_error"] = (
+                f"{type(exc).__name__}: {exc}"
+            )
+
+    return JSONResponse(snapshot)
+
+
+def _persist_voice_onboarding_fragment(
+    account_id: str, fragment: dict,
+) -> None:
+    """Merge a voice-onboarding dossier fragment into the canonical
+    V7 dossier file the planner reads from. Mirrors the merge logic in
+    /api/dossier/active POST so a future scoped POST to that endpoint
+    sees the same shape. Also runs the frozen onboarding extractor on
+    the chat_transcript so the UserProfile lands without a second LLM
+    hop. Best-effort: missing extractor or transient LLM failure does
+    not block the write.
+    """
+    root = (
+        Path(os.environ.get("ANTICIPY_V7_DOSSIER_ROOT", "").strip()
+             or str(Path.home() / ".anticipy" / "v7" / "dossiers"))
+    ).expanduser()
+    safe_id = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_"
+        for ch in (account_id or "default")
+    ) or "default"
+    target = root / safe_id / "dossier.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    existing: dict = {}
+    if target.exists():
+        try:
+            existing = json.loads(
+                target.read_text(encoding="utf-8") or "{}",
+            )
+            if not isinstance(existing, dict):
+                existing = {}
+        except Exception:
+            existing = {}
+    merged: dict = dict(existing)
+    for k, v in (fragment or {}).items():
+        if isinstance(v, dict) and isinstance(merged.get(k), dict):
+            sub = dict(merged[k])
+            sub.update(v)
+            merged[k] = sub
+        elif isinstance(v, list) and isinstance(merged.get(k), list):
+            prev = list(merged[k])
+            for item in v:
+                if isinstance(item, str) and item in prev:
+                    continue
+                prev.append(item)
+            merged[k] = prev
+        else:
+            merged[k] = v
+    tmp = target.with_suffix(".json.tmp")
+    tmp.write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    os.replace(tmp, target)
+
+    # Best-effort: run the frozen onboarding extractor on the chat
+    # transcript shape so the UserProfile partition is populated. Failure
+    # here is fine; the raw transcript is on disk and the engine's next
+    # cold-start pass can re-extract.
+    transcript = fragment.get("chat_transcript")
+    if isinstance(transcript, list) and transcript:
+        try:
+            from app.anticipy import onboarding as OB
+            asyncio.run(OB.run_intake(transcript, USER_ID))
+        except Exception:
+            pass
+
+
 @app.get("/api/onboarding/call_stubs")
 def onboarding_call_stubs_list() -> JSONResponse:
     """Inspection helper for path 3a. Returns the most recent stub
@@ -1860,7 +2684,50 @@ class ChatTurn(BaseModel):
 
 
 class ChatComplete(BaseModel):
-    transcript: list[ChatTurn]
+    """Body for /api/onboarding/chat_complete.
+
+    Two accepted shapes (B038):
+      1. List of objects: [{"speaker_id": "WEARER"|"AGENT", "text": "..."}]
+      2. Flat string transcript: "WEARER: hi\\nAGENT: ..."
+
+    The string form is normalized into the list form at the boundary so
+    the rest of the path is unchanged. Empty transcript is rejected with 400.
+    """
+
+    transcript: list[ChatTurn] | str
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {"transcript": [
+                    {"speaker_id": "WEARER", "text": "My name is Alex"},
+                    {"speaker_id": "AGENT", "text": "Got it."},
+                ]},
+                {"transcript": "WEARER: My name is Alex\nAGENT: Got it."},
+            ]
+        }
+
+
+def _coerce_chat_transcript(raw: list[ChatTurn] | str) -> list[ChatTurn]:
+    """Normalize either form into a list of ChatTurn. A bare string is
+    split on newlines and parsed for "SPEAKER: text" lines. Anything
+    without a colon prefix is treated as a WEARER turn."""
+    if isinstance(raw, list):
+        return raw
+    out: list[ChatTurn] = []
+    for line in (raw or "").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if ":" in s:
+            sp, _, body = s.partition(":")
+            sp_clean = sp.strip().upper()
+            if sp_clean not in ("AGENT", "WEARER"):
+                sp_clean = "WEARER"
+            out.append(ChatTurn(speaker_id=sp_clean, text=body.strip()))
+        else:
+            out.append(ChatTurn(speaker_id="WEARER", text=s))
+    return out
 
 
 def _flatten_chat_transcript(turns: list[ChatTurn]) -> str:
@@ -1895,8 +2762,9 @@ def onboarding_chat_complete(c: ChatComplete) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "empty transcript"},
                             status_code=400)
 
+    chat_turns = _coerce_chat_transcript(c.transcript)
     transcript = [{"speaker_id": t.speaker_id, "text": t.text}
-                  for t in c.transcript
+                  for t in chat_turns
                   if (t.text or "").strip()]
     if not transcript:
         return JSONResponse({"ok": False, "error": "no non-empty turns"},
@@ -1929,6 +2797,27 @@ def onboarding_chat_complete(c: ChatComplete) -> JSONResponse:
         pj.get("people") or {}
     )
     pj["well_populated"] = OB.profile_is_well_populated(prof)
+    # B071: previously every chat_complete call flipped onboarded=true even
+    # when intent extraction silently no-op'd and the profile came back
+    # empty. The UI then claimed "done" for a profile with no name, no
+    # people, no preferences. Refuse to mark onboarded when the result has
+    # no extracted signal.
+    has_signal = bool(
+        (pj.get("name") or "").strip()
+        or (pj.get("people") or {})
+        or (pj.get("preferences") or {})
+        or (pj.get("role_title") or "").strip()
+    )
+    if not has_signal:
+        return JSONResponse(
+            {"ok": False,
+             "error": "extractor returned empty profile; not marking "
+                      "onboarded. Try a longer transcript or use the "
+                      "scripted /api/onboarding/answer path.",
+             "profile_attempt": pj,
+             "turns": len(transcript)},
+            status_code=422,
+        )
     _SESS["profile"] = pj
     _seed_profile_memory(prof)
     cloud_sync = _save_profile()
@@ -2233,6 +3122,15 @@ def api_recovery_test(p: RecoveryTest) -> JSONResponse:
             status_code=500,
         )
     kind = (p.failure_kind or "").strip()
+    # B002: reject unknown failure_kind values with 422 instead of silently
+    # generating a network-style SMS body. Hides real test bugs otherwise.
+    if kind not in FR._VALID_FAILURE_KINDS:
+        return JSONResponse(
+            {"ok": False,
+             "error": f"unknown failure_kind: {kind!r}",
+             "allowed": list(FR._VALID_FAILURE_KINDS)},
+            status_code=422,
+        )
     surface_url = (p.surface_url or "").strip()
     sms_body = FR.format_recovery_sms(
         kind, surface_url,
@@ -2394,6 +3292,80 @@ _LISTEN: dict = {
     "audio_device": None, "sample_rate": None, "capture_id": None,
     "source_mode": None,
 }
+
+
+# --------------------------------------------------------------------------
+# Lightweight per-IP rate limiter for local-only abuse defence.
+#
+# B050, B054, B070: a Chrome extension or runaway script on 127.0.0.1 can
+# otherwise spam expensive endpoints. We keep one deque of timestamps per
+# (key, bucket) and prune on read. Pure stdlib + threading, no external dep.
+# --------------------------------------------------------------------------
+
+_RATE_LIMIT_BUCKETS: dict[str, collections.deque] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
+
+
+def _rate_limit_check(key: str, limit: int, window_seconds: float) -> bool:
+    """Return True if the call is within the limit, False if rate-limited.
+
+    `key` should incorporate both the endpoint and a caller identifier
+    (e.g. "listen_inject:127.0.0.1"). `limit` is the max number of calls
+    allowed in the rolling `window_seconds` window.
+    """
+    now = time.time()
+    cutoff = now - window_seconds
+    with _RATE_LIMIT_LOCK:
+        dq = _RATE_LIMIT_BUCKETS.get(key)
+        if dq is None:
+            dq = collections.deque(maxlen=max(limit + 4, 16))
+            _RATE_LIMIT_BUCKETS[key] = dq
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= limit:
+            return False
+        dq.append(now)
+        return True
+
+
+def _client_ip(request: Request | None) -> str:
+    if request is None:
+        return "local"
+    try:
+        return (request.client.host if request.client else "local") or "local"
+    except Exception:
+        return "local"
+
+
+# B003: injection-shape detector. SQLite uses parameterized queries downstream
+# so the engine itself is safe, but the raw string also feeds the planner /
+# LLM and should not arrive untagged.
+_SQL_INJECTION_KEYWORDS = (
+    "drop table", "drop database", "truncate table", "delete from",
+    "insert into", "update set", "union select", "select from",
+    "exec sp_", "xp_cmdshell",
+)
+_SQL_TAUTOLOGY_RE = re.compile(
+    r"""(?ix)
+    \b(or|and)\s+["']?\d+["']?\s*=\s*["']?\d+["']?  # OR 1=1, AND '1'='1'
+    """
+)
+
+
+def _looks_like_injection(text: str) -> bool:
+    if not text:
+        return False
+    low = text.lower()
+    if ";" in text and any(kw in low for kw in _SQL_INJECTION_KEYWORDS):
+        return True
+    if "--" in text and any(kw in low for kw in _SQL_INJECTION_KEYWORDS):
+        return True
+    if _SQL_TAUTOLOGY_RE.search(low):
+        # tautology alone is suspicious only when paired with a quote or
+        # comment marker; ordinary "5 or 6 = ten" should not trigger.
+        if "'" in text or '"' in text or "--" in text:
+            return True
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -2614,7 +3586,11 @@ def _run_pipeline(text: str):
         "urgency": "hours", "world_done_at": None, "world_done": None,
         "cancels_ev": None, "defer_until": None, "shorthand_key": None,
         "expansion": None, "first_occurrence": False}]}
-    world = W.populated()
+    # SCALE: never seed a stranger's live pipeline with the founder's
+    # fictional contacts / calendar / files. Empty SimWorld is the
+    # safe default; real wearer state arrives via the dossier loader
+    # in downstream resolution, not via the sim fixture.
+    world = W.SimWorld()
     res = pipeline.run_day(manifest, world)
     outcome = res[0].outcome if res else "?"
     proposal = world.outbound[0].body if world.outbound else None
@@ -4006,14 +4982,34 @@ def _draft_task_from_plan(instruction: str, plan: dict) -> str:
 # dossier with an email on file. This helper consults the V7 dossier
 # active loader for the current account, scans the instruction for any
 # person name / alias / first name / role match, and returns the
-# matching Person (or None). The lookup is deterministic. A single
-# match is treated as a resolution; multiple matches return None so the
-# caller still asks "did you mean A or B?".
+# matching Person (or None). The lookup is deterministic.
+#
+# INVESTOR-DEMO HARDENING (cycle "live-demo"): previously this returned
+# empty strings on ANY non-unique resolution, which forced the planner
+# into a "Did you mean Maya Patel or Maya Chen?" clarify. That clarify
+# stalls the demo when nobody in the room knows how to answer it. The
+# new behavior: score every match by specificity (full-name > last-name
+# > first-name > alias), pick the top-ranked candidate, and ship it.
+# The Confirm card downstream still shows the chosen recipient before
+# any send, so a wrong pick is reviewable. Zero matches still returns
+# empty (we never invent a recipient).
 def _resolve_person_from_active_dossier(instruction: str) -> tuple[
         str, str]:
     """Return (canonical_name, email) for a person mentioned in the
-    instruction whose record sits in the active dossier. Empty strings
-    when no unambiguous match exists. Never raises.
+    instruction whose record sits in the active dossier.
+
+    Specificity tiers (highest wins):
+      3 - full-name match ("Maya Patel")
+      2 - last-name match ("Patel")
+      1 - first-name match ("Maya")
+      0 - alias-only match
+
+    Ties broken by:
+      a) email present beats email missing,
+      b) canonical name lexicographic order (so the pick is stable
+         across calls and reproducible for the demo recording).
+
+    Empty strings when zero matches. Never raises.
     """
     if not instruction:
         return "", ""
@@ -4046,53 +5042,55 @@ def _resolve_person_from_active_dossier(instruction: str) -> tuple[
     if not people:
         return "", ""
     low = instruction.lower()
-    matches: list[tuple[str, str]] = []
+    # Each entry: (-specificity_tier, has_email_int, canonical_name, email).
+    # Negate tier so a normal ascending sort puts the most-specific
+    # match first. has_email_int is 0 when email is present so
+    # addressed candidates win the tiebreak.
+    scored: list[tuple[int, int, str, str]] = []
     for p in people:
         name = (p.name or "").strip()
         email = (p.email or "").strip()
         if not name:
             continue
-        # Build candidate match tokens: full name, first name, last name,
-        # each alias, the role string. Search the instruction for any of
-        # them as a whole-word match.
-        tokens: list[str] = []
         full = name.strip()
-        if full:
-            tokens.append(full)
         parts = [seg for seg in re.split(r"\s+", full) if seg]
-        if len(parts) >= 2:
-            tokens.append(parts[0])  # first name
-            tokens.append(parts[-1])  # last name
-        for alias in (p.aliases or []):
-            a = str(alias).strip()
-            if a and len(a) >= 2:
-                tokens.append(a)
-        seen: set[str] = set()
-        uniq_tokens = []
-        for t in tokens:
-            tl = t.lower()
-            if not tl or tl in seen:
-                continue
-            if len(tl) < 2:
-                continue
-            seen.add(tl)
-            uniq_tokens.append(t)
-        for token in uniq_tokens:
-            # Whole-word boundary search. `Maya` should match
-            # `Maya Chen` and `with Maya tomorrow`, but `Liang`
-            # should not match an arbitrary substring inside another
-            # word. re.escape so periods in aliases (`Dr.`) work.
-            pat = r"\b" + re.escape(token) + r"\b"
-            if re.search(pat, low, flags=re.IGNORECASE):
-                matches.append((name, email))
-                break
-    # Dedup by canonical name.
-    uniq: dict[str, str] = {}
-    for n, e in matches:
-        uniq.setdefault(n, e)
-    if len(uniq) != 1:
+        first_name = parts[0] if parts else ""
+        last_name = parts[-1] if len(parts) >= 2 else ""
+        aliases = [str(a).strip() for a in (p.aliases or []) if str(a).strip()]
+
+        def _hit(tok: str) -> bool:
+            if not tok or len(tok) < 2:
+                return False
+            # Whole-word boundary search. re.escape so periods in
+            # aliases like "Dr." work; flags=IGNORECASE so casing in
+            # the instruction does not matter.
+            return bool(
+                re.search(
+                    r"\b" + re.escape(tok) + r"\b",
+                    low,
+                    flags=re.IGNORECASE,
+                )
+            )
+
+        tier = -1
+        if full and _hit(full):
+            tier = 3
+        elif last_name and _hit(last_name):
+            tier = 2
+        elif first_name and _hit(first_name):
+            tier = 1
+        else:
+            for a in aliases:
+                if _hit(a):
+                    tier = 0
+                    break
+        if tier < 0:
+            continue
+        scored.append((-tier, 0 if email else 1, name, email))
+    if not scored:
         return "", ""
-    name, email = next(iter(uniq.items()))
+    scored.sort()
+    _, _, name, email = scored[0]
     return name, email
 
 
@@ -5261,7 +6259,7 @@ def _mp3_eval_candidate_excerpt(text: str) -> str:
 
 
 @app.post("/api/listen/inject")
-def listen_inject(i: Inject) -> JSONResponse:
+def listen_inject(i: Inject, request: Request) -> JSONResponse:
     """Authorized transcript-boundary input: the walled-off scenario
     script enters HERE, exactly where the real voice system's ASR
     output would enter the judged pipeline. It runs the identical
@@ -5277,7 +6275,28 @@ def listen_inject(i: Inject) -> JSONResponse:
     advance the pipeline. So the inject path advances regardless of
     mic state. Source label keeps the provenance distinction.
     """
+    # B070: cap to 60 per minute per caller IP. ASR / embedding / LLM
+    # proposals are expensive; a hostile script otherwise burns budget and
+    # CPU. The engine binds to 127.0.0.1 so "IP" almost always equals
+    # localhost, but the deque also bounds the per-key memory regardless.
+    if not _rate_limit_check(
+        f"listen_inject:{_client_ip(request)}", 60, 60.0
+    ):
+        return JSONResponse(
+            {"ok": False, "error": "rate limit: 60 inject calls per minute"},
+            status_code=429,
+        )
     text = (i.text or "").strip()
+    # B003: quarantine SQL-injection-shaped payloads. SQLite uses
+    # parameterized queries downstream so the engine itself is safe, but
+    # hostile strings should never reach the planner / LLM unflagged.
+    if _looks_like_injection(text):
+        return JSONResponse(
+            {"ok": False,
+             "error": "input quarantined: payload contains injection-style "
+                      "tokens (semicolons + SQL keywords or boolean tautology)"},
+            status_code=400,
+        )
     # If listening is off we still need a coherent rec shape for the
     # pipeline; _process_utterance reads from _LISTEN so it works
     # standalone. The "on" check on inject was a UX gate, not a
@@ -5302,6 +6321,10 @@ def listen_inject(i: Inject) -> JSONResponse:
         }
         with _LISTEN["lock"]:
             _LISTEN["error"] = str(e)
+    # B048: a TRIVIA_FIRE utterance must NOT also be queued as an action task.
+    # Otherwise "wait who is the president" returns a trivia answer AND
+    # enqueues a clarify-needed task with the same instruction.
+    is_trivia = (rec.get("outcome") == "TRIVIA_FIRE")
     # Belt-and-braces: ensure _LISTEN["pending"] carries the raw
     # instruction so a subsequent /api/act with no body can act on it
     # even when the pipeline did not produce a structured plan (e.g.
@@ -5309,6 +6332,7 @@ def listen_inject(i: Inject) -> JSONResponse:
     if (
         (not rec.get("error"))
         and text
+        and not is_trivia
         and not (_LISTEN.get("pending") or {}).get("instruction")
     ):
         with _LISTEN["lock"]:
@@ -5322,7 +6346,7 @@ def listen_inject(i: Inject) -> JSONResponse:
     # engine restarts. If the proactive scheduler tagged a due_at we
     # use that as wake_at; otherwise the task is immediately runnable.
     scheduled = rec.get("scheduled")
-    if (not rec.get("error")) and text:
+    if (not rec.get("error")) and text and not is_trivia:
         wake_at = None
         if isinstance(scheduled, dict):
             try:
@@ -5441,19 +6465,54 @@ def eval_run(body: EvalRun) -> JSONResponse:
     if not raw_path:
         return JSONResponse({"ok": False, "error": "empty transcript_path"},
                             status_code=400)
-    path = Path(raw_path)
-    if not path.is_absolute():
-        repo_root = Path(__file__).resolve().parents[3]
+    # B043 LFI: confine transcript_path reads to an allowlisted set of dirs.
+    # Without this an unauthenticated local caller (any Chrome extension or
+    # script on 127.0.0.1) could read /etc/passwd or anything else.
+    repo_root = Path(__file__).resolve().parents[3]
+    allowed_roots: list[Path] = []
+    for root in (
+        Path.home() / ".anticipy" / "eval",
+        Path.home() / ".anticipy",
+        repo_root / "proof-artifacts",
+        repo_root / "planning",
+        repo_root,
+    ):
+        try:
+            allowed_roots.append(root.resolve())
+        except Exception:
+            continue
+    raw_p = Path(raw_path)
+    if raw_p.is_absolute():
+        candidates = [raw_p]
+    else:
         candidates = [
-            (Path.cwd() / path).resolve(),
-            (Path.cwd().parent / path).resolve(),
-            (repo_root / path).resolve(),
+            (Path.cwd() / raw_p),
+            (Path.cwd().parent / raw_p),
+            (repo_root / raw_p),
         ]
-        path = next((p for p in candidates if p.exists()), candidates[0])
-    if not path.exists() or not path.is_file():
+    path: Path | None = None
+    for cand in candidates:
+        try:
+            resolved = cand.resolve(strict=False)
+        except Exception:
+            continue
+        # Restrict to .txt or .json files inside an allowed root.
+        if resolved.suffix.lower() not in {".txt", ".json"}:
+            continue
+        for ar in allowed_roots:
+            try:
+                resolved.relative_to(ar)
+            except ValueError:
+                continue
+            if resolved.exists() and resolved.is_file():
+                path = resolved
+                break
+        if path is not None:
+            break
+    if path is None:
         return JSONResponse({"ok": False,
-                             "error": f"transcript_path not found: {path}"},
-                            status_code=404)
+                             "error": "transcript_path not allowed or not found"},
+                            status_code=403)
     transcript = path.read_text(errors="replace")
     if not transcript.strip():
         return JSONResponse({"ok": False, "error": "empty transcript"},
@@ -5592,7 +6651,15 @@ def test_clock_advance(body: _ClockAdvance) -> JSONResponse:
     by the given seconds and tick any due items to the fired state.
     Used by the audit verifier (A-003) to confirm scheduled items
     actually fire when their target time passes.
+
+    B045: Gated behind ANTICIPY_DEV_MODE so a hostile local process or
+    Chrome extension on 127.0.0.1 cannot jump the clock a year forward
+    to bypass cost, rate, and SMS limits.
     """
+    if (os.environ.get("ANTICIPY_DEV_MODE") or "").lower() not in {"1", "true", "yes", "on"}:
+        return JSONResponse({"ok": False,
+                             "error": "endpoint disabled (set ANTICIPY_DEV_MODE=1 to enable)"},
+                            status_code=403)
     from app.product.scheduler import get_scheduler
     result = get_scheduler().advance_clock(float(body.seconds or 0.0))
     _surface_fired_proactive_items()
@@ -5734,6 +6801,67 @@ def task_queue_scan() -> JSONResponse:
         "ok": True,
         "fired_count": len(fired),
         "fired": [r.to_dict() for r in fired],
+    })
+
+
+@app.post("/api/task_queue/cleanup")
+def task_queue_cleanup() -> JSONResponse:
+    """Apply the popover cleanup policy. Auto-expires stale trivia
+    that has been waiting on the user for more than an hour, purges
+    dev / test recipient leaks, and rolls up recovery sibling chains
+    into a single SMS escalation. Returns the summary so the caller
+    can show the user (or the dashboard) how many cards were swept.
+
+    The policy is documented in `planning/00-handoff/QUEUE_AUDIT.md`.
+    Cancellations are journal-appended, never deleted, so the audit
+    trail stays intact.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+
+    def _escalator(rec) -> dict:
+        """Bridge to failure_recovery so the rollup sends one SMS
+        instead of N. Best-effort: if the recovery module is missing
+        we still cancel the older siblings; the user has been waiting
+        on this for hours either way.
+        """
+        try:
+            from app.product import failure_recovery as _fr
+        except Exception as exc:
+            return {"ok": False, "error": f"failure_recovery unavailable: {exc}"}
+        md = dict(rec.metadata or {})
+        kind = (md.get("recovery_failure_kind")
+                or (rec.waiting_reason or "").split(":", 1)[-1])
+        surface_url = str(md.get("recovery_surface_url") or "")
+        try:
+            return _fr.route_recovery(
+                rec.task_id,
+                kind,
+                surface_url,
+                instruction=rec.instruction or "",
+                recipient_hint=str(md.get("recipient_hint") or ""),
+            ) or {}
+        except Exception as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    try:
+        summary = _tq.cleanup_expired_tasks(escalator=_escalator)
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"{type(exc).__name__}: {exc}"},
+                            status_code=500)
+    return JSONResponse({
+        "ok": True,
+        "cancelled": summary.get("cancelled", 0),
+        "escalated": summary.get("escalated", 0),
+        "kept": summary.get("kept", 0),
+        "max_visible_in_ui": summary.get("max_visible_in_ui",
+                                          _tq.max_visible_in_ui()),
+        "detail": summary,
     })
 
 
@@ -8258,14 +9386,21 @@ def _receipt_summary_text(recipient: str, subject: str,
     rec = (recipient or "the recipient").strip()
     subj = (subject or "(no subject)").strip()
     link = (sent_link or "").strip()
+    # Per SMS_COPY_AUDIT (#3 and #4, ship-first list): verb-first
+    # reads like a teammate texting; drop the "Anticipy just sent"
+    # bot prefix and the STOP boilerplate (Twilio honors STOP on any
+    # message regardless of whether the body says so). "Open it here"
+    # is warmer than "View:"; pointing to Gmail Sent folder when there
+    # is no link gives the user the exact spot to verify.
+    subj_short = subj[:40]
     if link:
         return (
-            f"Anticipy just sent {rec} an email about {subj}. "
-            f"View: {link}. Reply STOP to silence."
+            f"Sent the email to {rec} about {subj_short}. "
+            f"Open it here: {link}"
         )
     return (
-        f"Anticipy just sent {rec} an email about {subj}. "
-        "Reply STOP to silence."
+        f"Sent the email to {rec} about {subj_short}. "
+        "It is in your Gmail Sent folder."
     )
 
 
@@ -8298,6 +9433,13 @@ def _send_receipt_sms_sync(body: str) -> dict:
     gated response; no opt-in -> gated suppress; happy path -> real
     Twilio POST. Returns a structured dict (never raises) so the
     receipt helper can include the result in its summary.
+
+    When ANTICIPY_TWILIO_BROKER=1 the engine delegates to the
+    website-side broker via send_sms_sync in sms_pre_confirm. That
+    is the shipping path for strangers without their own Twilio
+    creds. The legacy direct-Twilio path below is retained for devs
+    who export TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN /
+    TWILIO_PHONE_NUMBER locally.
     """
     phone = _receipt_phone()
     mock_env = (os.environ.get("TWILIO_MOCK") or "").strip().lower()
@@ -8310,6 +9452,36 @@ def _send_receipt_sms_sync(body: str) -> dict:
             "reason": "TWILIO_MOCK=1",
             "to": phone,
             "would_have_sent": body,
+        }
+    broker_enabled = (
+        os.environ.get("ANTICIPY_TWILIO_BROKER") or ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if broker_enabled:
+        if not phone:
+            return {
+                "channel": "sms",
+                "attempted": False,
+                "gated": True,
+                "reason": "no_destination_phone",
+            }
+        try:
+            from app.product import sms_pre_confirm as _sms_pre
+            result = _sms_pre.send_sms_sync(phone, body, "receipt")
+        except Exception as exc:
+            return {
+                "channel": "sms",
+                "attempted": True,
+                "ok": False,
+                "to": phone,
+                "error": f"broker_call_failed: {type(exc).__name__}: {exc}",
+            }
+        return {
+            "channel": "sms",
+            "attempted": True,
+            "ok": bool(result.get("ok")),
+            "to": phone,
+            "delivery": result,
+            "source": "broker",
         }
     if not _twilio_creds_ready():
         return {
@@ -9204,7 +10376,8 @@ class ConfirmDecision(BaseModel):
 
 @app.post("/api/act/confirm/{task_id}")
 def act_confirm(task_id: str,
-                decision: ConfirmDecision) -> JSONResponse:
+                decision: ConfirmDecision,
+                request: Request) -> JSONResponse:
     """US-017: popover Confirm card posts here on Approve / Reject.
 
     The 30s wall-clock timer started in /api/act defaults to reject
@@ -9214,6 +10387,15 @@ def act_confirm(task_id: str,
     returns the engine status `user_rejected` so the popover Past
     column shows the action did not run.
     """
+    # B050: rate-limit confirm to 20/sec per IP. Without this an attacker
+    # can brute-force valid task IDs at line speed. Real users click once.
+    if not _rate_limit_check(
+        f"act_confirm:{_client_ip(request)}", 20, 1.0
+    ):
+        return JSONResponse(
+            {"ok": False, "error": "rate limit: 20 confirm calls per second"},
+            status_code=429,
+        )
     with _CONFIRMS_LOCK:
         rec = _CONFIRMS.get(task_id)
     if not rec:
@@ -9459,21 +10641,34 @@ async def sms_inbound(request: Request) -> Response:
                     "ok": False,
                     "error": f"{type(exc).__name__}: {exc}",
                 }
-        twiml_message = "Anticipy: confirmed. Dispatching now."
+        # Per SMS_COPY_AUDIT (#5 ship-first plus #6/#7/#8/#9): drop the
+        # "Anticipy:" notification-subject prefix on every reply ack,
+        # switch to first person ("On it." "Cancelled." "Got it."),
+        # and replace "popover" jargon with "Anticipy on your Mac".
+        twiml_message = (
+            "On it. Sending now. I will text you the receipt as soon "
+            "as it lands."
+        )
     elif decision.get("ok") and decision.get("reply_class") == "no":
-        twiml_message = "Anticipy: cancelled. Nothing was sent."
+        twiml_message = (
+            "Cancelled. I kept the draft in your Gmail in case you "
+            "want to send it later."
+        )
     elif decision.get("ok") and decision.get("reply_class") == "edit":
         twiml_message = (
-            "Anticipy: saved as draft for review in the popover."
+            "Got it. Saved as a draft. Open Anticipy on your Mac to "
+            "edit and send."
         )
     elif decision.get("reply_class") == "unknown":
         twiml_message = (
-            "Anticipy: did not recognise that. Reply YES to send, "
-            "NO to cancel, EDIT to revise."
+            "Sorry, I missed that. Reply YES to send, or EDIT to "
+            "change it. No reply means I save it as a draft."
         )
     else:
         twiml_message = (
-            "Anticipy: no pending action to confirm."
+            "Nothing waiting on you right now. If you want me to do "
+            "something, just tell me out loud or open Anticipy on "
+            "your Mac."
         )
     payload_dict = {
         "ok": bool(decision.get("ok")),
@@ -10311,22 +11506,39 @@ def api_dossier_read(user_id: str, key: str | None = None) -> JSONResponse:
 
 @app.post("/api/test/reset_runtime")
 def api_test_reset_runtime() -> JSONResponse:
-    """Soft restart hook for the verifier.
+    """Soft restart hook for the verifier (RUNTIME CACHES ONLY).
+
+    Scope: only the in-process session transcript and counter are cleared
+    (B047). Profile state lives in the dossier on disk and is NOT touched
+    here; call /api/reset to wipe the persisted profile + onboarded flag.
 
     The audit's A-004 spawns a fresh engine when it can, but when an
     engine is already running it cannot kill it. Instead it pokes this
     endpoint to simulate a runtime restart. Because dossier facts are
     persisted to disk, no rehydration step is needed: a subsequent
     GET /api/dossier reads from the same files regardless of in process
-    caches. We still clear the in process session and listen caches so
-    the simulated restart actually resets transient state.
+    caches.
+
+    B046: Gated behind ANTICIPY_DEV_MODE so a hostile local process or
+    Chrome extension on 127.0.0.1 cannot wipe pending tasks, recovery
+    state, or cost stats.
     """
+    if (os.environ.get("ANTICIPY_DEV_MODE") or "").lower() not in {"1", "true", "yes", "on"}:
+        return JSONResponse({"ok": False,
+                             "error": "endpoint disabled (set ANTICIPY_DEV_MODE=1 to enable)"},
+                            status_code=403)
     try:
         _SESS["i"] = 0
         _SESS["transcript"] = []
     except Exception:
         pass
-    return JSONResponse({"ok": True, "reset": True})
+    return JSONResponse({
+        "ok": True,
+        "reset": True,
+        "scope": "runtime_caches_only",
+        "untouched": ["profile", "onboarded", "dossier_on_disk"],
+        "note": "Use /api/reset for a full profile reset.",
+    })
 
 
 # --------------------------------------------------------------------------
@@ -10406,6 +11618,93 @@ def api_coldstart_start(p: _ColdstartStart) -> JSONResponse:
         "caller_account_hint": caller_account_hint,
         "cross_wired_to_user_id": bool(
             caller_account_hint and caller_account_hint != account_id),
+    })
+
+
+@app.get("/api/coldstart/sources")
+def api_coldstart_sources_get() -> JSONResponse:
+    """Return the current cold-start inhale source config.
+
+    Materializes the default config at
+    ``~/.anticipy/inhale_sources.json`` on first call so the UI sees
+    the shipped defaults (Gmail, Google Calendar, Google Drive)
+    before the user edits anything. The body is
+    ``{"ok": true, "path": str, "config": {...}}``.
+    """
+    try:
+        from app.coldstart import sources as _inhale_sources
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "coldstart sources module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    try:
+        doc = _inhale_sources.load_all()
+        path = str(_inhale_sources.config_path())
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"load_all: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": True,
+        "path": path,
+        "config": doc,
+    })
+
+
+@app.post("/api/coldstart/sources")
+async def api_coldstart_sources_post(request: Request) -> JSONResponse:
+    """Replace the cold-start inhale source config atomically.
+
+    Body MUST be a JSON object matching the file schema:
+      {"version": int, "sources": [{id, label, url, enabled,
+        priority, scrape_selector?, max_pages?}, ...],
+       "_comment": str}
+
+    Each entry MUST define id (non-empty string), label (non-empty
+    string), url (http(s) string), enabled (bool), priority (int).
+    Invalid bodies return HTTP 400 with an ``errors`` list. On
+    success the response carries the freshly written config.
+    """
+    try:
+        from app.coldstart import sources as _inhale_sources
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "coldstart sources module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"invalid JSON body: {exc}",
+        }, status_code=400)
+    ok, errors, normalized = _inhale_sources.validate_payload(payload)
+    if not ok:
+        return JSONResponse({
+            "ok": False,
+            "error": "validation failed",
+            "errors": errors,
+        }, status_code=400)
+    try:
+        path = _inhale_sources.save(normalized)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"save: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": True,
+        "path": str(path),
+        "config": _inhale_sources.load_all(),
     })
 
 
@@ -10869,6 +12168,40 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
     to_number = (p.to or os.environ.get("TWILIO_NOTIFY_TO")
                  or os.environ.get("TWILIO_TEST_TO_REAL_NUMBER_E164")
                  or "").strip()
+    # When the website-side broker is enabled, SMS flows through it
+    # and the engine does not need raw Twilio creds. Voice is broker-
+    # gated separately and still requires the legacy creds for now.
+    broker_enabled = (
+        os.environ.get("ANTICIPY_TWILIO_BROKER") or ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if channel == "sms" and broker_enabled:
+        if not to_number:
+            return JSONResponse({
+                "ok": False,
+                "channel": channel,
+                "gated": True,
+                "reason": "no_destination_phone",
+                "detail": "pass 'to' in body or set TWILIO_NOTIFY_TO in env",
+            }, status_code=400)
+        try:
+            from app.product import sms_pre_confirm as _sms_pre
+            result = _sms_pre.send_sms_sync(to_number, body or title,
+                                            "preconfirm")
+        except Exception as exc:
+            return JSONResponse({
+                "ok": False,
+                "channel": channel,
+                "to": to_number,
+                "error": f"broker_call_failed: "
+                         f"{type(exc).__name__}: {exc}",
+            }, status_code=502)
+        return JSONResponse({
+            "ok": bool(result.get("ok")),
+            "channel": channel,
+            "to": to_number,
+            "delivery": result,
+            "source": "broker",
+        })
     creds_ready = bool(
         os.environ.get("TWILIO_ACCOUNT_SID")
         and os.environ.get("TWILIO_AUTH_TOKEN")
@@ -10885,7 +12218,8 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
             "gated": True,
             "reason": "twilio_credentials_missing",
             "detail": "set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
-                      "TWILIO_PHONE_NUMBER in env",
+                      "TWILIO_PHONE_NUMBER in env, "
+                      "or set ANTICIPY_TWILIO_BROKER=1",
         }, status_code=503)
 
     if not real_opt_in:

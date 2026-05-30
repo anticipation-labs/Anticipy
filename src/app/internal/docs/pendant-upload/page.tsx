@@ -253,7 +253,7 @@ export default function PendantUploadPage() {
   };
 
   const runFlash = useCallback(async () => {
-    if (!firmware) { log("No firmware loaded — select a .bin file first", "error"); return; }
+    if (!firmware) { log("No firmware loaded - select a .bin file first", "error"); return; }
     setPhase("connecting");
     setProgress(0);
     setLogs([]);
@@ -285,18 +285,18 @@ export default function PendantUploadPage() {
       log("Syncing with ESP32-S3 ROM bootloader...");
       const synced = await flasher.sync();
       if (!synced) {
-        log("Sync failed — is the pendant connected via USB and in boot mode?", "error");
+        log("Sync failed - is the pendant connected via USB and in boot mode?", "error");
         setPhase("error");
         await flasher.close();
         return;
       }
-      log("Sync OK — ESP32-S3 ROM bootloader responded", "ok");
+      log("Sync OK. ESP32-S3 ROM bootloader responded", "ok");
       setProgress(15);
 
       log("Switching to 921600 baud for fast upload...");
       const baudOk = await flasher.changeBaud(FLASH_BAUD);
       if (!baudOk) {
-        log("Baud change failed — continuing at 115200", "warn");
+        log("Baud change failed - continuing at 115200", "warn");
       } else {
         log("Baud rate: 921600", "ok");
       }
@@ -309,7 +309,7 @@ export default function PendantUploadPage() {
       log(`Erasing flash (${(firmware.length / 1024).toFixed(0)} KB, ${totalBlocks} blocks)...`);
       const beginOk = await flasher.flashBegin(firmware.length, totalBlocks, FLASH_BLOCK_SIZE, flashOffset);
       if (!beginOk) {
-        log("Flash begin failed — erase error?", "error");
+        log("Flash begin failed - erase error?", "error");
         setPhase("error");
         await flasher.close();
         return;
@@ -411,7 +411,7 @@ export default function PendantUploadPage() {
             Pendant Firmware Upload
           </h1>
           <p style={{ fontSize: 14, color: "#8A8A8A", lineHeight: 1.7 }}>
-            Flash firmware to the ESP32-S3 pendant directly from this browser — no drivers,
+            Flash firmware to the ESP32-S3 pendant directly from this browser - no drivers,
             no tools, no command line. Requires Google Chrome or Edge.
           </p>
         </div>
@@ -419,8 +419,7 @@ export default function PendantUploadPage() {
         {/* Browser compatibility warning */}
         {hasWebSerial === false && (
           <div style={{ padding: "14px 18px", background: "rgba(224,92,92,0.08)", border: "1px solid rgba(224,92,92,0.25)", borderRadius: 10, marginBottom: 32, fontSize: 13, color: "#E05C5C" }}>
-            <strong>Web Serial not supported.</strong> Open this page in Google Chrome or Microsoft Edge (version 89+).
-            Firefox and Safari do not support Web Serial API.
+            <strong>Web Serial not supported.</strong> Open this page in Google Chrome or Microsoft Edge (version 89+). Firefox and Safari do not support Web Serial API.
           </div>
         )}
 
@@ -554,7 +553,7 @@ export default function PendantUploadPage() {
             {
               n: 2,
               title: "Connect the pendant via USB",
-              content: "Use a USB-C cable with data lines (charge-only cables won't work). The ESP32-S3 has a built-in USB-to-UART bridge — no external adapter needed. The pendant should appear as a serial port (COMx on Windows, /dev/ttyUSB0 on Linux, /dev/cu.usbmodem* on macOS).",
+              content: "Use a USB-C cable with data lines (charge-only cables won't work). The ESP32-S3 has a built-in USB-to-UART bridge - no external adapter needed. The pendant should appear as a serial port (COMx on Windows, /dev/ttyUSB0 on Linux, /dev/cu.usbmodem* on macOS).",
             },
             {
               n: 3,
@@ -617,7 +616,7 @@ export default function PendantUploadPage() {
           <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: "#C8A97E" }}>Troubleshooting</h2>
           <div style={{ display: "grid", gap: 12 }}>
             {[
-              { q: "Sync failed", a: "Ensure the pendant is in bootloader mode (BOOT + RESET). Try a different USB cable — many cables are charge-only and have no data lines." },
+              { q: "Sync failed", a: "Ensure the pendant is in bootloader mode (BOOT + RESET). Try a different USB cable - many cables are charge-only and have no data lines." },
               { q: "Port not found on Windows", a: "Install the CP210x USB driver from Silicon Labs if using the CP2102 USB-to-UART bridge. ESP32-S3 with built-in USB-CDC doesn't need extra drivers on Windows 11+." },
               { q: "Flash failed at a specific block", a: "Low USB bandwidth or interference. Try a direct USB port (not through a hub). Ensure no other program is accessing the port." },
               { q: "Pendant won't boot after flash", a: "The firmware binary may be corrupted or built for a different partition table. Rebuild with `pio run -e esp32s3 --target fullclean` and try again." },

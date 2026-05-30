@@ -20,33 +20,38 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
+// B011 + B013: Root layout default is the marketing homepage pitch.
+// Per-route /app and /flash override this via their own layout files.
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.anticipy.ai"),
-  title: "Anticipy App",
+  title: {
+    default: "Anticipy: AI pendant that listens, remembers, and acts",
+    template: "%s | Anticipy",
+  },
   description:
-    "Open Anticipy, install the local Mac engine, and connect the private on-device assistant to the public app shell.",
+    "Anticipy is a discreet AI pendant that listens for ambient intent, remembers what matters, and quietly does the work on your Mac.",
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true },
   },
   openGraph: {
-    title: "Anticipy App",
+    title: "Anticipy: AI pendant that listens, remembers, and acts",
     description:
-      "The public Anticipy app shell plus the private local Mac engine.",
-    url: "https://www.anticipy.ai/app",
+      "A discreet AI pendant that listens for ambient intent, remembers what matters, and quietly does the work on your Mac.",
+    url: "https://www.anticipy.ai/",
     siteName: "Anticipy",
     type: "website",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Anticipy App",
+    title: "Anticipy: AI pendant that listens, remembers, and acts",
     description:
-      "Open Anticipy, install the local Mac engine, and connect the private on-device assistant.",
+      "A discreet AI pendant that listens, remembers what matters, and quietly does the work on your Mac.",
   },
   alternates: {
-    canonical: "https://www.anticipy.ai/app",
+    canonical: "https://www.anticipy.ai/",
   },
 };
 

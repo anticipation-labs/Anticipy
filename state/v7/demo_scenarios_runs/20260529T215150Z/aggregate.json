@@ -1,0 +1,80 @@
+{
+  "run_id": "20260529T215150Z",
+  "started_at": "20260529T215150Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "bridge_url": "http://127.0.0.1:7777",
+  "cdp_base": "http://localhost:9222",
+  "scenarios": [
+    {
+      "id": "stripe_revenue_check",
+      "surface": "Stripe Aevoy",
+      "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+      "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+      "started_at": "20260529T215150Z",
+      "verdict": "FAIL",
+      "skip_reason": "",
+      "probe": {
+        "logged_in": true,
+        "skip_reason": "",
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "title": "Transactions \u2013 Aevoy \u2013 Stripe",
+        "body_snippet": "skip to content\ntransactions\ncreate payment\nanalyze\npayments\npayouts\nall activity\n\nsend reminders if a one-off invoice hasn't been paid using automatic email reminders.\n\nturn on reminders\nall\n1\nsucceeded\n0\nrefunded\n0\ndisputed\n0\nfailed\n0\nuncaptured\n0\ndate and time\namount\ncurrency\nstatus\npayment metho",
+        "body_chars": 706,
+        "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/login_probe.png",
+        "probe_target_id": "13580DD6715E107CA0F51789936F7A25"
+      },
+      "act_probe": {
+        "ok": true,
+        "skipped": true,
+        "reason": "scenario not routed via /api/act"
+      },
+      "universal_result": {
+        "ok": false,
+        "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+        "surface_hint": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "status": "ERROR",
+        "answer": "",
+        "evidence": "",
+        "n_iterations": 0,
+        "subtasks": [],
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780091522_61296d",
+        "error": "CDP Page.captureScreenshot timed out after 10.0s",
+        "elapsed_sec": 129.377,
+        "deadline_sec": 150.0,
+        "deadline_hit": false
+      },
+      "universal_elapsed_sec": 129.384,
+      "verify": {
+        "engine_status": "ERROR",
+        "engine_answer": "",
+        "engine_evidence": "",
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780091522_61296d",
+        "elapsed_sec": 129.377,
+        "deadline_hit": false,
+        "n_iterations": 0,
+        "after_screenshot": "",
+        "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/agent_window_after.png",
+        "success_signal_present": null,
+        "trajectory_copy": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory",
+        "screenshot_count": 7,
+        "screenshot_paths": [
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory/s0_i00_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory/s0_i01_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory/s0_i02_after.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory/s0_i02_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory/s0_i03_after.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory/s0_i03_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215150Z/stripe_revenue_check/trajectory/s0_i04_before.png"
+        ]
+      },
+      "finished_at": "20260529T215412Z"
+    }
+  ],
+  "finished_at": "20260529T215412Z",
+  "pass_count": 0,
+  "partial_count": 0,
+  "fail_count": 1,
+  "skipped_count": 0,
+  "threshold": 4,
+  "aggregate_verdict": "FAIL"
+}

@@ -1,0 +1,97 @@
+{
+  "story": "stranger_flow",
+  "run_id": "20260529T232452Z",
+  "started_at": "20260529T232452Z",
+  "finished_at": "20260529T232648Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "cdp_base": "http://localhost:9222",
+  "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T232452Z",
+  "anticipy_home": "/Users/omarebrahim/.anticipy/v7",
+  "inject_text": "draft a thank-you email to omarkebrahim+anticipy-test@gmail.com about today's onboarding test",
+  "steps": [
+    {
+      "name": "engine_alive",
+      "ok": true,
+      "duration_ms": 326,
+      "engine_pid": 12121,
+      "engine_url": "http://127.0.0.1:8731",
+      "health_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T232452Z/engine_health.json"
+    },
+    {
+      "name": "snapshot",
+      "ok": true,
+      "duration_ms": 413,
+      "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T232452Z",
+      "file_count": 222,
+      "size_kb": 23844,
+      "source_existed": true
+    },
+    {
+      "name": "wipe",
+      "ok": true,
+      "duration_ms": 231,
+      "wiped_dir": "/Users/omarebrahim/.anticipy/v7"
+    },
+    {
+      "name": "coldstart_start",
+      "ok": true,
+      "duration_ms": 970,
+      "http_code": 200,
+      "available": true,
+      "response_path": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T232452Z/coldstart_start.json"
+    },
+    {
+      "name": "coldstart_status",
+      "ok": true,
+      "duration_ms": 53046,
+      "final_status": "done",
+      "people_count": 14,
+      "poll_count": 20,
+      "timeout_s": 90,
+      "poll_log": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T232452Z/coldstart_status_poll.jsonl"
+    },
+    {
+      "name": "inject",
+      "ok": true,
+      "duration_ms": 5046,
+      "http_code": 200,
+      "outcome": "DEFERRED",
+      "ingest_id": "asr-transcript-2b0b00e5d6fe4f339d16447bdb7bbeee",
+      "has_pending": true,
+      "pending_instruction": "draft a thank-you email to omarkebrahim+anticipy-test@gmail.com about today's onboarding test",
+      "proposal": "Should I save a reminder for this school item: draft a thank-you email to omarkebrahim+anticipy-test@gmail.com about today's onboarding test?",
+      "transcript": "draft a thank-you email to omarkebrahim+anticipy-test@gmail.com about today's onboarding test"
+    },
+    {
+      "name": "act_and_verify",
+      "ok": true,
+      "duration_ms": 51502,
+      "act_http_code": 200,
+      "act_ran": true,
+      "act_clarify": false,
+      "act_confirm_required": false,
+      "act_status": "SUCCESS",
+      "act_intent": "email_draft",
+      "act_error": "",
+      "act_compose_url": "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=omarkebrahim%2Banticipy-test%40gmail.com&su=today%27s+onboarding+test&body=Draft+created+by+Anticipy+for+review.",
+      "act_resolved_person": "omarkebrahim+anticipy-test@gmail.com",
+      "draft_verify_ok": true,
+      "drafts_url": "https://mail.google.com/mail/u/0/#inbox",
+      "drafts_title": "Inbox (3,357) - omarkebrahim@gmail.com - Gmail",
+      "drafts_body_chars": 14294,
+      "draft_marker_present": true,
+      "cdp_drafts_dump": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/stranger_flow_runs/20260529T232452Z/cdp_drafts_scan.json"
+    },
+    {
+      "name": "restore",
+      "ok": true,
+      "duration_ms": 473,
+      "restored_dir": "/Users/omarebrahim/.anticipy/v7",
+      "file_count": 222,
+      "snapshot_dir": "/tmp/anticipy-stranger-backup-20260529T232452Z"
+    }
+  ],
+  "verdict": "PASS",
+  "failed_step": "",
+  "notes": "coldstart_available=true; people_count=14; inject_ok=true; act_ran=true; act_ok=true; restored=true"
+}

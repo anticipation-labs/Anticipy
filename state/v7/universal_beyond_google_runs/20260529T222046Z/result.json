@@ -1,0 +1,63 @@
+{
+  "ts": "20260529T222046Z",
+  "run_dir": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/universal_beyond_google_runs/20260529T222046Z",
+  "surfaces_tested": [
+    "saucedemo",
+    "the_internet_herokuapp",
+    "wikipedia"
+  ],
+  "verdict": "FAIL",
+  "per_surface": [
+    {
+      "surface": "saucedemo",
+      "intent": "On the SauceDemo login page, type the text standard_user into the Username input field. The task is complete when the Username input shows the text standard_user.",
+      "surface_hint": "https://www.saucedemo.com/",
+      "status": "SUCCESS",
+      "verdict": "PASS",
+      "n_iterations": 1,
+      "elapsed_sec": 24.067,
+      "deadline_sec": 120.0,
+      "http_code": "200",
+      "answer": "standard_user",
+      "evidence_text": "vision-confirmed: The Username input field clearly shows the text 'standard_user' entered in it, with the cursor positioned at the end of the text.",
+      "evidence_screenshot_path": "/Users/omarebrahim/.anticipy/trajectories/1780093247_790a13/s0_i00_after.png",
+      "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780093247_790a13",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    },
+    {
+      "surface": "the_internet_herokuapp",
+      "intent": "On this Add/Remove Elements page, click the button labeled Add Element. The task is complete when a new button labeled Delete appears on the page below the Add Element button.",
+      "surface_hint": "https://the-internet.herokuapp.com/add_remove_elements/",
+      "status": "ERROR",
+      "verdict": "FAIL",
+      "n_iterations": 0,
+      "elapsed_sec": 0.187,
+      "deadline_sec": 120.0,
+      "http_code": "000000",
+      "answer": "",
+      "evidence_text": "",
+      "evidence_screenshot_path": "",
+      "trajectory_dir": "",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    },
+    {
+      "surface": "wikipedia",
+      "intent": "Read the page heading and the very first sentence of the article body on this Wikipedia page. The task is complete when you have reported what the heading says and the first sentence of the article.",
+      "surface_hint": "https://en.wikipedia.org/wiki/Roman_Empire",
+      "status": "ERROR",
+      "verdict": "FAIL",
+      "n_iterations": 0,
+      "elapsed_sec": 0.191,
+      "deadline_sec": 120.0,
+      "http_code": "000000",
+      "answer": "",
+      "evidence_text": "",
+      "evidence_screenshot_path": "",
+      "trajectory_dir": "",
+      "trajectory_recovered_from_disk": false,
+      "error": null
+    }
+  ]
+}

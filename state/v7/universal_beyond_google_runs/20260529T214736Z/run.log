@@ -1,0 +1,2 @@
+[21:47:41Z] ENGINE preflight FAIL: http://127.0.0.1:8731/health -> 000000
+[21:47:41Z] ABORT: engine down

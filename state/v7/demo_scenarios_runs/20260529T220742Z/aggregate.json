@@ -1,0 +1,163 @@
+{
+  "run_id": "20260529T220742Z",
+  "started_at": "20260529T220742Z",
+  "engine_url": "http://127.0.0.1:8731",
+  "bridge_url": "http://127.0.0.1:7777",
+  "cdp_base": "http://localhost:9222",
+  "scenarios": [
+    {
+      "id": "stripe_revenue_check",
+      "surface": "Stripe Aevoy",
+      "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+      "intent": "Read the Stripe Aevoy dashboard page that is currently open and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+      "started_at": "20260529T220742Z",
+      "verdict": "PASS",
+      "skip_reason": "",
+      "probe": {
+        "logged_in": true,
+        "skip_reason": "",
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "title": "Transactions \u2013 Aevoy \u2013 Stripe",
+        "body_snippet": "skip to content\ntransactions\ncreate payment\nanalyze\npayments\npayouts\nall activity\n\nstripe invoicing helps automate your accounts receivable with powerful automation tools and a flexible api.\n\ncreate first invoice\nall\n1\nsucceeded\n0\nrefunded\n0\ndisputed\n0\nfailed\n0\nuncaptured\n0\ndate and time\namount\ncurr",
+        "body_chars": 731,
+        "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/login_probe.png",
+        "probe_target_id": "296A2EB048A5BFD7D9292F5D4E091AD1"
+      },
+      "act_probe": {
+        "ok": true,
+        "skipped": true,
+        "reason": "scenario not routed via /api/act"
+      },
+      "agent_window_prewarm": {
+        "prewarmed": false,
+        "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "skip_reason": "no persisted agent window yet"
+      },
+      "universal_result": {
+        "ok": true,
+        "intent": "Read the Stripe Aevoy dashboard page that is currently open and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+        "surface_hint": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+        "status": "SUCCESS",
+        "answer": "The Stripe Aevoy dashboard page is open and visible.; The gross volume number at the top of the page is reported.",
+        "evidence": "vision-confirmed: The gross volume number visible at the top of the page under 'Today' section is $0.00, with a timestamp of 3:10 PM. The 'Yesterday' comparison also shows $0.00. Additionally, in the 'Your overview' se",
+        "n_iterations": 2,
+        "subtasks": [
+          {
+            "subgoal": "Read the Stripe Aevoy dashboard page that is currently open and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+            "status": "SUCCESS",
+            "answer": "The Stripe Aevoy dashboard page is open and visible.; The gross volume number at the top of the page is reported.",
+            "evidence": "vision-confirmed: The gross volume number visible at the top of the page under 'Today' section is $0.00, with a timestamp of 3:10 PM. The 'Yesterday' comparison also shows $0.00. Additionally, in the 'Your overview' se",
+            "iters": 2
+          }
+        ],
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780092475_4472a1",
+        "error": null,
+        "elapsed_sec": 147.605,
+        "deadline_sec": 300.0,
+        "deadline_hit": false
+      },
+      "universal_elapsed_sec": 148.296,
+      "verify": {
+        "engine_status": "SUCCESS",
+        "engine_answer": "The Stripe Aevoy dashboard page is open and visible.; The gross volume number at the top of the page is reported.",
+        "engine_evidence": "vision-confirmed: The gross volume number visible at the top of the page under 'Today' section is $0.00, with a timestamp of 3:10 PM. The 'Yesterday' comparison also shows $0.00. Additionally, in the 'Your overview' se",
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780092475_4472a1",
+        "elapsed_sec": 147.605,
+        "deadline_hit": false,
+        "n_iterations": 2,
+        "after_screenshot": "",
+        "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/agent_window_after.png",
+        "success_signal_present": null,
+        "trajectory_copy": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/trajectory",
+        "screenshot_count": 5,
+        "screenshot_paths": [
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/trajectory/s0_i00_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/trajectory/s0_i01_after.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/trajectory/s0_i01_before.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/trajectory/s0_i01_popup_00.png",
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/stripe_revenue_check/trajectory/s0_i02_before.png"
+        ]
+      },
+      "finished_at": "20260529T221022Z"
+    },
+    {
+      "id": "calendly_event_lookup",
+      "surface": "Calendly",
+      "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+      "intent": "Read the Calendly event types page that is currently open and report back the names of the event types listed. Do not click any event. Do not delete anything. Just read the page and report what you see.",
+      "started_at": "20260529T221052Z",
+      "verdict": "PASS",
+      "skip_reason": "",
+      "probe": {
+        "logged_in": true,
+        "skip_reason": "",
+        "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+        "title": "Event types - Scheduling - Calendly",
+        "body_snippet": "create\nscheduling\nmeetings\navailability\ncontacts\nworkflows\npayments\nnew\nintegrations & apps\nrouting\nupgrade plan\nanalytics\nadmin center\nhelp\no\nreview our updated terms of use\nwe've updated our terms of use to reflect how calendly works today. take a moment to review what's changed.\naccept terms\nrevi",
+        "body_chars": 701,
+        "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/calendly_event_lookup/login_probe.png",
+        "probe_target_id": "E5F594F0D7518299ADFD92B5EA3575D1"
+      },
+      "act_probe": {
+        "ok": true,
+        "skipped": true,
+        "reason": "scenario not routed via /api/act"
+      },
+      "agent_window_prewarm": {
+        "prewarmed": true,
+        "url": "https://calendly.com/app/scheduling/meeting_types/user/me",
+        "target_id": "8D22282FCEAAB93FBB4BC92FD78B7193",
+        "settle_seconds": 18.0
+      },
+      "universal_result": {
+        "ok": true,
+        "intent": "Read the Calendly event types page that is currently open and report back the names of the event types listed. Do not click any event. Do not delete anything. Just read the page and report what you see.",
+        "surface_hint": "https://calendly.com/app/scheduling/meeting_types/user/me",
+        "status": "SUCCESS",
+        "answer": "30 Minute Meeting",
+        "evidence": "vision-confirmed: The Calendly Event types page is open and visible. Under the user 'Omize Ten' there is one event type listed: '30 Minute Meeting' (30 min, Google Meet, One-on-One, Mon-Sun hours vary). No other event ",
+        "n_iterations": 0,
+        "subtasks": [
+          {
+            "subgoal": "Read the Calendly event types page that is currently open and report back the names of the event types listed. Do not click any event. Do not delete anything. Just read the page and report what you see.",
+            "status": "SUCCESS",
+            "answer": "30 Minute Meeting",
+            "evidence": "vision-confirmed: The Calendly Event types page is open and visible. Under the user 'Omize Ten' there is one event type listed: '30 Minute Meeting' (30 min, Google Meet, One-on-One, Mon-Sun hours vary). No other event ",
+            "iters": 0
+          }
+        ],
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780092683_fb8145",
+        "error": null,
+        "elapsed_sec": 40.622,
+        "deadline_sec": 300.0,
+        "deadline_hit": false
+      },
+      "universal_elapsed_sec": 40.714,
+      "verify": {
+        "engine_status": "SUCCESS",
+        "engine_answer": "30 Minute Meeting",
+        "engine_evidence": "vision-confirmed: The Calendly Event types page is open and visible. Under the user 'Omize Ten' there is one event type listed: '30 Minute Meeting' (30 min, Google Meet, One-on-One, Mon-Sun hours vary). No other event ",
+        "trajectory_dir": "/Users/omarebrahim/.anticipy/trajectories/1780092683_fb8145",
+        "elapsed_sec": 40.622,
+        "deadline_hit": false,
+        "n_iterations": 0,
+        "after_screenshot": "",
+        "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/calendly_event_lookup/agent_window_after.png",
+        "success_signal_present": null,
+        "trajectory_copy": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/calendly_event_lookup/trajectory",
+        "screenshot_count": 1,
+        "screenshot_paths": [
+          "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T220742Z/calendly_event_lookup/trajectory/s0_i00_before.png"
+        ]
+      },
+      "finished_at": "20260529T221204Z"
+    }
+  ],
+  "finished_at": "20260529T221204Z",
+  "pass_count": 2,
+  "partial_count": 0,
+  "fail_count": 0,
+  "skipped_count": 0,
+  "threshold": 4,
+  "aggregate_verdict": "FAIL"
+}

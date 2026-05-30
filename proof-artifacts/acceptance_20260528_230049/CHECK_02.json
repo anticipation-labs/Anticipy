@@ -1,0 +1,30 @@
+{
+  "check_number": 2,
+  "check_name": "dmg_downloadable",
+  "status": "PASS",
+  "artifact_path": "/Users/omarebrahim/Developer/Anticipy-V7/proof-artifacts/acceptance_20260528_230049/CHECK_02.json",
+  "key_contents": {
+    "final_status": 200,
+    "content_type": "application/x-apple-diskimage",
+    "headers": {
+      "accept-ranges": "bytes",
+      "age": "0",
+      "cache-control": "public, max-age=0, must-revalidate",
+      "content-type": "application/x-apple-diskimage",
+      "date": "Fri, 29 May 2026 06:00:50 GMT",
+      "permissions-policy": "microphone=(self), camera=(), geolocation=()",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "server": "Vercel",
+      "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+      "vary": "RSC, Next-Router-State-Tree, Next-Router-Prefetch",
+      "x-anticipy-redirect": "/dl/Anticipy_1.0.0_aarch64.dmg",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "x-matched-path": "/download",
+      "x-vercel-cache": "MISS",
+      "x-vercel-id": "pdx1::iad1::m59pb-1780034449862-7e3d945ed53e",
+      "content-length": "2515615248"
+    }
+  },
+  "ts": "2026-05-28T23:00:50.165322"
+}

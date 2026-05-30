@@ -1,0 +1,11 @@
+[z001] run dir = /Users/omarebrahim/Developer/Anticipy-V7/state/v7/z001_e2e_runs/20260529T073322Z
+[z001] bridge = http://127.0.0.1:7777 engine = http://127.0.0.1:8731
+[z001] CDP pages before run: 1
+[z001] step bridge_alive: PASS
+[z001] step engine_alive: PASS
+[z001] step create_identity: PASS
+[z001] step browser_signup: PASS
+[z001] FAIL: supabase admin list users failed: status=0 err='URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1000)>'
+[z001] verdict = FAIL
+[z001] evidence = /Users/omarebrahim/Developer/Anticipy-V7/state/v7/z001_e2e_runs/20260529T073322Z/result.json
+[z001] tab leakage from us = 0

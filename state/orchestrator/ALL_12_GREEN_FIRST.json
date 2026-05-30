@@ -1,0 +1,37 @@
+{
+  "first_all_green_at": "2026-05-29T23:26:50Z",
+  "cycle": 97,
+  "gates": {
+    "G1_install_under_5min": "GREEN",
+    "G2_trivia_fires": "GREEN",
+    "G3_silent_execute": "GREEN",
+    "G4_coldstart_fills_dossier": "GREEN",
+    "G5_packaged_binary_serves": "GREEN",
+    "G6_demo_rehearsed": "GREEN",
+    "G7_non_google_surfaces_work": "GREEN",
+    "G8_real_world_demo_scenarios": "GREEN",
+    "G9_proactive_fires_unprompted": "GREEN",
+    "G10_channel_by_urgency_routes": "GREEN",
+    "G11_cost_under_ceiling": "GREEN",
+    "G12_failure_recovery_works": "GREEN"
+  },
+  "evidence": {
+    "G1": "state/v7/stranger_flow_runs/20260529T232452Z/result.json verdict=PASS 8/8 steps",
+    "G2": "discovery_trivia.py Eiffel 23.99ms ElevenLabs cache hit",
+    "G3": "state/v7/z001_e2e_runs/20260529T225201Z/result.json verdict=PASS 9/9 steps",
+    "G4": "~/.anticipy/v7/dossiers/anticipy-user/dossier.json has 24 people",
+    "G5": "pid 12121 /Applications/Anticipy.app/Contents/MacOS/anticipy-engine on 8731",
+    "G6": "state/demo/dress_rehearsal_log.json runs[-3:] all PASS within 4h",
+    "G7": "state/v7/universal_beyond_google_runs/20260529T223332Z/result.json verdict=PASS 3/3",
+    "G8": "state/v7/demo_scenarios_runs/20260529T225813Z/aggregate.json aggregate_verdict=PASS 4/5",
+    "G9": "discovery_proactive.py scheduler running + 1 proactive fire",
+    "G10": "discovery_channel_router.py 6/6 matrix PASS",
+    "G11": "curl /api/cost/stats p95_cost_usd=0.0 < 0.005 hard cap",
+    "G12": "curl POST /api/recovery/test login_required returns 96-char SMS"
+  },
+  "needs_for_done_v2": [
+    "5 consecutive cycles with all 12 GREEN (cycle 97 is cycle 1 of 5)",
+    "3 owner-runnable E2E tests pass per USER_E2E_TESTS.md",
+    "owner sign-off in ORCHESTRATOR.md"
+  ]
+}

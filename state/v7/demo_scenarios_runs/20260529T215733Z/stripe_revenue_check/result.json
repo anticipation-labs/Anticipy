@@ -1,0 +1,58 @@
+{
+  "id": "stripe_revenue_check",
+  "surface": "Stripe Aevoy",
+  "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+  "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+  "started_at": "20260529T215733Z",
+  "verdict": "FAIL",
+  "skip_reason": "",
+  "agent_window_wipe": {
+    "closed": true,
+    "removed_state": true,
+    "target_id": "E3A6763FAE8F8441D137CCB4D24B43D7"
+  },
+  "probe": {
+    "logged_in": true,
+    "skip_reason": "",
+    "url": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+    "title": "Dashboard \u2013 Aevoy \u2013 Stripe",
+    "body_snippet": "",
+    "body_chars": 0,
+    "probe_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/stripe_revenue_check/login_probe.png",
+    "probe_target_id": "C1A5F6A4576ACACE0AF0AD4145997B61"
+  },
+  "act_probe": {
+    "ok": true,
+    "skipped": true,
+    "reason": "scenario not routed via /api/act"
+  },
+  "universal_result": {
+    "ok": false,
+    "intent": "Read the Stripe Aevoy dashboard payments page and report the gross volume number visible at the top of the page. Do not click any payment row. Do not refund or cancel anything. This is a read-only revenue check.",
+    "surface_hint": "https://dashboard.stripe.com/acct_1T3RNiBMF3gCPOse/payments",
+    "status": "DEADLINE_EXCEEDED",
+    "answer": "",
+    "evidence": "wall-clock 150.0s exceeded before the loop returned",
+    "n_iterations": 0,
+    "subtasks": [],
+    "trajectory_dir": "",
+    "error": "deadline_exceeded",
+    "elapsed_sec": 150.003,
+    "deadline_sec": 150.0,
+    "deadline_hit": true
+  },
+  "universal_elapsed_sec": 150.015,
+  "verify": {
+    "engine_status": "DEADLINE_EXCEEDED",
+    "engine_answer": "",
+    "engine_evidence": "wall-clock 150.0s exceeded before the loop returned",
+    "trajectory_dir": "",
+    "elapsed_sec": 150.003,
+    "deadline_hit": true,
+    "n_iterations": 0,
+    "after_screenshot": "",
+    "agent_window_screenshot": "/Users/omarebrahim/Developer/Anticipy-V7/state/v7/demo_scenarios_runs/20260529T215733Z/stripe_revenue_check/agent_window_after.png",
+    "success_signal_present": null
+  },
+  "finished_at": "20260529T220019Z"
+}
