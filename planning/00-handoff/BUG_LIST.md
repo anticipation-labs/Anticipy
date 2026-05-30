@@ -462,5 +462,19 @@
 | B448 | src/app/api/engine/twilio/voice-script/[intentId]/route.ts | P2 | callbackUrl built with intentId as query param without HMAC binding | Line 51. Anyone who guesses or scrapes intentId could MITM the callback URL (combined with Twilio signature verification failure cases). |
 | B449 | src/app/api/engine/analyze/route.ts | P3 | Comment claims "skipped (in cooldown)" but llm-cascade returns provider=none + errors{} only | Engine analyze depends on llm-cascade. If all providers in cooldown, analyze sees provider=none and surfaces error. Race window. |
 | B450 | src/app/api/cron/daily-digest/route.ts | P2 | Email digest body unescaped — recipient names could contain HTML breaking inbox preview | Lines 95-98: `name?.name` interpolated into text body. Probably text-only (text:body) — but Subject line has `${headline}` which could leak control chars. |
+| B451 | src/lib/html-escape.ts | P3 | Dead/duplicate of src/lib/escape.ts | No imports found. Should be deleted. |
+| B452 | src/lib/mistral.ts | P3 | MISTRAL_API_KEY captured at module load via non-null assertion | Line 8: `process.env.MISTRAL_API_KEY!`. Same B240 issue. |
+| B453 | src/app/api/admin/* | P3 | verifyAdmin function duplicated across 3 admin routes | Each route has its own copy. Should be shared helper. Inconsistent if one updates and others don't. |
+| B454 | src/lib/gate-cookie.ts | P3 | TODO comment "rotate GATE_PASSCODE_INTERNAL post-launch — alpha only" | Line 10. Production-blocking TODO. |
+| B455 | engine/app/anticipy/durable.py | P2 | SQLite `PRAGMA synchronous=FULL` with WAL — slow on macOS APFS | Line 56. Each commit fsyncs. On rotational disks / non-SSD, write latency >100ms. |
+| B456 | src/app/api/log/route.ts | P3 | Per-IP rate limit 120/min — slow trickling spam still possible | Line 35: 120 events/min/IP. Spam bot at 100/min stays under cap forever. |
+| B457 | src/app/api/twilio/sms-inbound/route.ts | P3 | raw_form JSON column stores entire Twilio webhook payload | Line 74: `raw_form: params`. Includes ALL keys Twilio sends (MessagingServiceSid, From, To, etc). Database row growth + PII (phone numbers). |
+| B458 | engine/app/main.py | P3 | _ws_client_ip drops trailing space but doesn't normalize IPv6 vs IPv4 | Lines 860-865. |
+| B459 | src/app/api/engine/auto-proceed/route.ts | P3 | rateLimit auto-proceed:user — 120/hr allows polling exploit | Line 35. Combined with B364 (auto-proceed default-yes), 120 executions/hr/user possible. |
+| B460 | engine/app/main.py | P3 | execute_intent immediately spawns bg_task without rate limit check on intent_id | Line 817. Multiple /execute-intent calls with same intent_id = multiple background tasks. Race + double-execution. |
+| B461 | src/app/api/extension/auth/route.ts | P3 | Returns `username` in response — leak username on bad-code probe attempt that accidentally matches | Line 119. Should not return identifying data even on success without proof. |
+| B462 | src/lib/notification-adapter.ts | P3 | Body length not capped for email path — large request takes full provider quota | No char limit visible. Could send 100KB messages chewing through quota. |
+| B463 | src/lib/twilio-notify.ts | P3 | sendTwilioNotification body always uses "Anticipy: " prefix — not A2P 10DLC registered | Line 69. SMS prefix could fail US carrier filtering without proper A2P registration. |
+| B464 | src/app/api/engine/transcribe/route.ts | P3 | JSON path content-type check uses `.includes("application/json")` | Line 41. Could trip on `application/json+charset=utf-8` or `application/jsonp`. |
 
 
