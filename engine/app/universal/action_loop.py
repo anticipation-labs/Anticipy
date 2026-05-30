@@ -166,12 +166,45 @@ def run_until_done(intent: str,
     # background (the manifest still lands).
     box: dict[str, Any] = {"result": None, "error": None}
 
+    # Snapshot the active task id from the calling thread so the worker
+    # can rebind it. Without this rebind, every LLM call inside the
+    # runner sees task_id=None and the budget gate has no record to
+    # consult. Best-effort import: if cost telemetry is unavailable the
+    # worker still runs.
+    _active_task_id = None
+    _ct = None
+    try:
+        from app.product import cost_telemetry as _ct  # type: ignore
+        _active_task_id = _ct.get_active_task_id_for_thread()
+    except Exception:
+        _ct = None  # type: ignore
+
     def _worker() -> None:
+        # Rebind the snapshotted task id on this worker thread so
+        # OpenRouterClient.chat and platform_adapter.model_call both see
+        # the same active task and the per-task budget gate / cost
+        # ledger work end-to-end across the thread boundary.
+        if _active_task_id:
+            try:
+                if _ct is not None:
+                    _ct.set_active_for_thread(_active_task_id)
+                from app.anticipy import platform_adapter as _pa  # type: ignore
+                _pa.bind_active_task_id(_active_task_id)
+            except Exception:
+                pass
         try:
             tr = runner.run(task, starting_url=starting_url)
             box["result"] = tr
         except Exception as exc:  # noqa: BLE001
             box["error"] = f"{type(exc).__name__}: {exc}"
+        finally:
+            try:
+                if _ct is not None:
+                    _ct.set_active_for_thread(None)
+                from app.anticipy import platform_adapter as _pa  # type: ignore
+                _pa.bind_active_task_id(None)
+            except Exception:
+                pass
 
     th = threading.Thread(target=_worker, daemon=True,
                           name="anticipy-universal-loop")
