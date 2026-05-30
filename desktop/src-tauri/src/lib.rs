@@ -2238,6 +2238,83 @@ fn start_bridge_daemon(app: &AppHandle) -> Result<(), String> {
     ))
 }
 
+/// INVESTOR-DEMO HARDENING (cycle "live-demo"): keep the engine sidecar
+/// alive without human intervention. Polls `engine_health_ok` every 2
+/// seconds; on the first failure it logs and re-runs `start_engine_sidecar`
+/// which will respawn the binary. A successful probe resets the failure
+/// counter so the watchdog stays quiet during steady state.
+///
+/// The popover already swallows transient engine errors and shows
+/// "Getting ready" while we recover. End-to-end recovery time after a
+/// `kill -9` of the engine: ~2-4 seconds (one watchdog tick to notice,
+/// one start cycle).
+///
+/// Deliberately does NOT cap the restart count. A broken sidecar binary
+/// would hot-loop here at 2s intervals; that is acceptable for the
+/// investor demo (a broken binary would be caught before the demo
+/// started) and adding a cap risks the watchdog quietly giving up
+/// during the demo, which is worse than a tight respawn loop nobody
+/// sees.
+fn spawn_engine_watchdog(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // Give the initial start_engine_sidecar call time to land
+        // before the watchdog starts checking. Otherwise the watchdog
+        // tries to respawn the engine before the first start has even
+        // begun, which double-spawns the sidecar binary.
+        std::thread::sleep(Duration::from_secs(5));
+        let mut consecutive_fail = 0u32;
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            if engine_health_ok(DEFAULT_ENGINE_PORT) {
+                if consecutive_fail > 0 {
+                    // Recovered. Notify the popover so the calm
+                    // "Getting ready" pill flips back to "Listening".
+                    let _ = handle.emit("engine-ready", DEFAULT_ENGINE_PORT);
+                }
+                consecutive_fail = 0;
+                continue;
+            }
+            consecutive_fail += 1;
+            eprintln!(
+                "[watchdog] engine sidecar unhealthy (fail #{consecutive_fail}); respawning"
+            );
+            start_engine_sidecar(&handle);
+        }
+    });
+}
+
+/// INVESTOR-DEMO HARDENING (cycle "live-demo"): same shape as the
+/// engine watchdog, but for the bridge daemon on port 7777 (or the
+/// `ANTICIPY_TRIGGER_PORT` override). The bridge mediates between the
+/// browser extension and the engine; if it goes down the popover loses
+/// all action-execution affordances. Respawn within ~2 seconds.
+fn spawn_bridge_watchdog(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // Same warm-up logic: bridge takes ~8 seconds to come up on a
+        // cold start, so wait at least that long before the first
+        // watchdog tick.
+        std::thread::sleep(Duration::from_secs(10));
+        let mut consecutive_fail = 0u32;
+        loop {
+            std::thread::sleep(Duration::from_secs(2));
+            if bridge_health_ok() {
+                consecutive_fail = 0;
+                continue;
+            }
+            consecutive_fail += 1;
+            eprintln!(
+                "[watchdog] bridge daemon unhealthy on port {} (fail #{consecutive_fail}); respawning",
+                bridge_port()
+            );
+            if let Err(e) = start_bridge_daemon(&handle) {
+                eprintln!("[watchdog] bridge respawn failed: {e}");
+            }
+        }
+    });
+}
+
 /// Run the full first-launch setup pipeline. Marker-gated: a successful run
 /// writes ~/.anticipy/.bootstrap-done and short-circuits subsequent launches
 /// (the existing behavior). Restartable: subsequent launches still call
@@ -2421,6 +2498,15 @@ pub fn run() {
             std::thread::spawn(move || {
                 start_engine_sidecar(&engine_handle);
             });
+
+            // INVESTOR-DEMO HARDENING (cycle "live-demo"): start the
+            // engine + bridge watchdogs. They sleep through the cold
+            // start, then poll /health every 2 seconds and respawn the
+            // sidecar / bridge daemon on the first failed probe so a
+            // mid-demo crash recovers in 2-4 seconds without ever
+            // surfacing a raw error to the room.
+            spawn_engine_watchdog(app.handle());
+            spawn_bridge_watchdog(app.handle());
 
             // US-015: wire the anticipy:// deep-link handler. Hot URLs come
             // through on_open_url, cold-start URLs come through get_current
