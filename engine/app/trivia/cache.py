@@ -43,14 +43,24 @@ _LOCK = threading.Lock()
 _SEEDED = False
 _CONN_CACHE: dict[str, sqlite3.Connection] = {}
 
-# Score threshold below which we say "no cache hit". 0.45 keeps the
-# Roman Empire phrasing at high confidence (~0.85) while rejecting
-# unrelated questions like "what color is the sky" against the Roman
-# Empire row.
-MIN_SCORE = float(os.environ.get("ANTICIPY_TRIVIA_MIN_SCORE", "0.45"))
+# B034: Score threshold raised from 0.45 to 0.62 so loose paraphrases
+# ("when did England win the world cup" matching "World Cup most wins" at
+# 0.494) no longer fire. Real exact-phrase hits sit comfortably above 0.7.
+MIN_SCORE = float(os.environ.get("ANTICIPY_TRIVIA_MIN_SCORE", "0.62"))
+
+# B035: Require at least this many content tokens (after stopword removal)
+# before firing. ASR mid-stream cutoffs like "wait when did the Roman Empire"
+# otherwise score 0.696 and fire on the fall-of-Rome row.
+MIN_CONTENT_TOKENS = int(os.environ.get("ANTICIPY_TRIVIA_MIN_TOKENS", "4"))
 
 # Words that add noise to the match. "when did" / "what is" appear in
 # many questions; their presence should not bias the score.
+#
+# B032: Do NOT strip country / proper-noun cues. Previously "france",
+# "england", etc. were dropped at clean time, so "wait who is the current
+# president of france" matched "current US president" with 2/3 token
+# overlap. Country and continent words now stay and feed the proper-noun
+# mismatch penalty in _score().
 _STOPWORDS = {
     "a", "an", "the", "is", "was", "were", "are", "be", "been", "being",
     "do", "does", "did", "done", "doing",
@@ -64,6 +74,26 @@ _STOPWORDS = {
     "remember", "tell", "me", "us", "ok", "okay", "huh", "hmm", "uh",
     "um", "yeah", "yes", "no", "well", "like", "kind", "sort", "thing",
     "stuff", "year",
+}
+
+# Proper-noun cues. If a token from this set appears in the question but
+# not in the alias (or vice versa), score is heavily penalized: a question
+# about "France" must not fire on a "United States" alias just because
+# "current president" overlaps.
+_PROPER_NOUN_TOKENS = {
+    # Major countries
+    "france", "england", "britain", "uk", "germany", "italy", "spain",
+    "portugal", "russia", "ukraine", "china", "japan", "korea",
+    "india", "pakistan", "iran", "iraq", "israel", "egypt", "turkey",
+    "canada", "mexico", "brazil", "argentina", "chile", "australia",
+    "america", "usa", "us",
+    # Major empires / civilizations
+    "roman", "rome", "greek", "greece", "egyptian", "byzantine", "ottoman",
+    "british", "spanish", "french",
+    # Continents
+    "europe", "asia", "africa", "americas",
+    # Common historical events that easily collide
+    "independence", "declaration", "founded", "founding",
 }
 
 _WORD_RE = re.compile(r"[A-Za-z0-9']+")
@@ -177,12 +207,24 @@ def _score(question_clean: str, alias_clean: str) -> float:
 
     Weighted 0.65 / 0.35 toward token overlap, which is the better
     signal on short questions.
+
+    B032 + B033: If the question contains a proper-noun token (country,
+    empire, etc.) and the alias does not, OR the alias contains a
+    different proper-noun token, the score is zeroed out. This stops
+    "france" from firing the US-president row and "Roman Empire founded"
+    from firing the Declaration of Independence row.
     """
     if not question_clean or not alias_clean:
         return 0.0
     q_tokens = _tokens(question_clean)
     a_tokens = _tokens(alias_clean)
     if not a_tokens:
+        return 0.0
+    q_proper = q_tokens & _PROPER_NOUN_TOKENS
+    a_proper = a_tokens & _PROPER_NOUN_TOKENS
+    if q_proper and a_proper and not (q_proper & a_proper):
+        return 0.0
+    if q_proper and not a_proper:
         return 0.0
     overlap = len(q_tokens & a_tokens) / len(a_tokens)
     bigrams = _jaccard_counter(
@@ -270,6 +312,11 @@ def lookup(question: str, *, min_score: Optional[float] = None) -> Optional[dict
     threshold = float(min_score if min_score is not None else MIN_SCORE)
     cleaned_q = _clean(question)
     if not cleaned_q:
+        return None
+    # B035: refuse to fire on incomplete utterances. ASR mid-stream cuts
+    # otherwise score 0.696 on stub questions like "wait when did the
+    # Roman Empire" and surface a wrong fall-of-Rome answer.
+    if len(_tokens(cleaned_q)) < MIN_CONTENT_TOKENS:
         return None
     conn = _connect()
     cur = conn.cursor()
