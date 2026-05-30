@@ -476,5 +476,16 @@
 | B462 | src/lib/notification-adapter.ts | P3 | Body length not capped for email path — large request takes full provider quota | No char limit visible. Could send 100KB messages chewing through quota. |
 | B463 | src/lib/twilio-notify.ts | P3 | sendTwilioNotification body always uses "Anticipy: " prefix — not A2P 10DLC registered | Line 69. SMS prefix could fail US carrier filtering without proper A2P registration. |
 | B464 | src/app/api/engine/transcribe/route.ts | P3 | JSON path content-type check uses `.includes("application/json")` | Line 41. Could trip on `application/json+charset=utf-8` or `application/jsonp`. |
+| B465 | engine/app/browser.py | P0 | Chromium launches with `--no-sandbox` flag | Line 171: `--no-sandbox`. Disables critical OS-level renderer sandbox; any compromised content can escape to engine process. Should never be set in production. |
+| B466 | engine/app/browser.py | P2 | Hardcoded Chrome/120 user-agent (released Nov 2023) | Lines 187-191. Stale UA fingerprint immediately identifies browser as automation. Bot-detection sites flag instantly. |
+| B467 | engine/app/browser.py | P3 | `--disable-blink-features=AutomationControlled` is the OG anti-detection flag — bot-detection vendors learned this years ago | Line 170. Visible "AutomationControlled flag stripped" is itself a fingerprint signal. |
+| B468 | engine/app/safetyx/ceiling.py | P3 | _MONEY regex matches "buy" and "subscribe" — overflagged for routine messages | Line 34-38. "I want to subscribe to a newsletter" flagged as RISK_MONEY. False positive. |
+| B469 | engine/app/safetyx/ceiling.py | P2 | _ULTRA matches "to (my|the) (boss|ceo|investor|client|board|lawyer)" but doesn't unfilter context | Lines 39-45. "I told my boss I'd be late" matches. False ULTRA classification. |
+| B470 | src/lib/cerebras.ts | P3 | callCerebrasJson uses fence-strip + substring extract pattern — duplicated across providers | Lines 114-126. Should be shared helper. |
+| B471 | src/lib/cerebras.ts | P3 | cerebrasCostUsd hardcoded to 0 — if Cerebras adds paid tier, cost reports wrong | Line 129. |
+| B472 | engine/app/browser.py | P3 | `_user_id` stored in instance state — racing tasks for different users may collide | Line 159: `self._user_id`. Persistent context (B161-style) per user, but single instance class with module-global state. |
+| B473 | engine/app/browser.py | P3 | Locale fixed to "en-US"; Spanish/French users see wrong-locale UI | Line 185. |
+| B474 | engine/app/browser.py | P3 | Window size fixed to 1920x1080 — mobile-emulation tasks impossible | Line 175. |
+| B475 | engine/app/audiostack/enrollment.py | P3 | Anchor file ext .enc — easy to find on disk | Line 50. Public file extension makes anchor discoverable in filesystem scan. |
 
 
