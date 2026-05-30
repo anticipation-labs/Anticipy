@@ -8629,6 +8629,13 @@ def _send_receipt_sms_sync(body: str) -> dict:
     gated response; no opt-in -> gated suppress; happy path -> real
     Twilio POST. Returns a structured dict (never raises) so the
     receipt helper can include the result in its summary.
+
+    When ANTICIPY_TWILIO_BROKER=1 the engine delegates to the
+    website-side broker via send_sms_sync in sms_pre_confirm. That
+    is the shipping path for strangers without their own Twilio
+    creds. The legacy direct-Twilio path below is retained for devs
+    who export TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN /
+    TWILIO_PHONE_NUMBER locally.
     """
     phone = _receipt_phone()
     mock_env = (os.environ.get("TWILIO_MOCK") or "").strip().lower()
@@ -8641,6 +8648,36 @@ def _send_receipt_sms_sync(body: str) -> dict:
             "reason": "TWILIO_MOCK=1",
             "to": phone,
             "would_have_sent": body,
+        }
+    broker_enabled = (
+        os.environ.get("ANTICIPY_TWILIO_BROKER") or ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if broker_enabled:
+        if not phone:
+            return {
+                "channel": "sms",
+                "attempted": False,
+                "gated": True,
+                "reason": "no_destination_phone",
+            }
+        try:
+            from app.product import sms_pre_confirm as _sms_pre
+            result = _sms_pre.send_sms_sync(phone, body, "receipt")
+        except Exception as exc:
+            return {
+                "channel": "sms",
+                "attempted": True,
+                "ok": False,
+                "to": phone,
+                "error": f"broker_call_failed: {type(exc).__name__}: {exc}",
+            }
+        return {
+            "channel": "sms",
+            "attempted": True,
+            "ok": bool(result.get("ok")),
+            "to": phone,
+            "delivery": result,
+            "source": "broker",
         }
     if not _twilio_creds_ready():
         return {
@@ -11287,6 +11324,40 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
     to_number = (p.to or os.environ.get("TWILIO_NOTIFY_TO")
                  or os.environ.get("TWILIO_TEST_TO_REAL_NUMBER_E164")
                  or "").strip()
+    # When the website-side broker is enabled, SMS flows through it
+    # and the engine does not need raw Twilio creds. Voice is broker-
+    # gated separately and still requires the legacy creds for now.
+    broker_enabled = (
+        os.environ.get("ANTICIPY_TWILIO_BROKER") or ""
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if channel == "sms" and broker_enabled:
+        if not to_number:
+            return JSONResponse({
+                "ok": False,
+                "channel": channel,
+                "gated": True,
+                "reason": "no_destination_phone",
+                "detail": "pass 'to' in body or set TWILIO_NOTIFY_TO in env",
+            }, status_code=400)
+        try:
+            from app.product import sms_pre_confirm as _sms_pre
+            result = _sms_pre.send_sms_sync(to_number, body or title,
+                                            "preconfirm")
+        except Exception as exc:
+            return JSONResponse({
+                "ok": False,
+                "channel": channel,
+                "to": to_number,
+                "error": f"broker_call_failed: "
+                         f"{type(exc).__name__}: {exc}",
+            }, status_code=502)
+        return JSONResponse({
+            "ok": bool(result.get("ok")),
+            "channel": channel,
+            "to": to_number,
+            "delivery": result,
+            "source": "broker",
+        })
     creds_ready = bool(
         os.environ.get("TWILIO_ACCOUNT_SID")
         and os.environ.get("TWILIO_AUTH_TOKEN")
@@ -11303,7 +11374,8 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
             "gated": True,
             "reason": "twilio_credentials_missing",
             "detail": "set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
-                      "TWILIO_PHONE_NUMBER in env",
+                      "TWILIO_PHONE_NUMBER in env, "
+                      "or set ANTICIPY_TWILIO_BROKER=1",
         }, status_code=503)
 
     if not real_opt_in:
