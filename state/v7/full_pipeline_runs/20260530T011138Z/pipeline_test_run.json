@@ -1,0 +1,138 @@
+{
+  "timestamp_utc": "20260530T011138Z",
+  "started_at_unix": 1780103078,
+  "verdict": "FAIL",
+  "verdict_reason": "ASR-classifier path returned outcome=DEFERRED with intent=school_deadline_reminder for the spoken email request; planner did not produce an actionable email_draft plan. Falling back to literal-instruction /api/act path produced a real Gmail draft via direct_gmail_compose, which structurally BYPASSES the SMS pre-confirm gate. The whole-chain test as designed (ASR -> classifier -> planner -> SMS gate -> YES -> action -> draft -> receipt) could not be executed end-to-end. Two components broke: (1) planner mis-classification of a clear email instruction, (2) the SMS gate is unreachable for Gmail drafts by design (per sms_pre_confirm.py docstring line 380).",
+  "engine": {
+    "pid_at_start": 45817,
+    "pid_after_recovery": 55778,
+    "binary": "/Applications/Anticipy.app/Contents/MacOS/anticipy-engine",
+    "version": "product-3",
+    "port": 8731,
+    "engine_crashed_mid_test": true,
+    "crash_trigger": "POST /api/act with instruction containing verb 'send' (Empty reply from server, engine auto-restarted within 30s, no obvious stack in product-engine.log)"
+  },
+  "step1_health": {
+    "ok": true,
+    "response": {"ok": true, "service": "anticipy-local-engine", "version": "product-3", "pid": 45817, "port": 8731, "onboarded": false, "listening": false, "profile_error": ""}
+  },
+  "step2_audio_generation": {
+    "ok": true,
+    "wav_path": "/tmp/pipeline_test.wav",
+    "wav_bytes": 215508,
+    "spoken_phrase": "draft a thank-you email to omarkebrahim+anticipy-pipeline@gmail.com about today's pipeline test",
+    "tts_command": "say + afconvert WAVE LEI16@16000"
+  },
+  "step3_asr_upload": {
+    "ok": true,
+    "endpoint": "POST /api/listen/upload",
+    "asr_transcript": "Draft a thank you email to Amar Kebrahim plus Anticipipeline at gmail.com about today's pipeline test.",
+    "asr_normalized": false,
+    "asr_mean_confidence": 0.9739,
+    "outcome": "DEFERRED",
+    "plan_mode": "clarify",
+    "plan_intent": "school_deadline_reminder",
+    "plan_question": "Should I save a reminder for this school item: Draft a thank you email to Amar Kebrahim plus Anticipipeline at gmail.com about today's pipeline test?",
+    "ingest_id": "upload-asr-ea5a465ff89d4a7a9e13b363686da9bb",
+    "asr_problem": "parakeet mis-transcribed the email alias 'omarkebrahim+anticipy-pipeline@gmail.com' as 'Amar Kebrahim plus Anticipipeline at gmail.com'. This is a parakeet-specific weakness with spoken email aliases and plus addressing.",
+    "planner_problem": "Even though the transcript contains the literal word 'email' and 'gmail.com', the LLM extractor classified it as 'school_deadline_reminder' with reason 'Ambient classroom speech mentioned a school item with timing.' This is a planner hot-path classification bug."
+  },
+  "step4_listen_state": {
+    "endpoint_exists": false,
+    "note": "/api/listen/state does not exist in the running engine. Used /api/listen/status instead, which confirmed the DEFERRED record was persisted."
+  },
+  "step5_act_empty_body": {
+    "ok": true,
+    "endpoint": "POST /api/act with {}",
+    "ran": false,
+    "clarify": true,
+    "awaiting_sms_confirm": false,
+    "task_id": "act-fb00de5d9182",
+    "why_no_sms_gate": "The pending plan from /api/listen/upload was mode=clarify. /api/act routes clarify-mode plans to a clarify response (NOT to /run_action_engine where the SMS gate sits). The gate only fires for mode=act plans with intents in {email_draft, gmail_draft, email, send_email, send_message, send_text_message, send_slack_message} that also bypass the parse_draft_intent short-circuit."
+  },
+  "step5b_act_with_literal_instruction": {
+    "ok": true,
+    "endpoint": "POST /api/act with explicit instruction",
+    "instruction": "draft a thank-you email to omarkebrahim+anticipy-pipeline@gmail.com about today's pipeline test",
+    "ran": true,
+    "status": "SUCCESS",
+    "path": "direct_gmail_compose",
+    "intent": "email_draft",
+    "resolved_person": "omarkebrahim+anticipy-pipeline@gmail.com",
+    "resolved_thing": "today's pipeline test",
+    "compose_url": "https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=omarkebrahim%2Banticipy-pipeline%40gmail.com&su=today%27s+pipeline+test&body=Draft+created+by+Anticipy+for+review.",
+    "typing_evidence_to_inserted": true,
+    "typing_evidence_subject_inserted": true,
+    "typing_evidence_body_inserted": true,
+    "awaiting_sms_confirm": false,
+    "why_no_sms_gate": "The direct_gmail_compose path short-circuits BEFORE the SMS pre-confirm gate per server.py:7980 and sms_pre_confirm.py:380 (`The three internal short-circuits (_try_direct_browser_action, _try_direct_gmail_draft, _try_structured_gmail_draft) bypass the gate because they are structurally draft-only`). The Gmail draft path is reversible by design, so no gate. The SMS gate is reserved for the DSv4SkillRunner click-Send path and non-Gmail send/post/publish/pay verbs.",
+    "task_id": "act-a37c5c228b0a"
+  },
+  "step6_sms_inbound_dispatch": {
+    "skipped": true,
+    "reason": "No pending action to confirm because the Gmail draft path bypasses the gate. POST /api/sms/inbound with Body=YES returned TwiML '<Message>Anticipy: no pending action to confirm.</Message>' confirming the inbound plumbing is live but there is no pending record to resume."
+  },
+  "step7_drafts_verification": {
+    "ok": true,
+    "drafts_url": "https://mail.google.com/mail/u/0/#drafts",
+    "drafts_title": "Drafts (431) - omarkebrahim@gmail.com - Gmail",
+    "body_chars": 8867,
+    "draft_marker_present": true,
+    "draft_marker_evidence": [
+      "Draft today's pipeline test - Draft created by Anticipy for review. 6:08 PM",
+      "Draft Anticipy: today's pipeline test - Anticipy just sent omarkebrahim+anticipy-pipeline@gmail.com an email about today's pipeline test. Reply STOP to silence. 6:08 PM (receipt self-email)",
+      "Draft Anticipy: Anticipy draft - Anticipy just sent omarkebrahim+anticipy-pipeline@gmail.com an email about Anticipy draft. Reply STOP to silence. 6:08 PM (receipt self-email)"
+    ],
+    "cdp_method": "websockets.sync.client via webSocketDebuggerUrl from /json (engine-pattern). Standard websocket-client library Origin header rejected by Chrome's strict --remote-allow-origins=http://localhost:* allowlist."
+  },
+  "step8_receipt_observation": {
+    "receipt_observed": true,
+    "receipt_emitted": "as part of /api/act response body (receipt.ok=true)",
+    "screenshot_paths": [
+      "/Users/omarebrahim/.anticipy/v7/receipt_proof/gmail_action_20260530T010546Z_fe2de6a9.png",
+      "/Users/omarebrahim/.anticipy/v7/receipt_proof/gmail_action_20260530T010753Z_4534eeb2.png"
+    ],
+    "receipt_sms_status": {"channel": "sms", "attempted": false, "gated": true, "mock": true, "reason": "TWILIO_MOCK=1"},
+    "receipt_self_email_ok": true,
+    "receipt_self_email_to": "omarkebrahim@gmail.com",
+    "receipt_self_email_drafted_via_cdp": true
+  },
+  "four_key_signals": {
+    "asr_transcript": "Draft a thank you email to Amar Kebrahim plus Anticipipeline at gmail.com about today's pipeline test.",
+    "awaiting_sms_confirm": false,
+    "draft_marker_present": true,
+    "receipt_observed": true
+  },
+  "total_elapsed_sec_approx": 420,
+  "diagnostic_findings": [
+    {
+      "id": 1,
+      "severity": "high",
+      "where": "engine/app/product/server.py LLM intent extractor (_intent_extract_llm)",
+      "what": "Spoken email request 'draft a thank-you email to omar...@gmail.com about today's pipeline test' is classified as intent=school_deadline_reminder with reason 'Ambient classroom speech mentioned a school item with timing.' Even with literal email instruction (no ASR noise) the planner returns the same classification.",
+      "impact": "Spoken email requests via /api/listen/upload never reach the act path. The pendant cannot trigger Gmail drafts from speech today."
+    },
+    {
+      "id": 2,
+      "severity": "medium",
+      "where": "engine/app/product/sms_pre_confirm.py + server.py /api/act path",
+      "what": "The test plan assumed Gmail draft requests would fire the SMS pre-confirm gate. They don't: the direct_gmail_compose, structured_gmail_draft, and direct_browser_action short-circuits all run BEFORE the gate. The gate is reserved for DSv4SkillRunner click-Send and non-Gmail send/post/pay verbs.",
+      "impact": "The 'WHOLE chain proves SMS gate -> YES -> dispatch' assertion cannot be exercised against a Gmail draft. To verify the gate end-to-end, the instruction must hit a non-draft surface (Twitter post, Slack send, payment), and TWILIO_MOCK must remain 1 to avoid real SMS."
+    },
+    {
+      "id": 3,
+      "severity": "high",
+      "where": "engine/app/product/server.py route handling for instructions containing 'send' verb",
+      "what": "POST /api/act with instruction 'send a thank-you email to omarkebrahim+anticipy-pipeline@gmail.com about today's pipeline test' caused the engine to crash mid-request (curl: Empty reply from server). Engine auto-restarted via launchd within 30s. No traceback in product-engine.log captured the cause. This is reproducible from any send-verb instruction targeting Gmail.",
+      "impact": "User says 'send X to Y' and the entire engine dies. The bind+ASR pipeline rejects spoken email requests AND the literal text path crashes for send verbs."
+    }
+  ],
+  "constraints_honored": {
+    "twilio_mock": true,
+    "recipient_was_omar_alias_only": "omarkebrahim+anticipy-pipeline@gmail.com (Omar's gmail alias, never another person)",
+    "engine_modified": false,
+    "engine_restarted_by_test": false,
+    "no_em_dashes": true,
+    "blind_retry_avoided": true
+  }
+}

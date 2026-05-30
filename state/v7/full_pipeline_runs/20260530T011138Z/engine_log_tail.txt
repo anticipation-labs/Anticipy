@@ -1,0 +1,200 @@
+  File "fastapi/routing.py", line 330, in run_endpoint_function
+  File "starlette/concurrency.py", line 32, in run_in_threadpool
+  File "anyio/to_thread.py", line 63, in run_sync
+  File "anyio/_backends/_asyncio.py", line 2502, in run_sync_in_worker_thread
+  File "anyio/_backends/_asyncio.py", line 986, in run
+  File "server.py", line 7212, in api_dossier_events
+ModuleNotFoundError: No module named 'app.dossier'
+anticipy-engine(53471) MallocStackLogging: can't turn off malloc stack logging because it was not enabled.
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "uvicorn/protocols/http/httptools_impl.py", line 421, in run_asgi
+  File "uvicorn/middleware/proxy_headers.py", line 63, in __call__
+  File "fastapi/applications.py", line 1159, in __call__
+  File "starlette/applications.py", line 90, in __call__
+  File "starlette/middleware/errors.py", line 186, in __call__
+  File "starlette/middleware/errors.py", line 164, in __call__
+  File "starlette/middleware/base.py", line 191, in __call__
+  File "contextlib.py", line 158, in __exit__
+  File "starlette/_utils.py", line 87, in collapse_excgroups
+  File "starlette/middleware/base.py", line 193, in __call__
+  File "server.py", line 102, in _private_network_headers
+  File "starlette/middleware/base.py", line 168, in call_next
+  File "starlette/middleware/base.py", line 144, in coro
+  File "starlette/middleware/cors.py", line 88, in __call__
+  File "starlette/middleware/exceptions.py", line 63, in __call__
+  File "starlette/_exception_handler.py", line 53, in wrapped_app
+  File "starlette/_exception_handler.py", line 42, in wrapped_app
+  File "fastapi/middleware/asyncexitstack.py", line 18, in __call__
+  File "starlette/routing.py", line 660, in __call__
+  File "starlette/routing.py", line 680, in app
+  File "starlette/routing.py", line 276, in handle
+  File "fastapi/routing.py", line 134, in app
+  File "starlette/_exception_handler.py", line 53, in wrapped_app
+  File "starlette/_exception_handler.py", line 42, in wrapped_app
+  File "fastapi/routing.py", line 120, in app
+  File "fastapi/routing.py", line 674, in app
+  File "fastapi/routing.py", line 330, in run_endpoint_function
+  File "starlette/concurrency.py", line 32, in run_in_threadpool
+  File "anyio/to_thread.py", line 63, in run_sync
+  File "anyio/_backends/_asyncio.py", line 2502, in run_sync_in_worker_thread
+  File "anyio/_backends/_asyncio.py", line 986, in run
+  File "server.py", line 7448, in api_dossier_events
+ModuleNotFoundError: No module named 'app.dossier'
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "uvicorn/protocols/http/httptools_impl.py", line 421, in run_asgi
+  File "uvicorn/middleware/proxy_headers.py", line 63, in __call__
+  File "fastapi/applications.py", line 1159, in __call__
+  File "starlette/applications.py", line 90, in __call__
+  File "starlette/middleware/errors.py", line 186, in __call__
+  File "starlette/middleware/errors.py", line 164, in __call__
+  File "starlette/middleware/base.py", line 191, in __call__
+  File "contextlib.py", line 158, in __exit__
+  File "starlette/_utils.py", line 87, in collapse_excgroups
+  File "starlette/middleware/base.py", line 193, in __call__
+  File "server.py", line 102, in _private_network_headers
+  File "starlette/middleware/base.py", line 168, in call_next
+  File "starlette/middleware/base.py", line 144, in coro
+  File "starlette/middleware/cors.py", line 88, in __call__
+  File "starlette/middleware/exceptions.py", line 63, in __call__
+  File "starlette/_exception_handler.py", line 53, in wrapped_app
+  File "starlette/_exception_handler.py", line 42, in wrapped_app
+  File "fastapi/middleware/asyncexitstack.py", line 18, in __call__
+  File "starlette/routing.py", line 660, in __call__
+  File "starlette/routing.py", line 680, in app
+  File "starlette/routing.py", line 276, in handle
+  File "fastapi/routing.py", line 134, in app
+  File "starlette/_exception_handler.py", line 53, in wrapped_app
+  File "starlette/_exception_handler.py", line 42, in wrapped_app
+  File "fastapi/routing.py", line 120, in app
+  File "fastapi/routing.py", line 674, in app
+  File "fastapi/routing.py", line 330, in run_endpoint_function
+  File "starlette/concurrency.py", line 32, in run_in_threadpool
+  File "anyio/to_thread.py", line 63, in run_sync
+  File "anyio/_backends/_asyncio.py", line 2502, in run_sync_in_worker_thread
+  File "anyio/_backends/_asyncio.py", line 986, in run
+  File "server.py", line 7448, in api_dossier_events
+ModuleNotFoundError: No module named 'app.dossier'
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+ERROR:    [Errno 48] error while attempting to bind on address ('127.0.0.1', 8731): address already in use
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:335: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:344: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:344: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+Anticipy: another engine instance already holds /tmp/anticipy_product_8731.lock; refusing to start a second instance on the same port (single-instance enforced per-port).
+server.py:344: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+Anticipy: another engine instance already holds /tmp/anticipy_product_8731.lock; refusing to start a second instance on the same port (single-instance enforced per-port).
+server.py:344: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:344: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:344: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
+server.py:344: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+anticipy-engine listening on 127.0.0.1:8731 (port file: /Users/omarebrahim/.anticipy/engine.port)
