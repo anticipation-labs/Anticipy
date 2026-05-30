@@ -6105,19 +6105,54 @@ def eval_run(body: EvalRun) -> JSONResponse:
     if not raw_path:
         return JSONResponse({"ok": False, "error": "empty transcript_path"},
                             status_code=400)
-    path = Path(raw_path)
-    if not path.is_absolute():
-        repo_root = Path(__file__).resolve().parents[3]
+    # B043 LFI: confine transcript_path reads to an allowlisted set of dirs.
+    # Without this an unauthenticated local caller (any Chrome extension or
+    # script on 127.0.0.1) could read /etc/passwd or anything else.
+    repo_root = Path(__file__).resolve().parents[3]
+    allowed_roots: list[Path] = []
+    for root in (
+        Path.home() / ".anticipy" / "eval",
+        Path.home() / ".anticipy",
+        repo_root / "proof-artifacts",
+        repo_root / "planning",
+        repo_root,
+    ):
+        try:
+            allowed_roots.append(root.resolve())
+        except Exception:
+            continue
+    raw_p = Path(raw_path)
+    if raw_p.is_absolute():
+        candidates = [raw_p]
+    else:
         candidates = [
-            (Path.cwd() / path).resolve(),
-            (Path.cwd().parent / path).resolve(),
-            (repo_root / path).resolve(),
+            (Path.cwd() / raw_p),
+            (Path.cwd().parent / raw_p),
+            (repo_root / raw_p),
         ]
-        path = next((p for p in candidates if p.exists()), candidates[0])
-    if not path.exists() or not path.is_file():
+    path: Path | None = None
+    for cand in candidates:
+        try:
+            resolved = cand.resolve(strict=False)
+        except Exception:
+            continue
+        # Restrict to .txt or .json files inside an allowed root.
+        if resolved.suffix.lower() not in {".txt", ".json"}:
+            continue
+        for ar in allowed_roots:
+            try:
+                resolved.relative_to(ar)
+            except ValueError:
+                continue
+            if resolved.exists() and resolved.is_file():
+                path = resolved
+                break
+        if path is not None:
+            break
+    if path is None:
         return JSONResponse({"ok": False,
-                             "error": f"transcript_path not found: {path}"},
-                            status_code=404)
+                             "error": "transcript_path not allowed or not found"},
+                            status_code=403)
     transcript = path.read_text(errors="replace")
     if not transcript.strip():
         return JSONResponse({"ok": False, "error": "empty transcript"},

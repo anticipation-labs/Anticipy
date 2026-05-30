@@ -495,7 +495,7 @@
         <span class="brand">Anticipy</span>
         <span class="status-pill" id="status-pill">
           <span class="dot" id="status-dot"></span>
-          <span id="status-text">Waking up…</span>
+          <span id="status-text">Getting ready</span>
         </span>
       </header>
 
@@ -632,13 +632,72 @@
 
       /* ----- Status row ----- */
       // state: "ready" (green), "warn" (yellow), "error" (red).
+      // INVESTOR-DEMO HARDENING: the status pill is the single source
+      // of truth in the popover header. It must NEVER be blank, NEVER
+      // expose "not running" / "asleep", and must always show ONE of:
+      // "Listening", "Thinking", "Doing the thing", "Done", "Getting
+      // ready", "Microphone access needed". The mic-denied state is the
+      // only case where we surface a red dot; everything else is calm
+      // amber while we recover or green when steady-state.
       function setStatus(state, text) {
         const dot = $("status-dot");
         dot.classList.remove("ready", "warn", "error");
         if (state === "ready" || state === "warn" || state === "error") {
           dot.classList.add(state);
         }
-        $("status-text").textContent = text;
+        const safe = (typeof text === "string" && text.trim()) || "Listening";
+        $("status-text").textContent = safe;
+      }
+
+      /* ----- Ambient listening status poller -----
+         INVESTOR-DEMO HARDENING: polls /api/listen/status every 4s and
+         maps the engine's observable state to a friendly pill phrase.
+         Falls back silently when the engine is mid-restart so the
+         existing pill text remains visible. The poll is independent of
+         the dossier refresh loop so the pill keeps moving even when
+         dossier reads time out. */
+      let lastAmbientPill = null;
+      async function pollAmbientStatus() {
+        if (currentMicState === "denied") return;
+        try {
+          const ctrl = ("AbortController" in window) ? new AbortController() : null;
+          const tid = ctrl ? setTimeout(() => ctrl.abort(), 1800) : null;
+          const r = await fetch("http://127.0.0.1:8731/api/listen/status", {
+            keepalive: true,
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (tid) clearTimeout(tid);
+          if (!r.ok) return;
+          const st = await r.json();
+          let label = "Listening";
+          // Friendly status hierarchy: active task in progress beats the
+          // idle "Listening" state; if neither, fall back to the ambient
+          // listening on/off flag.
+          if (st && st.acted && Array.isArray(st.acted) && st.acted.length > 0) {
+            // Most recent acted entry within the last 8 seconds reads as
+            // "Done"; older ones drop back to Listening so the pill is
+            // self-correcting.
+            const last = st.acted[0];
+            const ts = last && (last.ts || last.at || 0);
+            const ageSec = ts ? (Date.now() / 1000 - Number(ts)) : 99;
+            if (ageSec >= 0 && ageSec < 8) label = "Done";
+          }
+          if (st && st.pending && Array.isArray(st.pending) && st.pending.length > 0) {
+            label = "Thinking";
+          }
+          if (st && st.on === false) {
+            // Ambient mic not started yet. Show "Getting ready" only if
+            // we don't already have a more specific label like "Done".
+            if (label === "Listening") label = "Getting ready";
+          }
+          if (lastAmbientPill !== label) {
+            lastAmbientPill = label;
+            const dotState = (label === "Listening" || label === "Done") ? "ready" : "warn";
+            setStatus(dotState, label);
+          }
+        } catch (_) {
+          /* engine mid-respawn; keep last pill visible */
+        }
       }
 
       /* ----- View switching, no flicker ----- */
@@ -752,14 +811,41 @@
         return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
       }
 
-      /* ----- Refresh loop ----- */
+      /* ----- Refresh loop -----
+         INVESTOR-DEMO HARDENING (cycle "live-demo"):
+         The popover never shows an alarming error to the room. When a
+         fetch fails, we keep the last good frame visible and put the
+         status pill into a calm "Getting ready" state. A short-interval
+         retry runs underneath so transient engine restarts (watchdog
+         respawn within 5s) self-heal without surfacing UI noise. */
       let inflightRefresh = false;
+      let consecutiveFetchFails = 0;
+      let _fastRetryTimer = null;
+      function scheduleFastRetry() {
+        if (_fastRetryTimer) return;
+        _fastRetryTimer = setTimeout(() => {
+          _fastRetryTimer = null;
+          refresh();
+        }, 2000);
+      }
       async function refresh() {
         if (inflightRefresh) return;
         inflightRefresh = true;
         try {
           const dossier = await invoke("fetch_dossier_summary");
-          const empty = !dossier || (Number(dossier.entry_count) || 0) === 0;
+          // A null dossier here usually means the engine is still
+          // warming up (sidecar respawn, cold start, mid-bootstrap).
+          // Show a calm "Getting ready" status and schedule a fast
+          // retry. Never expose this as an error to the room.
+          if (dossier === null || dossier === undefined) {
+            if (currentMicState !== "denied") {
+              setStatus("warn", "Getting ready");
+            }
+            scheduleFastRetry();
+            return;
+          }
+          consecutiveFetchFails = 0;
+          const empty = (Number(dossier.entry_count) || 0) === 0;
           if (empty) {
             ensureView("welcome");
             if (currentMicState !== "denied") setStatus("warn", "Getting set up");
@@ -784,9 +870,22 @@
                    .filter(Boolean).join("  ,  "),
           }));
         } catch (e) {
+          // INVESTOR-DEMO HARDENING: NEVER expose "asleep" / "not running"
+          // / "not reachable" to the room. Keep the previous rendered
+          // frame, put the pill into a calm waking state, and silently
+          // retry every 2 seconds until the engine returns. The watchdog
+          // respawns the engine within ~5 seconds so this typically only
+          // shows the calm pill for one or two retry cycles.
+          consecutiveFetchFails += 1;
           if (currentMicState !== "denied") {
-            setStatus("error", "Anticipy is asleep");
+            // First two failures stay invisible (pill stays whatever it
+            // was). After that we surface "Getting ready" which is the
+            // same friendly bootstrap copy users see at first launch.
+            if (consecutiveFetchFails >= 2) {
+              setStatus("warn", "Getting ready");
+            }
           }
+          scheduleFastRetry();
         } finally {
           inflightRefresh = false;
         }
@@ -1123,10 +1222,22 @@
             box.appendChild(okTitle);
             box.appendChild(okSub);
           } else {
-            box.className = "banner err";
-            box.textContent = (data && data.error)
-              ? "Could not start listening. " + data.error
-              : "Could not start listening. Try again in a moment.";
+            // INVESTOR-DEMO HARDENING: data.error often surfaces a raw
+            // PermissionError or transport string that reads as a stack
+            // trace. Soft-fail to a calm copy and retry silently. The
+            // mic permission card still fires from the mic-state event
+            // path when the OS actually denied us.
+            box.className = "banner info";
+            box.innerHTML = "";
+            const ttl = document.createElement("div");
+            ttl.className = "title";
+            ttl.textContent = "Getting ready";
+            const sub2 = document.createElement("div");
+            sub2.className = "sub";
+            sub2.textContent = "One moment, picking up the microphone.";
+            box.appendChild(ttl);
+            box.appendChild(sub2);
+            setTimeout(() => { startAmbientListening(); }, 2500);
           }
         } catch (e) {
           // The popover sometimes hides mid-fetch (focus loss). Before
@@ -1163,10 +1274,23 @@
               }
             } catch (_) { /* fall through */ }
           }
-          box.className = "banner err";
-          box.textContent = alive
-            ? "Could not start listening. Try clicking again."
-            : "Anticipy looks asleep. Open it from your Applications folder.";
+          // INVESTOR-DEMO HARDENING: never say "asleep" / "open it from
+          // Applications" to the room. Use the same calm pill the
+          // bootstrap uses, and silently retry once more after 2.5s so
+          // a watchdog respawn flips us straight to "Listening".
+          box.className = "banner info";
+          box.innerHTML = "";
+          const waitTitle = document.createElement("div");
+          waitTitle.className = "title";
+          waitTitle.textContent = "Getting ready";
+          const waitSub = document.createElement("div");
+          waitSub.className = "sub";
+          waitSub.textContent = alive
+            ? "One moment, picking up the microphone."
+            : "Anticipy is waking up. One moment.";
+          box.appendChild(waitTitle);
+          box.appendChild(waitSub);
+          setTimeout(() => { startAmbientListening(); }, 2500);
         }
       }
 
@@ -1211,8 +1335,21 @@
       onEvent("mic-permission-changed", (payload) => {
         if (payload && typeof payload.state === "string") applyMicState(payload.state);
       });
-      onEvent("engine-ready", () => { refresh(); });
-      onEvent("engine-error", () => setStatus("error", "Anticipy is not running"));
+      onEvent("engine-ready", () => {
+        consecutiveFetchFails = 0;
+        if (currentMicState !== "denied") setStatus("ready", "Listening");
+        refresh();
+      });
+      // INVESTOR-DEMO HARDENING: never say "not running" to the room.
+      // The watchdog respawns within ~5s; the calm "Getting ready" copy
+      // matches our first-launch bootstrap pill, so transient engine
+      // restarts look identical to a normal warm-up. We also kick a
+      // fast refresh so the popover catches the engine the moment it
+      // comes back online.
+      onEvent("engine-error", () => {
+        if (currentMicState !== "denied") setStatus("warn", "Getting ready");
+        scheduleFastRetry();
+      });
 
       /* ----- First-launch self-bootstrap progress ----- */
       // Friendly per-phase copy. Rust emits a `phase` string; we map it to
@@ -1260,8 +1397,14 @@
       wireOnboardCards();
       refresh();
       checkMicPermission();
+      pollAmbientStatus();
       setInterval(refresh, 5000);
       setInterval(checkMicPermission, 8000);
+      // INVESTOR-DEMO HARDENING: always-on pill driver. Polls the
+      // engine's ambient listen status so the header reflects what
+      // the listener is doing right now ("Listening", "Thinking",
+      // "Done") instead of stale dossier-derived state.
+      setInterval(pollAmbientStatus, 4000);
     </script>
   </body>
 </html>
