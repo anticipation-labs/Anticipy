@@ -48,7 +48,7 @@ FAIL: 0.
 
 ## Fixes applied
 
-- Pending commit (working tree) | desktop/src/popover.html `startAmbientListening()` | Three changes:
+- Commit 9b7acb11 | desktop/src/popover.html `startAmbientListening()` | Three changes:
   1. Add `keepalive: true` to the POST /api/listen/start fetch so the request survives a popover blur-hide.
   2. In the catch path, re-probe /health before declaring the engine dead. If the engine answers /health, retry listen-start once with keepalive, and on success show the ok banner.
   3. If the engine is alive but listen-start still failed, show "Could not start listening. Try clicking again." instead of the misleading "Anticipy is not running" text.
