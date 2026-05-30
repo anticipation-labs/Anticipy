@@ -8589,14 +8589,21 @@ def _receipt_summary_text(recipient: str, subject: str,
     rec = (recipient or "the recipient").strip()
     subj = (subject or "(no subject)").strip()
     link = (sent_link or "").strip()
+    # Per SMS_COPY_AUDIT (#3 and #4, ship-first list): verb-first
+    # reads like a teammate texting; drop the "Anticipy just sent"
+    # bot prefix and the STOP boilerplate (Twilio honors STOP on any
+    # message regardless of whether the body says so). "Open it here"
+    # is warmer than "View:"; pointing to Gmail Sent folder when there
+    # is no link gives the user the exact spot to verify.
+    subj_short = subj[:40]
     if link:
         return (
-            f"Anticipy just sent {rec} an email about {subj}. "
-            f"View: {link}. Reply STOP to silence."
+            f"Sent the email to {rec} about {subj_short}. "
+            f"Open it here: {link}"
         )
     return (
-        f"Anticipy just sent {rec} an email about {subj}. "
-        "Reply STOP to silence."
+        f"Sent the email to {rec} about {subj_short}. "
+        "It is in your Gmail Sent folder."
     )
 
 
@@ -9827,21 +9834,34 @@ async def sms_inbound(request: Request) -> Response:
                     "ok": False,
                     "error": f"{type(exc).__name__}: {exc}",
                 }
-        twiml_message = "Anticipy: confirmed. Dispatching now."
+        # Per SMS_COPY_AUDIT (#5 ship-first plus #6/#7/#8/#9): drop the
+        # "Anticipy:" notification-subject prefix on every reply ack,
+        # switch to first person ("On it." "Cancelled." "Got it."),
+        # and replace "popover" jargon with "Anticipy on your Mac".
+        twiml_message = (
+            "On it. Sending now. I will text you the receipt as soon "
+            "as it lands."
+        )
     elif decision.get("ok") and decision.get("reply_class") == "no":
-        twiml_message = "Anticipy: cancelled. Nothing was sent."
+        twiml_message = (
+            "Cancelled. I kept the draft in your Gmail in case you "
+            "want to send it later."
+        )
     elif decision.get("ok") and decision.get("reply_class") == "edit":
         twiml_message = (
-            "Anticipy: saved as draft for review in the popover."
+            "Got it. Saved as a draft. Open Anticipy on your Mac to "
+            "edit and send."
         )
     elif decision.get("reply_class") == "unknown":
         twiml_message = (
-            "Anticipy: did not recognise that. Reply YES to send, "
-            "NO to cancel, EDIT to revise."
+            "Sorry, I missed that. Reply YES to send, or EDIT to "
+            "change it. No reply means I save it as a draft."
         )
     else:
         twiml_message = (
-            "Anticipy: no pending action to confirm."
+            "Nothing waiting on you right now. If you want me to do "
+            "something, just tell me out loud or open Anticipy on "
+            "your Mac."
         )
     payload_dict = {
         "ok": bool(decision.get("ok")),
