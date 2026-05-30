@@ -9,13 +9,13 @@
 - Iter 1 (2026-05-30 09:47 PDT): Fresh start of catalog; previous "iter 5" narrative had no persisted artifact. Beginning B001+.
 - Iter 2-24 (2026-05-30 09:53-10:41 PDT): 22 commits adding B001-B475. ~90 min wall budget; ~54 min used.
 
-## Severity Summary (as of B475)
+## Severity Summary (as of B490)
 
 - **P0** (security/data loss/prod broken): 60 bugs
-- **P1** (functional break for users): 66 bugs
-- **P2** (poor UX/perf/SEO): 154 bugs
-- **P3** (cosmetic/minor): 195 bugs
-- **TOTAL**: 475 bugs cataloged
+- **P1** (functional break for users): 67 bugs
+- **P2** (poor UX/perf/SEO): 159 bugs
+- **P3** (cosmetic/minor): 204 bugs
+- **TOTAL**: 490 bugs cataloged
 
 ## Top P0 Findings (Most Critical)
 
