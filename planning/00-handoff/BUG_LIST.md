@@ -247,3 +247,19 @@
 | B233 | src/app/api/crm/extract-receipt/route.ts | P3 | Stores receipt photos to permanent storage even if extract failed | B083 — orphans accumulate. Combined with B081 no size cap, bucket fills. |
 | B234 | src/lib/escape.ts | P3 | sanitizeHeader truncates at maxLen-1 + "…" but actual maxLen-1 chars may slice UTF-8 multibyte char | Line 43: `cleaned.slice(0, maxLen - 1) + "…"`. JS string indexing is UTF-16 unit, not codepoint. Emoji at boundary becomes broken surrogate. |
 | B235 | src/lib/notification-adapter.ts | P3 | Cloudflare email API: scope token + account ID embedded in URL not header | Lines 252-259. The Authorization header has token, account ID in URL. Standard but URL gets logged. |
+| B236 | src/lib/crm/google.ts | P0 | `getAnyStoredTokens` returns globally most-recent Google tokens, not the caller's | Lines 76-90: any CRM user with valid session impersonates the most-recent Google-connected user's calendar AND contacts. Cross-tenant data leak. |
+| B237 | src/lib/crm/google.ts | P0 | Same AES-256-CBC without HMAC pattern as B202 | Lines 51-68: padding-oracle vulnerability. |
+| B238 | src/lib/crm/email.ts | P1 | FROM default "omar@anticipy.ai" hardcoded | Line 9: `process.env.CRM_EMAIL_FROM \|\| "omar@anticipy.ai"`. Any fork or unset env sends CRM mail as Omar. |
+| B239 | src/lib/crm/email.ts | P3 | sendEmail short-circuits at first provider — no fallback if Resend down | Lines 18-36: if Resend present + failing, NEVER tries SendGrid even when configured. |
+| B240 | src/lib/groq.ts | P3 | GROQ_API_KEY captured at module load via non-null assertion | Line 1: `process.env.GROQ_API_KEY!`. If env unset, undefined captured. Type-safety lie. |
+| B241 | src/lib/gemini.ts | P3 | Free-tier rate limit comments claim "1500 RPM" but Gemini's free tier is 1500 RPD (per day) | Lines 47-49. Misleading. Free tier of Gemini 2.5 Flash is 1500 requests/day. Calls in analyze (B045 user limit 600/hr) overwhelm by 13x. |
+| B242 | src/app/demo/page.tsx | P0 | Client-side passcode gate using `process.env.NEXT_PUBLIC_DEMO_PASSCODE` | Lines 25-26: NEXT_PUBLIC_* env vars are baked into client bundle. Anyone reading JS source sees the passcode in plaintext. |
+| B243 | src/app/demo/page.tsx | P0 | engineUrl hardcoded fallback to https://anticipy-engine.up.railway.app | Lines 18-20: contradicts CLAUDE.md memory ("No Cloud Run / Fly.io engine hosts"). Railway is a cloud engine host. Plus URL exposed in public source. |
+| B244 | src/app/demo/page.tsx | P2 | sessionStorage auth check trusts client state — refresh resets, /demo content unauthenticated for that moment | Line 13-15: gate UX flickers. |
+| B245 | src/app/demo/page.tsx | P3 | Iframe to external URL with no sandbox attribute | Lines 63-68: `allow="clipboard-read; clipboard-write"` granted to remote iframe. If engine URL ever compromised, can read clipboard. |
+| B246 | src/app/api/crm/contacts/[id]/route.ts | P1 | PATCH allows changing `source` field after creation — bypass gmail-vs-manual provenance | Line 10: any field including `source` can be updated. Audit trail tampering. |
+| B247 | src/app/api/crm/expenses/[id]/route.ts | P2 | PATCH lets caller change `status` to "approved" without admin check | Lines 22: `status` in allowed list. Any signed-in CRM user can approve their own expense. |
+| B248 | src/app/api/crm/files/[id]/comments/route.ts | P2 | No content moderation; comment body unlimited length | Line 23: only trim/empty check. 1MB comments allowed. |
+| B249 | src/app/api/crm/files/[id]/comments/route.ts | P3 | author_user_id resolves to null silently | Line 27: `author_user_id: me` where me may be null → DB constraint violation if NOT NULL, silent null insert otherwise. |
+| B250 | src/app/api/crm/todos/[id]/comments/route.ts | P2 | Same issues as B248-B249 | Identical pattern. |
+| B251 | src/app/api/crm/decisions/[id]/route.ts | P3 | No DELETE confirmation; soft-delete absent | Lines 16-22: hard delete. No way to recover. |
