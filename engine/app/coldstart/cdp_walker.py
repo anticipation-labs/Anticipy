@@ -4,7 +4,9 @@ Talks to the existing loopback bridge at ``127.0.0.1:7777`` (the CDP
 primary bridge from ``scripts/v7/anticipy_bridge_fallback_cdp.py``),
 which speaks to the user's real Chrome at ``localhost:9222``.
 
-Hard rules per ``planning/10-instant-cold-start/DESIGN.md``:
+Hard rules per ``planning/10-instant-cold-start/DESIGN.md`` and
+``planning/00-handoff/NORTH_STAR_v2.md`` rule 1 (universal action
+agent, no per-app code):
 
   - Opens new ANTICIPY-OWNED background tabs. Never hijacks a tab the
     user is currently using.
@@ -13,6 +15,9 @@ Hard rules per ``planning/10-instant-cold-start/DESIGN.md``:
     No bodies. No raw HTML over the wire.
   - Generic row-extraction heuristic. No hardcoded selectors that
     bake Gmail markup into the engine.
+  - URL CHOICES live in ``~/.anticipy/inhale_sources.json`` via
+    ``sources.py``, NOT in source code. The walker iterates whatever
+    entries the user has enabled.
   - Returns plain dict rows; the LLM in ``auto_inhale.py`` decides
     what is a person, what is a project, what is a tool.
 
@@ -239,16 +244,16 @@ class CDPWalker:
     """Open Anticipy-owned background tabs, extract visible row metadata,
     close the tab on the way out.
 
-    Single-purpose instance: construct, call ``walk_gmail()`` /
-    ``walk_calendar()`` / etc, then ``close_all()``. Owns its own
-    list of opened ``targetId``s so the caller cannot leak tabs even
-    if a walk raises.
-    """
+    Single-purpose instance: construct, call ``walk_source()`` per
+    entry from ``sources.load_enabled()``, then ``close_all()``.
+    Owns its own list of opened ``targetId``s so the caller cannot
+    leak tabs even if a walk raises.
 
-    INBOX_URL = "https://mail.google.com/mail/u/0/#inbox"
-    SENT_URL = "https://mail.google.com/mail/u/0/#sent"
-    CAL_URL = "https://calendar.google.com/calendar/u/0/r/agenda"
-    DRIVE_URL = "https://drive.google.com/drive/u/0/recent"
+    URL CHOICES live in the user config at
+    ``~/.anticipy/inhale_sources.json`` and reach this class via the
+    ``url`` field on each entry passed to ``walk_source()``. There
+    are no URL string literals in this module.
+    """
 
     # Limit the data volume we pull from any single surface. The LLM
     # batches will not need more than this and we want the inhale to
@@ -405,16 +410,19 @@ class CDPWalker:
     )
 
     def walk_gmail(self, kind: str = "inbox",
+                   url: str = "",
                    max_rows: int | None = None,
                    per_tab_budget_s: float = 18.0) -> list[WalkerRow]:
         """Open a new background Gmail tab, scroll-collect ``max_rows``
         rows, close the tab, return ``WalkerRow`` objects.
 
-        ``kind`` is ``"inbox"`` or ``"sent"``. Other Gmail surfaces
-        would just be different fragment URLs (e.g. ``#starred``); we
-        keep the walker minimal here per the design budget.
+        ``kind`` is the WalkerRow.kind label (e.g. ``"inbox"`` or
+        ``"sent"``) used downstream by the LLM extractor. ``url`` is
+        the surface URL chosen by the user in
+        ``inhale_sources.json``; this method is URL-agnostic.
         """
-        url = self.SENT_URL if kind == "sent" else self.INBOX_URL
+        if not url:
+            return []
         rows: list[WalkerRow] = []
         tid = self._open_anticipy_tab(url)
         if not tid:
@@ -470,11 +478,20 @@ class CDPWalker:
     )
 
     def walk_calendar(self,
+                      url: str = "",
                       max_rows: int | None = None,
                       per_tab_budget_s: float = 12.0
                       ) -> list[WalkerRow]:
-        """Open the Google Calendar agenda view, capture event labels."""
-        tid = self._open_anticipy_tab(self.CAL_URL)
+        """Open a calendar surface tab, capture event labels.
+
+        ``url`` is supplied by the caller (from the user config).
+        The collector JS is generic and works against any calendar
+        surface that exposes ``[data-eventid]`` or
+        ``[role='button'][aria-label]`` rows.
+        """
+        if not url:
+            return []
+        tid = self._open_anticipy_tab(url)
         rows: list[WalkerRow] = []
         if not tid:
             return rows
@@ -525,9 +542,18 @@ class CDPWalker:
     )
 
     def walk_drive(self,
+                   url: str = "",
                    max_rows: int | None = None,
                    per_tab_budget_s: float = 10.0) -> list[WalkerRow]:
-        tid = self._open_anticipy_tab(self.DRIVE_URL)
+        """Open a drive/files surface tab, capture file labels.
+
+        ``url`` is supplied by the caller (from the user config).
+        The collector JS is generic and works against any grid that
+        exposes ``[role='row']`` or ``[data-id]`` cells.
+        """
+        if not url:
+            return []
+        tid = self._open_anticipy_tab(url)
         rows: list[WalkerRow] = []
         if not tid:
             return rows
@@ -552,6 +578,53 @@ class CDPWalker:
                 extra={"title": str(row.get("title") or "")[:240]},
             ))
         return rows
+
+
+    # ---- Generic dispatcher driven by the user config -------------------
+    def walk_source(self, source: dict,
+                    per_tab_budget_s: float = 18.0,
+                    max_rows: int | None = None) -> list[WalkerRow]:
+        """Walk one source entry from ``inhale_sources.json``.
+
+        Dispatches to the appropriate generic collector based on the
+        entry's ``id``. Mail-shaped ids use the mail collector,
+        calendar-shaped ids use the calendar collector, file-shaped
+        ids use the drive collector. Unknown ids fall back to the
+        mail (row-walker) collector, which is the most generic.
+
+        The dispatch is keyed off ``id`` not ``url`` because the
+        collector JS depends on the DOM shape, which is a property
+        of the surface, not of the URL the user typed.
+        """
+        if not isinstance(source, dict):
+            return []
+        sid = str(source.get("id") or "").lower()
+        url = str(source.get("url") or "")
+        if not url:
+            return []
+        kind_label = sid or "inbox"
+        if "calendar" in sid:
+            return self.walk_calendar(
+                url=url,
+                max_rows=max_rows,
+                per_tab_budget_s=per_tab_budget_s,
+            )
+        if "drive" in sid or "files" in sid:
+            return self.walk_drive(
+                url=url,
+                max_rows=max_rows,
+                per_tab_budget_s=per_tab_budget_s,
+            )
+        # Default: row-shaped surfaces (gmail, outlook, fastmail,
+        # superhuman, generic mailers). The collector JS already
+        # matches ``[role='row']``, ``tr.zA``, and ``tr[role='row']``
+        # so it covers the major web mailers without per-app code.
+        return self.walk_gmail(
+            kind=kind_label,
+            url=url,
+            max_rows=max_rows,
+            per_tab_budget_s=per_tab_budget_s,
+        )
 
 
 __all__ = [
