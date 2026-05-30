@@ -2131,6 +2131,284 @@ def onboarding_call_stub(p: CallStub) -> JSONResponse:
     })
 
 
+class VoiceCallStart(BaseModel):
+    phone_e164: str
+    account_id: str | None = None
+
+
+def _voice_call_log_path() -> Path:
+    from app.anticipy import platform_adapter
+    return platform_adapter.data_dir() / "voice_onboarding_calls.jsonl"
+
+
+def _voice_broker_url() -> str:
+    base = (
+        os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+        or "https://www.anticipy.ai"
+    ).rstrip("/")
+    return f"{base}/api/twilio/voice-relay"
+
+
+def _voice_broker_supabase_token() -> str:
+    """Reuse the same session-token resolution as the SMS broker so the
+    voice path inherits the existing auth seam. /api/provision sets
+    ANTICIPY_CLOUD_AUTH_TOKEN in the live engine; the on-disk session
+    is the forward-compat fallback.
+    """
+    env_token = (os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN") or "").strip()
+    if env_token:
+        return env_token
+    try:
+        override = (os.environ.get("ANTICIPY_SESSION_FILE") or "").strip()
+        if override:
+            session_path = Path(override).expanduser()
+        else:
+            session_path = Path.home() / ".anticipy" / "session.json"
+        if not session_path.exists():
+            return ""
+        data = json.loads(session_path.read_text(encoding="utf-8") or "{}")
+        if not isinstance(data, dict):
+            return ""
+        for key in ("access_token", "auth_token",
+                    "supabase_access_token", "token"):
+            val = data.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _normalize_phone_e164_plus1(raw: str) -> tuple[str, str]:
+    """Normalize a user-typed phone to +1 E.164. Returns (phone, error).
+    The broker enforces +1-only because the daily $5 spend cap assumes
+    A2P / US rates; international would blow it.
+    """
+    if not raw:
+        return "", "no phone supplied"
+    cleaned = "".join(ch for ch in raw if ch.isdigit() or ch == "+")
+    if not cleaned:
+        return "", "phone contains no digits"
+    if cleaned.startswith("+"):
+        if not cleaned.startswith("+1"):
+            return "", "voice broker accepts +1 US/CA numbers only"
+        digits = cleaned[1:]
+        if not digits.isdigit():
+            return "", "phone has bad characters"
+        if len(digits) < 11 or len(digits) > 15:
+            return "", "phone length out of range"
+        return cleaned, ""
+    digits = cleaned
+    if not digits.isdigit():
+        return "", "phone has bad characters"
+    if len(digits) == 10:
+        return "+1" + digits, ""
+    if len(digits) == 11 and digits.startswith("1"):
+        return "+" + digits, ""
+    return "", "phone could not be normalized to +1 E.164"
+
+
+# US/CA premium prefixes (parity with the website broker gate).
+_VOICE_PREMIUM_PREFIXES = ("+1900", "+1976")
+
+
+@app.post("/api/onboarding/call_start")
+def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
+    """Place an outbound voice-onboarding call for the user.
+
+    Flow:
+      1. Validate the phone to +1 E.164 + reject premium prefixes.
+      2. Resolve the Supabase session token the website broker accepts.
+      3. POST to /api/twilio/voice-relay on the website with the phone
+         and an account_id (defaults to the engine's USER_ID). The
+         broker is the only side that touches Twilio creds.
+      4. Mirror the placement to ~/.anticipy/voice_onboarding_calls.jsonl
+         for local audit and for /api/onboarding/voice_status polling.
+
+    Voice does NOT require A2P 10DLC; that gate is SMS-only. The broker
+    still needs a verified caller-ID for restricted Twilio accounts, so
+    a 21215 from Twilio is surfaced verbatim with a "verify caller-id"
+    hint so the operator knows what to do.
+    """
+    phone, perr = _normalize_phone_e164_plus1(p.phone_e164 or "")
+    if not phone:
+        return JSONResponse(
+            {"ok": False, "error": perr},
+            status_code=400,
+        )
+    if any(phone.startswith(pref) for pref in _VOICE_PREMIUM_PREFIXES):
+        return JSONResponse(
+            {"ok": False, "error": "premium-rate destinations are blocked"},
+            status_code=400,
+        )
+
+    account_id = (p.account_id or "").strip() or USER_ID
+    token = _voice_broker_supabase_token()
+    if not token:
+        return JSONResponse({
+            "ok": False,
+            "error": "no Supabase session. Sign in on the website first "
+                     "(the engine uses your session to place voice calls "
+                     "through the shared Anticipy broker).",
+        }, status_code=401)
+
+    url = _voice_broker_url()
+    try:
+        import httpx as _httpx
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"httpx_import_failed: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+
+    try:
+        with _httpx.Client(timeout=20.0) as client:
+            resp = client.post(
+                url,
+                json={
+                    "to": phone,
+                    "account_id": account_id,
+                    "kind": "onboarding",
+                },
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"broker_transport: {type(exc).__name__}: {exc}",
+        }, status_code=502)
+
+    status = int(getattr(resp, "status_code", 0) or 0)
+    try:
+        payload = resp.json()
+        if not isinstance(payload, dict):
+            payload = {"raw": payload}
+    except Exception:
+        payload = {"raw": (getattr(resp, "text", "") or "")[:600]}
+
+    # Mirror the placement to local audit so /api/onboarding/voice_status
+    # has a primary local record even before the answer route writes any
+    # answers back to Supabase.
+    row = {
+        "ts": time.time(),
+        "phone": phone,
+        "account_id": account_id,
+        "broker_status": status,
+        "ok": bool(payload.get("ok")),
+        "call_sid": str(payload.get("call_sid") or ""),
+        "error": str(payload.get("error") or "") if not payload.get("ok") else "",
+    }
+    try:
+        log = _voice_call_log_path()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+    if status == 200 and payload.get("ok"):
+        return JSONResponse({
+            "ok": True,
+            "call_sid": str(payload.get("call_sid") or ""),
+            "status": str(payload.get("status") or "queued"),
+            "to": phone,
+            "from": str(payload.get("from") or ""),
+            "account_id": account_id,
+        })
+    # Surface broker error verbatim so the popover can show the real
+    # Twilio reason (caller-ID not verified, cap reached, etc).
+    return JSONResponse({
+        "ok": False,
+        "error": str(payload.get("error") or f"broker_status_{status}"),
+        "broker_status": status,
+        "code": payload.get("code"),
+        "hint": payload.get("hint"),
+    }, status_code=502 if status >= 500 or status == 0 else status)
+
+
+@app.get("/api/onboarding/voice_status")
+def onboarding_voice_status(
+    account_id: str | None = None, call_sid: str | None = None,
+) -> JSONResponse:
+    """Poll the local audit log + website status route for an in-flight
+    voice-onboarding call. Returns a snapshot the popover can render:
+    {phase, question_index, question_total, answers_so_far, completed}.
+
+    The website's /api/twilio/onboarding/status route is the source of
+    truth (it sees every <Gather> result). This endpoint wraps it so
+    the popover only ever talks to 127.0.0.1.
+    """
+    target_account = (account_id or "").strip() or USER_ID
+    target_sid = (call_sid or "").strip()
+
+    # 1) Find the most recent local row matching the partition.
+    local_row: dict[str, object] = {}
+    try:
+        log = _voice_call_log_path()
+        if log.exists():
+            for ln in reversed(log.read_text(encoding="utf-8").splitlines()):
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    j = json.loads(ln)
+                except Exception:
+                    continue
+                if target_sid and j.get("call_sid") == target_sid:
+                    local_row = j
+                    break
+                if not target_sid and j.get("account_id") == target_account:
+                    local_row = j
+                    break
+    except Exception:
+        local_row = {}
+
+    sid = target_sid or str(local_row.get("call_sid") or "")
+    if not sid and not local_row:
+        return JSONResponse({
+            "ok": False,
+            "error": "no voice-onboarding call recorded for that account",
+            "account_id": target_account,
+        }, status_code=404)
+
+    # 2) Try the website status route for the freshest progress.
+    snapshot: dict[str, object] = {
+        "ok": True,
+        "account_id": target_account,
+        "call_sid": sid,
+        "phase": "calling" if not sid else "in_progress",
+        "question_index": 0,
+        "question_total": 7,
+        "answers": [],
+        "completed": False,
+    }
+    base = (os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+            or "https://www.anticipy.ai").rstrip("/")
+    try:
+        import httpx as _httpx
+        with _httpx.Client(timeout=8.0) as client:
+            r = client.get(
+                f"{base}/api/twilio/onboarding/status",
+                params={"call_sid": sid, "account_id": target_account},
+            )
+            if r.status_code == 200:
+                body = r.json()
+                if isinstance(body, dict):
+                    for k in ("phase", "question_index", "question_total",
+                              "answers", "completed", "error"):
+                        if k in body:
+                            snapshot[k] = body[k]
+    except Exception:
+        # The website may not be reachable from the engine host (rare).
+        # The local row still gives the popover enough to render.
+        pass
+
+    return JSONResponse(snapshot)
+
+
 @app.get("/api/onboarding/call_stubs")
 def onboarding_call_stubs_list() -> JSONResponse:
     """Inspection helper for path 3a. Returns the most recent stub
