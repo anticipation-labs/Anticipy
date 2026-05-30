@@ -499,6 +499,17 @@
         </span>
       </header>
 
+      <!-- First-launch self-bootstrap progress. Visible while the .app
+           replicates what install.sh does (venv at ~/.anticipy/venv/,
+           bridge daemon on 7777, Chrome native messaging host JSON,
+           Chrome relaunched on 9222). Hidden the moment Rust emits
+           bootstrap-done, which the JS listens for below. Defaults to
+           hidden so users on already-bootstrapped installs never see it. -->
+      <div id="setup-card" class="banner info hidden">
+        <div class="title">Setting up Anticipy</div>
+        <div class="sub" id="setup-card-sub">This takes about 30 seconds and only happens once.</div>
+      </div>
+
       <!-- Pre-prompt explainer. Fires for a beat before macOS shows the
            Allow / Deny dialog so the user knows why they are being asked. -->
       <div id="mic-pre-prompt" class="banner info hidden">
@@ -1202,6 +1213,49 @@
       });
       onEvent("engine-ready", () => { refresh(); });
       onEvent("engine-error", () => setStatus("error", "Anticipy is not running"));
+
+      /* ----- First-launch self-bootstrap progress ----- */
+      // Friendly per-phase copy. Rust emits a `phase` string; we map it to
+      // a human one-liner. Unknown phases fall back to the raw message so
+      // the user still sees motion when we add new phases later.
+      const BOOTSTRAP_PHASE_COPY = {
+        init: "Setting up Anticipy. This takes about 30 seconds.",
+        "bridge-script": "Staging the bridge script...",
+        extension: "Unpacking the Chrome extension...",
+        venv: "Installing the local Python environment...",
+        launcher: "Wiring the launcher...",
+        "native-host": "Connecting to Chrome...",
+        bridge: "Starting the local bridge on port 7777...",
+        chrome: "Starting Chrome with the debug port...",
+      };
+      let setupCardShown = false;
+      function showSetupCard(text) {
+        setupCardShown = true;
+        const card = $("setup-card");
+        const sub = $("setup-card-sub");
+        if (card) card.classList.remove("hidden");
+        if (sub && text) sub.textContent = text;
+        if (currentMicState !== "denied") setStatus("warn", "Setting up");
+      }
+      function hideSetupCard() {
+        const card = $("setup-card");
+        if (card) card.classList.add("hidden");
+      }
+      onEvent("bootstrap-progress", (payload) => {
+        if (!payload) return;
+        const phase = payload.phase || "";
+        const friendly = BOOTSTRAP_PHASE_COPY[phase] || payload.message || "Setting up Anticipy...";
+        showSetupCard(friendly);
+      });
+      onEvent("bootstrap-error", (payload) => {
+        if (!payload) return;
+        const msg = payload.message || "Setup hit an issue.";
+        showSetupCard(msg);
+      });
+      onEvent("bootstrap-done", () => {
+        hideSetupCard();
+        refresh();
+      });
 
       wireOnboardCards();
       refresh();

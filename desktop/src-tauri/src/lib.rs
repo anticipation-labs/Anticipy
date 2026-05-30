@@ -130,7 +130,35 @@ const ENGINE_PORT_FILE: &str = "engine.port";
 const DEFAULT_ENGINE_PORT: u16 = 8731;
 const DOSSIER_DEFAULT_USER_ID: &str = "anticipy-mac-user";
 
+// First-launch bootstrap constants. Self-bootstrap replicates what
+// public/install.sh does so a stranger who only drags the .app into
+// /Applications still gets a working bridge + Chrome CDP + venv. The
+// marker file pins idempotence; wiping it triggers re-bootstrap.
+const BOOTSTRAP_MARKER_FILE: &str = ".bootstrap-done";
+const BOOTSTRAP_LOG_FILE: &str = "bootstrap.log";
+const BRIDGE_LOG_FILE: &str = "anticipy-bridge.log";
+const BRIDGE_PID_FILE: &str = "anticipy-bridge.pid";
+const BRIDGE_LAUNCHER_NAME: &str = "anticipy-agent";
+const BRIDGE_PORT: u16 = 7777;
+const ANTICIPY_EXTENSION_ID: &str = "npnpagopediecennpleihemoochikggb";
+const NATIVE_MESSAGING_HOSTS_REL: &str =
+    "Library/Application Support/Google/Chrome/NativeMessagingHosts";
+const NATIVE_MESSAGING_HOST_NAME: &str = "com.anticipy.agent.json";
+const SYSTEM_PYTHON3_PATH: &str = "/usr/bin/python3";
+const BRIDGE_RESOURCE_NAME: &str = "anticipy-bridge.py";
+const EXTENSION_RESOURCE_NAME: &str = "anticipy-extension.zip";
+// Pip packages mirror public/install.sh install_native_bridge(). websockets
+// is what the CDP bridge needs at runtime; the others are inherited from the
+// shipped agent so the same venv works for the full native-host agent later.
+const BRIDGE_PIP_PACKAGES: &[&str] = &[
+    "websockets>=12",
+    "httpx>=0.25",
+    "cryptography>=41",
+    "python-dotenv>=1.0",
+];
+
 static ENGINE_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
+static BRIDGE_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
 
 // Embed Supabase coordinates at compile time when available. Falls back to
 // runtime env vars; both being absent yields an empty Past column instead of
@@ -1766,6 +1794,512 @@ fn install_anticipy_button_action(
     }
 }
 
+// ---------------------------------------------------------------------------
+// First-launch bootstrap. Self-contained replacement for public/install.sh
+// so a stranger who only drags Anticipy.app into /Applications still gets a
+// working bridge (port 7777), a venv at ~/.anticipy/venv/, the Chrome native
+// messaging host JSON wired up, and Chrome relaunched on the CDP port.
+// Idempotent: skipped after the marker file is written. Reversible: deleting
+// ~/.anticipy/.bootstrap-done forces a re-run on next launch.
+// ---------------------------------------------------------------------------
+
+fn bootstrap_marker_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BOOTSTRAP_MARKER_FILE))
+}
+
+fn bootstrap_log_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BOOTSTRAP_LOG_FILE))
+}
+
+fn bridge_log_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BRIDGE_LOG_FILE))
+}
+
+fn bridge_pid_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BRIDGE_PID_FILE))
+}
+
+fn bridge_launcher_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(BRIDGE_LAUNCHER_NAME))
+}
+
+fn venv_dir() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join("venv"))
+}
+
+fn venv_python_path() -> Option<PathBuf> {
+    venv_dir().map(|v| v.join("bin").join("python"))
+}
+
+fn venv_pip_path() -> Option<PathBuf> {
+    venv_dir().map(|v| v.join("bin").join("pip"))
+}
+
+fn bridge_target_script_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join("anticipy-bridge.py"))
+}
+
+fn native_messaging_host_path() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from)?;
+    Some(
+        home.join(NATIVE_MESSAGING_HOSTS_REL)
+            .join(NATIVE_MESSAGING_HOST_NAME),
+    )
+}
+
+/// Append a line to the bootstrap log. Best-effort; never panics.
+fn bootstrap_log(line: &str) {
+    if let Some(path) = bootstrap_log_path() {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&path) {
+            use std::io::Write;
+            let stamp = current_unix_seconds();
+            let _ = writeln!(f, "[{:.0}] {}", stamp, line);
+        }
+    }
+}
+
+fn emit_bootstrap_progress(app: &AppHandle, phase: &str, message: &str) {
+    bootstrap_log(&format!("{}: {}", phase, message));
+    let _ = app.emit(
+        "bootstrap-progress",
+        serde_json::json!({
+            "phase": phase,
+            "message": message,
+            "ts": current_unix_seconds(),
+        }),
+    );
+}
+
+fn emit_bootstrap_error(app: &AppHandle, phase: &str, message: &str) {
+    bootstrap_log(&format!("ERROR {}: {}", phase, message));
+    let _ = app.emit(
+        "bootstrap-error",
+        serde_json::json!({
+            "phase": phase,
+            "message": message,
+            "ts": current_unix_seconds(),
+        }),
+    );
+}
+
+fn emit_bootstrap_done(app: &AppHandle) {
+    bootstrap_log("bootstrap-done");
+    let _ = app.emit(
+        "bootstrap-done",
+        serde_json::json!({ "ts": current_unix_seconds() }),
+    );
+}
+
+/// Resolve the bundled resource directory. In a built .app this is
+/// Contents/Resources. In dev builds we fall back to the source tree under
+/// desktop/src-tauri/resources/.
+fn bootstrap_resource_dir(app: &AppHandle) -> Option<PathBuf> {
+    if let Ok(p) = app.path().resource_dir() {
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    // Dev fallback: walk up from the current exe to find the source tree.
+    let exe = std::env::current_exe().ok()?;
+    let mut cur = exe.as_path();
+    while let Some(parent) = cur.parent() {
+        let candidate = parent.join("desktop").join("src-tauri").join("resources");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        cur = parent;
+    }
+    None
+}
+
+fn chrome_binary_present() -> bool {
+    _resolve_chrome_binary().is_some()
+}
+
+/// Confirm /usr/bin/python3 (stock macOS Sonoma / Tahoe ship Python 3.9). If
+/// absent the stranger needs Xcode Command Line Tools; we surface a clear
+/// error instead of silently failing.
+fn ensure_system_python3() -> Result<PathBuf, String> {
+    let path = PathBuf::from(SYSTEM_PYTHON3_PATH);
+    if !path.exists() {
+        return Err(format!(
+            "{} not found. Install Xcode Command Line Tools: run xcode-select --install in Terminal.",
+            SYSTEM_PYTHON3_PATH
+        ));
+    }
+    // Sanity check: ensure it actually runs and reports a version >= 3.9.
+    let out = Command::new(&path)
+        .args(["-c", "import sys; print('%d.%d' % sys.version_info[:2])"])
+        .output()
+        .map_err(|e| format!("{} probe failed: {e}", SYSTEM_PYTHON3_PATH))?;
+    if !out.status.success() {
+        return Err(format!(
+            "{} did not return a version string",
+            SYSTEM_PYTHON3_PATH
+        ));
+    }
+    Ok(path)
+}
+
+/// Stage the bundled bridge script into ~/.anticipy/anticipy-bridge.py.
+fn install_bridge_script(app: &AppHandle) -> Result<PathBuf, String> {
+    let res_dir = bootstrap_resource_dir(app)
+        .ok_or_else(|| "bundled resource dir not found".to_string())?;
+    let src = res_dir.join(BRIDGE_RESOURCE_NAME);
+    if !src.exists() {
+        return Err(format!("bundled bridge script missing at {}", src.display()));
+    }
+    let dst = bridge_target_script_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    if let Some(parent) = dst.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+    }
+    fs::copy(&src, &dst).map_err(|e| format!("copy bridge script: {e}"))?;
+    Ok(dst)
+}
+
+/// Unzip the bundled Chrome extension to ~/.anticipy/extension/ so the user
+/// can load-unpacked from a stable on-disk path if needed, and so install.sh
+/// can pick up the same payload. Also stages native_host helpers next to the
+/// agent script in ~/.anticipy/ for future native-messaging upgrades.
+fn install_chrome_extension_assets(app: &AppHandle) -> Result<(), String> {
+    let res_dir = bootstrap_resource_dir(app)
+        .ok_or_else(|| "bundled resource dir not found".to_string())?;
+    let src = res_dir.join(EXTENSION_RESOURCE_NAME);
+    if !src.exists() {
+        return Err(format!("bundled extension zip missing at {}", src.display()));
+    }
+    let dst_dir = anticipy_dir()
+        .ok_or_else(|| "HOME not set".to_string())?
+        .join("extension");
+    fs::create_dir_all(&dst_dir).map_err(|e| format!("mkdir {}: {e}", dst_dir.display()))?;
+    let status = Command::new("/usr/bin/unzip")
+        .args(["-o", "-q"])
+        .arg(&src)
+        .arg("-d")
+        .arg(&dst_dir)
+        .status()
+        .map_err(|e| format!("unzip spawn: {e}"))?;
+    if !status.success() {
+        return Err(format!("unzip failed with status {status}"));
+    }
+    Ok(())
+}
+
+/// Write the Chrome native messaging host JSON pointing at the launcher
+/// shim. The launcher shim re-execs the venv python on anticipy_agent.py
+/// shipped inside the bundled extension zip; if the agent is missing the
+/// shim exits and Chrome falls back to the loopback bridge on 7777.
+fn install_native_messaging_host(launcher_path: &Path) -> Result<(), String> {
+    let host_path = native_messaging_host_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    if let Some(parent) = host_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
+    }
+    let payload = serde_json::json!({
+        "name": "com.anticipy.agent",
+        "description": "Anticipy local agent daemon",
+        "path": launcher_path.display().to_string(),
+        "type": "stdio",
+        "allowed_origins": [
+            format!("chrome-extension://{}/", ANTICIPY_EXTENSION_ID)
+        ],
+    });
+    let body = serde_json::to_string_pretty(&payload)
+        .map_err(|e| format!("serialize host json: {e}"))?;
+    fs::write(&host_path, body + "\n")
+        .map_err(|e| format!("write {}: {e}", host_path.display()))?;
+    Ok(())
+}
+
+/// Write the venv-aware launcher shim used by both the native messaging host
+/// and the bridge daemon. Idempotent rewrite.
+fn install_launcher_shim() -> Result<PathBuf, String> {
+    let launcher = bridge_launcher_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    let venv_py = venv_python_path()
+        .ok_or_else(|| "HOME not set".to_string())?;
+    let agent_script = anticipy_dir()
+        .ok_or_else(|| "HOME not set".to_string())?
+        .join("anticipy_agent.py");
+    let body = format!(
+        "#!/usr/bin/env bash\n# Anticipy agent launcher generated by Anticipy.app first-launch bootstrap.\n# Chrome speaks native messaging over stdio; do not print anything here.\nexport PYTHONUNBUFFERED=1\nif [ -x \"{venv}\" ] && [ -f \"{agent}\" ]; then\n  exec \"{venv}\" \"{agent}\"\nfi\n# Fallback: exit cleanly so Chrome native messaging does not loop.\nexit 0\n",
+        venv = venv_py.display(),
+        agent = agent_script.display(),
+    );
+    fs::write(&launcher, body).map_err(|e| format!("write launcher: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perm = fs::metadata(&launcher)
+            .map_err(|e| format!("stat launcher: {e}"))?
+            .permissions();
+        perm.set_mode(0o755);
+        fs::set_permissions(&launcher, perm)
+            .map_err(|e| format!("chmod launcher: {e}"))?;
+    }
+    Ok(launcher)
+}
+
+/// Create ~/.anticipy/venv/ and pip-install the bridge dependencies. Skipped
+/// when the venv already exists and the websockets package imports cleanly.
+fn setup_python_venv(app: &AppHandle) -> Result<PathBuf, String> {
+    let py = ensure_system_python3()?;
+    let venv = venv_dir().ok_or_else(|| "HOME not set".to_string())?;
+    let venv_py = venv_python_path().ok_or_else(|| "HOME not set".to_string())?;
+
+    // Fast path: venv exists and websockets imports. Nothing to do.
+    if venv_py.exists() {
+        let probe = Command::new(&venv_py)
+            .args(["-c", "import websockets, sys; print(sys.version_info[:2])"])
+            .output();
+        if let Ok(out) = probe {
+            if out.status.success() {
+                emit_bootstrap_progress(
+                    app,
+                    "venv",
+                    "Python environment already in place. Skipping install.",
+                );
+                return Ok(venv);
+            }
+        }
+    }
+
+    if !venv.exists() {
+        emit_bootstrap_progress(app, "venv", "Creating Python environment...");
+        let out = Command::new(&py)
+            .args(["-m", "venv"])
+            .arg(&venv)
+            .output()
+            .map_err(|e| format!("venv spawn: {e}"))?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+            return Err(format!("python -m venv failed: {stderr}"));
+        }
+    }
+
+    emit_bootstrap_progress(app, "venv", "Upgrading pip...");
+    let _ = Command::new(&venv_py)
+        .args(["-m", "pip", "install", "--upgrade", "pip"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    emit_bootstrap_progress(app, "venv", "Installing bridge dependencies...");
+    let pip = venv_pip_path().ok_or_else(|| "HOME not set".to_string())?;
+    let mut cmd = Command::new(&pip);
+    cmd.arg("install").arg("--quiet");
+    for pkg in BRIDGE_PIP_PACKAGES {
+        cmd.arg(pkg);
+    }
+    let out = cmd
+        .output()
+        .map_err(|e| format!("pip install spawn: {e}"))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+        return Err(format!("pip install failed: {stderr}"));
+    }
+    Ok(venv)
+}
+
+fn bridge_health_ok() -> bool {
+    let endpoint = format!("http://127.0.0.1:{}/status", BRIDGE_PORT);
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(1))
+        .build();
+    match agent.get(&endpoint).set("Accept", "application/json").call() {
+        Ok(r) => r.status() == 200,
+        Err(_) => false,
+    }
+}
+
+/// Spawn the bridge as a detached child of Anticipy.app. The bridge speaks
+/// the same HTTP surface install.sh expects (port 7777). The child inherits
+/// the venv Python and writes its log + PID under ~/.anticipy/.
+fn start_bridge_daemon(app: &AppHandle) -> Result<(), String> {
+    if bridge_health_ok() {
+        emit_bootstrap_progress(app, "bridge", "Bridge already running on 7777.");
+        return Ok(());
+    }
+    let venv_py = venv_python_path().ok_or_else(|| "HOME not set".to_string())?;
+    if !venv_py.exists() {
+        return Err(format!(
+            "venv python missing at {}; cannot start bridge",
+            venv_py.display()
+        ));
+    }
+    let script = bridge_target_script_path().ok_or_else(|| "HOME not set".to_string())?;
+    if !script.exists() {
+        return Err(format!("bridge script missing at {}", script.display()));
+    }
+    let log_path = bridge_log_path().ok_or_else(|| "HOME not set".to_string())?;
+    if let Some(parent) = log_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir log dir: {e}"))?;
+    }
+    let log = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|e| format!("open bridge log: {e}"))?;
+    let log_err = log
+        .try_clone()
+        .map_err(|e| format!("clone bridge log: {e}"))?;
+    emit_bootstrap_progress(app, "bridge", "Starting bridge daemon on 7777...");
+    let child = Command::new(&venv_py)
+        .arg(&script)
+        .env("PYTHONUNBUFFERED", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(log_err))
+        .spawn()
+        .map_err(|e| format!("spawn bridge: {e}"))?;
+    let pid = child.id();
+    if let Some(pid_path) = bridge_pid_path() {
+        let _ = fs::write(&pid_path, pid.to_string());
+    }
+    {
+        let slot = BRIDGE_CHILD.get_or_init(|| Mutex::new(None));
+        *slot.lock().unwrap() = Some(child);
+    }
+
+    // Wait up to 8 seconds for the bridge to bind 7777 and answer /status.
+    let deadline = std::time::Instant::now() + Duration::from_secs(8);
+    while std::time::Instant::now() < deadline {
+        if bridge_health_ok() {
+            emit_bootstrap_progress(app, "bridge", "Bridge healthy on 7777.");
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    Err(format!(
+        "bridge did not become healthy on port {}; see {}",
+        BRIDGE_PORT,
+        log_path.display()
+    ))
+}
+
+/// Run the full first-launch setup pipeline. Marker-gated: a successful run
+/// writes ~/.anticipy/.bootstrap-done and short-circuits subsequent launches
+/// (the existing behavior). Restartable: subsequent launches still call
+/// start_bridge_daemon and bootstrap_anticipy_chrome through the launcher,
+/// so the bridge respawns after a reboot or after the user quit the app.
+fn first_launch_bootstrap(app: &AppHandle) {
+    let dir = match anticipy_dir() {
+        Some(d) => d,
+        None => {
+            emit_bootstrap_error(app, "init", "HOME env var not set");
+            return;
+        }
+    };
+    if let Err(e) = fs::create_dir_all(&dir) {
+        emit_bootstrap_error(app, "init", &format!("mkdir {}: {e}", dir.display()));
+        return;
+    }
+
+    let marker = match bootstrap_marker_path() {
+        Some(p) => p,
+        None => {
+            emit_bootstrap_error(app, "init", "marker path not resolvable");
+            return;
+        }
+    };
+    let already_done = marker.exists();
+
+    if !already_done {
+        emit_bootstrap_progress(
+            app,
+            "init",
+            "Setting up Anticipy. This takes about 30 seconds and only happens once.",
+        );
+        if !chrome_binary_present() {
+            emit_bootstrap_error(
+                app,
+                "chrome",
+                "Anticipy needs Chrome. Install from google.com/chrome and reopen Anticipy.",
+            );
+            // Still continue: bridge can install even without Chrome. The
+            // chrome-setup-error event lets the popover raise a recovery
+            // banner, but we should not leave the venv half-built.
+        }
+    }
+
+    // Step A: stage the bundled bridge script. Always runs so the
+    // shipped script tracks the .app version on every launch.
+    if let Err(e) = install_bridge_script(app) {
+        emit_bootstrap_error(app, "bridge-script", &e);
+        return;
+    }
+    emit_bootstrap_progress(app, "bridge-script", "Bridge script staged.");
+
+    // Step B: unzip the bundled extension into ~/.anticipy/extension/.
+    // Failures here are non-fatal (the extension is installed separately
+    // through the Chrome Web Store), but we still log and emit so the
+    // installer-style flow keeps parity with public/install.sh.
+    if let Err(e) = install_chrome_extension_assets(app) {
+        emit_bootstrap_error(app, "extension", &e);
+    } else {
+        emit_bootstrap_progress(app, "extension", "Chrome extension assets staged.");
+    }
+
+    // Step C: create the Python venv and install dependencies.
+    if let Err(e) = setup_python_venv(app) {
+        emit_bootstrap_error(app, "venv", &e);
+        return;
+    }
+
+    // Step D: write the launcher shim now that the venv exists, then the
+    // Chrome native messaging host JSON that points at it.
+    let launcher = match install_launcher_shim() {
+        Ok(p) => p,
+        Err(e) => {
+            emit_bootstrap_error(app, "launcher", &e);
+            return;
+        }
+    };
+    emit_bootstrap_progress(app, "launcher", "Launcher installed.");
+    if let Err(e) = install_native_messaging_host(&launcher) {
+        emit_bootstrap_error(app, "native-host", &e);
+    } else {
+        emit_bootstrap_progress(app, "native-host", "Chrome native messaging host wired.");
+    }
+
+    // Step E: spawn the bridge daemon. Best-effort: failures emit
+    // bridge errors but should not block the welcome view from
+    // rendering.
+    if let Err(e) = start_bridge_daemon(app) {
+        emit_bootstrap_error(app, "bridge", &e);
+    }
+
+    // Step F: bootstrap Chrome on the CDP port. The existing
+    // bootstrap_anticipy_chrome handles the cloned-profile launch and
+    // emits its own chrome-setup-* events. Skipped when Chrome is not
+    // installed.
+    if chrome_binary_present() {
+        emit_bootstrap_progress(app, "chrome", "Starting Chrome on debug port 9222...");
+        bootstrap_anticipy_chrome(app);
+    } else {
+        emit_bootstrap_progress(
+            app,
+            "chrome",
+            "Chrome not installed; skipping Chrome bootstrap. Anticipy will still listen.",
+        );
+    }
+
+    // Marker: write only after the bridge + Chrome attempts. Subsequent
+    // launches skip the venv install but still re-spawn the bridge via
+    // start_bridge_daemon below in run().
+    if !already_done {
+        if let Err(e) = fs::write(&marker, b"ok\n") {
+            emit_bootstrap_error(app, "marker", &format!("write {}: {e}", marker.display()));
+        }
+    }
+    emit_bootstrap_done(app);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -1878,6 +2412,22 @@ pub fn run() {
                 let chrome_handle = app.handle().clone();
                 std::thread::spawn(move || {
                     bootstrap_anticipy_chrome(&chrome_handle);
+                });
+            }
+
+            // First-launch self-bootstrap. Replicates public/install.sh so a
+            // stranger who only drags Anticipy.app into /Applications still
+            // gets the bridge on 7777, the venv at ~/.anticipy/venv/, the
+            // Chrome native messaging host JSON, and Chrome relaunched on
+            // the CDP port 9222. Idempotent: subsequent launches skip the
+            // venv install but still re-spawn the bridge and Chrome via
+            // start_bridge_daemon. Set ANTICIPY_SKIP_BOOTSTRAP=1 to opt out
+            // (useful for the integration walker when isolating /tmp HOMEs
+            // with no network).
+            if std::env::var("ANTICIPY_SKIP_BOOTSTRAP").ok().as_deref() != Some("1") {
+                let bootstrap_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    first_launch_bootstrap(&bootstrap_handle);
                 });
             }
 

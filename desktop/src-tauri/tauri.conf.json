@@ -39,7 +39,9 @@
       "resources/parakeet-tdt-0.6b-v3/model.safetensors": "parakeet-tdt-0.6b-v3/model.safetensors",
       "resources/parakeet-tdt-0.6b-v3/tokenizer.model": "parakeet-tdt-0.6b-v3/tokenizer.model",
       "resources/parakeet-tdt-0.6b-v3/tokenizer.vocab": "parakeet-tdt-0.6b-v3/tokenizer.vocab",
-      "resources/parakeet-tdt-0.6b-v3/vocab.txt": "parakeet-tdt-0.6b-v3/vocab.txt"
+      "resources/parakeet-tdt-0.6b-v3/vocab.txt": "parakeet-tdt-0.6b-v3/vocab.txt",
+      "resources/anticipy-bridge.py": "anticipy-bridge.py",
+      "resources/anticipy-extension.zip": "anticipy-extension.zip"
     },
     "externalBin": ["bin/anticipy-engine"],
     "macOS": {
