@@ -50,6 +50,16 @@ from .types import Decision, DecisionKind, NoticedItem, NotificationChannel
 
 logger = logging.getLogger("engine.proactive.notifier")
 
+# Unified timeline writer. Every "Things I noticed" feed entry also
+# lands in ~/.anticipy/v7/timeline.jsonl so the popover can render one
+# unified stream. Defensive import so a timeline-module failure cannot
+# break notifier delivery.
+try:
+    from app.timeline import append as _timeline_append
+except Exception:  # pragma: no cover - defensive
+    def _timeline_append(_entry):  # type: ignore[no-redef]
+        return None
+
 
 # --- Contact book ---------------------------------------------------------------
 
@@ -445,11 +455,12 @@ class Notifier:
     # --- Internals -------------------------------------------------------------
 
     async def _record_to_feed(self, decision: Decision) -> None:
+        body_text = _body_for(decision)
         item = NoticedItem(
             item_id=uuid.uuid4().hex,
             user_id=decision.intent.user_id,
             session_id="",  # populated by the engine facade if available
-            body=_body_for(decision),
+            body=body_text,
             decision=decision,
             created_at=time.time(),
         )
@@ -457,6 +468,34 @@ class Notifier:
             await self._feed.append(item)
         except Exception:
             logger.exception("noticed_feed_append_failed")
+        # Mirror every silent/log entry to the unified timeline so the
+        # popover shows a single feed across SMS, voice, email, web
+        # actions, AND notes. Only LOG decisions (or any decision
+        # routed to the NOTED channel) land here; channel-delivered
+        # decisions get their own timeline rows from the delivery path.
+        try:
+            urgency_channel = decision.urgency.channel
+        except Exception:
+            urgency_channel = None
+        if (decision.kind == DecisionKind.LOG
+                or urgency_channel == NotificationChannel.NOTED):
+            try:
+                _timeline_append({
+                    "kind": "note",
+                    "channel": "popover",
+                    "status": "done",
+                    "summary": (body_text or "")[:200],
+                    "payload": {
+                        "decision_id": decision.decision_id,
+                        "intent_id": decision.intent.intent_id,
+                        "urgency": int(
+                            getattr(decision.urgency, "level", 0) or 0
+                        ),
+                        "kind": str(decision.kind.value),
+                    },
+                })
+            except Exception:
+                pass
 
     async def _deliver(self, user_id: str, channel: NotificationChannel, body: str) -> None:
         # Walk the channel ladder downward until one succeeds. Each lower

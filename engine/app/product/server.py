@@ -118,6 +118,18 @@ try:
 except Exception:
     _trivia = None
 
+# Unified timeline writer. Every action Anticipy completes (SMS, voice,
+# email draft, web action, note, user reply) appends one row to
+# ~/.anticipy/v7/timeline.jsonl via timeline_append. The call sites are
+# wrapped in try/except so a timeline write failure can never block the
+# action path. See engine/app/timeline/writer.py header for the
+# integration plan and per-site kind/channel/status mapping.
+try:
+    from app.timeline import append as timeline_append
+except Exception:
+    def timeline_append(_entry):  # type: ignore[no-redef]
+        return None
+
 
 @app.middleware("http")
 async def _private_network_headers(request: Request, call_next):
@@ -2580,6 +2592,22 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
         pass
 
     if status == 200 and payload.get("ok"):
+        try:
+            timeline_append({
+                "kind": "voice_call",
+                "channel": "twilio_voice",
+                "status": "done",
+                "summary": f"Onboarding call to {phone}"[:200],
+                "payload": {
+                    "to": phone,
+                    "account_id": account_id,
+                    "call_sid": str(payload.get("call_sid") or ""),
+                    "purpose": "onboarding",
+                    "broker_status": status,
+                },
+            })
+        except Exception:
+            pass
         return JSONResponse({
             "ok": True,
             "call_sid": str(payload.get("call_sid") or ""),
@@ -2590,6 +2618,23 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
         })
     # Surface broker error verbatim so the popover can show the real
     # Twilio reason (caller-ID not verified, cap reached, etc).
+    try:
+        timeline_append({
+            "kind": "voice_call",
+            "channel": "twilio_voice",
+            "status": "failed",
+            "summary": f"Onboarding call to {phone}"[:200],
+            "payload": {
+                "to": phone,
+                "account_id": account_id,
+                "purpose": "onboarding",
+                "broker_status": status,
+                "error": str(payload.get("error")
+                            or f"broker_status_{status}"),
+            },
+        })
+    except Exception:
+        pass
     return JSONResponse({
         "ok": False,
         "error": str(payload.get("error") or f"broker_status_{status}"),
@@ -8731,6 +8776,22 @@ def _try_structured_gmail_draft(plan: dict) -> JSONResponse | None:
             marker=marker,
         )
     except Exception as e:
+        try:
+            timeline_append({
+                "kind": "email_sent",
+                "channel": "chrome",
+                "status": "failed",
+                "summary": f"Gmail draft to {email}"[:200],
+                "payload": {
+                    "to": email,
+                    "subject": subject[:200],
+                    "draft_only": True,
+                    "path": "structured_gmail_compose",
+                    "error": f"{type(e).__name__}: {e}",
+                },
+            })
+        except Exception:
+            pass
         return JSONResponse({
             "ran": False, "status": "ERROR",
             "task": task, "intent": "email_draft",
@@ -8761,6 +8822,23 @@ def _try_structured_gmail_draft(plan: dict) -> JSONResponse | None:
             "ts": time.time(),
         }
         _LISTEN["pending"] = None
+    try:
+        timeline_append({
+            "kind": "email_sent",
+            "channel": "chrome",
+            "status": "done" if result.ok else "failed",
+            "summary": f"Gmail draft to {email}"[:200],
+            "payload": {
+                "to": email,
+                "subject": subject[:200],
+                "draft_only": True,
+                "path": "structured_gmail_compose",
+                "compose_url": str(getattr(result, "compose_url", "") or ""),
+                "error": str(getattr(result, "error", "") or ""),
+            },
+        })
+    except Exception:
+        pass
     return JSONResponse({
         "ran": bool(result.ok),
         "status": "SUCCESS" if result.ok else "ERROR",
@@ -9326,6 +9404,25 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
             except Exception:
                 # Recovery is a transparency improvement, never a gate.
                 pass
+        try:
+            timeline_append({
+                "kind": "web_action",
+                "channel": "chrome",
+                "status": "done" if ran else "failed",
+                "summary": (instruction or task)[:200],
+                "payload": {
+                    "plan": {
+                        "intent": str(plan.get("intent") or ""),
+                        "person": str(plan.get("person") or ""),
+                        "thing": str(plan.get("thing") or ""),
+                    },
+                    "engine_status": str(status),
+                    "trajectory_dir": str(out.get("trajectory_dir") or ""),
+                    "answer": str(out.get("answer") or "")[:400],
+                },
+            })
+        except Exception:
+            pass
         return JSONResponse(out)
     except Exception as e:
         import traceback
@@ -9349,6 +9446,23 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
         if recovery:
             content["recovery"] = recovery
             content["waiting_for_recovery"] = True
+        try:
+            timeline_append({
+                "kind": "web_action",
+                "channel": "chrome",
+                "status": "failed",
+                "summary": (instruction or task)[:200],
+                "payload": {
+                    "plan": {
+                        "intent": str(plan.get("intent") or ""),
+                        "person": str(plan.get("person") or ""),
+                        "thing": str(plan.get("thing") or ""),
+                    },
+                    "error": f"{type(e).__name__}: {e}",
+                },
+            })
+        except Exception:
+            pass
         return JSONResponse(status_code=500, content=content)
 
 
@@ -9574,6 +9688,21 @@ def _send_receipt_sms_sync(body: str) -> dict:
             from app.product import sms_pre_confirm as _sms_pre
             result = _sms_pre.send_sms_sync(phone, body, "receipt")
         except Exception as exc:
+            try:
+                timeline_append({
+                    "kind": "sms_sent",
+                    "channel": "twilio_sms",
+                    "status": "failed",
+                    "summary": f"SMS receipt to {phone}"[:200],
+                    "payload": {
+                        "to": phone,
+                        "body": (body or "")[:600],
+                        "source": "broker",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                })
+            except Exception:
+                pass
             return {
                 "channel": "sms",
                 "attempted": True,
@@ -9581,6 +9710,21 @@ def _send_receipt_sms_sync(body: str) -> dict:
                 "to": phone,
                 "error": f"broker_call_failed: {type(exc).__name__}: {exc}",
             }
+        try:
+            timeline_append({
+                "kind": "sms_sent",
+                "channel": "twilio_sms",
+                "status": "done" if result.get("ok") else "failed",
+                "summary": f"SMS receipt to {phone}"[:200],
+                "payload": {
+                    "to": phone,
+                    "body": (body or "")[:600],
+                    "twilio_sid": str(result.get("twilio_sid") or ""),
+                    "source": "broker",
+                },
+            })
+        except Exception:
+            pass
         return {
             "channel": "sms",
             "attempted": True,
@@ -9628,6 +9772,21 @@ def _send_receipt_sms_sync(body: str) -> dict:
     # already inside an event loop the caller wraps via to_thread.
     try:
         result = asyncio.run(_twilio_sms(phone, body))
+        try:
+            timeline_append({
+                "kind": "sms_sent",
+                "channel": "twilio_sms",
+                "status": "done" if result.get("ok") else "failed",
+                "summary": f"SMS receipt to {phone}"[:200],
+                "payload": {
+                    "to": phone,
+                    "body": (body or "")[:600],
+                    "twilio_sid": str(result.get("twilio_sid") or ""),
+                    "source": "direct",
+                },
+            })
+        except Exception:
+            pass
         return {
             "channel": "sms",
             "attempted": True,
@@ -9644,6 +9803,21 @@ def _send_receipt_sms_sync(body: str) -> dict:
             "to": phone,
         }
     except Exception as exc:
+        try:
+            timeline_append({
+                "kind": "sms_sent",
+                "channel": "twilio_sms",
+                "status": "failed",
+                "summary": f"SMS receipt to {phone}"[:200],
+                "payload": {
+                    "to": phone,
+                    "body": (body or "")[:600],
+                    "source": "direct",
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
+            })
+        except Exception:
+            pass
         return {
             "channel": "sms",
             "attempted": True,
@@ -9726,6 +9900,24 @@ def _send_receipt_email_via_cdp(subject: str, body: str,
             marker="",
         )
     except Exception as exc:
+        try:
+            timeline_append({
+                "kind": "email_sent",
+                "channel": "chrome",
+                "status": "failed",
+                "summary": f"Receipt email to {self_email}"[:200],
+                "payload": {
+                    "to": self_email,
+                    "subject": composed_subject[:200],
+                    "draft_only": True,
+                    "message_id": message_id,
+                    "sent_link": sent_link,
+                    "screenshot_path": screenshot_path,
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
+            })
+        except Exception:
+            pass
         return {
             "channel": "self_email",
             "attempted": True,
@@ -9733,6 +9925,24 @@ def _send_receipt_email_via_cdp(subject: str, body: str,
             "to": self_email,
             "error": f"{type(exc).__name__}: {exc}",
         }
+    try:
+        timeline_append({
+            "kind": "email_sent",
+            "channel": "chrome",
+            "status": "done" if result.ok else "failed",
+            "summary": f"Receipt email to {self_email}"[:200],
+            "payload": {
+                "to": self_email,
+                "subject": composed_subject[:200],
+                "draft_only": True,
+                "message_id": message_id,
+                "sent_link": sent_link,
+                "screenshot_path": screenshot_path,
+                "compose_url": str(getattr(result, "compose_url", "") or ""),
+            },
+        })
+    except Exception:
+        pass
     # Encourage Gmail to autosave so the draft lands. Best-effort.
     typing_evidence: dict = {}
     if result.ok and CDP_PORT > 0:
@@ -10720,6 +10930,26 @@ async def sms_inbound(request: Request) -> Response:
     is_voice_callback = bool(speech_result) or bool(
         fields.get("CallSid") or fields.get("call_sid")
     )
+    # Emit the inbound user reply to the unified timeline BEFORE we run
+    # resolve_inbound so the popover sees the reply even when
+    # classification fails downstream.
+    try:
+        timeline_append({
+            "kind": "user_reply",
+            "channel": ("twilio_voice" if is_voice_callback
+                       else "twilio_sms"),
+            "status": "done",
+            "summary": (body_text or "")[:200],
+            "payload": {
+                "from": from_number,
+                "message_sid": str(fields.get("MessageSid")
+                                  or fields.get("message_sid") or ""),
+                "task_id_hint": task_id_hint,
+                "speech": bool(speech_result),
+            },
+        })
+    except Exception:
+        pass
     decision = _sms_pre.resolve_inbound(
         body_text, task_id=task_id_hint)
     twiml_message = ""
@@ -12294,6 +12524,22 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
             result = _sms_pre.send_sms_sync(to_number, body or title,
                                             "preconfirm")
         except Exception as exc:
+            try:
+                timeline_append({
+                    "kind": "sms_sent",
+                    "channel": "twilio_sms",
+                    "status": "failed",
+                    "summary": f"SMS to {to_number}"[:200],
+                    "payload": {
+                        "to": to_number,
+                        "body": (body or title or "")[:600],
+                        "source": "broker",
+                        "endpoint": "/api/notify/test",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                })
+            except Exception:
+                pass
             return JSONResponse({
                 "ok": False,
                 "channel": channel,
@@ -12301,6 +12547,22 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
                 "error": f"broker_call_failed: "
                          f"{type(exc).__name__}: {exc}",
             }, status_code=502)
+        try:
+            timeline_append({
+                "kind": "sms_sent",
+                "channel": "twilio_sms",
+                "status": "done" if result.get("ok") else "failed",
+                "summary": f"SMS to {to_number}"[:200],
+                "payload": {
+                    "to": to_number,
+                    "body": (body or title or "")[:600],
+                    "twilio_sid": str(result.get("twilio_sid") or ""),
+                    "source": "broker",
+                    "endpoint": "/api/notify/test",
+                },
+            })
+        except Exception:
+            pass
         return JSONResponse({
             "ok": bool(result.get("ok")),
             "channel": channel,
@@ -12357,6 +12619,24 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
         else:  # voice
             result = await _twilio_voice(to_number, body=body or title)
     except Exception as exc:
+        try:
+            timeline_append({
+                "kind": ("sms_sent" if channel == "sms"
+                        else "voice_call"),
+                "channel": ("twilio_sms" if channel == "sms"
+                           else "twilio_voice"),
+                "status": "failed",
+                "summary": f"{channel.upper()} to {to_number}"[:200],
+                "payload": {
+                    "to": to_number,
+                    "body": (body or title or "")[:600],
+                    "source": "direct",
+                    "endpoint": "/api/notify/test",
+                    "error": f"{type(exc).__name__}: {exc}",
+                },
+            })
+        except Exception:
+            pass
         return JSONResponse({
             "ok": False,
             "channel": channel,
@@ -12364,6 +12644,25 @@ async def api_notify_test(p: NotifyTest) -> JSONResponse:
             "error": f"{type(exc).__name__}: {exc}",
         }, status_code=502)
 
+    try:
+        timeline_append({
+            "kind": ("sms_sent" if channel == "sms" else "voice_call"),
+            "channel": ("twilio_sms" if channel == "sms"
+                       else "twilio_voice"),
+            "status": "done" if (isinstance(result, dict)
+                                and result.get("ok")) else "done",
+            "summary": f"{channel.upper()} to {to_number}"[:200],
+            "payload": {
+                "to": to_number,
+                "body": (body or title or "")[:600],
+                "twilio_sid": (str(result.get("twilio_sid") or "")
+                              if isinstance(result, dict) else ""),
+                "source": "direct",
+                "endpoint": "/api/notify/test",
+            },
+        })
+    except Exception:
+        pass
     return JSONResponse({
         "ok": True,
         "channel": channel,

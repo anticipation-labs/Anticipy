@@ -83,6 +83,16 @@ from typing import Any, Optional
 
 logger = logging.getLogger("engine.product.sms_pre_confirm")
 
+# Unified timeline writer. send_sms_sync funnels every outbound SMS path
+# (broker + direct + mock), so wrapping its final return is enough to
+# capture every receipt / preconfirm / cascade / followup send. Defensive
+# import so a timeline-module failure cannot break SMS dispatch.
+try:
+    from app.timeline import append as _timeline_append
+except Exception:  # pragma: no cover - defensive
+    def _timeline_append(_entry):  # type: ignore[no-redef]
+        return None
+
 # 5 minutes per the directive. After this window we save the work as a
 # draft (Gmail draft, popover review item) and ping the user once more
 # so they can review at their convenience.
@@ -650,10 +660,51 @@ def send_sms_sync(to_number: str, body: str,
     direct-Twilio path so devs running with their own creds keep
     working even when their Supabase session has expired.
     """
+    kind = (kind or "preconfirm").strip() or "preconfirm"
+    result = _send_sms_sync_inner(to_number, body, kind)
+    # Emit one unified-timeline row per send so the popover shows every
+    # SMS the engine dispatched, regardless of broker/direct/mock path.
+    # "preconfirm" sends are waiting on a YES/NO/EDIT reply, so the row
+    # starts at wait_user; resolve_inbound flips it to done when the
+    # user replies (via the server.py inbound emit). Receipt / followup
+    # sends are terminal.
+    try:
+        if result.get("ok"):
+            status = "wait_user" if kind == "preconfirm" else "done"
+        else:
+            status = "failed"
+        _timeline_append({
+            "kind": "sms_sent",
+            "channel": "twilio_sms",
+            "status": status,
+            "summary": f"SMS {kind} to {to_number}"[:200],
+            "payload": {
+                "to": to_number,
+                "body": (body or "")[:600],
+                "category": kind,
+                "twilio_sid": str(result.get("twilio_sid") or ""),
+                "mock": bool(result.get("mock")),
+                "mock_reason": str(result.get("mock_reason") or ""),
+                "source": str(result.get("source") or "direct"),
+                "error": (str(result.get("error") or "")
+                         if not result.get("ok") else ""),
+            },
+        })
+    except Exception:
+        pass
+    return result
+
+
+def _send_sms_sync_inner(to_number: str, body: str,
+                         kind: str) -> dict[str, Any]:
+    """Internal: original send_sms_sync body. Kept as a separate
+    function so send_sms_sync can wrap every return with a single
+    timeline.append call without duplicating the dispatch logic at
+    every early-return site.
+    """
     if not to_number:
         return {"ok": False, "twilio_sid": "", "twilio_status": 0,
                 "mock": False, "error": "no destination phone"}
-    kind = (kind or "preconfirm").strip() or "preconfirm"
     if _twilio_broker_enabled():
         broker_result = _send_via_broker(body, to_number, kind)
         broker_status = int(broker_result.get("status") or 0)

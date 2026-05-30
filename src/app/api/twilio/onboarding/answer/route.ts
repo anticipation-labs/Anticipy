@@ -1,13 +1,13 @@
+import {
+  ONBOARDING_QUESTIONS,
+  QUESTION_TOTAL,
+} from "@/lib/onboarding-questions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
   formDataToParams,
   reconstructWebhookUrl,
   verifyTwilioRequest,
 } from "@/lib/twilio-verify";
-import {
-  ONBOARDING_QUESTIONS,
-  QUESTION_TOTAL,
-} from "../initial/route";
 
 export const dynamic = "force-dynamic";
 
