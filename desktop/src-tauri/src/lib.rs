@@ -2284,6 +2284,94 @@ fn spawn_engine_watchdog(app: &AppHandle) {
     });
 }
 
+/// INVESTOR-DEMO HARDENING (cycle "live-demo"): the menu bar tray
+/// tooltip mirrors what the popover pill shows. The pendant's LED is
+/// the canonical "we are listening" hardware signal; the tray tooltip
+/// is the calm laptop-only fallback. A real breathing-icon animation
+/// (regenerating the NSStatusItem image every ~600ms) is a bigger
+/// surface than this cycle can absorb safely; the tooltip is the
+/// 90% answer that still reassures a stranger reading the menu bar.
+///
+/// Polls /api/listen/status every 3 seconds. Tooltip transitions:
+///   - listening on, recent acted within 8s -> "Anticipy: just acted"
+///   - listening on, pending steps -> "Anticipy: working"
+///   - listening on -> "Anticipy: listening"
+///   - listening off or unreachable -> "Anticipy" (steady state)
+///
+/// Set-tooltip is a thin AppKit call (NSStatusItem.button.toolTip);
+/// safe to call repeatedly. Failures are logged and swallowed so the
+/// watchdog never crashes the app.
+fn spawn_tray_tooltip_updater(app: &AppHandle) {
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        // Give the tray time to actually exist before the first probe.
+        std::thread::sleep(Duration::from_secs(3));
+        let agent = ureq::AgentBuilder::new()
+            .timeout(Duration::from_secs(2))
+            .build();
+        let mut last_tooltip: Option<String> = None;
+        loop {
+            std::thread::sleep(Duration::from_secs(3));
+            let url = format!(
+                "http://127.0.0.1:{}/api/listen/status",
+                DEFAULT_ENGINE_PORT
+            );
+            let tooltip = match agent.get(&url).set("Accept", "application/json").call() {
+                Ok(resp) if resp.status() == 200 => {
+                    match resp.into_json::<serde_json::Value>() {
+                        Ok(v) => {
+                            let on = v.get("on").and_then(|x| x.as_bool()).unwrap_or(false);
+                            let pending_len = v
+                                .get("pending")
+                                .and_then(|p| p.as_array())
+                                .map(|a| a.len())
+                                .unwrap_or(0);
+                            let acted_recent = v
+                                .get("acted")
+                                .and_then(|a| a.as_array())
+                                .and_then(|a| a.first().cloned())
+                                .and_then(|first| {
+                                    first
+                                        .get("ts")
+                                        .or_else(|| first.get("at"))
+                                        .and_then(|t| t.as_f64())
+                                })
+                                .map(|ts| {
+                                    let now = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .map(|d| d.as_secs_f64())
+                                        .unwrap_or(0.0);
+                                    now - ts < 8.0
+                                })
+                                .unwrap_or(false);
+                            if !on {
+                                "Anticipy".to_string()
+                            } else if acted_recent {
+                                "Anticipy: just acted".to_string()
+                            } else if pending_len > 0 {
+                                "Anticipy: working".to_string()
+                            } else {
+                                "Anticipy: listening".to_string()
+                            }
+                        }
+                        Err(_) => "Anticipy".to_string(),
+                    }
+                }
+                _ => "Anticipy".to_string(),
+            };
+            if last_tooltip.as_deref() != Some(tooltip.as_str()) {
+                if let Some(tray) = handle.tray_by_id("main") {
+                    if let Err(e) = tray.set_tooltip(Some(tooltip.clone())) {
+                        eprintln!("[tray-tooltip] set_tooltip failed: {e}");
+                    } else {
+                        last_tooltip = Some(tooltip);
+                    }
+                }
+            }
+        }
+    });
+}
+
 /// INVESTOR-DEMO HARDENING (cycle "live-demo"): same shape as the
 /// engine watchdog, but for the bridge daemon on port 7777 (or the
 /// `ANTICIPY_TRIGGER_PORT` override). The bridge mediates between the
@@ -2641,6 +2729,12 @@ pub fn run() {
                     }
                 });
             }
+
+            // INVESTOR-DEMO HARDENING (cycle "live-demo"): drive the
+            // tray tooltip from the engine's ambient listen state. The
+            // pendant LED is the canonical "we are listening" signal;
+            // the menu bar tooltip is the calm laptop-only fallback.
+            spawn_tray_tooltip_updater(app.handle());
 
             Ok(())
         })
