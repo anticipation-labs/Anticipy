@@ -8204,8 +8204,27 @@ def _maybe_route_recovery(
 
 
 def _user_self_email() -> str:
-    return (os.environ.get("ANTICIPY_USER_EMAIL", "").strip()
-            or "omarkebrahim@gmail.com")
+    # Stranger-install safety: do NOT default to Omar's email. If the
+    # user has not provided ANTICIPY_USER_EMAIL and Supabase has not
+    # populated session.json, return empty string so the receipt
+    # helper skips the self-email step rather than mailing Omar by
+    # default. Closes STRANGER_INSTALL_AUDIT warning.
+    env_email = os.environ.get("ANTICIPY_USER_EMAIL", "").strip()
+    if env_email:
+        return env_email
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+        sess = _Path.home() / ".anticipy" / "session.json"
+        if sess.exists():
+            data = _json.loads(sess.read_text("utf-8"))
+            email = str(data.get("user_email") or
+                        data.get("email") or "").strip()
+            if email:
+                return email
+    except Exception:
+        pass
+    return ""
 
 
 def _receipt_phone() -> str:

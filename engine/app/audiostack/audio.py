@@ -19,6 +19,7 @@ They are fetched on first real use only, into data_dir()/models.
 from __future__ import annotations
 
 import os
+import sys
 import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -120,7 +121,14 @@ class AsrResult:
 
 
 _asr = None
-_ASR_MODEL = "mlx-community/parakeet-tdt-0.6b-v2"
+# Use the v3 weights bundled in the DMG at
+# /Applications/Anticipy.app/Contents/Resources/parakeet-tdt-0.6b-v3/.
+# Falls back to v2 HF Hub download only if the bundled path is missing
+# (dev/source runs where the bundle is not assembled). Prevents the
+# 2.5 GB cold-network download on first mic capture for stranger Mac
+# users. Closes STRANGER_INSTALL_AUDIT blocker.
+_ASR_MODEL_HUB_FALLBACK = "mlx-community/parakeet-tdt-0.6b-v2"
+_ASR_MODEL = _ASR_MODEL_HUB_FALLBACK  # historical name kept for log compatibility
 _asr_executor: ThreadPoolExecutor | None = None
 _asr_thread_id: int | None = None
 
@@ -176,13 +184,48 @@ def _ensure_ffmpeg_on_path() -> None:
             return
 
 
+def _bundled_parakeet_dir() -> Path | None:
+    """Locate the parakeet weights bundled inside the packaged Anticipy
+    app. The PyInstaller binary lives at
+    /Applications/Anticipy.app/Contents/MacOS/anticipy-engine and the
+    weights bundle next to it under ../Resources/parakeet-tdt-0.6b-v3/.
+    Returns the dir if config.json + model.safetensors are present.
+    None means we are running from source (no bundle) and should fall
+    through to the HF Hub download path."""
+    try:
+        exe = Path(sys.executable).resolve()
+        # PyInstaller-frozen binary: exe is the bundled engine binary.
+        candidates = [
+            exe.parent.parent / "Resources" / "parakeet-tdt-0.6b-v3",
+            exe.parent.parent / "Resources" / "parakeet-tdt-0.6b-v2",
+        ]
+        # Also accept a path passed by env (dev override).
+        env_path = os.environ.get("ANTICIPY_PARAKEET_DIR", "").strip()
+        if env_path:
+            candidates.insert(0, Path(env_path))
+        for cand in candidates:
+            if (cand / "config.json").exists() and any(
+                cand.glob("*.safetensors")
+            ):
+                return cand
+    except Exception:
+        pass
+    return None
+
+
 def _get_asr():
-    global _asr
+    global _asr, _ASR_MODEL
     if _asr is None:
         from parakeet_mlx import from_pretrained
 
         _models_dir()
-        _asr = from_pretrained(_ASR_MODEL)
+        bundled = _bundled_parakeet_dir()
+        if bundled is not None:
+            _ASR_MODEL = str(bundled)
+            _asr = from_pretrained(str(bundled))
+        else:
+            _asr = from_pretrained(_ASR_MODEL_HUB_FALLBACK)
+            _ASR_MODEL = _ASR_MODEL_HUB_FALLBACK
     return _asr
 
 
