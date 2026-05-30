@@ -603,6 +603,77 @@ _SINGLETON_FH = None
 _SINGLETON_LOCK_PATH = None
 
 
+def _parse_lock_holder_pid(raw: str) -> int | None:
+    """Parse the pid out of a lock-file body.
+
+    Accepts three forms:
+      - legacy bare integer ("12345")
+      - JSON object {"pid": 12345, "ts": ...}  (current P1-2 format)
+      - "pid <int> ts <float>" plain-text form (alt human-readable)
+
+    Returns None if the body is empty or unparseable so callers fall
+    through to flock as the authoritative gate rather than mis-
+    classifying a junk file.
+    """
+    if not raw:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    # JSON form first since the current writer emits JSON.
+    if raw.startswith("{"):
+        try:
+            obj = json.loads(raw)
+        except Exception:
+            obj = None
+        if isinstance(obj, dict):
+            pid_val = obj.get("pid")
+            if isinstance(pid_val, bool):
+                return None
+            if isinstance(pid_val, int):
+                return pid_val
+            if isinstance(pid_val, str) and pid_val.isdigit():
+                try:
+                    return int(pid_val)
+                except ValueError:
+                    return None
+        return None
+    # Legacy bare-int form.
+    if raw.isdigit():
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+    # Plain-text "pid <int> ..." form.
+    tokens = raw.split()
+    if len(tokens) >= 2 and tokens[0] == "pid" and tokens[1].isdigit():
+        try:
+            return int(tokens[1])
+        except ValueError:
+            return None
+    return None
+
+
+def _pid_is_alive(pid: int) -> bool:
+    """Return True iff `pid` exists. Signal 0 never delivers a signal
+    but raises ProcessLookupError if no such pid; PermissionError means
+    the pid exists but is owned by another user (still alive). Anything
+    else (e.g. OverflowError on a junk pid) we treat as not-alive so
+    the caller reclaims the lock rather than wedging on bad input.
+    """
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
 def _acquire_singleton_lock(port_str: str) -> None:
     global _SINGLETON_FH, _SINGLETON_LOCK_PATH
     if _SINGLETON_FH is not None:
@@ -616,18 +687,47 @@ def _acquire_singleton_lock(port_str: str) -> None:
     # this by checking the PID written to an EXISTING lock file: if it
     # is our own PID, we are the same process re-entering and can
     # short-circuit safely.
+    #
+    # P1-2 fix (2026-05-30): when the lock file exists but the holder
+    # pid is DEAD, the prior behavior left the stale lock in place and
+    # callers that picked a free port via `_pick_free_port()` ended up
+    # binding to a random ephemeral port (e.g. 49671) instead of the
+    # intended 8731. The kernel flock was already released on death, so
+    # the only thing wedging port-8731 reclaim was the file itself plus
+    # the random-port spawn pattern in _run_sidecar that never retries
+    # the intended port. Now: if the holder pid is not alive, drop the
+    # stale lock and proceed to re-bind on the same port. The kernel
+    # advisory flock is still the source of truth for "is someone live
+    # on this port"; the file content is just a hint for the same-
+    # process re-entry guard and the dead-pid reclaim check.
     lock_path = f"/tmp/anticipy_product_{port_str}.lock"
     try:
         if os.path.exists(lock_path):
             with open(lock_path, "r") as _existing:
-                holder = (_existing.read() or "").strip()
-            if holder and holder == str(os.getpid()):
+                holder_raw = (_existing.read() or "").strip()
+            holder_pid = _parse_lock_holder_pid(holder_raw)
+            if holder_pid == os.getpid():
                 _SINGLETON_LOCK_PATH = lock_path
                 # Re-open and re-flock would deadlock since same process
                 # already holds it; leave _SINGLETON_FH None so a later
                 # call from the real entrypoint can still write to it
                 # if it owns the entry. Most callers are idempotent.
                 return
+            if holder_pid is not None and not _pid_is_alive(holder_pid):
+                # Stale lock from a crashed prior instance. Drop it so
+                # the new engine can reclaim the intended port instead
+                # of silently falling through to a random free port.
+                try:
+                    os.unlink(lock_path)
+                    _sys.stderr.write(
+                        f"Anticipy: reclaimed port {port_str} from dead "
+                        f"pid {holder_pid} (stale lock {lock_path}).\n"
+                    )
+                except OSError:
+                    # If we can't unlink, fall through; flock will still
+                    # be the authoritative gate. The new pid write below
+                    # will overwrite the file content via open('w').
+                    pass
     except Exception:
         pass
     _SINGLETON_LOCK_PATH = lock_path
@@ -636,9 +736,15 @@ def _acquire_singleton_lock(port_str: str) -> None:
         _fcntl.flock(_SINGLETON_FH, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
         # Write PID FIRST so the same-process re-entry guard (above)
         # finds it before the second import tries to flock again.
+        # P1-2: also include a ts hint as JSON so external observers
+        # can tell how stale a lock is. The parser still accepts the
+        # legacy bare-int form so a downgrade or hand-edited lock file
+        # does not break the same-process guard or the dead-pid reclaim.
         _SINGLETON_FH.seek(0)
         _SINGLETON_FH.truncate()
-        _SINGLETON_FH.write(str(os.getpid()))
+        _SINGLETON_FH.write(
+            json.dumps({"pid": int(os.getpid()), "ts": float(time.time())})
+        )
         _SINGLETON_FH.flush()
         try:
             os.fsync(_SINGLETON_FH.fileno())

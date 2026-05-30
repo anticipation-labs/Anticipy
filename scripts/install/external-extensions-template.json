@@ -1,0 +1,11 @@
+{
+  "external_update_url": "https://REPLACE_WITH_HOSTED_CRX_DOMAIN/anticipy/updates.xml",
+  "external_version": "6.0.0",
+  "supported_locales": ["en", "en-US"],
+  "_comment_purpose": "Chrome External Extensions policy file for Anticipy Bridge v6. Drop this at ~/Library/Application Support/Google/Chrome/External Extensions/npnpagopediecennpleihemoochikggb.json and Chrome will auto-install the referenced extension on next launch, with no Developer Mode toggle required.",
+  "_comment_schema": "Per Chrome docs (https://developer.chrome.com/docs/extensions/how-to/distribute/install-extensions), an External Extensions JSON file uses either external_crx + external_version (for a local .crx on disk) OR external_update_url (pointing to an XML manifest hosted via HTTPS that lists the .crx URL + version). Only one form is allowed per file.",
+  "_comment_replace": "external_update_url must point to an HTTPS update XML produced by the Chrome update protocol (omaha). Replace REPLACE_WITH_HOSTED_CRX_DOMAIN with the real anticipy.ai CDN host once the .crx is hosted. The XML should respond with an <updatecheck codebase='https://.../anticipy-v6.crx' version='6.0.0'/> element for the pinned extension ID.",
+  "_comment_future": "Once Anticipy ships through the Chrome Web Store, this file can simply contain {\"external_update_url\": \"https://clients2.google.com/service/update2/crx\"} and Chrome will pull from CWS automatically. Until then, host the .crx ourselves.",
+  "_comment_extension_id": "Pinned extension ID is npnpagopediecennpleihemoochikggb, derived from the manifest.json `key` field. The filename of this JSON file MUST match the extension ID exactly.",
+  "_comment_chrome_versions": "External Extensions policy is supported on Chrome stable, Beta, Canary, and Chromium-based browsers (Brave, Edge with different path). The install path differs per browser; this template targets Chrome stable on macOS."
+}
