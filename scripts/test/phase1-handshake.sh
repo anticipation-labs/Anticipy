@@ -24,7 +24,7 @@ fi
 echo "PASS step 1: engine /health OK on port $PORT"
 
 # Step 2: anticipy-agent process alive
-AGENT=$(pgrep -fl "/anticipy-agent$|/anticipy-agent " 2>/dev/null | grep -v "status-poller" | head -1)
+AGENT=$(pgrep -fl "anticipy_agent.py|/anticipy-agent$|/anticipy-agent " 2>/dev/null | grep -v "status-poller" | head -1)
 if [ -z "$AGENT" ]; then
   echo "FAIL step 2: anticipy-agent process NOT running."
   echo "  Cause: Chrome Developer Mode is OFF, OR extension not loaded, OR native messaging permission denied."
