@@ -258,6 +258,7 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 164 | 2026-05-29 ~20:09 PDT | cycle 164 monitoring | Z-001 age 210s. Engine pid 66923 etime 52:45 stable. | drift verify: G2 12.53ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 | 165 | 2026-05-29 ~20:12 PDT | cycle 165 monitoring | Z-001 age 395s. Engine pid 66923 etime 55:49 stable. | drift verify: G2 12.49ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 | 166 | 2026-05-29 ~20:15 PDT | cycle 166 monitoring | Z-001 age 572s, 21 min headroom. Engine pid 66923 etime 58:46 (about to cross 1 hour). | drift verify: G2 19.0ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
+| 167 | 2026-05-29 ~20:18 PDT | cycle 167 monitoring | Z-001 age 754s, 17 min headroom. Engine pid 66923 etime 1:01:49 stable (cycle 146 binary now over 1 hour uptime). | drift verify: G2 19.12ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 
 ## Open queued work units (not gate-blocking)
 
