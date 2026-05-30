@@ -727,11 +727,13 @@
         box.className = "banner info";
         box.classList.remove("hidden");
         box.textContent = "Asking macOS for microphone access...";
+        // Use keepalive so the request survives a popover blur-hide.
         try {
           const res = await fetch("http://127.0.0.1:8731/api/listen/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: "{}",
+            keepalive: true,
           });
           const data = await res.json();
           if (data && data.on) {
@@ -745,8 +747,36 @@
               : "Could not start listening.";
           }
         } catch (e) {
+          // The popover sometimes hides mid-fetch (focus loss). Before
+          // declaring the engine dead, re-probe /health. If that succeeds,
+          // the engine is up and the listen-start probably did fire on
+          // the server side. Confirm by re-issuing listen-start once.
+          let alive = false;
+          try {
+            const h = await fetch("http://127.0.0.1:8731/health", { keepalive: true });
+            alive = h.ok;
+          } catch (_) { alive = false; }
+          if (alive) {
+            try {
+              const r2 = await fetch("http://127.0.0.1:8731/api/listen/start", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: "{}",
+                keepalive: true,
+              });
+              const d2 = await r2.json();
+              if (d2 && d2.on) {
+                box.className = "banner ok";
+                const dev = (d2.audio_device && d2.audio_device.name) || "your default microphone";
+                box.textContent = "Listening through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+                return;
+              }
+            } catch (_) { /* fall through */ }
+          }
           box.className = "banner err";
-          box.textContent = "Anticipy is not running. Try opening it from your Applications folder.";
+          box.textContent = alive
+            ? "Could not start listening. Try clicking again."
+            : "Anticipy is not running. Try opening it from your Applications folder.";
         }
       }
 
