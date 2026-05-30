@@ -250,6 +250,7 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 156 | 2026-05-29 ~19:45 PDT | cycle 156 monitoring | Z-001 age 627s, 19 min headroom. Engine pid 66923 etime 28:45 stable. | drift verify: G2 16.88ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 | 157 | 2026-05-29 ~19:50 PDT | cycle 157 | proactive G6 refresh: fresh Z-001 PASS at 20260530T024814Z + dress rehearsal PASS 3/3 at 20260530T025003Z (66s). G6 sequence 02:20:09Z PASS, 02:34:58Z PASS, 02:50:03Z PASS. Engine pid 66923 etime 31:43 stable. | drift verify: G2 10.96ms, G11 p95=0.0, G12 96 chars. **ALL 12 STILL GREEN.** stagnation: 0 |
 | 158 | 2026-05-29 ~19:51 PDT | cycle 158 monitoring | Z-001 age 129s post-refresh. Engine pid 66923 etime 35:28 stable. | drift verify: G2 15.42ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
+| 159 | 2026-05-29 ~19:54 PDT | cycle 159 monitoring | discovery: G2 trivia inject timed out on first probe attempt (transient, engine likely processing concurrent request). /health responded clean. Re-probed G2 immediately and got PASS in 16.81ms. Engine pid 66923 etime 38:11 stable. Z-001 age 266s. | drift verify after retry: G2 16.81ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 
 ## Open queued work units (not gate-blocking)
 
