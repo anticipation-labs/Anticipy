@@ -540,10 +540,31 @@
               <div class="title">Skip the interview, just listen</div>
               <div class="sub">Anticipy picks things up from your day as you go. No interview now.</div>
             </div>
-            <div class="onboard-card is-coming-soon" data-onboard="call">
-              <div class="title">Schedule a call from Anticipy <span class="badge">Soon</span></div>
-              <div class="sub">A friendly voice walkthrough on your phone. Live in the next build.</div>
+            <div class="onboard-card" data-onboard="call">
+              <div class="title">Have Anticipy call you</div>
+              <div class="sub">A short voice walkthrough on your phone. Seven quick questions, about five minutes.</div>
             </div>
+            <div id="call-phone-prompt" class="hidden" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+              <input id="call-phone-input" type="tel" inputmode="tel"
+                     placeholder="+1 604 555 1234"
+                     style="width: 100%; padding: 10px 12px; border-radius: 8px;
+                            border: 1px solid var(--hairline); background: var(--bg-elevated);
+                            color: var(--text); font-size: 13.5px; outline: none;" />
+              <div style="display: flex; gap: 8px;">
+                <button id="call-phone-submit" class="btn"
+                        style="flex: 1; padding: 9px 12px; border-radius: 8px;
+                               border: 1px solid var(--hairline-strong);
+                               background: var(--tint-strong); color: var(--text);
+                               font-size: 13px; cursor: pointer;">Call me now</button>
+                <button id="call-phone-cancel"
+                        style="padding: 9px 12px; border-radius: 8px;
+                               border: 1px solid var(--hairline);
+                               background: transparent; color: var(--text-dim);
+                               font-size: 13px; cursor: pointer;">Cancel</button>
+              </div>
+              <div id="call-phone-error" class="sub" style="color: #ef6f6f; display: none;"></div>
+            </div>
+            <div id="call-status" class="banner hidden"></div>
           </div>
           <div id="ambient-status" class="banner hidden"></div>
         </section>
@@ -884,8 +905,165 @@
             }
             if (choice === "ambient") {
               await startAmbientListening();
+              return;
+            }
+            if (choice === "call") {
+              await showCallPrompt();
+              return;
             }
           });
+        });
+        wireCallPrompt();
+      }
+
+      // E.164 normalizer: accepts "+1 604 ...", "(604) ...", "604..."
+      // and returns a +1 prefixed E.164 string if it parses, else "".
+      // Voice broker is +1 only (US/CA) so a stranger pasting +44 will
+      // get a calm error rather than a silent 400.
+      function normalizePhoneE164(raw) {
+        if (!raw) return "";
+        const cleaned = String(raw).replace(/[^\d+]/g, "");
+        if (!cleaned) return "";
+        let digits = cleaned;
+        if (cleaned.startsWith("+")) {
+          digits = cleaned.slice(1);
+          if (!/^\d+$/.test(digits)) return "";
+          if (!cleaned.startsWith("+1")) {
+            // Voice broker only allows +1 today. Surface as empty so
+            // the UI shows the rejection rather than racing the server.
+            return "";
+          }
+          if (digits.length < 11 || digits.length > 15) return "";
+          return "+" + digits;
+        }
+        if (!/^\d+$/.test(digits)) return "";
+        if (digits.length === 10) return "+1" + digits;
+        if (digits.length === 11 && digits.startsWith("1")) return "+" + digits;
+        return "";
+      }
+
+      function showCallPrompt() {
+        const wrap = $("call-phone-prompt");
+        const input = $("call-phone-input");
+        if (wrap) wrap.classList.remove("hidden");
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+
+      function hideCallPrompt() {
+        const wrap = $("call-phone-prompt");
+        const err  = $("call-phone-error");
+        if (wrap) wrap.classList.add("hidden");
+        if (err) {
+          err.style.display = "none";
+          err.textContent = "";
+        }
+      }
+
+      function setCallStatusBanner(kind, title, sub) {
+        const box = $("call-status");
+        if (!box) return;
+        box.classList.remove("hidden");
+        const cls =
+          kind === "ok"   ? "banner ok"   :
+          kind === "err"  ? "banner err"  :
+          kind === "warn" ? "banner warn" :
+                            "banner info";
+        box.className = cls;
+        box.innerHTML = "";
+        const t = document.createElement("div");
+        t.className = "title";
+        t.textContent = title || "";
+        const s = document.createElement("div");
+        s.className = "sub";
+        s.textContent = sub || "";
+        box.appendChild(t);
+        if (sub) box.appendChild(s);
+      }
+
+      function wireCallPrompt() {
+        const submit = $("call-phone-submit");
+        const cancel = $("call-phone-cancel");
+        const input  = $("call-phone-input");
+        const err    = $("call-phone-error");
+        if (cancel) {
+          cancel.addEventListener("click", () => { hideCallPrompt(); });
+        }
+        if (submit) {
+          submit.addEventListener("click", async () => {
+            const raw = (input && input.value) || "";
+            const phone = normalizePhoneE164(raw);
+            if (!phone) {
+              if (err) {
+                err.style.display = "block";
+                err.textContent = "Please enter a US or Canada (+1) phone number.";
+              }
+              return;
+            }
+            if (err) { err.style.display = "none"; err.textContent = ""; }
+            submit.disabled = true;
+            submit.textContent = "Placing call";
+            try {
+              const res = await invoke("start_voice_onboarding", { phone_e164: phone });
+              hideCallPrompt();
+              if (res && res.ok) {
+                setCallStatusBanner(
+                  "info",
+                  "Calling " + phone,
+                  "Pick up when your phone rings. Anticipy will walk you through seven quick questions.",
+                );
+              } else {
+                const detail = (res && res.error) ? String(res.error) : "Could not place the call. Try again in a moment.";
+                setCallStatusBanner("err", "Call failed", detail);
+              }
+            } catch (e) {
+              hideCallPrompt();
+              setCallStatusBanner(
+                "err",
+                "Call failed",
+                e && e.toString ? e.toString() : "Could not reach the local engine.",
+              );
+            } finally {
+              submit.disabled = false;
+              submit.textContent = "Call me now";
+            }
+          });
+        }
+        // Listen for the engine's status updates so the popover reflects
+        // call progress in real time. Each event is one phase transition.
+        onEvent("voice-onboarding-status", (payload) => {
+          if (!payload || typeof payload !== "object") return;
+          const phase = String(payload.phase || "");
+          const q     = Number(payload.question_index || 0);
+          const total = Number(payload.question_total || 7);
+          const phone = String(payload.phone || "");
+          if (phase === "calling") {
+            setCallStatusBanner(
+              "info",
+              "Calling " + (phone || "your phone"),
+              "Pick up when your phone rings.",
+            );
+          } else if (phase === "in_progress" || phase === "question") {
+            setCallStatusBanner(
+              "info",
+              "Question " + Math.max(1, q) + " of " + total,
+              payload.question_text || "Listening.",
+            );
+          } else if (phase === "completed") {
+            setCallStatusBanner(
+              "ok",
+              "Done. Dossier ready.",
+              "Anticipy now knows what you told it on the call.",
+            );
+          } else if (phase === "error") {
+            setCallStatusBanner(
+              "err",
+              "Call ended early",
+              String(payload.error || "Try again in a moment."),
+            );
+          }
         });
       }
 
