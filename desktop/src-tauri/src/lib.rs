@@ -1895,23 +1895,58 @@ fn emit_bootstrap_done(app: &AppHandle) {
 
 /// Resolve the bundled resource directory. In a built .app this is
 /// Contents/Resources. In dev builds we fall back to the source tree under
-/// desktop/src-tauri/resources/.
+/// desktop/src-tauri/resources/. Falls through to a current_exe()/../Resources
+/// lookup so we still work even if app.path().resource_dir() trips on
+/// canonicalize on copied .app bundles.
 fn bootstrap_resource_dir(app: &AppHandle) -> Option<PathBuf> {
-    if let Ok(p) = app.path().resource_dir() {
-        if p.exists() {
-            return Some(p);
+    // Path 1: Tauri's PathResolver. Canonical for production .app bundles.
+    match app.path().resource_dir() {
+        Ok(p) => {
+            if p.exists() {
+                bootstrap_log(&format!("resource_dir(): {}", p.display()));
+                return Some(p);
+            } else {
+                bootstrap_log(&format!(
+                    "resource_dir() returned {} but does not exist on disk",
+                    p.display()
+                ));
+            }
+        }
+        Err(e) => {
+            bootstrap_log(&format!("resource_dir() failed: {e}"));
         }
     }
-    // Dev fallback: walk up from the current exe to find the source tree.
+    // Path 2: derive from current_exe(). On macOS the canonical layout is
+    // ${.app}/Contents/MacOS/Anticipy with resources at
+    // ${.app}/Contents/Resources. Use literal join("..") so we do not need
+    // canonicalize (which fails on missing intermediate symlinks).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(macos_dir) = exe.parent() {
+            if let Some(contents_dir) = macos_dir.parent() {
+                let resources = contents_dir.join("Resources");
+                if resources.exists() {
+                    bootstrap_log(&format!(
+                        "resource fallback (exe parent): {}",
+                        resources.display()
+                    ));
+                    return Some(resources);
+                }
+            }
+        }
+    }
+    // Path 3: dev fallback. Walk up from current_exe() to find the source
+    // tree under desktop/src-tauri/resources/.
     let exe = std::env::current_exe().ok()?;
     let mut cur = exe.as_path();
     while let Some(parent) = cur.parent() {
         let candidate = parent.join("desktop").join("src-tauri").join("resources");
         if candidate.exists() {
+            bootstrap_log(&format!("resource fallback (dev tree): {}", candidate.display()));
             return Some(candidate);
         }
         cur = parent;
     }
+    bootstrap_log("resource_dir: all three lookup paths failed");
     None
 }
 
@@ -2106,8 +2141,16 @@ fn setup_python_venv(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(venv)
 }
 
+fn bridge_port() -> u16 {
+    std::env::var("ANTICIPY_TRIGGER_PORT")
+        .ok()
+        .and_then(|v| v.trim().parse::<u16>().ok())
+        .filter(|p| *p > 0)
+        .unwrap_or(BRIDGE_PORT)
+}
+
 fn bridge_health_ok() -> bool {
-    let endpoint = format!("http://127.0.0.1:{}/status", BRIDGE_PORT);
+    let endpoint = format!("http://127.0.0.1:{}/status", bridge_port());
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(1))
         .build();
@@ -2122,7 +2165,11 @@ fn bridge_health_ok() -> bool {
 /// the venv Python and writes its log + PID under ~/.anticipy/.
 fn start_bridge_daemon(app: &AppHandle) -> Result<(), String> {
     if bridge_health_ok() {
-        emit_bootstrap_progress(app, "bridge", "Bridge already running on 7777.");
+        emit_bootstrap_progress(
+            app,
+            "bridge",
+            &format!("Bridge already running on {}.", bridge_port()),
+        );
         return Ok(());
     }
     let venv_py = venv_python_path().ok_or_else(|| "HOME not set".to_string())?;
@@ -2148,7 +2195,11 @@ fn start_bridge_daemon(app: &AppHandle) -> Result<(), String> {
     let log_err = log
         .try_clone()
         .map_err(|e| format!("clone bridge log: {e}"))?;
-    emit_bootstrap_progress(app, "bridge", "Starting bridge daemon on 7777...");
+    emit_bootstrap_progress(
+        app,
+        "bridge",
+        &format!("Starting bridge daemon on {}...", bridge_port()),
+    );
     let child = Command::new(&venv_py)
         .arg(&script)
         .env("PYTHONUNBUFFERED", "1")
@@ -2166,18 +2217,23 @@ fn start_bridge_daemon(app: &AppHandle) -> Result<(), String> {
         *slot.lock().unwrap() = Some(child);
     }
 
-    // Wait up to 8 seconds for the bridge to bind 7777 and answer /status.
+    // Wait up to 8 seconds for the bridge to bind 7777 (or the
+    // ANTICIPY_TRIGGER_PORT override) and answer /status.
     let deadline = std::time::Instant::now() + Duration::from_secs(8);
     while std::time::Instant::now() < deadline {
         if bridge_health_ok() {
-            emit_bootstrap_progress(app, "bridge", "Bridge healthy on 7777.");
+            emit_bootstrap_progress(
+                app,
+                "bridge",
+                &format!("Bridge healthy on {}.", bridge_port()),
+            );
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(250));
     }
     Err(format!(
         "bridge did not become healthy on port {}; see {}",
-        BRIDGE_PORT,
+        bridge_port(),
         log_path.display()
     ))
 }

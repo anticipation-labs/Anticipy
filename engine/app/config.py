@@ -3,15 +3,55 @@ Configuration loaded from environment variables.
 All budget limits and model fallback order defined here.
 """
 
-import base64
-import hashlib
+import json
 import logging
 import os
+import secrets as _stdsecrets
+import stat
+from pathlib import Path
 
 from cryptography.fernet import Fernet
 
 
 _logger = logging.getLogger("engine")
+
+
+def _engine_secrets_path() -> Path:
+    """Path to ~/.anticipy/secrets.json, created at first run.
+
+    Stranger installs ship without env vars set. Instead of falling back to
+    insecure dev defaults (B021), we mint random secrets on first boot and
+    persist them with 0600 perms so subsequent restarts pick them up.
+    """
+    base = Path(os.environ.get("ANTICIPY_HOME") or
+                (Path.home() / ".anticipy"))
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "secrets.json"
+
+
+def _load_persisted_secrets() -> dict:
+    p = _engine_secrets_path()
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
+def _persist_secrets(d: dict) -> None:
+    p = _engine_secrets_path()
+    try:
+        p.write_text(json.dumps(d, sort_keys=True), encoding="utf-8")
+        try:
+            os.chmod(p, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+        except Exception:
+            pass
+    except Exception as _e:
+        _logger.warning("could not persist engine secrets: %s", _e)
+
+
+_PERSISTED_SECRETS: dict = _load_persisted_secrets()
 
 # Truthy values for environment booleans
 _TRUTHY = {"1", "true", "yes", "on"}
@@ -46,17 +86,18 @@ CAPSOLVER_API_KEY: str = os.environ.get("CAPSOLVER_API_KEY", "")
 TWOCAPTCHA_API_KEY: str = os.environ.get("TWOCAPTCHA_API_KEY", "")
 
 # --- JWT ---
-# Fail-closed in production: refuse to boot with the dev placeholder secret.
-# In dev we still warn loudly so it isn't missed.
-_JWT_DEFAULT = "anticipy-engine-secret-change-me"
+# Fail-closed posture (B021): if no env var is supplied, auto-mint a per-install
+# random secret and persist it to ~/.anticipy/secrets.json (0600). This way the
+# bundled DMG no longer logs the "insecure development default" warning at
+# every startup, AND every stranger install gets its own unique signing key.
 JWT_SECRET: str = os.environ.get("JWT_SECRET", "")
 if not JWT_SECRET:
-    if IS_PRODUCTION:
-        raise RuntimeError(
-            "JWT_SECRET is required in production. Refusing to start with default secret."
-        )
-    JWT_SECRET = _JWT_DEFAULT
-    _logger.warning("JWT_SECRET not set — using insecure development default. Set this in .env.")
+    JWT_SECRET = str(_PERSISTED_SECRETS.get("JWT_SECRET") or "")
+    if not JWT_SECRET:
+        JWT_SECRET = _stdsecrets.token_urlsafe(48)
+        _PERSISTED_SECRETS["JWT_SECRET"] = JWT_SECRET
+        _persist_secrets(_PERSISTED_SECRETS)
+        _logger.info("Minted new JWT_SECRET and persisted to ~/.anticipy/secrets.json")
 elif len(JWT_SECRET) < 32 and IS_PRODUCTION:
     raise RuntimeError("JWT_SECRET must be at least 32 characters in production.")
 
@@ -78,23 +119,22 @@ MAX_LABELED_ELEMENTS: int = 20
 MEMORY_MAX_CHARS: int = 300
 
 # --- Security ---
-# A regenerated key on every restart silently invalidates every saved cookie
-# blob. In production we fail-closed and refuse to boot. In dev we derive a
-# stable key from JWT_SECRET so cookies survive a restart.
+# B021: If no env var supplied, mint a real Fernet key, persist it to
+# ~/.anticipy/secrets.json (0600), and reuse across restarts so saved cookies
+# keep decrypting. Stranger installs no longer get a "derived development key"
+# warning, and the cookie store survives engine restarts.
 _PROFILE_KEY_RAW: str = os.environ.get("PROFILE_ENCRYPTION_KEY", "")
 if _PROFILE_KEY_RAW:
     PROFILE_ENCRYPTION_KEY: str = _PROFILE_KEY_RAW
-elif IS_PRODUCTION:
-    raise RuntimeError(
-        "PROFILE_ENCRYPTION_KEY is required in production. "
-        "Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
-    )
 else:
-    # Stable dev fallback: derived from JWT_SECRET so saved cookies still
-    # decrypt after a restart.  NOT for production.
-    _derived = hashlib.sha256(JWT_SECRET.encode("utf-8")).digest()
-    PROFILE_ENCRYPTION_KEY = base64.urlsafe_b64encode(_derived).decode("ascii")
-    _logger.warning("PROFILE_ENCRYPTION_KEY not set — using derived development key.")
+    _stored = str(_PERSISTED_SECRETS.get("PROFILE_ENCRYPTION_KEY") or "")
+    if _stored:
+        PROFILE_ENCRYPTION_KEY = _stored
+    else:
+        PROFILE_ENCRYPTION_KEY = Fernet.generate_key().decode("ascii")
+        _PERSISTED_SECRETS["PROFILE_ENCRYPTION_KEY"] = PROFILE_ENCRYPTION_KEY
+        _persist_secrets(_PERSISTED_SECRETS)
+        _logger.info("Minted new PROFILE_ENCRYPTION_KEY and persisted to ~/.anticipy/secrets.json")
 
 # Validate the key actually loads as Fernet (catches malformed values early)
 try:
