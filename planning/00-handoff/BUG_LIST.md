@@ -546,5 +546,20 @@
 | B473 | engine/app/browser.py | P3 | Locale fixed to "en-US"; Spanish/French users see wrong-locale UI | Line 185. |
 | B474 | engine/app/browser.py | P3 | Window size fixed to 1920x1080 — mobile-emulation tasks impossible | Line 175. |
 | B475 | engine/app/audiostack/enrollment.py | P3 | Anchor file ext .enc — easy to find on disk | Line 50. Public file extension makes anchor discoverable in filesystem scan. |
+| B476 | engine/app/anticipy/platform_adapter.py | P1 | _CommsBus is module-global single instance — multi-tenant collapses | Lines 593-624. All users share single comms bus; messages from User A may appear in User B's inbound list when ANTICIPY_LIVE=0 (test mode). |
+| B477 | engine/app/anticipy/platform_adapter.py | P2 | "live comms transport not provisioned in this build" raises if ANTICIPY_LIVE=1 | Line 609. Set ANTICIPY_LIVE in env to enable real SMS → engine crashes. Inverted toggle. |
+| B478 | engine/app/anticipy/memory.py | P2 | Per-user JSONL stored at user_data_dir/memory.jsonl — no compaction, grows unbounded | Lines 34-35. Each turn appends a new line. After 1 year of usage, file is many MB. Reads scan entire file. |
+| B479 | engine/app/anticipy/memory.py | P3 | Module-level `_lock` shared across all users | Line 31. One-user write blocks reads from another user. |
+| B480 | engine/app/anticipy/grader.py | P3 | Hard pass thresholds inflated (>=0.92 exact match) without statistical CI | Lines 52: `grading == "exact>=0.92"`. Tests pass with 9.2/10. Confidence interval not considered. |
+| B481 | engine/app/anticipy/grader.py | P3 | Random sample size (default not visible) for adversarial backstop — small samples mask true error rate | Lines 9-13 comment: "five percent" trigger. Statistical power not specified. |
+| B482 | src/lib/cerebras.ts | P2 | callCerebras 30s timeout per Vercel function budget; combined with cascade, total may exceed Vercel 60s default | Lines 80-83. Single-call timeout fits, but cascade × 4 providers × 30s = up to 120s. Function killed mid-stream. |
+| B483 | src/lib/mistral.ts | P2 | callMistral 30s timeout same B482 issue | Inferred from src/lib/mistral.ts 30s timeout. |
+| B484 | src/components/Pricing.tsx | P3 | TARGET_DOLLARS=149 + TARGET_CENTS=99 hardcoded; pre-order price updates require code change | Lines 9-10. |
+| B485 | src/components/Pricing.tsx | P3 | Animation runs once via useInView once:true — refresh snaps to final immediately | Line 15: `once: true`. |
+| B486 | src/app/api/engine/auto-proceed/route.ts | P2 | Logs use console.warn with intent IDs | Lines 144-148: full intent details to logs. Production Vercel logs ingest PII. |
+| B487 | engine/app/anticipy/onboarding.py | P3 | INTERVIEW_SCRIPT 7 questions strict — user can't skip/refuse a question | Lines 24-37. No "skip" option. |
+| B488 | engine/app/middle/skill_router.py | P3 | DEFAULT_TOP_K = 3 hardcoded; some intents benefit from larger candidate sets | Line 46. |
+| B489 | engine/app/audiostack/enrollment.py | P3 | MIN_SPEECH_S = 18.0 — too long for some users to record cleanly | Line 29. Setup friction. |
+| B490 | engine/app/audiostack/enrollment.py | P3 | STRONG_CONSISTENCY = 0.62 — hardcoded threshold | Line 30. Voice variations (cold, microphone change) trip the threshold. |
 
 
