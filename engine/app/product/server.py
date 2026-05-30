@@ -498,7 +498,11 @@ def _upload_asr_timeout_seconds() -> float:
 
 def _audio_device_kind(name: str) -> str:
     low = (name or "").lower()
-    if "printer" in low or "scanner" in low or "airplay" in low:
+    # AirPlay targets are output-only; we never see them with input
+    # channels, but keep the keyword guard for the rare misadvertised
+    # device. Any device that does expose input channels gets a real
+    # classification below so the caller can pick it.
+    if "airplay" in low:
         return "unsupported"
     if "macbook" in low or "built-in" in low or "internal microphone" in low:
         return "builtin"
@@ -506,7 +510,18 @@ def _audio_device_kind(name: str) -> str:
         return "bluetooth"
     if "blackhole" in low or "loopback" in low or "virtual" in low:
         return "virtual"
-    return "other"
+    # Aggregate/Multi-Output devices created in Audio MIDI Setup are
+    # legitimate capture sources for users who route multiple mics.
+    if "aggregate" in low or "multi-output" in low:
+        return "aggregate"
+    # Generic external USB / USB-C mics. CoreAudio sometimes labels
+    # USB audio interfaces by device name (e.g. "The printer123
+    # Microphone" for a USB-C lavalier passing through a printer-shaped
+    # OEM enclosure), so treat any input-capable device we did not
+    # already match as external USB rather than rejecting it.
+    if "usb" in low or "cmteck" in low or "yeti" in low or "rode" in low:
+        return "external_usb"
+    return "external_usb"
 
 
 def _audio_source_detail(kind: str, name: str) -> str:
@@ -523,6 +538,10 @@ def _audio_source_detail(kind: str, name: str) -> str:
         return "unsupported_device"
     if kind == "virtual":
         return "virtual_loopback"
+    if kind == "aggregate":
+        return "aggregate_device"
+    if kind == "external_usb":
+        return "usb_mic"
     return "other"
 
 
@@ -538,6 +557,8 @@ def _audio_connection_type(kind: str, name: str) -> str:
         return "line_in"
     if detail == "virtual_loopback":
         return "virtual"
+    if detail == "aggregate_device":
+        return "aggregate"
     if detail == "unsupported_device":
         return "unsupported"
     return kind or "other"
@@ -741,6 +762,65 @@ def _publish_engine_port_file() -> None:
         (port_dir / "engine.port").write_text(str(port), encoding="utf-8")
     except Exception:
         pass
+
+
+@app.on_event("startup")
+def _install_crash_handlers_and_heartbeat() -> None:
+    """B024: silent engine deaths leave no log line. Add crash signal
+    handlers (SIGSEGV, SIGABRT, SIGBUS) that flush a `crashed kind=...`
+    line to ~/.anticipy/product-engine.log before the process exits,
+    and run a 60s heartbeat thread that writes `heartbeat ts=...` so
+    a post-mortem can tell whether the engine was alive at time T.
+    """
+    import faulthandler
+    import signal
+    import threading
+
+    log_dir = Path.home() / ".anticipy"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "product-engine.log"
+    crash_path = log_dir / "engine-crash.log"
+
+    # faulthandler dumps a Python stack on SIGSEGV / SIGABRT / SIGBUS
+    # straight to a file, which is the only thing that survives a true
+    # native crash. Open in append so prior crash dumps are kept.
+    try:
+        fh_file = open(crash_path, "a", buffering=1)
+        faulthandler.enable(file=fh_file)
+        faulthandler.register(signal.SIGUSR1, file=fh_file, all_threads=True)
+    except Exception:
+        pass
+
+    def _signal_logger(signum, _frame):
+        try:
+            with log_path.open("a", encoding="utf-8") as fh:
+                fh.write(f"[engine] received signal={signum} pid={os.getpid()} "
+                         f"ts={time.time():.3f}\n")
+        except Exception:
+            pass
+        # Re-raise the default behavior so the process still exits.
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        try:
+            signal.signal(sig, _signal_logger)
+        except (ValueError, OSError):
+            pass
+
+    def _heartbeat_loop():
+        while True:
+            try:
+                with log_path.open("a", encoding="utf-8") as fh:
+                    fh.write(f"[engine] heartbeat pid={os.getpid()} "
+                             f"ts={time.time():.3f}\n")
+            except Exception:
+                pass
+            time.sleep(60.0)
+
+    t = threading.Thread(target=_heartbeat_loop, name="engine-heartbeat",
+                         daemon=True)
+    t.start()
 
 
 @app.on_event("startup")

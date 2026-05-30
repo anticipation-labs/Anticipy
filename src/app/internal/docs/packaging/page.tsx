@@ -15,9 +15,9 @@ export default function PackagingPage() {
             <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>Hardware · Orders</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-2">Packaging Design Specification</h1>
-          <p style={{ color: "#8A8A8A" }}>Anticipy Pendant — v1.0 · Updated 2026-04-15 · Contact: omar@anticipy.ai</p>
+          <p style={{ color: "#8A8A8A" }}>Anticipy Pendant - v1.0 · Updated 2026-04-15 · Contact: omar@anticipy.ai</p>
           <div className="mt-3 p-3 rounded-lg text-xs" style={{ background: "#161616", border: "1px solid #252525", color: "#8A8A8A" }}>
-            Design philosophy: minimal, premium, matches brand aesthetic — matte black, cream typography, gold accents. Apple-meets-Field-Notes. Unboxing feels intentional and quiet. No excess plastic, no promotional noise.
+            Design philosophy: minimal, premium, matches brand aesthetic - matte black, cream typography, gold accents. Apple-meets-Field-Notes. Unboxing feels intentional and quiet. No excess plastic, no promotional noise.
           </div>
         </div>
 
@@ -36,9 +36,9 @@ export default function PackagingPage() {
                       { k: "Material", v: "350gsm kraft board, matte black laminate exterior" },
                       { k: "Box style", v: "Rigid lid + base (telescope / two-piece)" },
                       { k: "Lid closure", v: "Friction fit; magnetic closure optional at >$4/unit" },
-                      { k: "Lid top print", v: '"Anticipy" — Playfair Display, 18pt, cream (#F5F0EB), centered' },
+                      { k: "Lid top print", v: '"Anticipy". Playfair Display, 18pt, cream (#F5F0EB), centered' },
                       { k: "Lid bottom print", v: "Logo mark (A monogram) 8mm, gold foil stamp" },
-                      { k: "Lid side print", v: '"anticipy.ai" — 7pt, cream, centered on long side' },
+                      { k: "Lid side print", v: '"anticipy.ai" - 7pt, cream, centered on long side' },
                       { k: "Base exterior", v: "Blank (batch/serial number sticker on bottom)" },
                     ].map((row) => (
                       <tr key={row.k} className="border-b" style={{ borderColor: "#1A1A1A" }}>
@@ -72,7 +72,7 @@ export default function PackagingPage() {
               </div>
               <div className="mt-3 p-3 rounded-lg text-xs" style={{ background: "#161616", border: "1px solid #252525", color: "#8A8A8A" }}>
                 <div className="font-medium mb-1" style={{ color: "#F5F0EB" }}>Dimensions rationale</div>
-                100×70×35mm is smaller than iPhone 15 footprint — fits in breast pocket. Pendant cavity has 7mm clearance on all sides. Ships as standard small parcel, no oversize.
+                100×70×35mm is smaller than iPhone 15 footprint - fits in breast pocket. Pendant cavity has 7mm clearance on all sides. Ships as standard small parcel, no oversize.
               </div>
             </div>
           </div>
@@ -173,9 +173,7 @@ Lid interior (underside):
 
   3. Enter it in the extension popup
 
-  4. Talk. Anticipy handles the rest.
-
-  Need help? anticipy.ai/help`}</pre>
+  4. Talk. Anticipy handles the rest. Need help? anticipy.ai/help`}</pre>
               </div>
             </div>
             <div>
@@ -195,8 +193,7 @@ Lid interior (underside):
   Fast cyan    Uploading
   Slow yellow  Low battery
 
-  Charge via USB-C. Full charge ~30 min.
-  Battery life: 15–20 hours typical.
+  Charge via USB-C. Full charge ~30 min. Battery life: 15–20 hours typical.
 
   © 2026 Anticipation Labs
   anticipy.ai`}</pre>
@@ -215,12 +212,12 @@ Lid interior (underside):
                 {[
                   { name: "Matte Black", usage: "Background", pantone: "Pantone Black 6 C", cmyk: "0/0/0/100", swatch: "#0C0C0C" },
                   { name: "Cream", usage: "Typography", pantone: "Pantone 9182 C", cmyk: "3/3/8/0", swatch: "#F5F0EB" },
-                  { name: "Gold", usage: "Logo mark, accent", pantone: "Pantone 872 C (metallic)", cmyk: "— (foil)", swatch: "#C8A97E" },
+                  { name: "Gold", usage: "Logo mark, accent", pantone: "Pantone 872 C (metallic)", cmyk: ".  (foil)", swatch: "#C8A97E" },
                 ].map((c) => (
                   <div key={c.name} className="flex items-center gap-3 p-3 rounded-lg" style={{ background: "#161616", border: "1px solid #252525" }}>
                     <div className="w-6 h-6 rounded flex-shrink-0" style={{ background: c.swatch, border: "1px solid #252525" }} />
                     <div>
-                      <div className="text-xs font-medium" style={{ color: "#F5F0EB" }}>{c.name} — {c.usage}</div>
+                      <div className="text-xs font-medium" style={{ color: "#F5F0EB" }}>{c.name} - {c.usage}</div>
                       <div className="text-xs" style={{ color: "#5A5A5A" }}>{c.pantone} · {c.cmyk}</div>
                     </div>
                   </div>
@@ -282,7 +279,7 @@ Lid interior (underside):
             ))}
 
             <div className="p-4 rounded-xl" style={{ background: "#161616", border: "1px solid #252525" }}>
-              <div className="font-semibold text-sm mb-3" style={{ color: "#F5F0EB" }}>Production (1,000+ units) — Full Packaging BOM</div>
+              <div className="font-semibold text-sm mb-3" style={{ color: "#F5F0EB" }}>Production (1,000+ units). Full Packaging BOM</div>
               <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "#1A1A1A" }}>
                 <table className="w-full text-xs">
                   <thead>
@@ -300,7 +297,7 @@ Lid interior (underside):
                       { item: "USB-C cable (braided)", cost: "~$0.90", lead: "Stock / AliExpress" },
                       { item: "Lanyard + split ring", cost: "~$0.35", lead: "Stock / AliExpress" },
                       { item: "Anti-static bag", cost: "~$0.04", lead: "Stock" },
-                      { item: "Total packaging BOM", cost: "~$2.97", lead: "—" },
+                      { item: "Total packaging BOM", cost: "~$2.97", lead: ". " },
                     ].map((row, i) => (
                       <tr key={row.item} className="border-b" style={{ borderColor: "#1A1A1A", background: i === 6 ? "#1A1A1A" : "transparent" }}>
                         <td className="px-3 py-2" style={{ color: i === 6 ? "#F5F0EB" : "#A0A0A0", fontWeight: i === 6 ? 600 : 400 }}>{row.item}</td>
@@ -323,7 +320,7 @@ Lid interior (underside):
             <ul className="space-y-2">
               {[
                 { mark: "CE mark (EU)", status: "Pending RF module certification via XIAO ESP32-S3 declarations" },
-                { mark: "FCC ID", status: "Inherit from XIAO ESP32-S3 module — FCC ID: 2AXX7XIAO-ESP32S3 (verify on FCC database)" },
+                { mark: "FCC ID", status: "Inherit from XIAO ESP32-S3 module. FCC ID: 2AXX7XIAO-ESP32S3 (verify on FCC database)" },
                 { mark: "ROHS compliant", status: "PCB and all components" },
                 { mark: "LiPo warning (box inner)", status: '"Contains lithium battery. Do not crush, puncture, or expose to fire."' },
                 { mark: "WEEE symbol (EU)", status: "Crossed-out wheelie bin on box exterior" },

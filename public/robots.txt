@@ -1,4 +1,4 @@
-# Anticipy — https://www.anticipy.ai
+# Anticipy - https://www.anticipy.ai
 # Allow all crawlers including AI engines
 
 User-agent: *

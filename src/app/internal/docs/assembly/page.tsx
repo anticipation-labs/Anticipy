@@ -17,7 +17,7 @@ export default function AssemblyPage() {
           <h1 className="text-3xl font-semibold tracking-tight mb-2">PCB Assembly Guide</h1>
           <p style={{ color: "#8A8A8A" }}>Doc v1.0 · PCB Rev 1.0 · Updated 2026-04-15 · Contact: omar@anticipy.ai</p>
           <div className="mt-3 p-3 rounded-lg text-xs" style={{ background: "#161616", border: "1px solid #252525", color: "#8A8A8A" }}>
-            Covers hand-solder prototype assembly (1–5 units). For SMT at JLCPCB (10+ units): upload Gerber + CPL + BOM — separate package on request.
+            Covers hand-solder prototype assembly (1–5 units). For SMT at JLCPCB (10+ units): upload Gerber + CPL + BOM - separate package on request.
           </div>
         </div>
 
@@ -63,7 +63,7 @@ export default function AssemblyPage() {
                   { ref: "R5", desc: "Resistor 33Ω", val: "RC0402FR-0733RL", qty: "1", pkg: "0402", supplier: "LCSC" },
                   { ref: "C1, C3, C4, C5", desc: "Capacitor 100nF", val: "CL05B104KO5NNNC", qty: "4", pkg: "0402", supplier: "LCSC" },
                   { ref: "C2, C6", desc: "Capacitor 10µF", val: "CL21A106KAYNNNE", qty: "2", pkg: "0805", supplier: "LCSC" },
-                  { ref: "J1", desc: "Lanyard hole reinforcement ring (optional)", val: "—", qty: "1", pkg: "4mm ID brass grommet", supplier: "Hardware store" },
+                  { ref: "J1", desc: "Lanyard hole reinforcement ring (optional)", val: ". ", qty: "1", pkg: "4mm ID brass grommet", supplier: "Hardware store" },
                 ].map((row) => (
                   <tr key={row.ref} className="border-b" style={{ borderColor: "#1A1A1A" }}>
                     <td className="px-4 py-2 text-xs font-mono font-semibold" style={{ color: "#C8A97E" }}>{row.ref}</td>
@@ -111,42 +111,42 @@ export default function AssemblyPage() {
           <div className="space-y-4">
             {[
               {
-                step: "Step 1 — SMD Passives: Resistors and Capacitors",
+                step: "Step 1. SMD Passives: Resistors and Capacitors",
                 critical: false,
                 items: [
                   "Apply flux to all 0402 and 0805 pads.",
                   "Order: C1, C2, C3, C4, C5, C6 (caps), then R1, R2, R3, R4, R5 (resistors).",
-                  "For 0402: apply solder to one pad → tack component → solder second pad → reflow first pad. Minimal solder — small fillet, not a blob.",
+                  "For 0402: apply solder to one pad → tack component → solder second pad → reflow first pad. Minimal solder - small fillet, not a blob.",
                   "Verify values before placement: R1/R2 = 100kΩ, R3/R4 = 10kΩ, R5 = 33Ω. Confirm with DMM ohmmeter.",
                   "Post-step: visual inspection under magnification for bridges and tombstoning.",
                 ]
               },
               {
-                step: "Step 2 — SK6812 Mini-E LED (LED1)",
+                step: "Step 2. SK6812 Mini-E LED (LED1)",
                 critical: true,
                 criticalNote: "Tiny 3.5×3.5mm IC with 4 pads on the underside. Hardest component on the board.",
                 items: [
                   "Apply flux to all 4 LED pads on PCB.",
-                  "Pre-tin one pad (GND pad — largest, nearest cathode dot).",
+                  "Pre-tin one pad (GND pad - largest, nearest cathode dot).",
                   "Place LED1 with correct orientation: pin 1/DIN corner matches silkscreen dot.",
                   "Pin order (from above, pads underneath): 1=DIN, 2=VDD, 3=DOUT, 4=GND.",
                   "Reflow pre-tinned pad to tack → solder remaining 3 pads with fine tip + minimal solder.",
                   "Inspect: all 4 pads visible, no bridges between adjacent pads.",
-                  "GND pad (pin 4) is largest and has thermal relief — needs slightly more heat.",
+                  "GND pad (pin 4) is largest and has thermal relief - needs slightly more heat.",
                 ]
               },
               {
-                step: "Step 3 — Tactile Buttons (SW1, SW2)",
+                step: "Step 3. Tactile Buttons (SW1, SW2)",
                 critical: false,
                 items: [
                   "4×4mm SMD tactile switches.",
-                  "All 4 legs are ground (symmetric) — orientation matters only for fit, not electrically.",
+                  "All 4 legs are ground (symmetric) - orientation matters only for fit, not electrically.",
                   "Solder one leg → check component is seated flat → solder remaining 3 legs.",
                   "Apply light pressure while soldering to prevent switch from lifting.",
                 ]
               },
               {
-                step: "Step 4 — Slide Switch (SW_PWR)",
+                step: "Step 4. Slide Switch (SW_PWR)",
                 critical: false,
                 items: [
                   "Through-hole SPDT SS-12D10.",
@@ -157,7 +157,7 @@ export default function AssemblyPage() {
                 ]
               },
               {
-                step: "Step 5 — TP4056 Charging Module (U2)",
+                step: "Step 5. TP4056 Charging Module (U2)",
                 critical: false,
                 items: [
                   "Module has solder pads around perimeter: IN+, IN–, BAT+, BAT–, OUT+, OUT–.",
@@ -168,26 +168,26 @@ export default function AssemblyPage() {
                 ]
               },
               {
-                step: "Step 6 — INMP441 Microphone Module (MIC1)",
+                step: "Step 6. INMP441 Microphone Module (MIC1)",
                 critical: false,
                 items: [
                   "6-pin 2.54mm header (VDD, GND, SCK, WS, SD, L/R).",
-                  "Option A (prototype): solder 6-pin female socket on PCB, plug module in — allows replacement without rework.",
-                  "Option B (production): solder module directly — trim header pins to 3mm, insert through PCB holes.",
-                  "L/R pin MUST connect to GND — verify continuity.",
+                  "Option A (prototype): solder 6-pin female socket on PCB, plug module in - allows replacement without rework.",
+                  "Option B (production): solder module directly - trim header pins to 3mm, insert through PCB holes.",
+                  "L/R pin MUST connect to GND - verify continuity.",
                   "Ensure mic port on INMP441 faces toward PCB mic hole (bottom of pendant case).",
                 ]
               },
               {
-                step: "Step 7 — XIAO ESP32-S3 (U1)",
+                step: "Step 7. XIAO ESP32-S3 (U1)",
                 critical: true,
                 criticalNote: "Solder this last. 14 castellated pads on each long side. Bridging any pair will kill the module.",
                 items: [
                   "Apply flux generously to all XIAO footprint pads on PCB.",
-                  "Place XIAO module — pin 1 (GPIO1) at marked corner on silkscreen.",
+                  "Place XIAO module - pin 1 (GPIO1) at marked corner on silkscreen.",
                   "Tack 2 diagonal corner pads first to set alignment.",
                   "Solder each pad individually: touch iron → apply minimal 0.3mm wire → remove iron.",
-                  "Work from one end to the other — do NOT skip around.",
+                  "Work from one end to the other - do NOT skip around.",
                   "Common mistakes: bridging adjacent pads, cold joints on castellated edges.",
                   "Post-solder: wipe flux with IPA + swab. Inspect all 14+14 pads under magnification.",
                   "Continuity check: adjacent pins NOT shorted. 3V3 to GND = open. 5V to GND = open.",
@@ -234,7 +234,7 @@ export default function AssemblyPage() {
               </thead>
               <tbody>
                 {[
-                  { check: "3V3 to GND", expected: "Open (no short)", method: "DMM resistance — should be >10kΩ" },
+                  { check: "3V3 to GND", expected: "Open (no short)", method: "DMM resistance - should be >10kΩ" },
                   { check: "5V to GND", expected: "Open (no short)", method: "DMM resistance" },
                   { check: "I2S_BCLK (GPIO6)", expected: "Connected to MIC1 SCK", method: "DMM continuity beep" },
                   { check: "I2S_LRCK (GPIO7)", expected: "Connected to MIC1 WS", method: "DMM continuity beep" },
@@ -265,7 +265,7 @@ export default function AssemblyPage() {
               <ul className="space-y-1.5">
                 {[
                   "Slide SW_PWR to OFF position.",
-                  "Connect USB-C to 5V/1A charger (NOT computer — charger only).",
+                  "Connect USB-C to 5V/1A charger (NOT computer - charger only).",
                   "Expected: TP4056 red CHRG LED illuminates. No smoke. No excessive heat on U2.",
                   "Measure: BATT_P rail should read ~5V briefly, then settle to 4.2V charge voltage.",
                   "Disconnect USB-C.",
@@ -284,7 +284,7 @@ export default function AssemblyPage() {
                   "Confirm cell voltage with DMM: should read 3.5–4.2V.",
                   "Match polarity: red wire to BT1 +, black wire to BT1 –.",
                   "Apply small amount of solder to hold wires. Use Kapton tape as strain relief.",
-                  "Do NOT use JST connectors unless footprint is present — direct solder for prototype.",
+                  "Do NOT use JST connectors unless footprint is present - direct solder for prototype.",
                 ].map((item, i) => (
                   <li key={i} className="text-xs flex gap-2" style={{ color: "#A0A0A0" }}>
                     <span style={{ color: "#C8A97E" }}>{i + 1}.</span>
@@ -346,7 +346,7 @@ BLE: advertising as "Anticipy-Pendant"`}</pre>
 
         {/* QA checklist */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>Quality Gate — All Must Pass Before Shipping</h2>
+          <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>Quality Gate. All Must Pass Before Shipping</h2>
           <div className="grid grid-cols-2 gap-2">
             {[
               "All 10 functional tests in §7d pass",

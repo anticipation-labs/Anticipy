@@ -15,7 +15,7 @@ export default function BOMPage() {
             <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(200,169,126,0.15)", color: "#C8A97E", border: "1px solid rgba(200,169,126,0.3)" }}>Hardware · Research</span>
           </div>
           <h1 className="text-3xl font-semibold tracking-tight mb-2">Bill of Materials</h1>
-          <p style={{ color: "#8A8A8A" }}>Anticipy Wearable — verified component pricing with live supplier links. Updated April 15, 2026.</p>
+          <p style={{ color: "#8A8A8A" }}>Anticipy Wearable - verified component pricing with live supplier links. Updated April 15, 2026.</p>
         </div>
 
         {/* Cost summary callout */}
@@ -35,7 +35,7 @@ export default function BOMPage() {
 
         {/* Main BOM table */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-1" style={{ color: "#C8A97E" }}>Component List — Single Prototype</h2>
+          <h2 className="text-lg font-semibold mb-1" style={{ color: "#C8A97E" }}>Component List. Single Prototype</h2>
           <p className="text-xs mb-4" style={{ color: "#5A5A5A" }}>All prices USD. CAD conversion ×1.38. Prices verified April 2026.</p>
           <div className="overflow-x-auto rounded-xl border" style={{ borderColor: "#252525" }}>
             <table className="w-full text-sm">
@@ -140,7 +140,7 @@ export default function BOMPage() {
                   },
                   {
                     n: 16, component: "Misc", part: "Solder paste, flux pen, jumper wires, kapton tape",
-                    supplier: "Local / Amazon", price: "$3.00", qty: "—", total: "$3.00",
+                    supplier: "Local / Amazon", price: "$3.00", qty: ". ", total: "$3.00",
                     url: "https://www.amazon.ca/s?k=SAC305+solder+paste",
                     note: "One-time cost, shared across all prototypes"
                   },
@@ -177,7 +177,7 @@ export default function BOMPage() {
                   <td></td>
                 </tr>
                 <tr style={{ background: "#1A1A1A", borderTop: "1px solid #252525" }}>
-                  <td colSpan={6} className="px-4 py-4 text-sm font-bold" style={{ color: "#F5F0EB" }}>TOTAL — prototype, landed</td>
+                  <td colSpan={6} className="px-4 py-4 text-sm font-bold" style={{ color: "#F5F0EB" }}>TOTAL - prototype, landed</td>
                   <td className="px-4 py-4 text-lg font-bold" style={{ color: "#C8A97E" }}>~$56 USD</td>
                   <td className="px-4 py-4 text-sm font-medium" style={{ color: "#8A8A8A" }}>~$77 CAD</td>
                 </tr>
@@ -194,10 +194,10 @@ export default function BOMPage() {
               {
                 title: "XIAO ESP32-S3 (not bare chip)",
                 points: [
-                  "USB-C native — no CH340/FTDI bridge needed",
-                  "8 MB flash + 8 MB PSRAM soldered on — enough for 30-second audio ring buffer",
+                  "USB-C native - no CH340/FTDI bridge needed",
+                  "8 MB flash + 8 MB PSRAM soldered on - enough for 30-second audio ring buffer",
                   "Built-in PCB antenna, FCC/CE certified",
-                  "21 × 17.5 mm — fits inside pendant case",
+                  "21 × 17.5 mm - fits inside pendant case",
                   "Dual-core LX7 @ 240 MHz handles I2S DMA + VAD + WiFi upload simultaneously",
                   "$7.49 is cheaper than bare ESP32-S3-MINI-1 + antenna design",
                 ]
@@ -207,14 +207,14 @@ export default function BOMPage() {
                 points: [
                   "SPH0645LM4H is discontinued (Syntiant acquired it)",
                   "INMP441 (TDK InvenSense) is widely available, actively manufactured",
-                  "61 dBA SNR — excellent for speech at 0.3–2m conversational distances",
+                  "61 dBA SNR - excellent for speech at 0.3–2m conversational distances",
                   "I2S 24-bit output maps cleanly to ESP32-S3 I2S peripheral",
                   "1.4 mA active current, 1 µA power-down mode",
                   "AliExpress breakout module ($2) pre-assembled with decoupling caps",
                 ]
               },
               {
-                title: "LP402035 400 mAh LiPo — battery life math",
+                title: "LP402035 400 mAh LiPo - battery life math",
                 points: [
                   "Normal conversation: 20% recording (~100 mA) + 80% light sleep (~5 mA) = 24 mA average",
                   "400 mAh ÷ 24 mA = 16.7 hours typical battery life",
@@ -275,14 +275,14 @@ export default function BOMPage() {
           <h2 className="text-lg font-semibold mb-4" style={{ color: "#C8A97E" }}>Quick Order Links</h2>
           <div className="flex flex-wrap gap-3">
             {[
-              { label: "JLCPCB — PCBs + SMT Assembly", url: "https://cart.jlcpcb.com/quote" },
-              { label: "JLCPCB — 3D Printing", url: "https://jlcpcb.com/3d-printing" },
-              { label: "Seeed Studio — XIAO ESP32-S3", url: "https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html" },
-              { label: "DigiKey — XIAO ESP32-S3", url: "https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/113991114/19285530" },
-              { label: "LCSC — All Passives", url: "https://www.lcsc.com" },
-              { label: "Amazon.ca — INMP441 mic", url: "https://www.amazon.ca/s?k=INMP441+I2S+microphone" },
-              { label: "Amazon.ca — TP4056 USB-C", url: "https://www.amazon.ca/s?k=TP4056+USB-C" },
-              { label: "Amazon.ca — 400mAh LiPo", url: "https://www.amazon.ca/s?k=3.7V+400mAh+LiPo+JST" },
+              { label: "JLCPCB. PCBs + SMT Assembly", url: "https://cart.jlcpcb.com/quote" },
+              { label: "JLCPCB - 3D Printing", url: "https://jlcpcb.com/3d-printing" },
+              { label: "Seeed Studio. XIAO ESP32-S3", url: "https://www.seeedstudio.com/XIAO-ESP32S3-p-5627.html" },
+              { label: "DigiKey. XIAO ESP32-S3", url: "https://www.digikey.com/en/products/detail/seeed-technology-co-ltd/113991114/19285530" },
+              { label: "LCSC. All Passives", url: "https://www.lcsc.com" },
+              { label: "Amazon.ca. INMP441 mic", url: "https://www.amazon.ca/s?k=INMP441+I2S+microphone" },
+              { label: "Amazon.ca. TP4056 USB-C", url: "https://www.amazon.ca/s?k=TP4056+USB-C" },
+              { label: "Amazon.ca - 400mAh LiPo", url: "https://www.amazon.ca/s?k=3.7V+400mAh+LiPo+JST" },
             ].map((btn) => (
               <a key={btn.label} href={btn.url} target="_blank" rel="noopener noreferrer"
                 className="px-4 py-2 rounded-lg text-sm font-medium"
