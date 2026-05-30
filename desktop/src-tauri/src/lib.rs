@@ -2495,18 +2495,37 @@ fn first_launch_bootstrap(app: &AppHandle) {
         emit_bootstrap_error(app, "bridge", &e);
     }
 
-    // Step F: bootstrap Chrome on the CDP port. The existing
-    // bootstrap_anticipy_chrome handles the cloned-profile launch and
-    // emits its own chrome-setup-* events. Skipped when Chrome is not
-    // installed.
-    if chrome_binary_present() {
-        emit_bootstrap_progress(app, "chrome", "Starting Chrome on debug port 9222...");
-        bootstrap_anticipy_chrome(app);
+    // Step F: previously launched a cloned Chrome on CDP port 9222
+    // (chrome-real-clone). V7 product surface is the user's REAL Chrome
+    // through the installed Anticipy extension + chrome.debugger +
+    // native-messaging bridge (engine/app/bridge_extension.py). Spawning
+    // a separate blank Chrome with --user-data-dir=~/.anticipy/chrome-real-clone
+    // is explicitly forbidden by V7 proof rules
+    // (scripts/v7/check_done.sh, scripts/v7/validate_clean_room_public_install.py)
+    // because it lands the wearer in a blank browser without their cookies
+    // or sessions. The legacy launcher is retained as an opt-in escape
+    // hatch behind ANTICIPY_ENABLE_LEGACY_CLONE_CDP=1 for controlled probes;
+    // the default product path skips it entirely.
+    if std::env::var("ANTICIPY_ENABLE_LEGACY_CLONE_CDP").ok().as_deref() == Some("1") {
+        if chrome_binary_present() {
+            emit_bootstrap_progress(
+                app,
+                "chrome",
+                "Legacy clone CDP requested; starting Chrome on debug port 9222...",
+            );
+            bootstrap_anticipy_chrome(app);
+        } else {
+            emit_bootstrap_progress(
+                app,
+                "chrome",
+                "Legacy clone CDP requested but Chrome not installed; skipping.",
+            );
+        }
     } else {
         emit_bootstrap_progress(
             app,
             "chrome",
-            "Chrome not installed; skipping Chrome bootstrap. Anticipy will still listen.",
+            "Using your real Chrome through the Anticipy extension. No cloned profile.",
         );
     }
 

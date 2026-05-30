@@ -42,6 +42,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "anticipy"
+version = "0.1.0"
+dependencies = [
+ "keyring",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-deep-link",
+ "tauri-plugin-macos-permissions",
+ "tauri-plugin-opener",
+ "tauri-plugin-positioner",
+ "ureq",
+ "url",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,26 +752,6 @@ dependencies = [
  "quote",
  "rustc_version",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "desktop"
-version = "0.1.0"
-dependencies = [
- "keyring",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-deep-link",
- "tauri-plugin-macos-permissions",
- "tauri-plugin-opener",
- "tauri-plugin-positioner",
- "ureq",
- "url",
 ]
 
 [[package]]

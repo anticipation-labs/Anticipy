@@ -698,16 +698,25 @@ def _ensure_clean_gmail_compose() -> int:
 
 
 def _chrome_user_data_dir() -> str:
+    # V7 product surface is the user's REAL Chrome through the installed
+    # Anticipy extension + chrome.debugger + native-messaging bridge
+    # (see engine/app/bridge_extension.py). A cloned Chrome profile with
+    # --remote-debugging-port is explicitly forbidden by V7 proof rules
+    # (scripts/v7/check_done.sh, scripts/v7/validate_clean_room_public_install.py)
+    # because it lands a stranger in a blank browser without their cookies
+    # or sessions. This function never returns the chrome-real-clone literal:
+    # only an explicit non-clone override via env var is honored, and only
+    # when the user has also opted in via ANTICIPY_ENABLE_LEGACY_CLONE_CDP=1.
     configured = os.environ.get("ANTICIPY_CHROME_USER_DATA_DIR", "").strip()
-    if (configured
-            and CHROME_REAL_CLONE_TOKEN in configured
-            and not LEGACY_CLONE_CDP_ENABLED):
+    if not configured:
         return ""
-    if configured:
-        return configured
-    if LEGACY_CLONE_CDP_ENABLED:
-        return os.path.expanduser("~/.anticipy/chrome-real-clone")
-    return ""
+    if CHROME_REAL_CLONE_TOKEN in configured:
+        # Always reject the clone token, even if the legacy gate is on.
+        # The legacy escape hatch is for non-clone overrides only.
+        return ""
+    if not LEGACY_CLONE_CDP_ENABLED:
+        return ""
+    return configured
 
 
 def _clone_cdp_config_rejected() -> bool:
