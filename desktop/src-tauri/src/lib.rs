@@ -1325,6 +1325,82 @@ fn hangup_dossier_call(app: AppHandle) -> Result<serde_json::Value, String> {
     post_engine_json("/api/dossier/inbound", payload)
 }
 
+/// Start the voice-onboarding flow: validate the user-entered phone,
+/// hit the local engine's /api/onboarding/call_start endpoint, and
+/// emit a `voice-onboarding-status` event so the popover reflects the
+/// transition immediately. The engine is the authority on whether the
+/// outbound Twilio call actually placed; this command just forwards.
+///
+/// Returns the engine's JSON response verbatim so the popover can
+/// surface the call SID and any broker-side error detail.
+#[tauri::command]
+fn start_voice_onboarding(
+    app: AppHandle,
+    phone_e164: String,
+) -> Result<serde_json::Value, String> {
+    let phone = phone_e164.trim().to_string();
+    // Mirror the broker's E.164 + +1-only gate so a typo never wastes a
+    // network round-trip. The engine re-validates.
+    if !phone.starts_with("+1") || phone.len() < 11 || phone.len() > 16 {
+        let err = "phone must be a +1 US/CA E.164 number".to_string();
+        let _ = app.emit(
+            "voice-onboarding-status",
+            serde_json::json!({
+                "phase": "error",
+                "phone": phone,
+                "error": err.clone(),
+                "ts": current_unix_seconds(),
+            }),
+        );
+        return Err(err);
+    }
+    let _ = app.emit(
+        "voice-onboarding-status",
+        serde_json::json!({
+            "phase": "calling",
+            "phone": phone.clone(),
+            "ts": current_unix_seconds(),
+        }),
+    );
+    let payload = serde_json::json!({
+        "phone_e164": phone,
+    });
+    match post_engine_json("/api/onboarding/call_start", payload) {
+        Ok(body) => {
+            let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+            if !ok {
+                let err = body
+                    .get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("engine declined the call")
+                    .to_string();
+                let _ = app.emit(
+                    "voice-onboarding-status",
+                    serde_json::json!({
+                        "phase": "error",
+                        "phone": phone,
+                        "error": err,
+                        "ts": current_unix_seconds(),
+                    }),
+                );
+            }
+            Ok(body)
+        }
+        Err(e) => {
+            let _ = app.emit(
+                "voice-onboarding-status",
+                serde_json::json!({
+                    "phase": "error",
+                    "phone": phone,
+                    "error": e.clone(),
+                    "ts": current_unix_seconds(),
+                }),
+            );
+            Err(e)
+        }
+    }
+}
+
 #[tauri::command]
 fn fetch_dossier_summary(app: AppHandle) -> DossierSummary {
     match get_engine_json("/api/dossier/events") {
@@ -1558,6 +1634,7 @@ pub fn run() {
             open_mic_system_settings,
             start_dossier_call,
             hangup_dossier_call,
+            start_voice_onboarding,
             fetch_dossier_summary
         ])
         .on_window_event(|window, event| {
