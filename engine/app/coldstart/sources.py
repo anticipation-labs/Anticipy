@@ -57,9 +57,29 @@ _OPTIONAL_FIELDS = ("scrape_selector", "max_pages")
 # planning/00-handoff/NORTH_STAR_v2.md: no per-app code; URL
 # literals are data, not code).
 
-_DEFAULT_TEMPLATE_PATH = (
-    Path(__file__).parent / "data" / "inhale_sources.default.json"
-)
+def _default_template_path() -> Path:
+    """Resolve the shipped default JSON template path.
+
+    Tries `__file__`-relative first (source tree), then falls back to
+    PyInstaller's `_MEIPASS` extraction dir when running from a
+    frozen sidecar binary. Both are searched at call time so a
+    bundle that ships the data file under either layout still works.
+    """
+    here = Path(__file__).parent / "data" / "inhale_sources.default.json"
+    if here.exists():
+        return here
+    # PyInstaller frozen bundle: data files unpacked under sys._MEIPASS.
+    import sys
+    meipass = getattr(sys, "_MEIPASS", "")
+    if meipass:
+        m = Path(meipass) / "app" / "coldstart" / "data" / \
+            "inhale_sources.default.json"
+        if m.exists():
+            return m
+    return here  # original path; read attempt below returns OSError
+
+
+_DEFAULT_TEMPLATE_PATH = _default_template_path()
 
 
 _FALLBACK_COMMENT = (
@@ -70,29 +90,80 @@ _FALLBACK_COMMENT = (
 )
 
 
+# Embedded last-resort defaults. The JSON template at
+# ``data/inhale_sources.default.json`` is the source of truth (data,
+# not code, per rule 1). These constants exist ONLY as a safety net
+# for shipped sidecar binaries that fail to ship the data file in the
+# bundle (PyInstaller spec mistake, etc). Cold-start on a fresh
+# install must work in 90s; an empty source list means 0 people
+# inhaled, which is the failure mode this guard prevents. Keep these
+# in sync with the JSON template.
+_EMBEDDED_DEFAULT_SOURCES = [
+    {
+        "id": "gmail",
+        "label": "Gmail contacts and senders",
+        "url": "https://mail.google.com/mail/u/0/#inbox",
+        "scrape_selector": "[role='row']",
+        "max_pages": 5,
+        "enabled": True,
+        "priority": 1,
+    },
+    {
+        "id": "google_calendar",
+        "label": "Google Calendar attendees",
+        "url": "https://calendar.google.com/calendar/r/week",
+        "scrape_selector": "[data-eventid]",
+        "max_pages": 1,
+        "enabled": True,
+        "priority": 2,
+    },
+    {
+        "id": "google_drive",
+        "label": "Google Drive collaborators",
+        "url": "https://drive.google.com/drive/recent",
+        "scrape_selector": "[data-id]",
+        "max_pages": 3,
+        "enabled": True,
+        "priority": 3,
+    },
+]
+
+
+def _embedded_fallback_doc() -> dict[str, Any]:
+    """Last-resort defaults so a fresh install still inhales."""
+    return {
+        "version": CONFIG_VERSION,
+        "sources": [dict(s) for s in _EMBEDDED_DEFAULT_SOURCES],
+        "_comment": _FALLBACK_COMMENT,
+    }
+
+
 def _load_default_template() -> dict[str, Any]:
     """Read the shipped default JSON template (the data file).
 
     Returns a defensive copy so callers can mutate freely. If the
-    template is missing or corrupt the engine still boots with an
-    empty list; the user can POST a config to recover.
+    template is missing or corrupt we fall back to the embedded
+    constants above so cold-start still works in shipped bundles
+    that did not include the data file.
     """
+    path = _default_template_path()
     try:
-        raw = _DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8")
+        raw = path.read_text(encoding="utf-8")
     except OSError:
-        return {"version": CONFIG_VERSION, "sources": [],
-                "_comment": _FALLBACK_COMMENT}
+        return _embedded_fallback_doc()
     try:
         parsed = json.loads(raw)
     except Exception:
-        return {"version": CONFIG_VERSION, "sources": [],
-                "_comment": _FALLBACK_COMMENT}
+        return _embedded_fallback_doc()
     if not isinstance(parsed, dict):
-        return {"version": CONFIG_VERSION, "sources": [],
-                "_comment": _FALLBACK_COMMENT}
+        return _embedded_fallback_doc()
     parsed.setdefault("version", CONFIG_VERSION)
     if not isinstance(parsed.get("sources"), list):
         parsed["sources"] = []
+    # If the file is present but empty, fall back to embedded defaults
+    # so the engine still has something to inhale on first launch.
+    if not parsed["sources"]:
+        parsed["sources"] = [dict(s) for s in _EMBEDDED_DEFAULT_SOURCES]
     parsed.setdefault("_comment", _FALLBACK_COMMENT)
     parsed["sources"] = [dict(s) for s in parsed["sources"]
                          if isinstance(s, dict)]

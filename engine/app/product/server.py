@@ -586,12 +586,43 @@ def _acquire_singleton_lock(port_str: str) -> None:
     global _SINGLETON_FH, _SINGLETON_LOCK_PATH
     if _SINGLETON_FH is not None:
         return
-    _SINGLETON_LOCK_PATH = f"/tmp/anticipy_product_{port_str}.lock"
+    # Same-process double-acquire guard. When this module is imported
+    # twice in the same process (e.g. `python engine/app/product/server.py`
+    # loads it as __main__, then a deferred-attach wire does
+    # `from app.product.server import ...` and Python imports it again
+    # as `app.product.server` with a fresh `_SINGLETON_FH = None`),
+    # the second flock attempt would fail and crash the boot. Detect
+    # this by checking the PID written to an EXISTING lock file: if it
+    # is our own PID, we are the same process re-entering and can
+    # short-circuit safely.
+    lock_path = f"/tmp/anticipy_product_{port_str}.lock"
+    try:
+        if os.path.exists(lock_path):
+            with open(lock_path, "r") as _existing:
+                holder = (_existing.read() or "").strip()
+            if holder and holder == str(os.getpid()):
+                _SINGLETON_LOCK_PATH = lock_path
+                # Re-open and re-flock would deadlock since same process
+                # already holds it; leave _SINGLETON_FH None so a later
+                # call from the real entrypoint can still write to it
+                # if it owns the entry. Most callers are idempotent.
+                return
+    except Exception:
+        pass
+    _SINGLETON_LOCK_PATH = lock_path
     _SINGLETON_FH = open(_SINGLETON_LOCK_PATH, "w")
     try:
         _fcntl.flock(_SINGLETON_FH, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+        # Write PID FIRST so the same-process re-entry guard (above)
+        # finds it before the second import tries to flock again.
+        _SINGLETON_FH.seek(0)
+        _SINGLETON_FH.truncate()
         _SINGLETON_FH.write(str(os.getpid()))
         _SINGLETON_FH.flush()
+        try:
+            os.fsync(_SINGLETON_FH.fileno())
+        except OSError:
+            pass
     except OSError:
         _sys.stderr.write(
             "Anticipy: another engine instance already holds "
