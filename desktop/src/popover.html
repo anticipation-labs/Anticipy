@@ -96,12 +96,19 @@
         font-feature-settings: "kern", "liga", "ss01";
       }
 
-      /* Popover open: 200ms fade with a gentle springy translateY. The
-         body sits at translateY(-4px) opacity:0 by default; the
-         .is-shown class (set on popover-shown event) flips it back. */
+      /* Popover open: 200ms fade with a gentle springy translateY.
+         IMPORTANT: opacity defaults to 1, not 0. The previous default
+         (opacity:0 until .is-shown is added by JS) meant any script
+         failure during boot left the popover invisible. Boot scripts
+         can fail when window.__TAURI__ is not yet injected, when an
+         inline expression throws, or when WebKit defers the first
+         frame past the time the user expects to see content. With
+         opacity:1 as the default, any failure still leaves the user
+         with a readable popover. The springy translateY is preserved
+         for the open animation when .is-shown lands on schedule. */
       body {
-        opacity: 0;
-        transform: translateY(-4px);
+        opacity: 1;
+        transform: translateY(0);
         transition:
           opacity 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
           transform 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
@@ -402,8 +409,13 @@
 
       <div class="body">
 
-        <!-- Welcome state: shown when dossier is empty. -->
-        <section id="welcome" class="welcome hidden">
+        <!-- Welcome state: shown when dossier is empty.
+             We default to VISIBLE (no .hidden) so that even if the
+             refresh() call to fetch_dossier_summary fails, never
+             returns, or runs late, the user still sees the Anticipy
+             welcome card on first paint. ensureView() will toggle
+             this off the moment we know the dossier has entries. -->
+        <section id="welcome" class="welcome">
           <h1>Welcome to Anticipy.</h1>
           <p class="lede">Let's get to know you. Pick one. Takes about ten minutes.</p>
           <div class="perm-note">
