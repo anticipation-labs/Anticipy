@@ -256,6 +256,7 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 162 | 2026-05-29 ~20:05 PDT | cycle 162 | proactive G6 refresh: Z-001 attempt 1 FAILED at browser_signup step ("signup did not advance to /app/download; final_url='https://www.anticipy.ai/app' inline_error=''"). Transient: probably supabase rate-limit or website hiccup. Retried immediately: Z-001 PASS at 20260530T030410Z. Then dress rehearsal PASS 3/3 at 20260530T030555Z. G6 sequence 02:34:58Z + 02:50:03Z + 03:05:55Z PASS. Engine pid 66923 etime 46:42 stable. | drift verify after retry: G3 PASS, G6 PASS x3, G2 PASS in scene A. **ALL 12 STILL GREEN.** stagnation: 0 (real diagnostic + recovery landed) |
 | 163 | 2026-05-29 ~20:07 PDT | cycle 163 monitoring | Z-001 age 129s on the cycle 162 retry. Engine pid 66923 etime 51:24 stable. | drift verify: G2 35.1ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 | 164 | 2026-05-29 ~20:09 PDT | cycle 164 monitoring | Z-001 age 210s. Engine pid 66923 etime 52:45 stable. | drift verify: G2 12.53ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
+| 165 | 2026-05-29 ~20:12 PDT | cycle 165 monitoring | Z-001 age 395s. Engine pid 66923 etime 55:49 stable. | drift verify: G2 12.49ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 
 ## Open queued work units (not gate-blocking)
 
