@@ -49,18 +49,37 @@ if [[ -z "$SRC" ]]; then
   SRC="$(snapshot_from_cache "$HOME/.cache/huggingface/hub" || true)"
 fi
 
-if [[ -z "$SRC" ]]; then
-  echo "No local snapshot found. Downloading via huggingface-cli..." >&2
-  HF_HOME="$HOME/.anticipy/models" \
-    uv --project "$ENGINE_DIR" run huggingface-cli download "$REPO_ID" \
-      --local-dir "$DST" --local-dir-use-symlinks False
-else
-  echo "Copying snapshot from: $SRC" >&2
-  for f in config.json model.safetensors tokenizer.model tokenizer.vocab vocab.txt README.md; do
-    if [[ -e "$SRC/$f" ]]; then
-      cp -L "$SRC/$f" "$DST/$f"
-    fi
-  done
+# Fast path: if DST is already populated with config.json and a sane-size
+# model.safetensors, skip both download AND copy. This is the common case
+# during repeated builds where the prior run already staged the files in
+# desktop/src-tauri/resources/parakeet-tdt-0.6b-v3 and the snapshot may
+# no longer be present in the HF cache.
+already_staged=0
+if [[ -f "$DST/config.json" && -f "$DST/model.safetensors" ]]; then
+  staged_mb=$(du -sm "$DST" | cut -f1)
+  if (( staged_mb >= 2300 && staged_mb <= 2700 )); then
+    already_staged=1
+    echo "DST already staged (${staged_mb} MB). Skipping download/copy." >&2
+  fi
+fi
+
+if [[ "$already_staged" -eq 0 ]]; then
+  if [[ -z "$SRC" ]]; then
+    echo "No local snapshot found. Downloading via hf CLI..." >&2
+    # huggingface-cli was deprecated in huggingface_hub 1.16+ and the
+    # entry point now errors out. Use `hf download` (the renamed CLI)
+    # via the engine venv which already has huggingface_hub installed.
+    HF_HOME="$HOME/.anticipy/models" \
+      "$ENGINE_DIR/.venv/bin/hf" download "$REPO_ID" \
+        --local-dir "$DST"
+  else
+    echo "Copying snapshot from: $SRC" >&2
+    for f in config.json model.safetensors tokenizer.model tokenizer.vocab vocab.txt README.md; do
+      if [[ -e "$SRC/$f" ]]; then
+        cp -L "$SRC/$f" "$DST/$f"
+      fi
+    done
+  fi
 fi
 
 if [[ ! -f "$DST/config.json" || ! -f "$DST/model.safetensors" ]]; then
