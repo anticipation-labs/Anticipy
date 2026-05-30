@@ -2708,6 +2708,27 @@ def onboarding_chat_complete(c: ChatComplete) -> JSONResponse:
         pj.get("people") or {}
     )
     pj["well_populated"] = OB.profile_is_well_populated(prof)
+    # B071: previously every chat_complete call flipped onboarded=true even
+    # when intent extraction silently no-op'd and the profile came back
+    # empty. The UI then claimed "done" for a profile with no name, no
+    # people, no preferences. Refuse to mark onboarded when the result has
+    # no extracted signal.
+    has_signal = bool(
+        (pj.get("name") or "").strip()
+        or (pj.get("people") or {})
+        or (pj.get("preferences") or {})
+        or (pj.get("role_title") or "").strip()
+    )
+    if not has_signal:
+        return JSONResponse(
+            {"ok": False,
+             "error": "extractor returned empty profile; not marking "
+                      "onboarded. Try a longer transcript or use the "
+                      "scripted /api/onboarding/answer path.",
+             "profile_attempt": pj,
+             "turns": len(transcript)},
+            status_code=422,
+        )
     _SESS["profile"] = pj
     _seed_profile_memory(prof)
     cloud_sync = _save_profile()

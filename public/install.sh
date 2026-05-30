@@ -202,7 +202,17 @@ PY
 mkdir -p "$ANTICIPY_HOME"
 stop_existing_engine
 stop_existing_bridge
-install_native_bridge
+
+# B055: in v7 the Tauri .app self-bootstraps the bridge + engine on first
+# launch. The legacy install_native_bridge call below installed the v6
+# extension zip, which produced an architecture mismatch (v6 native_host
+# overwriting v7's). Skip when the v7 app is already / about to be installed.
+# Set ANTICIPY_LEGACY_BRIDGE=1 to opt back in if you depend on the v6 zip.
+if [ "${ANTICIPY_LEGACY_BRIDGE:-0}" = "1" ]; then
+  install_native_bridge
+else
+  echo "Anticipy: skipping legacy v6 bridge install (v7 app self-bootstraps; set ANTICIPY_LEGACY_BRIDGE=1 to force)."
+fi
 
 echo "Anticipy: downloading the real app (~2.3 GB; includes the local speech model)..."
 curl -fL --retry 3 -o "$DMG" "$URL"
