@@ -10,6 +10,18 @@
     <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>Anticipy listens for ambient conversational intent. Microphone access is required for the product to work.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Anticipy reads on-screen text when you ask it to act on what you are looking at. Screen access stays local to your Mac.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Anticipy uses AppleScript to drive Mail, Calendar, and Messages on your behalf when you confirm an action.</string>
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Anticipy listens for the hotkey to open the popover. No keystrokes are recorded or sent off device.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Anticipy reads your calendar to answer questions and create events when you approve them.</string>
+    <key>NSContactsUsageDescription</key>
+    <string>Anticipy reads your contacts to resolve names when you ask it to message or call someone.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Anticipy creates reminders when you ask it to follow up later.</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
