@@ -252,6 +252,7 @@ Procedure (in planning/00-handoff/CYCLE_PROCEDURE.md). Summary: each wake, the p
 | 158 | 2026-05-29 ~19:51 PDT | cycle 158 monitoring | Z-001 age 129s post-refresh. Engine pid 66923 etime 35:28 stable. | drift verify: G2 15.42ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 | 159 | 2026-05-29 ~19:54 PDT | cycle 159 monitoring | discovery: G2 trivia inject timed out on first probe attempt (transient, engine likely processing concurrent request). /health responded clean. Re-probed G2 immediately and got PASS in 16.81ms. Engine pid 66923 etime 38:11 stable. Z-001 age 266s. | drift verify after retry: G2 16.81ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 | 160 | 2026-05-29 ~19:57 PDT | cycle 160 monitoring | Z-001 age 449s, 22 min headroom. Engine pid 66923 etime 40:47 stable. | drift verify: G2 18.34ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
+| 161 | 2026-05-29 ~20:00 PDT | cycle 161 monitoring | Z-001 age 628s, 19 min headroom. Engine pid 66923 etime 43:47 stable. | drift verify: G2 19.27ms, G10 6/6, G11 p95=0.0, G12 96 chars. G1 G3 G4 G5 G6 G7 G8 G9 evidence valid. **ALL 12 STILL GREEN.** stagnation: 0 |
 
 ## Open queued work units (not gate-blocking)
 
