@@ -1219,12 +1219,33 @@ def _engine_id() -> str:
 def _poller_account_id() -> str:
     """The dossier account this engine owns. The website filters
     anticipy_sms_inbound rows by account_id when the From-number maps
-    to a known user."""
-    return (
+    to a known user.
+
+    Resolution mirrors server.py: env override first, else USER_ID
+    from server.py (which is set from the machine_id helper at module
+    load), else fall back to the persisted machine_id directly so the
+    poller stays multi-tenant even before server.py imports.
+    """
+    env_val = (
         os.environ.get("ANTICIPY_ACCOUNT_ID", "").strip()
         or os.environ.get("ANTICIPY_USER_ID", "").strip()
-        or "anticipy-user"
     )
+    if env_val:
+        return env_val
+    try:
+        from app.product.server import USER_ID as _SERVER_USER_ID
+        if _SERVER_USER_ID:
+            return str(_SERVER_USER_ID).strip()
+    except Exception:
+        pass
+    try:
+        from app.product.server import _default_account_id
+        derived = _default_account_id()
+        if derived:
+            return derived
+    except Exception:
+        pass
+    return "anticipy-user"
 
 
 def _poll_inbound_rows(timeout_seconds: float = 8.0) -> list[dict[str, Any]]:

@@ -141,7 +141,74 @@ async def _private_network_headers(request: Request, call_next):
 
 _SESS: dict = {"i": 0, "transcript": [], "profile": None,
                "profile_obj": None}
-USER_ID = "anticipy-user"
+
+
+# Multi-tenant account_id derivation.
+#
+# Engine resolution order for any "which account writes/reads dossier,
+# task queue, pending_confirms?" lookup:
+#   1) ANTICIPY_ACCOUNT_ID env (deterministic override; Omar's launchctl
+#      sets this to "anticipy-user", which keeps his existing dossier
+#      path stable across the change below).
+#   2) USER_ID module global, which is initialized from a per-machine
+#      UUID materialized at ~/.anticipy/machine_id on first call. Once
+#      Supabase signin completes, server.py rebinds USER_ID to the real
+#      Supabase user id (see the mp3-eval block lower in this file).
+#   3) _SESS["profile_obj"].user_id when set by handoff.
+#   4) The persisted machine_id as a final safety net.
+#
+# Before this change, steps 1-3 all empty fell through to the global
+# literal "anticipy-user" which meant two strangers on different Macs
+# wrote to the same dossier path, the same pending_confirm path, and
+# the same task_queue position. The machine_id makes the engine
+# multi-tenant by default without requiring Supabase signin.
+_MACHINE_ID_PATH = Path.home() / ".anticipy" / "machine_id"
+_DEFAULT_ACCOUNT_ID_SOURCE = "unresolved"
+
+
+def _default_account_id() -> str:
+    """Return the per-machine account_id.
+
+    First call: reads ~/.anticipy/machine_id if it exists, else creates
+    it with uuid.uuid4().hex and chmod 0600. Returns the file content.
+    Idempotent across calls. Never raises; falls back to "local" only
+    if the home directory is unwritable (e.g. read-only sandbox).
+    """
+    global _DEFAULT_ACCOUNT_ID_SOURCE
+    try:
+        _MACHINE_ID_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if _MACHINE_ID_PATH.exists():
+            existing = _MACHINE_ID_PATH.read_text(encoding="utf-8").strip()
+            if existing:
+                _DEFAULT_ACCOUNT_ID_SOURCE = "machine_id_existing"
+                return existing
+        new_id = uuid.uuid4().hex
+        _MACHINE_ID_PATH.write_text(new_id, encoding="utf-8")
+        try:
+            os.chmod(_MACHINE_ID_PATH, 0o600)
+        except Exception:
+            pass
+        _DEFAULT_ACCOUNT_ID_SOURCE = "machine_id_created"
+        return new_id
+    except Exception:
+        _DEFAULT_ACCOUNT_ID_SOURCE = "fallback_local"
+        return "local"
+
+
+def _resolve_account_id_at_startup() -> tuple[str, str]:
+    """Compute the initial USER_ID and return (account_id, source_tag).
+
+    Source tags: "env" (ANTICIPY_ACCOUNT_ID was set), "machine_id_existing",
+    "machine_id_created", or "fallback_local".
+    """
+    env_val = (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+    if env_val:
+        return env_val, "env"
+    derived = _default_account_id()
+    return derived, _DEFAULT_ACCOUNT_ID_SOURCE
+
+
+USER_ID, _USER_ID_SOURCE = _resolve_account_id_at_startup()
 
 
 def _env_int(name: str, default: int) -> int:
@@ -386,6 +453,24 @@ def _publish_engine_port_file() -> None:
         port_dir = Path.home() / ".anticipy"
         port_dir.mkdir(parents=True, exist_ok=True)
         (port_dir / "engine.port").write_text(str(port), encoding="utf-8")
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
+def _log_account_id_source() -> None:
+    """Emit one line at boot so tests and operators can verify which
+    account_id the engine resolved to, and where it came from. Critical
+    for multi-tenant debugging: a stranger install without
+    ANTICIPY_ACCOUNT_ID set should log a machine_id-derived UUID, not
+    "anticipy-user" or "local".
+    """
+    try:
+        print(
+            f"[anticipy.account] resolved account_id={USER_ID!r} "
+            f"source={_USER_ID_SOURCE!r} machine_id_path={str(_MACHINE_ID_PATH)!r}",
+            flush=True,
+        )
     except Exception:
         pass
 
@@ -1547,6 +1632,8 @@ def state() -> JSONResponse:
         "total_questions": len(INTERVIEW_SCRIPT),
         "window_seconds": WINDOW_SECONDS,
         "cdp_port": CDP_PORT,
+        "account_id": USER_ID,
+        "account_id_source": _USER_ID_SOURCE,
         "chrome_user_data_dir": _chrome_user_data_dir(),
         "legacy_clone_cdp_enabled": LEGACY_CLONE_CDP_ENABLED,
         "clone_config_rejected": _clone_cdp_config_rejected(),
@@ -3053,7 +3140,11 @@ def _dispatch_via_universal_runtime(
     except Exception:
         account_id = ""
     if not account_id:
-        account_id = os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "local"
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or (USER_ID or "").strip()
+            or _default_account_id()
+        )
     device_id = os.environ.get("ANTICIPY_DEVICE_ID", "") or "user-device"
     memory_ctx = {
         "intent_kind": str(plan.get("intent") or ""),
@@ -3938,7 +4029,11 @@ def _resolve_person_from_active_dossier(instruction: str) -> tuple[
     except Exception:
         account_id = ""
     if not account_id:
-        account_id = os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "local"
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or (USER_ID or "").strip()
+            or _default_account_id()
+        )
     try:
         loader = DossierLoader(account_id=account_id)
     except Exception:
@@ -4011,15 +4106,19 @@ def _resolve_person_from_active_dossier(instruction: str) -> tuple[
 # This helper returns the active dossier people as the canonical v7
 # list-of-dicts shape, with the same source-of-truth account_id
 # resolution that auto_inhale.merge_delta uses (env override first,
-# then in-process USER_ID, then "local"). Returns [] on any error.
+# then in-process USER_ID, then per-machine derived UUID).
+# Returns [] on any error.
 def _active_dossier_people_dicts() -> list[dict]:
     """Read the on-disk active dossier and return its people as
     list[{name, email, role, pronouns, aliases}].
 
     Account_id resolution mirrors what cold-start writes to:
-    - ANTICIPY_ACCOUNT_ID env wins (deterministic override).
-    - Else the in-process USER_ID (default "anticipy-user", which is
-      also auto_inhale.DEFAULT_ACCOUNT_ID).
+    - ANTICIPY_ACCOUNT_ID env wins (deterministic override; Omar's
+      launchctl pins this to "anticipy-user" so his existing dossier
+      path stays stable).
+    - Else the in-process USER_ID (initialized from ANTICIPY_ACCOUNT_ID
+      at startup, or a per-machine UUID materialized at
+      ~/.anticipy/machine_id when the env is not set).
     - Else the legacy profile_obj.user_id when set.
     The DossierLoader's _candidate_paths fallback chain still applies,
     so if the per-account file is absent it will pick up a global
@@ -4042,7 +4141,7 @@ def _active_dossier_people_dicts() -> list[dict]:
         except Exception:
             account_id = ""
     if not account_id:
-        account_id = "local"
+        account_id = _default_account_id()
     try:
         loader = DossierLoader(account_id=account_id)
     except Exception:
