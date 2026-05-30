@@ -33,7 +33,15 @@ export const dynamic = "force-dynamic";
  *   NEXT_PUBLIC_SUPABASE_URL
  */
 export async function POST(req: Request) {
-  const formData = await req.formData();
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    // Malformed body (e.g. JSON sent to a Twilio webhook) is treated
+    // the same as an unsigned request. Return 403 so probers and
+    // accidental hits do not get a 500.
+    return new Response("Forbidden", { status: 403 });
+  }
   const params = formDataToParams(formData);
   const signature = req.headers.get("x-twilio-signature");
   if (!verifyTwilioRequest(signature, reconstructWebhookUrl(req), params)) {
