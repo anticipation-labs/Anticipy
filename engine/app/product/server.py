@@ -10632,6 +10632,20 @@ def api_universal_run(p: _UniversalRun) -> JSONResponse:
                 f"{type(exc).__name__}: {exc}"
             ),
         }, status_code=500)
+    # Bind a cost_telemetry task so every model_call inside the
+    # universal action loop accrues against the same task. Without
+    # this binding, /api/universal/run calls fire LLM requests that
+    # do not show up in /api/cost/stats per-task aggregation (the
+    # daily_calls counter stayed at 1 across multiple universal runs
+    # in cycles 113-116). Closes orchestrator queued unit
+    # UNIVERSAL-COST-ATTRIB.
+    cost_task_id = f"universal-{uuid.uuid4().hex[:12]}"
+    if _cost_telemetry is not None:
+        try:
+            _cost_telemetry.start_task(cost_task_id)
+            _cost_telemetry.set_active_for_thread(cost_task_id)
+        except Exception:
+            pass
     try:
         result = run_until_done(
             intent=intent,
@@ -10641,12 +10655,28 @@ def api_universal_run(p: _UniversalRun) -> JSONResponse:
         )
     except Exception as exc:
         import traceback
+        if _cost_telemetry is not None:
+            try:
+                _cost_telemetry.finish_task(cost_task_id, status="error")
+                _cost_telemetry.set_active_for_thread(None)
+            except Exception:
+                pass
         return JSONResponse({
             "ok": False,
             "error": f"run_until_done threw: {type(exc).__name__}: {exc}",
             "trace": traceback.format_exc()[-1200:],
         }, status_code=500)
-    return JSONResponse({"ok": result.get("status") == "SUCCESS", **result})
+    if _cost_telemetry is not None:
+        try:
+            _cost_telemetry.finish_task(
+                cost_task_id,
+                status=str(result.get("status") or "unknown").lower(),
+            )
+            _cost_telemetry.set_active_for_thread(None)
+        except Exception:
+            pass
+    return JSONResponse({"ok": result.get("status") == "SUCCESS",
+                          "cost_task_id": cost_task_id, **result})
 
 
 # --------------------------------------------------------------------------
