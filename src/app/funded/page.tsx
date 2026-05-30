@@ -19,9 +19,9 @@ const FUNDING_CONFIG = {
   minInvestment: 1000,
 };
 
-const CAL_LINK = "https://cal.com/omar-anticipy"; // Profile page — investors pick 15/30/60 min
+const CAL_LINK = "https://cal.com/omar-anticipy"; // Profile page. Investors pick 15/30/60 min
 const CAL_LINK_30 = "https://cal.com/omar-anticipy/anticipyfundraising30"; // Direct 30-min for emails
-const DECK_URL = ""; // Deck removed — investors get it after signing up
+const DECK_URL = ""; // Deck removed. Investors get it after signing up
 const CONTACT_EMAIL = "hello@anticipy.ai";
 
 // ─── HELPERS ───────────────────────────────────────────────────
@@ -103,7 +103,7 @@ function HeroSection() {
           variants={child}
           className="text-[clamp(18px,2.5vw,24px)] text-[var(--text-on-dark-muted)] font-light max-w-[640px] mx-auto mb-4"
         >
-          The AI wearable that acts — not advises.
+          The AI wearable that acts. Not advises.
         </motion.p>
 
         <motion.p
@@ -336,7 +336,7 @@ function WhyNowSection() {
         <div className="max-w-[720px] mx-auto space-y-8">
           <ScrollReveal delay={0.1}>
             <p className="text-[16px] leading-[1.75] text-[var(--text-on-dark-muted)]">
-              Apple is targeting 2027 with a recording pendant — a device that listens and transcribes. But the
+              Apple is targeting 2027 with a recording pendant, a device that listens and transcribes. But the
               action layer, the capability to autonomously execute tasks from ambient conversation, puts Apple&apos;s
               full vision at 2029 or 2030. We are building that layer now, years ahead of the incumbents.
             </p>
@@ -345,7 +345,7 @@ function WhyNowSection() {
           <ScrollReveal delay={0.2}>
             <p className="text-[16px] leading-[1.75] text-[var(--text-on-dark-muted)]">
               The window for a startup to own this space is narrow. Once Apple ships a recording device, consumer
-              awareness explodes — but the company that already has the action layer built wins the upgrade cycle.
+              awareness explodes. But the company that already has the action layer built wins the upgrade cycle.
               We intend to be that company.
             </p>
           </ScrollReveal>
@@ -353,7 +353,7 @@ function WhyNowSection() {
           <ScrollReveal delay={0.3}>
             <p className="text-[16px] leading-[1.75] text-[var(--text-on-dark-muted)]">
               At a $199 consumer price point, Anticipy is not a niche gadget for early adopters. It is a mass-market
-              product priced for mainstream adoption from day one — the same strategy that made AirPods a $30 billion
+              product priced for mainstream adoption from day one, the same strategy that made AirPods a $30 billion
               category.
             </p>
           </ScrollReveal>
@@ -367,7 +367,7 @@ function WhyNowSection() {
             <p className="font-serif text-[clamp(18px,2.5vw,22px)] text-[var(--text-on-dark)] leading-[1.6] mb-4">
               This is getting into Apple before it was Apple.
               Bitcoin before it was Bitcoin. The best investments are
-              obvious in hindsight — invisible in the moment.
+              obvious in hindsight. Invisible in the moment.
             </p>
             <p className="text-[14px] text-[var(--text-on-dark-muted)] opacity-70">
               At a $15M cap, you&apos;re investing at the stage where legends are made.
@@ -696,7 +696,7 @@ function InvestorInterestSection() {
         <ScrollReveal delay={0.1}>
           <p className="text-[15px] leading-[1.7] text-[var(--text-on-light-muted)] max-w-[520px] mx-auto mb-3">
             Leave your name and email. We&apos;ll personally send you the deck, terms, and
-            next steps — and a link to book time with Omar directly.
+            next steps, plus a link to book time with Omar directly.
           </p>
           <p className="text-[13px] text-[var(--text-on-light-muted)] opacity-60 mb-8">
             Minimum investment: {formatCurrency(FUNDING_CONFIG.minInvestment)}
@@ -722,7 +722,7 @@ function InvestorInterestSection() {
 
               <div className="space-y-4 text-[15px] leading-[1.7] text-[var(--text-on-light-muted)]">
                 <p>
-                  {firstName ? `Hey ${firstName}` : "Hey"} — really glad you&apos;re interested.
+                  {firstName ? `Hey ${firstName}, ` : "Hey, "}really glad you&apos;re interested.
                   This isn&apos;t a mass email situation. Omar will personally reach out
                   within the next 24 hours with your investor packet.
                 </p>
@@ -755,7 +755,7 @@ function InvestorInterestSection() {
               className="max-w-[440px] mx-auto"
             >
               <p className="text-[15px] text-[var(--text-on-light)] mb-4">
-                You&apos;re already on the list — we haven&apos;t forgotten about you.
+                You&apos;re already on the list. We haven&apos;t forgotten about you.
               </p>
               <p className="text-[14px] text-[var(--text-on-light-muted)] mb-6">
                 If you haven&apos;t heard from us yet, book a call directly:
@@ -879,7 +879,7 @@ function FAQSection() {
     },
     {
       q: "What's the competitive moat?",
-      a: "Privacy-first architecture creates a structural moat. Competitors store and transmit audio to the cloud — their architecture cannot support autonomous action without rebuilding from scratch. We have provisional patents covering ambient intent detection and on-device ephemeral audio processing. PCT international filing covering US, Canada, EU, UK, China, GCC, South Africa.",
+      a: "Privacy-first architecture creates a structural moat. Competitors store and transmit audio to the cloud. Their architecture cannot support autonomous action without rebuilding from scratch. We have provisional patents covering ambient intent detection and on-device ephemeral audio processing. PCT international filing covering US, Canada, EU, UK, China, GCC, South Africa.",
     },
     {
       q: "How do I invest if I'm not in the US?",

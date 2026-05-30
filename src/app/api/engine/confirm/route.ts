@@ -136,7 +136,7 @@ export async function GET(req: Request) {
 
     if (!existingIntent) {
       return new Response(
-        renderPage("error", "We couldn't find this request — it may have expired."),
+        renderPage("error", "We couldn't find this request. It may have expired."),
         { headers: HTML_HEADERS, status: 404 }
       );
     }
@@ -319,7 +319,7 @@ export async function GET(req: Request) {
   const variant = newStatus === "confirmed" ? "confirmed" : "skipped";
   const mainMessage =
     variant === "confirmed"
-      ? "Got it — Anticipy is on it."
+      ? "Got it. Anticipy is on it."
       : "Skipped. No action will be taken.";
 
   return new Response(renderPage(variant, mainMessage, executionMessage), {
@@ -345,7 +345,7 @@ const VARIANTS: Record<Variant, VariantConfig> = {
   },
   skipped: {
     title: "Skipped",
-    glyph: "—",
+    glyph: "·",
     glyphColor: "#8A8A8A",
     accent: "#8A8A8A",
   },
@@ -383,7 +383,7 @@ function renderPage(variant: Variant, message: string, detail?: string): string 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="dark">
 <meta name="robots" content="noindex,nofollow">
-<title>Anticipy — ${safeTitle}</title>
+<title>Anticipy: ${safeTitle}</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   body {

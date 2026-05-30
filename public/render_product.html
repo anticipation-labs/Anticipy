@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Anticipy Pendant — Product Render</title>
+<title>Anticipy Pendant | Product Render</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0C0C0C; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif; color: #F5F0EB; overflow: hidden; }
@@ -25,14 +25,14 @@ canvas { display: block; }
   <p>AMBIENT INTELLIGENCE PENDANT</p>
 </div>
 <div class="specs">
-  <div><span>38 × 25 × 11 mm</span> — smaller than AirPods</div>
-  <div><span>ESP32-S3</span> — dual-core 240MHz, 8MB PSRAM</div>
-  <div><span>INMP441</span> — MEMS microphone, 61dB SNR</div>
-  <div><span>15+ hours</span> — battery life</div>
-  <div><span>WiFi + BLE 5.0</span> — always connected</div>
-  <div><span>USB-C</span> — fast charging</div>
-  <div><span>On-device VAD</span> — privacy first</div>
-  <div><span>&lt; $100 CAD</span> — BOM cost</div>
+  <div><span>38 × 25 × 11 mm</span>, smaller than AirPods</div>
+  <div><span>ESP32-S3</span>, dual-core 240MHz, 8MB PSRAM</div>
+  <div><span>INMP441</span>, MEMS microphone, 61dB SNR</div>
+  <div><span>15+ hours</span> battery life</div>
+  <div><span>WiFi + BLE 5.0</span>, always connected</div>
+  <div><span>USB-C</span> fast charging</div>
+  <div><span>On-device VAD</span>, privacy first</div>
+  <div><span>&lt; $100 CAD</span> BOM cost</div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -58,7 +58,7 @@ const rim = new THREE.DirectionalLight(0x4488ff, 0.6);
 rim.position.set(0, -2, -5);
 scene.add(rim);
 
-// Pendant body — titanium-look rounded rectangle
+// Pendant body: titanium-look rounded rectangle
 const group = new THREE.Group();
 
 // Main body (rounded box approximation)

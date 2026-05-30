@@ -112,7 +112,7 @@ export async function GET(request: NextRequest) {
 function renderPage(title: string, message: string): string {
   return `<!DOCTYPE html>
 <html>
-<head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Anticipy — ${escapeHtml(title)}</title></head>
+<head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Anticipy: ${escapeHtml(title)}</title></head>
 <body style="background:#0C0C0C;color:#FAFAFA;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;">
   <div style="text-align:center;max-width:400px;padding:40px;">
     <h1 style="font-family:Georgia,serif;font-size:24px;color:#C8A97E;margin-bottom:12px;">Anticipy</h1>

@@ -232,16 +232,57 @@ class VisionSurface:
     # ---------------------------------------------------------------- internals
 
     def _call_vision_json(self, png_bytes: bytes, prompt: str) -> VisionCallResult:
-        """Cascade: try primary, fall back on failure or empty content."""
+        """Cascade: try primary, fall back on failure or empty content.
+
+        Wired into the per-task cost telemetry so:
+          - the gate refuses a NEW vision call once a task crossed the
+            5 call abort threshold (canvas-only apps will hit this and
+            we want them escalated, not silently expensive),
+          - every successful vision call increments the per-task
+            vision_call_count + accrues against the running cost.
+        """
+        # Resolve the active task id without hard-importing the product
+        # module (cost_telemetry has no upward dependency).
+        task_id: Optional[str] = None
+        _ct = None
+        try:
+            from app.product import cost_telemetry as _ct
+            task_id = _ct.get_active_task_id_for_thread()
+            if task_id:
+                reason = _ct.vision_gate(task_id)
+                if reason:
+                    return VisionCallResult(
+                        ok=False, content="", model=self.primary_model,
+                        latency_s=0.0,
+                        error=f"VISION_BUDGET_ABORTED: {reason}",
+                    )
+        except Exception:
+            _ct = None  # type: ignore
         b64 = base64.b64encode(png_bytes).decode("ascii")
+        result: VisionCallResult = VisionCallResult(  # default if loop skipped
+            ok=False, content="", model=self.primary_model,
+            latency_s=0.0, error="no model attempted",
+        )
         for model in (self.primary_model, self.fallback_model):
             t0 = time.time()
             result = self._post_chat(model, prompt, b64)
             result.latency_s = time.time() - t0
             if result.ok and result.content.strip():
-                return result
+                break
             # try fallback
-        return result  # type: ignore[return-value]
+        # Record the vision call cost regardless of success so the
+        # per-task ledger captures wasted vision spend too.
+        try:
+            if _ct is not None and task_id:
+                _ct.record_vision_call(
+                    task_id, result.model,
+                    int(result.prompt_tokens or 0),
+                    int(result.completion_tokens or 0),
+                    float(result.cost_usd or 0.0),
+                )
+        except Exception:
+            pass
+        return result
 
     def _post_chat(self, model: str, prompt: str, image_b64: str) -> VisionCallResult:
         # Reasoning OFF: both Kimi and Gemini are reasoning-capable but would

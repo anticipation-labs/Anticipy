@@ -4,37 +4,120 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=480, initial-scale=1.0" />
     <title>Anticipy</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
     <style>
+      /*
+       * Apple-quality popover.
+       *
+       * Typography is pure San Francisco. We use the macOS system font stack
+       * exclusively (no Google Fonts, no IBM Plex, no fallback) so the
+       * popover renders with the same rhythm and weight hierarchy as
+       * first-party Apple apps. Weights follow Apple guidance: 600 for
+       * titles, 400 for body, 500 for captions and labels.
+       *
+       * Colors respect light and dark mode via prefers-color-scheme. The
+       * dark palette stays in the cream/charcoal/gold brand band; the
+       * light palette uses near-black text on near-white background, with
+       * the same brand gold for accents, so the popover blends with the
+       * surrounding desktop in either appearance.
+       */
       :root {
-        --charcoal: #0C0C0C;
-        --cream: #F5F0EB;
+        /* Brand colors that stay constant across appearances. */
         --gold: #C8A97E;
-        --warm-gray: #6B635B;
-        --card-bg: #161616;
-        --hairline: #232323;
+        --ok: #34C759;
+        --warn: #FF9F0A;
+        --err: #FF3B30;
       }
+
+      /* Dark mode (default for the menu bar context). */
+      :root {
+        --bg: #0C0C0C;
+        --bg-elevated: #161616;
+        --text: #F5F0EB;
+        --text-dim: #9A9388;
+        --text-faint: #6B635B;
+        --hairline: #242424;
+        --hairline-strong: #2E2E2E;
+        --tint-soft: rgba(200, 169, 126, 0.08);
+        --tint-strong: rgba(200, 169, 126, 0.22);
+        --btn-bg: #F5F0EB;
+        --btn-text: #0C0C0C;
+        --ghost-bg: transparent;
+        --ghost-text: #F5F0EB;
+        --ghost-border: #2E2E2E;
+        --ok-soft: rgba(52, 199, 89, 0.10);
+        --ok-border: rgba(52, 199, 89, 0.32);
+        --warn-soft: rgba(255, 159, 10, 0.10);
+        --warn-border: rgba(255, 159, 10, 0.32);
+        --err-soft: rgba(255, 59, 48, 0.10);
+        --err-border: rgba(255, 59, 48, 0.34);
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #FFFFFF;
+          --bg-elevated: #F7F5F2;
+          --text: #1A1A1C;
+          --text-dim: #5B5550;
+          --text-faint: #8A857F;
+          --hairline: #E8E4DD;
+          --hairline-strong: #D8D3CA;
+          --tint-soft: rgba(200, 169, 126, 0.10);
+          --tint-strong: rgba(200, 169, 126, 0.28);
+          --btn-bg: #1A1A1C;
+          --btn-text: #FFFFFF;
+          --ghost-bg: transparent;
+          --ghost-text: #1A1A1C;
+          --ghost-border: #D8D3CA;
+          --ok-soft: rgba(52, 199, 89, 0.14);
+          --ok-border: rgba(52, 199, 89, 0.40);
+          --warn-soft: rgba(255, 159, 10, 0.14);
+          --warn-border: rgba(255, 159, 10, 0.40);
+          --err-soft: rgba(255, 59, 48, 0.12);
+          --err-border: rgba(255, 59, 48, 0.40);
+        }
+      }
+
       * { box-sizing: border-box; margin: 0; padding: 0; }
+
       html, body {
-        background: var(--charcoal);
-        color: var(--cream);
-        font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                     "SF Pro Display", "Helvetica Neue", sans-serif;
         font-size: 13px;
-        line-height: 1.5;
+        line-height: 1.45;
         width: 480px;
         height: 600px;
         overflow: hidden;
         user-select: none;
         -webkit-app-region: drag;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        font-feature-settings: "kern", "liga", "ss01";
       }
+
+      /* Popover open: 200ms fade with a gentle springy translateY. The
+         body sits at translateY(-4px) opacity:0 by default; the
+         .is-shown class (set on popover-shown event) flips it back. */
+      body {
+        opacity: 0;
+        transform: translateY(-4px);
+        transition:
+          opacity 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          transform 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      body.is-shown {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
       .container {
         display: flex;
         flex-direction: column;
         height: 100%;
-        padding: 16px 20px;
+        padding: 16px 20px 18px;
       }
+
       header {
         display: flex;
         align-items: center;
@@ -43,201 +126,251 @@
         -webkit-app-region: drag;
       }
       .brand {
-        font-family: "DM Serif Display", Georgia, serif;
-        font-size: 20px;
-        color: var(--cream);
-        letter-spacing: 0.5px;
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.01em;
       }
+
       .status-pill {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        color: var(--warm-gray);
+        gap: 7px;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--text-dim);
         -webkit-app-region: no-drag;
+        line-height: 1;
       }
       .dot {
-        width: 6px; height: 6px; border-radius: 50%;
-        background: var(--gold);
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-faint);
+        box-shadow: 0 0 0 0 transparent;
+        transition: background-color 180ms ease, box-shadow 180ms ease;
       }
-      .dot.alive { background: #8BC34A; }
-      .dot.dead { background: #E57373; }
+      .dot.ready  { background: var(--ok);   box-shadow: 0 0 6px rgba(52, 199, 89, 0.45); }
+      .dot.warn   { background: var(--warn); box-shadow: 0 0 6px rgba(255, 159, 10, 0.45); }
+      .dot.error  { background: var(--err);  box-shadow: 0 0 6px rgba(255, 59, 48, 0.45); }
 
       .body {
         flex: 1;
         overflow-y: auto;
         -webkit-app-region: no-drag;
+        scrollbar-width: thin;
       }
-      .body::-webkit-scrollbar { width: 4px; }
-      .body::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 2px; }
+      .body::-webkit-scrollbar { width: 6px; }
+      .body::-webkit-scrollbar-thumb {
+        background: var(--hairline-strong);
+        border-radius: 3px;
+      }
+      .body::-webkit-scrollbar-track { background: transparent; }
 
-      /* Onboarding (empty dossier) view */
-      .welcome { padding: 8px 0; }
+      /* Welcome (empty dossier) view. */
+      .welcome { padding: 4px 0 6px; }
       .welcome h1 {
-        font-family: "DM Serif Display", Georgia, serif;
         font-size: 22px;
-        color: var(--cream);
-        margin-bottom: 8px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.02em;
+        margin-bottom: 6px;
       }
-      .welcome p {
-        font-size: 13px;
-        color: var(--warm-gray);
+      .welcome p.lede {
+        font-size: 13.5px;
+        font-weight: 400;
+        color: var(--text-dim);
         margin-bottom: 14px;
-      }
-      .perm-note {
-        font-size: 12px;
-        color: var(--cream);
-        background: rgba(200, 169, 126, 0.06);
-        border: 1px solid rgba(200, 169, 126, 0.18);
-        border-radius: 8px;
-        padding: 12px 14px;
-        margin-bottom: 18px;
         line-height: 1.5;
       }
+
+      .perm-note {
+        font-size: 12.5px;
+        font-weight: 400;
+        color: var(--text);
+        background: var(--tint-soft);
+        border: 1px solid var(--tint-strong);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        line-height: 1.5;
+      }
+
       .onboard-options {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
       }
       .onboard-card {
-        background: var(--card-bg);
+        background: var(--bg-elevated);
         border: 1px solid var(--hairline);
         border-radius: 10px;
-        padding: 14px 16px;
+        padding: 12px 14px;
         cursor: pointer;
-        transition: border-color 0.15s, transform 0.05s;
+        transition:
+          border-color 160ms ease,
+          background-color 160ms ease,
+          transform 80ms ease;
       }
       .onboard-card:hover {
         border-color: var(--gold);
+        background: var(--bg-elevated);
       }
       .onboard-card:active {
-        transform: scale(0.99);
+        transform: scale(0.985);
       }
       .onboard-card .title {
-        font-size: 14px;
+        font-size: 13.5px;
         font-weight: 500;
-        color: var(--cream);
-        margin-bottom: 4px;
+        color: var(--text);
+        margin-bottom: 2px;
+        letter-spacing: -0.005em;
       }
       .onboard-card .sub {
         font-size: 12px;
-        color: var(--warm-gray);
+        font-weight: 400;
+        color: var(--text-dim);
+        line-height: 1.4;
       }
 
-      /* Populated dossier view: three columns Now / Next / Past */
+      /* Populated state: Now / Next / Past. */
       .columns {
         display: grid;
         grid-template-rows: auto 1fr 1fr;
-        gap: 14px;
+        gap: 12px;
         height: 100%;
       }
       .col {
-        background: var(--card-bg);
+        background: var(--bg-elevated);
         border: 1px solid var(--hairline);
         border-radius: 10px;
         padding: 12px 14px;
       }
       .col h2 {
         font-size: 10px;
-        color: var(--warm-gray);
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
-        margin-bottom: 8px;
         font-weight: 500;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.10em;
+        margin-bottom: 8px;
       }
       .col-now .now-title {
-        font-family: "DM Serif Display", Georgia, serif;
-        font-size: 17px;
-        color: var(--cream);
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text);
         line-height: 1.3;
+        letter-spacing: -0.01em;
       }
       .col-now .now-sub {
         font-size: 12px;
-        color: var(--warm-gray);
+        font-weight: 400;
+        color: var(--text-dim);
         margin-top: 4px;
       }
       .col-now .idle {
-        color: var(--warm-gray);
-        font-style: italic;
+        color: var(--text-dim);
         font-size: 13px;
+        font-weight: 400;
       }
       .col-now .actions {
         display: flex;
         gap: 8px;
         margin-top: 12px;
       }
+
       .btn {
-        padding: 6px 12px;
-        font-size: 12px;
-        font-family: inherit;
-        background: var(--cream);
-        color: var(--charcoal);
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
+        padding: 6px 13px;
+        font-size: 12.5px;
         font-weight: 500;
+        font-family: inherit;
+        background: var(--btn-bg);
+        color: var(--btn-text);
+        border: 1px solid var(--btn-bg);
+        border-radius: 7px;
+        cursor: pointer;
+        transition: opacity 120ms ease, transform 80ms ease;
+        letter-spacing: -0.005em;
       }
+      .btn:hover  { opacity: 0.88; }
+      .btn:active { transform: scale(0.98); }
       .btn.ghost {
-        background: transparent;
-        color: var(--cream);
-        border: 1px solid var(--hairline);
+        background: var(--ghost-bg);
+        color: var(--ghost-text);
+        border: 1px solid var(--ghost-border);
       }
-      .btn:hover { opacity: 0.9; }
 
       .col ul { list-style: none; }
       .col li {
-        padding: 6px 0;
+        padding: 7px 0;
         border-bottom: 1px solid var(--hairline);
-        font-size: 12px;
-        color: var(--cream);
+        font-size: 12.5px;
+        font-weight: 400;
+        color: var(--text);
       }
       .col li:last-child { border-bottom: none; }
       .col li .sub {
         font-size: 11px;
-        color: var(--warm-gray);
+        font-weight: 500;
+        color: var(--text-faint);
         margin-top: 2px;
+        letter-spacing: 0.005em;
       }
       .col .empty {
-        font-size: 12px;
-        color: var(--warm-gray);
-        font-style: italic;
+        font-size: 12.5px;
+        font-weight: 400;
+        color: var(--text-dim);
       }
 
-      .mic-card {
-        background: rgba(229, 115, 115, 0.08);
-        border: 1px solid rgba(229, 115, 115, 0.3);
+      /* Banner cards: mic pre-prompt, mic denied, ambient status. */
+      .banner {
         border-radius: 10px;
-        padding: 12px 14px;
+        padding: 11px 14px;
         margin-bottom: 12px;
+        font-size: 12.5px;
+        font-weight: 400;
+        line-height: 1.45;
+        animation: bannerIn 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
       }
-      .mic-card .title {
-        color: #E57373;
+      .banner .title {
+        font-size: 12.5px;
+        font-weight: 600;
+        margin-bottom: 3px;
+        letter-spacing: -0.005em;
+      }
+      .banner .sub {
         font-size: 12px;
-        font-weight: 500;
-        margin-bottom: 4px;
-      }
-      .mic-card .sub {
-        color: var(--warm-gray);
-        font-size: 11px;
+        font-weight: 400;
+        color: var(--text-dim);
         margin-bottom: 8px;
       }
+      .banner.info {
+        background: var(--tint-soft);
+        border: 1px solid var(--tint-strong);
+        color: var(--text);
+      }
+      .banner.info .title { color: var(--text); }
+      .banner.warn {
+        background: var(--warn-soft);
+        border: 1px solid var(--warn-border);
+        color: var(--text);
+      }
+      .banner.warn .title { color: var(--warn); }
+      .banner.err {
+        background: var(--err-soft);
+        border: 1px solid var(--err-border);
+        color: var(--text);
+      }
+      .banner.err .title { color: var(--err); }
+      .banner.ok {
+        background: var(--ok-soft);
+        border: 1px solid var(--ok-border);
+        color: var(--text);
+      }
+      .banner.ok .title { color: var(--ok); }
 
-      .ambient-status {
-        margin-top: 14px;
-        padding: 12px 14px;
-        border-radius: 8px;
-        font-size: 12px;
-        line-height: 1.5;
-      }
-      .ambient-status.ok {
-        background: rgba(139, 195, 74, 0.10);
-        border: 1px solid rgba(139, 195, 74, 0.30);
-        color: var(--cream);
-      }
-      .ambient-status.err {
-        background: rgba(229, 115, 115, 0.10);
-        border: 1px solid rgba(229, 115, 115, 0.30);
-        color: var(--cream);
+      @keyframes bannerIn {
+        from { opacity: 0; transform: translateY(-3px); }
+        to   { opacity: 1; transform: translateY(0); }
       }
 
       .hidden { display: none !important; }
@@ -249,24 +382,32 @@
         <span class="brand">Anticipy</span>
         <span class="status-pill" id="status-pill">
           <span class="dot" id="status-dot"></span>
-          <span id="status-text">Connecting</span>
+          <span id="status-text">Waking up</span>
         </span>
       </header>
 
-      <div id="mic-card" class="mic-card hidden">
-        <div class="title">Microphone access needed</div>
-        <div class="sub">Anticipy listens to your day so it can act on the things you mention. macOS needs to approve this once.</div>
+      <!-- Pre-prompt explainer. Fires for a beat before macOS shows the
+           Allow / Deny dialog so the user knows why they are being asked. -->
+      <div id="mic-pre-prompt" class="banner info hidden">
+        <div class="title">Microphone access in a moment</div>
+        <div class="sub">Anticipy needs to hear what people ask you to do. macOS will ask you to allow it next.</div>
+      </div>
+
+      <!-- Recovery card. Shown only when permission has been denied. -->
+      <div id="mic-card" class="banner err hidden">
+        <div class="title">Microphone access is off</div>
+        <div class="sub">Anticipy listens to your day so it can act on the things you mention. Turn microphone access on for Anticipy in System Settings.</div>
         <button class="btn" id="mic-open-settings">Open System Settings</button>
       </div>
 
       <div class="body">
 
-        <!-- Welcome state: shown when dossier is empty -->
+        <!-- Welcome state: shown when dossier is empty. -->
         <section id="welcome" class="welcome hidden">
           <h1>Welcome to Anticipy.</h1>
-          <p>Let's get to know you. Pick one. Takes about ten minutes.</p>
+          <p class="lede">Let's get to know you. Pick one. Takes about ten minutes.</p>
           <div class="perm-note">
-            Heads up. macOS will ask Anticipy for permission to use your microphone, take screenshots, and control other apps. That is so Anticipy can hear what you mention and act in your real Chrome. Click Allow when macOS asks. You can revoke any of these later in System Settings > Privacy and Security.
+            macOS will ask Anticipy for permission to use your microphone, take screenshots, and control other apps. That is so Anticipy can hear what you mention and act in your real Chrome. Click Allow when macOS asks. You can change any of these later in System Settings, Privacy and Security.
           </div>
           <div class="onboard-options">
             <div class="onboard-card" data-onboard="call">
@@ -286,14 +427,14 @@
               <div class="sub">Anticipy will pick things up from your day as you go. No interview now.</div>
             </div>
           </div>
-          <div id="ambient-status" class="ambient-status hidden"></div>
+          <div id="ambient-status" class="banner hidden"></div>
         </section>
 
-        <!-- Populated state: Now / Next / Past columns -->
+        <!-- Populated state: Now / Next / Past columns. -->
         <section id="columns" class="columns hidden">
           <div class="col col-now">
             <h2>Now</h2>
-            <div id="now-content" class="idle">Quiet right now.</div>
+            <div id="now-content" class="idle">Quiet right now. Anticipy is listening.</div>
           </div>
           <div class="col col-next">
             <h2>Next</h2>
@@ -309,97 +450,173 @@
     </div>
 
     <script>
-      // Tauri invoke shim. Works whether the popover is loaded inside
-      // Tauri or stand-alone in a browser for design preview.
+      /*
+       * Tauri invoke and event shims. They work whether the popover is
+       * loaded inside Tauri or stand-alone in a browser for design preview.
+       */
+      const tauriCore  = (window.__TAURI__ && window.__TAURI__.core)  || null;
+      const tauriEvent = (window.__TAURI__ && window.__TAURI__.event) || null;
+
       const invoke = (cmd, args = {}) => {
-        if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke) {
-          return window.__TAURI__.core.invoke(cmd, args);
-        }
+        if (tauriCore && tauriCore.invoke) return tauriCore.invoke(cmd, args);
         if (window.__TAURI__ && window.__TAURI__.invoke) {
           return window.__TAURI__.invoke(cmd, args);
         }
-        // Browser preview fallback: return mock empty values.
         const mocks = {
           fetch_active_task: () => null,
           fetch_next_tasks: () => [],
           fetch_past_tasks: () => [],
-          fetch_dossier_summary: () => ({ field_count: 0, people: [], last_call: null }),
-          fetch_mic_permission_state: () => ({ authorized: true }),
+          fetch_dossier_summary: () => ({ entry_count: 0, last_call_at: "", call_in_progress: false, mock_mode: true }),
+          fetch_mic_permission_state: () => "granted",
         };
         return Promise.resolve((mocks[cmd] || (() => null))());
       };
 
+      function onEvent(name, handler) {
+        if (tauriEvent && tauriEvent.listen) {
+          tauriEvent.listen(name, (e) => handler(e && e.payload));
+        }
+      }
+
       const $ = (id) => document.getElementById(id);
 
+      /* ----- Status row ----- */
+      // state: "ready" (green), "warn" (yellow), "error" (red).
       function setStatus(state, text) {
         const dot = $("status-dot");
-        dot.classList.remove("alive", "dead");
-        if (state === "alive") dot.classList.add("alive");
-        if (state === "dead") dot.classList.add("dead");
+        dot.classList.remove("ready", "warn", "error");
+        if (state === "ready" || state === "warn" || state === "error") {
+          dot.classList.add(state);
+        }
         $("status-text").textContent = text;
       }
 
-      function renderWelcome() {
-        $("welcome").classList.remove("hidden");
-        $("columns").classList.add("hidden");
+      /* ----- View switching, no flicker ----- */
+      let lastView = null;
+      function ensureView(name) {
+        if (lastView === name) return;
+        lastView = name;
+        $("welcome").classList.toggle("hidden", name !== "welcome");
+        $("columns").classList.toggle("hidden", name !== "columns");
       }
 
-      function renderColumns() {
-        $("welcome").classList.add("hidden");
-        $("columns").classList.remove("hidden");
-      }
-
+      /* ----- Now / Next / Past rendering, idempotent ----- */
+      let lastNowKey = null;
       function renderNow(active) {
         const el = $("now-content");
         if (!active) {
+          const key = "idle";
+          if (lastNowKey === key) return;
+          lastNowKey = key;
           el.className = "idle";
           el.textContent = "Quiet right now. Anticipy is listening.";
           return;
         }
+        const title = active.goal || active.task_name || "Working on something";
+        const sub = active.status || "Working on it";
+        const key = "active|" + title + "|" + sub;
+        if (lastNowKey === key) return;
+        lastNowKey = key;
         el.className = "";
-        el.innerHTML = `
-          <div class="now-title">${escapeHtml(active.goal || active.task_name || "Working on something")}</div>
-          <div class="now-sub">${escapeHtml(active.status || "running")}</div>
-          <div class="actions">
-            <button class="btn" id="now-yes">Yes, do it</button>
-            <button class="btn ghost" id="now-no">No</button>
-          </div>`;
+        el.innerHTML = "";
+        const t = document.createElement("div");
+        t.className = "now-title";
+        t.textContent = title;
+        const s = document.createElement("div");
+        s.className = "now-sub";
+        s.textContent = sub;
+        const a = document.createElement("div");
+        a.className = "actions";
+        const yes = document.createElement("button");
+        yes.className = "btn";
+        yes.id = "now-yes";
+        yes.textContent = "Yes, do it";
+        const no = document.createElement("button");
+        no.className = "btn ghost";
+        no.id = "now-no";
+        no.textContent = "No";
+        a.appendChild(yes);
+        a.appendChild(no);
+        el.appendChild(t);
+        el.appendChild(s);
+        el.appendChild(a);
       }
 
-      function renderList(elId, items, labelFn) {
+      const _listKeys = { "next-list": null, "past-list": null };
+      function renderList(elId, items, emptyText, labelFn) {
         const ul = $(elId);
+        const key = JSON.stringify((items || []).map(labelFn));
+        if (_listKeys[elId] === key) return;
+        _listKeys[elId] = key;
         ul.innerHTML = "";
         if (!items || items.length === 0) {
           const li = document.createElement("li");
           li.className = "empty";
-          li.textContent = elId === "next-list" ? "Nothing queued." : "No recent actions.";
+          li.textContent = emptyText;
           ul.appendChild(li);
           return;
         }
         for (const it of items.slice(0, 6)) {
           const li = document.createElement("li");
-          li.innerHTML = labelFn(it);
+          const labelObj = labelFn(it);
+          const main = document.createElement("span");
+          main.textContent = labelObj.main || "";
+          li.appendChild(main);
+          if (labelObj.sub) {
+            const sub = document.createElement("div");
+            sub.className = "sub";
+            sub.textContent = labelObj.sub;
+            li.appendChild(sub);
+          }
           ul.appendChild(li);
         }
       }
 
-      function escapeHtml(s) {
-        return String(s || "").replace(/[&<>"']/g, (c) => ({
-          "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-        }[c]));
+      /* ----- Friendly status text for past task rows ----- */
+      function friendlyStatus(raw) {
+        const s = String(raw || "").toLowerCase();
+        if (s === "success" || s === "ok" || s === "done") return "Done";
+        if (s === "in_progress" || s === "running" || s === "in-progress") return "Working on it";
+        if (s === "ask_user" || s === "ask") return "Needs your okay";
+        if (s === "notify_user" || s === "notify") return "Heads up sent";
+        if (s === "timed_out") return "Took too long, stopped";
+        if (s === "error" || s === "failed" || s === "fail") return "Could not finish";
+        if (!s) return "";
+        // Strip technical underscores and titlecase for unknown states.
+        return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
       }
 
+      /* ----- Friendly relative time for past task rows ----- */
+      function friendlyTime(iso) {
+        if (!iso) return "";
+        const t = Date.parse(iso);
+        if (!Number.isFinite(t)) return "";
+        const secs = Math.max(0, (Date.now() - t) / 1000);
+        if (secs < 60) return "Just now";
+        const mins = Math.floor(secs / 60);
+        if (mins < 60) return mins + " min ago";
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return hrs + " hr ago";
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return days + " day" + (days === 1 ? "" : "s") + " ago";
+        return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      }
+
+      /* ----- Refresh loop ----- */
+      let inflightRefresh = false;
       async function refresh() {
+        if (inflightRefresh) return;
+        inflightRefresh = true;
         try {
           const dossier = await invoke("fetch_dossier_summary");
-          const empty = !dossier || (dossier.field_count || 0) === 0;
+          const empty = !dossier || (Number(dossier.entry_count) || 0) === 0;
           if (empty) {
-            renderWelcome();
-            setStatus("alive", "Ready to set up");
+            ensureView("welcome");
+            if (currentMicState !== "denied") setStatus("warn", "Setting things up");
             return;
           }
-          renderColumns();
-          setStatus("alive", "Listening");
+          ensureView("columns");
+          if (currentMicState !== "denied") setStatus("ready", "Listening");
 
           const [active, next, past] = await Promise.all([
             invoke("fetch_active_task"),
@@ -407,42 +624,70 @@
             invoke("fetch_past_tasks", { limit: 6 }),
           ]);
           renderNow(active);
-          renderList("next-list", next, (it) => {
-            const goal = escapeHtml(it.goal || it.task_name || it.description || "Pending task");
-            const when = escapeHtml(it.when || it.scheduled_for || "");
-            return `${goal}${when ? `<div class="sub">${when}</div>` : ""}`;
-          });
-          renderList("past-list", past, (it) => {
-            const goal = escapeHtml(it.goal || it.task_name || "Action");
-            const status = escapeHtml(it.status || "");
-            return `${goal}${status ? `<div class="sub">${status}</div>` : ""}`;
-          });
+          renderList("next-list", next, "Nothing queued.", (it) => ({
+            main: it.goal || it.task_name || it.description || "Pending task",
+            sub: it.when || it.scheduled_for || "",
+          }));
+          renderList("past-list", past, "No recent actions.", (it) => ({
+            main: it.goal || it.task_name || "Recent action",
+            sub: [friendlyStatus(it.status), friendlyTime(it.updated_at || it.created_at)]
+                   .filter(Boolean).join("  ,  "),
+          }));
         } catch (e) {
-          setStatus("dead", "Engine not responding");
+          if (currentMicState !== "denied") {
+            setStatus("error", "Anticipy is not running");
+          }
+        } finally {
+          inflightRefresh = false;
+        }
+      }
+
+      /* ----- Mic permission state ----- */
+      // Rust returns the string "unknown" | "granted" | "denied" from
+      // fetch_mic_permission_state, and also emits mic-permission-granted
+      // / mic-permission-denied events as the OS state flips. We track
+      // both paths so the UI never goes stale.
+      let currentMicState = "unknown";
+
+      function applyMicState(state) {
+        currentMicState = state;
+        const denied = state === "denied";
+        $("mic-card").classList.toggle("hidden", !denied);
+        if (denied) {
+          $("mic-pre-prompt").classList.add("hidden");
+          setStatus("error", "Microphone access needed");
+        } else if (state === "granted") {
+          $("mic-pre-prompt").classList.add("hidden");
+          // Defer to refresh() to set ready / warn / error based on dossier.
         }
       }
 
       async function checkMicPermission() {
         try {
           const state = await invoke("fetch_mic_permission_state");
-          if (state && state.authorized === false) {
-            $("mic-card").classList.remove("hidden");
-          } else {
-            $("mic-card").classList.add("hidden");
+          // Tolerate both the current string return and any future object
+          // return so we never silently break on a backend tweak.
+          if (typeof state === "string") {
+            applyMicState(state);
+          } else if (state && typeof state === "object") {
+            if (state.authorized === true) applyMicState("granted");
+            else if (state.authorized === false) applyMicState("denied");
+            else if (typeof state.state === "string") applyMicState(state.state);
           }
         } catch (e) {
-          // ignore; mic state unknown is not an error to surface
+          /* mic state unknown is not an error to surface */
         }
       }
 
+      /* ----- Onboarding clicks ----- */
       function wireOnboardCards() {
         document.querySelectorAll(".onboard-card").forEach((card) => {
           card.addEventListener("click", async () => {
             const choice = card.dataset.onboard;
             const urls = {
-              call: "https://www.anticipy.ai/onboarding/call",
+              call:  "https://www.anticipy.ai/onboarding/call",
               audio: "https://www.anticipy.ai/onboarding/audio",
-              chat: "https://www.anticipy.ai/onboarding/chat",
+              chat:  "https://www.anticipy.ai/onboarding/chat",
             };
             if (urls[choice]) {
               try {
@@ -467,7 +712,7 @@
 
       async function startAmbientListening() {
         const box = $("ambient-status");
-        box.className = "ambient-status";
+        box.className = "banner info";
         box.classList.remove("hidden");
         box.textContent = "Asking macOS for microphone access...";
         try {
@@ -478,26 +723,64 @@
           });
           const data = await res.json();
           if (data && data.on) {
-            box.classList.add("ok");
-            const dev = (data.audio_device && data.audio_device.name) || "default microphone";
-            box.textContent = "Listening through " + dev + ". Close this and get on with your day. Anticipy will pick things up.";
+            box.className = "banner ok";
+            const dev = (data.audio_device && data.audio_device.name) || "your default microphone";
+            box.textContent = "Listening through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
           } else {
-            box.classList.add("err");
+            box.className = "banner err";
             box.textContent = (data && data.error)
               ? "Could not start listening. " + data.error
               : "Could not start listening.";
           }
         } catch (e) {
-          box.classList.add("err");
-          box.textContent = "Local engine is not reachable. Make sure Anticipy is running.";
+          box.className = "banner err";
+          box.textContent = "Anticipy is not running. Try opening it from your Applications folder.";
         }
       }
 
-      document.getElementById("mic-open-settings").addEventListener("click", async () => {
-        try {
-          await invoke("open_mic_system_settings");
-        } catch (e) {}
+      /* ----- Mic pre-prompt banner ----- */
+      // Emitted by Rust right before the macOS Allow / Deny dialog fires.
+      // We auto-hide on grant / deny so the banner never lingers.
+      function showMicPrePrompt(message) {
+        const el = $("mic-pre-prompt");
+        if (message && typeof message === "string") {
+          el.querySelector(".sub").textContent = message;
+        }
+        el.classList.remove("hidden");
+        // Belt and suspenders: if no state event arrives, hide after 10s.
+        setTimeout(() => {
+          if (currentMicState !== "denied") {
+            el.classList.add("hidden");
+          }
+        }, 10000);
+      }
+
+      /* ----- Boot ----- */
+      $("mic-open-settings").addEventListener("click", async () => {
+        try { await invoke("open_mic_system_settings"); } catch (e) { /* swallow */ }
       });
+
+      // Animate body in once on first paint so even cold opens feel
+      // springy. The popover-shown event from Rust re-asserts it on
+      // every show, which is a no-op when the class is already set.
+      requestAnimationFrame(() => document.body.classList.add("is-shown"));
+
+      onEvent("popover-shown", () => {
+        document.body.classList.add("is-shown");
+        refresh();
+        checkMicPermission();
+      });
+      onEvent("mic-permission-about-to-prompt", (payload) => {
+        const msg = (payload && (payload.message || payload.usage)) || "";
+        showMicPrePrompt(msg);
+      });
+      onEvent("mic-permission-granted", () => applyMicState("granted"));
+      onEvent("mic-permission-denied",  () => applyMicState("denied"));
+      onEvent("mic-permission-changed", (payload) => {
+        if (payload && typeof payload.state === "string") applyMicState(payload.state);
+      });
+      onEvent("engine-ready", () => { refresh(); });
+      onEvent("engine-error", () => setStatus("error", "Anticipy is not running"));
 
       wireOnboardCards();
       refresh();

@@ -8,11 +8,22 @@ function show(state) {
   }
 }
 
+function friendlyStatus(s) {
+  const k = String(s || "").toLowerCase();
+  if (k === "success" || k === "ok") return "Done";
+  if (k === "running" || k === "in_progress" || k === "in-progress") return "Working on it";
+  if (k === "ask_user" || k === "ask") return "Needs your okay";
+  if (k === "notify_user" || k === "notify") return "Heads up sent";
+  if (k === "timed_out") return "Took too long, stopped";
+  if (k === "error" || k === "failed" || k === "fail") return "Could not finish";
+  return k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function startRun() {
   const task = $("task").value.trim();
   if (!task) return;
   $("feed").innerHTML = "";
-  $("current").textContent = "Starting...";
+  $("current").textContent = "Getting started";
   show("running");
   invoke("run_task", { task });
 }
@@ -33,27 +44,26 @@ window.addEventListener("DOMContentLoaded", () => {
   listen("agent-event", (e) => {
     const ev = e.payload || {};
     if (ev.kind === "start") {
-      $("current").textContent = "Opening Anticipy Agent window...";
-      addFeed("start: " + (ev.task || ""));
+      $("current").textContent = "Opening the Anticipy work area";
+      addFeed("Started: " + (ev.task || ""));
     } else if (ev.kind === "step") {
-      const a = ev.action || "?";
-      const t = ev.target ? " -> " + ev.target : "";
-      const v = ev.verdict && ev.verdict !== "-" ? "  [" + ev.verdict + "]" : "";
-      $("current").textContent = "s" + ev.subtask + " i" + ev.iteration +
-        ": " + a + t + v;
-      addFeed("i" + ev.iteration + " " + a + t + v +
+      const a = ev.action || "step";
+      const t = ev.target ? " on " + ev.target : "";
+      const v = ev.verdict && ev.verdict !== "-" ? "  (" + ev.verdict + ")" : "";
+      $("current").textContent = "Step " + ev.iteration + ": " + a + t + v;
+      addFeed("Step " + ev.iteration + ": " + a + t + v +
         (ev.detail ? "  (" + ev.detail + ")" : ""));
     } else if (ev.kind === "log") {
       addFeed(ev.line);
     } else if (ev.kind === "done" || ev.kind === "result") {
       const ok = ev.status === "SUCCESS";
-      $("done-title").textContent = ok ? "Done" : (ev.status || "Failed");
+      $("done-title").textContent = ok ? "Done" : friendlyStatus(ev.status);
       $("done-title").className = ok ? "ok" : "fail";
       $("answer").textContent = ev.answer || "";
       $("evidence").textContent = ev.evidence || ev.error || "";
-      $("meta").textContent =
-        (ev.n_iterations != null ? ev.n_iterations + " iterations" : "") +
-        (ev.trajectory_dir ? "  -  " + ev.trajectory_dir : "");
+      const bits = [];
+      if (ev.n_iterations != null) bits.push(ev.n_iterations + " steps");
+      $("meta").textContent = bits.join("  ,  ");
       show("done");
     }
   });

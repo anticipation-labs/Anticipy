@@ -120,8 +120,12 @@ install_native_bridge() {
   PYV="$("$PY" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
   PYMAJ="${PYV%%.*}"
   PYMIN="${PYV##*.}"
-  if [ "$PYMAJ" -lt 3 ] || { [ "$PYMAJ" -eq 3 ] && [ "$PYMIN" -lt 10 ]; }; then
-    echo "Anticipy: Python 3.10+ is required for the Chrome native bridge (found $PYV)."
+  # Stock macOS ships /usr/bin/python3 as 3.9. The bridge packages
+  # (httpx>=0.25, cryptography>=41, supabase>=2.0, python-dotenv>=1.0)
+  # all support Python 3.8+, so 3.9 is the right floor for zero-friction
+  # stranger install. Per STRANGER_INSTALL_AUDIT W4 closed in cycle 129.
+  if [ "$PYMAJ" -lt 3 ] || { [ "$PYMAJ" -eq 3 ] && [ "$PYMIN" -lt 9 ]; }; then
+    echo "Anticipy: Python 3.9+ is required for the Chrome native bridge (found $PYV). Stock macOS Sonoma ships Python 3.9, so this should be present at /usr/bin/python3. If you removed it, reinstall the Xcode Command Line Tools: xcode-select --install"
     exit 1
   fi
 

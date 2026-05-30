@@ -8,7 +8,7 @@ import {
 } from "@/lib/engine-transfer-gate";
 
 export const metadata: Metadata = {
-  title: "Engine Transfer — Anticipy",
+  title: "Engine Transfer | Anticipy",
   description:
     "Internal engineering transfer guide for the Anticipy Action Engine.",
   robots: {

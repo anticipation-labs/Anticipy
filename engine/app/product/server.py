@@ -30,6 +30,7 @@ here, not a code edit.
 from __future__ import annotations
 
 import asyncio
+import base64
 import collections
 import json
 import os
@@ -66,14 +67,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Handoff token round-trip endpoints (POST /api/auth/handoff/mint,
-# POST /api/auth/exchange). Implementation lives in app.anticipy.handoff
-# so the engine route surface stays a thin attach point.
+# Per task cost telemetry. We wire the sink + budget gate into
+# platform_adapter at module import time so EVERY model_call (planner,
+# memory reconcile, onboarding extract, addressee, comms, taxonomy,
+# grader adversarial) is captured against the active task with zero
+# changes at the individual call sites. The gate then mechanically
+# refuses the next planner call once a task has crossed the $0.005
+# hard cap (2.5x the $0.002 / task ceiling).
+try:
+    from app.product import cost_telemetry as _cost_telemetry
+    from app.anticipy import platform_adapter as _pa_for_telemetry
+    _pa_for_telemetry.set_telemetry_sink(_cost_telemetry.record_call_from_log_row)
+    _pa_for_telemetry.set_budget_gate(_cost_telemetry.budget_gate)
+except Exception:
+    _cost_telemetry = None  # type: ignore
+
+# Engine-side handoff convenience routes (GET /api/auth/handoff/session,
+# POST /api/auth/handoff/exchange). The website still mints + exchanges
+# tokens; these endpoints let the engine inspect or perform an exchange
+# locally and cache a non-sensitive session record at ~/.anticipy/
+# session.json. See app.anticipy.handoff for the full docstring. Hard
+# import: a failure here means the route surface is wrong, not silent.
 try:
     from app.anticipy.handoff import attach_to as _attach_handoff_routes
     _attach_handoff_routes(app)
-except Exception:
-    pass
+except Exception as _e_handoff:
+    import traceback as _tb_handoff
+    print(
+        f"[anticipy.handoff] attach failed: "
+        f"{type(_e_handoff).__name__}: {_e_handoff}",
+        flush=True,
+    )
+    _tb_handoff.print_exc()
 
 # Live streaming STT via Deepgram Nova-3 (WebSocket /api/stt/stream).
 # Implementation lives in app.listen.stream so the route surface stays
@@ -83,6 +108,15 @@ try:
     _attach_stt_stream(app)
 except Exception:
     pass
+
+# Trivia-fire hot path. Module-level import so the trigger classifier
+# and cache stay warm across utterances. See planning/07-trivia-fire/
+# DESIGN.md and the maybe_fire docstring. Defensive try/except so a
+# trivia-side bug never wedges the engine.
+try:
+    from app import trivia as _trivia
+except Exception:
+    _trivia = None
 
 
 @app.middleware("http")
@@ -107,7 +141,74 @@ async def _private_network_headers(request: Request, call_next):
 
 _SESS: dict = {"i": 0, "transcript": [], "profile": None,
                "profile_obj": None}
-USER_ID = "anticipy-user"
+
+
+# Multi-tenant account_id derivation.
+#
+# Engine resolution order for any "which account writes/reads dossier,
+# task queue, pending_confirms?" lookup:
+#   1) ANTICIPY_ACCOUNT_ID env (deterministic override; Omar's launchctl
+#      sets this to "anticipy-user", which keeps his existing dossier
+#      path stable across the change below).
+#   2) USER_ID module global, which is initialized from a per-machine
+#      UUID materialized at ~/.anticipy/machine_id on first call. Once
+#      Supabase signin completes, server.py rebinds USER_ID to the real
+#      Supabase user id (see the mp3-eval block lower in this file).
+#   3) _SESS["profile_obj"].user_id when set by handoff.
+#   4) The persisted machine_id as a final safety net.
+#
+# Before this change, steps 1-3 all empty fell through to the global
+# literal "anticipy-user" which meant two strangers on different Macs
+# wrote to the same dossier path, the same pending_confirm path, and
+# the same task_queue position. The machine_id makes the engine
+# multi-tenant by default without requiring Supabase signin.
+_MACHINE_ID_PATH = Path.home() / ".anticipy" / "machine_id"
+_DEFAULT_ACCOUNT_ID_SOURCE = "unresolved"
+
+
+def _default_account_id() -> str:
+    """Return the per-machine account_id.
+
+    First call: reads ~/.anticipy/machine_id if it exists, else creates
+    it with uuid.uuid4().hex and chmod 0600. Returns the file content.
+    Idempotent across calls. Never raises; falls back to "local" only
+    if the home directory is unwritable (e.g. read-only sandbox).
+    """
+    global _DEFAULT_ACCOUNT_ID_SOURCE
+    try:
+        _MACHINE_ID_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if _MACHINE_ID_PATH.exists():
+            existing = _MACHINE_ID_PATH.read_text(encoding="utf-8").strip()
+            if existing:
+                _DEFAULT_ACCOUNT_ID_SOURCE = "machine_id_existing"
+                return existing
+        new_id = uuid.uuid4().hex
+        _MACHINE_ID_PATH.write_text(new_id, encoding="utf-8")
+        try:
+            os.chmod(_MACHINE_ID_PATH, 0o600)
+        except Exception:
+            pass
+        _DEFAULT_ACCOUNT_ID_SOURCE = "machine_id_created"
+        return new_id
+    except Exception:
+        _DEFAULT_ACCOUNT_ID_SOURCE = "fallback_local"
+        return "local"
+
+
+def _resolve_account_id_at_startup() -> tuple[str, str]:
+    """Compute the initial USER_ID and return (account_id, source_tag).
+
+    Source tags: "env" (ANTICIPY_ACCOUNT_ID was set), "machine_id_existing",
+    "machine_id_created", or "fallback_local".
+    """
+    env_val = (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+    if env_val:
+        return env_val, "env"
+    derived = _default_account_id()
+    return derived, _DEFAULT_ACCOUNT_ID_SOURCE
+
+
+USER_ID, _USER_ID_SOURCE = _resolve_account_id_at_startup()
 
 
 def _env_int(name: str, default: int) -> int:
@@ -117,7 +218,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-CDP_PORT = _env_int("ANTICIPY_CDP_PORT", 0)
+CDP_PORT = _env_int("ANTICIPY_CDP_PORT", 9222)
 LEGACY_CLONE_CDP_ENABLED = (
     os.environ.get("ANTICIPY_ENABLE_LEGACY_CLONE_CDP", "").strip() == "1"
 )
@@ -352,6 +453,24 @@ def _publish_engine_port_file() -> None:
         port_dir = Path.home() / ".anticipy"
         port_dir.mkdir(parents=True, exist_ok=True)
         (port_dir / "engine.port").write_text(str(port), encoding="utf-8")
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
+def _log_account_id_source() -> None:
+    """Emit one line at boot so tests and operators can verify which
+    account_id the engine resolved to, and where it came from. Critical
+    for multi-tenant debugging: a stranger install without
+    ANTICIPY_ACCOUNT_ID set should log a machine_id-derived UUID, not
+    "anticipy-user" or "local".
+    """
+    try:
+        print(
+            f"[anticipy.account] resolved account_id={USER_ID!r} "
+            f"source={_USER_ID_SOURCE!r} machine_id_path={str(_MACHINE_ID_PATH)!r}",
+            flush=True,
+        )
     except Exception:
         pass
 
@@ -1513,6 +1632,8 @@ def state() -> JSONResponse:
         "total_questions": len(INTERVIEW_SCRIPT),
         "window_seconds": WINDOW_SECONDS,
         "cdp_port": CDP_PORT,
+        "account_id": USER_ID,
+        "account_id_source": _USER_ID_SOURCE,
         "chrome_user_data_dir": _chrome_user_data_dir(),
         "legacy_clone_cdp_enabled": LEGACY_CLONE_CDP_ENABLED,
         "clone_config_rejected": _clone_cdp_config_rejected(),
@@ -2016,6 +2137,161 @@ async def onboarding_from_audio(request: Request) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
+# Login-wall fallback (Item 8 per HUMAN_READY_PLAN)
+# When the action engine wrapper hits an auth wall on a real site, it
+# can POST here and the user gets a Twilio voice call + local `say`
+# nudge to come finish the sign-in.
+# --------------------------------------------------------------------------
+
+class LoginWallNotify(BaseModel):
+    url: str
+    title: str | None = None
+    task_description: str = ""
+    phone: str | None = None
+
+
+@app.post("/api/action/login_wall_notify")
+def action_login_wall_notify(p: LoginWallNotify) -> JSONResponse:
+    try:
+        from app.product import login_wall_responder as LWR
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": f"login_wall_responder import: "
+                                   f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
+    out = LWR.notify_login_wall(
+        url=p.url, title=p.title or "",
+        task_description=p.task_description or "",
+        phone=p.phone,
+    )
+    return JSONResponse({"ok": True, **out})
+
+
+@app.get("/api/action/login_wall_detect")
+def action_login_wall_detect(url: str, title: str = "") -> JSONResponse:
+    """Pure detection. No side effects. Useful for the action engine
+    wrapper to check before deciding to call the notify endpoint.
+    """
+    try:
+        from app.product import login_wall_responder as LWR
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": f"login_wall_responder import: "
+                                   f"{type(e).__name__}: {e}"},
+            status_code=500,
+        )
+    det = LWR.detect_login_wall(url, title)
+    return JSONResponse({"ok": True, "detection": det})
+
+
+# --------------------------------------------------------------------------
+# Failure recovery transparency
+# --------------------------------------------------------------------------
+# When the action engine cannot finish (Gmail logged out, MFA prompt,
+# CAPTCHA, rate limit, network blip), the user finds out via a friendly
+# SMS and the task stays alive in the persistent queue. The
+# /api/recovery/test endpoint renders an SMS body for any failure_kind
+# WITHOUT firing a real failure or sending a real SMS, so the
+# verification harness and the agent itself can sanity-check the
+# wording. The real wiring lives in _run_action_engine where caught
+# exceptions get classified and routed.
+
+class RecoveryTest(BaseModel):
+    failure_kind: str
+    surface_url: str = ""
+    task_id: str = ""
+    instruction: str = ""
+    recipient_hint: str = ""
+    fire_route: bool = False
+
+
+@app.post("/api/recovery/test")
+def api_recovery_test(p: RecoveryTest) -> JSONResponse:
+    """Render the recovery SMS body for a given failure_kind WITHOUT
+    firing a real failure. When fire_route=true also exercises the
+    full route_recovery path (SMS send + queue park) so the persisted
+    task record can be inspected. The SMS send is mock-friendly so
+    routine test calls do not spam a real phone.
+
+    body: {
+      "failure_kind": "login_required|mfa_challenge|captcha_blocked|"
+                      "rate_limited|network_error|unknown_error",
+      "surface_url": "https://mail.google.com/...",
+      "task_id": "optional existing task id",
+      "instruction": "optional originating instruction text",
+      "recipient_hint": "optional recipient label for the SMS body",
+      "fire_route": false
+    }
+    """
+    try:
+        from app.product import failure_recovery as FR
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"failure_recovery import: "
+                                   f"{type(exc).__name__}: {exc}"},
+            status_code=500,
+        )
+    kind = (p.failure_kind or "").strip()
+    surface_url = (p.surface_url or "").strip()
+    sms_body = FR.format_recovery_sms(
+        kind, surface_url,
+        instruction=p.instruction or "",
+        recipient_hint=p.recipient_hint or "",
+    )
+    out: dict[str, Any] = {
+        "ok": True,
+        "failure_kind": kind,
+        "surface_url": surface_url,
+        "sms_body": sms_body,
+        "sms_body_len": len(sms_body),
+        "fire_route": bool(p.fire_route),
+    }
+    if p.fire_route:
+        try:
+            route = FR.route_recovery(
+                p.task_id or "",
+                kind,
+                surface_url,
+                instruction=p.instruction or "",
+                recipient_hint=p.recipient_hint or "",
+            )
+        except Exception as exc:
+            out["route"] = {"ok": False, "error": f"{type(exc).__name__}: "
+                                                    f"{exc}"}
+        else:
+            out["route"] = route
+    return JSONResponse(out)
+
+
+# --------------------------------------------------------------------------
+# Per task cost telemetry endpoint (G11 verify)
+# --------------------------------------------------------------------------
+# CYCLE_PROCEDURE.md G11: GET /api/cost/stats must return p95 per-task
+# cost. Pass = p95 < $0.005 (2.5x the $0.002/task ceiling that gives
+# $200/user/year on 100k tasks).
+
+@app.get("/api/cost/stats")
+def api_cost_stats(last_n: int = 100) -> JSONResponse:
+    """Returns per-task cost statistics from cost_telemetry.
+    Used by the G11 mechanical verify. Pass criterion: stats.p95_cost_usd
+    below the hard cap (currently $0.005)."""
+    if _cost_telemetry is None:
+        return JSONResponse(
+            {"ok": False, "error": "cost_telemetry module not loaded"},
+            status_code=500,
+        )
+    try:
+        stats = _cost_telemetry.get_per_task_stats(last_n=last_n)
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "error": f"{type(exc).__name__}: {exc}"},
+            status_code=500,
+        )
+    return JSONResponse({"ok": True, "stats": stats})
+
+
+# --------------------------------------------------------------------------
 # microphone permission probe
 # --------------------------------------------------------------------------
 
@@ -2118,6 +2394,199 @@ _LISTEN: dict = {
     "audio_device": None, "sample_rate": None, "capture_id": None,
     "source_mode": None,
 }
+
+
+# --------------------------------------------------------------------------
+# Persistent task queue glue (see app/task_queue/store.py).
+#
+# Every utterance that produces a pending instruction is mirrored into a
+# durable JSONL queue so the engine can resume mid-flight tasks across
+# restarts, fire delayed reminders weeks later, and retry failures with
+# exponential backoff. The in-memory _LISTEN["pending"] field stays as
+# the hot-path channel for the popover; the queue is the durable spine.
+# --------------------------------------------------------------------------
+
+def _task_queue_enqueue_from_pending(
+        instruction: str,
+        *,
+        wake_at: float | None = None,
+        metadata: dict | None = None) -> dict | None:
+    """Persist a pending instruction into the durable task queue. Best
+    effort: a queue write failure must not crash the inject pipeline.
+    Returns the TaskRecord-as-dict on success, None on skip/error.
+    """
+    text = (instruction or "").strip()
+    if not text:
+        return None
+    try:
+        from app import task_queue as _tq
+    except Exception:
+        return None
+    try:
+        meta = dict(metadata or {})
+        meta.setdefault("source", "listen_pending")
+        rec = _tq.enqueue(
+            text,
+            account_id=USER_ID,
+            wake_at=wake_at,
+            metadata=meta,
+        )
+        return rec.to_dict()
+    except Exception:
+        return None
+
+
+def _task_queue_executor(rec) -> dict:
+    """Background executor for re-firing a queued task. Invoked by
+    app.task_queue.dispatcher when a sleeping task's wake_at lands or
+    on engine restart for in_progress tasks. We re-issue the instruction
+    through the same path /api/act would have run: compose plan from
+    memory, then _run_action_engine. Returns the dispatcher contract
+    dict (ok / waiting / error / result).
+    """
+    try:
+        instruction = (rec.instruction or "").strip()
+        if not instruction:
+            return {"ok": False, "error": "empty_instruction"}
+        try:
+            plan = _compose_task_from_memory(instruction)
+        except Exception as exc:
+            return {"ok": False,
+                    "error": f"compose_failed: {type(exc).__name__}: {exc}"}
+        if not isinstance(plan, dict) or plan.get("mode") != "act":
+            # The task needs clarification from the user but the user is
+            # not at the keyboard; park as waiting so we do not burn
+            # retries on the same unanswerable plan.
+            return {
+                "ok": False,
+                "waiting": True,
+                "waiting_reason": "needs_user_clarification",
+            }
+        # Irreversible intents require explicit user confirmation.
+        # We cannot auto-confirm; park waiting and surface via pending.
+        intent = str(plan.get("intent") or "").strip()
+        if intent in _load_irreversible_intents():
+            task_id = _register_confirm(plan, instruction, intent)
+            confirm = _confirm_payload(intent, plan, instruction)
+            with _LISTEN["lock"]:
+                _LISTEN["pending"] = {
+                    "instruction": instruction,
+                    "proposal": confirm.get("description") or instruction,
+                    "ask_user": True,
+                    "require_confirm": True,
+                    "plan": plan,
+                    "confirm_card_id": task_id,
+                    "ts": time.time(),
+                    "from_task_queue": True,
+                }
+            return {
+                "ok": False,
+                "waiting": True,
+                "waiting_reason": f"confirm_required:{intent}",
+            }
+        response = _run_action_engine(instruction, plan)
+        body = {}
+        try:
+            body = json.loads(response.body.decode("utf-8"))
+        except Exception:
+            body = {}
+        if body.get("ran"):
+            return {"ok": True, "result": body}
+        if body.get("gated"):
+            return {
+                "ok": False,
+                "waiting": True,
+                "waiting_reason": str(body.get("error") or "gated"),
+            }
+        return {
+            "ok": False,
+            "error": str(body.get("error")
+                          or body.get("status")
+                          or "action_engine_no_run"),
+        }
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"executor_unhandled: {type(exc).__name__}: {exc}"}
+
+
+@app.on_event("startup")
+def _task_queue_startup() -> None:
+    """Resume mid-flight persistent tasks and start the periodic
+    scheduler. This is the wake-up scheduling spine: every 60 seconds
+    the scanner pulls due tasks off the queue and re-fires them.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception:
+        return
+    try:
+        _tq.dispatcher.register_executor(_task_queue_executor)
+        recovered = _tq.dispatcher.schedule_engine_restart_recovery()
+        interval_s = float(
+            os.environ.get("ANTICIPY_TASK_QUEUE_INTERVAL_SECONDS", "60")
+            or 60.0
+        )
+        _tq.dispatcher.start_scanner(interval_seconds=interval_s)
+        # Surface count so it appears in startup logs without spam.
+        print(
+            f"[task_queue] startup ok recovered={len(recovered)} "
+            f"interval_seconds={interval_s:.1f}",
+            flush=True,
+        )
+    except Exception as exc:
+        print(f"[task_queue] startup failed: {type(exc).__name__}: {exc}",
+              flush=True)
+
+
+@app.on_event("startup")
+def _sms_inbound_poller_startup() -> None:
+    """Start the inbound SMS poller. The website's Twilio webhook stores
+    each inbound reply in public.anticipy_sms_inbound; we poll every
+    10 seconds, claim new rows for our account, and POST them to the
+    local /api/sms/inbound handler. The poller is silent when no
+    website URL is configured."""
+    try:
+        from app.product import sms_pre_confirm as _sms_pre
+    except Exception as exc:
+        print(
+            f"[sms_inbound_poller] sms_pre_confirm import failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        return
+    try:
+        result = _sms_pre.start_inbound_poller()
+        if result.get("ok"):
+            print(
+                f"[sms_inbound_poller] startup ok "
+                f"interval_seconds="
+                f"{result.get('interval_seconds')} "
+                f"engine_id={result.get('engine_id')} "
+                f"account_id={result.get('account_id')} "
+                f"website_url={result.get('website_url')}",
+                flush=True,
+            )
+        else:
+            print(
+                f"[sms_inbound_poller] startup skipped: "
+                f"{result.get('reason') or result}",
+                flush=True,
+            )
+    except Exception as exc:
+        print(
+            f"[sms_inbound_poller] startup failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+
+
+@app.on_event("shutdown")
+def _sms_inbound_poller_shutdown() -> None:
+    try:
+        from app.product import sms_pre_confirm as _sms_pre
+        _sms_pre.stop_inbound_poller()
+    except Exception:
+        pass
 
 
 def _audio_cb(indata, frames, time_info, status) -> None:
@@ -2499,9 +2968,22 @@ def _recent_transcripts(limit: int = 8) -> list[str]:
 def _is_actionish(text: str) -> bool:
     low = (text or "").lower()
     return bool(re.search(
-        r"\b(should|need|needs|owe|draft|email|mail|send|share|"
-        r"get .* over|follow up|let .* know|schedule|calendar|"
-        r"book|remind|tell|ask)\b", low))
+        r"\b(should|need|needs|owe|owes|owed|"
+        r"draft|drafts|drafted|drafting|"
+        r"email|emails|emailed|emailing|"
+        r"mail|mails|mailed|mailing|"
+        r"send|sends|sent|sending|"
+        r"share|shares|shared|sharing|"
+        r"forward|forwards|forwarded|forwarding|"
+        r"told|tell|tells|telling|"
+        r"ask|asks|asked|asking|"
+        r"remind|reminds|reminded|reminding|"
+        r"schedule|schedules|scheduled|scheduling|"
+        r"book|books|booked|booking|"
+        r"calendar|"
+        r"waiting|pending|outstanding|due|"
+        r"sitting in (my )?drafts?|still in (my )?drafts?|"
+        r"get .* over|follow up|let .* know)\b", low))
 
 
 def _extract_email(text: str) -> str:
@@ -2658,7 +3140,11 @@ def _dispatch_via_universal_runtime(
     except Exception:
         account_id = ""
     if not account_id:
-        account_id = os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "local"
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or (USER_ID or "").strip()
+            or _default_account_id()
+        )
     device_id = os.environ.get("ANTICIPY_DEVICE_ID", "") or "user-device"
     memory_ctx = {
         "intent_kind": str(plan.get("intent") or ""),
@@ -3434,6 +3920,43 @@ def _draft_task_from_plan(instruction: str, plan: dict) -> str:
     thing = str(plan.get("thing") or "").strip()
     email = _extract_email(person)
     if not email:
+        # G1 install_under_5min fix: prefer an exact full-name (or full
+        # name + last-name) match against the active dossier before
+        # falling back to the legacy substring match against
+        # _profile_people(). Otherwise "Maya Patel" would substring-
+        # match the legacy "Maya Chen" entry and the draft would use
+        # the wrong email even after the planner correctly resolved
+        # the person from the merged dossier.
+        if person:
+            low = person.lower()
+            parts = low.split()
+            for entry in _active_dossier_people_dicts():
+                nm = (entry.get("name") or "").strip()
+                if not nm:
+                    continue
+                nm_low = nm.lower()
+                # Exact full-name match wins.
+                if nm_low == low:
+                    if entry.get("email"):
+                        email = entry["email"]
+                        person = nm
+                        break
+                    continue
+                # Else match when the resolved person string contains
+                # the FULL dossier name (handles "Maya Patel" vs
+                # dossier "Maya Patel <maya@...>") - but only when both
+                # the first AND last token agree (no partial "Maya"
+                # matches against unrelated dossier rows).
+                if len(parts) >= 2:
+                    e_parts = nm_low.split()
+                    if (len(e_parts) >= 2
+                            and parts[0] == e_parts[0]
+                            and parts[-1] == e_parts[-1]):
+                        if entry.get("email"):
+                            email = entry["email"]
+                            person = nm
+                            break
+    if not email:
         for p in _profile_people():
             if person and (person.lower() in p["value"].lower()
                            or person.lower() in p["label"].lower()
@@ -3506,7 +4029,11 @@ def _resolve_person_from_active_dossier(instruction: str) -> tuple[
     except Exception:
         account_id = ""
     if not account_id:
-        account_id = os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "local"
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or (USER_ID or "").strip()
+            or _default_account_id()
+        )
     try:
         loader = DossierLoader(account_id=account_id)
     except Exception:
@@ -3567,6 +4094,153 @@ def _resolve_person_from_active_dossier(instruction: str) -> tuple[
         return "", ""
     name, email = next(iter(uniq.items()))
     return name, email
+
+
+# G1 install_under_5min fix: the inject hot path (_compose_task_from_memory
+# below) historically only saw _profile_json() — the legacy onboarding
+# profile_obj that holds at most 3 dict-shaped people. The instant
+# cold-start inhale (planning/10) writes the discovered dossier to
+# ~/.anticipy/v7/dossiers/<account_id>/dossier.json (24+ people in the
+# stranger_flow proof), but the planner never picked them up because
+# the active dossier lives in a different shape and a different file.
+# This helper returns the active dossier people as the canonical v7
+# list-of-dicts shape, with the same source-of-truth account_id
+# resolution that auto_inhale.merge_delta uses (env override first,
+# then in-process USER_ID, then per-machine derived UUID).
+# Returns [] on any error.
+def _active_dossier_people_dicts() -> list[dict]:
+    """Read the on-disk active dossier and return its people as
+    list[{name, email, role, pronouns, aliases}].
+
+    Account_id resolution mirrors what cold-start writes to:
+    - ANTICIPY_ACCOUNT_ID env wins (deterministic override; Omar's
+      launchctl pins this to "anticipy-user" so his existing dossier
+      path stays stable).
+    - Else the in-process USER_ID (initialized from ANTICIPY_ACCOUNT_ID
+      at startup, or a per-machine UUID materialized at
+      ~/.anticipy/machine_id when the env is not set).
+    - Else the legacy profile_obj.user_id when set.
+    The DossierLoader's _candidate_paths fallback chain still applies,
+    so if the per-account file is absent it will pick up a global
+    ~/.anticipy/v7/dossier.json or ~/.anticipy/dossier.json.
+    """
+    try:
+        from app.product.dossier_active_loader import DossierLoader
+    except Exception:
+        return []
+    # Priority chain identical to auto_inhale's writer side.
+    account_id = (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+    if not account_id:
+        account_id = (USER_ID or "").strip()
+    if not account_id:
+        try:
+            prof = (_SESS.get("profile_obj")
+                    if isinstance(_SESS, dict) else None)
+            if prof is not None:
+                account_id = str(getattr(prof, "user_id", "") or "").strip()
+        except Exception:
+            account_id = ""
+    if not account_id:
+        account_id = _default_account_id()
+    try:
+        loader = DossierLoader(account_id=account_id)
+    except Exception:
+        return []
+    try:
+        people = loader.people()
+    except Exception:
+        return []
+    out: list[dict] = []
+    for p in people:
+        name = (p.name or "").strip()
+        if not name:
+            continue
+        out.append({
+            "name": name,
+            "email": (p.email or "").strip(),
+            "role": (p.role or "").strip(),
+            "pronouns": (p.pronouns or "").strip(),
+            "aliases": [str(a).strip() for a in (p.aliases or []) if a],
+        })
+    return out
+
+
+def _merged_profile_people(profile_obj: dict) -> list[dict]:
+    """Merge the legacy profile_obj.people (dict-or-list) with the
+    active dossier's people into ONE canonical list-of-dicts.
+
+    Dedup by (lowercased email) when present, else lowercased name.
+    The legacy profile entries win on collision because the user
+    explicitly named them at onboarding; dossier entries supplement.
+    Returns [] when both sources are empty.
+    """
+    merged: list[dict] = []
+    seen_keys: set[str] = set()
+
+    def _key(entry: dict) -> str:
+        em = str(entry.get("email") or "").strip().lower()
+        if em:
+            return f"e:{em}"
+        nm = re.sub(r"\s+", " ", str(entry.get("name") or "")).strip().lower()
+        return f"n:{nm}" if nm else ""
+
+    # Pass 1: legacy profile (dict-shaped {role: "Name <email>"} or
+    # already list-shaped).
+    raw_people = (profile_obj or {}).get("people")
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            nm = str(entry.get("name") or "").strip()
+            if not nm:
+                continue
+            normalized = {
+                "name": nm,
+                "email": str(entry.get("email") or "").strip(),
+                "role": (str(entry.get("role")
+                              or entry.get("role_title")
+                              or entry.get("relation") or "")).strip(),
+                "pronouns": str(entry.get("pronouns") or "").strip(),
+                "aliases": [str(a).strip()
+                            for a in (entry.get("aliases") or []) if a],
+            }
+            k = _key(normalized)
+            if not k or k in seen_keys:
+                continue
+            seen_keys.add(k)
+            merged.append(normalized)
+    elif isinstance(raw_people, dict):
+        for relation, val in raw_people.items():
+            raw = val if isinstance(val, str) else str(val or "")
+            email_part = ""
+            name_part = raw
+            if "<" in raw and ">" in raw:
+                name_part, _, rest = raw.partition("<")
+                email_part = rest.split(">", 1)[0].strip()
+            name_part = name_part.strip()
+            if not name_part:
+                continue
+            normalized = {
+                "name": name_part,
+                "email": email_part,
+                "role": str(relation).strip(),
+                "pronouns": "",
+                "aliases": [],
+            }
+            k = _key(normalized)
+            if not k or k in seen_keys:
+                continue
+            seen_keys.add(k)
+            merged.append(normalized)
+
+    # Pass 2: active dossier supplements.
+    for entry in _active_dossier_people_dicts():
+        k = _key(entry)
+        if not k or k in seen_keys:
+            continue
+        seen_keys.add(k)
+        merged.append(entry)
+    return merged
 
 
 # FIX (W2A clarify-reflex, supplementary): extract a likely recipient
@@ -4090,6 +4764,67 @@ def _process_utterance(
         except Exception as e:
             rec["profile_loaded"] = False
             rec["profile_error"] = f"{type(e).__name__}: {e}"
+        # Trivia-fire branch. If the utterance reads as a factual
+        # question the user wants answered, short-circuit the heavy
+        # action pipeline: speak the answer through TTS + log to the
+        # recent-fires queue, then mark the record so the rest of the
+        # judged path does not try to draft an email. Defensive: any
+        # failure here is logged into the record and the normal
+        # pipeline still runs as a safety net.
+        if _trivia is not None:
+            try:
+                trivia_rec = _trivia.maybe_fire(text)
+            except Exception as e:
+                trivia_rec = None
+                rec["trivia_error"] = f"{type(e).__name__}: {e}"
+            if trivia_rec is not None:
+                rec["trivia"] = trivia_rec
+                rec["outcome"] = "TRIVIA_FIRE"
+                rec["intent"] = "trivia"
+                rec["proposal"] = (trivia_rec.get("answer") or {}).get(
+                    "answer", "")
+                rec["decision_reason"] = (
+                    "Trivia trigger fired (confidence "
+                    f"{(trivia_rec.get('trigger') or {}).get('confidence')}); "
+                    "answer delivered via TTS + recent-fires log."
+                )
+                # Persist the trivia record on the listen state so the
+                # popover / debug surfaces can see it alongside other
+                # recent windows. We do NOT set _LISTEN.pending - this
+                # is not a pending action awaiting confirmation.
+                try:
+                    rec["memory"] = _memory_write(text, "trivia_fire")
+                except Exception:
+                    rec["memory"] = None
+                try:
+                    trace_sync = _sync_resolution_trace(rec)
+                    rec["resolution_trace_sync"] = trace_sync
+                    _SESS["last_resolution_trace_sync"] = trace_sync
+                except Exception as e:
+                    rec["resolution_trace_sync"] = {
+                        "ok": False,
+                        "error": f"{type(e).__name__}: {e}",
+                    }
+                try:
+                    plan_snapshot = {}
+                    _record_resolution_plan(rec.get("ingest_id"), {
+                        "ingest_id": rec.get("ingest_id"),
+                        "transcript": rec.get("transcript"),
+                        "outcome": rec.get("outcome"),
+                        "proposal": rec.get("proposal"),
+                        "plan": plan_snapshot,
+                        "source": rec.get("source"),
+                        "intent": rec.get("intent"),
+                        "clarify": False,
+                        "ts": rec.get("ts"),
+                    })
+                except Exception:
+                    pass
+                _set_current_ingest_id(None)
+                with _LISTEN["lock"]:
+                    _LISTEN["windows"] += 1
+                    _LISTEN["recent"] = ([rec] + _LISTEN["recent"])[:12]
+                return rec
         if _ambient_peer_chatter(text):
             rec["outcome"] = "IGNORED"
             rec["proposal"] = None
@@ -4133,25 +4868,51 @@ def _process_utterance(
                                 if outcome in ("ACTED", "DEFERRED", "CONFIRMED")
                                 else "fact")
                         rec["memory"] = _memory_write(text, kind)
-                        if proposal:
+                        # V1+V2+V3 EXCISION (priority): the unified LLM
+                        # intent extractor inside _compose_task_from_memory
+                        # is the authoritative resolver for any actionish
+                        # utterance referencing dossier people. We run it
+                        # whenever the text is actionish OR whenever the
+                        # legacy _run_pipeline emitted a proposal (because
+                        # the pipeline can guess wrong on ambiguous
+                        # references; the LLM extractor's CRITICAL
+                        # AMBIGUITY RULE prevents that). If the extractor
+                        # returns a usable plan (act with task or
+                        # clarify), that takes priority over the legacy
+                        # proposal. Falls back to the legacy proposal
+                        # path when extractor has nothing to say.
+                        plan_for_pending: dict | None = None
+                        if proposal or _is_actionish(text):
+                            try:
+                                plan_for_pending = _compose_task_from_memory(
+                                    text)
+                                plan_for_pending = _finalize_plan(
+                                    text, plan_for_pending)
+                            except Exception:
+                                plan_for_pending = None
+                        if plan_for_pending and plan_for_pending.get(
+                                "mode") == "clarify":
+                            rec["plan"] = plan_for_pending
+                            _LISTEN["pending"] = {
+                                "instruction": text,
+                                "proposal": _proposal_from_plan(
+                                    plan_for_pending),
+                                "clarify": True, "plan": plan_for_pending,
+                                "ts": rec["ts"]}
+                        elif (plan_for_pending
+                              and plan_for_pending.get("mode") == "act"
+                              and plan_for_pending.get("task")):
+                            rec["plan"] = plan_for_pending
+                            _LISTEN["pending"] = {
+                                "instruction": text,
+                                "proposal": _proposal_from_plan(
+                                    plan_for_pending),
+                                "plan": plan_for_pending,
+                                "ts": rec["ts"]}
+                        elif proposal:
                             _LISTEN["pending"] = {
                                 "instruction": text, "proposal": proposal,
                                 "ts": rec["ts"]}
-                        elif _is_actionish(text):
-                            plan = _compose_task_from_memory(text)
-                            plan = _finalize_plan(text, plan)
-                            rec["plan"] = plan
-                            if plan.get("mode") == "clarify":
-                                _LISTEN["pending"] = {
-                                    "instruction": text,
-                                    "proposal": _proposal_from_plan(plan),
-                                    "clarify": True, "plan": plan,
-                                    "ts": rec["ts"]}
-                            elif plan.get("mode") == "act" and plan.get("task"):
-                                _LISTEN["pending"] = {
-                                    "instruction": text,
-                                    "proposal": _proposal_from_plan(plan),
-                                    "plan": plan, "ts": rec["ts"]}
                     except Exception as e:
                         rec["error"] = f"{type(e).__name__}: {e}"
         try:
@@ -4556,7 +5317,30 @@ def listen_inject(i: Inject) -> JSONResponse:
                 "proposal": text,
                 "ts": time.time(),
             }
+    # Persist into the durable task queue so a long-deferred task
+    # (e.g. "remind me to send the contract in 3 weeks") survives
+    # engine restarts. If the proactive scheduler tagged a due_at we
+    # use that as wake_at; otherwise the task is immediately runnable.
     scheduled = rec.get("scheduled")
+    if (not rec.get("error")) and text:
+        wake_at = None
+        if isinstance(scheduled, dict):
+            try:
+                wake_at = float(scheduled.get("due_at") or 0) or None
+            except Exception:
+                wake_at = None
+        queued = _task_queue_enqueue_from_pending(
+            text,
+            wake_at=wake_at,
+            metadata={
+                "source": "listen_inject",
+                "ingest_id": rec.get("ingest_id"),
+                "scheduled_id": (scheduled or {}).get("id")
+                if isinstance(scheduled, dict) else None,
+            },
+        )
+        if queued:
+            rec["task_queue_id"] = queued.get("task_id")
     return JSONResponse({"on": _LISTEN.get("on", False),
                          "window": rec["window"],
                          "ingest_id": rec.get("ingest_id"),
@@ -4569,6 +5353,7 @@ def listen_inject(i: Inject) -> JSONResponse:
                          "resolution_trace_sync": rec.get(
                              "resolution_trace_sync"),
                          "pending": _LISTEN.get("pending"),
+                         "task_queue_id": rec.get("task_queue_id"),
                          "scheduled": scheduled})
 
 
@@ -4599,6 +5384,46 @@ def inference_trace(ingest_id: str) -> JSONResponse:
         "trace": trace,
         "trace_length": len(trace),
         "plan": plan,
+    })
+
+
+@app.get("/api/trivia/recent")
+def trivia_recent(limit: int = 10) -> JSONResponse:
+    """Return the most recent trivia fires for popover display.
+
+    Each entry includes the utterance, the spoken answer, the source,
+    classifier confidence, end-to-end latency, and TTS spawn metadata.
+    Defaults to 10 entries; capped at 50 to keep the response small.
+    """
+    if _trivia is None:
+        return JSONResponse({
+            "ok": False,
+            "error": "trivia subsystem not available",
+            "fires": [],
+            "count": 0,
+        })
+    try:
+        n = max(1, min(int(limit or 10), 50))
+    except Exception:
+        n = 10
+    try:
+        rows = _trivia.recent_fires(limit=n)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+            "fires": [],
+            "count": 0,
+        })
+    try:
+        cache_stats = _trivia.cache.stats()
+    except Exception:
+        cache_stats = {}
+    return JSONResponse({
+        "ok": True,
+        "fires": rows,
+        "count": len(rows),
+        "cache": cache_stats,
     })
 
 
@@ -4797,6 +5622,119 @@ def proactive_reset() -> JSONResponse:
     from app.product.scheduler import get_scheduler
     get_scheduler().reset()
     return JSONResponse({"ok": True})
+
+
+# --------------------------------------------------------------------------
+# Persistent task queue surfaces
+# --------------------------------------------------------------------------
+
+class _TaskQueueEnqueue(BaseModel):
+    instruction: str
+    wake_at: float | None = None
+    wake_in_seconds: float | None = None
+    metadata: dict | None = None
+
+
+@app.post("/api/task_queue/enqueue")
+def task_queue_enqueue(body: _TaskQueueEnqueue) -> JSONResponse:
+    """Manually enqueue a persistent task. Used by tests and by the
+    UI when the user explicitly says "remind me in N days / on date".
+    Either wake_at (absolute epoch seconds) or wake_in_seconds (relative
+    delay) may be supplied.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    text = (body.instruction or "").strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "instruction required"},
+                            status_code=400)
+    wake_at = body.wake_at
+    if wake_at is None and body.wake_in_seconds is not None:
+        wake_at = time.time() + float(body.wake_in_seconds)
+    try:
+        rec = _tq.enqueue(
+            text,
+            account_id=USER_ID,
+            wake_at=wake_at,
+            metadata=body.metadata or {"source": "api_task_queue_enqueue"},
+        )
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"{type(exc).__name__}: {exc}"},
+                            status_code=500)
+    return JSONResponse({"ok": True, "task": rec.to_dict()})
+
+
+@app.get("/api/task_queue/list")
+def task_queue_list(status: str | None = None,
+                     limit: int = 200) -> JSONResponse:
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    filt = [s.strip() for s in (status or "").split(",") if s.strip()]
+    rows = _tq.list_tasks(status=filt or None, limit=max(1, int(limit)))
+    return JSONResponse({
+        "ok": True,
+        "count": len(rows),
+        "tasks": [r.to_dict() for r in rows],
+    })
+
+
+@app.get("/api/task_queue/{task_id}")
+def task_queue_get(task_id: str) -> JSONResponse:
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    rec = _tq.get(task_id)
+    if rec is None:
+        return JSONResponse({"ok": False, "error": "not_found"},
+                            status_code=404)
+    return JSONResponse({"ok": True, "task": rec.to_dict()})
+
+
+@app.post("/api/task_queue/{task_id}/cancel")
+def task_queue_cancel(task_id: str) -> JSONResponse:
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    rec = _tq.cancel(task_id, reason="manual_cancel")
+    if rec is None:
+        return JSONResponse({"ok": False, "error": "not_found"},
+                            status_code=404)
+    return JSONResponse({"ok": True, "task": rec.to_dict()})
+
+
+@app.post("/api/task_queue/scan")
+def task_queue_scan() -> JSONResponse:
+    """Force the scheduler to scan once immediately rather than waiting
+    for the 60-second tick. Used by tests to drive wake-up behaviour
+    deterministically.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+    fired = _tq.dispatcher.scan_once()
+    return JSONResponse({
+        "ok": True,
+        "fired_count": len(fired),
+        "fired": [r.to_dict() for r in fired],
+    })
 
 
 @app.post("/api/stt/local")
@@ -5211,6 +6149,646 @@ def _compose_cache_put(key: tuple[str, str, str], plan: dict) -> None:
         _COMPOSE_CACHE[key] = (time.time(), dict(plan))
 
 
+def _fastpath_plan_from_memory(instruction: str,
+                                profile_obj: dict) -> dict | None:
+    """Return a deterministic act plan when the instruction unambiguously
+    names exactly one dossier person, else None.
+
+    Cuts three CHECK 16 failure modes for the resolvable bucket:
+    TIMEOUT (no LLM call), EMPTY_MODE (no LLM round-trip to garbage), and
+    CLARIFY_REFLEX (we make the deterministic act decision the LLM was
+    hedging on). Ambiguous scenarios (two contender names in one
+    instruction) return None and fall through to the LLM as before.
+
+    Handles two dossier shapes: list-of-dicts (the v7 dossier loader
+    canonical shape with name/email/aliases fields) and dict-of-strings
+    (the older onboarding profile shape "<name> <email>").
+    """
+    if not isinstance(profile_obj, dict):
+        return None
+    raw_people = profile_obj.get("people")
+    if not raw_people:
+        return None
+    text_lower = (instruction or "").lower()
+    if not text_lower:
+        return None
+    candidates: list[tuple[str, str, list[str]]] = []
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            email = str(entry.get("email") or "").strip()
+            aliases_raw = entry.get("aliases") or []
+            aliases = [str(a).strip() for a in aliases_raw if a]
+            if not name:
+                continue
+            candidates.append((name, email, aliases))
+    elif isinstance(raw_people, dict):
+        for key, val in raw_people.items():
+            raw = val if isinstance(val, str) else str(val or "")
+            email_part = ""
+            name_part = raw
+            if "<" in raw and ">" in raw:
+                name_part, _, rest = raw.partition("<")
+                email_part = rest.split(">", 1)[0].strip()
+            name_part = name_part.strip() or str(key)
+            if not name_part:
+                continue
+            candidates.append((name_part, email_part, []))
+    if not candidates:
+        return None
+    # G1 install_under_5min fix: prefer full-name matches first. When
+    # the user said "Maya Patel" verbatim and the dossier has Maya
+    # Patel, that's a unique resolution even when a second "Maya
+    # Chen" exists in the legacy profile. Falling back to first-name
+    # matching only when no full-name uniquely matches preserves the
+    # original behavior for utterances like "send Maya the deck."
+    full_name_matches: list[tuple[str, str]] = []
+    for name, email, _aliases in candidates:
+        full = name.strip().lower()
+        if not full or " " not in full:
+            continue
+        # Whole-word boundary match for the full name. re.escape so
+        # punctuation in dossier names (Dr., O'Brien) does not break.
+        pat = r"\b" + re.escape(full) + r"\b"
+        if re.search(pat, text_lower):
+            if name not in [n for n, _ in full_name_matches]:
+                full_name_matches.append((name, email))
+    if len(full_name_matches) == 1:
+        person = full_name_matches[0][0]
+        email = full_name_matches[0][1]
+        thing = (instruction.split(".")[0]
+                 if "." in instruction else instruction)
+        thing = thing.strip()[:120]
+        recipient = email or person
+        return {
+            "mode": "act",
+            "person": person,
+            "thing": thing,
+            "intent": "email_draft",
+            "task": (f"Open Gmail and create a draft email to {recipient} "
+                     f"about: {instruction.strip()[:240]}. "
+                     f"Do not send it; leave it as a draft."),
+            "question": "",
+            "_fastpath": "fullname",
+        }
+    matched_names: list[str] = []
+    matched_emails: list[str] = []
+    for name, email, aliases in candidates:
+        haystack_tokens = []
+        first = name.split()[0] if name.split() else ""
+        if first and len(first) >= 3:
+            haystack_tokens.append(first.lower())
+        for alias in aliases:
+            if alias and len(alias) >= 3:
+                haystack_tokens.append(alias.lower())
+        if any(t in text_lower for t in haystack_tokens):
+            if name not in matched_names:
+                matched_names.append(name)
+                matched_emails.append(email)
+    if len(matched_names) != 1:
+        return None
+    person = matched_names[0]
+    email = matched_emails[0]
+    thing = (instruction.split(".")[0] if "." in instruction else instruction)
+    thing = thing.strip()[:120]
+    recipient = email or person
+    plan = {
+        "mode": "act",
+        "person": person,
+        "thing": thing,
+        "intent": "email_draft",
+        "task": (f"Open Gmail and create a draft email to {recipient} "
+                 f"about: {instruction.strip()[:240]}. "
+                 f"Do not send it; leave it as a draft."),
+        "question": "",
+        "_fastpath": True,
+    }
+    return plan
+
+
+_FEMALE_PRONOUNS = ("she", "her", "hers", "herself")
+_MALE_PRONOUNS = ("he", "him", "his", "himself")
+_NEUTRAL_PRONOUNS = ("they", "them", "their", "theirs", "themself", "themselves")
+
+
+def _has_pronoun(text: str) -> str | None:
+    """Return 'female', 'male', 'neutral' or None for the first pronoun
+    detected in text. Word-boundary match to avoid 'history' -> 'his'."""
+    import re as _re
+    if not text:
+        return None
+    lower = text.lower()
+    for word in _FEMALE_PRONOUNS:
+        if _re.search(rf"\b{word}\b", lower):
+            return "female"
+    for word in _MALE_PRONOUNS:
+        if _re.search(rf"\b{word}\b", lower):
+            return "male"
+    for word in _NEUTRAL_PRONOUNS:
+        if _re.search(rf"\b{word}\b", lower):
+            return "neutral"
+    return None
+
+
+def _pronoun_matches(person_pronouns: str, gender: str) -> bool:
+    """Check whether a dossier person's `pronouns` field (e.g. 'she/her',
+    'he/him', 'they/them') is compatible with a detected gender bucket."""
+    if not person_pronouns:
+        return False
+    raw = person_pronouns.lower()
+    if gender == "female":
+        return "she" in raw or "her" in raw
+    if gender == "male":
+        return "he" in raw or "him" in raw
+    if gender == "neutral":
+        return "they" in raw or "them" in raw
+    return False
+
+
+def _fastpath_pronoun_resolve(instruction: str, profile_obj: dict,
+                               recent_list: list[str]) -> dict | None:
+    """Pronoun fast-path. When the instruction is a pronoun-only trigger
+    ("she is waiting on those notes", "I should send her the schedule")
+    and exactly one dossier person whose pronouns match was named in the
+    last 3 recent transcript windows, build the act plan deterministically.
+
+    Without this, CHECK 16 R10/R12/R13/R15/R16/R17/R18/R19 fall into the
+    LLM planner which is slow and often returns empty/clarify on the
+    pronoun-only utterance.
+
+    Returns None on ambiguity (zero or multiple candidates).
+    """
+    if not isinstance(profile_obj, dict):
+        return None
+    raw_people = profile_obj.get("people")
+    if not raw_people:
+        return None
+    gender = _has_pronoun(instruction)
+    if gender is None:
+        return None
+    candidates: list[tuple[str, str, str, list[str]]] = []
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            email = str(entry.get("email") or "").strip()
+            pronouns = str(entry.get("pronouns") or "").strip()
+            aliases_raw = entry.get("aliases") or []
+            aliases = [str(a).strip() for a in aliases_raw if a]
+            if not name:
+                continue
+            candidates.append((name, email, pronouns, aliases))
+    elif isinstance(raw_people, dict):
+        # The dict shape carries no structured pronoun field; we cannot
+        # safely pronoun-resolve from it. Return None and let the LLM
+        # path handle.
+        return None
+    if not candidates:
+        return None
+    matching_gender = [(n, e, a) for (n, e, p, a) in candidates
+                       if _pronoun_matches(p, gender)]
+    if not matching_gender:
+        return None
+    recent_window = " ".join(recent_list[-3:]) if recent_list else ""
+    recent_lower = recent_window.lower()
+    if not recent_lower:
+        return None
+    surfaced: list[tuple[str, str]] = []
+    for name, email, aliases in matching_gender:
+        first = name.split()[0].lower() if name.split() else ""
+        haystack_tokens = []
+        if first and len(first) >= 3:
+            haystack_tokens.append(first)
+        for alias in aliases:
+            if alias and len(alias) >= 3:
+                haystack_tokens.append(alias.lower())
+        if any(tok in recent_lower for tok in haystack_tokens):
+            surfaced.append((name, email))
+    if len(surfaced) != 1:
+        return None
+    person, email = surfaced[0]
+    recipient = email or person
+    thing = (instruction.split(".")[0] if "." in instruction else instruction)
+    thing = thing.strip()[:120]
+    plan = {
+        "mode": "act",
+        "person": person,
+        "thing": thing,
+        "intent": "email_draft",
+        "task": (f"Open Gmail and create a draft email to {recipient} "
+                 f"about: {instruction.strip()[:240]}. "
+                 f"Do not send it; leave it as a draft."),
+        "question": "",
+        "_fastpath": "pronoun",
+    }
+    return plan
+
+
+# ============================================================================
+# V1+V2+V3 EXCISION: unified LLM intent extractor.
+#
+# Replaces three hardcoded violations from
+# planning/11-hardcoded-violations-audit/EXCISE_LIST.md:
+#   V1 _is_actionish regex verb whitelist (40 verbs)
+#   V2 _fastpath_plan_from_memory deterministic name+gmail template
+#   V3 _fastpath_pronoun_resolve hardcoded pronoun tuples + buckets
+#
+# ONE call to DeepSeek V4 Flash via platform_adapter.model_call. The
+# system prompt is invariant across a session so DeepSeek's prompt cache
+# kicks in transparently (no cache_control directives needed; DeepSeek
+# caches matching prefixes automatically). The dossier people list is
+# embedded in the system prompt because it only changes when onboarding
+# fires, so it caches with the prompt body. Only the user message
+# (utterance + recent transcript) varies.
+#
+# Returns the unified JSON shape:
+#   {"is_actionish": bool,
+#    "intent_verb": str,
+#    "person": {"name": str, "email": str} | null,
+#    "surface_hint": str,
+#    "required_slots": {"subject": str, "body_outline": str},
+#    "plan_shape": "act" | "clarify" | "ignore",
+#    "clarify_question": str | null}
+#
+# Wired into _compose_task_from_memory BEFORE the regex fastpaths.
+# Fastpaths stay as a regression safety net but the LLM-driven path
+# takes priority when available.
+# ============================================================================
+
+_INTENT_EXTRACT_SYS_PREFIX = """\
+You are the listening intent extractor of a wearable that has heard
+the user this session. Decide three things for the latest utterance:
+(a) is it actionish (does it imply something the user wants the agent
+to do later, even latently like "I should email Karen"); (b) which
+specific dossier person if any does it reference (resolve pronouns,
+relations like "my boss", role aliases like "the strategy advisor",
+or first names); (c) what concrete intent and surface should the agent
+target (a Gmail draft, a Google Calendar event, a Slack message, a
+domain-specific app like epic.com, etc.).
+
+DECISION PROCEDURE (follow exactly):
+
+STEP 1 - actionish gate. Mark is_actionish=true ONLY if the utterance
+plausibly contains an action the user wants Anticipy to attempt on
+their behalf. Includes latent wishes ("I should email Karen", "those
+notes are still sitting in my drafts", "I owe her the deck"), explicit
+requests ("draft an email to ..."), and follow-up obligations ("get
+that over to her tonight", "let her know about the schedule"). EXCLUDE
+third-party requests where the actor is someone else ("he asked her if
+she could send it"), pure observations ("she is presenting Thursday"),
+ambient chatter, and idle musings. Free-form latent wishes from any
+domain count: a lawyer's "file the motion", a doctor's "order the
+labs", a PM's "pull the trust deed" are all is_actionish=true even
+though the verbs aren't in any preset list. If unsure, lean
+is_actionish=true and let the planner downstream decide.
+
+STEP 2 - person resolution. Use the DOSSIER PEOPLE block that follows
+this prompt. For each candidate person you have name, email, role/title,
+pronouns, and aliases. Resolve:
+  - Explicit first/last names ("Maya", "Maya Chen") to that person.
+  - Roles or relations ("my boss", "the operations partner") to the
+    matching dossier entry.
+  - Pronouns ("she", "him", "they") to the dossier person who was
+    named (or referenced via role/alias) in the RECENT TRANSCRIPT
+    earlier in this session. The recent transcript is the PRIMARY
+    cue for pronoun resolution. If the pronouns field is non-empty
+    for a dossier person, use it as a TIEBREAKER when multiple
+    transcript-named candidates fit. If the pronouns field is empty
+    for all candidates, do NOT exclude on pronouns; rely purely on
+    who was named in the recent transcript. Free-form pronoun
+    strings (neopronouns like "ze/zir", language-mixed, etc.) are
+    handled by literal compatibility with the dossier pronouns field,
+    not by a fixed pronoun-to-gender mapping.
+  - If exactly ONE dossier person was named/referenced in the recent
+    transcript and the utterance contains a pronoun, resolve the
+    pronoun to that person. Do NOT clarify just because the dossier
+    has multiple people of the same gender; the transcript already
+    picked one.
+  - CRITICAL AMBIGUITY RULE: when TWO OR MORE different dossier people
+    are each named/referenced in the recent transcript AND each is
+    associated with the SAME thing/topic the utterance refers to (for
+    example transcript says "Dana asked for the launch recap. Priya
+    also asked for the launch recap." and utterance says "I should
+    get that over to her"), you MUST set plan_shape="clarify",
+    person=null, and write a clarify_question naming the contenders
+    by first name (e.g. "Did you mean Dana or Priya?"). Picking ONE
+    of the two equally-fitting candidates is a GUESS = the worst
+    outcome. Do NOT favor whichever name appears first; do NOT pick
+    based on alphabetical order; do NOT pick based on which person
+    has more recent activity. If two dossier people each separately
+    own / asked for / are associated with their own instance of the
+    same kind of thing, the only correct answer is clarify.
+  - When ZERO dossier people fit the reference (the utterance names
+    no one in the dossier and pronouns/relations do not resolve to a
+    dossier person), set person=null. Still set plan_shape="act" if
+    the agent can execute the verb against the chosen surface without
+    a specific contact (e.g. "open the lab portal and pull today's
+    results"). Otherwise plan_shape="clarify" with a question that
+    asks who the user means.
+
+STEP 3 - intent_verb, surface_hint, required_slots. Pick free-form
+snake_case strings; do not coerce into a closed enum:
+  - intent_verb examples: "draft_email", "send_slack_message",
+    "create_calendar_event", "file_motion", "order_labs",
+    "post_to_chartchex", "follow_up", "pull_trust_deed".
+  - surface_hint examples: "mail.google.com" (Gmail),
+    "calendar.google.com", "slack.com", "epic.com",
+    "salesforce.com", "linear.app", "native_macos_reminders".
+    Pick the most specific surface the utterance implies; default
+    to "mail.google.com" for email-shaped intents and let downstream
+    routing override if the dossier contradicts.
+  - required_slots is an object whose keys describe what the agent
+    needs to fill in. For an email draft: {"subject": "...",
+    "body_outline": "..."}. For a calendar event: {"title": "...",
+    "start_time": "...", "guests": "..."}. For a domain-specific
+    surface: whatever slots make sense ({"matter_id": "..."} etc.).
+    Use empty strings for slots you cannot infer yet.
+
+STEP 4 - plan_shape. Choose ONE of:
+  - "act": the action can be attempted now. Use this when the
+    person + intent + surface are clear OR when the action does not
+    require a specific person (e.g. "pull today's labs" with one
+    candidate surface).
+  - "clarify": exactly TWO OR MORE comparable candidate people fit
+    and no cue picks one. Write a short clarify_question naming the
+    contenders by first name.
+  - "ignore": the utterance is not actionish at all (chatter,
+    third-party request the user is not the actor for, an
+    observation with no obligation).
+
+STEP 5 - DO NOT enumerate generic verbs. Trust the utterance
+semantics, the dossier shape, and your judgment about whether the
+utterance implies an action.
+
+Return STRICT JSON ONLY (no prose, no markdown):
+{"is_actionish": <bool>,
+ "intent_verb": "<free-form snake_case>",
+ "person": {"name": "<dossier name>", "email": "<dossier email>"} | null,
+ "surface_hint": "<free-form host or surface name>",
+ "required_slots": {"<slot_name>": "<slot_value or empty>"},
+ "plan_shape": "act" | "clarify" | "ignore",
+ "clarify_question": "<short question> | null"}
+"""
+
+
+def _intent_extract_dossier_block(dossier_people: list[dict]) -> str:
+    """Stable per-person block embedded inside the system prompt so the
+    DeepSeek prompt cache covers the dossier as well as the deciding
+    instructions. The dossier changes only when onboarding writes new
+    people, so this block is invariant across normal listening runs.
+    """
+    if not dossier_people:
+        return "DOSSIER PEOPLE:\n(empty)"
+    lines = ["DOSSIER PEOPLE:"]
+    for p in dossier_people:
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get("name") or "").strip()
+        email = str(p.get("email") or "").strip()
+        role = str(p.get("role") or p.get("relation")
+                   or p.get("role_title") or "").strip()
+        pronouns = str(p.get("pronouns") or "").strip()
+        aliases_raw = p.get("aliases") or []
+        aliases = [str(a).strip() for a in aliases_raw if a]
+        parts = [f"- name: {name}"]
+        if email:
+            parts.append(f"email: {email}")
+        if role:
+            parts.append(f"role: {role}")
+        if pronouns:
+            parts.append(f"pronouns: {pronouns}")
+        if aliases:
+            parts.append(f"aliases: {', '.join(aliases)}")
+        lines.append(" | ".join(parts))
+    return "\n".join(lines)
+
+
+def _intent_extract_normalize_people(profile_obj: dict) -> list[dict]:
+    """Coerce the two dossier shapes (list-of-dicts from v7 active loader,
+    dict-of-strings from the older onboarding profile) into a single
+    list of {name, email, role, pronouns, aliases} dicts that the
+    LLM-prompt block can render.
+    """
+    if not isinstance(profile_obj, dict):
+        return []
+    raw_people = profile_obj.get("people")
+    if not raw_people:
+        return []
+    out: list[dict] = []
+    if isinstance(raw_people, list):
+        for entry in raw_people:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or "").strip()
+            if not name:
+                continue
+            out.append({
+                "name": name,
+                "email": str(entry.get("email") or "").strip(),
+                "role": str(entry.get("role")
+                            or entry.get("role_title")
+                            or entry.get("relation") or "").strip(),
+                "pronouns": str(entry.get("pronouns") or "").strip(),
+                "aliases": [str(a).strip()
+                            for a in (entry.get("aliases") or []) if a],
+            })
+    elif isinstance(raw_people, dict):
+        for relation, val in raw_people.items():
+            raw = val if isinstance(val, str) else str(val or "")
+            email_part = ""
+            name_part = raw
+            if "<" in raw and ">" in raw:
+                name_part, _, rest = raw.partition("<")
+                email_part = rest.split(">", 1)[0].strip()
+            name_part = name_part.strip()
+            if not name_part:
+                continue
+            out.append({
+                "name": name_part,
+                "email": email_part,
+                "role": str(relation).strip(),
+                "pronouns": "",
+                "aliases": [],
+            })
+    return out
+
+
+def _intent_extract_llm(utterance: str,
+                        recent_context: list[str],
+                        dossier_people: list[dict]) -> dict | None:
+    """Single combined LLM call replacing V1 + V2 + V3.
+
+    System prompt = invariant instructions + dossier people block. Both
+    pieces are stable across a session so DeepSeek's prompt cache covers
+    the bulk of the input. The user message is just the utterance plus
+    up to 3 recent transcript lines.
+
+    Returns the unified intent dict described in the docstring above the
+    function (matches the spec from EXCISE_LIST.md V1+V2+V3 combined
+    call). Returns None on any LLM failure so the caller can fall back
+    to the regex fastpaths or the existing _COMPOSE_SYS planner round.
+    """
+    if not utterance:
+        return None
+    from app.anticipy import platform_adapter
+    if not platform_adapter.model_provisioned():
+        return None
+    system_prompt = (_INTENT_EXTRACT_SYS_PREFIX + "\n"
+                     + _intent_extract_dossier_block(dossier_people))
+    recent_lines = [t for t in (recent_context or [])[-3:] if t]
+    recent_block = ("\n".join(f"- {t}" for t in recent_lines)
+                    if recent_lines else "(none)")
+    user_msg = (f"RECENT TRANSCRIPT (last {len(recent_lines)} windows):\n"
+                f"{recent_block}\n\n"
+                f"LATEST UTTERANCE: {utterance!r}\n\n"
+                "Return STRICT JSON only.")
+    try:
+        res = platform_adapter.model_call(
+            system_prompt, user_msg, 512, 0.0, True, timeout_s=10.0)
+    except Exception:
+        return None
+    if not res.ok or not res.content:
+        return None
+    raw = res.content
+    a, b = raw.find("{"), raw.rfind("}")
+    if a == -1 or b == -1 or b <= a:
+        return None
+    try:
+        parsed = json.loads(raw[a:b + 1])
+    except Exception:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    # Light coercion so downstream code can assume the keys exist.
+    parsed.setdefault("is_actionish", False)
+    parsed.setdefault("intent_verb", "")
+    parsed.setdefault("surface_hint", "")
+    parsed.setdefault("required_slots", {})
+    parsed.setdefault("plan_shape", "ignore")
+    parsed.setdefault("clarify_question", None)
+    if "person" not in parsed:
+        parsed["person"] = None
+    person = parsed.get("person")
+    if isinstance(person, dict):
+        person.setdefault("name", "")
+        person.setdefault("email", "")
+    return parsed
+
+
+def _intent_extract_to_plan(extract: dict, instruction: str,
+                            dossier_people: list[dict]) -> dict | None:
+    """Convert the unified intent extractor JSON into the plan dict that
+    _compose_task_from_memory and downstream _finalize_plan understand
+    ({mode, person, thing, intent, task, question}).
+
+    Returns None when the extractor said is_actionish=false or
+    plan_shape="ignore" so the caller knows to skip the action wiring.
+    """
+    if not isinstance(extract, dict):
+        return None
+    if not extract.get("is_actionish"):
+        return None
+    plan_shape = str(extract.get("plan_shape") or "ignore").lower()
+    if plan_shape == "ignore":
+        return None
+    if plan_shape == "clarify":
+        q = str(extract.get("clarify_question") or "").strip()
+        if not q:
+            q = "Which one did you mean?"
+        return {
+            "mode": "clarify",
+            "person": "",
+            "thing": "",
+            "intent": str(extract.get("intent_verb") or ""),
+            "task": "",
+            "question": q,
+            "_intent_extract": True,
+        }
+    # plan_shape == "act"
+    person_obj = extract.get("person")
+    person_name = ""
+    person_email = ""
+    if isinstance(person_obj, dict):
+        person_name = str(person_obj.get("name") or "").strip()
+        person_email = str(person_obj.get("email") or "").strip()
+    # If the model named someone, cross-reference the dossier to
+    # canonicalize the email so the downstream draft has a real address.
+    if person_name and not person_email and dossier_people:
+        low_name = person_name.lower()
+        for p in dossier_people:
+            pname = (p.get("name") or "").strip()
+            if not pname:
+                continue
+            if (pname.lower() == low_name
+                    or (pname.lower().split()
+                        and low_name.split()
+                        and pname.lower().split()[0]
+                            == low_name.split()[0])):
+                person_email = str(p.get("email") or "").strip()
+                break
+    intent_verb = str(extract.get("intent_verb") or "").strip().lower()
+    surface_hint = str(extract.get("surface_hint") or "").strip().lower()
+    # Map free-form intent_verb + surface_hint to the plan.intent strings
+    # _finalize_plan and the rest of the engine recognize. The legacy
+    # values are "email_draft", "calendar_event", "lookup", "other".
+    # The extractor is free-form so we infer from the verb + surface.
+    is_email = (
+        "mail.google.com" in surface_hint
+        or "gmail" in surface_hint
+        or intent_verb.endswith("_email")
+        or "draft" in intent_verb
+        or intent_verb in {"send_email", "send_message", "email", "draft",
+                           "follow_up", "share", "let_know"}
+    )
+    is_calendar = (
+        "calendar" in surface_hint
+        or intent_verb in {"create_calendar_event", "schedule",
+                           "book_meeting"}
+    )
+    if is_email:
+        intent_token = "email_draft"
+    elif is_calendar:
+        intent_token = "calendar_event"
+    else:
+        intent_token = intent_verb or "other"
+    thing = (instruction.split(".")[0]
+             if "." in instruction else instruction)
+    thing = thing.strip()[:120]
+    # Build a free-form task description. For an email path we use the
+    # same shape the legacy fastpath used so downstream
+    # _draft_task_from_plan picks it up without modification.
+    if intent_token == "email_draft":
+        recipient = person_email or person_name or "the resolved contact"
+        task = (f"Open Gmail and create a draft email to {recipient} "
+                f"about: {instruction.strip()[:240]}. "
+                f"Do not send it; leave it as a draft.")
+    elif intent_token == "calendar_event":
+        task = (f"Open Google Calendar and create an event for: "
+                f"{instruction.strip()[:240]}.")
+    else:
+        slots = extract.get("required_slots") or {}
+        slot_summary = ""
+        if isinstance(slots, dict) and slots:
+            slot_summary = ("; slots: "
+                            + ", ".join(f"{k}={v}" for k, v in slots.items()
+                                        if v))
+        surface_label = surface_hint or "the appropriate app"
+        task = (f"Open {surface_label} and {intent_verb or 'act on'} "
+                f"the request: {instruction.strip()[:240]}{slot_summary}.")
+    return {
+        "mode": "act",
+        "person": person_name,
+        "thing": thing,
+        "intent": intent_token,
+        "task": task,
+        "question": "",
+        "_intent_extract": True,
+    }
+
+
 def _compose_task_from_memory(instruction: str) -> dict:
     """Resolve the vague utterance against THIS session's memory into a
     concrete browser task, or ask. Only the utterance + the accrued
@@ -5229,6 +6807,21 @@ def _compose_task_from_memory(instruction: str) -> dict:
     recent_list = _recent_transcripts(12)
     recent = "\n".join(f"- {t}" for t in recent_list) or "(none)"
     profile_obj = _profile_json() or {}
+    # G1 install_under_5min fix: enrich the planner's people list with
+    # whatever the instant cold-start inhale wrote to the active dossier
+    # on disk. Before this fix the LLM intent extractor (and the legacy
+    # fastpaths) only saw the 3-person legacy profile.people dict,
+    # so any name not in that hand-curated dict reflexively clarified
+    # ("Who do you mean by Maya Patel? I don't see that name in your
+    # contacts"). The merged list keeps the legacy entries first (user
+    # explicitly named them at onboarding) and supplements with dossier
+    # entries (auto-discovered from Gmail/Calendar inhale). Returned
+    # in the canonical v7 list-of-dicts shape that the downstream
+    # extractor + fastpaths both understand.
+    merged_people = _merged_profile_people(profile_obj)
+    if merged_people:
+        profile_obj = dict(profile_obj)
+        profile_obj["people"] = merged_people
     profile = json.dumps(profile_obj, ensure_ascii=False, indent=2)
     # FIX (W2O): 60-second cache keyed by (text_hash, profile_hash,
     # recent_hash). Same hard transcript in the same session state =>
@@ -5271,6 +6864,65 @@ def _compose_task_from_memory(instruction: str) -> dict:
         })
     except Exception:
         pass
+    # V1+V2+V3 EXCISION: the single combined LLM intent extractor runs
+    # FIRST. ONE DeepSeek V4 Flash call (~200-400ms cached) replaces
+    # the hardcoded _is_actionish verb whitelist, the
+    # _fastpath_plan_from_memory first-name substring + Gmail template,
+    # and the _fastpath_pronoun_resolve pronoun bucket matcher. The
+    # legacy fastpaths run as a regression safety net ONLY when the
+    # extractor returns None (no provisioned model, transport error,
+    # garbled JSON, etc.).
+    extract_plan: dict | None = None
+    try:
+        dossier_people = _intent_extract_normalize_people(profile_obj)
+        extract = _intent_extract_llm(instruction, recent_list,
+                                       dossier_people)
+        if extract is not None:
+            extract_plan = _intent_extract_to_plan(
+                extract, instruction, dossier_people)
+    except Exception:
+        extract_plan = None
+    # G1 install_under_5min fix: when the LLM returns clarify but the
+    # utterance contains an EXPLICIT FULL NAME that uniquely matches
+    # exactly ONE dossier person, prefer the deterministic resolution.
+    # Otherwise non-determinism in the LLM produces clarify cards even
+    # when the user said the full disambiguating name out loud
+    # ("Maya Patel" -> resolves Maya Patel, not Maya Chen). This only
+    # promotes ACT when the fastpath has a unique fullname match;
+    # ambiguous fastpath returns None and the LLM clarify stands.
+    if (extract_plan is not None
+            and extract_plan.get("mode") == "clarify"):
+        try:
+            fastpath_fullname = _fastpath_plan_from_memory(
+                instruction, profile_obj)
+        except Exception:
+            fastpath_fullname = None
+        if (fastpath_fullname is not None
+                and fastpath_fullname.get("mode") == "act"
+                and fastpath_fullname.get("_fastpath") == "fullname"):
+            extract_plan = fastpath_fullname
+    if extract_plan is not None:
+        _compose_cache_put(cache_key, extract_plan)
+        return _finalize_plan(instruction, extract_plan)
+
+    # Fast-path safety net (V1+V2+V3 legacy implementations): only
+    # reached when the LLM extractor returns None. Kept so the engine
+    # still resolves the simplest first-name match even with no model
+    # provisioned (offline / no OPENROUTER_API_KEY mode).
+    try:
+        fastpath = _fastpath_plan_from_memory(instruction, profile_obj)
+    except Exception:
+        fastpath = None
+    if fastpath is None:
+        try:
+            fastpath = _fastpath_pronoun_resolve(
+                instruction, profile_obj, recent_list)
+        except Exception:
+            fastpath = None
+    if fastpath is not None:
+        _compose_cache_put(cache_key, fastpath)
+        return _finalize_plan(instruction, fastpath)
+
     user = (f"ONBOARDING PROFILE:\n{profile}\n\n"
             f"DURABLE MEMORY:\n{facts}\n\n"
             f"RECENT TRANSCRIBED WINDOWS:\n{recent}\n\n"
@@ -5278,33 +6930,38 @@ def _compose_task_from_memory(instruction: str) -> dict:
     # Robust: under the session's burst of model calls OpenRouter can
     # return a transient empty/garbled completion. A transient infra
     # failure must NOT masquerade as a legitimate "ambiguous -> ask"
-    # (that wrongly fails a resolvable scenario). Retry once, with a
-    # short backoff; the platform_adapter.model_call already cascades
-    # across deepseek/kimi/gemini internally for transient OpenRouter
-    # failures, so an extra layer of retry-with-sleep here just stalls
-    # inject latency without improving correctness.
-    # W2O cut: 4 attempts with cumulative ~10.5s backoff -> 2 attempts
-    # with 1s backoff. Cumulative worst case ~1s, not 10s.
-    import time as _t
+    # (that wrongly fails a resolvable scenario). The platform_adapter
+    # model_call already handles transport retries (backoffs
+    # [0.5, 1.0]) and 429/5xx cascades internally, so an extra outer
+    # retry layer here just compounds 0 to 30s of dead latency on the
+    # injection hot path without changing correctness. Per the W2O
+    # planner-latency cut: drop the outer retry to one attempt and
+    # rely on the in-adapter cascade. If we still get back empty,
+    # fall through to the infra_fallback clarify.
     p = None
-    for attempt in range(2):
-        res = platform_adapter.model_call(_COMPOSE_SYS, user, 600, 0.0,
-                                          True)
-        if res.ok and res.content:
-            s = res.content
-            a, b = s.find("{"), s.rfind("}")
-            if a != -1 and b != -1 and b > a:
-                try:
-                    cand = json.loads(s[a:b + 1])
-                    if isinstance(cand, dict) and cand.get("mode") in (
-                            "act", "clarify"):
-                        p = cand
-                        break
-                except Exception:
-                    pass
-        if attempt == 0:
-            _t.sleep(1.0)
+    res = platform_adapter.model_call(_COMPOSE_SYS, user, 600, 0.0, True)
+    budget_exceeded = (isinstance(res.error, str)
+                       and "BUDGET_EXCEEDED" in res.error)
+    if res.ok and res.content:
+        s = res.content
+        a, b = s.find("{"), s.rfind("}")
+        if a != -1 and b != -1 and b > a:
+            try:
+                cand = json.loads(s[a:b + 1])
+                if isinstance(cand, dict) and cand.get("mode") in (
+                        "act", "clarify"):
+                    p = cand
+            except Exception:
+                pass
     if p is None:
+        if budget_exceeded:
+            # Planner cannot proceed; budget gate fired in the adapter.
+            # Escalate to user instead of generating a vague clarify.
+            return {"mode": "clarify",
+                    "question": ("This task crossed the $0.005 per task "
+                                  "hard cap. Tell me how to proceed."),
+                    "person": "", "thing": "", "task": "",
+                    "_budget_exceeded": True}
         return {"mode": "clarify", "question": "Which one did you "
                 "mean?", "person": "", "thing": "", "task": "",
                 "_infra_fallback": True}
@@ -6326,6 +7983,36 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
     structured = _try_structured_gmail_draft(plan)
     if structured is not None:
         return structured
+    # Defense-in-depth SMS pre-confirm gate. The /api/act top-level
+    # gate already handles every plan that flows through the public
+    # endpoint, but any internal caller that hands a plan directly to
+    # _run_action_engine (popover dispatch, automation, future code
+    # paths) needs the same guarantee: the DSv4SkillRunner below
+    # CLICKS Send in Gmail and can fire a real third-party message.
+    # The __sms_confirmed marker on plan dict means we already got
+    # YES from the user; skip the gate so dispatch can proceed.
+    if not plan.get("__sms_confirmed"):
+        try:
+            from app.product import sms_pre_confirm as _sms_pre_inner
+            if _sms_pre_inner.should_pre_confirm(plan, instruction):
+                pending_resp = _sms_pre_inner.create_pending_confirm(
+                    plan, instruction)
+                pending_resp.setdefault("resolved_person",
+                                        plan.get("person", ""))
+                pending_resp.setdefault("resolved_thing",
+                                        plan.get("thing", ""))
+                pending_resp.setdefault("task", task)
+                return JSONResponse(pending_resp)
+        except Exception as exc:
+            import traceback as _tb_gate_inner
+            return JSONResponse(status_code=500, content={
+                "ran": False,
+                "error":
+                f"sms_pre_confirm gate failed: "
+                f"{type(exc).__name__}: {exc}",
+                "trace": _tb_gate_inner.format_exc()[-1200:],
+                "task": task,
+            })
     try:
         from app.anticipy.action_handoff import make_real_action_engine
         # Gmail draft creation has to navigate authenticated UI, compose,
@@ -6363,13 +8050,767 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
         if ran:
             _LISTEN["acted"] = {"instruction": instruction, "task": task,
                                  "status": status, "ts": time.time()}
+            # Resolve the task_queue record (if one exists) so a
+            # successful action terminates the queue entry rather than
+            # leaving it pending. Best effort; failure to mark complete
+            # never gates the user-visible response.
+            try:
+                pending_meta = _LISTEN.get("pending") or {}
+                tq_id = pending_meta.get("task_queue_id")
+                if not tq_id:
+                    from app import task_queue as _tq_lookup
+                    for r in _tq_lookup.list_tasks(
+                            status=("pending", "in_progress"), limit=64):
+                        if r.instruction.strip() == instruction.strip():
+                            tq_id = r.task_id
+                            break
+                if tq_id:
+                    from app import task_queue as _tq_done
+                    _tq_done.complete(tq_id, {
+                        "status": status,
+                        "task": task,
+                        "answer": out.get("answer"),
+                    })
+            except Exception:
+                pass
             _LISTEN["pending"] = None
+        else:
+            # Soft failure (ran=False but no exception thrown). Classify
+            # the error / evidence so the user gets a friendly SMS and
+            # the persisted task stays alive for retry on next inject.
+            try:
+                recovery = _maybe_route_recovery(
+                    instruction=instruction,
+                    plan=plan,
+                    error_text=(out.get("error") or "")
+                                + " " + str(res.get("evidence", "")),
+                    surface_url=str(res.get("trajectory_dir", "") or ""),
+                )
+                if recovery:
+                    out["recovery"] = recovery
+                    out["waiting_for_recovery"] = True
+            except Exception:
+                # Recovery is a transparency improvement, never a gate.
+                pass
         return JSONResponse(out)
     except Exception as e:
         import traceback
-        return JSONResponse(status_code=500, content={
+        # Failure-recovery wiring: classify the exception, send a
+        # friendly SMS, park the persisted task in waiting status so
+        # the dispatcher does not burn retries on the same unfixable
+        # cause. Never let a recovery failure mask the original error.
+        recovery: dict[str, Any] | None = None
+        try:
+            recovery = _maybe_route_recovery(
+                instruction=instruction,
+                plan=plan,
+                error_text=f"{type(e).__name__}: {e}",
+                surface_url="",
+            )
+        except Exception:
+            recovery = None
+        content = {
             "ran": False, "error": f"{type(e).__name__}: {e}",
-            "trace": traceback.format_exc()[-1200:]})
+            "trace": traceback.format_exc()[-1200:]}
+        if recovery:
+            content["recovery"] = recovery
+            content["waiting_for_recovery"] = True
+        return JSONResponse(status_code=500, content=content)
+
+
+def _maybe_route_recovery(
+    *, instruction: str, plan: dict,
+    error_text: str, surface_url: str,
+) -> dict[str, Any] | None:
+    """Helper: classify the failure and call failure_recovery.route_recovery
+    when the error matches one of the recoverable kinds. Returns the
+    route_recovery result dict on success, None on skip / import error.
+
+    The caller wraps this in try/except so an unhandled exception here
+    never re-enters the original failure path.
+    """
+    text = (error_text or "").strip()
+    if not text:
+        return None
+    try:
+        from app.product import failure_recovery as FR
+    except Exception:
+        return None
+    kind = FR.classify_failure(text)
+    if kind == FR.FAILURE_UNKNOWN_ERROR:
+        # Unknown errors do not get a recovery SMS by default; they
+        # are usually genuine bugs the user cannot fix by re-auth. We
+        # still surface the trace in the normal response.
+        return None
+    # Resolve the task_queue record so the recovery parks the right
+    # row. Match by instruction string; the listen pipeline mirrors
+    # every utterance into the queue, so the most recent pending or
+    # in_progress row for this exact instruction is the right target.
+    tq_id = ""
+    try:
+        pending_meta = _LISTEN.get("pending") or {}
+        tq_id = str(pending_meta.get("task_queue_id") or "")
+        if not tq_id:
+            from app import task_queue as _tq_lookup
+            for r in _tq_lookup.list_tasks(
+                    status=("pending", "in_progress"), limit=64):
+                if r.instruction.strip() == (instruction or "").strip():
+                    tq_id = r.task_id
+                    break
+    except Exception:
+        tq_id = ""
+    recipient_hint = ""
+    if isinstance(plan, dict):
+        recipient_hint = str(plan.get("person") or "").strip()
+    return FR.route_recovery(
+        tq_id,
+        kind,
+        surface_url,
+        instruction=instruction or "",
+        recipient_hint=recipient_hint,
+    )
+
+
+# --------------------------------------------------------------------------
+# Post-action receipt
+# --------------------------------------------------------------------------
+#
+# After Anticipy successfully drives a real side-effect (especially a
+# Gmail send), the user should get a RECEIPT so they know what happened
+# on their behalf without having to open the mailbox to check. Two
+# channels, both safe defaults:
+#
+#   SMS via Twilio. Only fires when env opt-ins are present:
+#     TWILIO_TEST_TO_REAL_NUMBER=1
+#     TWILIO_TEST_TO_REAL_NUMBER_E164=+1...   (or TWILIO_NOTIFY_TO)
+#     TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER
+#   Without those flags this short-circuits to a gated reason so
+#   automated tests never spam a real phone.
+#
+#   Self-email. Always safe because we send to the user's OWN address
+#   (ANTICIPY_USER_EMAIL, falling back to omarkebrahim@gmail.com which
+#   is the active wearer of this dev engine). Uses the SAME Gmail CDP
+#   path that just ran the action, so there is no second auth surface
+#   to maintain. Opens a draft prefilled with the receipt text and
+#   triggers Gmail's autosave so the draft lands in Drafts. The user
+#   sees a row in their Drafts folder titled "Anticipy: <subject>".
+#   Self-send (actually clicking Send) is gated by
+#   ANTICIPY_RECEIPT_SEND=1 because the dev safety guard
+#   ANTICIPY_ALLOW_REAL_SEND already restricts outbound clicks.
+#
+# The receipt helper NEVER raises. Failures are recorded in the
+# returned dict so the caller can see what happened. The action that
+# triggered the receipt is never affected by a receipt failure.
+
+
+def _user_self_email() -> str:
+    # Stranger-install safety: do NOT default to Omar's email. If the
+    # user has not provided ANTICIPY_USER_EMAIL and Supabase has not
+    # populated session.json, return empty string so the receipt
+    # helper skips the self-email step rather than mailing Omar by
+    # default. Closes STRANGER_INSTALL_AUDIT warning.
+    env_email = os.environ.get("ANTICIPY_USER_EMAIL", "").strip()
+    if env_email:
+        return env_email
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+        sess = _Path.home() / ".anticipy" / "session.json"
+        if sess.exists():
+            data = _json.loads(sess.read_text("utf-8"))
+            email = str(data.get("user_email") or
+                        data.get("email") or "").strip()
+            if email:
+                return email
+    except Exception:
+        pass
+    return ""
+
+
+def _receipt_phone() -> str:
+    return (os.environ.get("TWILIO_NOTIFY_TO", "").strip()
+            or os.environ.get("TWILIO_TEST_TO_REAL_NUMBER_E164", "").strip())
+
+
+def _twilio_creds_ready() -> bool:
+    return bool(
+        os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+        and os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+        and os.environ.get("TWILIO_PHONE_NUMBER", "").strip()
+    )
+
+
+def _twilio_opt_in() -> bool:
+    return os.environ.get(
+        "TWILIO_TEST_TO_REAL_NUMBER", "").strip() == "1"
+
+
+def _receipt_summary_text(recipient: str, subject: str,
+                          sent_link: str = "") -> str:
+    """One short line, SMS-friendly. 'Reply STOP to silence' is the
+    standard opt-out line Twilio recommends for transactional SMS.
+
+    When sent_link is present we include it so the user can verify the
+    action in one click. The Gmail Message-ID encoded in the link
+    is the strongest possible audit identifier: it round-trips back to
+    the exact thread the agent touched.
+    """
+    rec = (recipient or "the recipient").strip()
+    subj = (subject or "(no subject)").strip()
+    link = (sent_link or "").strip()
+    if link:
+        return (
+            f"Anticipy just sent {rec} an email about {subj}. "
+            f"View: {link}. Reply STOP to silence."
+        )
+    return (
+        f"Anticipy just sent {rec} an email about {subj}. "
+        "Reply STOP to silence."
+    )
+
+
+def _extract_recipient_subject(instruction: str,
+                               response_obj: dict) -> tuple[str, str]:
+    """Pull recipient + subject from the response or, failing that,
+    from the original instruction text via the same parser the
+    direct_gmail_draft fast path uses. Returns ("", "") when we
+    cannot identify either, in which case the receipt helper still
+    sends a generic confirmation.
+    """
+    rec = str(response_obj.get("resolved_person") or "").strip()
+    subj = str(response_obj.get("resolved_thing") or "").strip()
+    if rec and subj:
+        return rec, subj
+    try:
+        from app.action_engine.gmail_compose import parse_draft_intent
+        parsed = parse_draft_intent(instruction)
+        if parsed is not None:
+            return parsed.to, parsed.subject
+    except Exception:
+        pass
+    return rec, subj
+
+
+def _send_receipt_sms_sync(body: str) -> dict:
+    """Synchronous Twilio SMS send for the receipt path.
+
+    Mirrors the gating logic of /api/notify/test: no creds -> 503-like
+    gated response; no opt-in -> gated suppress; happy path -> real
+    Twilio POST. Returns a structured dict (never raises) so the
+    receipt helper can include the result in its summary.
+    """
+    phone = _receipt_phone()
+    mock_env = (os.environ.get("TWILIO_MOCK") or "").strip().lower()
+    if mock_env in {"1", "true", "yes", "on"}:
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "mock": True,
+            "reason": "TWILIO_MOCK=1",
+            "to": phone,
+            "would_have_sent": body,
+        }
+    if not _twilio_creds_ready():
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "reason": "twilio_credentials_missing",
+            "to": phone,
+        }
+    if not _twilio_opt_in():
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "reason": "TWILIO_TEST_TO_REAL_NUMBER not set",
+            "to": phone,
+            "would_have_sent": body,
+        }
+    if not phone:
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "gated": True,
+            "reason": "no_destination_phone",
+        }
+    try:
+        from app.proactive.notifier import twilio_sms as _twilio_sms
+    except Exception as exc:
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "error": (f"notifier import: {type(exc).__name__}: {exc}"),
+            "to": phone,
+        }
+    # twilio_sms is async (it offloads via asyncio.to_thread). Drive
+    # it from a fresh event loop so the synchronous receipt helper
+    # can call it without disturbing the request loop. If we are
+    # already inside an event loop the caller wraps via to_thread.
+    try:
+        result = asyncio.run(_twilio_sms(phone, body))
+        return {
+            "channel": "sms",
+            "attempted": True,
+            "ok": bool(result.get("ok")),
+            "to": phone,
+            "delivery": result,
+        }
+    except RuntimeError as exc:
+        # already-running loop -> caller must offload us via thread
+        return {
+            "channel": "sms",
+            "attempted": False,
+            "error": f"loop_conflict: {exc}",
+            "to": phone,
+        }
+    except Exception as exc:
+        return {
+            "channel": "sms",
+            "attempted": True,
+            "ok": False,
+            "to": phone,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _send_receipt_email_via_cdp(subject: str, body: str,
+                                *,
+                                sent_link: str = "",
+                                screenshot_path: str = "",
+                                message_id: str = "") -> dict:
+    """Drop a receipt-summary email into the user's Gmail Drafts
+    (or send, when ANTICIPY_RECEIPT_SEND=1) via the same Gmail CDP
+    composer the action path already uses.
+
+    Sends to the user's OWN address so a misdelivery is impossible.
+    The dev safety guard in dsv4_skill_runner restricts outbound
+    sends, so the default behavior here is draft-only. Returns a
+    structured dict (never raises).
+
+    The audit-trail proof block (sent_link + screenshot_path +
+    message_id) gets stamped into the body so a single self-email is
+    enough to reconstruct exactly what Anticipy did. Gmail's URL
+    prefill only supports a single body parameter and no real
+    attachments, so we inline the proof inline as plain text with a
+    file:// reference to the screenshot on disk. A future revision
+    can swap to multipart MIME via Gmail's API; today the goal is to
+    have an unambiguous, verifiable identifier in the receipt.
+    """
+    self_email = _user_self_email()
+    if not self_email:
+        return {
+            "channel": "self_email",
+            "attempted": False,
+            "gated": True,
+            "reason": "no_self_email",
+        }
+    if CDP_PORT <= 0:
+        return {
+            "channel": "self_email",
+            "attempted": False,
+            "gated": True,
+            "reason": f"cdp_port_disabled ({CDP_PORT})",
+            "to": self_email,
+        }
+    try:
+        from app.action_engine.gmail_compose import (
+            DraftRequest, create_gmail_draft,
+        )
+    except Exception as exc:
+        return {
+            "channel": "self_email",
+            "attempted": False,
+            "error": (
+                f"gmail_compose import: {type(exc).__name__}: {exc}"),
+            "to": self_email,
+        }
+    enriched_body_parts = [body or ""]
+    if message_id:
+        enriched_body_parts.append(f"\n\nMessage-ID: {message_id}")
+    if sent_link:
+        enriched_body_parts.append(f"\nView the sent message: {sent_link}")
+    if screenshot_path:
+        enriched_body_parts.append(
+            f"\nScreenshot of the action: file://{screenshot_path}"
+        )
+    enriched_body = "".join(enriched_body_parts)
+    composed_subject = f"Anticipy: {subject or '(action completed)'}"
+    try:
+        result = create_gmail_draft(
+            DraftRequest(
+                to=self_email,
+                subject=composed_subject,
+                body=enriched_body,
+            ),
+            cdp_port=CDP_PORT,
+            marker="",
+        )
+    except Exception as exc:
+        return {
+            "channel": "self_email",
+            "attempted": True,
+            "ok": False,
+            "to": self_email,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    # Encourage Gmail to autosave so the draft lands. Best-effort.
+    typing_evidence: dict = {}
+    if result.ok and CDP_PORT > 0:
+        target_id = ""
+        for _attempt in range(10):
+            time.sleep(0.5)
+            try:
+                target_id = _gmail_find_compose_target(CDP_PORT)
+            except Exception:
+                target_id = ""
+            if target_id:
+                break
+        if target_id:
+            try:
+                typing_evidence = _gmail_type_into_compose_body(
+                    CDP_PORT, target_id, enriched_body,
+                    to_text=self_email,
+                    subject_text=composed_subject,
+                )
+            except Exception as exc:
+                typing_evidence = {
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+    return {
+        "channel": "self_email",
+        "attempted": True,
+        "ok": bool(result.ok),
+        "to": self_email,
+        "compose_url": result.compose_url,
+        "error": result.error,
+        "typing_evidence": typing_evidence,
+        "proof_sent_link": sent_link,
+        "proof_screenshot_path": screenshot_path,
+        "proof_message_id": message_id,
+    }
+
+
+# --------------------------------------------------------------------------
+# Audit-trail proof capture (Message-ID + screenshot + sent link)
+# --------------------------------------------------------------------------
+#
+# Receipts that just say "I sent X" are weak. A real audit trail needs a
+# verifiable identifier the user can click. For Gmail that is the message
+# RFC 2822 Message-ID which Gmail also exposes as a base16-style "thread
+# id" in the URL fragment after the message ships. The fragment looks
+# like `#sent/FMfcgzGxXxxxxXxxxxxx` and `https://mail.google.com/
+# mail/u/0/#sent/<id>` always resolves to the exact thread.
+#
+# We also drop a PNG screenshot of the post-action Gmail tab to disk
+# (under ~/.anticipy/v7/receipt_proof/) and base64-encode it for
+# inclusion in the receipt payload + self-email body. Both are best
+# effort: a missing screenshot must NEVER block the receipt or the
+# action. The receipt fires anyway with whatever fields we could
+# collect.
+
+_RECEIPT_PROOF_DIR = Path(
+    os.environ.get("ANTICIPY_DATA_DIR", "")
+    or os.path.expanduser("~/.anticipy/v7")
+) / "receipt_proof"
+
+
+def _capture_cdp_screenshot(cdp_port: int,
+                            target_id: str,
+                            out_path: Path,
+                            timeout_seconds: float = 10.0) -> dict:
+    """One synchronous CDP Page.captureScreenshot. Returns a dict with
+    {ok, path, bytes, error}. Never raises.
+    """
+    try:
+        from websockets.sync.client import connect as _ws_connect
+    except Exception as exc:
+        return {"ok": False, "error": f"ws import: {type(exc).__name__}: {exc}"}
+    if not target_id:
+        return {"ok": False, "error": "no_target_id"}
+    ws_url = f"ws://127.0.0.1:{cdp_port}/devtools/page/{target_id}"
+    try:
+        ws = _ws_connect(ws_url, max_size=32 * 1024 * 1024,
+                         open_timeout=float(timeout_seconds))
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"ws connect: {type(exc).__name__}: {exc}"}
+    try:
+        ws.send(json.dumps({
+            "id": 1, "method": "Page.captureScreenshot",
+            "params": {"format": "png", "fromSurface": True,
+                       "captureBeyondViewport": False},
+        }))
+        deadline = time.time() + float(timeout_seconds)
+        b64 = ""
+        while time.time() < deadline:
+            try:
+                raw = ws.recv(timeout=max(0.5, deadline - time.time()))
+            except Exception:
+                break
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            if msg.get("id") == 1:
+                b64 = ((msg.get("result") or {}).get("data") or "")
+                break
+        if not b64:
+            return {"ok": False, "error": "no_screenshot_returned"}
+        try:
+            data = base64.b64decode(b64)
+        except Exception as exc:
+            return {"ok": False,
+                    "error": f"b64 decode: {type(exc).__name__}: {exc}"}
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            out_path.write_bytes(data)
+        except Exception as exc:
+            return {"ok": False,
+                    "error": f"write: {type(exc).__name__}: {exc}"}
+        return {"ok": True, "path": str(out_path),
+                "bytes": len(data), "base64": b64}
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+
+def _gmail_extract_message_id_from_tab(cdp_port: int,
+                                       target_id: str,
+                                       timeout_seconds: float = 8.0
+                                       ) -> dict:
+    """Read the Gmail thread id (Message-ID surrogate) from a tab's
+    location.hash. Gmail rewrites the URL to #sent/<id>, #inbox/<id>,
+    or #drafts/<id> after Send completes. Returns a dict with
+    {ok, message_id, hash_kind, url, error}.
+    """
+    try:
+        from websockets.sync.client import connect as _ws_connect
+    except Exception as exc:
+        return {"ok": False, "error": f"ws import: {type(exc).__name__}: {exc}"}
+    if not target_id:
+        return {"ok": False, "error": "no_target_id"}
+    ws_url = f"ws://127.0.0.1:{cdp_port}/devtools/page/{target_id}"
+    js = (
+        "(function(){"
+        "try{"
+        "var url=location.href;"
+        "var hash=(location.hash||'').replace(/^#/,'');"
+        "var m=hash.match(/^([a-z]+)\\/([A-Za-z0-9_-]+)/);"
+        "if(!m){return JSON.stringify({ok:false,"
+        "error:'no_hash_match',hash:hash,url:url});}"
+        "return JSON.stringify({ok:true,kind:m[1],id:m[2],"
+        "hash:hash,url:url});"
+        "}catch(e){return JSON.stringify({ok:false,"
+        "error:String(e)});}"
+        "})()"
+    )
+    try:
+        ws = _ws_connect(ws_url, max_size=4 * 1024 * 1024,
+                         open_timeout=float(timeout_seconds))
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"ws connect: {type(exc).__name__}: {exc}"}
+    try:
+        ws.send(json.dumps({
+            "id": 1, "method": "Runtime.evaluate",
+            "params": {"expression": js, "returnByValue": True,
+                       "awaitPromise": False},
+        }))
+        deadline = time.time() + float(timeout_seconds)
+        raw_value = ""
+        while time.time() < deadline:
+            try:
+                raw = ws.recv(timeout=max(0.5, deadline - time.time()))
+            except Exception:
+                break
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+            if msg.get("id") == 1:
+                raw_value = str(((msg.get("result") or {})
+                                  .get("result") or {}).get("value") or "")
+                break
+        try:
+            parsed = json.loads(raw_value or "{}")
+        except Exception:
+            parsed = {}
+        if not parsed.get("ok"):
+            return {"ok": False,
+                    "error": str(parsed.get("error") or "no_value"),
+                    "raw": raw_value[:300]}
+        return {
+            "ok": True,
+            "message_id": str(parsed.get("id") or ""),
+            "hash_kind": str(parsed.get("kind") or ""),
+            "url": str(parsed.get("url") or ""),
+        }
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+
+def _gmail_sent_link(message_id: str, hash_kind: str = "sent") -> str:
+    if not message_id:
+        return ""
+    kind = (hash_kind or "sent").strip() or "sent"
+    return (
+        f"https://mail.google.com/mail/u/0/#{kind}/{message_id}"
+    )
+
+
+def _capture_gmail_action_proof(response_obj: dict) -> dict:
+    """Drop a screenshot + extract the Gmail Message-ID (or thread id
+    surrogate) from the tab the action engine just used. Returns a
+    structured dict with everything the receipt needs. Never raises.
+
+    Strategy:
+      - Prefer the compose_target_id the action engine emitted; the
+        post-send Gmail tab keeps the same target_id and just rewrites
+        its location.hash to #sent/<id> or #drafts/<id>.
+      - Fall back to scanning CDP /json for any mail.google.com tab.
+      - Screenshot is best-effort; missing it is non-fatal.
+    """
+    if CDP_PORT <= 0:
+        return {"ok": False, "reason": "cdp_disabled",
+                "cdp_port": CDP_PORT}
+    target_id = str(
+        (response_obj or {}).get("compose_target_id")
+        or ((response_obj or {}).get("typing_evidence") or {})
+        .get("target_id")
+        or ""
+    ).strip()
+    if not target_id:
+        try:
+            target_id = _gmail_find_compose_target(CDP_PORT) or ""
+        except Exception:
+            target_id = ""
+    if not target_id:
+        try:
+            for tid in _gmail_list_compose_targets(CDP_PORT):
+                target_id = tid
+                break
+        except Exception:
+            pass
+    if not target_id:
+        return {"ok": False, "reason": "no_gmail_target",
+                "cdp_port": CDP_PORT}
+
+    msg = _gmail_extract_message_id_from_tab(CDP_PORT, target_id)
+    message_id = str(msg.get("message_id") or "") if msg.get("ok") else ""
+    hash_kind = str(msg.get("hash_kind") or "") if msg.get("ok") else ""
+    sent_link = _gmail_sent_link(message_id, hash_kind or "sent")
+
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    out_path = _RECEIPT_PROOF_DIR / f"gmail_action_{ts}_{uuid.uuid4().hex[:8]}.png"
+    shot = _capture_cdp_screenshot(CDP_PORT, target_id, out_path)
+
+    return {
+        "ok": bool(message_id or shot.get("ok")),
+        "target_id": target_id,
+        "message_id": message_id,
+        "hash_kind": hash_kind,
+        "tab_url": str(msg.get("url") or ""),
+        "sent_link": sent_link,
+        "screenshot": {
+            "ok": bool(shot.get("ok")),
+            "path": str(shot.get("path") or ""),
+            "bytes": int(shot.get("bytes") or 0),
+            "base64_len": len(shot.get("base64") or ""),
+            "error": str(shot.get("error") or ""),
+        },
+        "message_id_error": "" if msg.get("ok") else str(
+            msg.get("error") or ""),
+    }
+
+
+def _emit_action_receipt(instruction: str,
+                         response_obj: dict) -> dict:
+    """Fire the SMS + self-email receipt for an action that just ran.
+
+    Called from the /api/act post-success path and from the new
+    /api/dispatch/with_receipt endpoint. Returns a structured dict
+    summarizing what each channel did. NEVER raises: a receipt
+    failure must not roll back a successful real-world action.
+
+    The new audit-trail proof block captures Gmail's Message-ID
+    (thread id surrogate) and a PNG screenshot of the tab so the
+    user has a verifiable identifier to click.
+    """
+    try:
+        recipient, subject = _extract_recipient_subject(
+            instruction, response_obj)
+        proof = _capture_gmail_action_proof(response_obj)
+        sent_link = str(proof.get("sent_link") or "")
+        screenshot_path = ""
+        screenshot_b64 = ""
+        screenshot_block = proof.get("screenshot") or {}
+        if isinstance(screenshot_block, dict):
+            screenshot_path = str(screenshot_block.get("path") or "")
+            # Don't bloat the JSON response with the full b64. Carry
+            # only the path; the email helper reads the file when it
+            # needs to inline.
+        text = _receipt_summary_text(recipient, subject, sent_link)
+        sms_result = _send_receipt_sms_sync(text)
+        email_result = _send_receipt_email_via_cdp(
+            subject, text,
+            sent_link=sent_link,
+            screenshot_path=screenshot_path,
+            message_id=str(proof.get("message_id") or ""),
+        )
+        return {
+            "ok": True,
+            "recipient": recipient,
+            "subject": subject,
+            "summary_text": text,
+            "sms": sms_result,
+            "self_email": email_result,
+            "proof": proof,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _maybe_attach_receipt(response: JSONResponse,
+                          instruction: str) -> JSONResponse:
+    """Inspect a JSONResponse returned from the action path; if the
+    body indicates SUCCESS, attach a receipt summary. Returns the
+    same response object (mutated) for convenience.
+
+    Receipt firing is gated by ANTICIPY_RECEIPT_ON_SUCCESS=1 so that
+    routine test runs do not produce side-effect notifications. The
+    /api/dispatch/with_receipt endpoint flips this gate per-call.
+    """
+    enabled = os.environ.get(
+        "ANTICIPY_RECEIPT_ON_SUCCESS", "").strip() == "1"
+    if not enabled:
+        return response
+    try:
+        raw = response.body
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8", "replace")
+        data = json.loads(raw or "{}")
+    except Exception:
+        return response
+    if not isinstance(data, dict):
+        return response
+    ran = bool(data.get("ran"))
+    status = str(data.get("status") or "").upper()
+    if not (ran and status == "SUCCESS"):
+        return response
+    receipt = _emit_action_receipt(instruction, data)
+    data["receipt"] = receipt
+    return JSONResponse(data)
 
 
 @app.post("/api/act")
@@ -6403,6 +8844,66 @@ async def act(request: Request) -> JSONResponse:
     instruction = (a.instruction
                    or pending.get("instruction")
                    or "").strip()
+    # Per-task cost telemetry. Mint a task id at the top so EVERY model
+    # call made during this request (planner, memory reconcile, vision)
+    # is attributed to the same task. Caller may pre-supply the id (the
+    # confirm-card resume path does) via body.task_id; otherwise we
+    # mint a fresh one. We bind it both on the asyncio request thread
+    # AND in the cost_telemetry per-thread store so the budget gate
+    # can read it without an explicit argument.
+    cost_task_id = ""
+    if _cost_telemetry is not None:
+        try:
+            existing = str(body_obj.get("task_id") or "").strip()
+            cost_task_id = existing or f"act-{uuid.uuid4().hex[:12]}"
+            _cost_telemetry.start_task(cost_task_id)
+            _cost_telemetry.set_active_for_thread(cost_task_id)
+            from app.anticipy import platform_adapter as _pa_for_bind
+            _pa_for_bind.bind_active_task_id(cost_task_id)
+        except Exception:
+            cost_task_id = ""
+
+    def _finalize_act_response(resp: JSONResponse, status: str = "ok") -> JSONResponse:
+        """Attach the task id + running cost to the response payload
+        and close the cost telemetry record. Idempotent on a second
+        call (finish_task pops the active record)."""
+        if _cost_telemetry is None or not cost_task_id:
+            return resp
+        try:
+            record = _cost_telemetry.current_task_record(cost_task_id)
+            running_cost = float(record.get("cost_usd", 0.0)) if record else 0.0
+            vision_calls = int(record.get("vision_call_count", 0)) if record else 0
+            call_count = int(record.get("call_count", 0)) if record else 0
+            try:
+                existing_body = resp.body or b"{}"
+                existing_dict = json.loads(existing_body.decode("utf-8") or "{}")
+                if isinstance(existing_dict, dict):
+                    existing_dict.setdefault("task_id", cost_task_id)
+                    existing_dict["cost_telemetry"] = {
+                        "task_id": cost_task_id,
+                        "cost_usd": round(running_cost, 6),
+                        "call_count": call_count,
+                        "vision_call_count": vision_calls,
+                        "per_task_ceiling_usd":
+                            _cost_telemetry.PER_TASK_CEILING_USD,
+                        "per_task_hard_cap_usd":
+                            _cost_telemetry.PER_TASK_HARD_CAP_USD,
+                    }
+                    resp = JSONResponse(existing_dict, status_code=resp.status_code)
+            except Exception:
+                pass
+            _cost_telemetry.finish_task(cost_task_id, status=status)
+        except Exception:
+            pass
+        finally:
+            try:
+                _cost_telemetry.set_active_for_thread(None)
+                from app.anticipy import platform_adapter as _pa_for_unbind
+                _pa_for_unbind.bind_active_task_id(None)
+            except Exception:
+                pass
+        return resp
+
     # Omar 2026-05-26 directive: never flat-decline. The competent_decline
     # / decline flags on a pending record now only fire AFTER the user has
     # explicitly answered no on a surfaced confirm card. When we see them
@@ -6410,7 +8911,7 @@ async def act(request: Request) -> JSONResponse:
     # the user instead of refusing. New requests go through the universal
     # dispatcher below.
     if pending.get("competent_decline") or pending.get("decline"):
-        return JSONResponse({
+        return _finalize_act_response(JSONResponse({
             "ran": False,
             "status": "ask_user",
             "ask_user": True,
@@ -6422,10 +8923,24 @@ async def act(request: Request) -> JSONResponse:
             "options": pending.get("options") or ["proceed", "cancel"],
             "confirm_card_id": pending.get("confirm_card_id"),
             "task": instruction,
-        })
+        }), status="ask_user")
     if not instruction:
-        return JSONResponse({"ran": False,
-                             "error": "no instruction to act on"})
+        return _finalize_act_response(JSONResponse({"ran": False,
+                             "error": "no instruction to act on"}),
+                                       status="empty")
+    # Persist to the durable task queue if this instruction did not
+    # already arrive via the listen pipeline. The queue tracks the
+    # instruction across engine restarts; the in-memory pending dict
+    # tracks the in-flight popover state.
+    pending_tq_id = pending.get("task_queue_id") if pending else None
+    queue_task_id = pending_tq_id
+    if not queue_task_id:
+        queued = _task_queue_enqueue_from_pending(
+            instruction,
+            metadata={"source": "api_act_direct"},
+        )
+        if queued:
+            queue_task_id = queued.get("task_id")
     # Fast path: a fully-specified draft request can be executed
     # deterministically without burning an LLM round trip on plan
     # composition. The DSv4SkillRunner stays as the fallback for
@@ -6434,10 +8949,10 @@ async def act(request: Request) -> JSONResponse:
     direct_draft = parse_draft_intent(instruction)
     if direct_draft is not None:
         if not _ensure_cdp_chrome():
-            return JSONResponse({
+            return _finalize_act_response(JSONResponse({
                 "ran": False, "gated": True,
                 "task": instruction, "intent": "email_draft",
-                "error": "No real Chrome on :9222"})
+                "error": "No real Chrome on :9222"}), status="gated")
         synthetic_plan = {
             "mode": "act",
             "intent": "email_draft",
@@ -6448,20 +8963,30 @@ async def act(request: Request) -> JSONResponse:
         }
         direct = _try_direct_gmail_draft(instruction, synthetic_plan)
         if direct is not None:
-            return direct
+            return _finalize_act_response(
+                _maybe_attach_receipt(direct, instruction), status="ok")
     direct_browser = _try_direct_browser_action(instruction)
     if direct_browser is not None:
-        return direct_browser
+        return _finalize_act_response(
+            _maybe_attach_receipt(direct_browser, instruction), status="ok")
     plan = pending.get("plan") if (not a.instruction and pending) else None
     if not isinstance(plan, dict):
         plan = _compose_task_from_memory(instruction)
     if plan.get("mode") != "act" or not plan.get("task"):
-        # genuinely ambiguous / absent referent -> ASK, never guess
-        return JSONResponse({
-            "ran": False, "clarify": True,
+        # genuinely ambiguous / absent referent -> ASK, never guess.
+        # If the planner short-circuited because we crossed the budget
+        # the response carries that explicitly so the popover can
+        # surface a real "escalate to user" card instead of a clarify.
+        budget_block = bool(plan.get("_budget_exceeded"))
+        return _finalize_act_response(JSONResponse({
+            "ran": False, "clarify": not budget_block,
+            "budget_exceeded": budget_block,
             "question": plan.get("question")
-            or "Which one did you mean?",
-            "resolved_person": "", "resolved_thing": ""})
+            or ("Task exceeded the $0.005 per task hard cap and was "
+                "paused. Tell me how to proceed."
+                if budget_block else "Which one did you mean?"),
+            "resolved_person": "", "resolved_thing": ""}),
+            status=("budget_exceeded" if budget_block else "clarify"))
 
     # US-017: irreversible intents pause the frozen engine until the
     # user clicks Approve in the popover Confirm card. The reversible
@@ -6471,7 +8996,17 @@ async def act(request: Request) -> JSONResponse:
     if intent in _load_irreversible_intents():
         task_id = _register_confirm(plan, instruction, intent)
         confirm = _confirm_payload(intent, plan, instruction)
-        return JSONResponse({
+        # Stash the cost telemetry task id so the confirm resume path
+        # can re-bind to the same accumulator (otherwise approve would
+        # start a fresh task counter and we would under-report cost).
+        try:
+            with _CONFIRMS_LOCK:
+                rec = _CONFIRMS.get(task_id)
+                if isinstance(rec, dict):
+                    rec["cost_task_id"] = cost_task_id
+        except Exception:
+            pass
+        return _finalize_act_response(JSONResponse({
             "ran": False,
             "confirm_required": True,
             "event": "confirm_required",
@@ -6486,9 +9021,181 @@ async def act(request: Request) -> JSONResponse:
                 "task_id": task_id,
                 "timeout_s": _CONFIRM_TIMEOUT_SECONDS,
                 "confirm": confirm}),
+        }), status="confirm_required")
+
+    # SMS pre-confirm gate. Before any irreversible action fires
+    # (Gmail click-Send, social post, payment, form submit), send
+    # the user an SMS with the proposed action and wait for YES /
+    # NO / EDIT. The popover confirm card alone is not enough
+    # because the user is not always at their Mac (pendant / phone).
+    # SMS is the universal-reach channel per the SMS_PRE_CONFIRM
+    # directive (feedback_sms_pre_confirm.md).
+    #
+    # Z-001 uses the explicit "Draft an email to lara@... saying"
+    # shape, which `parse_draft_intent` catches above and returns
+    # at _try_direct_gmail_draft. That early return runs BEFORE this
+    # gate, so Z-001's draft-only path is unaffected.
+    #
+    # The `__sms_confirmed` marker on the plan is set when the
+    # inbound webhook dispatches a previously-approved task; it
+    # bypasses the gate so a YES reply does not loop back into
+    # another SMS round-trip.
+    if not plan.get("__sms_confirmed"):
+        try:
+            from app.product import sms_pre_confirm as _sms_pre_top
+            if _sms_pre_top.should_pre_confirm(plan, instruction):
+                pending_resp = _sms_pre_top.create_pending_confirm(
+                    plan, instruction)
+                pending_resp.setdefault("resolved_person",
+                                        plan.get("person", ""))
+                pending_resp.setdefault("resolved_thing",
+                                        plan.get("thing", ""))
+                pending_resp.setdefault("task",
+                                        str(plan.get("task") or ""))
+                return _finalize_act_response(JSONResponse(pending_resp),
+                                              status="sms_pending_confirm")
+        except Exception as exc:
+            import traceback as _tb_gate_top
+            return _finalize_act_response(JSONResponse(status_code=500, content={
+                "ran": False,
+                "error":
+                f"sms_pre_confirm gate failed: "
+                f"{type(exc).__name__}: {exc}",
+                "trace": _tb_gate_top.format_exc()[-1200:],
+                "task": str(plan.get("task") or ""),
+            }), status="error")
+
+    return _finalize_act_response(
+        _maybe_attach_receipt(
+            _run_action_engine(instruction, plan), instruction),
+        status="ok")
+
+
+# --------------------------------------------------------------------------
+# Dispatch + receipt wrapper
+# --------------------------------------------------------------------------
+#
+# Wraps /api/act so a caller (UI, test harness, post-success automation)
+# can fire one POST and get back BOTH the action result and the receipt
+# summary. Useful when the caller wants the receipt regardless of the
+# ANTICIPY_RECEIPT_ON_SUCCESS env gate (which keeps the default /api/act
+# safe for routine probes).
+#
+# Body:
+#   {
+#     "instruction": "Draft an email to lara@... with subject ... saying ...",
+#     "to_phone": "+15555550100",     # optional, overrides env phone
+#     "to_self_email": "you@..."      # optional, overrides ANTICIPY_USER_EMAIL
+#   }
+#
+# Returns:
+#   {
+#     "action": <full /api/act response body>,
+#     "receipt": <_emit_action_receipt summary>,
+#     "skipped_reason": "..."          # only when action did not succeed
+#   }
+#
+# Behavior:
+#   1. Calls the same internal action path /api/act uses.
+#   2. If the action result indicates SUCCESS, fires the receipt
+#      unconditionally (no env gate). If not, returns the action
+#      response untouched with skipped_reason set.
+#   3. Temporary overrides for TWILIO_NOTIFY_TO and
+#      ANTICIPY_USER_EMAIL are applied only for the duration of the
+#      receipt call so the env stays clean.
+
+
+class DispatchWithReceipt(BaseModel):
+    instruction: str | None = None
+    to_phone: str | None = None
+    to_self_email: str | None = None
+
+
+@app.post("/api/dispatch/with_receipt")
+async def dispatch_with_receipt(p: DispatchWithReceipt,
+                                request: Request) -> JSONResponse:
+    instruction = (p.instruction or "").strip()
+    if not instruction:
+        pending = _LISTEN.get("pending") or {}
+        instruction = (pending.get("instruction") or "").strip()
+    if not instruction:
+        return JSONResponse({
+            "ok": False,
+            "error": ("no instruction provided in body and no "
+                      "pending instruction queued"),
+        }, status_code=400)
+
+    # Run the action via the exact same path /api/act uses by calling
+    # act() directly with a fabricated Request that carries our body.
+    class _FauxRequest:
+        def __init__(self, payload: dict) -> None:
+            self._payload = payload
+
+        async def body(self) -> bytes:
+            return json.dumps(self._payload).encode("utf-8")
+
+    action_resp = await act(_FauxRequest({"instruction": instruction}))
+    # act() may return a JSONResponse that already passed through
+    # _maybe_attach_receipt. Decode the body so we can branch.
+    try:
+        raw = action_resp.body
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8", "replace")
+        action_data = json.loads(raw or "{}")
+        if not isinstance(action_data, dict):
+            action_data = {}
+    except Exception:
+        action_data = {}
+
+    ran = bool(action_data.get("ran"))
+    status = str(action_data.get("status") or "").upper()
+    if not (ran and status == "SUCCESS"):
+        return JSONResponse({
+            "ok": False,
+            "action": action_data,
+            "receipt": None,
+            "skipped_reason": (
+                f"action did not succeed (ran={ran}, status={status!r})"
+            ),
         })
 
-    return _run_action_engine(instruction, plan)
+    # If /api/act already attached a receipt (env-gated), reuse it.
+    # Otherwise force one through, with optional per-call env overrides
+    # for phone + self_email so the caller can target a different number
+    # without restarting the engine.
+    existing_receipt = action_data.get("receipt") if isinstance(
+        action_data.get("receipt"), dict) else None
+    if existing_receipt:
+        return JSONResponse({
+            "ok": True,
+            "action": action_data,
+            "receipt": existing_receipt,
+            "receipt_source": "act_post_success",
+        })
+
+    saved_phone = os.environ.get("TWILIO_NOTIFY_TO")
+    saved_email = os.environ.get("ANTICIPY_USER_EMAIL")
+    if p.to_phone:
+        os.environ["TWILIO_NOTIFY_TO"] = p.to_phone
+    if p.to_self_email:
+        os.environ["ANTICIPY_USER_EMAIL"] = p.to_self_email
+    try:
+        receipt = _emit_action_receipt(instruction, action_data)
+    finally:
+        if saved_phone is None:
+            os.environ.pop("TWILIO_NOTIFY_TO", None)
+        else:
+            os.environ["TWILIO_NOTIFY_TO"] = saved_phone
+        if saved_email is None:
+            os.environ.pop("ANTICIPY_USER_EMAIL", None)
+        else:
+            os.environ["ANTICIPY_USER_EMAIL"] = saved_email
+    return JSONResponse({
+        "ok": True,
+        "action": action_data,
+        "receipt": receipt,
+        "receipt_source": "wrapper_forced",
+    })
 
 
 class ConfirmDecision(BaseModel):
@@ -6552,7 +9259,58 @@ def act_confirm(task_id: str,
             "expired": expired,
         })
 
-    out = _run_action_engine(rec["instruction"], rec["plan"])
+    # Resume cost telemetry against the SAME task id that the
+    # /api/act response created so the approve path's vision / action
+    # LLM calls accrue against the original budget. Without this the
+    # confirm path would mint a brand new accumulator and the total
+    # task cost would be split across two records.
+    cost_task_id = str((rec.get("cost_task_id") if isinstance(rec, dict)
+                        else None) or "")
+    if _cost_telemetry is not None and cost_task_id:
+        try:
+            _cost_telemetry.start_task(cost_task_id)  # idempotent
+            _cost_telemetry.set_active_for_thread(cost_task_id)
+            from app.anticipy import platform_adapter as _pa_for_resume
+            _pa_for_resume.bind_active_task_id(cost_task_id)
+        except Exception:
+            cost_task_id = ""
+    try:
+        out = _run_action_engine(rec["instruction"], rec["plan"])
+    finally:
+        if _cost_telemetry is not None and cost_task_id:
+            try:
+                final_record = _cost_telemetry.current_task_record(cost_task_id)
+                running_cost = float(final_record.get("cost_usd", 0.0)) if final_record else 0.0
+                vision_calls = int(final_record.get("vision_call_count", 0)) if final_record else 0
+                call_count = int(final_record.get("call_count", 0)) if final_record else 0
+                try:
+                    existing_body = out.body or b"{}"
+                    existing_dict = json.loads(existing_body.decode("utf-8") or "{}")
+                    if isinstance(existing_dict, dict):
+                        existing_dict.setdefault("task_id", cost_task_id)
+                        existing_dict["cost_telemetry"] = {
+                            "task_id": cost_task_id,
+                            "cost_usd": round(running_cost, 6),
+                            "call_count": call_count,
+                            "vision_call_count": vision_calls,
+                            "per_task_ceiling_usd":
+                                _cost_telemetry.PER_TASK_CEILING_USD,
+                            "per_task_hard_cap_usd":
+                                _cost_telemetry.PER_TASK_HARD_CAP_USD,
+                        }
+                        out = JSONResponse(existing_dict, status_code=out.status_code)
+                except Exception:
+                    pass
+                _cost_telemetry.finish_task(cost_task_id, status="ok")
+            except Exception:
+                pass
+            finally:
+                try:
+                    _cost_telemetry.set_active_for_thread(None)
+                    from app.anticipy import platform_adapter as _pa_for_unbind2
+                    _pa_for_unbind2.bind_active_task_id(None)
+                except Exception:
+                    pass
     with _CONFIRMS_LOCK:
         _CONFIRMS.pop(task_id, None)
     return out
@@ -6583,6 +9341,295 @@ def act_confirm_status(task_id: str) -> JSONResponse:
         "status": ("pending" if rec.get("approved") is None
                    else ("approved" if rec["approved"] else "user_rejected")),
     })
+
+
+# --------------------------------------------------------------------------
+# SMS pre-confirm: inbound webhook + status surface
+# --------------------------------------------------------------------------
+#
+# Twilio posts inbound SMS to /api/sms/inbound as form-encoded fields
+# (Body, From, To, MessageSid, ...). We classify the body as
+# YES / NO / EDIT / unknown, resolve against the most recent pending
+# task, and either dispatch (YES) or cancel (NO) or stash (EDIT).
+#
+# The response body is TwiML so Twilio plays a friendly acknowledgement
+# back to the user. Twilio expects a 200 with Content-Type=text/xml.
+#
+# Companion endpoints:
+#   GET  /api/sms/pending              list currently pending tasks
+#   GET  /api/sms/pending/{task_id}    inspect a single task
+#   POST /api/sms/pending/{task_id}/dispatch  operator-resume after YES
+#   POST /api/sms/expire/run           force the expiry sweeper
+#
+# See engine/app/product/sms_pre_confirm.py for the persistence
+# layer and the SMS_PRE_CONFIRM directive
+# (feedback_sms_pre_confirm.md) for the policy.
+
+
+@app.post("/api/sms/inbound")
+async def sms_inbound(request: Request) -> Response:
+    """Twilio inbound-SMS webhook.
+
+    Twilio posts application/x-www-form-urlencoded with at least:
+      Body            the user's reply text
+      From            the user's phone (E.164)
+      To              our Twilio number
+      MessageSid      Twilio message identifier
+
+    The handler classifies Body, persists the decision on the most
+    recent pending task, and triggers dispatch when the user said
+    YES. Returns TwiML so Twilio messages back the user with a
+    friendly acknowledgement. JSON callers (tests, the popover) get
+    the same payload as JSON when they send Accept: application/json
+    or include format=json in the form.
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    raw = await request.body()
+    fields: dict[str, str] = {}
+    if raw:
+        try:
+            parsed = urllib.parse.parse_qs(
+                raw.decode("utf-8", "replace"),
+                keep_blank_values=True,
+            )
+            for k, v in parsed.items():
+                fields[str(k)] = str((v or [""])[0])
+        except Exception:
+            fields = {}
+        if not fields:
+            try:
+                obj = json.loads(
+                    raw.decode("utf-8", "replace") or "{}"
+                )
+                if isinstance(obj, dict):
+                    fields = {str(k): str(v) for k, v in obj.items()
+                              if v is not None}
+            except Exception:
+                fields = {}
+    # Twilio Programmable Voice with <Gather input="speech"> POSTs
+    # SpeechResult (transcribed user speech) and Confidence in
+    # addition to the standard SMS fields. We accept either, with
+    # SpeechResult winning when both are present so a voice-channel
+    # callback never gets misclassified as a text reply.
+    speech_result = (
+        fields.get("SpeechResult")
+        or fields.get("speech_result")
+        or ""
+    )
+    body_text = (
+        speech_result
+        or fields.get("Body")
+        or fields.get("body")
+        or ""
+    )
+    from_number = fields.get("From") or fields.get("from") or ""
+    task_id_hint = (
+        fields.get("task_id")
+        or fields.get("TaskId")
+        or ""
+    ).strip()
+    is_voice_callback = bool(speech_result) or bool(
+        fields.get("CallSid") or fields.get("call_sid")
+    )
+    decision = _sms_pre.resolve_inbound(
+        body_text, task_id=task_id_hint)
+    twiml_message = ""
+    dispatched: dict[str, Any] = {}
+    if decision.get("ok") and decision.get("reply_class") == "yes":
+        payload = decision.get("action_payload") or {}
+        instruction = str(payload.get("instruction") or "")
+        plan = (payload.get("plan")
+                if isinstance(payload.get("plan"), dict) else {})
+        if instruction and plan:
+            try:
+                dispatched_resp = (
+                    _run_action_engine_post_sms_confirm(
+                        instruction, plan)
+                )
+                dispatched = {
+                    "ok": True,
+                    "status_code": dispatched_resp.status_code,
+                    "body": (json.loads(
+                        bytes(dispatched_resp.body).decode("utf-8"))
+                             if dispatched_resp.body else {}),
+                }
+            except Exception as exc:
+                dispatched = {
+                    "ok": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+        twiml_message = "Anticipy: confirmed. Dispatching now."
+    elif decision.get("ok") and decision.get("reply_class") == "no":
+        twiml_message = "Anticipy: cancelled. Nothing was sent."
+    elif decision.get("ok") and decision.get("reply_class") == "edit":
+        twiml_message = (
+            "Anticipy: saved as draft for review in the popover."
+        )
+    elif decision.get("reply_class") == "unknown":
+        twiml_message = (
+            "Anticipy: did not recognise that. Reply YES to send, "
+            "NO to cancel, EDIT to revise."
+        )
+    else:
+        twiml_message = (
+            "Anticipy: no pending action to confirm."
+        )
+    payload_dict = {
+        "ok": bool(decision.get("ok")),
+        "from": from_number,
+        "task_id": decision.get("task_id", ""),
+        "reply_class": decision.get("reply_class", ""),
+        "previous_status": decision.get("previous_status", ""),
+        "new_status": decision.get("new_status", ""),
+        "dispatched": dispatched,
+        "message": twiml_message,
+        "decision_error": decision.get("error"),
+        "channel": ("voice" if is_voice_callback else "sms"),
+        "speech_result": speech_result,
+    }
+    accept = request.headers.get("accept", "")
+    wants_json = (
+        "application/json" in accept.lower()
+        or fields.get("format", "").lower() == "json"
+    )
+    if wants_json:
+        return JSONResponse(payload_dict)
+    safe_msg = (twiml_message or "") \
+        .replace("&", "&amp;") \
+        .replace("<", "&lt;") \
+        .replace(">", "&gt;")
+    if is_voice_callback:
+        # Voice channel: speak the acknowledgement and hang up. Using
+        # <Message> here would be a Twilio error because the call
+        # context expects voice verbs.
+        twiml = (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<Response>"
+            f"<Say voice=\"alice\">{safe_msg}</Say>"
+            "<Hangup/>"
+            "</Response>"
+        )
+    else:
+        twiml = (
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            "<Response>"
+            f"<Message>{safe_msg}</Message>"
+            "</Response>"
+        )
+    return Response(
+        content=twiml,
+        media_type="text/xml",
+        headers={"X-Anticipy-Decision": json.dumps(
+            payload_dict, ensure_ascii=False)},
+    )
+
+
+def _run_action_engine_post_sms_confirm(instruction: str,
+                                        plan: dict) -> JSONResponse:
+    """Dispatch a previously SMS-confirmed task.
+
+    Calling _run_action_engine directly would re-enter the
+    should_pre_confirm gate and start another SMS round-trip. We
+    annotate the plan with __sms_confirmed=True so the gate respects
+    the prior approval.
+    """
+    plan = dict(plan or {})
+    plan["__sms_confirmed"] = True
+    return _run_action_engine(instruction, plan)
+
+
+@app.get("/api/sms/pending")
+def sms_pending_list() -> JSONResponse:
+    """Inspect currently-pending SMS pre-confirm tasks.
+
+    Used by the popover and integration tests to verify the gate
+    persisted a record without having to read the JSON files on
+    disk.
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    store = _sms_pre.PendingConfirmStore()
+    rows = [r.to_dict() for r in store.list_pending()]
+    return JSONResponse({"count": len(rows), "rows": rows})
+
+
+@app.get("/api/sms/pending/{task_id}")
+def sms_pending_status(task_id: str) -> JSONResponse:
+    from app.product import sms_pre_confirm as _sms_pre
+
+    store = _sms_pre.PendingConfirmStore()
+    rec = store.get(task_id)
+    if rec is None:
+        return JSONResponse(
+            {"task_id": task_id, "status": "unknown"},
+            status_code=410)
+    return JSONResponse(rec.to_dict())
+
+
+@app.post("/api/sms/pending/{task_id}/dispatch")
+def sms_pending_dispatch(task_id: str) -> JSONResponse:
+    """Operator path: dispatch an already-approved pending task.
+
+    The inbound webhook normally calls _run_action_engine itself on
+    YES; this endpoint is for manual recovery (e.g. when the user
+    approved via the popover instead of SMS, or the inbound webhook
+    failed mid-flight).
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    store = _sms_pre.PendingConfirmStore()
+    rec = store.get(task_id)
+    if rec is None:
+        return JSONResponse({"task_id": task_id, "error": "unknown"},
+                            status_code=410)
+    if rec.status != _sms_pre.STATUS_APPROVED:
+        return JSONResponse({
+            "task_id": task_id,
+            "error":
+            f"task status is {rec.status}, expected "
+            f"{_sms_pre.STATUS_APPROVED}",
+        }, status_code=409)
+    payload = rec.action_payload or {}
+    instruction = str(payload.get("instruction") or "")
+    plan = (payload.get("plan")
+            if isinstance(payload.get("plan"), dict) else {})
+    if not instruction or not plan:
+        return JSONResponse({
+            "task_id": task_id,
+            "error": "persisted payload missing instruction/plan",
+        }, status_code=500)
+    return _run_action_engine_post_sms_confirm(instruction, plan)
+
+
+@app.post("/api/sms/expire/run")
+def sms_expire_run() -> JSONResponse:
+    """Force the expiry sweeper on demand. The background thread
+    runs every 60s; this lets the popover or a test force-run it.
+    """
+    from app.product import sms_pre_confirm as _sms_pre
+
+    expired = _sms_pre.expire_pending()
+    return JSONResponse({"expired_count": len(expired),
+                         "expired": expired})
+
+
+@app.get("/api/sms/inbound_poller/status")
+def sms_inbound_poller_status() -> JSONResponse:
+    """Report on the background inbound-SMS poller. Used by tests and
+    the popover to confirm the relay is healthy."""
+    from app.product import sms_pre_confirm as _sms_pre
+
+    return JSONResponse(_sms_pre.inbound_poller_status())
+
+
+@app.post("/api/sms/inbound_poller/start")
+def sms_inbound_poller_start() -> JSONResponse:
+    """Re-arm the inbound-SMS poller after an env change or test
+    teardown. Idempotent."""
+    from app.product import sms_pre_confirm as _sms_pre
+
+    return JSONResponse(_sms_pre.start_inbound_poller())
 
 
 # --------------------------------------------------------------------------
@@ -7282,6 +10329,609 @@ def api_test_reset_runtime() -> JSONResponse:
     return JSONResponse({"ok": True, "reset": True})
 
 
+# --------------------------------------------------------------------------
+# Instant cold-start inhale (planning/10-instant-cold-start).
+#
+# The popover welcome screen pings /api/coldstart/start to kick off a
+# background walk of the user's open Gmail / Calendar tabs through the
+# existing loopback bridge on 127.0.0.1:7777, feeds the raw row text to
+# DeepSeek V4 Flash, and merges structured deltas into the active
+# dossier. /api/coldstart/status returns progress so the popover can
+# render a real progress strip.
+#
+# Implementation lives in app.coldstart.auto_inhale; this surface is the
+# thin route wrapper.
+# --------------------------------------------------------------------------
+class _ColdstartStart(BaseModel):
+    account_id: str | None = None
+    walk_gmail: bool = True
+    walk_calendar: bool = True
+    walk_drive: bool = False
+    batch_size: int = 30
+
+
+@app.post("/api/coldstart/start")
+def api_coldstart_start(p: _ColdstartStart) -> JSONResponse:
+    """Kick off the background inhale and return immediately.
+
+    Body is optional; when omitted the orchestrator uses the
+    in-process USER_ID and the default lane selection (Gmail inbox +
+    sent + Google Calendar agenda). If an inhale is already running
+    this is a no-op and the response carries ``already_running``.
+    """
+    try:
+        from app.coldstart.auto_inhale import (
+            DEFAULT_ACCOUNT_ID, start_inhale,
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "coldstart module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+
+    # G1 install_under_5min fix: always cross-wire the cold-start
+    # writer to the engine's USER_ID. There is ONE user per engine
+    # process; honoring a caller-provided account_id "hint" silently
+    # writes the inhaled dossier to a different on-disk path than the
+    # one the planner / DossierLoader reads on the inject hot path,
+    # which produced the "Maya Patel is not in your contact list"
+    # clarify even after a successful inhale. The hint is logged in
+    # the response so callers can verify (and tests still partition
+    # via ANTICIPY_ACCOUNT_ID + ANTICIPY_V7_DOSSIER_ROOT envs when
+    # they need per-test isolation).
+    caller_account_hint = (p.account_id or "").strip()
+    account_id = (USER_ID or caller_account_hint
+                  or DEFAULT_ACCOUNT_ID)
+    try:
+        snapshot = start_inhale(
+            account_id=account_id,
+            walk_gmail=bool(p.walk_gmail),
+            walk_calendar=bool(p.walk_calendar),
+            walk_drive=bool(p.walk_drive),
+            batch_size=max(1, int(p.batch_size or 30)),
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"start_inhale: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": True,
+        "started": True,
+        "state": snapshot,
+        "account_id": account_id,
+        "caller_account_hint": caller_account_hint,
+        "cross_wired_to_user_id": bool(
+            caller_account_hint and caller_account_hint != account_id),
+    })
+
+
+@app.get("/api/coldstart/status")
+def api_coldstart_status() -> JSONResponse:
+    """Snapshot the cold-start orchestrator's progress.
+
+    Shape:
+      {
+        "state": "running" | "done" | "failed" | "idle",
+        "people_count": int,
+        "projects_count": int,
+        "tools_count": int,
+        "rows_collected": int,
+        "elapsed_ms": int,
+        "batches_sent": int,
+        "llm_calls_ok": int,
+        "llm_calls_failed": int,
+        "errors": [str],
+        "bridge_ready": bool
+      }
+    """
+    try:
+        from app.coldstart.auto_inhale import run_state
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "state": "failed",
+            "error": (
+                "coldstart module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    return JSONResponse({"ok": True, **run_state()})
+
+
+# --------------------------------------------------------------------------
+# Calendar auto-prep
+# --------------------------------------------------------------------------
+#
+# When the user says "prep for the 3pm with Sarah" or the background
+# scheduler notices a meeting starting in the next 30 min, the engine
+# pulls together the calendar event, the latest Gmail thread with the
+# primary attendee, recent Drive docs that mention the attendee, and
+# any past Anticipy dossier notes about that person. DeepSeek V4
+# Flash (via the platform_adapter broker, prompt-cached) compresses
+# that into a one-page markdown brief. The brief is returned to the
+# caller AND delivered through the channel router (macOS local
+# notification + popover activity feed entry).
+#
+# Implementation lives in app.product.calendar_prep so this surface is
+# the thin route wrapper. See planning/00-handoff/HANDOFF_FOR_NEXT_AGENT
+# for the architectural constraints; no per-app recipes, no service
+# API calls, CDP only.
+# --------------------------------------------------------------------------
+
+
+class _CalendarPrepRequest(BaseModel):
+    meeting_id: str | None = None
+    attendee_email: str | None = None
+    deliver: bool = False
+
+
+@app.post("/api/calendar/prep")
+def api_calendar_prep(p: _CalendarPrepRequest) -> JSONResponse:
+    """Compose a brief for one calendar meeting.
+
+    Body:
+      {"meeting_id": "evt:abc123" | "" (find next),
+       "attendee_email": "sarah@example.com" (optional),
+       "deliver": false (no notification, just return the brief)}
+
+    Returns:
+      {"ok": bool, "brief": "...markdown...", "meeting": {...},
+       "context": {...}, "delivered": [...], "error": ""}
+
+    When meeting_id is provided we try to read the previously persisted
+    brief first (so a popover reopen does not re-pay the LLM cost).
+    When it is missing or no persisted brief exists, we find the next
+    upcoming meeting via CDP and prep it fresh.
+    """
+    try:
+        from app.product import calendar_prep as _cal
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+
+    meeting_id = (p.meeting_id or "").strip()
+    attendee_email = (p.attendee_email or "").strip()
+
+    # Fast path: caller knows the event_id and the brief is cached.
+    if meeting_id and not p.deliver:
+        cached = _cal.read_persisted_brief(meeting_id)
+        if cached:
+            return JSONResponse({
+                "ok": True,
+                "brief": cached,
+                "meeting": {"event_id": meeting_id,
+                            "from_cache": True},
+                "context": {"warnings": ["served_from_disk_cache"]},
+                "delivered": [],
+            })
+
+    # Find a fresh meeting. We always scan the next 60 min when the
+    # caller asks for a specific prep; the trigger endpoint below
+    # constrains the window for the background scheduler use case.
+    try:
+        meeting = _cal.find_upcoming_meeting(within_minutes=60)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"find_upcoming_meeting: "
+                     f"{type(exc).__name__}: {exc}",
+        }, status_code=500)
+    if meeting is None:
+        return JSONResponse({
+            "ok": False,
+            "error": "no upcoming meeting found in next 60 min",
+            "brief": "",
+            "meeting": None,
+            "context": {},
+            "delivered": [],
+        })
+    try:
+        result = _cal.prep_meeting(meeting,
+                                    attendee_email=attendee_email,
+                                    deliver=bool(p.deliver))
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"prep_meeting: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": result.ok,
+        "brief": result.brief,
+        "meeting": result.meeting.to_dict() if result.meeting else None,
+        "context": result.context,
+        "delivered": result.delivered,
+        "error": result.error,
+        "requested_meeting_id": meeting_id,
+    })
+
+
+class _CalendarPrepTriggerRequest(BaseModel):
+    within_minutes: int = 30
+    attendee_email: str | None = None
+
+
+@app.post("/api/calendar/prep/trigger")
+def api_calendar_prep_trigger(
+    p: _CalendarPrepTriggerRequest,
+) -> JSONResponse:
+    """Find the next meeting in the window and auto-prep + deliver.
+
+    Body:
+      {"within_minutes": 30 (default),
+       "attendee_email": "sarah@example.com" (optional override)}
+
+    Returns:
+      {"ok": bool, "brief": "...markdown...", "meeting": {...},
+       "context": {...}, "delivered": [...]}
+
+    This is the endpoint the background scheduler calls every 5 min,
+    and the one a popover button labelled "prep me for the next
+    meeting" maps to. When no meeting falls in the window the
+    response carries ``ok=false`` and an empty brief; the popover
+    surfaces this as a quiet "nothing coming up".
+    """
+    try:
+        from app.product import calendar_prep as _cal
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    within_minutes = max(1, int(p.within_minutes or 30))
+    attendee_email = (p.attendee_email or "").strip()
+    try:
+        meeting = _cal.find_upcoming_meeting(within_minutes=within_minutes)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"find_upcoming_meeting: "
+                     f"{type(exc).__name__}: {exc}",
+        }, status_code=500)
+    if meeting is None:
+        return JSONResponse({
+            "ok": False,
+            "brief": "",
+            "meeting": None,
+            "context": {},
+            "delivered": [],
+            "within_minutes": within_minutes,
+            "reason": "no upcoming meeting in window",
+        })
+    try:
+        result = _cal.prep_meeting(meeting,
+                                    attendee_email=attendee_email,
+                                    deliver=True)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"prep_meeting: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({
+        "ok": result.ok,
+        "brief": result.brief,
+        "meeting": result.meeting.to_dict() if result.meeting else None,
+        "context": result.context,
+        "delivered": result.delivered,
+        "within_minutes": within_minutes,
+    })
+
+
+@app.get("/api/calendar/prep/scheduler/status")
+def api_calendar_prep_scheduler_status() -> JSONResponse:
+    """Snapshot of the background prep scheduler."""
+    try:
+        from app.product.calendar_prep import scheduler_state
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    return JSONResponse({"ok": True, **scheduler_state()})
+
+
+class _CalendarPrepSchedulerStart(BaseModel):
+    within_minutes: int = 30
+    scan_interval_s: float = 300.0
+
+
+@app.post("/api/calendar/prep/scheduler/start")
+def api_calendar_prep_scheduler_start(
+    p: _CalendarPrepSchedulerStart,
+) -> JSONResponse:
+    """Idempotent: start (or report on) the background prep scheduler.
+
+    The startup hook below already calls this on process start so most
+    callers do NOT need to invoke this. Exposed for test harnesses
+    that boot the scheduler with a different window / interval.
+    """
+    try:
+        from app.product.calendar_prep import start_scheduler
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "calendar_prep module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    try:
+        snapshot = start_scheduler(
+            within_minutes=max(1, int(p.within_minutes or 30)),
+            scan_interval_s=max(10.0, float(p.scan_interval_s or 300.0)),
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"start_scheduler: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+    return JSONResponse({"ok": True, "state": snapshot})
+
+
+# --------------------------------------------------------------------------
+# Universal action loop
+# --------------------------------------------------------------------------
+#
+# planning/08-universal-action-agent/DESIGN.md: ONE orchestrator that drives
+# any web surface by reading the DOM accessibility tree plus a screenshot,
+# asking the vision model for the next concrete action, dispatching over
+# CDP against an Anticipy-owned background tab, observing, and repeating.
+# No per-app recipes, no hardcoded skill library, no regex verb whitelists.
+# Calendar, Salesforce, Slack, a law firm's bespoke matter portal all get
+# the same treatment. The route here is the public seam; the loop body is
+# in engine/app/universal/action_loop.py, which wraps the existing
+# DSv4SkillRunner (Ralph Loop) and the generic CDP dispatcher.
+
+
+class _UniversalRun(BaseModel):
+    intent: str
+    surface_hint: str | None = ""
+    deadline_sec: float | None = 60.0
+
+
+@app.post("/api/universal/run")
+def api_universal_run(p: _UniversalRun) -> JSONResponse:
+    """Run the universal action loop against any web surface.
+
+    Body:
+      {"intent": "make a calendar event for next Tuesday at 3pm titled
+                  Anticipy Demo",
+       "surface_hint": "https://calendar.google.com/calendar/u/0/r",
+       "deadline_sec": 60}
+
+    Returns:
+      {"ok": bool, "intent", "surface_hint", "status", "answer",
+       "evidence", "n_iterations", "subtasks", "trajectory_dir",
+       "error", "elapsed_sec", "deadline_sec", "deadline_hit"}
+
+    status is one of SUCCESS, ITERATION_EXHAUSTED, HARD_FAIL, ERROR,
+    DEADLINE_EXCEEDED. SUCCESS means the vision auditor confirmed the
+    intent on the real after-screenshot. The same loop drives Gmail
+    compose, Google Calendar event create, Slack message send, etc.;
+    there is no per-surface code path.
+    """
+    intent = (p.intent or "").strip()
+    if not intent:
+        return JSONResponse({
+            "ok": False,
+            "error": "missing intent",
+        }, status_code=400)
+    if not _ensure_cdp_chrome():
+        return JSONResponse({
+            "ok": False,
+            "gated": True,
+            "error": (
+                "No real Chrome on :9222 and the launchd agent could "
+                "not be kicked. The universal loop drives the user's "
+                "real Chrome over CDP; a running browser is the edge."
+            ),
+        }, status_code=503)
+    try:
+        from app.universal.action_loop import run_until_done
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                "universal module not available: "
+                f"{type(exc).__name__}: {exc}"
+            ),
+        }, status_code=500)
+    # Bind a cost_telemetry task so every model_call inside the
+    # universal action loop accrues against the same task. Without
+    # this binding, /api/universal/run calls fire LLM requests that
+    # do not show up in /api/cost/stats per-task aggregation (the
+    # daily_calls counter stayed at 1 across multiple universal runs
+    # in cycles 113-116). Closes orchestrator queued unit
+    # UNIVERSAL-COST-ATTRIB.
+    cost_task_id = f"universal-{uuid.uuid4().hex[:12]}"
+    if _cost_telemetry is not None:
+        try:
+            _cost_telemetry.start_task(cost_task_id)
+            _cost_telemetry.set_active_for_thread(cost_task_id)
+        except Exception:
+            pass
+    try:
+        result = run_until_done(
+            intent=intent,
+            surface_hint=(p.surface_hint or "").strip(),
+            deadline_sec=float(p.deadline_sec or 60.0),
+            cdp_port=CDP_PORT,
+        )
+    except Exception as exc:
+        import traceback
+        if _cost_telemetry is not None:
+            try:
+                _cost_telemetry.finish_task(cost_task_id, status="error")
+                _cost_telemetry.set_active_for_thread(None)
+            except Exception:
+                pass
+        return JSONResponse({
+            "ok": False,
+            "error": f"run_until_done threw: {type(exc).__name__}: {exc}",
+            "trace": traceback.format_exc()[-1200:],
+        }, status_code=500)
+    if _cost_telemetry is not None:
+        try:
+            _cost_telemetry.finish_task(
+                cost_task_id,
+                status=str(result.get("status") or "unknown").lower(),
+            )
+            _cost_telemetry.set_active_for_thread(None)
+        except Exception:
+            pass
+    return JSONResponse({"ok": result.get("status") == "SUCCESS",
+                          "cost_task_id": cost_task_id, **result})
+
+
+# --------------------------------------------------------------------------
+# Notifier delivery test surface
+# --------------------------------------------------------------------------
+#
+# The proactive cascade picks IN_APP / PUSH / SMS / VOICE channels, and the
+# notifier delivers them via the slots wired in DeliveryRoutes. This endpoint
+# fires ONE notification on the channel the caller picks. It is the demo
+# probe that proves a channel actually delivers without driving the whole
+# cascade. SMS and voice REQUIRE TWILIO_TEST_TO_REAL_NUMBER=1 in env;
+# without that flag they short-circuit to a credentials probe so we do not
+# spam real phones during routine checks.
+
+
+class NotifyTest(BaseModel):
+    channel: str
+    title: str | None = None
+    body: str | None = None
+    to: str | None = None  # phone for sms/voice; falls back to env
+
+
+@app.post("/api/notify/test")
+async def api_notify_test(p: NotifyTest) -> JSONResponse:
+    """Fire one notification on the chosen channel.
+
+    body: {"channel": "local"|"sms"|"voice", "title": "...", "body": "..."}
+
+    For sms/voice the caller can pass {"to": "+1..."} to override the
+    default phone (env TWILIO_NOTIFY_TO or TWILIO_TEST_TO_REAL_NUMBER_E164).
+    Real Twilio outbound is gated by TWILIO_TEST_TO_REAL_NUMBER=1 so that
+    automated checks do not place real calls.
+    """
+    channel = (p.channel or "").strip().lower()
+    title = p.title or "Anticipy"
+    body = p.body or ""
+    if channel not in {"local", "in_app", "push", "sms", "voice"}:
+        return JSONResponse({
+            "ok": False,
+            "error": f"unknown channel {channel!r}; "
+                     "expected local|in_app|push|sms|voice",
+        }, status_code=400)
+
+    try:
+        from app.proactive.notifier import (
+            local_notify as _local_notify,
+            twilio_sms as _twilio_sms,
+            twilio_voice as _twilio_voice,
+        )
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "error": f"notifier import failed: {type(exc).__name__}: {exc}",
+        }, status_code=500)
+
+    if channel in {"local", "in_app", "push"}:
+        try:
+            result = await _local_notify(title, body)
+        except Exception as exc:
+            return JSONResponse({
+                "ok": False,
+                "channel": channel,
+                "error": f"{type(exc).__name__}: {exc}",
+            }, status_code=500)
+        return JSONResponse({
+            "ok": True,
+            "channel": channel,
+            "delivery": result,
+        })
+
+    # SMS / voice paths share the Twilio gate logic.
+    to_number = (p.to or os.environ.get("TWILIO_NOTIFY_TO")
+                 or os.environ.get("TWILIO_TEST_TO_REAL_NUMBER_E164")
+                 or "").strip()
+    creds_ready = bool(
+        os.environ.get("TWILIO_ACCOUNT_SID")
+        and os.environ.get("TWILIO_AUTH_TOKEN")
+        and os.environ.get("TWILIO_PHONE_NUMBER")
+    )
+    real_opt_in = (
+        os.environ.get("TWILIO_TEST_TO_REAL_NUMBER", "").strip() == "1"
+    )
+
+    if not creds_ready:
+        return JSONResponse({
+            "ok": False,
+            "channel": channel,
+            "gated": True,
+            "reason": "twilio_credentials_missing",
+            "detail": "set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
+                      "TWILIO_PHONE_NUMBER in env",
+        }, status_code=503)
+
+    if not real_opt_in:
+        # Safe default: do not fire real outbound. The notify function
+        # is wired and ready; this short-circuit prevents accidental
+        # SMS/voice spam during automated tests.
+        return JSONResponse({
+            "ok": True,
+            "channel": channel,
+            "gated": True,
+            "reason": "TWILIO_TEST_TO_REAL_NUMBER not set",
+            "detail": "Twilio credentials ready; real outbound suppressed. "
+                      "Set TWILIO_TEST_TO_REAL_NUMBER=1 to actually send.",
+            "to": to_number,
+        })
+
+    if not to_number:
+        return JSONResponse({
+            "ok": False,
+            "channel": channel,
+            "gated": True,
+            "reason": "no_destination_phone",
+            "detail": "pass 'to' in body or set TWILIO_NOTIFY_TO in env",
+        }, status_code=400)
+
+    try:
+        if channel == "sms":
+            result = await _twilio_sms(to_number, body or title)
+        else:  # voice
+            result = await _twilio_voice(to_number, body=body or title)
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False,
+            "channel": channel,
+            "to": to_number,
+            "error": f"{type(exc).__name__}: {exc}",
+        }, status_code=502)
+
+    return JSONResponse({
+        "ok": True,
+        "channel": channel,
+        "to": to_number,
+        "delivery": result,
+    })
+
+
 def _pick_free_port() -> int:
     import socket as _sock
     s = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
@@ -7570,6 +11220,127 @@ def api_deferred_attach_status() -> JSONResponse:
         "ok": all(v.get("ok") for v in _DEFERRED_ATTACH_STATUS.values()),
         "status": dict(_DEFERRED_ATTACH_STATUS),
     })
+
+
+# --------------------------------------------------------------------------
+# SMS pre-confirm expiry sweeper
+# --------------------------------------------------------------------------
+#
+# A small background thread runs every 60s, marks any pending
+# pre-confirm task whose 5 min TTL has elapsed as EXPIRED, and sends
+# the user one follow-up SMS so they know the action did not fire.
+# The thread is daemon and idempotent: re-entry from a second startup
+# hook would not double-spawn because we guard with
+# _SMS_SWEEPER_STARTED.
+
+_SMS_SWEEPER_STARTED = False
+_SMS_SWEEPER_INTERVAL_S = 60
+
+
+def _sms_pre_confirm_sweeper_loop() -> None:
+    from app.product import sms_pre_confirm as _sms_pre
+    while True:
+        try:
+            _sms_pre.expire_pending()
+        except Exception:
+            # Best-effort. Sweeper failure must never wedge the
+            # engine nor crash the daemon thread; the next tick
+            # retries.
+            pass
+        time.sleep(_SMS_SWEEPER_INTERVAL_S)
+
+
+@app.on_event("startup")
+def _start_sms_pre_confirm_sweeper() -> None:
+    global _SMS_SWEEPER_STARTED
+    if _SMS_SWEEPER_STARTED:
+        return
+    _SMS_SWEEPER_STARTED = True
+    t = threading.Thread(
+        target=_sms_pre_confirm_sweeper_loop,
+        name="sms-pre-confirm-sweeper",
+        daemon=True,
+    )
+    t.start()
+
+
+# --------------------------------------------------------------------------
+# Calendar auto-prep background scheduler bootstrap
+# --------------------------------------------------------------------------
+#
+# Scans the user's Google Calendar via CDP every 5 minutes for
+# meetings starting in the next 30 minutes. When it finds one (and we
+# have not already briefed it) it composes a prep brief and delivers
+# it through the channel router (macOS notify banner + popover feed
+# entry).
+#
+# Disabled by ANTICIPY_CALENDAR_PREP_DISABLE=1 for headless test
+# environments. The endpoints above remain usable regardless.
+
+_CALENDAR_PREP_SCHEDULER_STARTED = False
+
+
+@app.on_event("startup")
+def _start_calendar_prep_scheduler() -> None:
+    global _CALENDAR_PREP_SCHEDULER_STARTED
+    if _CALENDAR_PREP_SCHEDULER_STARTED:
+        return
+    # ANTICIPY_QUIET=1 disables every proactive tab-open path. The
+    # calendar prep scheduler is the loudest of those (it opens a
+    # Calendar tab every 5 minutes plus Gmail/Drive search tabs when
+    # a meeting is near) so it gets gated first. Audit:
+    # planning/00-handoff/TAB_OPEN_AUDIT.md.
+    try:
+        from app.config import _quiet_mode_enabled
+    except Exception:
+        _quiet_mode_enabled = lambda: False  # noqa: E731
+    if _quiet_mode_enabled():
+        print(
+            "[anticipy.calendar_prep] quiet_mode_skipped "
+            "path=calendar_prep_scheduler",
+            flush=True,
+        )
+        return
+    disabled = (
+        os.environ.get("ANTICIPY_CALENDAR_PREP_DISABLE", "")
+        .strip()
+        in {"1", "true", "yes", "on"}
+    )
+    if disabled:
+        return
+    try:
+        from app.product.calendar_prep import start_scheduler
+    except Exception as exc:
+        print(
+            "[anticipy.calendar_prep] scheduler bootstrap import failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        return
+    try:
+        within = int(
+            os.environ.get("ANTICIPY_CALENDAR_PREP_WITHIN_MIN", "30")
+        )
+    except ValueError:
+        within = 30
+    try:
+        interval = float(
+            os.environ.get("ANTICIPY_CALENDAR_PREP_INTERVAL_S", "300")
+        )
+    except ValueError:
+        interval = 300.0
+    try:
+        start_scheduler(
+            within_minutes=max(1, within),
+            scan_interval_s=max(10.0, interval),
+        )
+        _CALENDAR_PREP_SCHEDULER_STARTED = True
+    except Exception as exc:
+        print(
+            "[anticipy.calendar_prep] scheduler start failed: "
+            f"{type(exc).__name__}: {exc}",
+            flush=True,
+        )
 
 
 if __name__ == "__main__":

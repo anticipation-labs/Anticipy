@@ -48,9 +48,68 @@ _NUMBER_WORDS = {
 }
 
 
+# Phrases that indicate a deadline within roughly the next hour. Match
+# the bullet list in feedback_channel_by_urgency.md plus a couple of
+# spoken variants the pendant ASR is likely to surface.
+_TIME_SENSITIVE_PATTERNS = (
+    r"\bby\s+eod\b",
+    r"\bend\s+of\s+(?:the\s+)?day\b",
+    r"\bin\s+(?:the\s+)?next\s+hour\b",
+    r"\bwithin\s+(?:the\s+)?(?:next\s+)?hour\b",
+    r"\bwithin\s+\d+\s+(?:min(?:ute)?s?|hours?)\b",
+    r"\bin\s+\d+\s+(?:min(?:ute)?s?|hours?)\b",
+    r"\bbefore\s+(?:the\s+)?call\b",
+    r"\bbefore\s+(?:the\s+)?meeting\b",
+    r"\bbefore\s+noon\b",
+    r"\bbefore\s+lunch\b",
+    r"\bby\s+noon\b",
+    r"\bby\s+lunch\b",
+    r"\bbefore\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)\b",
+    r"\bby\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)\b",
+    r"\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)\b",
+    r"\btomorrow\s+morning\b",
+    r"\bthis\s+morning\b",
+    r"\bthis\s+afternoon\b",
+    r"\btonight\b",
+    r"\basap\b",
+    r"\bright\s+now\b",
+    r"\burgent(?:ly)?\b",
+    r"\bimmediately\b",
+    r"\bnow\b(?=\s|$)",
+)
+
+# Phrases that EXPLICITLY rule out the time-sensitive class (longer
+# horizons). When one of these matches we keep the default
+# not_time_sensitive verdict even when an ambiguous date-like phrase
+# also appears.
+_NOT_TIME_SENSITIVE_PATTERNS = (
+    r"\bthis\s+week\b",
+    r"\bnext\s+week\b",
+    r"\bby\s+friday\b",
+    r"\bby\s+monday\b",
+    r"\bby\s+tuesday\b",
+    r"\bby\s+wednesday\b",
+    r"\bby\s+thursday\b",
+    r"\bby\s+saturday\b",
+    r"\bby\s+sunday\b",
+    r"\bwhenever\b",
+    r"\bno\s+rush\b",
+    r"\beventually\b",
+)
+
+
 @dataclass
 class RiskAssessment:
-    """Outcome of `assess()`. Never carries a `decline` mode."""
+    """Outcome of `assess()`. Never carries a `decline` mode.
+
+    `time_sensitivity` is a coarse classifier sitting alongside
+    `level`. The channel router (engine/app/product/channel_router.py)
+    multiplexes (level, time_sensitivity) into voice / SMS / email /
+    silent per the channel-by-urgency matrix
+    (feedback_channel_by_urgency.md). Default is
+    "not_time_sensitive" so a missing-signal utterance never escalates
+    to a phone call.
+    """
 
     level: str  # "low" | "medium" | "high"
     proceed_mode: str  # "silent" | "notify" | "confirm" | "ask"
@@ -60,6 +119,8 @@ class RiskAssessment:
     irreversibility_score: float = 0.0
     third_party_impact: bool = False
     surface_target: str = ""
+    time_sensitivity: str = "not_time_sensitive"  # "time_sensitive" |
+    # "not_time_sensitive"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -72,6 +133,8 @@ class RiskAssessment:
             "irreversibility_score": float(self.irreversibility_score),
             "third_party_impact": bool(self.third_party_impact),
             "surface_target": str(self.surface_target or ""),
+            "time_sensitivity": str(self.time_sensitivity
+                                    or "not_time_sensitive"),
         }
 
 
@@ -171,6 +234,29 @@ def _irreversibility(tokens: set[str]) -> float:
     return score
 
 
+def detect_time_sensitivity(text: str) -> str:
+    """Return "time_sensitive" or "not_time_sensitive".
+
+    A surface deadline phrase like "by EOD", "before the call at 3pm",
+    "in the next hour" snaps the verdict to time_sensitive. A longer-
+    horizon phrase like "this week" or "by Friday" pulls it back to
+    not_time_sensitive even when an ambiguous "Friday" token is also
+    present. Default is not_time_sensitive: when in doubt, the channel
+    router will pick SMS over a phone call so the user is not woken up
+    for a routine task.
+    """
+    if not text:
+        return "not_time_sensitive"
+    blob = text.lower()
+    for pattern in _NOT_TIME_SENSITIVE_PATTERNS:
+        if re.search(pattern, blob):
+            return "not_time_sensitive"
+    for pattern in _TIME_SENSITIVE_PATTERNS:
+        if re.search(pattern, blob):
+            return "time_sensitive"
+    return "not_time_sensitive"
+
+
 def _list_field(binding: dict[str, Any], key: str) -> list[str]:
     raw = binding.get(key) if isinstance(binding, dict) else None
     if not raw:
@@ -198,6 +284,7 @@ def assess(intent: Any, binding: Any = None,
         _has_external_recipient(combined, binding)
     dnt_hits = _list_field(binding, "do_not_touch_warnings")
     missing = _list_field(binding, "missing_slots")
+    time_sensitivity = detect_time_sensitivity(combined)
 
     def build(level, mode, *, confirm, reasons,
               irr_floor=None, tp=None) -> RiskAssessment:
@@ -209,6 +296,7 @@ def assess(intent: Any, binding: Any = None,
                 max(irr, irr_floor) if irr_floor is not None else irr),
             third_party_impact=(third_party if tp is None else tp),
             surface_target=surface_target,
+            time_sensitivity=time_sensitivity,
         )
 
     if dnt_hits:
@@ -269,6 +357,7 @@ def explain(assessment: RiskAssessment) -> str:
 __all__ = [
     "RiskAssessment",
     "assess",
+    "detect_time_sensitivity",
     "explain",
     "parse_money_amount",
 ]

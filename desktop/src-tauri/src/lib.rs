@@ -41,9 +41,13 @@ use tauri::{
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_positioner::{Position, WindowExt as PositionerWindowExt};
 
-const ENGINE_DIR: &str = "/Users/omarebrahim/Developer/Anticipy-DEV-FINAL/engine";
-const VENV_PY: &str =
-    "/Users/omarebrahim/Developer/Anticipy-DEV-FINAL/engine/.venv/bin/python";
+// Note: the prior dev-mode ENGINE_DIR + VENV_PY constants hardcoded
+// Omar's local checkout path and were used only by the legacy
+// run_task command + index.html UI which the polished popover does
+// not load. Per CLAUDE.md "Hardcoded Omar-specific paths in shipped
+// code are scale bugs to fix." Removed in cycle 122; production
+// stranger users use the packaged sidecar binary via /api/* endpoints
+// through popover.html.
 
 const POPOVER_LABEL: &str = "popover";
 const POPOVER_WIDTH: f64 = 480.0;
@@ -64,26 +68,56 @@ const USER_ID_FILE: &str = "session_user.json";
 // V7 because cloned Chrome cannot count as product proof.
 const CHROME_PROFILE_DIR_NAME: &str = "chrome-real-clone";
 const CHROME_REMOTE_DEBUG_PORT: u16 = 9222;
+// Per STRANGER_INSTALL_AUDIT W6 cycle 130: support Chromium-family
+// browsers beyond Google Chrome so stranger users who installed
+// Brave / Arc / Edge / Chromium / Vivaldi can still run the agent
+// without a separate Google Chrome install. _resolve_chrome_binary
+// returns the first one that exists on disk.
+const CHROME_BINARY_CANDIDATES: &[&str] = &[
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Arc.app/Contents/MacOS/Arc",
+    "/Applications/Vivaldi.app/Contents/MacOS/Vivaldi",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+];
 const CHROME_BINARY_PATH: &str =
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+
+fn _resolve_chrome_binary() -> Option<&'static str> {
+    for candidate in CHROME_BINARY_CANDIDATES {
+        if std::path::Path::new(candidate).exists() {
+            return Some(*candidate);
+        }
+    }
+    None
+}
 const USER_CHROME_DEFAULT_REL: &str =
     "Library/Application Support/Google/Chrome/Default";
 const CHROME_CDP_TIMEOUT_SECS: u64 = 15;
 const CHROME_SETUP_COPY_MESSAGE: &str =
-    "Setting up Anticipy Chrome, this takes about 30 seconds, only happens once.";
+    "Setting up Anticipy. This takes about 30 seconds and only happens once.";
 const CHROME_SIGNIN_MESSAGE: &str =
-    "Sign in to Gmail and Calendar in this Chrome window to enable Anticipy.";
+    "Sign in to Gmail and Calendar in this Chrome window so Anticipy can act on your behalf.";
 
 // US-019 microphone permission constants. The usage string is also the
 // exact NSMicrophoneUsageDescription value in Info.plist.
 const MIC_PERMISSION_USAGE: &str =
     "Anticipy listens for ambient conversational intent. Microphone access is required for the product to work.";
+// Plain-English copy shown in the popover one beat before the macOS Allow
+// or Deny dialog renders. Apple-quality polish item 8: explain the prompt
+// to the user BEFORE the system dialog appears.
+const MIC_PERMISSION_PRE_PROMPT_MESSAGE: &str =
+    "Anticipy needs to hear what people ask you to do. macOS will ask you to allow microphone access in a moment.";
 const MIC_SYSTEM_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone";
 const MIC_GRACE_PERIOD_MS: u64 = 1_200;
 const MIC_POLL_INTERVAL_MS: u64 = 1_500;
 const MIC_POLL_MAX_SECS: u64 = 1_800;
 const MIC_PROMPT_DELAY_MS: u64 = 1_000;
+// Window in which the popover can render the pre-prompt explainer before
+// the actual macOS Allow/Deny dialog fires.
+const MIC_PRE_PROMPT_LEAD_MS: u64 = 1_400;
 const MIC_DENIED_MESSAGE: &str = "Microphone access required";
 
 // US-023 dossier section constants. The popover invokes these commands
@@ -145,56 +179,12 @@ struct PastTask {
     updated_at: String,
 }
 
-#[tauri::command]
-fn run_task(window: Window, task: String) {
-    std::thread::spawn(move || {
-        let mut child = match Command::new(VENV_PY)
-            .args([
-                "-m",
-                "app.action_engine.dsv4_skill_runner",
-                "--task",
-                &task,
-                "--stream",
-            ])
-            .current_dir(ENGINE_DIR)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = window.emit(
-                    "agent-event",
-                    serde_json::json!({"kind":"done","status":"ERROR",
-                        "error": format!("spawn failed: {e}")}),
-                );
-                return;
-            }
-        };
-
-        if let Some(out) = child.stdout.take() {
-            let reader = BufReader::new(out);
-            for line in reader.lines().map_while(Result::ok) {
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                match serde_json::from_str::<serde_json::Value>(line) {
-                    Ok(ev) => {
-                        let _ = window.emit("agent-event", ev);
-                    }
-                    Err(_) => {
-                        let _ = window.emit(
-                            "agent-event",
-                            serde_json::json!({"kind":"log","line":line}),
-                        );
-                    }
-                }
-            }
-        }
-        let _ = child.wait();
-    });
-}
+// Legacy run_task Tauri command removed in cycle 122. It spawned a
+// dev-only Python process at Omar's hardcoded path and was only
+// reachable from the unused index.html UI. The polished popover.html
+// drives the engine sidecar over HTTP via /api/listen/inject and
+// /api/act, which works for any user with the packaged binary
+// installed. Per the scale-by-distribution directive in CLAUDE.md.
 
 #[tauri::command]
 fn hide_popover(app: AppHandle) {
@@ -664,7 +654,11 @@ fn wait_for_chrome_cdp(port: u16, timeout: Duration) -> Result<String, String> {
 fn launch_anticipy_chrome(profile_dir: &Path) -> std::io::Result<()> {
     let port_arg = format!("--remote-debugging-port={CHROME_REMOTE_DEBUG_PORT}");
     let user_data_arg = format!("--user-data-dir={}", profile_dir.display());
-    Command::new(CHROME_BINARY_PATH)
+    // Find the first Chromium-family browser the user has installed.
+    // Falls back to the hardcoded Google Chrome path if none detected
+    // (Tauri spawn will then surface ENOENT which the caller logs).
+    let bin = _resolve_chrome_binary().unwrap_or(CHROME_BINARY_PATH);
+    Command::new(bin)
         .args([
             port_arg.as_str(),
             user_data_arg.as_str(),
@@ -870,6 +864,19 @@ fn bootstrap_mic_permission(app: &AppHandle) {
         record_and_emit(app, &store, MicPermissionState::Granted);
         return;
     }
+
+    // Apple-quality polish item 8: pre-prompt explainer. Emit a clear,
+    // plain-English heads-up so the popover can show a one-line banner
+    // BEFORE macOS surfaces its own opaque Allow/Deny dialog. Then sleep
+    // briefly so the user actually has a chance to read it.
+    let _ = app.emit(
+        "mic-permission-about-to-prompt",
+        serde_json::json!({
+            "message": MIC_PERMISSION_PRE_PROMPT_MESSAGE,
+            "usage": MIC_PERMISSION_USAGE,
+        }),
+    );
+    std::thread::sleep(Duration::from_millis(MIC_PRE_PROMPT_LEAD_MS));
 
     // Trigger the system Allow/Deny dialog. If status is NotDetermined
     // the user sees the prompt; if it is Denied/Restricted the request
@@ -1540,7 +1547,6 @@ pub fn run() {
     builder
         .manage(MicPermissionStore::default())
         .invoke_handler(tauri::generate_handler![
-            run_task,
             hide_popover,
             quit_app,
             dismiss_auth_error,

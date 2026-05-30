@@ -33,7 +33,8 @@ PY
   exit 0
 fi
 
-if ! command -v codex >/dev/null 2>&1; then
+PREFER_OR="${ANTICIPY_PREFER_OPENROUTER:-1}"
+if ! command -v codex >/dev/null 2>&1 || [ "$PREFER_OR" = "1" ]; then
   : "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY required for openrouter evaluator fallback}"
   EVALUATOR_PY="$REPO/scripts/v7/evaluate_stranger_openrouter.py"
   if [ ! -f "$EVALUATOR_PY" ]; then

@@ -92,6 +92,20 @@ ACQUIRED_VIA_APPLESCRIPT = "chrome_applescript_loopback_bridge"
 # -----------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------
+def _ws_alive(ws) -> bool:
+    """Backward-compat liveness check across websockets v11 (.closed bool)
+    and v16 (.state enum). The pyenv 3.10.14 env that runs this bridge
+    was upgraded mid-session and now has v16, where ClientConnection no
+    longer exposes .closed.
+    """
+    if ws is None:
+        return False
+    if hasattr(ws, "closed"):
+        return not ws.closed
+    state = getattr(ws, "state", None)
+    return state is not None and getattr(state, "name", "") != "CLOSED"
+
+
 def _log_dir() -> Path:
     home = Path.home()
     if sys.platform == "darwin":
@@ -185,17 +199,33 @@ async def _cdp_list_pages_ws(timeout: float = 8.0) -> list[dict]:
 
 
 async def _cdp_find_page_by_url_prefix(prefix: str) -> dict | None:
+    """Find the first page tab whose URL matches ``prefix``.
+
+    Tab-ownership preference: among matches, prefer pages the bridge
+    itself opened (recorded in _ANTICIPY_OWNED_TARGETS) before falling
+    back to tabs that were already in the browser. This keeps
+    follow-up eval_js/type/click commands aimed at the tab the bridge
+    just spawned for the caller, rather than at whatever user tab
+    happened to be listed first.
+
+    When prefix is empty the most recent page is returned, preferring
+    owned tabs when any exist.
+    """
     pages = [p for p in (await _cdp_list_pages_ws())
              if p.get("type") == "page"]
     if not pages:
         return None
     if not prefix:
-        return pages[-1]
-    for p in pages:
-        u = (p.get("url") or "")
-        if u.startswith(prefix):
-            return p
-    return None
+        owned = [p for p in pages if _is_anticipy_owned(str(p.get("id") or ""))]
+        return (owned[-1] if owned else pages[-1])
+    matches = [p for p in pages if (p.get("url") or "").startswith(prefix)]
+    if not matches:
+        return None
+    owned_matches = [p for p in matches
+                     if _is_anticipy_owned(str(p.get("id") or ""))]
+    if owned_matches:
+        return owned_matches[-1]
+    return matches[0]
 
 
 async def _cdp_find_page_by_id(target_id: str) -> dict | None:
@@ -232,10 +262,10 @@ class _CDPClient:
         return next(self._id_counter)
 
     async def _ensure_connected(self) -> None:
-        if self._ws is not None and not self._ws.closed:
+        if self._ws is not None and _ws_alive(self._ws):
             return
         async with self._connect_lock:
-            if self._ws is not None and not self._ws.closed:
+            if self._ws is not None and _ws_alive(self._ws):
                 return
             try:
                 self._browser_ws_url = await _browser_ws_url()
@@ -383,6 +413,27 @@ class _CDPClient:
 _cdp_client: _CDPClient | None = None
 _cdp_client_lock: asyncio.Lock | None = None
 
+# Tab ownership map. Only target_ids in this set may be reused by
+# _cdp_navigate when prefer_in_place is honored. Every tab the bridge
+# spawns via _cdp_create_target gets added here. Tabs the user opened
+# manually (or that Chrome restored at startup) are NOT in this set,
+# so _cdp_navigate will never hijack them, even if a request URL
+# matches their host. Prevents the long-standing
+# "navigate to mail.google.com clobbers the user's open Gmail tab"
+# bug. The set is in-memory only; on bridge restart, every prior tab
+# is treated as user-owned and not reusable.
+_ANTICIPY_OWNED_TARGETS: set[str] = set()
+
+
+def _mark_anticipy_owned(target_id: str) -> None:
+    """Tag a CDP targetId as a tab the bridge itself created."""
+    if target_id:
+        _ANTICIPY_OWNED_TARGETS.add(target_id)
+
+
+def _is_anticipy_owned(target_id: str) -> bool:
+    return bool(target_id) and target_id in _ANTICIPY_OWNED_TARGETS
+
 
 def _ensure_client_lock() -> asyncio.Lock:
     global _cdp_client_lock
@@ -418,7 +469,12 @@ def _unpack_result(msg: dict) -> tuple[dict, str]:
 # CDP high-level operations (used by the HTTP handlers; all async)
 # -----------------------------------------------------------------------
 async def _cdp_create_target(url: str, background: bool = True) -> dict:
-    """Open a new tab via Target.createTarget. Returns {ok, targetId, error}."""
+    """Open a new tab via Target.createTarget. Returns {ok, targetId, error}.
+
+    Every tab spawned here is recorded in _ANTICIPY_OWNED_TARGETS so
+    that _cdp_navigate may reuse it later. Tabs the user already had
+    open never enter this set, so they are never hijacked.
+    """
     try:
         client = await _get_client()
         msg = await client.browser_call(
@@ -434,6 +490,7 @@ async def _cdp_create_target(url: str, background: bool = True) -> dict:
     target_id = result.get("targetId")
     if not target_id:
         return {"ok": False, "error": f"no targetId in response: {str(msg)[:200]}"}
+    _mark_anticipy_owned(str(target_id))
     return {"ok": True, "targetId": target_id}
 
 
@@ -500,10 +557,20 @@ async def _cdp_page_screenshot(target_id: str, timeout: float = 15.0) -> dict:
             "png_bytes": raw, "error": ""}
 
 
-async def _cdp_navigate(url: str, prefer_in_place: bool = True) -> dict:
-    """Open url. If an existing 'page' tab already has the same host
-    loaded, reuse it via Page.navigate (in-place). Otherwise open a
-    background tab via Target.createTarget.
+async def _cdp_navigate(url: str, prefer_in_place: bool = False) -> dict:
+    """Open url. Default behavior is to spawn a FRESH background tab via
+    Target.createTarget so the user's existing tabs are never touched.
+
+    When prefer_in_place is True the bridge looks for an existing tab
+    that BOTH matches the request host AND was previously created by
+    the bridge itself (recorded in _ANTICIPY_OWNED_TARGETS). Tabs the
+    user opened manually never enter that set, so they are never
+    reused, even if the host matches.
+
+    This fixes the tab-hijack bug where navigating to mail.google.com
+    used to clobber the user's already-open Gmail tab. Each test that
+    relied on in-place reuse must now pass prefer_in_place=True AND
+    have previously opened the target tab through this same bridge.
 
     Returns {ok, url, title, targetId, in_place, error}.
     """
@@ -521,12 +588,15 @@ async def _cdp_navigate(url: str, prefer_in_place: bool = True) -> dict:
         if host_prefix:
             existing = await _cdp_find_page_by_url_prefix(host_prefix)
             if existing:
-                target_id = existing.get("id") or ""
-                if target_id:
+                candidate_id = str(existing.get("id") or "")
+                # Critical: never reuse a tab the user owns. Only tabs
+                # the bridge itself created via _cdp_create_target are
+                # in _ANTICIPY_OWNED_TARGETS.
+                if candidate_id and _is_anticipy_owned(candidate_id):
                     try:
                         client = await _get_client()
                         msg = await client.session_call(
-                            target_id,
+                            candidate_id,
                             "Page.navigate",
                             {"url": url},
                             timeout=15.0,
@@ -535,9 +605,8 @@ async def _cdp_navigate(url: str, prefer_in_place: bool = True) -> dict:
                         msg = {"error": f"cdp page.navigate: {exc}"}
                     _, err = _unpack_result(msg)
                     if not err:
+                        target_id = candidate_id
                         in_place = True
-                    else:
-                        target_id = ""
     if not target_id:
         out = await _cdp_create_target(url, background=True)
         if not out.get("ok"):
@@ -969,8 +1038,16 @@ async def _handle(reader: asyncio.StreamReader,
                     await _send("400 Bad Request",
                                 b'{"ok":false,"error":"missing url"}')
                     return
+                # Default: always spawn a fresh background tab so the
+                # user's existing tabs are never hijacked. Callers may
+                # opt in to in-place reuse with prefer_in_place=true,
+                # but reuse still only succeeds if the matched tab was
+                # created by this bridge (tracked in
+                # _ANTICIPY_OWNED_TARGETS by _cdp_create_target).
+                prefer_in_place = bool(payload_in.get("prefer_in_place"))
                 if cdp_ok:
-                    n = await _cdp_navigate(url, prefer_in_place=True)
+                    n = await _cdp_navigate(url,
+                                            prefer_in_place=prefer_in_place)
                     response = {
                         "ok": bool(n.get("ok")),
                         "command": "navigate",
