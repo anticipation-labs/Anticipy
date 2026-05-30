@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSupabaseUser } from "@/lib/require-auth";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { shouldResetWindow, type ProfileRow } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,18 @@ export const dynamic = "force-dynamic";
  *   1. Authenticates the caller using their Supabase session token.
  *   2. Per-user and per-IP rate limits to bound abuse if a token leaks.
  *   3. Validates payload (E.164 recipient, body length, allowed kind).
- *   4. Sends via the shared Anticipy Twilio number using server-side
- *      creds in TWILIO_BROKER_SID / TWILIO_BROKER_TOKEN / TWILIO_BROKER_FROM.
- *   5. Logs each send to public.anticipy_twilio_sends for audit + abuse
- *      forensics.
+ *   4. Loads anticipy_profiles row for the caller; enforces per-user
+ *      daily SMS cap and resets the 24h window if needed.
+ *   5. Blocks non +1 numbers and known premium prefixes so an unbounded
+ *      international or premium-line send cannot drain the broker
+ *      account.
+ *   6. Enforces account-wide $5/day SMS spend cap by counting recent
+ *      anticipy_twilio_sends inserts in the trailing 24h window.
+ *   7. Sends via the shared Anticipy Twilio number using server-side
+ *      creds in TWILIO_BROKER_SID / TWILIO_BROKER_TOKEN /
+ *      TWILIO_BROKER_FROM.
+ *   8. Logs each send to public.anticipy_twilio_sends for audit and
+ *      cost reconciliation, then increments the per-user counter.
  *
  * Mirrors the architecture of /api/engine/model: shared scarce server
  * secret, Supabase auth gate, per-user and per-IP rate limits, ALLOWED
@@ -31,14 +40,24 @@ export const dynamic = "force-dynamic";
  *   NEXT_PUBLIC_SUPABASE_ANON_KEY
  *   SUPABASE_SERVICE_ROLE_KEY
  *
- * Supabase: see ./MIGRATION.sql for the anticipy_twilio_sends table the
- * owner must apply before this route logs successfully.
+ * Optional:
+ *   TWILIO_BROKER_SMS_DAILY_USD_CAP  account-wide $/day SMS cap, default 5
+ *   TWILIO_BROKER_SMS_PRICE_USD      assumed cost per outbound, default 0.0083
+ *
+ * Supabase: see ./MIGRATION.sql for anticipy_twilio_sends and
+ * ../../onboarding/profile/MIGRATION.sql for anticipy_profiles.
  */
 
 const ALLOWED_KINDS = new Set(["preconfirm", "receipt", "followup"]);
 const MAX_BODY_LEN = 320;
 const E164_PATTERN = /^\+[1-9]\d{6,14}$/;
 const STATUS_CALLBACK_URL = "https://www.anticipy.ai/api/twilio/status";
+
+// US/CA premium and special-rate prefixes that bill at multiples of
+// the standard A2P rate. Block these outright. The "+1900" family is
+// pay-per-call/SMS; +1976 historically the same. Anyone with a real
+// reason to text these will not be coming through the broker.
+const PREMIUM_PREFIXES = ["+1900", "+1976"];
 
 interface RelayBody {
   to?: unknown;
@@ -62,6 +81,80 @@ function validatePayload(input: unknown): ValidatedPayload | null {
   if (!body || body.length === 0 || body.length > MAX_BODY_LEN) return null;
   if (!ALLOWED_KINDS.has(kind)) return null;
   return { to, body, kind };
+}
+
+function isAllowedDestination(to: string): { ok: boolean; reason?: string } {
+  if (!to.startsWith("+1")) {
+    return {
+      ok: false,
+      reason:
+        "Anticipy currently only sends to US and Canada (+1) numbers. International sends are disabled.",
+    };
+  }
+  for (const prefix of PREMIUM_PREFIXES) {
+    if (to.startsWith(prefix)) {
+      return {
+        ok: false,
+        reason: "Premium-rate destination numbers are blocked.",
+      };
+    }
+  }
+  return { ok: true };
+}
+
+async function loadOrCreateProfile(userId: string): Promise<ProfileRow | null> {
+  const existing = await supabaseAdmin
+    .from("anticipy_profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+  if (existing.error) {
+    console.error("[twilio-relay] profile select failed", existing.error);
+    return null;
+  }
+  if (existing.data) return existing.data as ProfileRow;
+  const inserted = await supabaseAdmin
+    .from("anticipy_profiles")
+    .insert({ id: userId })
+    .select("*")
+    .single();
+  if (inserted.error) {
+    console.error("[twilio-relay] profile insert failed", inserted.error);
+    return null;
+  }
+  return inserted.data as ProfileRow;
+}
+
+async function checkAccountWideSmsCap(): Promise<{
+  ok: boolean;
+  reason?: string;
+}> {
+  const capUsd = Number(
+    process.env.TWILIO_BROKER_SMS_DAILY_USD_CAP || "5",
+  );
+  const pricePerSms = Number(
+    process.env.TWILIO_BROKER_SMS_PRICE_USD || "0.0083",
+  );
+  if (!Number.isFinite(capUsd) || capUsd <= 0) return { ok: true };
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { count, error } = await supabaseAdmin
+    .from("anticipy_twilio_sends")
+    .select("id", { count: "exact", head: true })
+    .gte("sent_at", since);
+  if (error) {
+    // If the cap check fails closed we would block all sends on a
+    // transient Supabase blip. Log + allow so the cap is best-effort.
+    console.error("[twilio-relay] account cap select failed", error);
+    return { ok: true };
+  }
+  const spend = (count ?? 0) * pricePerSms;
+  if (spend >= capUsd) {
+    return {
+      ok: false,
+      reason: `Account-wide daily SMS cap reached ($${capUsd.toFixed(2)}).`,
+    };
+  }
+  return { ok: true };
 }
 
 async function logSend(
@@ -93,6 +186,33 @@ async function logSend(
   }
 }
 
+async function incrementUserDailyCounter(
+  userId: string,
+  current: ProfileRow,
+): Promise<void> {
+  const resetTo = shouldResetWindow(current.daily_window_started_at);
+  const nextCount = resetTo
+    ? 1
+    : (current.daily_sms_count_used || 0) + 1;
+  const update: Record<string, unknown> = {
+    daily_sms_count_used: nextCount,
+    updated_at: new Date().toISOString(),
+  };
+  if (resetTo) {
+    update.daily_window_started_at = resetTo;
+    // Voice counter rolls on the same window so the daily reset is
+    // coherent across both surfaces.
+    update.daily_voice_minutes_used = 0;
+  }
+  const { error } = await supabaseAdmin
+    .from("anticipy_profiles")
+    .update(update)
+    .eq("id", userId);
+  if (error) {
+    console.error("[twilio-relay] counter increment failed", error);
+  }
+}
+
 export async function POST(req: Request) {
   const user = await requireSupabaseUser(req);
   if (!user) {
@@ -108,6 +228,26 @@ export async function POST(req: Request) {
     );
   }
 
+  const raw = await req.json().catch(() => null);
+  const payload = validatePayload(raw);
+  if (!payload) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid relay payload" },
+      { status: 400 },
+    );
+  }
+
+  // Destination gates run BEFORE the env check so a misconfigured
+  // server never silently accepts a non +1 or premium send during
+  // the time between config-loss and the next deploy.
+  const destinationGate = isAllowedDestination(payload.to);
+  if (!destinationGate.ok) {
+    return NextResponse.json(
+      { ok: false, error: destinationGate.reason },
+      { status: 400 },
+    );
+  }
+
   const sid = (process.env.TWILIO_BROKER_SID || "").trim();
   const token = (process.env.TWILIO_BROKER_TOKEN || "").trim();
   const from = (process.env.TWILIO_BROKER_FROM || "").trim();
@@ -118,12 +258,33 @@ export async function POST(req: Request) {
     );
   }
 
-  const raw = await req.json().catch(() => null);
-  const payload = validatePayload(raw);
-  if (!payload) {
+  const profile = await loadOrCreateProfile(user.id);
+  if (!profile) {
     return NextResponse.json(
-      { ok: false, error: "Invalid relay payload" },
-      { status: 400 },
+      { ok: false, error: "Profile lookup failed" },
+      { status: 500 },
+    );
+  }
+
+  // Reset window without persisting yet (the counter-increment step
+  // below writes both the reset and the increment in one update).
+  const resetTo = shouldResetWindow(profile.daily_window_started_at);
+  const usedAtCheck = resetTo ? 0 : profile.daily_sms_count_used || 0;
+  if (usedAtCheck >= profile.daily_sms_count_cap) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `You have hit today's send cap of ${profile.daily_sms_count_cap} messages.`,
+      },
+      { status: 429 },
+    );
+  }
+
+  const accountCap = await checkAccountWideSmsCap();
+  if (!accountCap.ok) {
+    return NextResponse.json(
+      { ok: false, error: accountCap.reason },
+      { status: 429 },
     );
   }
 
@@ -175,6 +336,7 @@ export async function POST(req: Request) {
       twilioSid,
       twilioStatus,
     );
+    await incrementUserDailyCounter(user.id, profile);
     return NextResponse.json({ ok: true, sid: twilioSid });
   }
 
