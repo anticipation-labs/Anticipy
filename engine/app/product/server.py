@@ -4744,14 +4744,34 @@ def _draft_task_from_plan(instruction: str, plan: dict) -> str:
 # dossier with an email on file. This helper consults the V7 dossier
 # active loader for the current account, scans the instruction for any
 # person name / alias / first name / role match, and returns the
-# matching Person (or None). The lookup is deterministic. A single
-# match is treated as a resolution; multiple matches return None so the
-# caller still asks "did you mean A or B?".
+# matching Person (or None). The lookup is deterministic.
+#
+# INVESTOR-DEMO HARDENING (cycle "live-demo"): previously this returned
+# empty strings on ANY non-unique resolution, which forced the planner
+# into a "Did you mean Maya Patel or Maya Chen?" clarify. That clarify
+# stalls the demo when nobody in the room knows how to answer it. The
+# new behavior: score every match by specificity (full-name > last-name
+# > first-name > alias), pick the top-ranked candidate, and ship it.
+# The Confirm card downstream still shows the chosen recipient before
+# any send, so a wrong pick is reviewable. Zero matches still returns
+# empty (we never invent a recipient).
 def _resolve_person_from_active_dossier(instruction: str) -> tuple[
         str, str]:
     """Return (canonical_name, email) for a person mentioned in the
-    instruction whose record sits in the active dossier. Empty strings
-    when no unambiguous match exists. Never raises.
+    instruction whose record sits in the active dossier.
+
+    Specificity tiers (highest wins):
+      3 - full-name match ("Maya Patel")
+      2 - last-name match ("Patel")
+      1 - first-name match ("Maya")
+      0 - alias-only match
+
+    Ties broken by:
+      a) email present beats email missing,
+      b) canonical name lexicographic order (so the pick is stable
+         across calls and reproducible for the demo recording).
+
+    Empty strings when zero matches. Never raises.
     """
     if not instruction:
         return "", ""
@@ -4784,53 +4804,55 @@ def _resolve_person_from_active_dossier(instruction: str) -> tuple[
     if not people:
         return "", ""
     low = instruction.lower()
-    matches: list[tuple[str, str]] = []
+    # Each entry: (-specificity_tier, has_email_int, canonical_name, email).
+    # Negate tier so a normal ascending sort puts the most-specific
+    # match first. has_email_int is 0 when email is present so
+    # addressed candidates win the tiebreak.
+    scored: list[tuple[int, int, str, str]] = []
     for p in people:
         name = (p.name or "").strip()
         email = (p.email or "").strip()
         if not name:
             continue
-        # Build candidate match tokens: full name, first name, last name,
-        # each alias, the role string. Search the instruction for any of
-        # them as a whole-word match.
-        tokens: list[str] = []
         full = name.strip()
-        if full:
-            tokens.append(full)
         parts = [seg for seg in re.split(r"\s+", full) if seg]
-        if len(parts) >= 2:
-            tokens.append(parts[0])  # first name
-            tokens.append(parts[-1])  # last name
-        for alias in (p.aliases or []):
-            a = str(alias).strip()
-            if a and len(a) >= 2:
-                tokens.append(a)
-        seen: set[str] = set()
-        uniq_tokens = []
-        for t in tokens:
-            tl = t.lower()
-            if not tl or tl in seen:
-                continue
-            if len(tl) < 2:
-                continue
-            seen.add(tl)
-            uniq_tokens.append(t)
-        for token in uniq_tokens:
-            # Whole-word boundary search. `Maya` should match
-            # `Maya Chen` and `with Maya tomorrow`, but `Liang`
-            # should not match an arbitrary substring inside another
-            # word. re.escape so periods in aliases (`Dr.`) work.
-            pat = r"\b" + re.escape(token) + r"\b"
-            if re.search(pat, low, flags=re.IGNORECASE):
-                matches.append((name, email))
-                break
-    # Dedup by canonical name.
-    uniq: dict[str, str] = {}
-    for n, e in matches:
-        uniq.setdefault(n, e)
-    if len(uniq) != 1:
+        first_name = parts[0] if parts else ""
+        last_name = parts[-1] if len(parts) >= 2 else ""
+        aliases = [str(a).strip() for a in (p.aliases or []) if str(a).strip()]
+
+        def _hit(tok: str) -> bool:
+            if not tok or len(tok) < 2:
+                return False
+            # Whole-word boundary search. re.escape so periods in
+            # aliases like "Dr." work; flags=IGNORECASE so casing in
+            # the instruction does not matter.
+            return bool(
+                re.search(
+                    r"\b" + re.escape(tok) + r"\b",
+                    low,
+                    flags=re.IGNORECASE,
+                )
+            )
+
+        tier = -1
+        if full and _hit(full):
+            tier = 3
+        elif last_name and _hit(last_name):
+            tier = 2
+        elif first_name and _hit(first_name):
+            tier = 1
+        else:
+            for a in aliases:
+                if _hit(a):
+                    tier = 0
+                    break
+        if tier < 0:
+            continue
+        scored.append((-tier, 0 if email else 1, name, email))
+    if not scored:
         return "", ""
-    name, email = next(iter(uniq.items()))
+    scored.sort()
+    _, _, name, email = scored[0]
     return name, email
 
 
