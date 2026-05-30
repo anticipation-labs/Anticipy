@@ -1745,8 +1745,39 @@ class Key(BaseModel):
 
 @app.post("/api/key")
 def set_key(k: Key) -> JSONResponse:
-    if not k.key.strip().startswith("sk-or-"):
-        return JSONResponse({"ok": False, "error": "not an sk-or- key"})
+    candidate = (k.key or "").strip()
+    # B044: previously a prefix check alone accepted "sk-or-anything", flipping
+    # the state to key_ok=True without any contact with OpenRouter. Do a real
+    # live probe against /api/v1/auth/key before persisting. Reject on
+    # non-2xx so a fake key cannot poison the rest of the engine.
+    if not candidate.startswith("sk-or-"):
+        return JSONResponse({"ok": False, "error": "not an sk-or- key"},
+                            status_code=400)
+    if len(candidate) < 20 or len(candidate) > 256:
+        return JSONResponse({"ok": False,
+                             "error": "key length out of expected range"},
+                            status_code=400)
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/auth/key",
+            headers={"Authorization": f"Bearer {candidate}"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            status = resp.status
+            if status < 200 or status >= 300:
+                return JSONResponse({"ok": False,
+                                     "error": f"OpenRouter rejected key (HTTP {status})"},
+                                    status_code=401)
+    except urllib.error.HTTPError as he:
+        return JSONResponse({"ok": False,
+                             "error": f"OpenRouter rejected key (HTTP {he.code})"},
+                            status_code=401)
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"could not verify key with OpenRouter: "
+                                      f"{type(exc).__name__}"},
+                            status_code=502)
     cfg = _cfg_path()
     cfg.parent.mkdir(parents=True, exist_ok=True)
     keep = ""
@@ -1754,8 +1785,8 @@ def set_key(k: Key) -> JSONResponse:
         keep = "\n".join(l for l in cfg.read_text().splitlines()
                          if not l.strip().startswith("OPENROUTER_API_KEY="))
     cfg.write_text((keep + "\n" if keep else "")
-                   + f"OPENROUTER_API_KEY={k.key.strip()}\n")
-    os.environ["OPENROUTER_API_KEY"] = k.key.strip()
+                   + f"OPENROUTER_API_KEY={candidate}\n")
+    os.environ["OPENROUTER_API_KEY"] = candidate
     return JSONResponse({"ok": True})
 
 
@@ -6291,7 +6322,15 @@ def test_clock_advance(body: _ClockAdvance) -> JSONResponse:
     by the given seconds and tick any due items to the fired state.
     Used by the audit verifier (A-003) to confirm scheduled items
     actually fire when their target time passes.
+
+    B045: Gated behind ANTICIPY_DEV_MODE so a hostile local process or
+    Chrome extension on 127.0.0.1 cannot jump the clock a year forward
+    to bypass cost, rate, and SMS limits.
     """
+    if (os.environ.get("ANTICIPY_DEV_MODE") or "").lower() not in {"1", "true", "yes", "on"}:
+        return JSONResponse({"ok": False,
+                             "error": "endpoint disabled (set ANTICIPY_DEV_MODE=1 to enable)"},
+                            status_code=403)
     from app.product.scheduler import get_scheduler
     result = get_scheduler().advance_clock(float(body.seconds or 0.0))
     _surface_fired_proactive_items()
@@ -11137,7 +11176,15 @@ def api_test_reset_runtime() -> JSONResponse:
     GET /api/dossier reads from the same files regardless of in process
     caches. We still clear the in process session and listen caches so
     the simulated restart actually resets transient state.
+
+    B046: Gated behind ANTICIPY_DEV_MODE so a hostile local process or
+    Chrome extension on 127.0.0.1 cannot wipe pending tasks, recovery
+    state, or cost stats.
     """
+    if (os.environ.get("ANTICIPY_DEV_MODE") or "").lower() not in {"1", "true", "yes", "on"}:
+        return JSONResponse({"ok": False,
+                             "error": "endpoint disabled (set ANTICIPY_DEV_MODE=1 to enable)"},
+                            status_code=403)
     try:
         _SESS["i"] = 0
         _SESS["transcript"] = []
