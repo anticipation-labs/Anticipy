@@ -1383,7 +1383,30 @@ fn start_voice_onboarding(
                         "ts": current_unix_seconds(),
                     }),
                 );
+                return Ok(body);
             }
+            // Kick off a background poller so the popover sees the
+            // question_N transitions and the final completion event
+            // without the popover needing to wake up. Aborts after 8
+            // minutes (longer than the worst-case 7-question call) so
+            // a dropped call eventually frees the thread.
+            let call_sid = body
+                .get("call_sid")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let account_id = body
+                .get("account_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let app_clone = app.clone();
+            let phone_clone = phone.clone();
+            std::thread::spawn(move || {
+                spawn_voice_status_poller(
+                    app_clone, call_sid, account_id, phone_clone,
+                );
+            });
             Ok(body)
         }
         Err(e) => {
@@ -1399,6 +1422,141 @@ fn start_voice_onboarding(
             Err(e)
         }
     }
+}
+
+/// Long-poll the engine's /api/onboarding/voice_status endpoint and
+/// emit `voice-onboarding-status` events on every phase transition so
+/// the popover renders live progress. Caps at 8 minutes so a dropped
+/// call eventually frees the polling thread.
+fn spawn_voice_status_poller(
+    app: AppHandle,
+    call_sid: String,
+    account_id: String,
+    phone: String,
+) {
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_secs(8 * 60);
+    let mut last_phase: String = String::new();
+    let mut last_index: i64 = -1;
+    loop {
+        if std::time::Instant::now() >= deadline {
+            let _ = app.emit(
+                "voice-onboarding-status",
+                serde_json::json!({
+                    "phase": "error",
+                    "phone": phone,
+                    "error": "voice onboarding poller timed out after 8 minutes",
+                    "ts": current_unix_seconds(),
+                }),
+            );
+            return;
+        }
+        let path = if !call_sid.is_empty() {
+            format!(
+                "/api/onboarding/voice_status?call_sid={}",
+                urlencode_minimal(&call_sid),
+            )
+        } else {
+            format!(
+                "/api/onboarding/voice_status?account_id={}",
+                urlencode_minimal(&account_id),
+            )
+        };
+        match get_engine_json(&path) {
+            Ok(body) => {
+                let phase = body
+                    .get("phase")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let q_index = body
+                    .get("question_index")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0);
+                let q_total = body
+                    .get("question_total")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(7);
+                let completed = body
+                    .get("completed")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let error_msg = body
+                    .get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                // Emit on transition. The "question" phase fires once
+                // per index increment; "completed" and "error" fire
+                // once each. "calling" never overrides itself.
+                let should_emit =
+                    phase != last_phase || q_index != last_index;
+                if should_emit {
+                    last_phase = phase.clone();
+                    last_index = q_index;
+                    // Map the website's "in_progress" with a question
+                    // index > 0 to the popover's "question" phase so
+                    // the UI shows "Question N of 7" cleanly.
+                    let ui_phase = if completed {
+                        "completed"
+                    } else if !error_msg.is_empty()
+                        || phase == "error"
+                        || phase == "failed"
+                    {
+                        "error"
+                    } else if phase == "in_progress" && q_index > 0 {
+                        "question"
+                    } else if phase == "calling" {
+                        "calling"
+                    } else {
+                        phase.as_str()
+                    };
+                    let _ = app.emit(
+                        "voice-onboarding-status",
+                        serde_json::json!({
+                            "phase": ui_phase,
+                            "phone": phone,
+                            "question_index": q_index,
+                            "question_total": q_total,
+                            "completed": completed,
+                            "error": if error_msg.is_empty() {
+                                serde_json::Value::Null
+                            } else {
+                                serde_json::Value::String(error_msg.clone())
+                            },
+                            "ts": current_unix_seconds(),
+                        }),
+                    );
+                }
+                if completed || phase == "error" || phase == "failed" {
+                    return;
+                }
+            }
+            Err(_) => {
+                // Transient: keep polling, the engine may be a beat
+                // behind a deferred-attach reload.
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
+}
+
+/// Minimal percent-encoding for the query string. Covers the subset
+/// that appears in a Twilio call SID (alnum) and an account_id
+/// (alnum + dash + underscore), so the only real escapes are spaces
+/// and the literal "+" in case an account_id ever holds one.
+fn urlencode_minimal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+            out.push(ch);
+        } else {
+            for b in ch.to_string().into_bytes() {
+                out.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    out
 }
 
 #[tauri::command]
