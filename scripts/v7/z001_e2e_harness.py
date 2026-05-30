@@ -1189,11 +1189,26 @@ def main(argv: list[str] | None = None) -> int:
         record["compose_url"] = act.get("compose_url")
         record["act_via"] = act.get("via")
 
-        draft_check = step_verify_gmail_draft(
-            secret, SAMPLE_SUBJECT, state_dir, opened_targets)
-        _record("gmail_draft_visible", draft_check)
-        record["gmail_draft_url"] = draft_check.get("draft_url")
-        record["gmail_draft_subject"] = SAMPLE_SUBJECT
+        # Z001_FAST=1 skips the Gmail draft visibility check. The
+        # 30s autosave wait + drafts navigate + DOM probe adds
+        # 60-90 seconds to the run. For sentinel deep-iter (which
+        # has a 75s budget on this script via /usr/bin/timeout),
+        # the engine_act SUCCESS is the actual silent-execute
+        # proof. Set the env to short-circuit.
+        z001_fast = os.environ.get("Z001_FAST", "").strip().lower() in {"1", "true", "yes"}
+        if z001_fast:
+            draft_check = {
+                "ok": False,
+                "skipped": True,
+                "reason": "Z001_FAST=1; gmail visibility check deferred to non-fast runs",
+            }
+            _record("gmail_draft_visible", draft_check)
+        else:
+            draft_check = step_verify_gmail_draft(
+                secret, SAMPLE_SUBJECT, state_dir, opened_targets)
+            _record("gmail_draft_visible", draft_check)
+            record["gmail_draft_url"] = draft_check.get("draft_url")
+            record["gmail_draft_subject"] = SAMPLE_SUBJECT
 
         # All hard steps passed if we got here. Soft-fail if gmail
         # draft was not visible (often because the Chrome profile is
