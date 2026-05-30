@@ -3088,6 +3088,49 @@ _LISTEN: dict = {
 
 
 # --------------------------------------------------------------------------
+# Lightweight per-IP rate limiter for local-only abuse defence.
+#
+# B050, B054, B070: a Chrome extension or runaway script on 127.0.0.1 can
+# otherwise spam expensive endpoints. We keep one deque of timestamps per
+# (key, bucket) and prune on read. Pure stdlib + threading, no external dep.
+# --------------------------------------------------------------------------
+
+_RATE_LIMIT_BUCKETS: dict[str, collections.deque] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
+
+
+def _rate_limit_check(key: str, limit: int, window_seconds: float) -> bool:
+    """Return True if the call is within the limit, False if rate-limited.
+
+    `key` should incorporate both the endpoint and a caller identifier
+    (e.g. "listen_inject:127.0.0.1"). `limit` is the max number of calls
+    allowed in the rolling `window_seconds` window.
+    """
+    now = time.time()
+    cutoff = now - window_seconds
+    with _RATE_LIMIT_LOCK:
+        dq = _RATE_LIMIT_BUCKETS.get(key)
+        if dq is None:
+            dq = collections.deque(maxlen=max(limit + 4, 16))
+            _RATE_LIMIT_BUCKETS[key] = dq
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= limit:
+            return False
+        dq.append(now)
+        return True
+
+
+def _client_ip(request: Request | None) -> str:
+    if request is None:
+        return "local"
+    try:
+        return (request.client.host if request.client else "local") or "local"
+    except Exception:
+        return "local"
+
+
+# --------------------------------------------------------------------------
 # Persistent task queue glue (see app/task_queue/store.py).
 #
 # Every utterance that produces a pending instruction is mirrored into a
@@ -5956,7 +5999,7 @@ def _mp3_eval_candidate_excerpt(text: str) -> str:
 
 
 @app.post("/api/listen/inject")
-def listen_inject(i: Inject) -> JSONResponse:
+def listen_inject(i: Inject, request: Request) -> JSONResponse:
     """Authorized transcript-boundary input: the walled-off scenario
     script enters HERE, exactly where the real voice system's ASR
     output would enter the judged pipeline. It runs the identical
@@ -5972,6 +6015,17 @@ def listen_inject(i: Inject) -> JSONResponse:
     advance the pipeline. So the inject path advances regardless of
     mic state. Source label keeps the provenance distinction.
     """
+    # B070: cap to 60 per minute per caller IP. ASR / embedding / LLM
+    # proposals are expensive; a hostile script otherwise burns budget and
+    # CPU. The engine binds to 127.0.0.1 so "IP" almost always equals
+    # localhost, but the deque also bounds the per-key memory regardless.
+    if not _rate_limit_check(
+        f"listen_inject:{_client_ip(request)}", 60, 60.0
+    ):
+        return JSONResponse(
+            {"ok": False, "error": "rate limit: 60 inject calls per minute"},
+            status_code=429,
+        )
     text = (i.text or "").strip()
     # If listening is off we still need a coherent rec shape for the
     # pipeline; _process_utterance reads from _LISTEN so it works
@@ -5997,6 +6051,10 @@ def listen_inject(i: Inject) -> JSONResponse:
         }
         with _LISTEN["lock"]:
             _LISTEN["error"] = str(e)
+    # B048: a TRIVIA_FIRE utterance must NOT also be queued as an action task.
+    # Otherwise "wait who is the president" returns a trivia answer AND
+    # enqueues a clarify-needed task with the same instruction.
+    is_trivia = (rec.get("outcome") == "TRIVIA_FIRE")
     # Belt-and-braces: ensure _LISTEN["pending"] carries the raw
     # instruction so a subsequent /api/act with no body can act on it
     # even when the pipeline did not produce a structured plan (e.g.
@@ -6004,6 +6062,7 @@ def listen_inject(i: Inject) -> JSONResponse:
     if (
         (not rec.get("error"))
         and text
+        and not is_trivia
         and not (_LISTEN.get("pending") or {}).get("instruction")
     ):
         with _LISTEN["lock"]:
@@ -6017,7 +6076,7 @@ def listen_inject(i: Inject) -> JSONResponse:
     # engine restarts. If the proactive scheduler tagged a due_at we
     # use that as wake_at; otherwise the task is immediately runnable.
     scheduled = rec.get("scheduled")
-    if (not rec.get("error")) and text:
+    if (not rec.get("error")) and text and not is_trivia:
         wake_at = None
         if isinstance(scheduled, dict):
             try:
@@ -10047,7 +10106,8 @@ class ConfirmDecision(BaseModel):
 
 @app.post("/api/act/confirm/{task_id}")
 def act_confirm(task_id: str,
-                decision: ConfirmDecision) -> JSONResponse:
+                decision: ConfirmDecision,
+                request: Request) -> JSONResponse:
     """US-017: popover Confirm card posts here on Approve / Reject.
 
     The 30s wall-clock timer started in /api/act defaults to reject
@@ -10057,6 +10117,15 @@ def act_confirm(task_id: str,
     returns the engine status `user_rejected` so the popover Past
     column shows the action did not run.
     """
+    # B050: rate-limit confirm to 20/sec per IP. Without this an attacker
+    # can brute-force valid task IDs at line speed. Real users click once.
+    if not _rate_limit_check(
+        f"act_confirm:{_client_ip(request)}", 20, 1.0
+    ):
+        return JSONResponse(
+            {"ok": False, "error": "rate limit: 20 confirm calls per second"},
+            status_code=429,
+        )
     with _CONFIRMS_LOCK:
         rec = _CONFIRMS.get(task_id)
     if not rec:
