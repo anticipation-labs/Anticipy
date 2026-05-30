@@ -21,13 +21,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 
 # Exponential backoff schedule for retries: 1 minute, 5 minutes, 30
@@ -586,6 +587,250 @@ def resume_after_restart() -> list[TaskRecord]:
             out.append(r)
         out.sort(key=lambda r: (r.created_at, r.task_id))
         return out
+
+
+# ---------------------------------------------------------------------------
+# Cleanup policy (auto-expire stale waiting tasks)
+# ---------------------------------------------------------------------------
+
+# Default age threshold for sweeping a stale `needs_user_clarification`
+# task whose instruction looks like trivia. One hour matches the spec.
+STALE_TRIVIA_AGE_SECONDS = 3600.0
+
+# Maximum waiting tasks the popover should ever render. Anything past
+# this gets folded behind a "show more" affordance so the user does
+# not see "you have 22 tasks waiting" on the front of the device.
+DEFAULT_MAX_VISIBLE_IN_UI = 5
+
+# How many retries a recovery task may accumulate before the cleanup
+# rolls the rest up into a single SMS and cancels the older siblings.
+RECOVERY_RETRY_ROLLUP_THRESHOLD = 3
+
+# Lexical openers that mark an instruction as trivia the agent should
+# never have queued. Conservative on purpose: we only sweep things
+# that read like questions, not anything that looks like an action.
+_TRIVIA_OPENER_RE = re.compile(
+    r"^\s*(?:wait[,\s]+)?(?:"
+    r"when did|when was|when is|when's|whens|"
+    r"what is|what was|what's|whats|what does|what are|"
+    r"who is|who was|who's|whos|"
+    r"where is|where was|"
+    r"how many|how much|how do|how does|how did|"
+    r"why did|why is|why was|why are|why do|why does|"
+    r"tell me about|"
+    r"define|"
+    r"explain"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Synthetic recipients that escaped from dev / test runs. These are
+# safe to purge because they cannot resolve to a real human.
+_DEV_TEST_RECIPIENT_RE = re.compile(
+    r"(?:"
+    r"omarkebrahim\+anticipy-|"
+    r"@anticipy-test\.local|"
+    r"@example\.com|"
+    r"Anticipy plus Anticipipeline|"
+    r"Anticipipeline at gmail|"
+    r"Anticipipeline"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def max_visible_in_ui() -> int:
+    """Read the popover cap from env so the desktop shell can tune it
+    without a rebuild. Falls back to DEFAULT_MAX_VISIBLE_IN_UI.
+    """
+    raw = (os.environ.get("ANTICIPY_TASK_QUEUE_MAX_VISIBLE_IN_UI") or "").strip()
+    if not raw:
+        return DEFAULT_MAX_VISIBLE_IN_UI
+    try:
+        n = int(raw)
+        if n > 0:
+            return n
+    except Exception:
+        pass
+    return DEFAULT_MAX_VISIBLE_IN_UI
+
+
+def _looks_like_trivia(instruction: str) -> bool:
+    return bool(_TRIVIA_OPENER_RE.match(instruction or ""))
+
+
+def _looks_like_dev_test_leak(instruction: str) -> bool:
+    return bool(_DEV_TEST_RECIPIENT_RE.search(instruction or ""))
+
+
+def cleanup_expired_tasks(
+    *,
+    now: Optional[float] = None,
+    stale_trivia_age_seconds: float = STALE_TRIVIA_AGE_SECONDS,
+    recovery_retry_threshold: int = RECOVERY_RETRY_ROLLUP_THRESHOLD,
+    escalator: Optional[Callable[[TaskRecord], dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    """Apply the popover cleanup policy. Returns a summary dict.
+
+    Policy (see planning/00-handoff/QUEUE_AUDIT.md):
+
+    1. `status=waiting`, `waiting_reason=needs_user_clarification`,
+       `age > stale_trivia_age_seconds`, and the instruction matches a
+       trivia opener (lexical: "wait, when did", "what is", etc.) ->
+       cancel with `reason=stale_trivia_swept`.
+
+    2. `status=waiting`, instruction contains a known dev-test
+       recipient pattern -> cancel with `reason=dev_test_leak_purged`.
+
+    3. `status=waiting`, `waiting_reason` starts with `recovery:`,
+       grouped by the same `recovery_failure_kind` per account. If the
+       total retry_count across the group exceeds the threshold OR the
+       group has more than `recovery_retry_threshold + 1` siblings,
+       call the escalator on the newest sibling (the caller wires this
+       to `failure_recovery.route_recovery` so the user gets ONE SMS),
+       then cancel the older siblings with `reason=rolled_up`.
+
+    The function never deletes journal entries; it only appends cancel
+    events so the audit trail stays intact.
+    """
+    t = float(now if now is not None else time.time())
+    summary = {
+        "cancelled": 0,
+        "escalated": 0,
+        "kept": 0,
+        "stale_trivia_swept": 0,
+        "dev_test_leak_purged": 0,
+        "rolled_up": 0,
+        "real_kept": 0,
+        "recovery_kept": 0,
+        "examples": {
+            "stale_trivia_swept": [],
+            "dev_test_leak_purged": [],
+            "rolled_up": [],
+            "real_kept": [],
+            "recovery_kept": [],
+        },
+    }
+
+    with _LOCK:
+        _ensure_loaded()
+        waiting = [r for r in _TASKS.values() if r.status == STATUS_WAITING]
+
+        # Group recovery tasks so we can roll up by (account, kind).
+        recovery_groups: dict[tuple[str, str], list[TaskRecord]] = {}
+        for rec in waiting:
+            wr = rec.waiting_reason or ""
+            if not wr.startswith("recovery:"):
+                continue
+            kind = (rec.metadata or {}).get("recovery_failure_kind") or wr
+            key = (rec.account_id or "", str(kind))
+            recovery_groups.setdefault(key, []).append(rec)
+
+        # Pass 1: stale trivia + dev_test_leak.
+        for rec in waiting:
+            wr = rec.waiting_reason or ""
+            if wr.startswith("recovery:"):
+                continue  # handled in pass 2
+            age = t - (rec.created_at or t)
+            instr = rec.instruction or ""
+            if (wr == "needs_user_clarification"
+                    and age > stale_trivia_age_seconds
+                    and _looks_like_trivia(instr)):
+                _cancel_internal_locked(
+                    rec.task_id, reason="stale_trivia_swept",
+                )
+                summary["cancelled"] += 1
+                summary["stale_trivia_swept"] += 1
+                if len(summary["examples"]["stale_trivia_swept"]) < 5:
+                    summary["examples"]["stale_trivia_swept"].append(
+                        rec.task_id
+                    )
+                continue
+            if _looks_like_dev_test_leak(instr):
+                _cancel_internal_locked(
+                    rec.task_id, reason="dev_test_leak_purged",
+                )
+                summary["cancelled"] += 1
+                summary["dev_test_leak_purged"] += 1
+                if len(summary["examples"]["dev_test_leak_purged"]) < 5:
+                    summary["examples"]["dev_test_leak_purged"].append(
+                        rec.task_id
+                    )
+                continue
+            # Surviving non-recovery waiting tasks are "real": user
+            # genuinely needs to clarify. Keep them.
+            summary["kept"] += 1
+            summary["real_kept"] += 1
+            if len(summary["examples"]["real_kept"]) < 5:
+                summary["examples"]["real_kept"].append(rec.task_id)
+
+        # Pass 2: recovery rollup. Group by (account, failure_kind);
+        # if the group's retries are over budget OR there are more
+        # than threshold+1 siblings, escalate the newest and roll
+        # everything else up.
+        for (account, kind), group in recovery_groups.items():
+            group.sort(key=lambda r: r.created_at or 0.0)
+            total_retries = sum(int(r.retry_count or 0) for r in group)
+            over_retries = total_retries > recovery_retry_threshold
+            too_many_siblings = len(group) > (recovery_retry_threshold + 1)
+            keep = group[-1]  # newest
+            if over_retries or too_many_siblings:
+                # Escalate the newest task via the supplied callback.
+                escalated_ok = False
+                if escalator is not None:
+                    try:
+                        res = escalator(keep) or {}
+                        escalated_ok = bool(res.get("ok"))
+                    except Exception:
+                        escalated_ok = False
+                if escalated_ok:
+                    summary["escalated"] += 1
+                # Roll up older siblings even if the escalator failed:
+                # the user already has 20 cards in the popover, we are
+                # not going to keep them just because Twilio is down.
+                for sib in group[:-1]:
+                    _cancel_internal_locked(
+                        sib.task_id, reason="rolled_up",
+                    )
+                    summary["cancelled"] += 1
+                    summary["rolled_up"] += 1
+                    if len(summary["examples"]["rolled_up"]) < 5:
+                        summary["examples"]["rolled_up"].append(sib.task_id)
+                summary["kept"] += 1
+                summary["recovery_kept"] += 1
+                if len(summary["examples"]["recovery_kept"]) < 5:
+                    summary["examples"]["recovery_kept"].append(keep.task_id)
+            else:
+                # Under budget: keep every recovery sibling.
+                for sib in group:
+                    summary["kept"] += 1
+                    summary["recovery_kept"] += 1
+                    if len(summary["examples"]["recovery_kept"]) < 5:
+                        summary["examples"]["recovery_kept"].append(
+                            sib.task_id
+                        )
+
+    summary["max_visible_in_ui"] = max_visible_in_ui()
+    return summary
+
+
+def _cancel_internal_locked(task_id: str, *, reason: str) -> Optional[TaskRecord]:
+    """Internal cancel that assumes the caller holds _LOCK already and
+    appends an audit-friendly cancel event. Mirrors `cancel()` but
+    skips the lock reentry to keep the cleanup pass atomic.
+    """
+    rec = _TASKS.get(task_id)
+    if rec is None:
+        return None
+    if rec.status in _TERMINAL_STATUSES:
+        return rec
+    now = time.time()
+    rec.status = STATUS_CANCELLED
+    rec.completed_at = now
+    rec.updated_at = now
+    rec.last_error = str(reason or "")[:512]
+    _append_journal_locked("cancel", rec, {"reason": reason})
+    return rec
 
 
 def rebuild_index_from_journal() -> dict[str, Any]:

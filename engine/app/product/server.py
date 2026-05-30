@@ -5737,6 +5737,67 @@ def task_queue_scan() -> JSONResponse:
     })
 
 
+@app.post("/api/task_queue/cleanup")
+def task_queue_cleanup() -> JSONResponse:
+    """Apply the popover cleanup policy. Auto-expires stale trivia
+    that has been waiting on the user for more than an hour, purges
+    dev / test recipient leaks, and rolls up recovery sibling chains
+    into a single SMS escalation. Returns the summary so the caller
+    can show the user (or the dashboard) how many cards were swept.
+
+    The policy is documented in `planning/00-handoff/QUEUE_AUDIT.md`.
+    Cancellations are journal-appended, never deleted, so the audit
+    trail stays intact.
+    """
+    try:
+        from app import task_queue as _tq
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"task_queue unavailable: {exc}"},
+                            status_code=500)
+
+    def _escalator(rec) -> dict:
+        """Bridge to failure_recovery so the rollup sends one SMS
+        instead of N. Best-effort: if the recovery module is missing
+        we still cancel the older siblings; the user has been waiting
+        on this for hours either way.
+        """
+        try:
+            from app.product import failure_recovery as _fr
+        except Exception as exc:
+            return {"ok": False, "error": f"failure_recovery unavailable: {exc}"}
+        md = dict(rec.metadata or {})
+        kind = (md.get("recovery_failure_kind")
+                or (rec.waiting_reason or "").split(":", 1)[-1])
+        surface_url = str(md.get("recovery_surface_url") or "")
+        try:
+            return _fr.route_recovery(
+                rec.task_id,
+                kind,
+                surface_url,
+                instruction=rec.instruction or "",
+                recipient_hint=str(md.get("recipient_hint") or ""),
+            ) or {}
+        except Exception as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    try:
+        summary = _tq.cleanup_expired_tasks(escalator=_escalator)
+    except Exception as exc:
+        return JSONResponse({"ok": False,
+                             "error": f"{type(exc).__name__}: {exc}"},
+                            status_code=500)
+    return JSONResponse({
+        "ok": True,
+        "cancelled": summary.get("cancelled", 0),
+        "escalated": summary.get("escalated", 0),
+        "kept": summary.get("kept", 0),
+        "max_visible_in_ui": summary.get("max_visible_in_ui",
+                                          _tq.max_visible_in_ui()),
+        "detail": summary,
+    })
+
+
 @app.post("/api/stt/local")
 async def stt_local(request: Request) -> JSONResponse:
     """Pure local parakeet-mlx transcription.
@@ -11284,6 +11345,22 @@ _CALENDAR_PREP_SCHEDULER_STARTED = False
 def _start_calendar_prep_scheduler() -> None:
     global _CALENDAR_PREP_SCHEDULER_STARTED
     if _CALENDAR_PREP_SCHEDULER_STARTED:
+        return
+    # ANTICIPY_QUIET=1 disables every proactive tab-open path. The
+    # calendar prep scheduler is the loudest of those (it opens a
+    # Calendar tab every 5 minutes plus Gmail/Drive search tabs when
+    # a meeting is near) so it gets gated first. Audit:
+    # planning/00-handoff/TAB_OPEN_AUDIT.md.
+    try:
+        from app.config import _quiet_mode_enabled
+    except Exception:
+        _quiet_mode_enabled = lambda: False  # noqa: E731
+    if _quiet_mode_enabled():
+        print(
+            "[anticipy.calendar_prep] quiet_mode_skipped "
+            "path=calendar_prep_scheduler",
+            flush=True,
+        )
         return
     disabled = (
         os.environ.get("ANTICIPY_CALENDAR_PREP_DISABLE", "")
