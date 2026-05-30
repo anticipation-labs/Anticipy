@@ -775,27 +775,88 @@
       }
 
       /* ----- Onboarding clicks ----- */
+      // Open a URL via the safest channel available. Tauri opener and
+      // shell both deep-link to the user's default browser; window.open
+      // is the browser-preview fallback.
+      async function openExternal(url) {
+        try {
+          if (window.__TAURI__ && window.__TAURI__.opener
+              && window.__TAURI__.opener.openUrl) {
+            await window.__TAURI__.opener.openUrl(url);
+            return true;
+          }
+          if (window.__TAURI__ && window.__TAURI__.shell
+              && window.__TAURI__.shell.open) {
+            await window.__TAURI__.shell.open(url);
+            return true;
+          }
+        } catch (e) { /* fall through */ }
+        try {
+          window.open(url, "_blank");
+          return true;
+        } catch (e) { return false; }
+      }
+
+      // Brief in-card feedback so the click is never silent. Replaces
+      // the card's sub line with a one-word progress phrase and a
+      // dotty progress indicator for the life of the action, then
+      // restores the original copy. Keeps the click discoverable even
+      // when the new tab takes a beat to land.
+      function showCardBusy(card, label) {
+        if (!card || card.classList.contains("is-busy")) return null;
+        card.classList.add("is-busy");
+        const subEl = card.querySelector(".sub");
+        const previous = subEl ? subEl.textContent : "";
+        if (subEl) {
+          subEl.innerHTML = "";
+          const wrap = document.createElement("span");
+          wrap.className = "inline-progress";
+          const txt = document.createElement("span");
+          txt.textContent = label;
+          wrap.appendChild(txt);
+          for (let i = 0; i < 3; i += 1) {
+            const d = document.createElement("span");
+            d.className = "dotty";
+            wrap.appendChild(d);
+          }
+          subEl.appendChild(wrap);
+        }
+        return () => {
+          card.classList.remove("is-busy");
+          if (subEl) subEl.textContent = previous;
+        };
+      }
+
       function wireOnboardCards() {
         document.querySelectorAll(".onboard-card").forEach((card) => {
           card.addEventListener("click", async () => {
+            // Coming-soon cards: surface a calm reason rather than a
+            // broken link. The card label already shows the badge, so
+            // a one-shot toast in the sub line is enough.
+            if (card.classList.contains("is-coming-soon")) {
+              const release = showCardBusy(card, "Coming soon, you can pick another path now");
+              setTimeout(() => { if (release) release(); }, 2200);
+              return;
+            }
             const choice = card.dataset.onboard;
             const urls = {
-              call:  "https://www.anticipy.ai/onboarding/call",
               audio: "https://www.anticipy.ai/onboarding/audio",
               chat:  "https://www.anticipy.ai/onboarding/chat",
             };
             if (urls[choice]) {
-              try {
-                if (window.__TAURI__ && window.__TAURI__.opener) {
-                  await window.__TAURI__.opener.openUrl(urls[choice]);
-                } else if (window.__TAURI__ && window.__TAURI__.shell) {
-                  await window.__TAURI__.shell.open(urls[choice]);
-                } else {
-                  window.open(urls[choice], "_blank");
+              const release = showCardBusy(card, "Opening");
+              const ok = await openExternal(urls[choice]);
+              // Hold the busy state for 1.4s so the user perceives the
+              // feedback even when the browser opens instantly.
+              setTimeout(() => {
+                if (release) release();
+                if (!ok) {
+                  const subEl = card.querySelector(".sub");
+                  if (subEl) {
+                    subEl.textContent = "Could not open your browser. Try again.";
+                  }
                 }
-              } catch (e) {
-                window.open(urls[choice], "_blank");
-              }
+              }, 1400);
               return;
             }
             if (choice === "ambient") {
@@ -809,7 +870,25 @@
         const box = $("ambient-status");
         box.className = "banner info";
         box.classList.remove("hidden");
-        box.textContent = "Asking macOS for microphone access...";
+        // A short, plain progress sentence with a dotty pulse. No
+        // "Asking macOS..." preamble: that is a chore the user did
+        // not opt into mentally.
+        box.innerHTML = "";
+        const title = document.createElement("div");
+        title.className = "title";
+        title.textContent = "Turning on listening";
+        const sub = document.createElement("div");
+        sub.className = "sub inline-progress";
+        const t = document.createElement("span");
+        t.textContent = "macOS will pop up if it needs you";
+        sub.appendChild(t);
+        for (let i = 0; i < 3; i += 1) {
+          const d = document.createElement("span");
+          d.className = "dotty";
+          sub.appendChild(d);
+        }
+        box.appendChild(title);
+        box.appendChild(sub);
         // Use keepalive so the request survives a popover blur-hide.
         try {
           const res = await fetch("http://127.0.0.1:8731/api/listen/start", {
@@ -822,12 +901,20 @@
           if (data && data.on) {
             box.className = "banner ok";
             const dev = (data.audio_device && data.audio_device.name) || "your default microphone";
-            box.textContent = "Listening through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+            box.innerHTML = "";
+            const okTitle = document.createElement("div");
+            okTitle.className = "title";
+            okTitle.textContent = "Listening";
+            const okSub = document.createElement("div");
+            okSub.className = "sub";
+            okSub.textContent = "Through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+            box.appendChild(okTitle);
+            box.appendChild(okSub);
           } else {
             box.className = "banner err";
             box.textContent = (data && data.error)
               ? "Could not start listening. " + data.error
-              : "Could not start listening.";
+              : "Could not start listening. Try again in a moment.";
           }
         } catch (e) {
           // The popover sometimes hides mid-fetch (focus loss). Before
@@ -851,7 +938,15 @@
               if (d2 && d2.on) {
                 box.className = "banner ok";
                 const dev = (d2.audio_device && d2.audio_device.name) || "your default microphone";
-                box.textContent = "Listening through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+                box.innerHTML = "";
+                const okTitle2 = document.createElement("div");
+                okTitle2.className = "title";
+                okTitle2.textContent = "Listening";
+                const okSub2 = document.createElement("div");
+                okSub2.className = "sub";
+                okSub2.textContent = "Through " + dev + ". You can close this and get on with your day. Anticipy will pick things up.";
+                box.appendChild(okTitle2);
+                box.appendChild(okSub2);
                 return;
               }
             } catch (_) { /* fall through */ }
@@ -859,7 +954,7 @@
           box.className = "banner err";
           box.textContent = alive
             ? "Could not start listening. Try clicking again."
-            : "Anticipy is not running. Try opening it from your Applications folder.";
+            : "Anticipy looks asleep. Open it from your Applications folder.";
         }
       }
 
