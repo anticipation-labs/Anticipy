@@ -165,10 +165,16 @@ def deliver(utterance: str, answer_payload: dict,
     """
     text = ""
     if isinstance(answer_payload, dict):
-        text = str(answer_payload.get("answer") or "")
+        text = str(answer_payload.get("answer") or "").strip()
+    # Silence is preferred to a robot voice saying "I do not know
+    # that one". When the answer lane is empty (cache miss + live
+    # lookup miss, or LLM credits exhausted) we record the fire but
+    # do not speak. The popover still shows the IDK state visually.
     if not text:
-        text = "I do not know that one."
-    tts = _deliver_audio(text, voice=voice, rate=rate)
+        tts = {"spawned": False, "reason": "no_answer_silent",
+               "provider": "none"}
+    else:
+        tts = _deliver_audio(text, voice=voice, rate=rate)
     now = time.time()
     rcv = float(received_at if received_at is not None else now)
     total_ms = round(max(0.0, (now - rcv) * 1000.0), 2)

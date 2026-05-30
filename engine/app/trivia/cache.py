@@ -127,6 +127,27 @@ def _create_schema(conn: sqlite3.Connection) -> None:
     cur.execute(
         "CREATE INDEX IF NOT EXISTS aliases_fact_idx ON aliases(fact_id)"
     )
+    # Live-lookup cache: answers from Perplexity Sonar (Lane B) are
+    # persisted here so repeated questions hit SQLite, not the network.
+    # Keyed by the cleaned question text (same _clean used for seed
+    # aliases) so trivial paraphrase variants collapse to one row.
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS live_lookups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_clean TEXT NOT NULL UNIQUE,
+            question_raw TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL DEFAULT 0,
+            hits INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS live_lookups_clean_idx "
+        "ON live_lookups(question_clean)"
+    )
     conn.commit()
 
 
@@ -319,12 +340,95 @@ def stats() -> dict:
     facts = int(cur.fetchone()[0] or 0)
     cur.execute("SELECT COUNT(*) FROM aliases")
     aliases = int(cur.fetchone()[0] or 0)
+    live = 0
+    try:
+        cur.execute("SELECT COUNT(*) FROM live_lookups")
+        live = int(cur.fetchone()[0] or 0)
+    except Exception:
+        # Older DB without the live_lookups table; harmless.
+        live = 0
     return {
         "facts": facts,
         "aliases": aliases,
+        "live_lookups": live,
         "db_path": str(db_path()),
         "seeded": bool(_SEEDED),
     }
+
+
+def live_get(question: str) -> Optional[dict]:
+    """Return a prior live-lookup answer for ``question`` or None.
+
+    Uses exact match on the cleaned form so paraphrase variants like
+    "when did the printing press get invented" and "wait, when did
+    the printing press get invented" collide on the same row after
+    stopword/punct stripping. Bumps the hit counter on each hit so
+    the popular questions are visible in ``stats``.
+    """
+    if not question or not question.strip():
+        return None
+    cleaned = _clean(question)
+    if not cleaned:
+        return None
+    try:
+        conn = _connect()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT question_raw, answer, source FROM live_lookups "
+            "WHERE question_clean = ? LIMIT 1",
+            (cleaned,),
+        )
+        row = cur.fetchone()
+    except Exception:
+        return None
+    if row is None:
+        return None
+    try:
+        with _LOCK:
+            conn.execute(
+                "UPDATE live_lookups SET hits = hits + 1 "
+                "WHERE question_clean = ?",
+                (cleaned,),
+            )
+            conn.commit()
+    except Exception:
+        pass
+    return {
+        "topic": str(row["question_raw"]),
+        "answer": str(row["answer"]),
+        "source": str(row["source"] or ""),
+    }
+
+
+def live_put(question: str, answer: str, *, source: str = "") -> bool:
+    """Insert or update a live-lookup answer. Returns True on write,
+    False on no-op (empty inputs) or error.
+    """
+    if not question or not question.strip():
+        return False
+    if not answer or not answer.strip():
+        return False
+    cleaned = _clean(question)
+    if not cleaned:
+        return False
+    try:
+        with _LOCK:
+            conn = _connect()
+            conn.execute(
+                "INSERT INTO live_lookups "
+                "(question_clean, question_raw, answer, source, created_at, hits) "
+                "VALUES (?, ?, ?, ?, ?, 1) "
+                "ON CONFLICT(question_clean) DO UPDATE SET "
+                "answer = excluded.answer, "
+                "source = excluded.source, "
+                "created_at = excluded.created_at",
+                (cleaned, question.strip(), answer.strip(),
+                 source.strip(), time.time()),
+            )
+            conn.commit()
+        return True
+    except Exception:
+        return False
 
 
 __all__ = [
@@ -332,6 +436,8 @@ __all__ = [
     "count",
     "db_path",
     "ensure_seeded",
+    "live_get",
+    "live_put",
     "lookup",
     "stats",
 ]
