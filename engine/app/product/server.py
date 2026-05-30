@@ -2012,8 +2012,26 @@ def onb_answer(a: Answer) -> JSONResponse:
     from app.anticipy import onboarding as OB
 
     script = OB.INTERVIEW_SCRIPT
+    # B008: reject empty / whitespace-only answers. Previously the endpoint
+    # silently advanced past every question on an empty body, producing a
+    # fully-empty profile flagged as onboarded.
+    answer_text = (a.answer or "").strip()
+    if not answer_text:
+        return JSONResponse(
+            {"ok": False, "error": "answer is empty",
+             "index": _SESS["i"], "total": len(script)},
+            status_code=400,
+        )
+    # B037: if the script is already complete, reject further answers
+    # instead of returning an empty 200.
+    if _SESS["i"] >= len(script):
+        return JSONResponse(
+            {"ok": False, "error": "onboarding already complete",
+             "index": _SESS["i"], "total": len(script)},
+            status_code=422,
+        )
     _SESS["transcript"].append({"speaker_id": "WEARER",
-                                "text": a.answer.strip()})
+                                "text": answer_text})
     _SESS["i"] += 1
     if _SESS["i"] < len(script):
         q = script[_SESS["i"]]
@@ -2994,6 +3012,15 @@ def api_recovery_test(p: RecoveryTest) -> JSONResponse:
             status_code=500,
         )
     kind = (p.failure_kind or "").strip()
+    # B002: reject unknown failure_kind values with 422 instead of silently
+    # generating a network-style SMS body. Hides real test bugs otherwise.
+    if kind not in FR._VALID_FAILURE_KINDS:
+        return JSONResponse(
+            {"ok": False,
+             "error": f"unknown failure_kind: {kind!r}",
+             "allowed": list(FR._VALID_FAILURE_KINDS)},
+            status_code=422,
+        )
     surface_url = (p.surface_url or "").strip()
     sms_body = FR.format_recovery_sms(
         kind, surface_url,
@@ -3198,6 +3225,37 @@ def _client_ip(request: Request | None) -> str:
         return (request.client.host if request.client else "local") or "local"
     except Exception:
         return "local"
+
+
+# B003: injection-shape detector. SQLite uses parameterized queries downstream
+# so the engine itself is safe, but the raw string also feeds the planner /
+# LLM and should not arrive untagged.
+_SQL_INJECTION_KEYWORDS = (
+    "drop table", "drop database", "truncate table", "delete from",
+    "insert into", "update set", "union select", "select from",
+    "exec sp_", "xp_cmdshell",
+)
+_SQL_TAUTOLOGY_RE = re.compile(
+    r"""(?ix)
+    \b(or|and)\s+["']?\d+["']?\s*=\s*["']?\d+["']?  # OR 1=1, AND '1'='1'
+    """
+)
+
+
+def _looks_like_injection(text: str) -> bool:
+    if not text:
+        return False
+    low = text.lower()
+    if ";" in text and any(kw in low for kw in _SQL_INJECTION_KEYWORDS):
+        return True
+    if "--" in text and any(kw in low for kw in _SQL_INJECTION_KEYWORDS):
+        return True
+    if _SQL_TAUTOLOGY_RE.search(low):
+        # tautology alone is suspicious only when paired with a quote or
+        # comment marker; ordinary "5 or 6 = ten" should not trigger.
+        if "'" in text or '"' in text or "--" in text:
+            return True
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -6119,6 +6177,16 @@ def listen_inject(i: Inject, request: Request) -> JSONResponse:
             status_code=429,
         )
     text = (i.text or "").strip()
+    # B003: quarantine SQL-injection-shaped payloads. SQLite uses
+    # parameterized queries downstream so the engine itself is safe, but
+    # hostile strings should never reach the planner / LLM unflagged.
+    if _looks_like_injection(text):
+        return JSONResponse(
+            {"ok": False,
+             "error": "input quarantined: payload contains injection-style "
+                      "tokens (semicolons + SQL keywords or boolean tautology)"},
+            status_code=400,
+        )
     # If listening is off we still need a coherent rec shape for the
     # pipeline; _process_utterance reads from _LISTEN so it works
     # standalone. The "on" check on inject was a UX gate, not a
@@ -11328,15 +11396,18 @@ def api_dossier_read(user_id: str, key: str | None = None) -> JSONResponse:
 
 @app.post("/api/test/reset_runtime")
 def api_test_reset_runtime() -> JSONResponse:
-    """Soft restart hook for the verifier.
+    """Soft restart hook for the verifier (RUNTIME CACHES ONLY).
+
+    Scope: only the in-process session transcript and counter are cleared
+    (B047). Profile state lives in the dossier on disk and is NOT touched
+    here; call /api/reset to wipe the persisted profile + onboarded flag.
 
     The audit's A-004 spawns a fresh engine when it can, but when an
     engine is already running it cannot kill it. Instead it pokes this
     endpoint to simulate a runtime restart. Because dossier facts are
     persisted to disk, no rehydration step is needed: a subsequent
     GET /api/dossier reads from the same files regardless of in process
-    caches. We still clear the in process session and listen caches so
-    the simulated restart actually resets transient state.
+    caches.
 
     B046: Gated behind ANTICIPY_DEV_MODE so a hostile local process or
     Chrome extension on 127.0.0.1 cannot wipe pending tasks, recovery
@@ -11351,7 +11422,13 @@ def api_test_reset_runtime() -> JSONResponse:
         _SESS["transcript"] = []
     except Exception:
         pass
-    return JSONResponse({"ok": True, "reset": True})
+    return JSONResponse({
+        "ok": True,
+        "reset": True,
+        "scope": "runtime_caches_only",
+        "untouched": ["profile", "onboarded", "dossier_on_disk"],
+        "note": "Use /api/reset for a full profile reset.",
+    })
 
 
 # --------------------------------------------------------------------------
