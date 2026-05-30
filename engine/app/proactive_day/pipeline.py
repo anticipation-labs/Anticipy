@@ -48,13 +48,16 @@ def frozen_is_instruction(event: dict) -> str:
     spk = event.get("speaker", "WEARER")
     line = [{"speaker_id": "WEARER" if spk == "WEARER" else "S1",
              "text": event.get("text", ""), "ts": float(event.get("ts", 0))}]
+    # SCALE: never bias the frozen engine's instruction judgement on
+    # any stranger's utterance against the founder's profile. Empty
+    # identity (no name, no role, no people, no mandate) keeps the
+    # frozen decide() generic. The real wearer's dossier is read by
+    # downstream resolution layers, not seeded here.
     ctx = UserContext.from_profile(UserProfile(
-        user_id="dil-wearer", name="Omar", role_title="Founder",
-        what_they_do="runs an AI hardware startup",
-        mandate="Handle scheduling, dinner and email proactively. "
-                "Do not touch payroll or legal.",
-        people={"the boss": "Dana", "us": "Omar and Priya"},
-        trajectory_confidence=0.0, days_since_onboard=3))
+        user_id="dil-wearer", name="", role_title="",
+        what_they_do="", mandate="",
+        people={},
+        trajectory_confidence=0.0, days_since_onboard=0))
     try:
         r = asyncio.run(ProactiveEngine().decide(line, ctx, "mac_mic"))
         return getattr(r, "decision", "IGNORE")

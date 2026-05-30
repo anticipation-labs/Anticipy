@@ -2880,7 +2880,11 @@ def _run_pipeline(text: str):
         "urgency": "hours", "world_done_at": None, "world_done": None,
         "cancels_ev": None, "defer_until": None, "shorthand_key": None,
         "expansion": None, "first_occurrence": False}]}
-    world = W.populated()
+    # SCALE: never seed a stranger's live pipeline with the founder's
+    # fictional contacts / calendar / files. Empty SimWorld is the
+    # safe default; real wearer state arrives via the dossier loader
+    # in downstream resolution, not via the sim fixture.
+    world = W.SimWorld()
     res = pipeline.run_day(manifest, world)
     outcome = res[0].outcome if res else "?"
     proposal = world.outbound[0].body if world.outbound else None

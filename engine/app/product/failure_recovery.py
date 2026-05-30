@@ -541,9 +541,26 @@ def _park_task_in_queue(
         # No queue record (this can happen if the action was driven
         # directly via /api/act without the listen pipeline). Enqueue
         # a fresh entry so the recovery sticks across restarts.
+        # SCALE: resolve account_id via the standard env > USER_ID >
+        # machine_id chain so a stranger's recovery task is enqueued
+        # under THEIR account, not the founder's default.
+        import os as _os
+        try:
+            from app.product.server import USER_ID as _USER_ID
+            from app.product.server import _default_account_id
+        except Exception:
+            _USER_ID = ""
+            _default_account_id = lambda: ""  # noqa: E731
+        _acct = (
+            (_os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or (_USER_ID or "").strip()
+            or _default_account_id()
+            or "wearer"
+        )
         try:
             rec = _tq.enqueue(
                 instruction or f"recovery: {failure_kind}",
+                account_id=_acct,
                 metadata={
                     "source": "failure_recovery_route",
                     "wait_for_recovery": True,

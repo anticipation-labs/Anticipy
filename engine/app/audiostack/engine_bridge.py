@@ -35,13 +35,15 @@ class E2EResult:
 def _ctx(user_id: str = "wearer"):
     from app.anticipy.seams import UserContext, UserProfile
 
+    # SCALE: never seed Omar-specific identity into a stranger's
+    # decision context. Start from an EMPTY profile (no name, no
+    # people, no role) so the frozen engine reads the real wearer's
+    # state only via the dossier loader where downstream code looks.
     return UserContext.from_profile(UserProfile(
-        user_id=user_id, name="Omar", role_title="Founder",
-        what_they_do="runs an AI hardware startup",
-        mandate="Handle scheduling, dinner bookings and email "
-                "proactively. Do not touch payroll or legal.",
-        people={"the boss": "Dana", "us": "Omar and Priya"},
-        trajectory_confidence=0.0, days_since_onboard=3))
+        user_id=user_id, name="", role_title="",
+        what_they_do="", mandate="",
+        people={},
+        trajectory_confidence=0.0, days_since_onboard=0))
 
 
 def run_end_to_end(item: dict, stack: AudioStack, ctx) -> E2EResult:

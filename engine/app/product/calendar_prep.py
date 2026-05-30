@@ -509,8 +509,24 @@ def _dossier_notes_for(label: str, max_chars: int = 600) -> list[str]:
         from app.product.dossier_active_loader import DossierLoader
     except Exception:
         return notes
+    # SCALE: resolve the active wearer's account_id via the standard
+    # env > USER_ID > machine_id chain instead of hardcoding the
+    # founder's launchctl value. The loader's _candidate_paths fallback
+    # still applies, so a global dossier still resolves.
     try:
-        loader = DossierLoader("anticipy-user")
+        from app.product.server import _default_account_id
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or _default_account_id()
+            or "wearer"
+        )
+    except Exception:
+        account_id = (
+            (os.environ.get("ANTICIPY_ACCOUNT_ID", "") or "").strip()
+            or "wearer"
+        )
+    try:
+        loader = DossierLoader(account_id)
     except Exception:
         return notes
     needle = label.lower()
