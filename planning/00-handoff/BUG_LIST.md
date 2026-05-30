@@ -392,4 +392,21 @@
 | B378 | src/app/api/extension/access-code/route.ts | P2 | engine_users.username column populated as `auth_${authUserId.slice(0,16)}` — collisions possible | Line 63: 16 hex chars = ~64 bits collision space across all users. Birthday collision after ~4B users. Not immediate but unique constraint will fire eventually. |
 | B379 | src/app/api/extension/access-code/route.ts | P3 | password_hash filler uses crypto.randomBytes(32).toString("hex") — 64 chars, not bcrypt format | Lines 56-65. Stored hash doesn't start with `$2b$` so any future `bcrypt.compare(password, hash)` returns false but throws no error. Confusing during incident. |
 | B380 | src/app/api/extension/access-code/route.ts | P3 | First-call provisioning ignores existing row's username conflict | Lines 59-65: if `auth_${authUserId.slice(0,16)}` is taken (extremely rare but possible), insert fails with cryptic error. |
+| B381 | src/lib/agent-llm.ts | P2 | Provider order (cerebras → groq → mistral) hardcoded; no learning | Lines 40-72. Same as B272 cascade pattern. |
+| B382 | src/lib/agent-llm.ts | P3 | callAgentJson always returns same shape; downstream can't tell which provider failed | Lines 41-74: errors[] joined into one string. Hard to alert on cerebras-down specifically. |
+| B383 | src/lib/crm/gemini.ts | P3 | API key URL-encoded into URL query param | Line 94: `?key=${encodeURIComponent(apiKey)}`. URL logged in nginx/Vercel logs. Key leak vector. |
+| B384 | src/lib/crm/gemini.ts | P2 | normalize() silently coerces wrong currency to null instead of failing | Lines 124: `r.currency === "USD" ? "USD" : r.currency === "CAD" ? "CAD" : null`. CHF or GBP receipts silently become null currency. |
+| B385 | src/lib/crm/rate-limit.ts | P2 | Duplicated implementation from src/lib/rate-limit.ts | Comment on line 5 admits "duplicated so the CRM PR has no cross-branch import dependency". Future divergence between two files. |
+| B386 | src/lib/crm/events.ts | P3 | logAgentEvent silently fails if crmDb fails — no return value | Lines 16-26: no error return. Caller can't detect logging failed. |
+| B387 | src/lib/brand.ts | P3 | logoSvg shipped as raw string for direct innerHTML use — XSS risk if ever interpolated user input | Line 42: tied to brand only, safe today. Pattern is dangerous. |
+| B388 | src/lib/api-auth.ts | P3 | DUPLICATE of src/lib/require-auth.ts — two parallel auth implementations | Both files do supabase.auth.getUser(token). require-auth uses anon key; api-auth uses service role. Inconsistent. |
+| B389 | src/lib/memory-recall.ts | P3 | Pulls 200 recent rows on every analyze call — no Supabase index hint | Lines 28-44: 200-row scan per analyze. With 600 analyze/hr/user (B045), 120k rows/hr per user. Supabase egress + DB load. |
+| B390 | src/lib/memory-extract.ts | P2 | "DO NOT extract sensitive content like passwords, SSN" relies on LLM compliance — not enforced | Per docstring. PII could slip through if LLM doesn't follow prompt. No post-extract filter. |
+| B391 | src/lib/memory-extract.ts | P3 | Same `process.env.GOOGLE_API_KEY` URL leakage pattern as B383 | Inherits gemini.ts pattern. |
+| B392 | engine/app/main.py | P2 | _validate_env_vars only logs warning, doesn't block startup | Lines 149-155, 181-182: missing required env vars print warning, engine continues. Silent degradation. |
+| B393 | engine/app/main.py | P3 | _check_database_tables only verifies 3 tables; many more exist | Line 159: REQUIRED_TABLES list incomplete (per B118). Inspection lies about actual DB readiness. |
+| B394 | engine/app/main.py | P3 | _bearer_user uses `parts[0].lower() != "bearer"` — case-insensitive but no whitespace tolerance | Lines 417-420: `parts = authorization.split(None, 1)`. Tab character header value rejected as wrong scheme. |
+| B395 | src/app/api/internal-gate/route.ts | P2 | safeEqual returns false on mismatched length — leaks length via timing | Lines 36-40: same B004 timing pattern. |
+| B396 | src/app/api/engine-transfer-gate/route.ts | P2 | safeEqual returns false on mismatched length — same leak | Lines 19-22: identical issue. |
+| B397 | engine/app/proactive/engine.py | P3 | SPEAKER_ID_DROP_CONFIDENCE = 0.6 hardcoded — too aggressive / too soft? not configurable | Line 50. Silent dropping at 0.6; no env override. |
 
