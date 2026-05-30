@@ -204,7 +204,7 @@ stop_existing_engine
 stop_existing_bridge
 install_native_bridge
 
-echo "Anticipy: downloading the real app (~2.7 GB; includes the local speech model)..."
+echo "Anticipy: downloading the real app (~2.3 GB; includes the local speech model)..."
 curl -fL --retry 3 -o "$DMG" "$URL"
 
 # Sanity: a real disk image, not a truncated/parked file.

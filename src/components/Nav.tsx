@@ -60,12 +60,17 @@ export function Nav() {
     >
       <div className="max-w-container mx-auto flex items-center justify-between h-[72px] px-6 md:px-12">
         <a
-          href="#"
+          href="/"
           className="font-serif text-[22px] transition-colors duration-300"
           style={{ color: isLight ? "var(--text-on-light)" : "var(--text-on-dark)" }}
           onClick={(e) => {
-            e.preventDefault();
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            // B012: stay on a real route (/ instead of #). The click still
+            // smooth-scrolls when we are already on the homepage; on any
+            // other route the default browser navigation to "/" wins.
+            if (typeof window !== "undefined" && window.location.pathname === "/") {
+              e.preventDefault();
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
           }}
         >
           Anticipy
