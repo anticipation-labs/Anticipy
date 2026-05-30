@@ -502,7 +502,131 @@ def _twilio_credentials_ready() -> bool:
     )
 
 
-def send_sms_sync(to_number: str, body: str) -> dict[str, Any]:
+# ----------------------------------------------------------------------
+# Website-side Twilio broker
+#
+# Strangers downloading the Mac DMG do not own a Twilio account, so the
+# direct twilio_sms path only works for developers who exported
+# TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER locally.
+# When ANTICIPY_TWILIO_BROKER=1 the engine instead POSTs to
+# /api/twilio/relay on the anticipy.ai website, which holds the shared
+# Anticipy creds server-side and sends from the shared Anticipy number.
+# ----------------------------------------------------------------------
+def _twilio_broker_enabled() -> bool:
+    return (os.environ.get("ANTICIPY_TWILIO_BROKER") or "").strip() in {
+        "1", "true", "yes", "on",
+    }
+
+
+def _twilio_broker_url() -> str:
+    base = (
+        os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+        or "https://www.anticipy.ai"
+    ).rstrip("/")
+    return f"{base}/api/twilio/relay"
+
+
+def _broker_supabase_token() -> str:
+    """Return the Supabase access token the broker uses to identify the
+    user. Prefers the in-process env var the /api/provision route sets
+    (ANTICIPY_CLOUD_AUTH_TOKEN) because that is the live engine state.
+    Falls back to ~/.anticipy/session.json for forward-compat with any
+    future on-disk session that carries the token.
+    """
+    env_token = (os.environ.get("ANTICIPY_CLOUD_AUTH_TOKEN") or "").strip()
+    if env_token:
+        return env_token
+    try:
+        override = (os.environ.get("ANTICIPY_SESSION_FILE") or "").strip()
+        if override:
+            path = Path(override).expanduser()
+        else:
+            path = Path.home() / ".anticipy" / "session.json"
+        if not path.exists():
+            return ""
+        data = json.loads(path.read_text(encoding="utf-8") or "{}")
+        if not isinstance(data, dict):
+            return ""
+        for key in ("access_token", "auth_token", "supabase_access_token",
+                    "token"):
+            val = data.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _send_via_broker(body: str, recipient_e164: str,
+                     kind: str) -> dict[str, Any]:
+    """POST one SMS through the website-side Twilio broker.
+
+    Returns {"ok": True, "sid": "...", "mock": False, "source":
+    "broker"} on a successful relay, or {"ok": False, "error": "...",
+    "source": "broker", "status": <http>} on failure. The caller is
+    responsible for falling back to the direct Twilio path on auth
+    failures (401 / 403) so a developer with their own creds is not
+    blocked when their Supabase session has expired.
+    """
+    recipient = (recipient_e164 or "").strip()
+    if not recipient:
+        return {"ok": False, "error": "no destination phone",
+                "source": "broker"}
+    text = body or ""
+    if not text:
+        return {"ok": False, "error": "empty body", "source": "broker"}
+    token = _broker_supabase_token()
+    if not token:
+        return {"ok": False, "error": "missing_session",
+                "source": "broker"}
+    url = _twilio_broker_url()
+    try:
+        import httpx as _httpx
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"httpx_import_failed: "
+                         f"{type(exc).__name__}: {exc}",
+                "source": "broker"}
+    try:
+        with _httpx.Client(timeout=15.0) as client:
+            resp = client.post(
+                url,
+                json={"to": recipient, "body": text, "kind": kind},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except Exception as exc:
+        return {"ok": False,
+                "error": f"broker_transport: "
+                         f"{type(exc).__name__}: {exc}",
+                "source": "broker"}
+    status = int(getattr(resp, "status_code", 0) or 0)
+    try:
+        payload = resp.json()
+        if not isinstance(payload, dict):
+            payload = {"raw": payload}
+    except Exception:
+        payload = {"raw": (getattr(resp, "text", "") or "")[:600]}
+    if status == 200 and payload.get("ok"):
+        return {
+            "ok": True,
+            "sid": str(payload.get("sid") or ""),
+            "mock": False,
+            "source": "broker",
+            "status": status,
+        }
+    return {
+        "ok": False,
+        "error": str(payload.get("error") or f"broker_status_{status}"),
+        "source": "broker",
+        "status": status,
+    }
+
+
+def send_sms_sync(to_number: str, body: str,
+                  kind: str = "preconfirm") -> dict[str, Any]:
     """Synchronously send an SMS via Twilio (used from the dispatcher
     which is not in an asyncio context).
 
@@ -513,10 +637,48 @@ def send_sms_sync(to_number: str, body: str) -> dict[str, Any]:
     TWILIO_TEST_TO_REAL_NUMBER!=1 we return ok=True with mock=True so
     callers can keep moving (the persisted task record still captures
     everything; nothing is actually sent over the wire).
+
+    When ANTICIPY_TWILIO_BROKER=1 we prefer the website-side broker so
+    strangers without their own Twilio creds still get real SMS. If the
+    broker responds 401 / 403 (auth failed) we fall through to the
+    direct-Twilio path so devs running with their own creds keep
+    working even when their Supabase session has expired.
     """
     if not to_number:
         return {"ok": False, "twilio_sid": "", "twilio_status": 0,
                 "mock": False, "error": "no destination phone"}
+    kind = (kind or "preconfirm").strip() or "preconfirm"
+    if _twilio_broker_enabled():
+        broker_result = _send_via_broker(body, to_number, kind)
+        broker_status = int(broker_result.get("status") or 0)
+        if broker_result.get("ok"):
+            return {
+                "ok": True,
+                "twilio_sid": str(broker_result.get("sid") or ""),
+                "twilio_status": broker_status or 200,
+                "mock": False,
+                "error": None,
+                "source": "broker",
+            }
+        if broker_status not in (401, 403):
+            # Hard broker failure (transport, 400, 429, 500, missing
+            # session, etc). Surface it; do NOT silently degrade to the
+            # direct path because the stranger almost certainly does
+            # not have local Twilio creds and would otherwise see a
+            # confusing twilio_credentials_missing mock.
+            return {
+                "ok": False,
+                "twilio_sid": "",
+                "twilio_status": broker_status,
+                "mock": False,
+                "error": str(broker_result.get("error")
+                             or "broker_unknown_error"),
+                "source": "broker",
+            }
+        logger.info(
+            "sms_broker_auth_failed status=%s falling back to direct",
+            broker_status,
+        )
     mock_env = (os.environ.get("TWILIO_MOCK") or "").strip().lower()
     twilio_mock = mock_env in {"1", "true", "yes", "on"}
     real_opt_in = (
@@ -1155,6 +1317,7 @@ def expire_pending(now_ts: Optional[float] = None,
                     rec.to_number,
                     "Anticipy: no reply, saved as draft. Open the "
                     "Anticipy popover to review.",
+                    kind="followup",
                 )
             expired_rows.append(rec.to_dict())
     return expired_rows
