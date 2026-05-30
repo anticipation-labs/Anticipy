@@ -116,7 +116,13 @@ export async function POST(req: Request) {
   const attempt =
     Number.isFinite(attemptParam) && attemptParam >= 1 ? attemptParam : 1;
 
-  const formData = await req.formData();
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    // Malformed body. Treat the same as an unsigned request.
+    return new Response("Forbidden", { status: 403 });
+  }
   const params = formDataToParams(formData);
   const signature = req.headers.get("x-twilio-signature");
   if (!verifyTwilioRequest(signature, reconstructWebhookUrl(req), params)) {
