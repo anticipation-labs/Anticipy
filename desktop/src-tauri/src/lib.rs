@@ -41,9 +41,13 @@ use tauri::{
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_positioner::{Position, WindowExt as PositionerWindowExt};
 
-const ENGINE_DIR: &str = "/Users/omarebrahim/Developer/Anticipy-DEV-FINAL/engine";
-const VENV_PY: &str =
-    "/Users/omarebrahim/Developer/Anticipy-DEV-FINAL/engine/.venv/bin/python";
+// Note: the prior dev-mode ENGINE_DIR + VENV_PY constants hardcoded
+// Omar's local checkout path and were used only by the legacy
+// run_task command + index.html UI which the polished popover does
+// not load. Per CLAUDE.md "Hardcoded Omar-specific paths in shipped
+// code are scale bugs to fix." Removed in cycle 122; production
+// stranger users use the packaged sidecar binary via /api/* endpoints
+// through popover.html.
 
 const POPOVER_LABEL: &str = "popover";
 const POPOVER_WIDTH: f64 = 480.0;
@@ -153,56 +157,12 @@ struct PastTask {
     updated_at: String,
 }
 
-#[tauri::command]
-fn run_task(window: Window, task: String) {
-    std::thread::spawn(move || {
-        let mut child = match Command::new(VENV_PY)
-            .args([
-                "-m",
-                "app.action_engine.dsv4_skill_runner",
-                "--task",
-                &task,
-                "--stream",
-            ])
-            .current_dir(ENGINE_DIR)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(c) => c,
-            Err(e) => {
-                let _ = window.emit(
-                    "agent-event",
-                    serde_json::json!({"kind":"done","status":"ERROR",
-                        "error": format!("spawn failed: {e}")}),
-                );
-                return;
-            }
-        };
-
-        if let Some(out) = child.stdout.take() {
-            let reader = BufReader::new(out);
-            for line in reader.lines().map_while(Result::ok) {
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                match serde_json::from_str::<serde_json::Value>(line) {
-                    Ok(ev) => {
-                        let _ = window.emit("agent-event", ev);
-                    }
-                    Err(_) => {
-                        let _ = window.emit(
-                            "agent-event",
-                            serde_json::json!({"kind":"log","line":line}),
-                        );
-                    }
-                }
-            }
-        }
-        let _ = child.wait();
-    });
-}
+// Legacy run_task Tauri command removed in cycle 122. It spawned a
+// dev-only Python process at Omar's hardcoded path and was only
+// reachable from the unused index.html UI. The polished popover.html
+// drives the engine sidecar over HTTP via /api/listen/inject and
+// /api/act, which works for any user with the packaged binary
+// installed. Per the scale-by-distribution directive in CLAUDE.md.
 
 #[tauri::command]
 fn hide_popover(app: AppHandle) {
@@ -1561,7 +1521,6 @@ pub fn run() {
     builder
         .manage(MicPermissionStore::default())
         .invoke_handler(tauri::generate_handler![
-            run_task,
             hide_popover,
             quit_app,
             dismiss_auth_error,
