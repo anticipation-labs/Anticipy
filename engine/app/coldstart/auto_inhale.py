@@ -687,6 +687,23 @@ def start_inhale(account_id: str = DEFAULT_ACCOUNT_ID,
     needs one cold start).
     """
     global _THREAD
+    # ANTICIPY_QUIET=1 disables every proactive tab-open path. The
+    # cold-start inhale opens 2-4 Chrome tabs (Gmail inbox, Gmail
+    # sent, Calendar agenda, optionally Drive recents). Skip the
+    # thread spawn entirely and return an idle snapshot. Audit:
+    # planning/00-handoff/TAB_OPEN_AUDIT.md.
+    try:
+        from app.config import _quiet_mode_enabled
+    except Exception:
+        _quiet_mode_enabled = lambda: False  # noqa: E731
+    if _quiet_mode_enabled():
+        _logger.info("quiet_mode_skipped path=coldstart_auto_inhale")
+        print(
+            "[anticipy.coldstart] quiet_mode_skipped "
+            "path=coldstart_auto_inhale",
+            flush=True,
+        )
+        return run_state() | {"quiet_mode_skipped": True}
     with _STATE_LOCK:
         if _STATE.state == "running":
             return _STATE.to_dict() | {"already_running": True}
