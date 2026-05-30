@@ -1,0 +1,1107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=480, initial-scale=1.0" />
+    <title>Anticipy onboarding wizard test</title>
+    <style>
+      /*
+       * PHASE 5 wizard test page.
+       *
+       * Standalone HTML that hosts a snapshot of the wizard markup +
+       * controller from popover.html. Mocks Tauri commands and
+       * engine HTTP so it runs purely in the browser.
+       *
+       * Open in any browser:
+       *   open file:///.../desktop/tests/test_onboarding_wizard.html
+       *
+       * Console will log "PASS: all wizard steps render" when every
+       * assertion succeeds; otherwise it logs the first failure.
+       */
+      :root {
+        --gold: #C8A97E;
+        --ok: #34C759;
+        --warn: #FF9F0A;
+        --err: #FF3B30;
+        --bg: #0C0C0C;
+        --bg-elevated: #161616;
+        --text: #F5F0EB;
+        --text-dim: #9A9388;
+        --text-faint: #6B635B;
+        --hairline: #242424;
+        --hairline-strong: #2E2E2E;
+        --tint-soft: rgba(200, 169, 126, 0.08);
+        --tint-strong: rgba(200, 169, 126, 0.22);
+        --btn-bg: #F5F0EB;
+        --btn-text: #0C0C0C;
+        --ghost-bg: transparent;
+        --ghost-text: #F5F0EB;
+        --ghost-border: #2E2E2E;
+        --ok-soft: rgba(52, 199, 89, 0.10);
+        --ok-border: rgba(52, 199, 89, 0.32);
+        --warn-soft: rgba(255, 159, 10, 0.10);
+        --warn-border: rgba(255, 159, 10, 0.32);
+        --err-soft: rgba(255, 59, 48, 0.10);
+        --err-border: rgba(255, 59, 48, 0.34);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                     "SF Pro Display", "Helvetica Neue", sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      body { display: flex; gap: 16px; padding: 16px; }
+      .popover-frame {
+        width: 480px;
+        height: 600px;
+        background: var(--bg);
+        border-radius: 14px;
+        padding: 16px 20px 18px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .brand {
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .status-pill {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--text-dim);
+      }
+      .body { flex: 1; overflow-y: auto; }
+      .test-log {
+        flex: 1;
+        background: #0a0a0a;
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        padding: 14px;
+        font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+        font-size: 12px;
+        color: var(--text);
+        overflow-y: auto;
+        max-width: 600px;
+      }
+      .test-log h2 {
+        font-family: -apple-system, sans-serif;
+        font-size: 14px;
+        margin-bottom: 10px;
+        color: var(--gold);
+      }
+      .test-log .pass { color: var(--ok); }
+      .test-log .fail { color: var(--err); }
+      .test-log .info { color: var(--text-dim); }
+
+      /* PHASE 5 onboarding wizard styles (copied verbatim from
+         popover.html so this test runs without loading external CSS). */
+      .hidden { display: none !important; }
+      #onboarding-wizard {
+        padding: 0 0 2px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        min-height: 100%;
+      }
+      .wizard-progress { display: flex; align-items: center; gap: 8px; }
+      .wizard-progress .pip {
+        flex: 1;
+        height: 3px;
+        border-radius: 2px;
+        background: var(--hairline);
+        transition: background-color 220ms;
+      }
+      .wizard-progress .pip.active { background: var(--gold); }
+      .wizard-progress .pip.done { background: var(--ok); }
+      .wizard-step-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.10em;
+        line-height: 1;
+        margin-bottom: 8px;
+      }
+      .wizard-step {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .wizard-step h1 {
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.28;
+      }
+      .wizard-step p.lede {
+        font-size: 13.5px;
+        font-weight: 400;
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
+      .wizard-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .wizard-card .title {
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+      .wizard-card .sub {
+        font-size: 12.5px;
+        color: var(--text-dim);
+      }
+      .wizard-perm-list { display: flex; flex-direction: column; gap: 8px; }
+      .wizard-perm {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+      }
+      .wizard-perm.active {
+        border-color: var(--tint-strong);
+        background: var(--tint-soft);
+      }
+      .wizard-perm.done {
+        border-color: var(--ok-border);
+        background: var(--ok-soft);
+      }
+      .wizard-perm .perm-check {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 1.5px solid var(--text-faint);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        color: transparent;
+        flex-shrink: 0;
+      }
+      .wizard-perm.done .perm-check {
+        border-color: var(--ok);
+        background: var(--ok);
+        color: var(--bg);
+      }
+      .wizard-perm.active .perm-check { border-color: var(--gold); }
+      .wizard-perm .perm-body { flex: 1; }
+      .wizard-perm .perm-name { font-size: 12.5px; font-weight: 600; }
+      .wizard-perm .perm-why { font-size: 11.5px; color: var(--text-dim); }
+      .wizard-perm .perm-state { font-size: 11px; color: var(--text-faint); }
+      .wizard-perm.done .perm-state { color: var(--ok); }
+      .wizard-perm.active .perm-state { color: var(--gold); }
+      .wizard-explainer {
+        background: var(--tint-soft);
+        border: 1px solid var(--tint-strong);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 12.5px;
+        color: var(--text);
+        line-height: 1.5;
+      }
+      .wizard-explainer .title {
+        font-size: 12.5px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .wizard-guide-steps { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+      .wizard-guide-step {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 8px 10px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        border-radius: 8px;
+      }
+      .wizard-guide-step .num {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--tint-strong);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .wizard-guide-step .body { flex: 1; font-size: 12.5px; }
+      .wizard-guide-step .body .hint { font-size: 11.5px; color: var(--text-dim); }
+      .wizard-path-pill {
+        display: inline-block;
+        font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--gold);
+        background: var(--bg);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 6px;
+        padding: 4px 8px;
+        margin-top: 4px;
+        word-break: break-all;
+      }
+      .wizard-field { display: flex; flex-direction: column; gap: 6px; }
+      .wizard-field label {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--text-dim);
+      }
+      .wizard-field input {
+        width: 100%;
+        padding: 11px 13px;
+        border-radius: 9px;
+        border: 1px solid var(--hairline-strong);
+        background: var(--bg-elevated);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13.5px;
+        outline: none;
+      }
+      .wizard-field input:focus {
+        border-color: var(--gold);
+        background: var(--bg);
+      }
+      .wizard-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 6px;
+      }
+      .wizard-btn {
+        padding: 10px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        background: var(--btn-bg);
+        color: var(--btn-text);
+        border: 1px solid var(--btn-bg);
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      .wizard-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+      .wizard-btn.ghost {
+        background: var(--ghost-bg);
+        color: var(--ghost-text);
+        border: 1px solid var(--ghost-border);
+      }
+      .wizard-btn.gold {
+        background: var(--tint-strong);
+        color: var(--text);
+        border: 1px solid var(--gold);
+      }
+      .wizard-skip {
+        margin-top: auto;
+        padding-top: 14px;
+        border-top: 1px solid var(--hairline);
+        text-align: center;
+      }
+      .wizard-skip button {
+        background: transparent;
+        border: none;
+        color: var(--text-faint);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 4px 8px;
+      }
+      .wizard-scrape-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+      }
+      .wizard-scrape-line .label { flex: 1; }
+      .wizard-scrape-line .count { font-size: 11.5px; color: var(--text-dim); }
+      .wizard-scrape-line.active .label { color: var(--gold); }
+      .wizard-scrape-line.done .count { color: var(--ok); }
+      .wizard-scrape-line .spark {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-faint);
+      }
+      .wizard-scrape-line.active .spark { background: var(--gold); }
+      .wizard-scrape-line.done .spark { background: var(--ok); }
+      .wizard-error {
+        background: var(--err-soft);
+        border: 1px solid var(--err-border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 12.5px;
+        color: var(--err);
+      }
+      .wizard-sms-preview {
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 14px;
+        padding: 14px;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .wizard-sms-preview::before {
+        content: "From Anticipy via SMS";
+        display: block;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.10em;
+        margin-bottom: 8px;
+      }
+
+      /* Stand-in "main" view used to verify the skip path. */
+      #welcome {
+        padding: 16px;
+        background: var(--bg-elevated);
+        border-radius: 10px;
+        border: 1px solid var(--hairline);
+      }
+      #welcome h1 { font-size: 18px; margin-bottom: 6px; }
+      #welcome p { color: var(--text-dim); }
+    </style>
+  </head>
+  <body>
+    <div class="popover-frame">
+      <header>
+        <span class="brand">Anticipy</span>
+        <span class="status-pill">Getting ready</span>
+      </header>
+
+      <div class="body">
+        <!-- Wizard view (mirrors popover.html #onboarding-wizard). -->
+        <section id="onboarding-wizard">
+          <div>
+            <div class="wizard-step-label" id="wizard-step-label">Step 1 of 5</div>
+            <div class="wizard-progress" id="wizard-progress">
+              <span class="pip active" data-pip="1"></span>
+              <span class="pip" data-pip="2"></span>
+              <span class="pip" data-pip="3"></span>
+              <span class="pip" data-pip="4"></span>
+              <span class="pip" data-pip="5"></span>
+            </div>
+          </div>
+
+          <div class="wizard-step" id="wizard-step-1" data-step="1">
+            <h1>A few quick permissions.</h1>
+            <p class="lede">Anticipy works on your Mac. These three macOS prompts let it hear you, see what is on screen when you ask, and tap you on the shoulder when something is ready.</p>
+            <div class="wizard-perm-list">
+              <div class="wizard-perm active" data-perm="microphone">
+                <span class="perm-check">OK</span>
+                <div class="perm-body">
+                  <div class="perm-name">Microphone</div>
+                  <div class="perm-why">Lets Anticipy hear what people ask you to do. Audio stays on this Mac. Never uploaded.</div>
+                </div>
+                <span class="perm-state">Needed</span>
+              </div>
+              <div class="wizard-perm" data-perm="accessibility">
+                <span class="perm-check">OK</span>
+                <div class="perm-body">
+                  <div class="perm-name">Accessibility</div>
+                  <div class="perm-why">Lets Anticipy press a button or paste a line into a Mac app when you ask it to.</div>
+                </div>
+                <span class="perm-state">Needed</span>
+              </div>
+              <div class="wizard-perm" data-perm="notifications">
+                <span class="perm-check">OK</span>
+                <div class="perm-body">
+                  <div class="perm-name">Notifications</div>
+                  <div class="perm-why">Lets Anticipy ping you when something needs a yes or no.</div>
+                </div>
+                <span class="perm-state">Needed</span>
+              </div>
+            </div>
+            <div class="wizard-explainer">
+              <div class="title">One macOS pop-up at a time</div>
+              When you click Allow Microphone below, macOS will pop up its own Allow or Deny window. Click Allow there, then we move on to the next one. We do not collect anything; the prompts come straight from macOS.
+            </div>
+            <div class="wizard-error hidden" id="wizard-perm-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-perm-action">Allow microphone</button>
+              <button class="wizard-btn ghost" id="wizard-perm-skip">Skip this one</button>
+            </div>
+          </div>
+
+          <div class="wizard-step hidden" id="wizard-step-2" data-step="2">
+            <h1>Plug Anticipy into Chrome.</h1>
+            <p class="lede">Anticipy uses your own Chrome so it can act on the websites you are already signed into. This is the only part that needs a few clicks.</p>
+            <div class="wizard-explainer">
+              <div class="title">We copied the folder path for you</div>
+              When you hit Load unpacked in Chrome, paste right away. The path is already on your clipboard.
+              <span class="wizard-path-pill" id="wizard-extension-path">/Users/omarebrahim/.anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME</span>
+            </div>
+            <ol class="wizard-guide-steps">
+              <li class="wizard-guide-step">
+                <span class="num">1</span>
+                <div class="body">
+                  Open chrome://extensions in Chrome.
+                  <div class="hint">The big Open Chrome button below does this for you.</div>
+                </div>
+              </li>
+              <li class="wizard-guide-step">
+                <span class="num">2</span>
+                <div class="body">
+                  Flip on Developer mode in the top right.
+                  <div class="hint">It is a small toggle next to the search box.</div>
+                </div>
+              </li>
+              <li class="wizard-guide-step">
+                <span class="num">3</span>
+                <div class="body">
+                  Click Load unpacked.
+                  <div class="hint">A folder picker opens.</div>
+                </div>
+              </li>
+              <li class="wizard-guide-step">
+                <span class="num">4</span>
+                <div class="body">
+                  Paste the path we copied for you, then hit Select.
+                  <div class="hint">Press Cmd+Shift+G in the folder picker, paste, Enter.</div>
+                </div>
+              </li>
+            </ol>
+            <div class="wizard-error hidden" id="wizard-ext-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-ext-open">Open chrome://extensions</button>
+              <button class="wizard-btn gold" id="wizard-ext-loaded">I loaded it</button>
+            </div>
+            <div class="wizard-actions">
+              <button class="wizard-btn ghost" id="wizard-ext-copy">Copy path again</button>
+            </div>
+          </div>
+
+          <div class="wizard-step hidden" id="wizard-step-3" data-step="3">
+            <h1>Two quick things.</h1>
+            <p class="lede">Anticipy will use these to introduce you when it acts on your behalf and to keep things relevant to where you are.</p>
+            <div class="wizard-field">
+              <label for="wizard-name">Your name</label>
+              <input id="wizard-name" type="text" autocomplete="name" placeholder="Omar Ebrahim" />
+            </div>
+            <div class="wizard-field">
+              <label for="wizard-location">Where you are</label>
+              <input id="wizard-location" type="text" autocomplete="address-level2" placeholder="Vancouver, BC" />
+            </div>
+            <div class="wizard-error hidden" id="wizard-profile-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-profile-submit" disabled>Save and continue</button>
+            </div>
+          </div>
+
+          <div class="wizard-step hidden" id="wizard-step-4" data-step="4">
+            <h1>Give me two minutes.</h1>
+            <p class="lede">Anticipy will read your Gmail, Calendar, and contacts to learn what is going on in your life. It does this once, locally, then forgets the raw data and keeps only what matters.</p>
+            <div class="wizard-card">
+              <div class="title">What Anticipy is doing</div>
+              <div class="wizard-scrape-line" data-source="status">
+                <span class="spark"></span>
+                <span class="label" id="wizard-scrape-status">Ready when you are</span>
+                <span class="count" id="wizard-scrape-elapsed">0s</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="gmail">
+                <span class="spark"></span>
+                <span class="label">Gmail</span>
+                <span class="count" data-count-for="gmail">Waiting</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="calendar">
+                <span class="spark"></span>
+                <span class="label">Calendar</span>
+                <span class="count" data-count-for="calendar">Waiting</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="contacts">
+                <span class="spark"></span>
+                <span class="label">Contacts</span>
+                <span class="count" data-count-for="contacts">Waiting</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="linkedin">
+                <span class="spark"></span>
+                <span class="label">LinkedIn</span>
+                <span class="count" data-count-for="linkedin">Waiting</span>
+              </div>
+            </div>
+            <div class="wizard-error hidden" id="wizard-scrape-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-scrape-start">Give me 2 minutes</button>
+              <button class="wizard-btn ghost hidden" id="wizard-scrape-continue">Move on</button>
+            </div>
+          </div>
+
+          <div class="wizard-step hidden" id="wizard-step-5" data-step="5">
+            <h1>Last thing.</h1>
+            <p class="lede">Anticipy will text you to clarify a couple of things, then it is yours. Here is what the message looks like.</p>
+            <div class="wizard-sms-preview" id="wizard-sms-preview">
+              Hey, Anticipy here. I read through what is going on this week and I have two quick questions so I get it right. Reply YES to chat now, or LATER and I will hold off.
+            </div>
+            <div class="wizard-error hidden" id="wizard-sms-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-sms-send">Send the text</button>
+              <button class="wizard-btn ghost" id="wizard-sms-skip">Not now</button>
+            </div>
+          </div>
+
+          <div class="wizard-skip">
+            <button id="wizard-skip-all">Skip onboarding, just listen</button>
+          </div>
+        </section>
+
+        <!-- Stand-in "main listen" view to verify Skip behavior. -->
+        <section id="welcome" class="hidden">
+          <h1>You are all set.</h1>
+          <p>Anticipy is listening. Close this and get on with your day.</p>
+        </section>
+      </div>
+    </div>
+
+    <div class="test-log" id="log">
+      <h2>Anticipy wizard test suite</h2>
+    </div>
+
+    <script>
+      /* ============================================================
+         MOCK runtime.
+         ============================================================
+         Stand-ins for Tauri invoke + onEvent + fetch so the wizard
+         controller runs without a real engine or Rust backend. Every
+         mock records the call so assertions can verify behavior.
+       */
+      const calls = [];
+      window.__TAURI__ = {
+        core: {
+          invoke: (cmd, args) => {
+            calls.push({ kind: "invoke", cmd: cmd, args: args || {} });
+            if (cmd === "open_chrome_extensions_page" ||
+                cmd === "copy_extension_path_to_clipboard") {
+              return Promise.resolve({
+                ok: true,
+                copied: true,
+                path: "/Users/omarebrahim/.anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME",
+              });
+            }
+            return Promise.resolve(null);
+          },
+        },
+        event: {
+          listen: (name, handler) => {
+            calls.push({ kind: "listen", name: name });
+            return Promise.resolve(() => {});
+          },
+        },
+      };
+      window._scrapeReply = {
+        ok: true,
+        running: false,
+        current_message: "Reading your Gmail",
+        sources: {
+          gmail: { state: "done", count: 47 },
+          calendar: { state: "done", count: 14 },
+          contacts: { state: "done", count: 91 },
+          linkedin: { state: "active", count: 0 },
+        },
+      };
+      const _origFetch = window.fetch.bind(window);
+      window.fetch = async (url, opts) => {
+        calls.push({ kind: "fetch", url: String(url), opts: opts || {} });
+        const sUrl = String(url);
+        if (sUrl.includes("/api/extension/probe")) {
+          return new Response(JSON.stringify({ ok: true, connected: true }),
+                              { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (sUrl.includes("/api/coldstart/start")) {
+          return new Response(JSON.stringify({ ok: true, started: true }),
+                              { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (sUrl.includes("/api/coldstart/status")) {
+          return new Response(JSON.stringify(window._scrapeReply),
+                              { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (sUrl.includes("/api/state")) {
+          return new Response(JSON.stringify({ ok: true, onboarded: false }),
+                              { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (sUrl.includes("/api/onboarding/clarify_sms")) {
+          return new Response(JSON.stringify({ ok: true, queued: true }),
+                              { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        // Default: 404 to mimic engine offline for any other route.
+        return new Response("{}", { status: 404 });
+      };
+
+      /* ============================================================
+         WIZARD controller (snapshot from popover.html).
+         ============================================================
+         Keep this identical to the version in popover.html. The test
+         drives the same code path; if you change the controller you
+         must update both files.
+       */
+      const $ = (id) => document.getElementById(id);
+      const tauriCore  = (window.__TAURI__ && window.__TAURI__.core)  || null;
+      const tauriEvent = (window.__TAURI__ && window.__TAURI__.event) || null;
+      const invoke = (cmd, args = {}) => {
+        if (tauriCore && tauriCore.invoke) return tauriCore.invoke(cmd, args);
+        return Promise.resolve(null);
+      };
+      function onEvent(name, handler) {
+        if (tauriEvent && tauriEvent.listen) {
+          tauriEvent.listen(name, (e) => handler(e && e.payload));
+        }
+      }
+      let lastView = null;
+      function ensureView(name) {
+        if (lastView === name) return;
+        lastView = name;
+        const wz = $("onboarding-wizard");
+        const we = $("welcome");
+        if (wz) wz.classList.toggle("hidden", name !== "onboarding-wizard");
+        if (we) we.classList.toggle("hidden", name !== "welcome");
+      }
+      function refresh() { /* no-op in test */ }
+      function checkMicPermission() { /* no-op in test */ }
+
+      const WIZARD = {
+        currentStep: 1,
+        totalSteps: 5,
+        perms: {
+          microphone: { done: false, request: "request_microphone_permission" },
+          accessibility: { done: false, request: "request_accessibility_permission" },
+          notifications: { done: false, request: "request_notifications_permission" },
+        },
+        permOrder: ["microphone", "accessibility", "notifications"],
+        permIndex: 0,
+        scrapePollTimer: null,
+        scrapeStartedAt: 0,
+        scrapeRunning: false,
+        forced: false,
+        lastEngineState: null,
+      };
+
+      function wizardSetStep(step) {
+        step = Math.max(1, Math.min(WIZARD.totalSteps, step));
+        WIZARD.currentStep = step;
+        for (let i = 1; i <= WIZARD.totalSteps; i += 1) {
+          const el = $("wizard-step-" + i);
+          if (el) el.classList.toggle("hidden", i !== step);
+        }
+        const label = $("wizard-step-label");
+        if (label) label.textContent = "Step " + step + " of " + WIZARD.totalSteps;
+        const pips = document.querySelectorAll("#wizard-progress .pip");
+        pips.forEach((p) => {
+          const idx = Number(p.dataset.pip || 0);
+          p.classList.remove("active", "done");
+          if (idx < step) p.classList.add("done");
+          else if (idx === step) p.classList.add("active");
+        });
+      }
+
+      function wizardUpdatePermRows() {
+        const next = WIZARD.permOrder[WIZARD.permIndex];
+        WIZARD.permOrder.forEach((name) => {
+          const row = document.querySelector(
+            '.wizard-perm[data-perm="' + name + '"]'
+          );
+          if (!row) return;
+          row.classList.remove("active", "done");
+          const stateEl = row.querySelector(".perm-state");
+          if (WIZARD.perms[name].done) {
+            row.classList.add("done");
+            if (stateEl) stateEl.textContent = "Granted";
+          } else if (name === next) {
+            row.classList.add("active");
+            if (stateEl) stateEl.textContent = "Up next";
+          } else if (stateEl) {
+            stateEl.textContent = "Needed";
+          }
+        });
+        const actionBtn = $("wizard-perm-action");
+        if (actionBtn) {
+          if (!next) {
+            actionBtn.textContent = "All set, continue";
+          } else {
+            const label = next.charAt(0).toUpperCase() + next.slice(1);
+            actionBtn.textContent = "Allow " + label.toLowerCase();
+          }
+        }
+      }
+
+      async function wizardRequestNextPerm() {
+        const next = WIZARD.permOrder[WIZARD.permIndex];
+        if (!next) { wizardSetStep(2); return; }
+        const cmd = WIZARD.perms[next].request;
+        try {
+          await invoke(cmd);
+          WIZARD.perms[next].done = true;
+          WIZARD.permIndex += 1;
+          wizardUpdatePermRows();
+        } catch (e) {
+          // ignored in test
+        }
+      }
+
+      function wizardSkipCurrentPerm() {
+        const next = WIZARD.permOrder[WIZARD.permIndex];
+        if (!next) return;
+        WIZARD.permIndex += 1;
+        wizardUpdatePermRows();
+        if (WIZARD.permIndex >= WIZARD.permOrder.length) {
+          wizardSetStep(2);
+        }
+      }
+
+      async function wizardOpenExtensionsPage() {
+        try {
+          const res = await invoke("open_chrome_extensions_page");
+          if (res && res.path) {
+            const pathEl = $("wizard-extension-path");
+            if (pathEl) pathEl.textContent = res.path;
+          }
+        } catch (e) { /* ignored */ }
+      }
+
+      async function wizardCopyExtensionPath() {
+        try { await invoke("copy_extension_path_to_clipboard"); } catch (e) { /* ignored */ }
+      }
+
+      async function wizardProbeExtension() {
+        let connected = false;
+        try {
+          const r = await fetch("http://127.0.0.1:8731/api/extension/probe");
+          if (r.ok) {
+            const data = await r.json();
+            connected = !!(data && (data.connected === true || data.ok === true));
+          }
+        } catch (_) { connected = true; }
+        if (connected) wizardSetStep(3);
+      }
+
+      function wizardValidateProfileFields() {
+        const name = ($("wizard-name") && $("wizard-name").value || "").trim();
+        const loc  = ($("wizard-location") && $("wizard-location").value || "").trim();
+        const submit = $("wizard-profile-submit");
+        if (submit) submit.disabled = !(name && loc);
+      }
+
+      async function wizardSubmitProfile() {
+        const name = ($("wizard-name") && $("wizard-name").value || "").trim();
+        const loc  = ($("wizard-location") && $("wizard-location").value || "").trim();
+        if (!name || !loc) return;
+        try {
+          await invoke("submit_basic_profile", { name: name, location: loc });
+        } catch (e) { /* ignored */ }
+        wizardSetStep(4);
+      }
+
+      function wizardRenderScrapeLine(source, label, count, state) {
+        const line = document.querySelector(
+          '.wizard-scrape-line[data-source="' + source + '"]'
+        );
+        if (!line) return;
+        line.classList.remove("active", "done");
+        if (state === "active") line.classList.add("active");
+        if (state === "done")   line.classList.add("done");
+        const countEl = line.querySelector('[data-count-for="' + source + '"]');
+        if (countEl && count !== undefined && count !== null) {
+          countEl.textContent = String(count);
+        }
+      }
+
+      async function wizardPollScrapeStatus() {
+        try {
+          const r = await fetch("http://127.0.0.1:8731/api/coldstart/status");
+          if (!r.ok) throw new Error("status " + r.status);
+          const data = await r.json();
+          const status = $("wizard-scrape-status");
+          if (status) {
+            status.textContent = (data && data.current_message) ||
+                                 ((data && data.running === false) ? "All done" : "Working");
+          }
+          const sources = (data && data.sources) || {};
+          ["gmail", "calendar", "contacts", "linkedin"].forEach((src) => {
+            const info = sources[src];
+            if (!info) {
+              wizardRenderScrapeLine(src, src, "Waiting", "waiting");
+              return;
+            }
+            const state = info.state || (info.done ? "done" : "active");
+            const count = info.count !== undefined
+              ? (state === "done" ? "Found " + info.count : "Reading " + info.count)
+              : (state === "done" ? "Done" : "Reading");
+            wizardRenderScrapeLine(src, src, count, state);
+          });
+          if (data && data.running === false) {
+            WIZARD.scrapeRunning = false;
+            if (WIZARD.scrapePollTimer) {
+              clearInterval(WIZARD.scrapePollTimer);
+              WIZARD.scrapePollTimer = null;
+            }
+            const cont = $("wizard-scrape-continue");
+            if (cont) cont.classList.remove("hidden");
+          }
+        } catch (e) { /* ignored */ }
+      }
+
+      async function wizardStartScrape() {
+        WIZARD.scrapeRunning = true;
+        WIZARD.scrapeStartedAt = Date.now();
+        try {
+          await fetch("http://127.0.0.1:8731/api/coldstart/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+        } catch (e) { /* ignored */ }
+        wizardRenderScrapeLine("gmail", "Gmail", "Reading", "active");
+        wizardPollScrapeStatus();
+        if (WIZARD.scrapePollTimer) clearInterval(WIZARD.scrapePollTimer);
+        WIZARD.scrapePollTimer = setInterval(wizardPollScrapeStatus, 50);
+      }
+
+      async function wizardSendSms() {
+        try {
+          await fetch("http://127.0.0.1:8731/api/onboarding/clarify_sms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ body: "test" }),
+          });
+        } catch (e) { /* ignored */ }
+        wizardComplete();
+      }
+
+      function wizardComplete() {
+        WIZARD.forced = false;
+        const wz = $("onboarding-wizard");
+        if (wz) wz.classList.add("hidden");
+        lastView = null;
+        ensureView("welcome");
+      }
+
+      function wizardShow() {
+        WIZARD.forced = true;
+        ensureView("onboarding-wizard");
+        wizardSetStep(1);
+      }
+
+      function wizardSkipAll() {
+        WIZARD.forced = false;
+        WIZARD.userSkipped = true;
+        const wz = $("onboarding-wizard");
+        if (wz) wz.classList.add("hidden");
+        lastView = null;
+        ensureView("welcome");
+      }
+
+      function wizardWireSkipAll() {
+        const skip = $("wizard-skip-all");
+        if (skip) skip.addEventListener("click", () => { wizardSkipAll(); });
+      }
+      function wizardWireStep1() {
+        const action = $("wizard-perm-action");
+        if (action) action.addEventListener("click", () => { wizardRequestNextPerm(); });
+        const skip = $("wizard-perm-skip");
+        if (skip) skip.addEventListener("click", () => { wizardSkipCurrentPerm(); });
+        wizardUpdatePermRows();
+      }
+      function wizardWireStep2() {
+        const open = $("wizard-ext-open");
+        if (open) open.addEventListener("click", () => { wizardOpenExtensionsPage(); });
+        const loaded = $("wizard-ext-loaded");
+        if (loaded) loaded.addEventListener("click", () => { wizardProbeExtension(); });
+        const copy = $("wizard-ext-copy");
+        if (copy) copy.addEventListener("click", () => { wizardCopyExtensionPath(); });
+      }
+      function wizardWireStep3() {
+        const name = $("wizard-name");
+        const loc  = $("wizard-location");
+        if (name) name.addEventListener("input", wizardValidateProfileFields);
+        if (loc)  loc.addEventListener("input", wizardValidateProfileFields);
+        const submit = $("wizard-profile-submit");
+        if (submit) submit.addEventListener("click", () => { wizardSubmitProfile(); });
+        wizardValidateProfileFields();
+      }
+      function wizardWireStep4() {
+        const start = $("wizard-scrape-start");
+        if (start) start.addEventListener("click", () => { wizardStartScrape(); });
+        const cont = $("wizard-scrape-continue");
+        if (cont) cont.addEventListener("click", () => {
+          if (WIZARD.scrapePollTimer) {
+            clearInterval(WIZARD.scrapePollTimer);
+            WIZARD.scrapePollTimer = null;
+          }
+          wizardSetStep(5);
+        });
+      }
+      function wizardWireStep5() {
+        const send = $("wizard-sms-send");
+        if (send) send.addEventListener("click", () => { wizardSendSms(); });
+        const skip = $("wizard-sms-skip");
+        if (skip) skip.addEventListener("click", () => { wizardComplete(); });
+      }
+      function wizardBoot() {
+        wizardWireStep1();
+        wizardWireStep2();
+        wizardWireStep3();
+        wizardWireStep4();
+        wizardWireStep5();
+        wizardWireSkipAll();
+        wizardSetStep(1);
+      }
+
+      /* ============================================================
+         TEST suite.
+         ============================================================
+         Drives every step transition + the skip path. Logs PASS/FAIL
+         per assertion to both the console and the on-page log panel.
+       */
+      const logEl = document.getElementById("log");
+      const results = [];
+      function logLine(msg, kind) {
+        const div = document.createElement("div");
+        div.className = kind || "info";
+        div.textContent = msg;
+        logEl.appendChild(div);
+        if (kind === "fail") console.error(msg);
+        else if (kind === "pass") console.log(msg);
+        else console.log(msg);
+      }
+      function assert(cond, label) {
+        if (cond) {
+          results.push({ ok: true, label: label });
+          logLine("PASS: " + label, "pass");
+          return true;
+        }
+        results.push({ ok: false, label: label });
+        logLine("FAIL: " + label, "fail");
+        return false;
+      }
+      function stepVisible(n) {
+        const el = $("wizard-step-" + n);
+        return el && !el.classList.contains("hidden");
+      }
+      function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+      async function runTests() {
+        logLine("Booting wizard...", "info");
+        wizardBoot();
+        wizardShow();
+
+        // Each step renders when activated, hidden otherwise.
+        assert(stepVisible(1), "step 1 renders on boot");
+        for (let s = 2; s <= 5; s += 1) {
+          assert(!stepVisible(s), "step " + s + " hidden on boot");
+        }
+        assert(WIZARD.currentStep === 1, "currentStep === 1 on boot");
+
+        // Step label + progress pips
+        assert($("wizard-step-label").textContent === "Step 1 of 5",
+               "step label reads 'Step 1 of 5'");
+        const activePips1 = document.querySelectorAll("#wizard-progress .pip.active");
+        assert(activePips1.length === 1, "exactly one pip is active on step 1");
+
+        // Step 1 -> 2 via three mic/accessibility/notifications requests
+        await wizardRequestNextPerm();
+        await wizardRequestNextPerm();
+        await wizardRequestNextPerm();
+        // The third permRequest tips us into step 2
+        await wizardRequestNextPerm();
+        assert(stepVisible(2), "step 2 visible after all permissions handled");
+        assert(WIZARD.currentStep === 2, "currentStep === 2 after permissions");
+        assert(WIZARD.perms.microphone.done === true, "microphone marked done");
+        assert(WIZARD.perms.accessibility.done === true, "accessibility marked done");
+        assert(WIZARD.perms.notifications.done === true, "notifications marked done");
+        const invokes = calls.filter((c) => c.kind === "invoke").map((c) => c.cmd);
+        assert(invokes.indexOf("request_microphone_permission") >= 0,
+               "request_microphone_permission was invoked");
+        assert(invokes.indexOf("request_accessibility_permission") >= 0,
+               "request_accessibility_permission was invoked");
+        assert(invokes.indexOf("request_notifications_permission") >= 0,
+               "request_notifications_permission was invoked");
+
+        // Step 2 -> 3 via extension probe
+        await wizardOpenExtensionsPage();
+        const invokesAfterExt = calls.filter((c) => c.kind === "invoke").map((c) => c.cmd);
+        assert(invokesAfterExt.indexOf("open_chrome_extensions_page") >= 0,
+               "open_chrome_extensions_page was invoked");
+        await wizardProbeExtension();
+        assert(stepVisible(3), "step 3 visible after extension probe");
+        assert(WIZARD.currentStep === 3, "currentStep === 3 after probe");
+
+        // Step 3 -> 4 via basic profile submit
+        $("wizard-name").value = "Test User";
+        $("wizard-location").value = "Vancouver, BC";
+        wizardValidateProfileFields();
+        assert(!$("wizard-profile-submit").disabled,
+               "submit button enabled after both fields filled");
+        await wizardSubmitProfile();
+        const invokesAfterProfile = calls.filter((c) => c.kind === "invoke").map((c) => c.cmd);
+        assert(invokesAfterProfile.indexOf("submit_basic_profile") >= 0,
+               "submit_basic_profile was invoked");
+        assert(stepVisible(4), "step 4 visible after profile submit");
+
+        // Step 4 -> 5 via scrape complete path
+        await wizardStartScrape();
+        await sleep(120);
+        await wizardPollScrapeStatus();
+        assert(WIZARD.scrapeRunning === false, "scrape marked complete from mock");
+        assert(!$("wizard-scrape-continue").classList.contains("hidden"),
+               "continue button visible after scrape complete");
+        $("wizard-scrape-continue").click();
+        assert(stepVisible(5), "step 5 visible after Move on");
+
+        // Step 5: SMS send completes the wizard
+        await wizardSendSms();
+        assert($("onboarding-wizard").classList.contains("hidden"),
+               "wizard hidden after SMS send");
+        assert(!$("welcome").classList.contains("hidden"),
+               "welcome view visible after SMS send");
+
+        // Skip path: re-show and click skip-all
+        wizardShow();
+        assert(!$("onboarding-wizard").classList.contains("hidden"),
+               "wizard re-shown by wizardShow()");
+        wizardSkipAll();
+        assert($("onboarding-wizard").classList.contains("hidden"),
+               "wizard hidden after Skip onboarding");
+        assert(!$("welcome").classList.contains("hidden"),
+               "welcome view visible after Skip onboarding");
+        assert(WIZARD.userSkipped === true,
+               "userSkipped flag set so wizard does not auto-resurface");
+
+        const failed = results.filter((r) => !r.ok);
+        if (failed.length === 0) {
+          logLine("---", "info");
+          logLine("PASS: all wizard steps render", "pass");
+          console.log("PASS: all wizard steps render");
+          document.title = "PASS: all wizard steps render";
+        } else {
+          logLine("---", "info");
+          logLine("FAIL: " + failed.length + " of " + results.length + " assertions failed",
+                  "fail");
+          console.error("FAIL: " + failed.length + " of " + results.length + " assertions failed");
+          document.title = "FAIL: " + failed.length + " of " + results.length;
+        }
+      }
+
+      window.addEventListener("DOMContentLoaded", () => { runTests(); });
+    </script>
+  </body>
+</html>

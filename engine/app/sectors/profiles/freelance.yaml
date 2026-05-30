@@ -1,0 +1,62 @@
+sector: freelance
+display_name: Freelancer
+common_tools:
+  - Upwork
+  - Fiverr
+  - Contra
+  - Toptal
+  - FreshBooks
+  - Wave
+  - Bonsai
+  - HoneyBook
+  - Notion
+  - Figma
+  - Adobe Creative Cloud
+  - Calendly
+  - Stripe Atlas
+  - PayPal
+  - Wise
+common_goals:
+  - send the proposal to the prospect by end of day
+  - invoice the client for the milestone shipped last week
+  - log the billable hours for the past two days
+  - chase the overdue invoice from the agency
+  - schedule the kickoff call for the new retainer
+  - update the portfolio with the latest case study
+  - file the quarterly estimated tax payment
+  - decline the project that does not fit my rate card
+  - send a status update to the client at the end of the sprint
+vocab_hints:
+  - retainer
+  - scope creep
+  - kill fee
+  - SOW
+  - net thirty
+  - net sixty
+  - rate card
+  - day rate
+  - milestone
+  - revisions
+  - deliverable
+  - 1099
+  - estimated taxes
+  - solo S corp
+  - billable utilization
+preferred_channels:
+  - email
+  - sms
+detection_signals:
+  - Upwork or Fiverr freelancer dashboard signed in
+  - FreshBooks or Wave invoicing tabs
+  - HoneyBook or Bonsai contract portals
+  - Calendly booking links in recent emails
+  - many one off Stripe payouts to the same bank
+  - Figma or Adobe Creative Cloud active
+  - calendar full of single client meetings rather than recurring
+  - PayPal or Wise transfers from international clients
+  - 1099 reminder emails near tax season
+sample_personas:
+  - Freelance designer juggling four retainers
+  - Independent developer billing hourly to two agencies
+  - Solo copywriter on a milestone based contract
+  - Consultant running a one person LLC with quarterly taxes

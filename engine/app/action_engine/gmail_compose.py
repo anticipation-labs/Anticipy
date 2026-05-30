@@ -1,7 +1,26 @@
-"""Gmail draft creation through the user's real CDP Chrome.
+"""Gmail draft helpers.
 
-This module parses explicit draft requests, opens Gmail's compose URL
-in Chrome over CDP, and leaves the message as a draft.
+DEPRECATED for new code. This module was a site-specific recipe that
+opened Gmail's compose URL over CDP and pressed Ctrl+S to autosave.
+The new architecture (see planning/00-handoff/ARCHITECTURE.md section
+4) replaces every per-site recipe with the generic dispatcher in
+``app.action_engine.dispatch``. New action code MUST import
+``dispatch_action`` instead of calling anything here.
+
+What stays:
+  - ``parse_draft_intent``: pure regex parser, no side effects, used
+    by /api/act and the receipt path to extract structured draft
+    fields. Pure parsing is generic; it is not a recipe.
+  - ``DraftRequest`` / ``DraftResult`` dataclasses: shape only.
+
+What changes:
+  - ``create_gmail_draft`` and ``draft_from_transcript`` now route
+    through ``app.action_engine.dispatch.dispatch_action`` first.
+    The historical inline CDP path stays as the FALLBACK only when
+    the extension surface is not available. This is required for
+    back-compat with the timeline-integration tests that stub the
+    whole module out via sys.modules patching and for the receipt
+    path which still expects ``compose_url`` in the result.
 """
 
 from __future__ import annotations
@@ -100,6 +119,9 @@ def _body_from_text(text: str, marker: str) -> str:
 
 
 def parse_draft_intent(text: str) -> DraftRequest | None:
+    """Pure regex parser. Generic and stateless: extracts (to, subject,
+    body) from a free-text instruction. Kept because it has no recipe
+    knowledge; it is text parsing only."""
     low = (text or "").lower()
     if not re.search(r"\b(draft|email|mail|gmail|send|follow up|share)\b", low):
         return None
@@ -167,10 +189,74 @@ def _tabs(cdp_port: int) -> tuple[list[dict[str, Any]], str]:
     return [item for item in data if isinstance(item, dict)], ""
 
 
+def _create_via_extension(
+    request: DraftRequest, compose_url: str, marker: str
+) -> DraftResult | None:
+    """Try the extension surface first. Returns None if the extension
+    bridge is not available so the caller can fall through to CDP."""
+    try:
+        from app.action_engine.dispatch import (
+            dispatch_action,
+            extension_surface_available,
+        )
+    except Exception:
+        return None
+    if not extension_surface_available():
+        return None
+    result = dispatch_action(
+        goal=f"Open Gmail compose for {request.to}",
+        intent_payload={
+            "verb": "open_browser_tab",
+            "target": compose_url,
+            "action": "navigate",
+        },
+    )
+    if not isinstance(result, dict):
+        return None
+    proof_blob = json.dumps(
+        {
+            "type": "gmail_extension_compose",
+            "compose_url": compose_url,
+            "to": request.to,
+            "subject": request.subject,
+            "body_contains_marker": bool(marker and marker in request.body),
+            "marker_uuid": marker,
+            "surface": result.get("surface"),
+            "source": result.get("source"),
+            "url": result.get("url"),
+            "ran": bool(result.get("ran")),
+            "error": str(result.get("error") or ""),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return DraftResult(
+        ok=bool(result.get("ran")),
+        error=str(result.get("error") or ""),
+        evidence=proof_blob,
+        compose_url=compose_url,
+    )
+
+
 def create_gmail_draft(
     request: DraftRequest, cdp_port: int = 9222, marker: str = ""
 ) -> DraftResult:
+    """Open a Gmail compose tab pre-filled with request fields.
+
+    Routing order (per the new generic-dispatcher architecture):
+      1. Try the extension native messaging bridge (production path)
+      2. Fall back to direct CDP (legacy clone-Chrome path) when the
+         extension bridge is unavailable
+
+    The CDP fallback preserves back-compat with the receipt path and
+    with the timeline-integration tests that stub this module out.
+    """
     compose_url = _compose_url(request)
+
+    extension_result = _create_via_extension(request, compose_url, marker)
+    if extension_result is not None and extension_result.ok:
+        return extension_result
+
     target, error = _open_tab(cdp_port, compose_url)
     if error:
         evidence = json.dumps(
@@ -179,6 +265,7 @@ def create_gmail_draft(
                 "cdp_port": cdp_port,
                 "compose_url": compose_url,
                 "error": error,
+                "extension_attempted": extension_result is not None,
             },
             sort_keys=True,
         )
@@ -215,7 +302,18 @@ def create_gmail_draft(
 
 
 def draft_from_transcript(text: str, cdp_port: int = 9222) -> DraftResult | None:
+    """Parse text and create a Gmail draft. Returns None when the text
+    does not parse as a draft request."""
     request = parse_draft_intent(text)
     if request is None:
         return None
     return create_gmail_draft(request, cdp_port=cdp_port, marker=_marker(text))
+
+
+__all__ = [
+    "DraftRequest",
+    "DraftResult",
+    "create_gmail_draft",
+    "draft_from_transcript",
+    "parse_draft_intent",
+]

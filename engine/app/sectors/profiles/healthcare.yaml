@@ -1,0 +1,56 @@
+sector: healthcare
+display_name: Healthcare Worker
+common_tools:
+  - Epic MyChart
+  - Athenahealth
+  - Cerner PowerChart
+  - eClinicalWorks
+  - Doximity
+  - UpToDate
+  - DrFirst
+  - Practice Fusion
+  - NPPES
+  - CMS provider portal
+common_goals:
+  - confirm tomorrows patient schedule from the EHR
+  - refill the standing prescription for Mrs Patel
+  - reply to the patient portal message about lab results
+  - submit prior authorization for the MRI
+  - request CME credits before the renewal deadline
+  - check the on call rotation for next weekend
+  - update the credentialing file at the new hospital
+  - bill the visit at the right level using the new code
+vocab_hints:
+  - prior auth
+  - PHI
+  - HIPAA
+  - encounter
+  - chart note
+  - SOAP note
+  - DEA number
+  - NPI
+  - credentialing
+  - panel
+  - census
+  - rounding
+  - sign out
+  - copay
+  - CPT and ICD codes
+preferred_channels:
+  - voice
+  - sms
+detection_signals:
+  - Epic MyChart in scraped tabs
+  - Athenahealth provider portal signed in
+  - Cerner PowerChart in browser history
+  - Doximity app in recent tabs
+  - UpToDate references opened during work hours
+  - DrFirst e-prescribe sessions
+  - NPPES or CMS portal in scraped tabs
+  - calendar with rounding blocks and clinic templates
+  - HIPAA training reminders in inbox
+sample_personas:
+  - Primary care physician in a small group practice
+  - Nurse practitioner staffing a community clinic
+  - Hospitalist working seven on seven off
+  - Practice manager handling billing and credentialing

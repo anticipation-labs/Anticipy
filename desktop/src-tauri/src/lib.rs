@@ -979,6 +979,208 @@ fn open_mic_system_settings() -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
+// PHASE 5 onboarding wizard commands.
+//
+// The popover renders an onboarding wizard view on first launch. Each
+// step needs a thin Tauri bridge: open System Settings to the right
+// privacy pane, open chrome://extensions and pre-copy the extension
+// path to the macOS clipboard, and forward the basic profile (name +
+// location) to the local engine. The wizard JS handles step ordering
+// and progress; these commands just do one macOS-shaped action each.
+//
+// macOS privacy pane URLs use the x-apple.systempreferences: scheme
+// documented in Apple's "Open System Preferences pane" technote. We
+// shell out to `open` rather than calling NSWorkspace directly so the
+// existing open_mic_system_settings precedent is mirrored exactly and
+// no new entitlement is needed.
+// ---------------------------------------------------------------------------
+
+const ACCESSIBILITY_SYSTEM_SETTINGS_URL: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
+const SCREEN_RECORDING_SYSTEM_SETTINGS_URL: &str =
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
+const NOTIFICATIONS_SYSTEM_SETTINGS_URL: &str =
+    "x-apple.systempreferences:com.apple.preference.notifications";
+const ANTICIPY_EXTENSION_LOAD_PATH: &str =
+    "/Users/omarebrahim/.anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME";
+
+/// Open a macOS System Settings pane via the `open` command.
+/// Returns Ok(()) when the spawn succeeded; the wizard does not wait
+/// for the pane to render because the pre-prompt explainer already
+/// gives the user mental warm-up time.
+fn open_settings_pane(url: &str) -> Result<(), String> {
+    Command::new("open")
+        .arg(url)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .stdin(Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Copy a string to the macOS clipboard via NSPasteboard.
+/// Returns Ok(true) on success. On non-macOS or when the pasteboard is
+/// unavailable, returns Ok(false) so the caller can fall back to
+/// showing the path inline in the wizard.
+#[cfg(target_os = "macos")]
+fn copy_string_to_clipboard(text: &str) -> Result<bool, String> {
+    use std::process::Command;
+    // pbcopy is the canonical macOS clipboard interface, present on
+    // every macOS install since the 10.x era. It avoids the NSPasteboard
+    // ObjC dance that would otherwise need a fresh objc2 binding here.
+    let mut child = Command::new("pbcopy")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("pbcopy spawn failed: {e}"))?;
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        stdin
+            .write_all(text.as_bytes())
+            .map_err(|e| format!("pbcopy write failed: {e}"))?;
+    }
+    let status = child
+        .wait()
+        .map_err(|e| format!("pbcopy wait failed: {e}"))?;
+    Ok(status.success())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn copy_string_to_clipboard(_text: &str) -> Result<bool, String> {
+    Ok(false)
+}
+
+/// Step 1 of the wizard: microphone permission. We delegate to the
+/// existing mic bootstrap path so the same Allow/Deny dialog fires
+/// exactly once and the same mic-permission-* events flow afterwards.
+/// The wizard does not block on this; it observes the events.
+#[tauri::command]
+fn request_microphone_permission(app: AppHandle) -> Result<(), String> {
+    // The OS-level mic permission dialog is triggered by the same
+    // bootstrap path that runs on launch. We re-run it idempotently;
+    // the AVCaptureDevice request returns immediately when the user
+    // has already answered, so re-asking is safe.
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        bootstrap_mic_permission(&handle);
+    });
+    Ok(())
+}
+
+/// Step 1b: screen recording (used by the engine to read on-screen
+/// context when the user opts in). Opens System Settings since macOS
+/// does not expose a programmatic prompt the way mic does. The wizard
+/// shows the friendly explainer BEFORE this call.
+#[tauri::command]
+fn request_screen_recording_permission() -> Result<(), String> {
+    open_settings_pane(SCREEN_RECORDING_SYSTEM_SETTINGS_URL)
+}
+
+/// Step 1c: accessibility (needed only when the user wants Anticipy
+/// to drive non-Chrome native apps; harmless if the user denies for
+/// v1). Opens System Settings to the right pane.
+#[tauri::command]
+fn request_accessibility_permission() -> Result<(), String> {
+    open_settings_pane(ACCESSIBILITY_SYSTEM_SETTINGS_URL)
+}
+
+/// Step 1d: notifications. macOS NSUserNotificationCenter does have a
+/// requestAuthorization path, but for the wizard the System Settings
+/// pane is friendlier (user sees the toggle they will be flipping and
+/// keeps muscle memory for later). Opens the Notifications pane.
+#[tauri::command]
+fn request_notifications_permission() -> Result<(), String> {
+    open_settings_pane(NOTIFICATIONS_SYSTEM_SETTINGS_URL)
+}
+
+/// Step 2: open chrome://extensions and pre-copy the extension path
+/// to the clipboard so the user can paste it into the Load Unpacked
+/// file picker without typing. Returns the path that was copied so
+/// the JS can show it in the inline 4-click guide.
+#[tauri::command]
+fn open_chrome_extensions_page() -> Result<serde_json::Value, String> {
+    // Copy the path BEFORE we open Chrome so the user can paste it
+    // the moment they click Load Unpacked. If pbcopy fails (rare; we
+    // still try to open Chrome) we return copied=false so the wizard
+    // shows the path inline.
+    let copy_result = copy_string_to_clipboard(ANTICIPY_EXTENSION_LOAD_PATH)
+        .unwrap_or(false);
+    // chrome://extensions cannot be opened via `open <url>` because
+    // chrome:// is browser-internal. The Apple-blessed path is to
+    // launch Chrome with the URL as an argument; Chrome routes it to
+    // the existing instance if one is open.
+    let spawn_result = Command::new("open")
+        .arg("-a")
+        .arg("Google Chrome")
+        .arg("chrome://extensions")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .stdin(Stdio::null())
+        .spawn();
+    let spawned = spawn_result.is_ok();
+    Ok(serde_json::json!({
+        "ok": spawned,
+        "copied": copy_result,
+        "path": ANTICIPY_EXTENSION_LOAD_PATH,
+    }))
+}
+
+/// Step 2b: copy the extension path without opening Chrome. Useful
+/// when the user already has chrome://extensions open in another tab
+/// and just wants the path back in the clipboard after they pasted
+/// something else.
+#[tauri::command]
+fn copy_extension_path_to_clipboard() -> Result<serde_json::Value, String> {
+    let copied = copy_string_to_clipboard(ANTICIPY_EXTENSION_LOAD_PATH)
+        .unwrap_or(false);
+    Ok(serde_json::json!({
+        "copied": copied,
+        "path": ANTICIPY_EXTENSION_LOAD_PATH,
+    }))
+}
+
+/// Step 3: submit name + location to the engine. The engine persists
+/// the basic profile and uses it as the seed for the cold-start
+/// scrape (so the dossier knows whose Gmail/Calendar to read).
+///
+/// The wizard pre-validates that both fields are non-empty; we
+/// re-validate here defensively and pass through to the engine.
+#[tauri::command]
+fn submit_basic_profile(
+    app: AppHandle,
+    name: String,
+    location: String,
+) -> Result<serde_json::Value, String> {
+    let name = name.trim().to_string();
+    let location = location.trim().to_string();
+    if name.is_empty() {
+        return Err("name is empty".to_string());
+    }
+    if location.is_empty() {
+        return Err("location is empty".to_string());
+    }
+    let payload = serde_json::json!({
+        "name": name,
+        "location": location,
+    });
+    let _ = app.emit(
+        "onboarding-basic-profile-submitted",
+        serde_json::json!({
+            "name": name.clone(),
+            "location": location.clone(),
+            "ts": current_unix_seconds(),
+        }),
+    );
+    // The basic_profile route is built by another agent in parallel.
+    // If it isn't live yet we return the engine's transport error
+    // verbatim; the wizard JS falls back to local-only state in that
+    // case so a partial sibling-agent rollout never blocks the user.
+    post_engine_json("/api/onboarding/basic_profile", payload)
+}
+
+// ---------------------------------------------------------------------------
 // US-023: Dossier section in the popover.
 //
 // The popover renders a Dossier section below Past with the last call
@@ -2567,7 +2769,14 @@ pub fn run() {
             start_dossier_call,
             hangup_dossier_call,
             start_voice_onboarding,
-            fetch_dossier_summary
+            fetch_dossier_summary,
+            request_microphone_permission,
+            request_screen_recording_permission,
+            request_accessibility_permission,
+            request_notifications_permission,
+            open_chrome_extensions_page,
+            copy_extension_path_to_clipboard,
+            submit_basic_profile
         ])
         .on_window_event(|window, event| {
             if window.label() == POPOVER_LABEL {

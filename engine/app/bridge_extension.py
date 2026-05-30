@@ -335,3 +335,184 @@ def make_production_executor(
         verifier=verifier,
         on_wearer_message=on_wearer_message,
     )
+
+
+# ─────────────────────────────────────────────────────────────────
+# Synchronous dispatch via the native-messaging surface bridge
+# (chrome.runtime.connectNative -> anticipy_agent on 127.0.0.1:7777)
+# ─────────────────────────────────────────────────────────────────
+#
+# The Supabase realtime path above is used by the proactive cascade
+# (cascade decisions broadcast to all wearers). The synchronous
+# dispatch path below is used by /api/act (a single, in-flight user
+# instruction that needs an immediate browser action on the wearer's
+# Chrome). Both paths terminate at the SAME Chrome extension, just
+# through different transports:
+#
+#   broadcast path:  Engine -> Supabase Realtime -> Extension (poll
+#                    anticipy_intents row)
+#   dispatch path:   Engine -> 127.0.0.1:7777 (native messaging
+#                    daemon) -> Extension (port message)
+#
+# The dispatch path is what runs the live /api/act path so a goal
+# like "navigate to https://example.com" never has to wait for
+# Supabase round-trips. It is also the path that lets the engine
+# work when CDP on :9222 is NOT available, because the extension
+# drives the user's existing Chrome via chrome.debugger, not CDP.
+#
+# Returns the standardized dict shape the action dispatcher expects:
+#   {
+#     "ran":             bool,   # True if the action ran and the
+#                                 # extension reported success
+#     "surface":         str,    # always "extension" on this path
+#     "screenshot_path": str,    # optional path to the proof shot
+#     "url":             str,    # the URL the extension landed on
+#     "error":           str,    # empty on success, message on fail
+#     "proof":           dict,   # raw surface_proof receipt
+#     "source":          str,    # transport identifier
+#   }
+
+
+def _intent_to_browser_verb(intent_payload: dict) -> tuple[str, str]:
+    """Map a generic intent dict to a (verb, target) tuple the
+    SurfaceRuntime native bridge understands. The verbs match
+    SurfaceRuntime.run_browser_task supported verbs."""
+    if not isinstance(intent_payload, dict):
+        return "", ""
+    verb = str(intent_payload.get("verb") or "").strip()
+    target = str(
+        intent_payload.get("target")
+        or intent_payload.get("url")
+        or intent_payload.get("query")
+        or ""
+    ).strip()
+    if verb in {"open_browser_tab", "open_search_tab", "navigate", "open"}:
+        return verb, target
+    action = str(intent_payload.get("action") or "").lower()
+    if action in {"navigate", "open", "open_url"} and target:
+        return "open_browser_tab", target
+    if action in {"search", "google", "web_search"} and target:
+        return "open_search_tab", target
+    if target.startswith(("http://", "https://")):
+        return "open_browser_tab", target
+    return "", target
+
+
+def dispatch(
+    goal: str,
+    intent_payload: dict | None = None,
+    *,
+    timeout_s: float = 30.0,
+) -> dict:
+    """Send an action to the user's Chrome via the extension's native
+    messaging bridge. Synchronous. Never raises.
+
+    The native messaging daemon ('anticipy_agent', spawned by Chrome
+    when the extension calls connectNative) listens on 127.0.0.1:7777
+    and forwards bounded primitives to the extension over a Chrome
+    runtime port. The extension drives the user's actual Chrome via
+    chrome.debugger. This is the production path; CDP on :9222 is the
+    legacy fallback for controlled probes only.
+
+    Arguments:
+      goal: the human-readable intent (e.g. "navigate to https://...")
+      intent_payload: structured intent fields. May include:
+        - verb: explicit SurfaceRuntime verb
+        - target / url / query: navigation target
+        - action: high-level action name (navigate/search)
+      timeout_s: wall-clock budget for the round trip
+
+    Returns the dict shape documented above.
+    """
+    payload = intent_payload if isinstance(intent_payload, dict) else {}
+    verb, target = _intent_to_browser_verb(payload)
+    if not (verb and target) and goal:
+        from app.product.surface_runtime import normalize_browser_url
+        normalized = normalize_browser_url(goal)
+        if normalized:
+            verb, target = "open_browser_tab", normalized
+
+    if not (verb and target):
+        return {
+            "ran": False,
+            "surface": "extension",
+            "screenshot_path": "",
+            "url": "",
+            "error": (
+                "dispatch could not derive a browser primitive from goal "
+                "or intent payload"
+            ),
+            "proof": {},
+            "source": "bridge_extension.dispatch",
+        }
+
+    try:
+        from app.product.surface_runtime import SurfaceRuntime
+        runtime = SurfaceRuntime(command_timeout=max(2.0, float(timeout_s)))
+    except Exception as e:
+        return {
+            "ran": False,
+            "surface": "extension",
+            "screenshot_path": "",
+            "url": "",
+            "error": f"SurfaceRuntime import failed: {type(e).__name__}: {e}",
+            "proof": {},
+            "source": "bridge_extension.dispatch",
+        }
+
+    try:
+        receipt = runtime.run_browser_task(
+            verb=verb,
+            target=target,
+            task=(goal or "")[:200],
+        )
+    except Exception as e:
+        return {
+            "ran": False,
+            "surface": "extension",
+            "screenshot_path": "",
+            "url": "",
+            "error": f"surface_runtime raised: {type(e).__name__}: {e}",
+            "proof": {},
+            "source": "bridge_extension.dispatch",
+        }
+
+    if not isinstance(receipt, dict):
+        return {
+            "ran": False,
+            "surface": "extension",
+            "screenshot_path": "",
+            "url": "",
+            "error": "surface_runtime returned non-dict receipt",
+            "proof": {},
+            "source": "bridge_extension.dispatch",
+        }
+
+    proof = receipt.get("proof") if isinstance(receipt.get("proof"), dict) else {}
+    surface = receipt.get("surface") if isinstance(receipt.get("surface"), dict) else {}
+    landed_url = str(proof.get("url") or surface.get("url") or "")
+    return {
+        "ran": bool(receipt.get("ok")),
+        "surface": "extension",
+        "screenshot_path": str(proof.get("screenshot_path") or ""),
+        "url": landed_url,
+        "error": str(receipt.get("error") or ""),
+        "proof": proof,
+        "source": str(receipt.get("source") or "chrome_extension_native_messaging"),
+        "verb": verb,
+        "target": target,
+    }
+
+
+def surface_available() -> bool:
+    """Return True iff the native messaging bridge accepts commands.
+
+    Cheap probe (single HTTP GET to /status). Used by the action
+    dispatcher to decide whether to attempt the bridge_extension
+    dispatch path before falling back to the legacy CDP path.
+    """
+    try:
+        from app.product.surface_runtime import SurfaceRuntime
+        return SurfaceRuntime().available()
+    except Exception:
+        return False

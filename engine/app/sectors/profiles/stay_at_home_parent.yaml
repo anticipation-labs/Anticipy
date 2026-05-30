@@ -1,0 +1,62 @@
+sector: stay_at_home_parent
+display_name: Stay at Home Parent
+common_tools:
+  - PowerSchool
+  - Seesaw
+  - ClassDojo
+  - Brightwheel
+  - Konstella
+  - SignUpGenius
+  - Care.com
+  - Sittercity
+  - Instacart
+  - Amazon
+  - Target
+  - Pediatric portal at the local hospital
+  - Bright Horizons
+  - YMCA enrollment
+  - Pinterest
+common_goals:
+  - sign the permission slip due Friday in the school portal
+  - schedule the pediatrician follow up for the eight year old
+  - order groceries for pickup before the swim meet
+  - book the summer camp slot before registration closes
+  - reschedule the playdate after soccer practice
+  - send the teacher a thank you note for the conference
+  - find a sitter for date night on Saturday
+  - confirm the carpool order for the rest of the week
+  - submit the form for the upcoming field trip
+vocab_hints:
+  - school pickup
+  - drop off
+  - PTA
+  - report card
+  - parent teacher conference
+  - well visit
+  - sick visit
+  - carpool
+  - playdate
+  - extracurricular
+  - permission slip
+  - field trip
+  - snack day
+  - half day schedule
+  - summer camp
+preferred_channels:
+  - sms
+  - voice
+detection_signals:
+  - PowerSchool parent portal signed in
+  - Seesaw or ClassDojo notifications in inbox
+  - Brightwheel or Konstella in scraped tabs
+  - SignUpGenius volunteer slots in recent history
+  - Care.com or Sittercity sessions
+  - Instacart or grocery delivery in scheduled orders
+  - calendar packed with school events and pediatrician appointments
+  - emails from .edu domains for elementary schools
+  - YMCA or community center enrollment tabs
+sample_personas:
+  - First time parent of an infant managing pediatric visits
+  - Parent of three school age kids juggling schedules
+  - Parent caring for a child with special needs
+  - Single parent splitting custody and coordinating handoffs

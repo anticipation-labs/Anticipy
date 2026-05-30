@@ -93,10 +93,57 @@ except Exception:  # pragma: no cover - defensive
     def _timeline_append(_entry):  # type: ignore[no-redef]
         return None
 
-# 5 minutes per the directive. After this window we save the work as a
-# draft (Gmail draft, popover review item) and ping the user once more
-# so they can review at their convenience.
-DEFAULT_TTL_SECONDS = 5 * 60
+
+# ----------------------------------------------------------------------
+# Test fast timeouts honoring.
+# ----------------------------------------------------------------------
+# When ANTICIPY_TEST_FAST_TIMEOUTS=1 every production time constant in
+# this module collapses by a factor of ~360x so a full SMS pre-confirm
+# round trip plus expiry sweep can be exercised in under a minute. The
+# 360x ratio was picked so the directive 3-hour ceiling (10800 s) maps
+# to a clean 30 s in test mode; every other constant rides the same
+# ratio so test mode preserves the relative ordering of the production
+# constants (poll interval still < TTL still < dedup window etc.).
+#
+# Production values stay completely unchanged when the env var is
+# absent or any value other than the literal "1". Only the constants
+# below toggle. No code path logic changes.
+def _test_fast_timeouts_enabled() -> bool:
+    return (os.environ.get("ANTICIPY_TEST_FAST_TIMEOUTS") or "").strip() == "1"
+
+
+_FAST_TIMEOUT_RATIO = 360
+
+
+def _scale_seconds(prod_seconds: float, *,
+                   floor_seconds: float = 1.0) -> float:
+    """Return prod_seconds normally; in test mode divide by 360 and
+    floor at floor_seconds so a test never accidentally waits a value
+    so small the OS rounds it to zero.
+    """
+    if not _test_fast_timeouts_enabled():
+        return float(prod_seconds)
+    scaled = float(prod_seconds) / float(_FAST_TIMEOUT_RATIO)
+    return max(float(floor_seconds), scaled)
+
+
+# 5 minutes per the directive (the proposal review window). After this
+# window we save the work as a draft (Gmail draft, popover review item)
+# and ping the user once more so they can review at their convenience.
+# When ANTICIPY_TEST_FAST_TIMEOUTS=1 collapses to ~1 s so the expiry
+# sweep can run in a fast test.
+DEFAULT_TTL_SECONDS = (
+    30 if _test_fast_timeouts_enabled() else 5 * 60
+)
+
+# Hard floor on the TTL value persisted alongside a pending record. The
+# create_pending_confirm path enforces this with max(ttl, MIN_TTL) so a
+# caller cannot pass 0 and produce a record that expires before the
+# user can possibly reply. The production floor is 60 s; in test mode
+# we drop it to 1 s so the floor never clobbers the collapsed TTL.
+MIN_TTL_SECONDS_FLOOR = (
+    1 if _test_fast_timeouts_enabled() else 60
+)
 
 STATUS_PENDING = "pending"
 STATUS_APPROVED = "approved"
@@ -1172,7 +1219,7 @@ def create_pending_confirm(plan: dict[str, Any], instruction: str,
     rec = PendingConfirm(
         task_id=task_id,
         created_at=now,
-        expires_at=now + max(int(ttl_seconds), 60),
+        expires_at=now + max(int(ttl_seconds), MIN_TTL_SECONDS_FLOOR),
         status=STATUS_PENDING,
         proposal_text=proposal["proposal_text"],
         to_number=to_number,
@@ -1396,7 +1443,13 @@ def expire_pending(now_ts: Optional[float] = None,
 # unchanged.
 # ----------------------------------------------------------------------
 
-DEFAULT_INBOUND_POLL_INTERVAL_SECONDS = 10.0
+# Inbound SMS poller cadence. Production polls the website-side relay
+# every 10 seconds. When ANTICIPY_TEST_FAST_TIMEOUTS=1 the cadence
+# drops to ~1 second floor (10 / 360 = 0.027 s, clamped to 1 s) so a
+# test can observe at least one poll loop without burning seconds.
+DEFAULT_INBOUND_POLL_INTERVAL_SECONDS = (
+    1.0 if _test_fast_timeouts_enabled() else 10.0
+)
 
 
 def _website_base_url() -> str:
@@ -1719,6 +1772,7 @@ def inbound_poller_status() -> dict[str, Any]:
 __all__ = [
     "DEFAULT_TTL_SECONDS",
     "DEFAULT_INBOUND_POLL_INTERVAL_SECONDS",
+    "MIN_TTL_SECONDS_FLOOR",
     "PendingConfirm",
     "PendingConfirmStore",
     "STATUS_APPROVED",

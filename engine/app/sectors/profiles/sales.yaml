@@ -1,0 +1,55 @@
+sector: sales
+display_name: Sales Professional
+common_tools:
+  - Salesforce
+  - HubSpot
+  - Outreach
+  - Salesloft
+  - Apollo
+  - ZoomInfo
+  - Gong
+  - Chili Piper
+  - LinkedIn Sales Navigator
+  - DocuSign
+common_goals:
+  - log the call into the opportunity record
+  - book a demo with the prospect for next Tuesday
+  - send a follow up sequence to fifteen leads
+  - update the forecast for the current quarter
+  - request a quote from the SE team for the enterprise deal
+  - move the deal to negotiation stage
+  - prep a discovery summary before the next meeting
+  - share the mutual action plan with the buyer
+vocab_hints:
+  - pipeline
+  - quota
+  - MEDDPICC
+  - SQL
+  - MQL
+  - discovery call
+  - mutual action plan
+  - close plan
+  - champion
+  - economic buyer
+  - commit and best case
+  - sandbagging
+  - whitespace
+  - logo win
+preferred_channels:
+  - email
+  - sms
+detection_signals:
+  - Salesforce in scraped tabs
+  - HubSpot CRM in scraped tabs
+  - Outreach.io signed in
+  - Salesloft cadences open
+  - LinkedIn Sales Navigator active
+  - Gong call recordings in recent history
+  - Apollo or ZoomInfo enrichment tabs
+  - calendar packed with discovery and demo slots
+  - DocuSign envelopes in the last seven days
+sample_personas:
+  - Account executive at a B2B SaaS company
+  - Sales development rep on outbound prospecting
+  - Regional sales manager owning a forecast
+  - Strategic account manager in enterprise

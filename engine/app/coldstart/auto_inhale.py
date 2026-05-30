@@ -750,4 +750,290 @@ __all__ = [
     "run_state",
     "start_inhale",
     "DEFAULT_ACCOUNT_ID",
+    # New parallel pipeline (Phase 5):
+    "inhale_all_sources",
+    "run_coldstart_pipeline",
+    "PER_SOURCE_TIMEOUT_S",
+    "TOTAL_PIPELINE_BUDGET_S",
+    "SCRAPE_BUDGET_S",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: parallel asyncio pipeline through bridge_extension
+# ---------------------------------------------------------------------------
+# The old _run_inhale path above drives Chrome via the loopback bridge
+# at 127.0.0.1:7777 (CDP). Phase 3 wired a new extension-native bridge
+# (`app.bridge_extension`) so the engine never spawns its own Chromium.
+# The functions below are the cold-start pipeline that runs ON TOP of
+# that bridge:
+#
+#   * One async ``extract`` function per source (sources/<name>.py).
+#   * ``inhale_all_sources`` fans them out via ``asyncio.gather`` with
+#     a 20s timeout per source. A timing-out source returns a sentinel
+#     dict so the merge step still succeeds for everyone else.
+#   * ``run_coldstart_pipeline`` runs the inhale + clarifier and
+#     enforces a 120s total budget (90s scrape + 30s slack).
+#
+# The old _run_inhale path stays alive for the existing /api/coldstart
+# endpoint. The Phase 5 path is invoked by the onboarding wizard on
+# first launch.
+
+import asyncio as _asyncio  # noqa: E402  (intentional late import)
+
+
+# Per-source hard timeout. The spec ("each source has a 20s hard
+# timeout") is enforced by ``asyncio.wait_for`` inside
+# ``_run_one_source_with_timeout``.
+PER_SOURCE_TIMEOUT_S = 20.0
+
+# Total budget. Spec says "90s actual scrape + 30s slack = 120s
+# overall". The scrape stage caps at SCRAPE_BUDGET_S; the clarifier +
+# any post-processing share the remaining slack.
+SCRAPE_BUDGET_S = 90.0
+TOTAL_PIPELINE_BUDGET_S = 120.0
+
+
+# Default source set. The orchestrator iterates this list; the
+# import-by-string indirection lets tests stub a source without
+# touching the production registry. The strings map to attribute
+# names in ``app.coldstart.sources`` (which is a package since
+# Phase 5: `sources/__init__.py` re-exports the registry and the
+# per-source extractors live as siblings).
+DEFAULT_DOSSIER_SOURCES = (
+    "linkedin",
+    "gmail",
+    "calendar",
+    "drive",
+)
+
+
+def _resolve_source_extractor(name: str):
+    """Import the ``extract`` callable for one source by name.
+
+    Returns ``None`` (and logs) when the source module is missing
+    so the orchestrator can skip it instead of crashing the inhale.
+    """
+    try:
+        mod = __import__(
+            f"app.coldstart.sources.{name}",
+            fromlist=["extract"],
+        )
+    except Exception as exc:
+        _logger.warning(
+            "coldstart.sources.%s import failed: %s", name, exc)
+        return None
+    fn = getattr(mod, "extract", None)
+    if not callable(fn):
+        _logger.warning(
+            "coldstart.sources.%s has no callable extract", name)
+        return None
+    return fn
+
+
+async def _run_one_source_with_timeout(name: str, bridge: Any,
+                                       timeout_s: float
+                                       ) -> dict[str, Any]:
+    """Invoke one source's ``extract(bridge)`` with a hard timeout.
+
+    Every failure mode (missing module, exception inside extract,
+    timeout) is mapped to the same shape::
+
+        {"source": name, "ok": False, "error": "<reason>"}
+
+    so the merge step never needs to distinguish them.
+    """
+    fn = _resolve_source_extractor(name)
+    if fn is None:
+        return {"source": name, "ok": False,
+                "error": "extractor module missing"}
+    try:
+        return await _asyncio.wait_for(fn(bridge), timeout=timeout_s)
+    except _asyncio.TimeoutError:
+        return {
+            "source": name,
+            "ok": False,
+            "error": f"timeout after {timeout_s:.0f}s",
+        }
+    except Exception as exc:
+        return {
+            "source": name,
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+async def inhale_all_sources(
+    bridge: Any,
+    sources: tuple[str, ...] | list[str] = DEFAULT_DOSSIER_SOURCES,
+    per_source_timeout_s: float = PER_SOURCE_TIMEOUT_S,
+    overall_budget_s: float = SCRAPE_BUDGET_S,
+) -> dict[str, Any]:
+    """Fan out every configured source in parallel via asyncio.gather.
+
+    Returns a merged dossier dict shaped like::
+
+        {
+            "schema": "coldstart.dossier.v1",
+            "sources": ["linkedin", "gmail", ...],
+            "ok_sources": ["linkedin", ...],
+            "failed_sources": [{"source": str, "error": str}],
+            "linkedin": {...},   # the source's full extract dict
+            "gmail":    {...},
+            "calendar": {...},
+            "drive":    {...},
+            "elapsed_ms": int,
+        }
+
+    Hard rules:
+
+    * Sources run CONCURRENTLY (asyncio.gather), not serially.
+    * Each source has its own ``per_source_timeout_s`` hard cap.
+    * The whole fan-out also has an ``overall_budget_s`` cap so a
+      pathological dispatcher cannot stall the cold start forever.
+    * One failing source never breaks the others: every coroutine is
+      wrapped by ``_run_one_source_with_timeout`` which converts
+      every exception path into a dict result.
+    """
+    if not sources:
+        return {
+            "schema": "coldstart.dossier.v1",
+            "sources": [],
+            "ok_sources": [],
+            "failed_sources": [],
+            "elapsed_ms": 0,
+        }
+
+    started = time.monotonic()
+    coros = [
+        _run_one_source_with_timeout(name, bridge, per_source_timeout_s)
+        for name in sources
+    ]
+
+    try:
+        results = await _asyncio.wait_for(
+            _asyncio.gather(*coros, return_exceptions=False),
+            timeout=overall_budget_s,
+        )
+    except _asyncio.TimeoutError:
+        # Overall budget blown. Build a result that marks every source
+        # as failed for budget; the clarifier still runs (empty) and
+        # the orchestrator surfaces a clean error instead of a hang.
+        elapsed = int((time.monotonic() - started) * 1000)
+        return {
+            "schema": "coldstart.dossier.v1",
+            "sources": list(sources),
+            "ok_sources": [],
+            "failed_sources": [
+                {"source": s,
+                 "error": f"overall scrape budget {overall_budget_s:.0f}s exceeded"}
+                for s in sources
+            ],
+            "elapsed_ms": elapsed,
+        }
+
+    elapsed = int((time.monotonic() - started) * 1000)
+    dossier: dict[str, Any] = {
+        "schema": "coldstart.dossier.v1",
+        "sources": list(sources),
+        "ok_sources": [],
+        "failed_sources": [],
+        "elapsed_ms": elapsed,
+    }
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        name = str(r.get("source") or "").strip()
+        if not name:
+            continue
+        dossier[name] = r
+        if r.get("ok"):
+            dossier["ok_sources"].append(name)
+        else:
+            dossier["failed_sources"].append({
+                "source": name,
+                "error": str(r.get("error") or "unknown failure"),
+            })
+    return dossier
+
+
+async def run_coldstart_pipeline(
+    bridge: Any,
+    sources: tuple[str, ...] | list[str] = DEFAULT_DOSSIER_SOURCES,
+    per_source_timeout_s: float = PER_SOURCE_TIMEOUT_S,
+    overall_budget_s: float = SCRAPE_BUDGET_S,
+    total_budget_s: float = TOTAL_PIPELINE_BUDGET_S,
+) -> dict[str, Any]:
+    """Run the full Phase 5 onboarding pipeline.
+
+    Steps:
+
+    1. Inhale every source in parallel (with per-source timeouts).
+    2. Generate the SMS clarification body from the merged dossier.
+    3. Return ``{dossier, clarification_sms, elapsed_ms, ok}`` so the
+       caller can persist + send.
+
+    The total budget covers steps 1 + 2. We give the inhale up to
+    ``overall_budget_s`` (default 90s) and the clarifier ~the remaining
+    slack. The clarifier itself is synchronous and fast so the slack
+    is almost always unused; it exists to absorb LLM-side jitter if
+    a future version of the clarifier calls a model.
+
+    Returns shape::
+
+        {
+            "ok": bool,
+            "dossier": {...},
+            "clarification_sms": str,
+            "elapsed_ms": int,
+            "error": str | None,
+        }
+    """
+    # Defer the clarifier import to call time so a test can swap it
+    # out by reassigning the module attribute first.
+    from . import clarifier as _clarifier
+
+    pipeline_started = time.monotonic()
+    deadline = pipeline_started + max(1.0, total_budget_s)
+
+    # Cap the scrape budget at whatever slack we still have left.
+    scrape_budget = min(
+        overall_budget_s,
+        max(1.0, deadline - time.monotonic()),
+    )
+    try:
+        dossier = await inhale_all_sources(
+            bridge,
+            sources=sources,
+            per_source_timeout_s=per_source_timeout_s,
+            overall_budget_s=scrape_budget,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "dossier": {},
+            "clarification_sms": "",
+            "elapsed_ms": int(
+                (time.monotonic() - pipeline_started) * 1000),
+            "error": f"inhale_all_sources raised: {exc}",
+        }
+
+    # Even if the inhale fully timed out we still try to clarify on
+    # whatever (potentially empty) shape we got; the clarifier
+    # returns "" when there is nothing to confirm, which the caller
+    # handles by falling back to a longer SMS conversation.
+    try:
+        sms = _clarifier.build_clarification_sms(dossier)
+    except Exception as exc:
+        sms = ""
+        dossier.setdefault("clarifier_error",
+                           f"{type(exc).__name__}: {exc}")
+
+    elapsed = int((time.monotonic() - pipeline_started) * 1000)
+    return {
+        "ok": bool(dossier.get("ok_sources")),
+        "dossier": dossier,
+        "clarification_sms": sms,
+        "elapsed_ms": elapsed,
+        "error": None,
+    }

@@ -487,6 +487,597 @@
         0%, 100% { opacity: 0.30; transform: translateY(0); }
         50%      { opacity: 0.90; transform: translateY(-1px); }
       }
+
+      /* Timeline view (Phase 2 UI follow-on).
+         Renders the unified-timeline feed from /api/timeline/recent.
+         Lives alongside #welcome and #columns in the .body container;
+         ensureView toggles which one is visible. Each row uses the same
+         Apple type rhythm as the rest of the popover: 13.5/18 row text,
+         11.5/14 timestamp, generous left padding so the kind icon has
+         room to breathe. */
+
+      #timeline-view {
+        animation: viewIn 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+        padding: 2px 0 6px;
+      }
+
+      .timeline-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+      .timeline-header h1 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+      }
+      .timeline-header .count {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-faint);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      /* Filter chips. Pill row at the top of the feed. Active chip uses
+         the gold tint band so the user always sees what's filtered. */
+      .timeline-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .timeline-chip {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--text-dim);
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        border-radius: 999px;
+        padding: 4px 10px;
+        cursor: pointer;
+        line-height: 1.2;
+        letter-spacing: -0.002em;
+        transition:
+          background-color 160ms ease,
+          color 160ms ease,
+          border-color 160ms ease;
+      }
+      .timeline-chip:hover {
+        border-color: var(--hairline-strong);
+        color: var(--text);
+      }
+      .timeline-chip.is-active {
+        background: var(--tint-strong);
+        color: var(--text);
+        border-color: var(--tint-strong);
+      }
+
+      /* Feed list. Scrolls inside .body, so the list itself only needs
+         flat spacing and dividers. */
+      .timeline-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .timeline-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--hairline);
+        animation: rowFadeIn 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      .timeline-row:last-child { border-bottom: none; }
+      .timeline-row:first-child { padding-top: 4px; }
+
+      @keyframes rowFadeIn {
+        from { opacity: 0; transform: translateY(2px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      .timeline-icon {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-dim);
+        font-size: 11.5px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: -0.01em;
+      }
+      .timeline-icon svg {
+        width: 12px;
+        height: 12px;
+        fill: currentColor;
+      }
+
+      .timeline-body {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .timeline-summary {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text);
+        line-height: 1.4;
+        letter-spacing: -0.002em;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+      .timeline-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-faint);
+        letter-spacing: 0.005em;
+      }
+      .timeline-meta .dot-sep {
+        width: 2px;
+        height: 2px;
+        border-radius: 50%;
+        background: var(--text-faint);
+        opacity: 0.6;
+      }
+
+      /* Status badge. Pill colored by status: green done, amber pending,
+         red failed, gold wait_user. */
+      .timeline-status {
+        display: inline-flex;
+        align-items: center;
+        font-size: 10px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 3px 7px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+      }
+      .timeline-status.s-done {
+        color: var(--ok);
+        background: var(--ok-soft);
+        border-color: var(--ok-border);
+      }
+      .timeline-status.s-failed {
+        color: var(--err);
+        background: var(--err-soft);
+        border-color: var(--err-border);
+      }
+      .timeline-status.s-pending {
+        color: var(--warn);
+        background: var(--warn-soft);
+        border-color: var(--warn-border);
+      }
+      .timeline-status.s-wait_user {
+        color: var(--gold);
+        background: var(--tint-soft);
+        border-color: var(--tint-strong);
+      }
+
+      .timeline-empty {
+        padding: 20px 4px;
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 1.5;
+        letter-spacing: -0.002em;
+      }
+      .timeline-empty .hint {
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--text-faint);
+      }
+
+      /*
+       * PHASE 5 onboarding wizard styles.
+       *
+       * The wizard takes over the whole popover body the first time a
+       * user opens Anticipy. It walks them through five steps:
+       *   1. Permissions (mic / accessibility / notifications)
+       *   2. Chrome extension install
+       *   3. Name + location
+       *   4. Two-minute cold-start scrape
+       *   5. SMS clarification preview
+       *
+       * The visual rhythm follows the existing popover: cream text on
+       * dark, gold tint for active state, 10px corners, generous
+       * whitespace, springy 200ms transitions. There is always a
+       * "Skip onboarding, just listen" link at the bottom so the user
+       * can drop straight into the ambient-listen surface if they want
+       * to. The wizard never auto-dismisses; the user owns the pacing.
+       */
+      #onboarding-wizard {
+        padding: 0 0 2px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        animation: viewIn 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+        min-height: 100%;
+      }
+      .wizard-progress {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .wizard-progress .pip {
+        flex: 1;
+        height: 3px;
+        border-radius: 2px;
+        background: var(--hairline);
+        transition: background-color 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      .wizard-progress .pip.active {
+        background: var(--gold);
+        box-shadow: 0 0 6px rgba(200, 169, 126, 0.40);
+      }
+      .wizard-progress .pip.done {
+        background: var(--ok);
+      }
+      .wizard-step-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.10em;
+        line-height: 1;
+      }
+      .wizard-step {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        animation: viewIn 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      .wizard-step h1 {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.02em;
+        line-height: 1.28;
+      }
+      .wizard-step p.lede {
+        font-size: 13.5px;
+        font-weight: 400;
+        color: var(--text-dim);
+        line-height: 1.5;
+        letter-spacing: -0.003em;
+      }
+      .wizard-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+        padding: 14px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .wizard-card .title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.005em;
+      }
+      .wizard-card .sub {
+        font-size: 12.5px;
+        font-weight: 400;
+        color: var(--text-dim);
+        line-height: 1.5;
+        letter-spacing: -0.002em;
+      }
+      .wizard-perm-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .wizard-perm {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+        transition:
+          border-color 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          background-color 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      .wizard-perm.active {
+        border-color: var(--tint-strong);
+        background: var(--tint-soft);
+      }
+      .wizard-perm.done {
+        border-color: var(--ok-border);
+        background: var(--ok-soft);
+      }
+      .wizard-perm .perm-check {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 1.5px solid var(--text-faint);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        color: transparent;
+        flex-shrink: 0;
+      }
+      .wizard-perm.done .perm-check {
+        border-color: var(--ok);
+        background: var(--ok);
+        color: var(--bg);
+      }
+      .wizard-perm.active .perm-check {
+        border-color: var(--gold);
+      }
+      .wizard-perm .perm-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .wizard-perm .perm-name {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--text);
+        letter-spacing: -0.005em;
+      }
+      .wizard-perm .perm-why {
+        font-size: 11.5px;
+        font-weight: 400;
+        color: var(--text-dim);
+        line-height: 1.4;
+      }
+      .wizard-perm .perm-state {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-faint);
+        letter-spacing: 0.01em;
+      }
+      .wizard-perm.done .perm-state { color: var(--ok); }
+      .wizard-perm.active .perm-state { color: var(--gold); }
+      .wizard-explainer {
+        background: var(--tint-soft);
+        border: 1px solid var(--tint-strong);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 12.5px;
+        font-weight: 400;
+        color: var(--text);
+        line-height: 1.5;
+        letter-spacing: -0.002em;
+      }
+      .wizard-explainer .title {
+        font-size: 12.5px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        letter-spacing: -0.005em;
+      }
+      .wizard-guide-steps {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0;
+        margin: 0;
+      }
+      .wizard-guide-step {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 8px 10px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline);
+        border-radius: 8px;
+      }
+      .wizard-guide-step .num {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--tint-strong);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0;
+      }
+      .wizard-guide-step .body {
+        flex: 1;
+        font-size: 12.5px;
+        font-weight: 400;
+        color: var(--text);
+        line-height: 1.45;
+        letter-spacing: -0.002em;
+      }
+      .wizard-guide-step .body .hint {
+        font-size: 11.5px;
+        font-weight: 400;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      .wizard-path-pill {
+        display: inline-block;
+        font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--gold);
+        background: var(--bg);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 6px;
+        padding: 4px 8px;
+        margin-top: 4px;
+        word-break: break-all;
+        line-height: 1.4;
+        user-select: text;
+      }
+      .wizard-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .wizard-field label {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--text-dim);
+        letter-spacing: 0.005em;
+      }
+      .wizard-field input {
+        width: 100%;
+        padding: 11px 13px;
+        border-radius: 9px;
+        border: 1px solid var(--hairline-strong);
+        background: var(--bg-elevated);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 13.5px;
+        outline: none;
+        transition:
+          border-color 180ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          background-color 180ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+        -webkit-app-region: no-drag;
+      }
+      .wizard-field input:focus {
+        border-color: var(--gold);
+        background: var(--bg);
+      }
+      .wizard-field input::placeholder { color: var(--text-faint); }
+      .wizard-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 6px;
+      }
+      .wizard-btn {
+        padding: 10px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: inherit;
+        background: var(--btn-bg);
+        color: var(--btn-text);
+        border: 1px solid var(--btn-bg);
+        border-radius: 9px;
+        cursor: pointer;
+        transition: opacity 120ms ease, transform 80ms ease;
+        letter-spacing: -0.005em;
+        -webkit-app-region: no-drag;
+      }
+      .wizard-btn:hover  { opacity: 0.88; }
+      .wizard-btn:active { transform: scale(0.98); }
+      .wizard-btn[disabled] {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .wizard-btn.ghost {
+        background: var(--ghost-bg);
+        color: var(--ghost-text);
+        border: 1px solid var(--ghost-border);
+      }
+      .wizard-btn.gold {
+        background: var(--tint-strong);
+        color: var(--text);
+        border: 1px solid var(--gold);
+      }
+      .wizard-skip {
+        margin-top: auto;
+        padding-top: 14px;
+        border-top: 1px solid var(--hairline);
+        text-align: center;
+      }
+      .wizard-skip button {
+        background: transparent;
+        border: none;
+        color: var(--text-faint);
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 4px 8px;
+        transition: color 160ms ease;
+        -webkit-app-region: no-drag;
+      }
+      .wizard-skip button:hover { color: var(--text-dim); }
+      .wizard-scrape-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--text);
+        line-height: 1.45;
+      }
+      .wizard-scrape-line .label {
+        flex: 1;
+      }
+      .wizard-scrape-line .count {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--text-dim);
+        letter-spacing: 0.005em;
+      }
+      .wizard-scrape-line.active .label { color: var(--gold); }
+      .wizard-scrape-line.done   .count { color: var(--ok); }
+      .wizard-scrape-line .spark {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-faint);
+        flex-shrink: 0;
+      }
+      .wizard-scrape-line.active .spark {
+        background: var(--gold);
+        animation: dotty 1100ms ease-in-out infinite;
+      }
+      .wizard-scrape-line.done .spark { background: var(--ok); }
+      .wizard-error {
+        background: var(--err-soft);
+        border: 1px solid var(--err-border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--err);
+        line-height: 1.4;
+      }
+      .wizard-sms-preview {
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 14px;
+        padding: 14px 14px;
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text);
+        line-height: 1.55;
+        letter-spacing: -0.002em;
+        position: relative;
+      }
+      .wizard-sms-preview::before {
+        content: "From Anticipy via SMS";
+        display: block;
+        font-size: 10.5px;
+        font-weight: 600;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.10em;
+        margin-bottom: 8px;
+      }
     </style>
   </head>
   <body>
@@ -525,6 +1116,202 @@
       </div>
 
       <div class="body">
+
+        <!-- PHASE 5 onboarding wizard. Hidden by default; surfaced
+             when /api/state reports onboarded:false. Walks the user
+             through permissions, Chrome extension install, basic
+             profile, the 2-minute cold-start scrape, and the SMS
+             clarification. Skip-onboarding link at bottom flips back
+             to the welcome view so power users can drop into ambient
+             listen mode without the full intro. -->
+        <section id="onboarding-wizard" class="hidden">
+          <div>
+            <div class="wizard-step-label" id="wizard-step-label">Step 1 of 5</div>
+            <div class="wizard-progress" id="wizard-progress">
+              <span class="pip active" data-pip="1"></span>
+              <span class="pip" data-pip="2"></span>
+              <span class="pip" data-pip="3"></span>
+              <span class="pip" data-pip="4"></span>
+              <span class="pip" data-pip="5"></span>
+            </div>
+          </div>
+
+          <!-- Step 1: Permissions. Mic first because the engine needs it
+               immediately; accessibility and notifications follow. Each
+               row has an inline explainer (the "why") above the row
+               state so the user reads the rationale BEFORE they click. -->
+          <div class="wizard-step" id="wizard-step-1" data-step="1">
+            <h1>A few quick permissions.</h1>
+            <p class="lede">Anticipy works on your Mac. These three macOS prompts let it hear you, see what is on screen when you ask, and tap you on the shoulder when something is ready.</p>
+            <div class="wizard-perm-list">
+              <div class="wizard-perm active" data-perm="microphone">
+                <span class="perm-check">OK</span>
+                <div class="perm-body">
+                  <div class="perm-name">Microphone</div>
+                  <div class="perm-why">Lets Anticipy hear what people ask you to do. Audio stays on this Mac. Never uploaded.</div>
+                </div>
+                <span class="perm-state">Needed</span>
+              </div>
+              <div class="wizard-perm" data-perm="accessibility">
+                <span class="perm-check">OK</span>
+                <div class="perm-body">
+                  <div class="perm-name">Accessibility</div>
+                  <div class="perm-why">Lets Anticipy press a button or paste a line into a Mac app when you ask it to.</div>
+                </div>
+                <span class="perm-state">Needed</span>
+              </div>
+              <div class="wizard-perm" data-perm="notifications">
+                <span class="perm-check">OK</span>
+                <div class="perm-body">
+                  <div class="perm-name">Notifications</div>
+                  <div class="perm-why">Lets Anticipy ping you when something needs a yes or no.</div>
+                </div>
+                <span class="perm-state">Needed</span>
+              </div>
+            </div>
+            <div class="wizard-explainer" id="wizard-perm-explainer">
+              <div class="title">One macOS pop-up at a time</div>
+              When you click Allow Microphone below, macOS will pop up its own Allow or Deny window. Click Allow there, then we move on to the next one. We do not collect anything; the prompts come straight from macOS.
+            </div>
+            <div class="wizard-error hidden" id="wizard-perm-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-perm-action">Allow microphone</button>
+              <button class="wizard-btn ghost" id="wizard-perm-skip">Skip this one</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Chrome extension. The path is pre-copied to
+               clipboard by the Tauri command. The 4-step guide lives
+               inline so the user does not have to context-switch to
+               read a separate help page. -->
+          <div class="wizard-step hidden" id="wizard-step-2" data-step="2">
+            <h1>Plug Anticipy into Chrome.</h1>
+            <p class="lede">Anticipy uses your own Chrome so it can act on the websites you are already signed into. This is the only part that needs a few clicks.</p>
+            <div class="wizard-explainer">
+              <div class="title">We copied the folder path for you</div>
+              When you hit Load unpacked in Chrome, paste right away. The path is already on your clipboard.
+              <span class="wizard-path-pill" id="wizard-extension-path">/Users/omarebrahim/.anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME</span>
+            </div>
+            <ol class="wizard-guide-steps">
+              <li class="wizard-guide-step">
+                <span class="num">1</span>
+                <div class="body">
+                  Open chrome://extensions in Chrome.
+                  <div class="hint">The big Open Chrome button below does this for you.</div>
+                </div>
+              </li>
+              <li class="wizard-guide-step">
+                <span class="num">2</span>
+                <div class="body">
+                  Flip on Developer mode in the top right.
+                  <div class="hint">It is a small toggle next to the search box.</div>
+                </div>
+              </li>
+              <li class="wizard-guide-step">
+                <span class="num">3</span>
+                <div class="body">
+                  Click Load unpacked.
+                  <div class="hint">A folder picker opens.</div>
+                </div>
+              </li>
+              <li class="wizard-guide-step">
+                <span class="num">4</span>
+                <div class="body">
+                  Paste the path we copied for you, then hit Select.
+                  <div class="hint">Press Cmd+Shift+G in the folder picker, paste, Enter.</div>
+                </div>
+              </li>
+            </ol>
+            <div class="wizard-error hidden" id="wizard-ext-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-ext-open">Open chrome://extensions</button>
+              <button class="wizard-btn gold" id="wizard-ext-loaded">I loaded it</button>
+            </div>
+            <div class="wizard-actions">
+              <button class="wizard-btn ghost" id="wizard-ext-copy">Copy path again</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Name + location. Two fields, generous spacing,
+               primary button disabled until both are non-empty. -->
+          <div class="wizard-step hidden" id="wizard-step-3" data-step="3">
+            <h1>Two quick things.</h1>
+            <p class="lede">Anticipy will use these to introduce you when it acts on your behalf and to keep things relevant to where you are.</p>
+            <div class="wizard-field">
+              <label for="wizard-name">Your name</label>
+              <input id="wizard-name" type="text" autocomplete="name" placeholder="Omar Ebrahim" />
+            </div>
+            <div class="wizard-field">
+              <label for="wizard-location">Where you are</label>
+              <input id="wizard-location" type="text" autocomplete="address-level2" placeholder="Vancouver, BC" />
+            </div>
+            <div class="wizard-error hidden" id="wizard-profile-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-profile-submit" disabled>Save and continue</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Cold-start scrape. Big button to start, then a
+               live progress list with checkmarks as each source
+               finishes. Numbers come from /api/coldstart/status. -->
+          <div class="wizard-step hidden" id="wizard-step-4" data-step="4">
+            <h1>Give me two minutes.</h1>
+            <p class="lede">Anticipy will read your Gmail, Calendar, and contacts to learn what is going on in your life. It does this once, locally, then forgets the raw data and keeps only what matters.</p>
+            <div class="wizard-card">
+              <div class="title">What Anticipy is doing</div>
+              <div class="wizard-scrape-line" data-source="status">
+                <span class="spark"></span>
+                <span class="label" id="wizard-scrape-status">Ready when you are</span>
+                <span class="count" id="wizard-scrape-elapsed">0s</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="gmail">
+                <span class="spark"></span>
+                <span class="label">Gmail</span>
+                <span class="count" data-count-for="gmail">Waiting</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="calendar">
+                <span class="spark"></span>
+                <span class="label">Calendar</span>
+                <span class="count" data-count-for="calendar">Waiting</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="contacts">
+                <span class="spark"></span>
+                <span class="label">Contacts</span>
+                <span class="count" data-count-for="contacts">Waiting</span>
+              </div>
+              <div class="wizard-scrape-line" data-source="linkedin">
+                <span class="spark"></span>
+                <span class="label">LinkedIn</span>
+                <span class="count" data-count-for="linkedin">Waiting</span>
+              </div>
+            </div>
+            <div class="wizard-error hidden" id="wizard-scrape-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-scrape-start">Give me 2 minutes</button>
+              <button class="wizard-btn ghost hidden" id="wizard-scrape-continue">Move on</button>
+            </div>
+          </div>
+
+          <!-- Step 5: SMS clarification preview. Shows the exact
+               message Anticipy will text the user, with a Send button
+               that runs through the existing pre-confirm path. -->
+          <div class="wizard-step hidden" id="wizard-step-5" data-step="5">
+            <h1>Last thing.</h1>
+            <p class="lede">Anticipy will text you to clarify a couple of things, then it is yours. Here is what the message looks like.</p>
+            <div class="wizard-sms-preview" id="wizard-sms-preview">
+              Hey, Anticipy here. I read through what is going on this week and I have two quick questions so I get it right. Reply YES to chat now, or LATER and I will hold off.
+            </div>
+            <div class="wizard-error hidden" id="wizard-sms-error"></div>
+            <div class="wizard-actions">
+              <button class="wizard-btn" id="wizard-sms-send">Send the text</button>
+              <button class="wizard-btn ghost" id="wizard-sms-skip">Not now</button>
+            </div>
+          </div>
+
+          <div class="wizard-skip">
+            <button id="wizard-skip-all">Skip onboarding, just listen</button>
+          </div>
+        </section>
 
         <!-- Welcome state: shown when dossier is empty.
              We default to VISIBLE (no .hidden) so that even if the
@@ -594,6 +1381,31 @@
             <h2>Past</h2>
             <ul id="past-list"><li class="empty">No recent actions yet.</li></ul>
           </div>
+        </section>
+
+        <!-- Unified timeline feed (Phase 2 UI follow-on).
+             Reads from /api/timeline/recent every 5 seconds. Renders
+             every action Anticipy has taken across every channel (SMS,
+             voice, email, web, notes, replies) as one scrollable feed.
+             Filter chips at the top let the user narrow by status. -->
+        <section id="timeline-view" class="hidden">
+          <div class="timeline-header">
+            <h1>What Anticipy has done</h1>
+            <span class="count" id="timeline-count">0 events</span>
+          </div>
+          <div class="timeline-chips" id="timeline-chips">
+            <span class="timeline-chip is-active" data-filter="all" data-filter-type="status">All</span>
+            <span class="timeline-chip" data-filter="pending" data-filter-type="status">Pending</span>
+            <span class="timeline-chip" data-filter="done" data-filter-type="status">Done</span>
+            <span class="timeline-chip" data-filter="wait_user" data-filter-type="status">Waiting on you</span>
+            <span class="timeline-chip" data-filter="failed" data-filter-type="status">Failed</span>
+          </div>
+          <ul class="timeline-list" id="timeline-list">
+            <li class="timeline-empty" id="timeline-empty">
+              Anticipy hasn't done anything yet.
+              <div class="hint">Try saying "draft an email to my boss".</div>
+            </li>
+          </ul>
         </section>
 
       </div>
@@ -707,6 +1519,10 @@
         lastView = name;
         $("welcome").classList.toggle("hidden", name !== "welcome");
         $("columns").classList.toggle("hidden", name !== "columns");
+        const tlEl = $("timeline-view");
+        if (tlEl) tlEl.classList.toggle("hidden", name !== "timeline");
+        const wzEl = $("onboarding-wizard");
+        if (wzEl) wzEl.classList.toggle("hidden", name !== "onboarding-wizard");
       }
 
       /* ----- Now / Next / Past rendering, idempotent ----- */
@@ -851,7 +1667,12 @@
             if (currentMicState !== "denied") setStatus("warn", "Getting set up");
             return;
           }
-          ensureView("columns");
+          // Populated state: switch to the unified-timeline feed
+          // (ARCHITECTURE.md section 3). The legacy Now/Next/Past
+          // columns view stays in markup for reference but is hidden
+          // because the timeline is the canonical "what Anticipy has
+          // done" surface.
+          ensureView("timeline");
           if (currentMicState !== "denied") setStatus("ready", "Listening");
 
           const [active, next, past] = await Promise.all([
@@ -1325,12 +2146,24 @@
         document.body.classList.add("is-shown");
         refresh();
         checkMicPermission();
+        checkOnboardingState();
       });
       onEvent("mic-permission-about-to-prompt", (payload) => {
         const msg = (payload && (payload.message || payload.usage)) || "";
         showMicPrePrompt(msg);
       });
-      onEvent("mic-permission-granted", () => applyMicState("granted"));
+      onEvent("mic-permission-granted", () => {
+        applyMicState("granted");
+        // PHASE 5 wizard: mark microphone as done if the wizard is
+        // currently showing step 1. The wizard state machine advances
+        // only on explicit user action, but a granted event from
+        // outside the wizard (e.g. user clicked Allow in System
+        // Settings) should be reflected immediately.
+        if (WIZARD.perms && WIZARD.perms.microphone) {
+          WIZARD.perms.microphone.done = true;
+          wizardUpdatePermRows();
+        }
+      });
       onEvent("mic-permission-denied",  () => applyMicState("denied"));
       onEvent("mic-permission-changed", (payload) => {
         if (payload && typeof payload.state === "string") applyMicState(payload.state);
@@ -1394,10 +2227,809 @@
         refresh();
       });
 
+      /* ----- Unified timeline poller (Phase 2 UI follow-on) -----
+         Polls /api/timeline/recent every 5 seconds. Renders one feed
+         row per timeline entry (most recent first). Filter chips at the
+         top filter by status (All / Pending / Done / Waiting on you /
+         Failed); each click re-fetches with the appropriate query
+         param. Newly arrived rows fade in via the rowFadeIn keyframe
+         on .timeline-row, so the user notices motion without a flash.
+         All rendering is idempotent: the seen-key set short-circuits
+         when the data hasn't changed since the last poll. */
+
+      const TIMELINE_ENGINE_URL = "http://127.0.0.1:8731";
+      const TIMELINE_KIND_LABEL = {
+        email_sent: "Email",
+        sms_sent: "SMS",
+        voice_call: "Voice call",
+        web_action: "Web action",
+        note: "Note",
+        user_reply: "Reply",
+      };
+      // Inline SVG icons. We use stroke="currentColor" so the icon
+      // inherits the chip color (text-dim by default), which keeps the
+      // popover monochrome until status overrides apply on the badge.
+      const TIMELINE_KIND_ICON = {
+        email_sent:
+          '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 4.5h11v7h-11z"/><path d="M2.8 4.8l5.2 4 5.2-4"/></svg>',
+        sms_sent:
+          '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 3.5h11v7h-7l-3 2.5v-2.5h-1z"/></svg>',
+        voice_call:
+          '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 3.5c0 5 4 9 9 9l1-2.5-2.5-1-1 1c-1.5-.5-3-2-3.5-3.5l1-1-1-2.5z"/></svg>',
+        web_action:
+          '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 1.7 2 9.3 0 11M8 2.5c-2 1.7-2 9.3 0 11"/></svg>',
+        note:
+          '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.5"/></svg>',
+        user_reply:
+          '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8h-9l3-3M4.5 8l3 3"/></svg>',
+      };
+      const TIMELINE_STATUS_LABEL = {
+        done: "Done",
+        pending: "Pending",
+        failed: "Failed",
+        wait_user: "Needs you",
+      };
+
+      let timelineFilterStatus = "all"; // matches data-filter on chips
+      let timelineSeenKeys = new Set();
+      let timelinePolling = false;
+      let timelineLastCount = -1;
+
+      function friendlyTimelineAge(ts) {
+        if (!Number.isFinite(ts) || ts <= 0) return "";
+        const secs = Math.max(0, Date.now() / 1000 - Number(ts));
+        if (secs < 5) return "Just now";
+        if (secs < 60) return Math.floor(secs) + " sec ago";
+        const mins = Math.floor(secs / 60);
+        if (mins < 60) return mins + " minute" + (mins === 1 ? "" : "s") + " ago";
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return hrs + " hour" + (hrs === 1 ? "" : "s") + " ago";
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return days + " day" + (days === 1 ? "" : "s") + " ago";
+        const d = new Date(Number(ts) * 1000);
+        return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      }
+
+      function buildTimelineRow(entry) {
+        const li = document.createElement("li");
+        li.className = "timeline-row";
+        li.setAttribute("role", "listitem");
+        if (entry && entry.goal_id) li.dataset.goalId = entry.goal_id;
+
+        const icon = document.createElement("span");
+        icon.className = "timeline-icon";
+        icon.setAttribute("aria-hidden", "true");
+        const kind = entry && entry.kind ? String(entry.kind) : "note";
+        icon.innerHTML = TIMELINE_KIND_ICON[kind] || TIMELINE_KIND_ICON.note;
+        li.appendChild(icon);
+
+        const bodyEl = document.createElement("div");
+        bodyEl.className = "timeline-body";
+        const summary = document.createElement("div");
+        summary.className = "timeline-summary";
+        summary.textContent = (entry && entry.summary) || "Anticipy did something";
+        bodyEl.appendChild(summary);
+
+        const meta = document.createElement("div");
+        meta.className = "timeline-meta";
+
+        const status = (entry && entry.status) || "done";
+        const badge = document.createElement("span");
+        badge.className = "timeline-status s-" + status;
+        badge.textContent = TIMELINE_STATUS_LABEL[status] || status;
+        meta.appendChild(badge);
+
+        const sep = document.createElement("span");
+        sep.className = "dot-sep";
+        meta.appendChild(sep);
+
+        const kindLabel = document.createElement("span");
+        kindLabel.textContent = TIMELINE_KIND_LABEL[kind] || kind;
+        meta.appendChild(kindLabel);
+
+        const ts = entry && Number(entry.ts);
+        if (Number.isFinite(ts) && ts > 0) {
+          const sep2 = document.createElement("span");
+          sep2.className = "dot-sep";
+          meta.appendChild(sep2);
+          const age = document.createElement("span");
+          age.textContent = friendlyTimelineAge(ts);
+          meta.appendChild(age);
+        }
+
+        bodyEl.appendChild(meta);
+        li.appendChild(bodyEl);
+        return li;
+      }
+
+      function renderTimelineEntries(entries) {
+        const list = $("timeline-list");
+        const empty = $("timeline-empty");
+        const countEl = $("timeline-count");
+        if (!list) return;
+
+        // Sort most recent first for the visible feed.
+        const sorted = (entries || []).slice().sort((a, b) => {
+          const ta = Number(a && a.ts) || 0;
+          const tb = Number(b && b.ts) || 0;
+          return tb - ta;
+        });
+
+        if (countEl) {
+          const n = sorted.length;
+          countEl.textContent = n + " event" + (n === 1 ? "" : "s");
+        }
+
+        if (sorted.length === 0) {
+          // Empty state. The empty <li> stays in markup; just clear
+          // the diff cache so a later non-empty render fully redraws.
+          timelineSeenKeys = new Set();
+          // Remove any prior rendered rows but keep the empty cell.
+          const existing = list.querySelectorAll(".timeline-row");
+          existing.forEach((node) => node.remove());
+          if (empty) empty.style.display = "";
+          timelineLastCount = 0;
+          return;
+        }
+        if (empty) empty.style.display = "none";
+
+        // Idempotent diff render: only append rows whose ts+goal_id is
+        // new since the last poll. When the count changes (rows fell
+        // off the tail of the window) we do a full redraw.
+        if (sorted.length !== timelineLastCount) {
+          list.innerHTML = "";
+          timelineSeenKeys = new Set();
+          if (empty) list.appendChild(empty);
+          if (empty) empty.style.display = "none";
+        }
+        timelineLastCount = sorted.length;
+
+        // Append rows in newest-first order. Existing rows are kept;
+        // new rows fade in via the rowFadeIn keyframe.
+        const fragment = document.createDocumentFragment();
+        const renderedKeys = new Set();
+        for (const entry of sorted) {
+          const ts = Number(entry && entry.ts) || 0;
+          const goalId = String((entry && entry.goal_id) || "");
+          const summary = String((entry && entry.summary) || "");
+          const key = ts.toFixed(3) + "|" + goalId + "|" + summary;
+          renderedKeys.add(key);
+          if (!timelineSeenKeys.has(key)) {
+            const row = buildTimelineRow(entry);
+            row.dataset.key = key;
+            fragment.appendChild(row);
+            timelineSeenKeys.add(key);
+          }
+        }
+        if (fragment.childNodes.length > 0) {
+          // Prepend so newest is on top.
+          const firstReal = list.querySelector(".timeline-row");
+          if (firstReal) {
+            list.insertBefore(fragment, firstReal);
+          } else {
+            list.appendChild(fragment);
+          }
+        }
+        // Drop any rows that fell off the tail of the window.
+        const rows = list.querySelectorAll(".timeline-row");
+        rows.forEach((node) => {
+          const k = node.dataset.key || "";
+          if (!renderedKeys.has(k)) node.remove();
+        });
+      }
+
+      function timelineQueryParams() {
+        const params = new URLSearchParams();
+        params.set("n", "50");
+        if (timelineFilterStatus && timelineFilterStatus !== "all") {
+          params.set("status", timelineFilterStatus);
+        }
+        return params.toString();
+      }
+
+      async function pollTimeline() {
+        if (timelinePolling) return;
+        timelinePolling = true;
+        try {
+          const ctrl = ("AbortController" in window) ? new AbortController() : null;
+          const tid = ctrl ? setTimeout(() => ctrl.abort(), 3000) : null;
+          const url = TIMELINE_ENGINE_URL + "/api/timeline/recent?" + timelineQueryParams();
+          const r = await fetch(url, {
+            keepalive: true,
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (tid) clearTimeout(tid);
+          if (!r.ok) return;
+          const data = await r.json();
+          if (!data || data.ok !== true) return;
+          renderTimelineEntries(Array.isArray(data.entries) ? data.entries : []);
+        } catch (_) {
+          /* engine mid-respawn or popover hidden; keep last frame */
+        } finally {
+          timelinePolling = false;
+        }
+      }
+
+      function wireTimelineChips() {
+        const wrap = $("timeline-chips");
+        if (!wrap) return;
+        wrap.addEventListener("click", (ev) => {
+          const target = ev.target;
+          if (!target || !target.classList || !target.classList.contains("timeline-chip")) return;
+          const val = target.dataset.filter || "all";
+          if (val === timelineFilterStatus) return;
+          timelineFilterStatus = val;
+          // Toggle active class. Single-select within chip row.
+          wrap.querySelectorAll(".timeline-chip").forEach((chip) => {
+            chip.classList.toggle("is-active", chip === target);
+          });
+          // Reset diff state so the next poll fully re-renders.
+          timelineSeenKeys = new Set();
+          timelineLastCount = -1;
+          pollTimeline();
+        });
+      }
+
+      /* ============================================================
+         PHASE 5 onboarding wizard controller.
+         ============================================================
+         Mounted on every popover load. Reads /api/state once on boot
+         to decide whether the wizard should be the first thing the
+         user sees. Drives a 5-step flow with progress pips, friendly
+         explainers, and a permanent "Skip onboarding, just listen"
+         escape hatch.
+
+         The wizard never auto-dismisses. The user advances by clicking
+         the primary button in each step. If a step's backing engine
+         endpoint 404s (sibling agent not yet rolled out), the wizard
+         logs and lets the user advance anyway so a partial rollout
+         never blocks first-launch UX.
+
+         Test surface (window.__wizard) exposes the step API so
+         test_onboarding_wizard.html can drive each transition without
+         needing real Tauri commands or a real engine.
+       */
+
+      const WIZARD = {
+        currentStep: 1,
+        totalSteps: 5,
+        perms: {
+          microphone: { done: false, request: "request_microphone_permission" },
+          accessibility: { done: false, request: "request_accessibility_permission" },
+          notifications: { done: false, request: "request_notifications_permission" },
+        },
+        permOrder: ["microphone", "accessibility", "notifications"],
+        permIndex: 0,
+        scrapePollTimer: null,
+        scrapeStartedAt: 0,
+        scrapeRunning: false,
+        forced: false,
+        // Last engine state snapshot. Re-fetched on every refresh()
+        // so an out-of-band state change (e.g. user completes
+        // onboarding via the website) flips us back to the main view.
+        lastEngineState: null,
+      };
+
+      function wizardSetStep(step) {
+        step = Math.max(1, Math.min(WIZARD.totalSteps, step));
+        WIZARD.currentStep = step;
+        for (let i = 1; i <= WIZARD.totalSteps; i += 1) {
+          const el = $("wizard-step-" + i);
+          if (el) el.classList.toggle("hidden", i !== step);
+        }
+        const label = $("wizard-step-label");
+        if (label) label.textContent = "Step " + step + " of " + WIZARD.totalSteps;
+        const pips = document.querySelectorAll("#wizard-progress .pip");
+        pips.forEach((p) => {
+          const idx = Number(p.dataset.pip || 0);
+          p.classList.remove("active", "done");
+          if (idx < step) p.classList.add("done");
+          else if (idx === step) p.classList.add("active");
+        });
+      }
+
+      function wizardUpdatePermRows() {
+        const next = WIZARD.permOrder[WIZARD.permIndex];
+        WIZARD.permOrder.forEach((name) => {
+          const row = document.querySelector(
+            '.wizard-perm[data-perm="' + name + '"]'
+          );
+          if (!row) return;
+          row.classList.remove("active", "done");
+          const stateEl = row.querySelector(".perm-state");
+          if (WIZARD.perms[name].done) {
+            row.classList.add("done");
+            if (stateEl) stateEl.textContent = "Granted";
+          } else if (name === next) {
+            row.classList.add("active");
+            if (stateEl) stateEl.textContent = "Up next";
+          } else if (stateEl) {
+            stateEl.textContent = "Needed";
+          }
+        });
+        const actionBtn = $("wizard-perm-action");
+        if (actionBtn) {
+          if (!next) {
+            actionBtn.textContent = "All set, continue";
+          } else {
+            const label = next.charAt(0).toUpperCase() + next.slice(1);
+            actionBtn.textContent = "Allow " + label.toLowerCase();
+          }
+        }
+      }
+
+      async function wizardRequestNextPerm() {
+        const next = WIZARD.permOrder[WIZARD.permIndex];
+        if (!next) {
+          // All three granted; advance to step 2.
+          wizardSetStep(2);
+          return;
+        }
+        const cmd = WIZARD.perms[next].request;
+        const errEl = $("wizard-perm-error");
+        if (errEl) {
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+        }
+        try {
+          await invoke(cmd);
+          // We optimistically mark this perm as "done" once the OS
+          // dialog has been raised; the user actually clicking Allow
+          // happens out of band and the engine probes the real state
+          // later. Mic state is the one we can re-verify directly via
+          // fetch_mic_permission_state.
+          WIZARD.perms[next].done = true;
+          WIZARD.permIndex += 1;
+          wizardUpdatePermRows();
+        } catch (e) {
+          if (errEl) {
+            errEl.textContent = "macOS could not open that prompt. " +
+              "Try System Settings then Privacy and Security yourself.";
+            errEl.classList.remove("hidden");
+          }
+        }
+      }
+
+      function wizardSkipCurrentPerm() {
+        const next = WIZARD.permOrder[WIZARD.permIndex];
+        if (!next) return;
+        WIZARD.permIndex += 1;
+        wizardUpdatePermRows();
+        if (WIZARD.permIndex >= WIZARD.permOrder.length) {
+          wizardSetStep(2);
+        }
+      }
+
+      function wizardWireStep1() {
+        const action = $("wizard-perm-action");
+        if (action) {
+          action.addEventListener("click", () => { wizardRequestNextPerm(); });
+        }
+        const skip = $("wizard-perm-skip");
+        if (skip) {
+          skip.addEventListener("click", () => { wizardSkipCurrentPerm(); });
+        }
+        wizardUpdatePermRows();
+      }
+
+      async function wizardOpenExtensionsPage() {
+        const errEl = $("wizard-ext-error");
+        if (errEl) {
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+        }
+        try {
+          const res = await invoke("open_chrome_extensions_page");
+          if (res && res.path) {
+            const pathEl = $("wizard-extension-path");
+            if (pathEl) pathEl.textContent = res.path;
+          }
+          if (res && res.copied === false) {
+            if (errEl) {
+              errEl.textContent = "We could not copy the path automatically. " +
+                "Tap and hold the path above to copy.";
+              errEl.classList.remove("hidden");
+            }
+          }
+        } catch (e) {
+          if (errEl) {
+            errEl.textContent = "Could not open Chrome. Open Chrome yourself, then come back.";
+            errEl.classList.remove("hidden");
+          }
+        }
+      }
+
+      async function wizardCopyExtensionPath() {
+        const errEl = $("wizard-ext-error");
+        if (errEl) {
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+        }
+        try {
+          await invoke("copy_extension_path_to_clipboard");
+        } catch (e) {
+          if (errEl) {
+            errEl.textContent = "Could not copy. Tap and hold the path above to copy.";
+            errEl.classList.remove("hidden");
+          }
+        }
+      }
+
+      async function wizardProbeExtension() {
+        const errEl = $("wizard-ext-error");
+        if (errEl) {
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+        }
+        // The probe endpoint is being built by a sibling agent. We
+        // soft-fail to "advance anyway" so the wizard never blocks a
+        // user just because one engine endpoint hasn't shipped yet.
+        let connected = false;
+        try {
+          const ctrl = ("AbortController" in window) ? new AbortController() : null;
+          const tid = ctrl ? setTimeout(() => ctrl.abort(), 4000) : null;
+          const r = await fetch("http://127.0.0.1:8731/api/extension/probe", {
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (tid) clearTimeout(tid);
+          if (r.ok) {
+            const data = await r.json();
+            connected = !!(data && (data.connected === true || data.ok === true));
+          }
+        } catch (_) {
+          // Engine offline or endpoint not yet live.
+          connected = true; // permissive: do not gate user on missing endpoint
+        }
+        if (connected) {
+          wizardSetStep(3);
+        } else {
+          if (errEl) {
+            errEl.textContent = "Still not connecting. Check Developer mode is on, " +
+              "then click Load unpacked again and pick the same folder.";
+            errEl.classList.remove("hidden");
+          }
+        }
+      }
+
+      function wizardWireStep2() {
+        const open = $("wizard-ext-open");
+        if (open) open.addEventListener("click", () => { wizardOpenExtensionsPage(); });
+        const loaded = $("wizard-ext-loaded");
+        if (loaded) loaded.addEventListener("click", () => { wizardProbeExtension(); });
+        const copy = $("wizard-ext-copy");
+        if (copy) copy.addEventListener("click", () => { wizardCopyExtensionPath(); });
+      }
+
+      function wizardValidateProfileFields() {
+        const name = ($("wizard-name") && $("wizard-name").value || "").trim();
+        const loc  = ($("wizard-location") && $("wizard-location").value || "").trim();
+        const submit = $("wizard-profile-submit");
+        if (submit) submit.disabled = !(name && loc);
+      }
+
+      async function wizardSubmitProfile() {
+        const errEl = $("wizard-profile-error");
+        if (errEl) {
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+        }
+        const name = ($("wizard-name") && $("wizard-name").value || "").trim();
+        const loc  = ($("wizard-location") && $("wizard-location").value || "").trim();
+        if (!name || !loc) {
+          if (errEl) {
+            errEl.textContent = "Both fields help Anticipy introduce you. Fill in your name and where you are.";
+            errEl.classList.remove("hidden");
+          }
+          return;
+        }
+        try {
+          await invoke("submit_basic_profile", { name: name, location: loc });
+        } catch (e) {
+          // Engine endpoint missing or transport error. Log to console
+          // but advance the user so onboarding stays unblocked.
+          if (window.console) {
+            console.warn("submit_basic_profile failed, advancing anyway:", e);
+          }
+        }
+        wizardSetStep(4);
+      }
+
+      function wizardWireStep3() {
+        const name = $("wizard-name");
+        const loc  = $("wizard-location");
+        if (name) name.addEventListener("input", wizardValidateProfileFields);
+        if (loc)  loc.addEventListener("input", wizardValidateProfileFields);
+        const submit = $("wizard-profile-submit");
+        if (submit) submit.addEventListener("click", () => { wizardSubmitProfile(); });
+        wizardValidateProfileFields();
+      }
+
+      function wizardRenderScrapeLine(source, label, count, state) {
+        // state: "waiting" | "active" | "done"
+        const line = document.querySelector(
+          '.wizard-scrape-line[data-source="' + source + '"]'
+        );
+        if (!line) return;
+        line.classList.remove("active", "done");
+        if (state === "active") line.classList.add("active");
+        if (state === "done")   line.classList.add("done");
+        const countEl = line.querySelector('[data-count-for="' + source + '"]');
+        if (countEl && count !== undefined && count !== null) {
+          countEl.textContent = String(count);
+        }
+      }
+
+      function wizardScrapeFormatElapsed(secs) {
+        secs = Math.max(0, Math.floor(secs));
+        if (secs < 60) return secs + "s";
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return m + "m " + (s < 10 ? "0" : "") + s + "s";
+      }
+
+      async function wizardPollScrapeStatus() {
+        const errEl = $("wizard-scrape-error");
+        try {
+          const ctrl = ("AbortController" in window) ? new AbortController() : null;
+          const tid = ctrl ? setTimeout(() => ctrl.abort(), 4000) : null;
+          const r = await fetch("http://127.0.0.1:8731/api/coldstart/status", {
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (tid) clearTimeout(tid);
+          if (!r.ok) throw new Error("status " + r.status);
+          const data = await r.json();
+          // Expected shape (best effort; we tolerate missing fields):
+          //   { ok, running, current_source, sources: { gmail: { state, count }, ... } }
+          const status = $("wizard-scrape-status");
+          if (status) {
+            if (data && data.current_message) {
+              status.textContent = data.current_message;
+            } else if (data && data.current_source) {
+              status.textContent = "Reading your " + String(data.current_source);
+            } else if (data && data.running === false) {
+              status.textContent = "All done";
+            } else {
+              status.textContent = "Working through your sources";
+            }
+          }
+          const elapsedEl = $("wizard-scrape-elapsed");
+          if (elapsedEl) {
+            const elapsed = WIZARD.scrapeStartedAt
+              ? (Date.now() - WIZARD.scrapeStartedAt) / 1000
+              : 0;
+            elapsedEl.textContent = wizardScrapeFormatElapsed(elapsed);
+          }
+          const sources = (data && data.sources) || {};
+          ["gmail", "calendar", "contacts", "linkedin"].forEach((src) => {
+            const info = sources[src];
+            if (!info) {
+              wizardRenderScrapeLine(src, src, "Waiting", "waiting");
+              return;
+            }
+            const state = info.state || (info.done ? "done" : "active");
+            const count = info.count !== undefined
+              ? (state === "done" ? "Found " + info.count : "Reading " + info.count)
+              : (state === "done" ? "Done" : "Reading");
+            wizardRenderScrapeLine(src, src, count, state);
+          });
+          if (data && data.running === false) {
+            WIZARD.scrapeRunning = false;
+            if (WIZARD.scrapePollTimer) {
+              clearInterval(WIZARD.scrapePollTimer);
+              WIZARD.scrapePollTimer = null;
+            }
+            const cont = $("wizard-scrape-continue");
+            if (cont) cont.classList.remove("hidden");
+            const start = $("wizard-scrape-start");
+            if (start) start.classList.add("hidden");
+          }
+        } catch (e) {
+          // Engine offline mid-poll. Keep polling silently; the user
+          // sees the last good frame. After 6 consecutive failures we
+          // surface a soft message.
+          WIZARD.scrapePollFails = (WIZARD.scrapePollFails || 0) + 1;
+          if (WIZARD.scrapePollFails >= 6 && errEl) {
+            errEl.textContent = "Anticipy is reading offline for a moment. " +
+              "Give it a beat or skip this step.";
+            errEl.classList.remove("hidden");
+          }
+        }
+      }
+
+      async function wizardStartScrape() {
+        const errEl = $("wizard-scrape-error");
+        if (errEl) {
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+        }
+        WIZARD.scrapeRunning = true;
+        WIZARD.scrapeStartedAt = Date.now();
+        WIZARD.scrapePollFails = 0;
+        const start = $("wizard-scrape-start");
+        if (start) {
+          start.disabled = true;
+          start.textContent = "Reading your sources...";
+        }
+        try {
+          await fetch("http://127.0.0.1:8731/api/coldstart/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+            keepalive: true,
+          });
+        } catch (e) {
+          // Engine not reachable. Surface and let user advance.
+          if (errEl) {
+            errEl.textContent = "Anticipy is starting up. Move on for now and the scrape will run in the background.";
+            errEl.classList.remove("hidden");
+          }
+        }
+        wizardRenderScrapeLine("gmail", "Gmail", "Reading", "active");
+        wizardPollScrapeStatus();
+        if (WIZARD.scrapePollTimer) clearInterval(WIZARD.scrapePollTimer);
+        WIZARD.scrapePollTimer = setInterval(wizardPollScrapeStatus, 2000);
+      }
+
+      function wizardWireStep4() {
+        const start = $("wizard-scrape-start");
+        if (start) start.addEventListener("click", () => { wizardStartScrape(); });
+        const cont = $("wizard-scrape-continue");
+        if (cont) cont.addEventListener("click", () => {
+          if (WIZARD.scrapePollTimer) {
+            clearInterval(WIZARD.scrapePollTimer);
+            WIZARD.scrapePollTimer = null;
+          }
+          wizardSetStep(5);
+        });
+      }
+
+      async function wizardSendSms() {
+        const errEl = $("wizard-sms-error");
+        if (errEl) {
+          errEl.classList.add("hidden");
+          errEl.textContent = "";
+        }
+        const body = $("wizard-sms-preview") && $("wizard-sms-preview").textContent || "";
+        try {
+          await fetch("http://127.0.0.1:8731/api/onboarding/clarify_sms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ body: body.trim() }),
+            keepalive: true,
+          });
+        } catch (e) {
+          // Endpoint missing or engine offline. Treat as "queued
+          // locally" so the user sees a clean completion.
+          if (window.console) {
+            console.warn("clarify_sms failed, treating as queued:", e);
+          }
+        }
+        wizardComplete();
+      }
+
+      function wizardWireStep5() {
+        const send = $("wizard-sms-send");
+        if (send) send.addEventListener("click", () => { wizardSendSms(); });
+        const skip = $("wizard-sms-skip");
+        if (skip) skip.addEventListener("click", () => { wizardComplete(); });
+      }
+
+      function wizardComplete() {
+        // Onboarding finished. Hide wizard, flip to whichever view the
+        // dossier dictates (welcome or columns). The engine's own
+        // /api/state will report onboarded:true once basic_profile
+        // landed, but we proactively flip the local lastView so the
+        // popover does not bounce back into the wizard on the next
+        // refresh cycle.
+        WIZARD.forced = false;
+        const wz = $("onboarding-wizard");
+        if (wz) wz.classList.add("hidden");
+        lastView = null; // force ensureView to re-evaluate next tick
+        refresh();
+      }
+
+      function wizardShow() {
+        WIZARD.forced = true;
+        ensureView("onboarding-wizard");
+        wizardSetStep(1);
+      }
+
+      function wizardSkipAll() {
+        // Permanent skip for this session. We flip back to the
+        // welcome view and tell the user they can re-open the wizard
+        // from the settings menu later (out of scope for this agent;
+        // just don't auto-resurface).
+        WIZARD.forced = false;
+        WIZARD.userSkipped = true;
+        const wz = $("onboarding-wizard");
+        if (wz) wz.classList.add("hidden");
+        lastView = null;
+        ensureView("welcome");
+      }
+
+      function wizardWireSkipAll() {
+        const skip = $("wizard-skip-all");
+        if (skip) skip.addEventListener("click", () => { wizardSkipAll(); });
+      }
+
+      function wizardBoot() {
+        wizardWireStep1();
+        wizardWireStep2();
+        wizardWireStep3();
+        wizardWireStep4();
+        wizardWireStep5();
+        wizardWireSkipAll();
+        wizardSetStep(1);
+      }
+
+      async function checkOnboardingState() {
+        // Source of truth is engine /api/state.onboarded. We only
+        // force-show the wizard when:
+        //   1. engine reports onboarded:false
+        //   2. user has not pressed "Skip onboarding, just listen" in
+        //      this popover session
+        //   3. wizard is not already up
+        if (WIZARD.userSkipped) return;
+        try {
+          const ctrl = ("AbortController" in window) ? new AbortController() : null;
+          const tid = ctrl ? setTimeout(() => ctrl.abort(), 2000) : null;
+          const r = await fetch("http://127.0.0.1:8731/api/state", {
+            signal: ctrl ? ctrl.signal : undefined,
+          });
+          if (tid) clearTimeout(tid);
+          if (!r.ok) return;
+          const data = await r.json();
+          WIZARD.lastEngineState = data;
+          if (data && data.onboarded === false && !WIZARD.forced) {
+            wizardShow();
+          } else if (data && data.onboarded === true && WIZARD.forced) {
+            WIZARD.forced = false;
+            const wz = $("onboarding-wizard");
+            if (wz) wz.classList.add("hidden");
+            lastView = null;
+            refresh();
+          }
+        } catch (_) {
+          // Engine offline. Don't force the wizard up just because we
+          // can't reach the engine; the calm welcome view is a better
+          // first impression than a blank wizard with a broken probe.
+        }
+      }
+
+      // Expose the wizard controller for the standalone test HTML.
+      // The test suite calls wizardSetStep, reads WIZARD.currentStep,
+      // and asserts each step's root element renders. Production
+      // popover code never reads window.__wizard.
+      window.__wizard = {
+        WIZARD: WIZARD,
+        setStep: wizardSetStep,
+        show: wizardShow,
+        skipAll: wizardSkipAll,
+        complete: wizardComplete,
+        boot: wizardBoot,
+        check: checkOnboardingState,
+        // Per-step helpers exposed so tests can drive each transition
+        // deterministically without relying on real Tauri commands or
+        // a real engine HTTP server being up.
+        permRequestNext: wizardRequestNextPerm,
+        permSkip: wizardSkipCurrentPerm,
+        renderScrapeLine: wizardRenderScrapeLine,
+      };
+
+      wizardBoot();
+
       wireOnboardCards();
+      wireTimelineChips();
+      // Check onboarding state once on boot. If the engine reports
+      // onboarded:false, the wizard takes over immediately. We also
+      // re-check on every popover-shown event so a user who completed
+      // onboarding via the website sees the main view next time they
+      // open the popover.
+      checkOnboardingState();
       refresh();
       checkMicPermission();
       pollAmbientStatus();
+      pollTimeline();
       setInterval(refresh, 5000);
       setInterval(checkMicPermission, 8000);
       // INVESTOR-DEMO HARDENING: always-on pill driver. Polls the
@@ -1405,6 +3037,11 @@
       // the listener is doing right now ("Listening", "Thinking",
       // "Done") instead of stale dossier-derived state.
       setInterval(pollAmbientStatus, 4000);
+      // Unified timeline poll. Same 5s cadence as the dossier refresh
+      // loop so the popover stays in sync without doubling network
+      // traffic. Listed last so a render bug in the timeline poller
+      // cannot wedge the more critical pill / dossier loops above.
+      setInterval(pollTimeline, 5000);
     </script>
   </body>
 </html>

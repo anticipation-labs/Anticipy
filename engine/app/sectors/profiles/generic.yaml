@@ -1,0 +1,47 @@
+sector: generic
+display_name: General User
+common_tools:
+  - Gmail
+  - Google Calendar
+  - Google Drive
+  - iCloud
+  - Apple Notes
+  - Apple Reminders
+  - Safari
+  - Chrome
+  - Maps
+  - Amazon
+common_goals:
+  - reply to a few unread emails
+  - schedule an appointment next week
+  - find a confirmation receipt from last month
+  - add a reminder for tomorrow morning
+  - look up directions for the evening errand
+  - save a research article for later
+  - order a household item before the weekend
+  - check the next event on the calendar
+vocab_hints:
+  - inbox
+  - calendar
+  - reminder
+  - appointment
+  - receipt
+  - confirmation
+  - subscription
+  - account
+  - profile
+  - settings
+preferred_channels:
+  - email
+  - sms
+detection_signals:
+  - Gmail or other personal email signed in
+  - Google Calendar in recent tabs
+  - mixed shopping and reading habits with no strong vertical signal
+  - no specialty tools from any single sector
+  - calendar with a small number of personal events
+sample_personas:
+  - Casual user without strong professional vertical
+  - User whose sector cannot be inferred from limited browser data
+  - New onboarding user before enough signals accumulate
+  - Personal assistant style user managing mixed errands

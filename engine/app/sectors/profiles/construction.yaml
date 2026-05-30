@@ -1,0 +1,53 @@
+sector: construction
+display_name: Construction
+common_tools:
+  - Procore
+  - Buildertrend
+  - PlanGrid
+  - CoConstruct
+  - Home Depot Pro
+  - Lowes Pro
+  - Google Maps
+  - QuickBooks Online
+  - Sage 100 Contractor
+common_goals:
+  - schedule subs for tomorrow
+  - quote materials for the next job
+  - invoice the homeowner for completed phase
+  - calendar a callback to the GC
+  - chase a missing permit at the city portal
+  - reorder lumber and drywall before the cutoff
+  - send the lien waiver back to accounting
+  - rough in punch list items before walkthrough
+vocab_hints:
+  - punch list
+  - change order
+  - job site
+  - RFI
+  - submittal
+  - day rate
+  - draw schedule
+  - takeoff
+  - rough in
+  - certificate of occupancy
+  - lien waiver
+  - backcharge
+  - mobilization
+preferred_channels:
+  - sms
+  - voice
+detection_signals:
+  - Procore in scraped tabs
+  - Buildertrend in scraped tabs
+  - PlanGrid in scraped tabs
+  - Home Depot Pro signed in
+  - Lowes Pro signed in
+  - CoConstruct in browser history
+  - frequent email to suppliers like ferguson or whitecap
+  - calendar events titled with site addresses
+  - QuickBooks Online dashboard in recent tabs
+sample_personas:
+  - General contractor with five to fifteen employees
+  - Independent subcontractor running a two person crew
+  - Specialty trade owner in electrical, plumbing, or HVAC
+  - Project manager at a mid market commercial firm

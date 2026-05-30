@@ -15,6 +15,80 @@ Three public entry points:
   await engine.on_transcript_chunk(chunk)
   await engine.on_confirmation(decision_id, "yes" | "no")
   engine.set_notes_mode(enabled=True)
+
+----------------------------------------------------------------------
+Donna trigger pattern (audit: 2026-05-30)
+----------------------------------------------------------------------
+
+The "Donna proactive" trigger is NOT a polling loop and not a single
+calendar-driven dispatcher. Donna is woven into the five-layer cascade
+that fires whenever a transcript chunk arrives via
+on_transcript_chunk(). The proactive surface area is:
+
+  1. EVENT INGESTION (this file): a TranscriptChunk arrives from the
+     phone or from a synthesized source (e.g. a calendar-prep brief
+     could be funneled in as a synthetic chunk so the same cascade
+     evaluates it). Layer 0 (SpeakerIDClassifier) drops chunks that
+     are confidently NOT the wearer; the chunk is still appended to
+     the context buffer so the wearer's responses-to-others remain
+     grounded, but downstream layers ignore the text as wearer intent.
+
+  2. SALIENCE GATE (L1): an LLM verdict per chunk. Most ambient
+     conversation is non-actionable and short-circuits here.
+
+  3. EXTRACTION (L2): on salient chunks, the Interpreter pulls 0..N
+     ExtractedIntent records with a canonical action_verb + free-form
+     parameter slots. Each intent enters the _pending_dispatches
+     settling buffer keyed by (decision, settle_after_chunk_idx).
+
+  4. DECIDE (L3+L4+L5 in parallel via asyncio.gather): for every
+     extracted intent the Decider runs
+       - ReversibilityClassifier (read-only? sendable? irreversible?)
+       - UrgencyScorer (1..5 → NotificationChannel)
+       - DonnaPass ("would a great assistant push back here?")
+     and emits a Decision with one of four kinds: EXECUTE / ASK /
+     LOG / REFUSE.
+
+  5. SETTLING + RE-VALIDATION (_process_settled): the decision waits
+     `settle_chunks` more chunks before dispatch. At settlement we re-
+     run a "still wanted?" LLM check against the latest context, then
+     re-run Donna once more in case later chunks revealed harshness or
+     a retraction. Either drop blocks dispatch.
+
+  6. DISPATCH-TIME DEDUP (Dispatcher.admit): a cheap LLM call decides
+     whether this intent is a duplicate of one we already dispatched
+     in the recent past.
+
+  7. SURFACE (Notifier.announce + Executor.execute): the channel is
+     chosen from Urgency.channel (NOTED, IN_APP, PUSH, SMS, VOICE).
+     EXECUTE decisions auto-cap at PUSH (no surprise voice calls for
+     already-completed work). ASK decisions are gated on the user
+     replying YES (that gate is the SMS pre-confirm path in
+     engine/app/product/sms_pre_confirm.py for the production v1
+     deployment; see sms_pre_confirm.create_pending_confirm).
+
+  8. CONFIRMATION (on_confirmation): the user's YES/NO reply resolves
+     the pending asyncio Future and dispatches the original Executor
+     for ASK kinds.
+
+For calendar-driven proactive briefing (the "team standup at 10am
+tomorrow" path) the equivalent surface lives in
+engine/app/product/calendar_prep.py.  That module's `_scheduler_loop`
+scans Google Calendar via CDP every `scan_interval_s`, calls
+`find_upcoming_meeting(within_minutes=30)`, and on each fresh event
+id calls `prep_meeting(..., deliver=True)` which composes a markdown
+brief and routes through deliver_brief(). When the proactive engine
+needs to enqueue an SMS pre-confirm for a meeting-derived action
+(e.g. "prep for the standup → draft summary email to Marcus"), the
+calendar scheduler hands the event to the cascade entry points
+above; the cascade then decides via Donna whether to surface it.
+
+The integration test in tests/test_donna_proactive_e2e.py exercises
+this exact path end-to-end without real Twilio, real Chrome, or a
+real LLM. It injects a synthetic calendar event into a stub
+event-source, runs one scheduler tick, and asserts the SMS body that
+sms_pre_confirm.create_pending_confirm would have queued matches the
+event details.
 """
 
 from __future__ import annotations

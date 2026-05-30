@@ -1,0 +1,61 @@
+sector: pensioner
+display_name: Retiree
+common_tools:
+  - Medicare.gov
+  - Social Security Administration portal
+  - AARP
+  - MyChart
+  - SilverSneakers
+  - Fidelity
+  - Vanguard
+  - Charles Schwab
+  - Costco
+  - AAA
+  - Local library catalog
+  - Facebook
+  - Trip Advisor
+  - Allianz travel insurance
+common_goals:
+  - confirm the prescription refill at the pharmacy
+  - schedule the annual wellness visit before the deadline
+  - check the social security deposit landed this month
+  - review the required minimum distribution from the IRA
+  - book the road trip to see the grandkids in May
+  - renew the AAA membership before it expires
+  - sign up for the SilverSneakers class at the gym
+  - update the Medicare supplement plan during open enrollment
+  - print the boarding pass for the morning flight
+vocab_hints:
+  - Medicare Part A
+  - Part B
+  - Part D
+  - Medigap
+  - open enrollment
+  - RMD
+  - required minimum distribution
+  - cost of living adjustment
+  - COLA
+  - annuity
+  - estate plan
+  - power of attorney
+  - living will
+  - downsizing
+  - bucket list trip
+preferred_channels:
+  - voice
+  - email
+detection_signals:
+  - Medicare.gov in scraped tabs
+  - SSA portal signed in
+  - AARP membership pages in recent history
+  - MyChart with multiple specialty providers
+  - Fidelity or Vanguard retirement account dashboards
+  - SilverSneakers reservation pages
+  - calendar with bridge club, water aerobics, doctor visits
+  - emails about RMDs and cost of living adjustments
+  - Trip Advisor or AAA trip planning tabs
+sample_personas:
+  - Recently retired couple managing Medicare and travel
+  - Widowed retiree consolidating finances after a loss
+  - Snowbird splitting time between two states
+  - Retiree caring for an aging spouse

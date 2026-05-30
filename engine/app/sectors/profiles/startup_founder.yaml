@@ -1,0 +1,62 @@
+sector: startup_founder
+display_name: Startup Founder
+common_tools:
+  - Linear
+  - Notion
+  - Slack
+  - GitHub
+  - Vercel
+  - Supabase
+  - Stripe Dashboard
+  - PostHog
+  - Mixpanel
+  - Y Combinator Bookface
+  - Anthropic Console
+  - OpenAI Platform
+  - Mercury
+  - Brex
+  - Carta
+common_goals:
+  - draft the weekly investor update for the seed round
+  - schedule customer discovery calls for next week
+  - review the open PRs and unblock the engineering team
+  - update the runway model after the new hire
+  - file the Delaware franchise tax before March
+  - prep the deck for the Series A pitch on Friday
+  - decline the warm intro that does not fit the ICP
+  - reconcile Stripe payouts with the Mercury ledger
+  - approve the next batch of stock option grants
+vocab_hints:
+  - runway
+  - burn
+  - ARR and MRR
+  - PMF
+  - ICP
+  - design partner
+  - lead investor
+  - SAFE
+  - post money
+  - cap table
+  - dilution
+  - data room
+  - YC W26
+  - LOI
+  - north star metric
+preferred_channels:
+  - sms
+  - email
+detection_signals:
+  - Y Combinator Bookface in scraped tabs
+  - Anthropic or OpenAI console signed in
+  - Linear and Notion both active
+  - Vercel and Supabase dashboards open
+  - Stripe Dashboard with low transaction volume but recent activity
+  - Mercury or Brex banking portal signed in
+  - Carta cap table app in browser history
+  - GitHub org with private repos under fifty stars
+  - calendar packed with VC partner names and demo slots
+sample_personas:
+  - Solo founder pre seed building the first prototype
+  - Two cofounder team six months post YC
+  - Series A CEO scaling from ten to forty engineers
+  - Technical cofounder owning product and engineering

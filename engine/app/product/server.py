@@ -3341,6 +3341,109 @@ def api_cost_stats(last_n: int = 100) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
+# unified timeline read endpoint (ARCHITECTURE.md section 3)
+# --------------------------------------------------------------------------
+#
+# Phase 2 UI follow-on. The popover polls this endpoint every 5s to
+# render the unified-timeline feed: every action Anticipy has taken
+# (emails, SMSes, voice calls, web actions, notes, user replies) in one
+# scrollable list, filterable by kind and status. The data layer at
+# engine/app/timeline/{writer,reader}.py is the source of truth; this
+# route only adapts it to JSON for the popover. n is hard-capped at 500
+# so an over-eager client cannot DOS the engine by asking for 1M rows.
+
+@app.get("/api/timeline/recent")
+def api_timeline_recent(
+    n: int = 50,
+    kind: str = "",
+    status: str = "",
+    since_ts: float = 0.0,
+) -> JSONResponse:
+    """Return the most recent unified-timeline entries for the popover.
+
+    Query params:
+        n         most recent rows to return (default 50, hard cap 500)
+        kind      optional kind filter (email_sent, sms_sent, voice_call,
+                  web_action, note, user_reply). Empty string = no filter.
+        status    optional status filter (pending, done, failed,
+                  wait_user). Empty string = no filter.
+        since_ts  optional unix-timestamp lower bound (inclusive). 0.0 =
+                  no filter.
+
+    Returns:
+        {"ok": true, "entries": [...]} with entries in file order
+        (oldest first). The popover sorts most-recent first client-side
+        for the visible feed.
+
+    The handler imports the timeline module lazily so a timeline-side
+    import failure cannot wedge the server.py module load.
+    """
+    try:
+        from app.timeline import filter_by as _filter_by
+        from app.timeline import tail as _tail
+    except Exception as exc:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": (
+                    f"timeline module unavailable: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "entries": [],
+            },
+            status_code=500,
+        )
+
+    try:
+        capped_n = max(0, min(int(n), 500))
+    except (TypeError, ValueError):
+        capped_n = 50
+    if capped_n == 0:
+        return JSONResponse({"ok": True, "entries": []})
+
+    kind_arg = kind.strip() or None
+    status_arg = status.strip() or None
+    since_arg: float | None
+    try:
+        since_arg = float(since_ts) if float(since_ts) > 0.0 else None
+    except (TypeError, ValueError):
+        since_arg = None
+
+    try:
+        # Fast path: no filters. tail() seeks from the end so we don't
+        # walk the whole jsonl for a typical 50-row popover render.
+        if kind_arg is None and status_arg is None and since_arg is None:
+            entries = _tail(capped_n)
+        else:
+            # Filter path: stream every matching row, keep the last
+            # capped_n. Acceptable for the popover's 5s poll because
+            # filter_by short-circuits on missing files and the
+            # timeline is rotated at 100 MB.
+            rows: list[dict] = []
+            for row in _filter_by(
+                kind=kind_arg,
+                status=status_arg,
+                since_ts=since_arg,
+            ):
+                rows.append(row)
+            entries = rows[-capped_n:] if rows else []
+    except Exception as exc:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": (
+                    f"timeline read failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+                "entries": [],
+            },
+            status_code=500,
+        )
+
+    return JSONResponse({"ok": True, "entries": entries})
+
+
+# --------------------------------------------------------------------------
 # microphone permission probe
 # --------------------------------------------------------------------------
 
@@ -9024,6 +9127,130 @@ def _surface_runtime_error_receipt(error: str,
     }
 
 
+def _browser_surface() -> str:
+    """Return the current browser surface identifier.
+
+    Mirrors the logic in /api/state ('explicit_cdp' vs
+    'extension_native_bridge') so the action dispatcher knows which
+    transport to attempt first. Kept as a separate helper because
+    /api/state is one of many sites that need this decision.
+    """
+    if CDP_PORT > 0 and _chrome_user_data_dir():
+        return "explicit_cdp"
+    return "extension_native_bridge"
+
+
+def _dispatch_via_extension_bridge(
+    instruction: str,
+    plan: dict | None = None,
+) -> JSONResponse | None:
+    """Drive the action through the Chrome extension's native messaging
+    bridge. Returns a JSONResponse on success, None when the bridge is
+    unavailable so the caller can fall back to the legacy CDP path.
+
+    The route picker is intentional: when ``_browser_surface()`` reports
+    the extension surface AND the bridge accepts commands AND we can
+    derive a bounded browser primitive from the instruction/plan, we
+    send through the extension. Anything else returns None so the
+    legacy CDP path runs unchanged.
+
+    Wraps the dispatch result with a timeline append of kind=web_action
+    so the unified timeline records every browser action regardless of
+    which transport carried it.
+    """
+    if _browser_surface() != "extension_native_bridge":
+        return None
+    try:
+        from app.action_engine.dispatch import (
+            dispatch_action,
+            extension_surface_available,
+        )
+    except Exception:
+        return None
+    if not extension_surface_available():
+        return None
+
+    plan_dict = plan if isinstance(plan, dict) else {}
+    task = str(plan_dict.get("task") or instruction or "").strip()
+    direct = _direct_browser_plan(instruction or task)
+    intent_payload: dict[str, Any] = {}
+    if isinstance(direct, dict):
+        intent_payload = {
+            "verb": str(direct.get("verb") or ""),
+            "target": str(direct.get("target") or ""),
+        }
+    elif task:
+        intent_payload = {"action": "navigate", "target": task}
+
+    result = dispatch_action(
+        goal=instruction or task,
+        intent_payload=intent_payload,
+    )
+    if not isinstance(result, dict):
+        return None
+
+    ran = bool(result.get("ran"))
+    status = "SUCCESS" if ran else "ERROR"
+    response_body = {
+        "ran": ran,
+        "status": status,
+        "task": task,
+        "intent": str(plan_dict.get("intent") or "browser"),
+        "resolved_person": plan_dict.get("person", ""),
+        "resolved_thing": plan_dict.get("thing", ""),
+        "path": "extension_native_bridge",
+        "surface": result.get("surface") or "extension",
+        "screenshot_path": result.get("screenshot_path") or "",
+        "opened_url": result.get("url") or "",
+        "browser_verb": result.get("verb") or intent_payload.get("verb") or "",
+        "target": result.get("target") or intent_payload.get("target") or "",
+        "answer": "",
+        "evidence": result.get("source") or "",
+        "trajectory_dir": "",
+        "error": result.get("error") or "",
+        "proof": result.get("proof") if isinstance(result.get("proof"), dict) else {},
+        "source": result.get("source") or "bridge_extension.dispatch",
+    }
+
+    if ran:
+        _LISTEN["acted"] = {
+            "instruction": instruction,
+            "task": task,
+            "status": status,
+            "ts": time.time(),
+            "surface": "extension_native_bridge",
+        }
+        _LISTEN["pending"] = None
+    try:
+        timeline_append({
+            "kind": "web_action",
+            "channel": "chrome",
+            "status": "done" if ran else "failed",
+            "summary": (instruction or task)[:200],
+            "payload": {
+                "plan": {
+                    "intent": str(plan_dict.get("intent") or ""),
+                    "person": str(plan_dict.get("person") or ""),
+                    "thing": str(plan_dict.get("thing") or ""),
+                },
+                "engine_status": status,
+                "trajectory_dir": "",
+                "path": "extension_native_bridge",
+                "url": result.get("url") or "",
+                "error": result.get("error") or "",
+            },
+        })
+    except Exception:
+        pass
+
+    if not ran:
+        # Bridge reachable but the primitive could not execute. Surface
+        # the error to the caller; do NOT fall back to legacy CDP. The
+        # extension's error is the ground truth here.
+        return JSONResponse(response_body, status_code=502)
+    return JSONResponse(response_body)
+
+
 def _try_surface_browser_action(
     instruction: str,
     plan: dict | None = None,
@@ -9174,6 +9401,13 @@ def _try_direct_browser_action(instruction: str,
         instruction, plan, direct)
     if surface_response is not None:
         return surface_response
+    # Extension surface failed/unavailable. Try the bridge-extension
+    # dispatch path as a last layer before falling through to legacy
+    # CDP. This is the seam that kills the "No real Chrome on :9222"
+    # error when the wearer is using the production extension surface.
+    bridge_resp = _dispatch_via_extension_bridge(instruction, plan)
+    if bridge_resp is not None:
+        return bridge_resp
     if not _ensure_cdp_chrome():
         return JSONResponse({
             "ran": False,
@@ -9182,7 +9416,10 @@ def _try_direct_browser_action(instruction: str,
             "intent": "browser",
             "path": "direct_browser_cdp",
             "surface_receipt": surface_receipt,
-            "error": f"No real Chrome on :{CDP_PORT}",
+            "error": (
+                f"No real Chrome on :{CDP_PORT} and the extension "
+                f"native messaging bridge could not dispatch the action"
+            ),
         })
 
     verb = str(direct["verb"])
@@ -9276,14 +9513,25 @@ def _run_action_engine(instruction: str, plan: dict) -> JSONResponse:
     if browser_direct is not None:
         return browser_direct
     if not _ensure_cdp_chrome():
+        # Extension native bridge takes over when the legacy CDP path
+        # is not reachable. Per planning/00-handoff/ARCHITECTURE.md
+        # section 4, every action ultimately drives the wearer's
+        # actual Chrome through the extension; CDP-on-:9222 is the
+        # legacy fallback for controlled probes only.
+        bridge_resp = _dispatch_via_extension_bridge(instruction, plan)
+        if bridge_resp is not None:
+            return bridge_resp
         return JSONResponse({
             "ran": False, "gated": True,
             "resolved_person": plan.get("person", ""),
             "resolved_thing": plan.get("thing", ""), "task": task,
-            "error": "No real Chrome on :9222 and the launchd agent "
-                     "could not be kicked. The real path "
-                     "(action_handoff -> frozen DSv4SkillRunner) is "
-                     "wired; the real-clone browser is the edge."})
+            "error": (
+                "No browser surface available. The extension native "
+                "messaging bridge did not accept the action and CDP "
+                "on :9222 is not reachable. Confirm the Anticipy "
+                "extension is loaded in Chrome and the native "
+                "messaging daemon is running."
+            )})
     # Fast path: when the instruction already names recipient, subject,
     # and body, skip the LLM-driven engine and produce a real Gmail
     # draft deterministically.
@@ -10436,11 +10684,6 @@ async def act(request: Request) -> JSONResponse:
     from app.action_engine.gmail_compose import parse_draft_intent
     direct_draft = parse_draft_intent(instruction)
     if direct_draft is not None:
-        if not _ensure_cdp_chrome():
-            return _finalize_act_response(JSONResponse({
-                "ran": False, "gated": True,
-                "task": instruction, "intent": "email_draft",
-                "error": "No real Chrome on :9222"}), status="gated")
         synthetic_plan = {
             "mode": "act",
             "intent": "email_draft",
@@ -10449,10 +10692,32 @@ async def act(request: Request) -> JSONResponse:
             "person": direct_draft.to,
             "thing": direct_draft.subject,
         }
-        direct = _try_direct_gmail_draft(instruction, synthetic_plan)
-        if direct is not None:
-            return _finalize_act_response(
-                _maybe_attach_receipt(direct, instruction), status="ok")
+        # CDP available: take the legacy direct-gmail path so the
+        # existing typing/autosave evidence flow stays intact.
+        if _ensure_cdp_chrome():
+            direct = _try_direct_gmail_draft(instruction, synthetic_plan)
+            if direct is not None:
+                return _finalize_act_response(
+                    _maybe_attach_receipt(direct, instruction), status="ok")
+        else:
+            # No CDP: route the draft request through the extension
+            # native messaging bridge. This is the generic dispatcher
+            # path; gmail_compose itself now delegates to it.
+            bridge_resp = _dispatch_via_extension_bridge(
+                instruction, synthetic_plan)
+            if bridge_resp is not None:
+                return _finalize_act_response(
+                    _maybe_attach_receipt(bridge_resp, instruction),
+                    status="ok")
+            return _finalize_act_response(JSONResponse({
+                "ran": False, "gated": True,
+                "task": instruction, "intent": "email_draft",
+                "error": (
+                    "No browser surface available for email draft. "
+                    "Extension native messaging bridge did not "
+                    "accept the action and CDP on :9222 is not "
+                    "reachable."
+                )}), status="gated")
     direct_browser = _try_direct_browser_action(instruction)
     if direct_browser is not None:
         return _finalize_act_response(
@@ -12366,13 +12631,28 @@ def api_universal_run(p: _UniversalRun) -> JSONResponse:
             "error": "missing intent",
         }, status_code=400)
     if not _ensure_cdp_chrome():
+        # Universal loop's bounded primitive path can be served by the
+        # extension native messaging bridge for navigate verbs. If the
+        # bridge picks it up, return its dispatch result; otherwise
+        # surface the gated error so the caller knows no surface is
+        # reachable.
+        bridge_resp = _dispatch_via_extension_bridge(
+            intent,
+            {"task": intent,
+             "intent": "browser",
+             "person": "",
+             "thing": (p.surface_hint or "")},
+        )
+        if bridge_resp is not None:
+            return bridge_resp
         return JSONResponse({
             "ok": False,
             "gated": True,
             "error": (
-                "No real Chrome on :9222 and the launchd agent could "
-                "not be kicked. The universal loop drives the user's "
-                "real Chrome over CDP; a running browser is the edge."
+                "No browser surface available. The universal loop "
+                "drives the user's real Chrome through the extension "
+                "native messaging bridge or CDP; neither is "
+                "reachable."
             ),
         }, status_code=503)
     try:

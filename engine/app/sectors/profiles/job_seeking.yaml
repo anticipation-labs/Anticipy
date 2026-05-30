@@ -1,0 +1,57 @@
+sector: job_seeking
+display_name: Job Seeker
+common_tools:
+  - Indeed
+  - LinkedIn Jobs
+  - Glassdoor
+  - Wellfound
+  - Hired
+  - Greenhouse
+  - Lever
+  - Workday
+  - Otta
+  - Levels.fyi
+  - Blind
+common_goals:
+  - apply to roles matching senior PM in Boston
+  - tailor my resume for the listing at Stripe
+  - draft a cover letter for the Notion role
+  - prep STAR stories for behavioral rounds
+  - research the hiring manager on LinkedIn
+  - schedule the recruiter screen for Thursday morning
+  - send a thank you note after the on site
+  - track all open applications in a spreadsheet
+  - prepare salary negotiation talking points
+vocab_hints:
+  - ATS
+  - referral
+  - take home assignment
+  - case study
+  - leetcode
+  - system design
+  - behavioral round
+  - recruiter screen
+  - on site loop
+  - tech screen
+  - offer letter
+  - total comp
+  - sign on bonus
+  - levels and bands
+preferred_channels:
+  - email
+  - sms
+detection_signals:
+  - Indeed in scraped tabs
+  - LinkedIn Jobs in scraped tabs
+  - Glassdoor company pages in recent history
+  - Greenhouse or Lever application portals signed in
+  - Workday candidate accounts active
+  - Levels.fyi or Blind in recent tabs
+  - many calendar events titled with company names
+  - resume PDFs in recent downloads
+  - frequent emails from no-reply at greenhouse or lever
+sample_personas:
+  - Mid career engineer looking for a senior IC role
+  - Recent grad doing first time job search
+  - Career switcher moving from consulting into tech
+  - Laid off worker actively interviewing across companies
