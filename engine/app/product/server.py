@@ -2385,6 +2385,7 @@ def onboarding_voice_status(
         "answers": [],
         "completed": False,
     }
+    dossier_fragment: dict | None = None
     base = (os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
             or "https://www.anticipy.ai").rstrip("/")
     try:
@@ -2401,12 +2402,96 @@ def onboarding_voice_status(
                               "answers", "completed", "error"):
                         if k in body:
                             snapshot[k] = body[k]
+                    frag = body.get("dossier_fragment")
+                    if isinstance(frag, dict) and frag:
+                        dossier_fragment = frag
     except Exception:
         # The website may not be reachable from the engine host (rare).
         # The local row still gives the popover enough to render.
         pass
 
+    # 3) On completion, persist the dossier fragment to the canonical V7
+    # dossier path so the planner picks it up. Idempotent: a duplicate
+    # merge is a no-op because _merge_dossier_fragment dedupes lists and
+    # overwrites scalars. We also run the frozen onboarding extractor on
+    # the chat_transcript fragment so the canonical UserProfile lands.
+    if dossier_fragment and snapshot.get("completed"):
+        try:
+            _persist_voice_onboarding_fragment(
+                target_account, dossier_fragment,
+            )
+        except Exception as exc:
+            snapshot["dossier_write_error"] = (
+                f"{type(exc).__name__}: {exc}"
+            )
+
     return JSONResponse(snapshot)
+
+
+def _persist_voice_onboarding_fragment(
+    account_id: str, fragment: dict,
+) -> None:
+    """Merge a voice-onboarding dossier fragment into the canonical
+    V7 dossier file the planner reads from. Mirrors the merge logic in
+    /api/dossier/active POST so a future scoped POST to that endpoint
+    sees the same shape. Also runs the frozen onboarding extractor on
+    the chat_transcript so the UserProfile lands without a second LLM
+    hop. Best-effort: missing extractor or transient LLM failure does
+    not block the write.
+    """
+    root = (
+        Path(os.environ.get("ANTICIPY_V7_DOSSIER_ROOT", "").strip()
+             or str(Path.home() / ".anticipy" / "v7" / "dossiers"))
+    ).expanduser()
+    safe_id = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_"
+        for ch in (account_id or "default")
+    ) or "default"
+    target = root / safe_id / "dossier.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    existing: dict = {}
+    if target.exists():
+        try:
+            existing = json.loads(
+                target.read_text(encoding="utf-8") or "{}",
+            )
+            if not isinstance(existing, dict):
+                existing = {}
+        except Exception:
+            existing = {}
+    merged: dict = dict(existing)
+    for k, v in (fragment or {}).items():
+        if isinstance(v, dict) and isinstance(merged.get(k), dict):
+            sub = dict(merged[k])
+            sub.update(v)
+            merged[k] = sub
+        elif isinstance(v, list) and isinstance(merged.get(k), list):
+            prev = list(merged[k])
+            for item in v:
+                if isinstance(item, str) and item in prev:
+                    continue
+                prev.append(item)
+            merged[k] = prev
+        else:
+            merged[k] = v
+    tmp = target.with_suffix(".json.tmp")
+    tmp.write_text(
+        json.dumps(merged, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    os.replace(tmp, target)
+
+    # Best-effort: run the frozen onboarding extractor on the chat
+    # transcript shape so the UserProfile partition is populated. Failure
+    # here is fine; the raw transcript is on disk and the engine's next
+    # cold-start pass can re-extract.
+    transcript = fragment.get("chat_transcript")
+    if isinstance(transcript, list) and transcript:
+        try:
+            from app.anticipy import onboarding as OB
+            asyncio.run(OB.run_intake(transcript, USER_ID))
+        except Exception:
+            pass
 
 
 @app.get("/api/onboarding/call_stubs")
