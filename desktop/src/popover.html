@@ -174,21 +174,28 @@
       }
       .body::-webkit-scrollbar-track { background: transparent; }
 
-      /* Welcome (empty dossier) view. */
-      .welcome { padding: 4px 0 6px; }
+      /* Welcome (empty dossier) view.
+         Spacing follows a 4px grid. Type rhythm: h1 22/28, lede
+         13.5/20 (line-height 1.5), card title 13.5/18, sub 12/17.
+         Tracking: titles tighten (negative letter-spacing), body
+         opens slightly so it reads at popover distance.
+      */
+      .welcome { padding: 2px 0 4px; }
       .welcome h1 {
         font-size: 22px;
         font-weight: 600;
         color: var(--text);
         letter-spacing: -0.02em;
+        line-height: 1.27;
         margin-bottom: 6px;
       }
       .welcome p.lede {
         font-size: 13.5px;
         font-weight: 400;
         color: var(--text-dim);
-        margin-bottom: 14px;
+        margin-bottom: 16px;
         line-height: 1.5;
+        letter-spacing: -0.003em;
       }
 
       .perm-note {
@@ -201,6 +208,7 @@
         padding: 12px 14px;
         margin-bottom: 16px;
         line-height: 1.5;
+        letter-spacing: -0.002em;
       }
 
       .onboard-options {
@@ -208,6 +216,9 @@
         flex-direction: column;
         gap: 8px;
       }
+      /* Card: subtle elevation change on hover (not a heavy color
+         change), brief 100ms scale tap on click. 200ms ease for the
+         hover transition, 100ms for the press. */
       .onboard-card {
         background: var(--bg-elevated);
         border: 1px solid var(--hairline);
@@ -215,16 +226,30 @@
         padding: 12px 14px;
         cursor: pointer;
         transition:
-          border-color 160ms ease,
-          background-color 160ms ease,
-          transform 80ms ease;
+          border-color 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          box-shadow 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          transform 100ms ease;
       }
       .onboard-card:hover {
-        border-color: var(--gold);
-        background: var(--bg-elevated);
+        border-color: var(--hairline-strong);
+        box-shadow: 0 0 0 1px var(--tint-strong) inset;
       }
       .onboard-card:active {
-        transform: scale(0.985);
+        transform: scale(0.98);
+      }
+      .onboard-card.is-coming-soon {
+        opacity: 0.72;
+        cursor: default;
+      }
+      .onboard-card.is-coming-soon:hover {
+        border-color: var(--hairline);
+        box-shadow: none;
+      }
+      .onboard-card.is-coming-soon:active {
+        transform: none;
+      }
+      .onboard-card.is-busy {
+        cursor: progress;
       }
       .onboard-card .title {
         font-size: 13.5px;
@@ -232,12 +257,28 @@
         color: var(--text);
         margin-bottom: 2px;
         letter-spacing: -0.005em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .onboard-card .badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        background: var(--hairline);
+        border-radius: 4px;
+        padding: 2px 6px;
+        line-height: 1;
       }
       .onboard-card .sub {
         font-size: 12px;
         font-weight: 400;
         color: var(--text-dim);
         line-height: 1.4;
+        letter-spacing: -0.002em;
       }
 
       /* Populated state: Now / Next / Past. */
@@ -255,11 +296,12 @@
       }
       .col h2 {
         font-size: 10px;
-        font-weight: 500;
+        font-weight: 600;
         color: var(--text-faint);
         text-transform: uppercase;
         letter-spacing: 0.10em;
         margin-bottom: 8px;
+        line-height: 1;
       }
       .col-now .now-title {
         font-size: 16px;
@@ -381,6 +423,47 @@
       }
 
       .hidden { display: none !important; }
+
+      /* Skeleton placeholder for loading rows. Pulses, never spins.
+         Apple-style shimmer is too noisy at popover scale; a soft
+         opacity pulse on a flat block reads as "data on the way"
+         without grabbing attention. */
+      .skeleton {
+        background: var(--hairline);
+        border-radius: 6px;
+        animation: skel 1400ms ease-in-out infinite;
+      }
+      .skeleton.row {
+        height: 11px;
+        margin: 6px 0;
+        width: 78%;
+      }
+      .skeleton.row + .skeleton.row { width: 52%; }
+      @keyframes skel {
+        0%, 100% { opacity: 0.55; }
+        50%      { opacity: 0.30; }
+      }
+
+      /* Inline spinner for the ambient-listen card while permission
+         is being requested. Keeps the user oriented without anxiety. */
+      .inline-progress {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .inline-progress .dotty {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--text-dim);
+        animation: dotty 1100ms ease-in-out infinite;
+      }
+      .inline-progress .dotty:nth-child(2) { animation-delay: 150ms; }
+      .inline-progress .dotty:nth-child(3) { animation-delay: 300ms; }
+      @keyframes dotty {
+        0%, 100% { opacity: 0.30; transform: translateY(0); }
+        50%      { opacity: 0.90; transform: translateY(-1px); }
+      }
     </style>
   </head>
   <body>
@@ -389,21 +472,21 @@
         <span class="brand">Anticipy</span>
         <span class="status-pill" id="status-pill">
           <span class="dot" id="status-dot"></span>
-          <span id="status-text">Waking up</span>
+          <span id="status-text">Waking up…</span>
         </span>
       </header>
 
       <!-- Pre-prompt explainer. Fires for a beat before macOS shows the
            Allow / Deny dialog so the user knows why they are being asked. -->
       <div id="mic-pre-prompt" class="banner info hidden">
-        <div class="title">Microphone access in a moment</div>
-        <div class="sub">Anticipy needs to hear what people ask you to do. macOS will ask you to allow it next.</div>
+        <div class="title">Microphone in a moment</div>
+        <div class="sub">Anticipy needs to hear what people ask you to do. Allow when macOS asks.</div>
       </div>
 
       <!-- Recovery card. Shown only when permission has been denied. -->
       <div id="mic-card" class="banner err hidden">
-        <div class="title">Microphone access is off</div>
-        <div class="sub">Anticipy listens to your day so it can act on the things you mention. Turn microphone access on for Anticipy in System Settings.</div>
+        <div class="title">Microphone is off</div>
+        <div class="sub">Anticipy listens to your day so it can act on the things you mention. Turn it on for Anticipy in System Settings.</div>
         <button class="btn" id="mic-open-settings">Open System Settings</button>
       </div>
 
@@ -417,26 +500,26 @@
              this off the moment we know the dossier has entries. -->
         <section id="welcome" class="welcome">
           <h1>Welcome to Anticipy.</h1>
-          <p class="lede">Let's get to know you. Pick one. Takes about ten minutes.</p>
+          <p class="lede">Pick one. Five to ten minutes.</p>
           <div class="perm-note">
-            macOS will ask Anticipy for permission to use your microphone, take screenshots, and control other apps. That is so Anticipy can hear what you mention and act in your real Chrome. Click Allow when macOS asks. You can change any of these later in System Settings, Privacy and Security.
+            macOS will ask to share your microphone, screen, and Chrome. Allow when it asks, so Anticipy can hear what you mention and act in your real browser.
           </div>
           <div class="onboard-options">
-            <div class="onboard-card" data-onboard="call">
-              <div class="title">Have Anticipy call you</div>
-              <div class="sub">Quick friend-style interview on your phone. Hands-free, no typing.</div>
-            </div>
             <div class="onboard-card" data-onboard="audio">
               <div class="title">Drop in an MP3 of your day</div>
-              <div class="sub">If you already recorded yourself, give Anticipy that. It will figure out the rest.</div>
+              <div class="sub">If you already recorded yourself, give Anticipy that. It figures out the rest.</div>
             </div>
             <div class="onboard-card" data-onboard="chat">
               <div class="title">Type a short chat</div>
               <div class="sub">Five quick questions in a browser tab. Best if you want it done in five minutes.</div>
             </div>
             <div class="onboard-card" data-onboard="ambient">
-              <div class="title">Skip onboarding, just listen</div>
-              <div class="sub">Anticipy will pick things up from your day as you go. No interview now.</div>
+              <div class="title">Skip the interview, just listen</div>
+              <div class="sub">Anticipy picks things up from your day as you go. No interview now.</div>
+            </div>
+            <div class="onboard-card is-coming-soon" data-onboard="call">
+              <div class="title">Schedule a call from Anticipy <span class="badge">Soon</span></div>
+              <div class="sub">A friendly voice walkthrough on your phone. Live in the next build.</div>
             </div>
           </div>
           <div id="ambient-status" class="banner hidden"></div>
@@ -446,15 +529,15 @@
         <section id="columns" class="columns hidden">
           <div class="col col-now">
             <h2>Now</h2>
-            <div id="now-content" class="idle">Quiet right now. Anticipy is listening.</div>
+            <div id="now-content" class="idle">Nothing planned right now. Anticipy is listening.</div>
           </div>
           <div class="col col-next">
             <h2>Next</h2>
-            <ul id="next-list"><li class="empty">Nothing queued.</li></ul>
+            <ul id="next-list"><li class="empty">Nothing queued. As you mention things, they will show up here.</li></ul>
           </div>
           <div class="col col-past">
             <h2>Past</h2>
-            <ul id="past-list"><li class="empty">No recent actions.</li></ul>
+            <ul id="past-list"><li class="empty">No recent actions yet.</li></ul>
           </div>
         </section>
 
@@ -521,7 +604,7 @@
           if (lastNowKey === key) return;
           lastNowKey = key;
           el.className = "idle";
-          el.textContent = "Quiet right now. Anticipy is listening.";
+          el.textContent = "Nothing planned right now. Anticipy is listening.";
           return;
         }
         const title = active.goal || active.task_name || "Working on something";
@@ -624,7 +707,7 @@
           const empty = !dossier || (Number(dossier.entry_count) || 0) === 0;
           if (empty) {
             ensureView("welcome");
-            if (currentMicState !== "denied") setStatus("warn", "Setting things up");
+            if (currentMicState !== "denied") setStatus("warn", "Getting set up");
             return;
           }
           ensureView("columns");
@@ -636,18 +719,18 @@
             invoke("fetch_past_tasks", { limit: 6 }),
           ]);
           renderNow(active);
-          renderList("next-list", next, "Nothing queued.", (it) => ({
+          renderList("next-list", next, "Nothing queued. As you mention things, they will show up here.", (it) => ({
             main: it.goal || it.task_name || it.description || "Pending task",
             sub: it.when || it.scheduled_for || "",
           }));
-          renderList("past-list", past, "No recent actions.", (it) => ({
+          renderList("past-list", past, "No recent actions yet.", (it) => ({
             main: it.goal || it.task_name || "Recent action",
             sub: [friendlyStatus(it.status), friendlyTime(it.updated_at || it.created_at)]
                    .filter(Boolean).join("  ,  "),
           }));
         } catch (e) {
           if (currentMicState !== "denied") {
-            setStatus("error", "Anticipy is not running");
+            setStatus("error", "Anticipy is asleep");
           }
         } finally {
           inflightRefresh = false;
