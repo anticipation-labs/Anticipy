@@ -3017,11 +3017,14 @@ pub fn run() {
 
             // UX-016: load the @2x (44x44) tray icon so retina displays
             // render a smooth glyph that matches the system status
-            // items next to it. The 22x22 base tray.png renders blocky
-            // on retina because AppKit upscales it. The 44x44 source
-            // downscales cleanly to logical 22x22 in template mode and
-            // produces a sharp NSStatusItem image at both 1x and 2x.
-            let tray_icon_bytes: &[u8] = include_bytes!("../icons/tray@2x.png");
+            // items next to it. macOS NSStatusItem expects the 22x22 base
+            // and auto-scales for Retina. Using the 44x44 @2x asset directly
+            // here BREAKS the tray icon (icon does not render in the menu
+            // bar at all on macOS 15). Stick with tray.png for the embedded
+            // bytes; if blocky-on-retina becomes a real visible issue we
+            // will revisit by loading both sizes via Image::with_scale or
+            // by shipping a vector tray asset.
+            let tray_icon_bytes: &[u8] = include_bytes!("../icons/tray.png");
             let icon = Image::from_bytes(tray_icon_bytes)?;
 
             // Pre-write the preferred position for our status item BEFORE the
