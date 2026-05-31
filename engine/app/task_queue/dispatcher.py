@@ -134,8 +134,29 @@ def scan_once(*, now: Optional[float] = None) -> list[TaskRecord]:
     """Pull every due task off the queue and dispatch it. Public so
     tests and the server's /api/task_queue/scan endpoint can call it.
     Returns the list of records that were dispatched (for visibility).
+
+    Task queue stuck fix: WAITING tasks whose wake_at has elapsed are
+    promoted back to PENDING here so the scanner can re-claim them.
+    Before this fix, a task parked in WAITING with a wake_at hint
+    stayed waiting forever even after wake_at passed; nothing else
+    promoted them. The per-tenant counts in /api/state were showing
+    0 running while 46 sat in waiting indefinitely.
     """
     t = float(now if now is not None else time.time())
+    # Promote stale WAITING tasks back to PENDING when their wake_at
+    # has elapsed. Best-effort: a missing wake_at means the task is
+    # blocked on an explicit external signal (user reply, MFA) and
+    # MUST stay in WAITING until that signal arrives. We only auto-
+    # promote tasks with an explicit wake hint that has passed.
+    try:
+        promoted = _promote_due_waiting_tasks(t)
+        if promoted:
+            LOGGER.info(
+                "task_queue_promoted_waiting_to_pending count=%d",
+                promoted,
+            )
+    except Exception:
+        LOGGER.exception("task_queue_promote_waiting_error")
     due = store.scan_due(t)
     fired: list[TaskRecord] = []
     for rec in due:
@@ -166,6 +187,37 @@ def scan_once(*, now: Optional[float] = None) -> list[TaskRecord]:
             name=f"taskq-fire-{c.task_id[:8]}",
         ).start()
     return fired
+
+
+def _promote_due_waiting_tasks(now_ts: float) -> int:
+    """Return the number of WAITING tasks promoted to PENDING.
+
+    A waiting task is "due" when its wake_at is set AND has elapsed.
+    Tasks with no wake_at remain in waiting (they block on user
+    reply, MFA, or similar external signal) and are not touched.
+    Promotion is via store.reschedule which atomically flips
+    status -> PENDING and emits a journal entry.
+    """
+    promoted = 0
+    try:
+        rows = store.list_tasks(limit=10000) or []
+    except Exception:
+        return 0
+    for r in rows:
+        try:
+            if getattr(r, "status", "") != "waiting":
+                continue
+            wake_at = getattr(r, "wake_at", None)
+            if wake_at is None:
+                continue
+            if float(wake_at) > now_ts:
+                continue
+            updated = store.reschedule(r.task_id, float(wake_at))
+            if updated is not None and updated.status == "pending":
+                promoted += 1
+        except Exception:
+            continue
+    return promoted
 
 
 def _run_one(rec: TaskRecord) -> None:

@@ -1001,8 +1001,24 @@ const SCREEN_RECORDING_SYSTEM_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 const NOTIFICATIONS_SYSTEM_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.notifications";
-const ANTICIPY_EXTENSION_LOAD_PATH: &str =
-    "/Users/omarebrahim/.anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME";
+// BNEW-011: extension load path resolves under the current user's
+// home directory at runtime so stranger installs work. The earlier
+// hardcoded "/Users/omarebrahim/.anticipy/..." path was a CLAUDE.md
+// scale violation (every non-Omar user pasted a dead path into
+// Chrome). The path tail is shared so wizard step 2 markup and the
+// Tauri command stay in sync.
+const ANTICIPY_EXTENSION_LOAD_TAIL: &str =
+    ".anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME";
+
+fn anticipy_extension_load_path() -> String {
+    if let Some(home) = std::env::var_os("HOME") {
+        let p = PathBuf::from(home).join(ANTICIPY_EXTENSION_LOAD_TAIL);
+        return p.display().to_string();
+    }
+    // HOME unset is a degenerate macOS state; fall back to a relative
+    // path so we never panic, and the wizard surfaces a copy error.
+    format!("~/{ANTICIPY_EXTENSION_LOAD_TAIL}")
+}
 
 /// Open a macOS System Settings pane via the `open` command.
 /// Returns Ok(()) when the spawn succeeded; the wizard does not wait
@@ -1105,7 +1121,8 @@ fn open_chrome_extensions_page() -> Result<serde_json::Value, String> {
     // the moment they click Load Unpacked. If pbcopy fails (rare; we
     // still try to open Chrome) we return copied=false so the wizard
     // shows the path inline.
-    let copy_result = copy_string_to_clipboard(ANTICIPY_EXTENSION_LOAD_PATH)
+    let load_path = anticipy_extension_load_path();
+    let copy_result = copy_string_to_clipboard(&load_path)
         .unwrap_or(false);
     // chrome://extensions cannot be opened via `open <url>` because
     // chrome:// is browser-internal. The Apple-blessed path is to
@@ -1123,7 +1140,7 @@ fn open_chrome_extensions_page() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({
         "ok": spawned,
         "copied": copy_result,
-        "path": ANTICIPY_EXTENSION_LOAD_PATH,
+        "path": load_path,
     }))
 }
 
@@ -1133,11 +1150,12 @@ fn open_chrome_extensions_page() -> Result<serde_json::Value, String> {
 /// something else.
 #[tauri::command]
 fn copy_extension_path_to_clipboard() -> Result<serde_json::Value, String> {
-    let copied = copy_string_to_clipboard(ANTICIPY_EXTENSION_LOAD_PATH)
+    let load_path = anticipy_extension_load_path();
+    let copied = copy_string_to_clipboard(&load_path)
         .unwrap_or(false);
     Ok(serde_json::json!({
         "copied": copied,
-        "path": ANTICIPY_EXTENSION_LOAD_PATH,
+        "path": load_path,
     }))
 }
 
@@ -1240,6 +1258,17 @@ fn engine_port() -> u16 {
 
 fn engine_base_url() -> String {
     format!("http://127.0.0.1:{}", engine_port())
+}
+
+/// BNEW-008: expose the engine URL to the JS layer so popover.html can
+/// build fetch URLs against the actual port the sidecar bound (read
+/// from `~/.anticipy/engine.port`) instead of hardcoding 8731. Callers
+/// cache the result on boot; the URL is stable for the lifetime of an
+/// engine sidecar process. Returns a `http://127.0.0.1:<port>` string
+/// with no trailing slash.
+#[tauri::command]
+fn fetch_engine_url() -> String {
+    engine_base_url()
 }
 
 fn engine_health_ok(port: u16) -> bool {
@@ -2021,6 +2050,85 @@ fn bridge_pid_path() -> Option<PathBuf> {
     anticipy_dir().map(|d| d.join(BRIDGE_PID_FILE))
 }
 
+// BNEW-012: per-install random bridge trigger secret. The bundled
+// anticipy-bridge.py defaults SECRET to "local-dev" when the env var
+// is unset, which means any local process can issue trigger requests
+// to the bridge. lib.rs now generates a per-install random token at
+// first launch, persists it under ~/.anticipy/secrets.json, and
+// passes it via ANTICIPY_TRIGGER_SECRET so the bundled bridge runs
+// with a real secret. The file is mode 0600 on macOS so it stays
+// readable only by the owning user.
+const SECRETS_FILE: &str = "secrets.json";
+const BRIDGE_SECRET_LEN: usize = 32;
+
+fn secrets_path() -> Option<PathBuf> {
+    anticipy_dir().map(|d| d.join(SECRETS_FILE))
+}
+
+fn generate_bridge_secret() -> String {
+    // Use the process random source via std::time + a small mix to
+    // avoid pulling rand as a new dep. The token is base16 of 32
+    // bytes derived from a SplitMix-style scramble of nanos + pid.
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let pid = std::process::id() as u64;
+    let mut seed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0xa5a5_5a5a_a5a5_5a5a);
+    seed ^= pid.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let mut out = String::with_capacity(BRIDGE_SECRET_LEN * 2);
+    let hex = b"0123456789abcdef";
+    for _ in 0..BRIDGE_SECRET_LEN {
+        // SplitMix64
+        seed = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = seed;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z = z ^ (z >> 31);
+        let b = (z & 0xFF) as u8;
+        out.push(hex[(b >> 4) as usize] as char);
+        out.push(hex[(b & 0x0F) as usize] as char);
+    }
+    out
+}
+
+fn load_or_create_bridge_secret() -> Option<String> {
+    let path = secrets_path()?;
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    // Try to load an existing token first.
+    if let Ok(raw) = fs::read_to_string(&path) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if let Some(t) = v.get("bridge_trigger_secret").and_then(|x| x.as_str()) {
+                let t = t.trim();
+                // Reject the literal "local-dev" so a hand-rolled file
+                // never re-introduces the unsafe default.
+                if !t.is_empty() && t != "local-dev" {
+                    return Some(t.to_string());
+                }
+            }
+        }
+    }
+    // Mint a fresh one, persist, return.
+    let token = generate_bridge_secret();
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        "bridge_trigger_secret".to_string(),
+        serde_json::Value::String(token.clone()),
+    );
+    let body = serde_json::Value::Object(payload).to_string();
+    if fs::write(&path, body).is_err() {
+        return Some(token); // returned for this session even if persist failed
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Some(token)
+}
+
 fn bridge_launcher_path() -> Option<PathBuf> {
     anticipy_dir().map(|d| d.join(BRIDGE_LAUNCHER_NAME))
 }
@@ -2402,9 +2510,15 @@ fn start_bridge_daemon(app: &AppHandle) -> Result<(), String> {
         "bridge",
         &format!("Starting bridge daemon on {}...", bridge_port()),
     );
+    // BNEW-012: pass a freshly-minted (or persisted) random secret so
+    // the bridge runs with a real trigger token instead of the
+    // baked-in "local-dev" default that any local process could guess.
+    let bridge_secret = load_or_create_bridge_secret()
+        .unwrap_or_else(generate_bridge_secret);
     let child = Command::new(&venv_py)
         .arg(&script)
         .env("PYTHONUNBUFFERED", "1")
+        .env("ANTICIPY_TRIGGER_SECRET", &bridge_secret)
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(log_err))
@@ -2776,7 +2890,8 @@ pub fn run() {
             request_notifications_permission,
             open_chrome_extensions_page,
             copy_extension_path_to_clipboard,
-            submit_basic_profile
+            submit_basic_profile,
+            fetch_engine_url
         ])
         .on_window_event(|window, event| {
             if window.label() == POPOVER_LABEL {
@@ -2900,7 +3015,13 @@ pub fn run() {
                 bootstrap_mic_permission(&mic_handle);
             });
 
-            let tray_icon_bytes: &[u8] = include_bytes!("../icons/tray.png");
+            // UX-016: load the @2x (44x44) tray icon so retina displays
+            // render a smooth glyph that matches the system status
+            // items next to it. The 22x22 base tray.png renders blocky
+            // on retina because AppKit upscales it. The 44x44 source
+            // downscales cleanly to logical 22x22 in template mode and
+            // produces a sharp NSStatusItem image at both 1x and 2x.
+            let tray_icon_bytes: &[u8] = include_bytes!("../icons/tray@2x.png");
             let icon = Image::from_bytes(tray_icon_bytes)?;
 
             // Pre-write the preferred position for our status item BEFORE the

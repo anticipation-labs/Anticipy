@@ -23,9 +23,13 @@ function startRun() {
   const task = $("task").value.trim();
   if (!task) return;
   $("feed").innerHTML = "";
-  $("current").textContent = "Getting started";
+  // BNEW-002: the legacy run_task Tauri command was removed in cycle
+  // 122. The polished popover (popover.html) is the only valid
+  // surface; this index.html / main.js pair is kept only so a
+  // historical Tauri config pointing at it doesn't crash. Show a
+  // calm copy directing the user to the menu bar.
+  $("current").textContent = "This window is no longer used. Open Anticipy from the menu bar.";
   show("running");
-  invoke("run_task", { task });
 }
 
 function addFeed(text) {

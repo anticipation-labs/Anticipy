@@ -2287,6 +2287,262 @@ def onb_answer(a: Answer) -> JSONResponse:
 
 
 # --------------------------------------------------------------------------
+# BNEW-004 + UX-002: wizard step 3 basic profile (name + location).
+#
+# The Tauri wizard's "Two quick things" step (popover.html:1545-1560)
+# POSTs to /api/onboarding/basic_profile with {name, location}. Before
+# this fix the engine had no route and the wizard caught the 404
+# silently, completing onboarding without persisting either field.
+#
+# This handler stores name + location into the in-memory session profile
+# AND persists them to disk via the same _save_profile path the scripted
+# interview uses, so a restart preserves the entries. When BOTH fields
+# arrive populated, /api/state.onboarded flips True so the wizard does
+# not re-show on the next popover open.
+# --------------------------------------------------------------------------
+
+
+class BasicProfile(BaseModel):
+    name: str | None = None
+    location: str | None = None
+
+
+@app.post("/api/onboarding/basic_profile")
+def onb_basic_profile(p: BasicProfile) -> JSONResponse:
+    """Persist the wizard step 3 basic profile (name + location).
+
+    Body: {"name": "...", "location": "..."}
+    Either field may be empty; both populated marks the profile
+    onboarded. The route is intentionally additive: it does NOT touch
+    the scripted /api/onboarding/answer interview flow.
+    """
+    name = (p.name or "").strip()
+    location = (p.location or "").strip()
+    if not name and not location:
+        return JSONResponse(
+            {"ok": False, "error": "name or location is required"},
+            status_code=400,
+        )
+    _ensure_profile_loaded()
+    existing = dict(_SESS.get("profile") or {})
+    if name:
+        existing["name"] = name
+    if location:
+        existing["location"] = location
+    # Persist a UserProfile if one is not present so /api/state.onboarded
+    # flips and the wizard does not re-show next time.
+    prof_obj = _SESS.get("profile_obj")
+    if prof_obj is None:
+        try:
+            prof_obj = _profile_from_json({
+                "name": existing.get("name", ""),
+                "role_title": existing.get("role_title", ""),
+                "what_they_do": existing.get("what_they_do", ""),
+                "timezone": existing.get("timezone", "UTC"),
+                "working_hours": existing.get("working_hours", ""),
+                "people": existing.get("people", {}),
+                "critical_software": existing.get("critical_software", {}),
+                "mandate": existing.get("mandate", ""),
+                "do_not_touch": existing.get("do_not_touch", []),
+                "comms_prefs": existing.get("comms_prefs", {}),
+                "quiet_hours": existing.get("quiet_hours", ""),
+            })
+            _SESS["profile_obj"] = prof_obj
+        except Exception:
+            prof_obj = None
+    else:
+        try:
+            if name:
+                prof_obj.name = name
+        except Exception:
+            pass
+    # Rebuild the surface json from the (possibly newly constructed)
+    # frozen dataclass, then overlay the wizard-only fields (location
+    # is not a frozen UserProfile field; carry it through alongside
+    # recurring_topics / pronoun_map per _save_profile's extra-keys
+    # contract).
+    pj = _profile_json() or {}
+    if name:
+        pj["name"] = name
+    if location:
+        pj["location"] = location
+    onboarded_now = bool(pj.get("name") and pj.get("location"))
+    pj["well_populated"] = bool(pj.get("well_populated") or onboarded_now)
+    _SESS["profile"] = pj
+    cloud_sync: dict = {}
+    try:
+        cloud_sync = _save_profile() or {}
+    except Exception as exc:
+        cloud_sync = {
+            "ok": False,
+            "error": f"save_profile_failed: {type(exc).__name__}: {exc}",
+        }
+    return JSONResponse({
+        "ok": True,
+        "name": pj.get("name", ""),
+        "location": pj.get("location", ""),
+        "onboarded": onboarded_now,
+        "cloud_sync": cloud_sync,
+    })
+
+
+# --------------------------------------------------------------------------
+# UX-003: Tauri wizard step 2 probes /api/extension/probe to verify the
+# native messaging agent is alive (the user just installed the Chrome
+# extension). Before this fix there was no engine route; the wizard's
+# permissive fallback let the user advance without verification.
+#
+# Probe is a single pgrep against the installed agent script name; the
+# agent runs as ~/.anticipy/anticipy_agent.py when Chrome's native
+# messaging spawns it. We do NOT require the bridge to be reachable
+# right now because Chrome only spawns it on demand; "process exists
+# OR HTTP 127.0.0.1:7777/status responds" both count as alive.
+# --------------------------------------------------------------------------
+
+
+def _extension_agent_alive() -> bool:
+    """Return True iff the anticipy_agent.py native messaging helper is
+    detectable. Two independent checks so a process that has not yet
+    been spawned (cold first wizard step) can still report alive once
+    Chrome contacts it.
+    """
+    try:
+        out = subprocess.run(
+            ["pgrep", "-fl", "anticipy_agent.py"],
+            capture_output=True, text=True, timeout=3.0,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return True
+    except Exception:
+        pass
+    # Fallback probe: the agent exposes a /status endpoint on 127.0.0.1:7777
+    # once Chrome's native messaging spawns it. A 200 there proves alive.
+    try:
+        req = urllib.request.Request(
+            "http://127.0.0.1:7777/status", method="GET")
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            if 200 <= resp.status < 300:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+@app.get("/api/extension/probe")
+def extension_probe() -> JSONResponse:
+    """Return whether the Chrome extension's native messaging agent is
+    reachable from the engine. Used by the wizard step 2 verification
+    flow so the user is told the extension is wired vs the wizard
+    silently advancing on a 404.
+    """
+    alive = _extension_agent_alive()
+    return JSONResponse({
+        "ok": True,
+        "agent_alive": alive,
+        "connected": alive,
+    })
+
+
+# --------------------------------------------------------------------------
+# BNEW-001: server-side past_tasks fetch with explicit user_id filter.
+#
+# The Tauri fetch_past_tasks command in desktop/src-tauri/src/lib.rs queries
+# Supabase REST directly with NO user_id filter, leaking every Anticipy
+# user's task history to every other user. The structural fix is in
+# lib.rs (the desktop agent owns that file), but we ALSO expose a
+# server-side endpoint here that always passes the account_id eq filter
+# so a future fix in lib.rs can route through this proxy.
+#
+# This endpoint enforces the filter on every read so the engine itself
+# never returns cross-tenant rows even if the lib.rs query is wrong.
+# --------------------------------------------------------------------------
+
+
+@app.get("/api/past_tasks")
+def past_tasks(
+    user_id: str | None = None,
+    account_id: str | None = None,
+    limit: int = 30,
+) -> JSONResponse:
+    """Return recent action_engine_tasks rows for the current user only.
+
+    Filters by user_id (Supabase auth uid) when provided, falling back
+    to the engine's account_id when no user_id is given. NEVER returns
+    rows without a filter; this is the defense against BNEW-001.
+    """
+    try:
+        from app.config import SUPABASE_URL, SUPABASE_ANON_KEY
+    except Exception:
+        return JSONResponse({"ok": False, "rows": [],
+                             "error": "supabase_not_configured"})
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        return JSONResponse({"ok": True, "rows": [],
+                             "error": "supabase_not_configured"})
+    effective_user = (user_id or "").strip()
+    effective_account = (account_id or "").strip() or USER_ID
+    if not effective_user and not effective_account:
+        return JSONResponse({
+            "ok": False, "rows": [],
+            "error": "user_id or account_id is required",
+        }, status_code=400)
+    safe_limit = max(1, min(int(limit or 30), 200))
+    columns = (
+        "id,task_id,instruction,status,created_at,updated_at,"
+        "user_id,account_id"
+    )
+    params: list[tuple[str, str]] = [
+        ("select", columns),
+        ("order", "updated_at.desc"),
+        ("limit", str(safe_limit)),
+    ]
+    if effective_user:
+        params.append(("user_id", f"eq.{effective_user}"))
+    if effective_account:
+        params.append(("account_id", f"eq.{effective_account}"))
+    headers = {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+        "Accept": "application/json",
+    }
+    qs = urllib.parse.urlencode(params)
+    url = f"{SUPABASE_URL}/rest/v1/action_engine_tasks?{qs}"
+    try:
+        req = urllib.request.Request(url, method="GET", headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            raw = resp.read()
+        rows = json.loads(raw.decode("utf-8") or "[]")
+        if not isinstance(rows, list):
+            rows = []
+        # Defense-in-depth: drop any row whose user_id / account_id
+        # does not match the filter we sent. Belt-and-braces against
+        # PostgREST returning extra rows on a malformed filter param.
+        filtered: list[dict] = []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            row_user = str(r.get("user_id") or "")
+            row_acct = str(r.get("account_id") or "")
+            if effective_user and row_user and row_user != effective_user:
+                continue
+            if (effective_account and row_acct
+                    and row_acct != effective_account):
+                continue
+            filtered.append(r)
+        return JSONResponse({
+            "ok": True,
+            "rows": filtered,
+            "count": len(filtered),
+            "user_id_filter": effective_user,
+            "account_id_filter": effective_account,
+        })
+    except Exception as exc:
+        return JSONResponse({
+            "ok": False, "rows": [],
+            "error": f"{type(exc).__name__}: {exc}",
+        })
+
+
+# --------------------------------------------------------------------------
 # cold-start onboarding paths 3a/3b/3c (additive; do not modify the
 # scripted INTERVIEW_SCRIPT flow above). All three paths persist via
 # the SAME _save_profile durability boundary and the SAME
@@ -2718,7 +2974,9 @@ def _place_voice_call_via_direct_twilio(
 
 
 @app.post("/api/onboarding/call_start")
-def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
+def onboarding_call_start(
+    p: VoiceCallStart, request: Request,
+) -> JSONResponse:
     """Place an outbound voice-onboarding call for the user.
 
     Two dispatch paths, picked at request time:
@@ -2747,7 +3005,38 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
     Twilio still needs a verified caller-ID for restricted accounts, so
     a 21215 from Twilio is surfaced verbatim with a "verify caller-id"
     hint so the operator knows what to do.
+
+    BNEW-009: hard per-IP rate limit (3/hour, configurable via
+    ANTICIPY_CALL_START_LIMIT_PER_HOUR) so a runaway local script
+    cannot rack up Twilio charges or spam the recipient.
     """
+    # BNEW-009: rate limit BEFORE any Twilio touch. The deque survives
+    # across the engine's lifetime in _RATE_LIMIT_BUCKETS so a process
+    # restart does not reset the counter mid-window.
+    try:
+        per_hour_cap = int(os.environ.get(
+            "ANTICIPY_CALL_START_LIMIT_PER_HOUR", "3"))
+    except Exception:
+        per_hour_cap = 3
+    per_hour_cap = max(1, min(per_hour_cap, 60))
+    bucket_key = (
+        f"onboarding_call_start:"
+        f"{_client_ip(request)}:"
+        f"{(p.account_id or USER_ID or '').strip()}"
+    )
+    if not _rate_limit_check(bucket_key, per_hour_cap, 3600.0):
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": (
+                    "Too many voice-onboarding call attempts. Try again "
+                    "in an hour."
+                ),
+                "rate_limited": True,
+                "limit_per_hour": per_hour_cap,
+            },
+            status_code=429,
+        )
     phone, perr = _normalize_phone_e164_plus1(p.phone_e164 or "")
     if not phone:
         return JSONResponse(
@@ -7419,23 +7708,73 @@ def listen_start(body: ListenStart | None = None) -> JSONResponse:
                     default_in, dict) else ""
             except Exception:
                 default_name = ""
+            # UX-007: when picking the auto-default microphone, PREFER
+            # real hardware (builtin / external_usb / bluetooth) over
+            # virtual loopback devices (BlackHole, Loopback, Aggregate).
+            # On Omar's dev Mac, BlackHole 2ch advertises is_default=true
+            # so the engine listens to system audio loopback rather than
+            # the real macOS microphone, which is silent for end users
+            # who never installed BlackHole. The allow-virtual override
+            # is gated by ANTICIPY_ALLOW_VIRTUAL_AUDIO=1 for testing.
+            allow_virtual = (
+                os.environ.get("ANTICIPY_ALLOW_VIRTUAL_AUDIO", "")
+                .strip()
+                .lower()
+                in ("1", "true", "yes")
+            )
+            _real_kinds = {"builtin", "external_usb", "bluetooth"}
             selected_row: dict | None = None
             selected_device = None
-            for idx, dev in enumerate(raw_devices):
-                if not isinstance(dev, dict):
-                    continue
-                if int(dev.get("max_input_channels") or 0) <= 0:
-                    continue
-                row = _audio_device_row(idx, dev, default_name)
-                if requested_index is None:
-                    if row["is_default"]:
+            if requested_index is not None:
+                # Explicit index from the caller wins; no preference logic.
+                for idx, dev in enumerate(raw_devices):
+                    if not isinstance(dev, dict):
+                        continue
+                    if int(dev.get("max_input_channels") or 0) <= 0:
+                        continue
+                    row = _audio_device_row(idx, dev, default_name)
+                    if row["index"] == int(requested_index):
                         selected_row = row
                         selected_device = dev
                         break
-                elif row["index"] == int(requested_index):
-                    selected_row = row
-                    selected_device = dev
-                    break
+            else:
+                # Pass 1: prefer a REAL hardware mic flagged as default.
+                # Pass 2: prefer ANY real hardware mic when no real mic
+                #         is system-default.
+                # Pass 3: fall back to default (even if virtual).
+                # Pass 4: fall back to first input-capable device.
+                pass_buckets: list[list[dict]] = [[], [], [], []]
+                for idx, dev in enumerate(raw_devices):
+                    if not isinstance(dev, dict):
+                        continue
+                    if int(dev.get("max_input_channels") or 0) <= 0:
+                        continue
+                    row = _audio_device_row(idx, dev, default_name)
+                    is_real = row["kind"] in _real_kinds
+                    is_default = row["is_default"]
+                    entry = {"row": row, "dev": dev}
+                    if is_real and is_default:
+                        pass_buckets[0].append(entry)
+                    elif is_real:
+                        pass_buckets[1].append(entry)
+                    elif is_default:
+                        pass_buckets[2].append(entry)
+                    else:
+                        pass_buckets[3].append(entry)
+                ordered: list[dict] = []
+                if allow_virtual:
+                    # Original behavior: default-wins then any input dev.
+                    for b in (pass_buckets[0], pass_buckets[2],
+                              pass_buckets[1], pass_buckets[3]):
+                        ordered.extend(b)
+                else:
+                    # Prefer real hardware over virtual loopbacks.
+                    for b in pass_buckets:
+                        ordered.extend(b)
+                if ordered:
+                    pick = ordered[0]
+                    selected_row = pick["row"]
+                    selected_device = pick["dev"]
             if selected_row is None and requested_index is None:
                 for idx, dev in enumerate(raw_devices):
                     if isinstance(dev, dict) and int(dev.get("max_input_channels") or 0) > 0:
@@ -7514,20 +7853,148 @@ def listen_stop() -> JSONResponse:
     return JSONResponse({"on": False})
 
 
+def _engine_local_token_path() -> Path:
+    """Per-machine secret used to gate side-effecting localhost endpoints
+    (BNEW-005 + BNEW-006). Generated on first read; persisted to disk so
+    siblings on the same Mac can share it across engine restarts."""
+    try:
+        from app.anticipy import platform_adapter
+        return platform_adapter.data_dir() / "engine.token"
+    except Exception:
+        return Path.home() / ".anticipy" / "engine.token"
+
+
+def _engine_local_token() -> str:
+    """Return the engine-local request token, generating + persisting
+    one on first read. Empty string means generation failed (very
+    unlikely; we fall back to comparing against any empty header)."""
+    env_token = (os.environ.get("ANTICIPY_INTERNAL_TOKEN") or "").strip()
+    if env_token:
+        return env_token
+    p = _engine_local_token_path()
+    try:
+        if p.exists():
+            existing = p.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+        # Generate a fresh token. 192 bits of urandom hex is plenty for
+        # localhost abuse defence and small enough to fit in a header.
+        fresh = uuid.uuid4().hex + uuid.uuid4().hex
+        p.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            p.write_text(fresh, encoding="utf-8")
+            # Best-effort restrict to user-only read.
+            try:
+                p.chmod(0o600)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return fresh
+    except Exception:
+        return ""
+
+
+def _verify_engine_local_token(request: Request) -> tuple[bool, str]:
+    """Check the X-Anticipy-Token header against the engine-local token.
+
+    Returns (ok, reason). Bypassed when ANTICIPY_DEV_MODE=1 OR when
+    TWILIO_MOCK=1 (test mode shortcut so unit tests do not need a
+    token plumbed through every request).
+    """
+    dev_mode = (os.environ.get("ANTICIPY_DEV_MODE") or "").strip().lower() in (
+        "1", "true", "yes",
+    )
+    if dev_mode:
+        return True, "dev_mode"
+    test_mode = (os.environ.get("TWILIO_MOCK") or "").strip().lower() in (
+        "1", "true", "yes",
+    )
+    if test_mode:
+        return True, "test_mode"
+    expected = _engine_local_token()
+    if not expected:
+        # Engine could not generate or persist a token; permit the
+        # request rather than wedge the popover. This is a soft fail.
+        return True, "token_unavailable"
+    supplied = (
+        request.headers.get("x-anticipy-token")
+        or request.headers.get("X-Anticipy-Token") or ""
+    ).strip()
+    if not supplied:
+        return False, "missing_x_anticipy_token_header"
+    import hmac as _hmac_token
+    if not _hmac_token.compare_digest(supplied, expected):
+        return False, "token_mismatch"
+    return True, "ok"
+
+
+@app.get("/api/auth/engine_token")
+def engine_local_token_view(request: Request) -> JSONResponse:
+    """Return the engine-local token to localhost callers so the Tauri
+    popover can attach it as X-Anticipy-Token. Only callable from
+    127.0.0.1; refuses any other source."""
+    client = _client_ip(request)
+    if client not in ("127.0.0.1", "::1", "local"):
+        return JSONResponse(
+            {"ok": False, "error": "non_local_caller", "client": client},
+            status_code=403,
+        )
+    return JSONResponse({"ok": True, "token": _engine_local_token()})
+
+
 @app.post("/api/listen/dismiss")
-def listen_dismiss() -> JSONResponse:
-    _LISTEN["pending"] = None
+def listen_dismiss(request: Request) -> JSONResponse:
+    """BNEW-005: clear pending action card.
+
+    Now acquires the _LISTEN["lock"] before writing so concurrent
+    readers (pollListen) cannot observe a torn state. Requires the
+    engine-local token via X-Anticipy-Token header so a stranger
+    process on 127.0.0.1 cannot kill the user's pending card.
+    """
+    ok, reason = _verify_engine_local_token(request)
+    if not ok:
+        return JSONResponse(
+            {"ok": False, "error": "auth_required", "reason": reason},
+            status_code=401,
+        )
+    if not _rate_limit_check(
+        f"listen_dismiss:{_client_ip(request)}", 30, 60.0
+    ):
+        return JSONResponse(
+            {"ok": False, "error": "rate_limited"},
+            status_code=429,
+        )
+    with _LISTEN["lock"]:
+        _LISTEN["pending"] = None
     return JSONResponse({"ok": True})
 
 
 @app.post("/api/listen/reset")
-def listen_reset() -> JSONResponse:
+def listen_reset(request: Request) -> JSONResponse:
     """Clear the session counters/feed/pending WITHOUT touching the
     audio stream. Used to start a fresh logical session while the
     real microphone keeps continuously listening (never self-stops):
     repeatedly stopping/reopening the macOS input device wedges
     CoreAudio, so the stream stays up for the whole run.
+
+    BNEW-006: now requires X-Anticipy-Token and rate-limits per IP so
+    a runaway local script cannot DOS the popover by resetting state
+    100 times per second.
     """
+    ok, reason = _verify_engine_local_token(request)
+    if not ok:
+        return JSONResponse(
+            {"ok": False, "error": "auth_required", "reason": reason},
+            status_code=401,
+        )
+    if not _rate_limit_check(
+        f"listen_reset:{_client_ip(request)}", 10, 60.0
+    ):
+        return JSONResponse(
+            {"ok": False, "error": "rate_limited"},
+            status_code=429,
+        )
     with _LISTEN["lock"]:
         _LISTEN["windows"] = 0
         _LISTEN["recent"] = []
@@ -7758,6 +8225,81 @@ def _compose_cache_put(key: tuple[str, str, str], plan: dict) -> None:
             except Exception:
                 _COMPOSE_CACHE.clear()
         _COMPOSE_CACHE[key] = (time.time(), dict(plan))
+
+
+# B-PHASE9-2 helper: deterministic email-shape detector. Runs BEFORE the
+# LLM intent classifier so misclassifications (school_deadline_reminder,
+# clarify) never happen on an instruction that obviously names a Gmail
+# recipient. The regex is intentionally conservative: it must see BOTH a
+# recognized email verb AND a literal email address in the text. False
+# positives would short-circuit the LLM unnecessarily; the verb whitelist
+# below mirrors the one in parse_draft_intent on the dispatch side.
+_EMAIL_SHAPE_VERB_RE = re.compile(
+    r"\b("
+    r"draft|drafting|compose|composing|"
+    r"send|sending|email|emailing|mail|mailing|"
+    r"follow\s+up\s+with|follow\s+up\s+on|"
+    r"reply\s+to|respond\s+to|write\s+to|message"
+    r")\b",
+    re.IGNORECASE,
+)
+_EMAIL_SHAPE_ADDR_RE = re.compile(
+    r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+
+
+def _fastpath_email_shape_to_plan(instruction: str) -> dict | None:
+    """Return a plan(mode=act, intent=email_draft) when the instruction
+    contains both an email-action verb AND a literal email recipient.
+
+    Used as a deterministic fast-path BEFORE the LLM classifier in
+    _compose_task_from_memory. The LLM was observed routing
+    'draft a thank you email to X about Y' to school_deadline_reminder
+    (a real production misclassification per Phase 9 report). The
+    fastpath cuts that miss entirely by trusting the email regex.
+
+    The downstream SMS pre-confirm gate decides whether the action is
+    actually safe to dispatch. parse_draft_intent on the dispatcher
+    side requires the explicit "draft" verb only; "send" verbs go
+    through the gate. So this fast-path is safe to enable for both.
+    """
+    text = (instruction or "").strip()
+    if not text:
+        return None
+    if not _EMAIL_SHAPE_VERB_RE.search(text):
+        return None
+    addr_match = _EMAIL_SHAPE_ADDR_RE.search(text)
+    if not addr_match:
+        return None
+    recipient = addr_match.group(0)
+    # Best-effort subject extraction. about/regarding -> subject.
+    subject = ""
+    m = re.search(
+        r"\b(?:about|regarding|re:)\s+(?P<subj>.+?)(?:[.!?]\s|$)",
+        text, re.IGNORECASE | re.DOTALL,
+    )
+    if m:
+        subject = re.sub(r"\s+", " ", m.group("subj")).strip(" .,:;")[:180]
+    if not subject:
+        m = re.search(
+            r"\bsubject\s*[:=-]\s*(?P<subj>.+?)(?:[.!?]\s|$)",
+            text, re.IGNORECASE | re.DOTALL,
+        )
+        if m:
+            subject = re.sub(r"\s+", " ", m.group("subj")).strip(" .,:;")[:180]
+    subject = subject or "Anticipy draft"
+    body_summary = re.sub(r"\s+", " ", text)[:280]
+    task = (
+        f"Draft an email to {recipient} with subject {subject} "
+        f"saying {body_summary}"
+    )
+    return {
+        "mode": "act",
+        "intent": "email_draft",
+        "person": recipient,
+        "thing": subject,
+        "task": task,
+        "_fastpath": "email_shape",
+    }
 
 
 def _fastpath_plan_from_memory(instruction: str,
@@ -8475,6 +9017,23 @@ def _compose_task_from_memory(instruction: str) -> dict:
         })
     except Exception:
         pass
+    # B-PHASE9-2: deterministic regex fast-path BEFORE the LLM
+    # classifier. The live OpenRouter classifier has been observed
+    # mis-classifying explicit email-shape utterances ("draft a thank
+    # you email to X about Y") as school_deadline_reminder / clarify.
+    # When an instruction contains an email address AND a clear email
+    # action verb (draft / send / email / mail / follow up), route
+    # straight to mode=act / intent=email_draft so the dispatcher
+    # reaches the Gmail compose path without burning an LLM round
+    # trip on the misclassification. The downstream SMS pre-confirm
+    # gate still fires for irreversible send-shape verbs because
+    # parse_draft_intent (which we just tightened in B-PHASE9-3) only
+    # short-circuits the draft verb.
+    fast_email = _fastpath_email_shape_to_plan(instruction)
+    if fast_email is not None:
+        _compose_cache_put(cache_key, fast_email)
+        return _finalize_plan(instruction, fast_email)
+
     # V1+V2+V3 EXCISION: the single combined LLM intent extractor runs
     # FIRST. ONE DeepSeek V4 Flash call (~200-400ms cached) replaces
     # the hardcoded _is_actionish verb whitelist, the
@@ -9369,6 +9928,61 @@ def _browser_surface() -> str:
     return "extension_native_bridge"
 
 
+def _compose_gmail_url_from_plan(
+    instruction: str, plan: dict | None = None,
+) -> str:
+    """B-PHASE9-1: build a Gmail compose URL from an email_draft plan.
+
+    Pulls the recipient / subject / body from the plan + instruction
+    text via the existing parse_draft_intent regex (pure function, no
+    network). Returns "" when none of the fields can be resolved so
+    the caller can fall back to the existing browser dispatch.
+    """
+    try:
+        from app.action_engine.gmail_compose import (
+            DraftRequest, parse_draft_intent,
+        )
+    except Exception:
+        return ""
+    plan_dict = plan if isinstance(plan, dict) else {}
+    parsed: DraftRequest | None = None
+    try:
+        parsed = parse_draft_intent(instruction or "")
+    except Exception:
+        parsed = None
+    if parsed is None:
+        # parse_draft_intent is conservative on purpose; fall back to
+        # plan fields. plan["person"] often carries the recipient email
+        # when the email regex landed in _finalize_plan; plan["thing"]
+        # often carries the subject.
+        person_field = str(plan_dict.get("person") or "").strip()
+        to_match = re.search(
+            r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", person_field)
+        if not to_match:
+            to_match = re.search(
+                r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", instruction or "")
+        if to_match:
+            try:
+                parsed = DraftRequest(
+                    to=to_match.group(0),
+                    subject=str(plan_dict.get("thing") or "Anticipy draft"),
+                    body=str(plan_dict.get("task") or instruction or "")[:1000],
+                )
+            except Exception:
+                parsed = None
+    if parsed is None:
+        return ""
+    params = urllib.parse.urlencode({
+        "view": "cm",
+        "fs": "1",
+        "tf": "cm",
+        "to": parsed.to,
+        "su": parsed.subject,
+        "body": parsed.body,
+    })
+    return f"https://mail.google.com/mail/u/0/?{params}"
+
+
 def _dispatch_via_extension_bridge(
     instruction: str,
     plan: dict | None = None,
@@ -9408,8 +10022,25 @@ def _dispatch_via_extension_bridge(
             "verb": str(direct.get("verb") or ""),
             "target": str(direct.get("target") or ""),
         }
-    elif task:
-        intent_payload = {"action": "navigate", "target": task}
+    else:
+        # B-PHASE9-1: when the plan is an email_draft, compose a real
+        # Gmail compose URL instead of passing the prose plan task as
+        # the navigation target. The real SurfaceRuntime rejects free
+        # text with "surface task requires an explicit URL/domain or
+        # search query"; a proper compose URL passes the gate and
+        # opens a Gmail draft pre-filled with to/subject/body.
+        intent_val = str(plan_dict.get("intent") or "").lower()
+        if intent_val in {"email_draft", "gmail_draft", "email"}:
+            compose_url = _compose_gmail_url_from_plan(
+                instruction, plan_dict)
+            if compose_url:
+                intent_payload = {
+                    "verb": "open_browser_tab",
+                    "target": compose_url,
+                    "action": "navigate",
+                }
+        if not intent_payload and task:
+            intent_payload = {"action": "navigate", "target": task}
 
     result = dispatch_action(
         goal=instruction or task,
@@ -10910,6 +11541,15 @@ async def act(request: Request) -> JSONResponse:
     # deterministically without burning an LLM round trip on plan
     # composition. The DSv4SkillRunner stays as the fallback for
     # anything that isn't a direct, explicit draft.
+    #
+    # B-PHASE9-3: even on the fast-path, run the SMS pre-confirm gate
+    # so policy decisions made elsewhere (sms_pre_confirm.should_pre_confirm)
+    # are respected. parse_draft_intent now requires the literal "draft"
+    # verb (we tightened it in this pass), but the gate may still flag
+    # the action depending on plan content + user policy. The gate is
+    # skipped when the caller already passed __sms_confirmed=True
+    # (post-YES dispatch), and short-circuits to no-op when
+    # should_pre_confirm returns False for draft-only plans.
     from app.action_engine.gmail_compose import parse_draft_intent
     direct_draft = parse_draft_intent(instruction)
     if direct_draft is not None:
@@ -10921,6 +11561,33 @@ async def act(request: Request) -> JSONResponse:
             "person": direct_draft.to,
             "thing": direct_draft.subject,
         }
+        # B-PHASE9-3: gate the fast-path before any browser side effect.
+        # The gate is no-op (returns False) for safe drafts by default;
+        # if a future policy flips it on for drafts too, we honor it.
+        sms_already = bool(body_obj.get("__sms_confirmed")
+                           or pending.get("__sms_confirmed"))
+        if not sms_already:
+            try:
+                from app.product import sms_pre_confirm as _sms_pre_fp
+                if _sms_pre_fp.should_pre_confirm(synthetic_plan,
+                                                  instruction):
+                    pending_resp = _sms_pre_fp.create_pending_confirm(
+                        synthetic_plan, instruction)
+                    pending_resp.setdefault(
+                        "resolved_person", synthetic_plan.get("person", ""))
+                    pending_resp.setdefault(
+                        "resolved_thing", synthetic_plan.get("thing", ""))
+                    pending_resp.setdefault(
+                        "task", str(synthetic_plan.get("task") or ""))
+                    return _finalize_act_response(
+                        JSONResponse(pending_resp),
+                        status="sms_pending_confirm",
+                    )
+            except Exception:
+                # Gate failure must not block a draft; fall through to
+                # the existing path. Errors here are best-effort
+                # defense-in-depth, not the primary block.
+                pass
         # CDP available: take the legacy direct-gmail path so the
         # existing typing/autosave evidence flow stays intact.
         if _ensure_cdp_chrome():
@@ -11358,6 +12025,82 @@ def act_confirm_status(task_id: str) -> JSONResponse:
 # (feedback_sms_pre_confirm.md) for the policy.
 
 
+def _verify_twilio_signature(
+    request: Request, raw_body: bytes, fields: dict[str, str],
+) -> tuple[bool, str]:
+    """BNEW-003: verify the Twilio X-Twilio-Signature HMAC on the
+    inbound webhook. Returns (ok, reason). In TWILIO_MOCK=1 mode the
+    check is bypassed (returns ok=True, reason='mock') so unit tests
+    can exercise the handler without an HMAC. When auth token is unset
+    AND TWILIO_MOCK is not set, the request is REJECTED (no token =
+    no auth = no dispatch).
+
+    Algorithm per Twilio docs:
+      1. URL = full request URL with scheme + host + path
+      2. Append every form field as key+value in alphabetical order
+      3. HMAC-SHA1 with the auth token, base64-encode the digest
+      4. Compare constant-time against the supplied header
+    """
+    mock_on = (os.environ.get("TWILIO_MOCK") or "").strip().lower() in (
+        "1", "true", "yes",
+    )
+    if mock_on:
+        return True, "mock"
+    auth_token = (os.environ.get("TWILIO_AUTH_TOKEN") or "").strip()
+    if not auth_token:
+        # No token configured = engine cannot verify = reject. Better
+        # to block all inbound SMS than to dispatch on unauthenticated
+        # YES replies (BNEW-003 root cause).
+        return False, "twilio_auth_token_not_configured"
+    signature = (
+        request.headers.get("x-twilio-signature")
+        or request.headers.get("X-Twilio-Signature")
+        or ""
+    ).strip()
+    if not signature:
+        return False, "missing_x_twilio_signature_header"
+    # Build the canonical URL. Twilio signs the URL it POSTed to;
+    # the engine receives the same URL via request.url. Strip query
+    # string fragments are part of the URL when present.
+    try:
+        url = str(request.url)
+    except Exception:
+        url = ""
+    if not url:
+        return False, "request_url_unavailable"
+    # When TWILIO_PUBLIC_BASE_URL is set, prefer it as the canonical
+    # URL prefix so signatures computed against the public host pass
+    # even though the engine sees a 127.0.0.1 URL internally. Twilio
+    # webhooks land at a public-facing path then get relayed.
+    public_base = (
+        os.environ.get("TWILIO_PUBLIC_BASE_URL")
+        or os.environ.get("ANTICIPY_PUBLIC_BASE_URL") or ""
+    ).strip().rstrip("/")
+    if public_base:
+        try:
+            parsed = urllib.parse.urlparse(url)
+            url = f"{public_base}{parsed.path}"
+            if parsed.query:
+                url = f"{url}?{parsed.query}"
+        except Exception:
+            pass
+    # Canonical string: URL + concat(sorted key+value pairs from form)
+    keys = sorted(fields.keys())
+    payload = url + "".join(k + str(fields.get(k, "")) for k in keys)
+    import base64
+    import hashlib
+    import hmac as _hmac
+    digest = _hmac.new(
+        auth_token.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha1,
+    ).digest()
+    expected = base64.b64encode(digest).decode("ascii")
+    if not _hmac.compare_digest(expected, signature):
+        return False, "signature_mismatch"
+    return True, "ok"
+
+
 @app.post("/api/sms/inbound")
 async def sms_inbound(request: Request) -> Response:
     """Twilio inbound-SMS webhook.
@@ -11374,6 +12117,10 @@ async def sms_inbound(request: Request) -> Response:
     friendly acknowledgement. JSON callers (tests, the popover) get
     the same payload as JSON when they send Accept: application/json
     or include format=json in the form.
+
+    BNEW-003: every inbound request is signature-verified BEFORE any
+    dispatch logic runs. Unsigned or tampered requests are rejected
+    with HTTP 403. The check is bypassed only when TWILIO_MOCK=1.
     """
     from app.product import sms_pre_confirm as _sms_pre
 
@@ -11399,6 +12146,18 @@ async def sms_inbound(request: Request) -> Response:
                               if v is not None}
             except Exception:
                 fields = {}
+    # BNEW-003: HMAC-SHA1 signature check before any state mutation
+    # or downstream dispatch.
+    sig_ok, sig_reason = _verify_twilio_signature(request, raw, fields)
+    if not sig_ok:
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "twilio_signature_invalid",
+                "reason": sig_reason,
+            },
+            status_code=403,
+        )
     # Twilio Programmable Voice with <Gather input="speech"> POSTs
     # SpeechResult (transcribed user speech) and Confidence in
     # addition to the standard SMS fields. We accept either, with

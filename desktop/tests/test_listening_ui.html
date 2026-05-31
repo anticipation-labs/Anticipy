@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=480, initial-scale=1.0" />
+    <title>Anticipy listening UI test</title>
+    <style>
+      /*
+       * PHASE 5 listening-active view test page.
+       *
+       * Standalone HTML that hosts a snapshot of the listening card
+       * markup + controller from popover.html. Mocks /api/listen/status
+       * via 5 named scenarios. Each scenario runs sequentially with a
+       * 1500ms beat between them so a screencapture run can grab one
+       * PNG per scenario.
+       *
+       * Open in any browser:
+       *   open file:///.../desktop/tests/test_listening_ui.html
+       *
+       * Console + page title will log "PASS: all 5 scenarios render"
+       * when every assertion succeeds. Each scenario also flips a
+       * data-scenario attribute on body so an external screencapture
+       * script can sync (see CSS rule on body[data-scenario]).
+       */
+      :root {
+        --gold: #C8A97E;
+        --ok: #34C759;
+        --warn: #FF9F0A;
+        --err: #FF3B30;
+        --bg: #0C0C0C;
+        --bg-elevated: #161616;
+        --text: #F5F0EB;
+        --text-dim: #9A9388;
+        --text-faint: #6B635B;
+        --hairline: #242424;
+        --hairline-strong: #2E2E2E;
+        --tint-soft: rgba(200, 169, 126, 0.08);
+        --tint-strong: rgba(200, 169, 126, 0.22);
+        --btn-bg: #F5F0EB;
+        --btn-text: #0C0C0C;
+        --ghost-bg: transparent;
+        --ghost-text: #F5F0EB;
+        --ghost-border: #2E2E2E;
+        --ok-soft: rgba(52, 199, 89, 0.10);
+        --ok-border: rgba(52, 199, 89, 0.32);
+        --warn-soft: rgba(255, 159, 10, 0.10);
+        --warn-border: rgba(255, 159, 10, 0.32);
+        --err-soft: rgba(255, 59, 48, 0.10);
+        --err-border: rgba(255, 59, 48, 0.34);
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        background: #050505;
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                     "SF Pro Display", "Helvetica Neue", sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      body {
+        display: flex;
+        gap: 16px;
+        padding: 16px;
+        min-height: 100vh;
+      }
+      /* The popover frame is sized identically to the real popover so
+         a screencapture -R 0,0,480,720 grabs the whole frame plus a
+         little of the scenario banner above it. */
+      .popover-frame {
+        width: 480px;
+        height: 600px;
+        background: var(--bg);
+        border-radius: 14px;
+        padding: 16px 20px 18px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        position: relative;
+      }
+      /* Single-scenario screenshot mode: when ?scenario=NAME is in the
+         URL, we drop the body padding + gap, hide the test log, and pin
+         the popover to top-left so a 480x720 screencapture grabs just
+         the popover frame on a clean background. */
+      body.single-scenario {
+        padding: 0;
+        gap: 0;
+        display: block;
+        background: var(--bg);
+        width: 480px;
+        height: 720px;
+        overflow: hidden;
+      }
+      body.single-scenario .popover-frame {
+        border-radius: 0;
+        box-shadow: none;
+        width: 480px;
+        height: 720px;
+      }
+      body.single-scenario .test-log { display: none; }
+      body.single-scenario .scenario-tag { display: none; }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .brand {
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .status-pill {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--text-dim);
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        line-height: 1;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--text-faint);
+      }
+      .dot.ready  { background: var(--ok);   box-shadow: 0 0 6px rgba(52, 199, 89, 0.45); }
+      .dot.warn   { background: var(--warn); box-shadow: 0 0 6px rgba(255, 159, 10, 0.45); }
+      .dot.error  { background: var(--err);  box-shadow: 0 0 6px rgba(255, 59, 48, 0.45); }
+      .body { flex: 1; overflow-y: auto; }
+      .hidden { display: none !important; }
+
+      .test-log {
+        flex: 1;
+        background: #0a0a0a;
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        padding: 14px;
+        font-family: ui-monospace, "SF Mono", Menlo, Monaco, monospace;
+        font-size: 12px;
+        color: var(--text);
+        overflow-y: auto;
+        max-width: 600px;
+        min-height: 480px;
+      }
+      .test-log h2 {
+        font-family: -apple-system, sans-serif;
+        font-size: 14px;
+        margin-bottom: 10px;
+        color: var(--gold);
+      }
+      .test-log .pass { color: var(--ok); }
+      .test-log .fail { color: var(--err); }
+      .test-log .info { color: var(--text-dim); }
+      .test-log .scenario {
+        color: var(--gold);
+        font-weight: 600;
+        margin-top: 8px;
+      }
+
+      /* Scenario banner. Sits above the popover frame so the
+         screencapture script can read which scenario is rendered. */
+      .scenario-tag {
+        position: absolute;
+        top: -32px;
+        left: 0;
+        right: 0;
+        height: 24px;
+        background: var(--gold);
+        color: var(--bg);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.10em;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+      }
+
+      /* ============================================================
+         PHASE 5 listening-active view styles
+         (copied verbatim from popover.html so this test runs without
+         loading external CSS).
+         ============================================================ */
+      #listening-active-view {
+        margin-bottom: 14px;
+      }
+      .listening-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--tint-strong);
+        border-radius: 14px;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 0 0 1px var(--tint-soft) inset;
+      }
+      .listening-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .listening-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--err);
+        box-shadow:
+          0 0 0 0 rgba(255, 59, 48, 0.55),
+          0 0 6px rgba(255, 59, 48, 0.55);
+        animation: listenPulse 1500ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        flex-shrink: 0;
+      }
+      @keyframes listenPulse {
+        0% {
+          transform: scale(0.95);
+          box-shadow:
+            0 0 0 0 rgba(255, 59, 48, 0.55),
+            0 0 6px rgba(255, 59, 48, 0.45);
+        }
+        50% {
+          transform: scale(1.05);
+          box-shadow:
+            0 0 0 6px rgba(255, 59, 48, 0.00),
+            0 0 8px rgba(255, 59, 48, 0.55);
+        }
+        100% {
+          transform: scale(0.95);
+          box-shadow:
+            0 0 0 0 rgba(255, 59, 48, 0.00),
+            0 0 6px rgba(255, 59, 48, 0.45);
+        }
+      }
+      .listening-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--gold);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        line-height: 1;
+      }
+      .listening-sub {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-faint);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        line-height: 1;
+      }
+
+      .listening-meter {
+        position: relative;
+        height: 6px;
+        background: var(--hairline);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .listening-meter-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0%;
+        background: linear-gradient(
+          90deg,
+          var(--text-dim) 0%,
+          var(--gold) 100%
+        );
+        border-radius: 3px;
+        transition:
+          width 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          background-color 240ms ease;
+      }
+      .listening-meter-fill.is-quiet { background: var(--text-faint); }
+      .listening-meter-fill.is-active { background: var(--text-dim); }
+      .listening-meter-fill.is-loud {
+        background: linear-gradient(
+          90deg,
+          var(--text-dim) 0%,
+          var(--gold) 100%
+        );
+        box-shadow: 0 0 6px rgba(200, 169, 126, 0.40);
+      }
+
+      .listening-transcripts {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .listening-transcripts:empty { display: none; }
+      .listening-transcript {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text);
+        line-height: 1.45;
+        letter-spacing: -0.002em;
+        animation: transcriptIn 300ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+        opacity: 1;
+        transition: opacity 300ms ease, color 240ms ease;
+      }
+      .listening-transcript.age-1 {
+        color: var(--text-dim);
+        opacity: 0.82;
+      }
+      .listening-transcript.age-2 {
+        color: var(--text-faint);
+        opacity: 0.62;
+      }
+      .listening-transcript .ts {
+        display: inline-block;
+        margin-right: 8px;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        vertical-align: 1px;
+      }
+      @keyframes transcriptIn {
+        from { opacity: 0; transform: translateY(-3px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .listening-transcripts-empty {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--text-faint);
+        line-height: 1.45;
+        font-style: italic;
+      }
+
+      .listening-action {
+        background: var(--bg);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        animation: actionIn 240ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      .listening-action.is-pending {
+        border-color: var(--warn-border);
+        background: var(--warn-soft);
+      }
+      .listening-action.is-acted {
+        border-color: var(--ok-border);
+        background: var(--ok-soft);
+      }
+      @keyframes actionIn {
+        from { opacity: 0; transform: translateY(2px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .listening-action-icon {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-dim);
+        line-height: 1;
+        letter-spacing: -0.01em;
+      }
+      .listening-action.is-pending .listening-action-icon {
+        color: var(--warn);
+        border-color: var(--warn-border);
+      }
+      .listening-action.is-acted .listening-action-icon {
+        color: var(--ok);
+        border-color: var(--ok-border);
+      }
+      .listening-action-body {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .listening-action-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.10em;
+        line-height: 1;
+        margin-bottom: 4px;
+      }
+      .listening-action.is-pending .listening-action-kicker {
+        color: var(--warn);
+      }
+      .listening-action.is-acted .listening-action-kicker {
+        color: var(--ok);
+      }
+      .listening-action-summary {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        line-height: 1.4;
+        letter-spacing: -0.005em;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
+
+      /* When the listening view is hidden the welcome stub shows in
+         its place so the popover never looks empty even in the off
+         scenario. */
+      #welcome-stub {
+        padding: 12px 4px;
+        font-size: 13px;
+        color: var(--text-dim);
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body data-scenario="boot">
+    <div class="popover-frame">
+      <div class="scenario-tag" id="scenario-tag">boot</div>
+      <header>
+        <span class="brand">Anticipy</span>
+        <span class="status-pill" id="status-pill">
+          <span class="dot warn" id="status-dot"></span>
+          <span id="status-text">Getting ready</span>
+        </span>
+      </header>
+      <div class="body">
+
+        <!-- Listening-active view, identical markup to popover.html.
+             Hidden by default; the renderer flips it on per scenario. -->
+        <section id="listening-active-view" class="hidden" aria-live="polite">
+          <div class="listening-card">
+            <div class="listening-head">
+              <span class="listening-dot" aria-hidden="true"></span>
+              <span class="listening-label">Listening</span>
+              <span class="listening-sub" id="listening-sub">Live</span>
+            </div>
+            <div class="listening-meter" aria-label="Microphone level">
+              <div class="listening-meter-fill is-quiet" id="listening-meter-fill"></div>
+            </div>
+            <div class="listening-transcripts" id="listening-transcripts">
+              <div class="listening-transcripts-empty" id="listening-transcripts-empty">
+                Anticipy is listening. Say something and it will appear here.
+              </div>
+            </div>
+            <div class="listening-action is-pending hidden" id="listening-pending-card">
+              <span class="listening-action-icon" id="listening-pending-icon">AI</span>
+              <div class="listening-action-body">
+                <div class="listening-action-kicker">Currently working on</div>
+                <div class="listening-action-summary" id="listening-pending-summary"></div>
+              </div>
+            </div>
+            <div class="listening-action is-acted hidden" id="listening-acted-card">
+              <span class="listening-action-icon" id="listening-acted-icon">OK</span>
+              <div class="listening-action-body">
+                <div class="listening-action-kicker">Just did</div>
+                <div class="listening-action-summary" id="listening-acted-summary"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div id="welcome-stub">
+          Listening is off. Anticipy will surface here the moment you turn it on.
+        </div>
+      </div>
+    </div>
+    <div class="test-log" id="log">
+      <h2>Listening UI test</h2>
+    </div>
+
+    <script>
+      /* ============================================================
+         Controller snapshot from popover.html.
+         ============================================================
+         Keep this identical to the version in popover.html. The test
+         drives the same code path; if you change the controller you
+         must update both files.
+       */
+      const $ = (id) => document.getElementById(id);
+      let currentMicState = "granted";
+
+      function setStatus(state, text) {
+        const dot = $("status-dot");
+        dot.classList.remove("ready", "warn", "error");
+        if (state === "ready" || state === "warn" || state === "error") {
+          dot.classList.add(state);
+        }
+        const safe = (typeof text === "string" && text.trim()) || "Listening";
+        $("status-text").textContent = safe;
+      }
+
+      function channelIconFor(action, fallback) {
+        if (!action || typeof action !== "object") return fallback || "AI";
+        const plan = (action.plan && typeof action.plan === "object") ? action.plan : {};
+        const candidates = [
+          plan.channel, plan.surface, plan.surface_hint, plan.tool,
+          action.channel, action.surface,
+        ].filter((v) => typeof v === "string");
+        for (const c of candidates) {
+          const s = c.toLowerCase();
+          if (s.indexOf("gmail") >= 0 || s.indexOf("email") >= 0) return "@";
+          if (s.indexOf("sms") >= 0) return "SMS";
+          if (s.indexOf("voice") >= 0 || s.indexOf("call") >= 0) return "TEL";
+          if (s.indexOf("calendar") >= 0) return "CAL";
+          if (s.indexOf("drive") >= 0 || s.indexOf("doc") >= 0) return "DOC";
+          if (s.indexOf("web") >= 0 || s.indexOf("chrome") >= 0
+              || s.indexOf("browser") >= 0) return "WEB";
+        }
+        const task = String(
+          action.task || action.instruction || action.proposal || ""
+        ).toLowerCase();
+        if (task.indexOf("email") >= 0 || task.indexOf("gmail") >= 0
+            || task.indexOf("draft") >= 0) return "@";
+        if (task.indexOf("text ") >= 0 || task.indexOf("sms") >= 0) return "SMS";
+        if (task.indexOf("call") >= 0) return "TEL";
+        if (task.indexOf("book") >= 0 || task.indexOf("schedule") >= 0
+            || task.indexOf("calendar") >= 0) return "CAL";
+        if (task.indexOf("doc") >= 0 || task.indexOf("file") >= 0) return "DOC";
+        return fallback || "AI";
+      }
+
+      function actionSummaryFor(action) {
+        if (!action || typeof action !== "object") return "";
+        return String(
+          action.proposal || action.task || action.instruction
+          || (action.plan && action.plan.task) || ""
+        ).trim();
+      }
+
+      let _listeningLastLevel = -1;
+      function renderListeningMeter(level) {
+        const fill = $("listening-meter-fill");
+        if (!fill) return;
+        let pct = Number(level) * 100;
+        if (!Number.isFinite(pct) || pct < 0) pct = 0;
+        const scaled = Math.min(100, Math.sqrt(pct / 100) * 140);
+        if (Math.abs(_listeningLastLevel - scaled) < 1) return;
+        _listeningLastLevel = scaled;
+        fill.style.width = scaled + "%";
+        fill.classList.remove("is-quiet", "is-active", "is-loud");
+        if (scaled < 15)      fill.classList.add("is-quiet");
+        else if (scaled < 60) fill.classList.add("is-active");
+        else                  fill.classList.add("is-loud");
+      }
+
+      let _listeningTranscriptKey = "";
+      function renderListeningTranscripts(recent) {
+        const wrap = $("listening-transcripts");
+        if (!wrap) return;
+        const list = Array.isArray(recent) ? recent.slice(0, 3) : [];
+        const key = list.map((r) =>
+          (r && (r.ingest_id || r.ts || r.transcript || ""))
+        ).join("|");
+        if (key === _listeningTranscriptKey) return;
+        _listeningTranscriptKey = key;
+        if (list.length === 0) {
+          wrap.innerHTML =
+            '<div class="listening-transcripts-empty" id="listening-transcripts-empty">' +
+            'Anticipy is listening. Say something and it will appear here.' +
+            '</div>';
+          return;
+        }
+        wrap.innerHTML = "";
+        list.forEach((r, idx) => {
+          const text = String((r && r.transcript) || "").trim();
+          if (!text) return;
+          const row = document.createElement("div");
+          row.className = "listening-transcript" + (idx > 0 ? " age-" + idx : "");
+          if (r && r.ts) {
+            const ts = document.createElement("span");
+            ts.className = "ts";
+            ts.textContent = transcriptTimeAgo(Number(r.ts));
+            row.appendChild(ts);
+          }
+          row.appendChild(document.createTextNode(text));
+          wrap.appendChild(row);
+        });
+      }
+
+      function transcriptTimeAgo(ts) {
+        if (!Number.isFinite(ts) || ts <= 0) return "Now";
+        const ageSec = Math.max(0, Date.now() / 1000 - ts);
+        if (ageSec < 5)   return "Now";
+        if (ageSec < 60)  return Math.floor(ageSec) + "s ago";
+        const mins = Math.floor(ageSec / 60);
+        if (mins < 60) return mins + "m ago";
+        const hrs = Math.floor(mins / 60);
+        return hrs + "h ago";
+      }
+
+      let _listeningPendingKey = "";
+      function renderListeningPending(pending) {
+        const card = $("listening-pending-card");
+        if (!card) return;
+        const action = (pending && typeof pending === "object")
+          ? (Array.isArray(pending) ? pending[0] : pending)
+          : null;
+        const summary = actionSummaryFor(action);
+        const key = summary || "";
+        if (key === _listeningPendingKey) return;
+        _listeningPendingKey = key;
+        if (!summary) {
+          card.classList.add("hidden");
+          return;
+        }
+        card.classList.remove("hidden");
+        const icon = $("listening-pending-icon");
+        const sumEl = $("listening-pending-summary");
+        if (icon) icon.textContent = channelIconFor(action, "AI");
+        if (sumEl) sumEl.textContent = summary;
+      }
+
+      let _listeningActedKey = "";
+      function renderListeningActed(acted) {
+        const card = $("listening-acted-card");
+        if (!card) return;
+        const action = (acted && typeof acted === "object")
+          ? (Array.isArray(acted) ? acted[0] : acted)
+          : null;
+        const summary = actionSummaryFor(action);
+        const ts = action && (action.ts || action.at);
+        const ageSec = (Number.isFinite(Number(ts)) && Number(ts) > 0)
+          ? (Date.now() / 1000 - Number(ts))
+          : 0;
+        const stale = ageSec > 30;
+        const key = summary && !stale ? summary + "|" + Math.floor(Number(ts) || 0) : "";
+        if (key === _listeningActedKey) return;
+        _listeningActedKey = key;
+        if (!summary || stale) {
+          card.classList.add("hidden");
+          return;
+        }
+        card.classList.remove("hidden");
+        const icon = $("listening-acted-icon");
+        const sumEl = $("listening-acted-summary");
+        if (icon) icon.textContent = channelIconFor(action, "OK");
+        if (sumEl) sumEl.textContent = summary;
+      }
+
+      let _listeningOn = null;
+      function renderListeningCard(st) {
+        const view = $("listening-active-view");
+        if (!view) return;
+        const isOn = !!(st && st.on === true);
+        const denied = currentMicState === "denied";
+        const visible = isOn && !denied;
+        if (_listeningOn !== visible) {
+          _listeningOn = visible;
+          view.classList.toggle("hidden", !visible);
+        }
+        const stub = $("welcome-stub");
+        if (stub) stub.classList.toggle("hidden", visible);
+        if (!visible) return;
+        renderListeningMeter(st.level);
+        renderListeningTranscripts(st.recent);
+        renderListeningPending(st.pending);
+        renderListeningActed(st.acted);
+        const sub = $("listening-sub");
+        if (sub) {
+          const winCount = Number(st.windows) || 0;
+          const txt = winCount > 0
+            ? ("Live  ,  " + winCount + " window" + (winCount === 1 ? "" : "s"))
+            : "Live";
+          if (sub.textContent !== txt) sub.textContent = txt;
+        }
+      }
+
+      /* The driver: takes a mock listen-status payload and applies it
+         exactly as the real pollAmbientStatus would (renderListeningCard
+         + setStatus). Returns nothing; callers assert on the DOM. */
+      function applyMockStatus(st) {
+        renderListeningCard(st);
+        let label = "Listening";
+        if (st && st.acted) {
+          const actedItems = Array.isArray(st.acted) ? st.acted : [st.acted];
+          if (actedItems.length > 0) {
+            const last = actedItems[0];
+            const ts = last && (last.ts || last.at || 0);
+            const ageSec = ts ? (Date.now() / 1000 - Number(ts)) : 99;
+            if (ageSec >= 0 && ageSec < 8) label = "Done";
+          }
+        }
+        if (st && st.pending) {
+          const pendingItems = Array.isArray(st.pending) ? st.pending : [st.pending];
+          if (pendingItems.length > 0) label = "Thinking";
+        }
+        if (st && st.on === false) {
+          if (label === "Listening") label = "Getting ready";
+        }
+        const dotState = (label === "Listening" || label === "Done") ? "ready" : "warn";
+        setStatus(dotState, label);
+      }
+
+      /* ============================================================
+         5 named scenarios
+         ============================================================
+         Each payload is computed at scenario render time (not at file
+         load) so the relative timestamps (ts: NOW - 2) stay correct
+         even when scenarios are stepped through manually or driven by
+         an external screencapture script after a long pause. */
+      function freshScenarios() {
+        const NOW = Date.now() / 1000;
+        return {
+          "off": {
+            desc: "Listening off (engine idle)",
+            payload: {
+              on: false, windows: 0, level: 0,
+              recent: [], pending: null, acted: null, error: null,
+            },
+          },
+          "listening-quiet": {
+            desc: "Listening on, room is quiet, no transcripts yet",
+            payload: {
+              on: true, windows: 1, level: 0.002,
+              recent: [], pending: null, acted: null, error: null,
+            },
+          },
+          "listening-loud": {
+            desc: "Listening on, mic active, three transcripts in flight",
+            payload: {
+              on: true, windows: 4, level: 0.18,
+              recent: [
+                { ingest_id: "live-1", ts: NOW - 2,
+                  transcript: "Remind me to follow up with Sarah by Friday." },
+                { ingest_id: "live-2", ts: NOW - 12,
+                  transcript: "Book that flight to Toronto for next Tuesday." },
+                { ingest_id: "live-3", ts: NOW - 25,
+                  transcript: "I think we need to push the demo to Wednesday." },
+              ],
+              pending: null, acted: null, error: null,
+            },
+          },
+          "transcribing": {
+            desc: "Engine is composing an action (pending non-null)",
+            payload: {
+              on: true, windows: 5, level: 0.06,
+              recent: [
+                { ingest_id: "live-4", ts: NOW - 1,
+                  transcript: "Draft an email to Sarah about pushing the Friday demo." },
+                { ingest_id: "live-1", ts: NOW - 14,
+                  transcript: "Remind me to follow up with Sarah by Friday." },
+              ],
+              pending: {
+                instruction: "Draft an email to Sarah about pushing the Friday demo.",
+                proposal: "Drafting Gmail to Sarah Lin about moving Friday demo to Wednesday",
+                plan: { surface_hint: "gmail", task: "draft email to sarah" },
+                ts: NOW - 1,
+              },
+              acted: null, error: null,
+            },
+          },
+          "acted-just-now": {
+            desc: "Engine just completed a Gmail draft (acted within 8s)",
+            payload: {
+              on: true, windows: 6, level: 0.04,
+              recent: [
+                { ingest_id: "live-5", ts: NOW - 6,
+                  transcript: "Draft an email to Sarah about pushing the Friday demo." },
+                { ingest_id: "live-4", ts: NOW - 18,
+                  transcript: "Remind me to follow up with Sarah by Friday." },
+              ],
+              pending: null,
+              acted: {
+                instruction: "Draft an email to Sarah about pushing the Friday demo.",
+                task: "Drafted Gmail to Sarah Lin: moving Friday demo to Wednesday",
+                status: "SUCCESS",
+                plan: { surface: "gmail" },
+                ts: NOW - 2,
+              },
+              error: null,
+            },
+          },
+        };
+      }
+      let SCENARIOS = freshScenarios();
+
+      /* ============================================================
+         Test runner
+         ============================================================ */
+      const logEl = $("log");
+      const results = [];
+      function logLine(msg, kind) {
+        const div = document.createElement("div");
+        div.className = kind || "info";
+        div.textContent = msg;
+        logEl.appendChild(div);
+        if (kind === "fail") console.error(msg);
+        else if (kind === "pass") console.log(msg);
+        else console.log(msg);
+      }
+      function assert(cond, label) {
+        if (cond) {
+          results.push({ ok: true, label: label });
+          logLine("  PASS: " + label, "pass");
+          return true;
+        }
+        results.push({ ok: false, label: label });
+        logLine("  FAIL: " + label, "fail");
+        return false;
+      }
+      function visible(id) {
+        const el = $(id);
+        return !!(el && !el.classList.contains("hidden"));
+      }
+      function meterPct() {
+        const fill = $("listening-meter-fill");
+        if (!fill) return -1;
+        const v = String(fill.style.width || "0%").replace("%", "");
+        const n = Number(v);
+        return Number.isFinite(n) ? n : -1;
+      }
+      function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+      /* Mark the body with the active scenario so the external
+         screencapture script can sync and screenshot the right frame. */
+      function setScenario(name, desc) {
+        document.body.dataset.scenario = name;
+        const tag = $("scenario-tag");
+        if (tag) tag.textContent = name + "  ,  " + desc;
+      }
+
+      async function runScenario(name) {
+        // Refresh timestamps so each scenario's NOW - N values stay
+        // relative to render time (not file load time).
+        SCENARIOS = freshScenarios();
+        const spec = SCENARIOS[name];
+        if (!spec) {
+          logLine("FAIL: unknown scenario " + name, "fail");
+          return;
+        }
+        logLine("Scenario: " + name + "  ,  " + spec.desc, "scenario");
+        setScenario(name, spec.desc);
+        applyMockStatus(spec.payload);
+
+        // Per-scenario assertions: each scenario validates the UI
+        // surfaces the right elements for its payload.
+        if (name === "off") {
+          assert(!visible("listening-active-view"),
+                 "listening view hidden when on:false");
+          assert(visible("welcome-stub"),
+                 "welcome stub shown when listening off");
+          assert($("status-text").textContent === "Getting ready",
+                 "status pill reads 'Getting ready' when off");
+        } else if (name === "listening-quiet") {
+          assert(visible("listening-active-view"),
+                 "listening view visible when on:true");
+          assert(!visible("welcome-stub"),
+                 "welcome stub hidden when listening on");
+          assert(visible("listening-transcripts-empty"),
+                 "transcripts-empty hint visible when recent is empty");
+          assert(!visible("listening-pending-card"),
+                 "pending card hidden when pending:null");
+          assert(!visible("listening-acted-card"),
+                 "acted card hidden when acted:null");
+          assert(meterPct() < 15,
+                 "meter reads quiet (<15%) when level is 0.002");
+          const fill = $("listening-meter-fill");
+          assert(fill && fill.classList.contains("is-quiet"),
+                 "meter has is-quiet class at low level");
+          assert($("status-text").textContent === "Listening",
+                 "status pill reads 'Listening' when on and idle");
+        } else if (name === "listening-loud") {
+          assert(visible("listening-active-view"),
+                 "listening view visible");
+          const rows = document.querySelectorAll(
+            "#listening-transcripts .listening-transcript"
+          );
+          assert(rows.length === 3,
+                 "exactly 3 transcript rows render");
+          assert(rows[0].textContent.indexOf("Sarah by Friday") >= 0,
+                 "newest transcript on top reads 'Sarah by Friday'");
+          assert(rows[1].classList.contains("age-1"),
+                 "second transcript has age-1 class (mid-fade)");
+          assert(rows[2].classList.contains("age-2"),
+                 "third transcript has age-2 class (oldest, faded)");
+          assert(meterPct() >= 15,
+                 "meter reads active (>=15%) when level is 0.18");
+          const fill = $("listening-meter-fill");
+          assert(fill && (fill.classList.contains("is-active")
+                || fill.classList.contains("is-loud")),
+                 "meter has is-active or is-loud class at higher level");
+        } else if (name === "transcribing") {
+          assert(visible("listening-pending-card"),
+                 "pending card visible when pending non-null");
+          assert(!visible("listening-acted-card"),
+                 "acted card hidden when acted null");
+          const sum = $("listening-pending-summary").textContent;
+          assert(sum.indexOf("Sarah Lin") >= 0,
+                 "pending summary mentions Sarah Lin");
+          const icon = $("listening-pending-icon").textContent;
+          assert(icon === "@",
+                 "pending channel icon is '@' for Gmail surface_hint");
+          assert($("status-text").textContent === "Thinking",
+                 "status pill reads 'Thinking' when pending non-null");
+        } else if (name === "acted-just-now") {
+          assert(visible("listening-acted-card"),
+                 "acted card visible when acted non-null and fresh");
+          assert(!visible("listening-pending-card"),
+                 "pending card hidden when pending null");
+          const sum = $("listening-acted-summary").textContent;
+          assert(sum.indexOf("Sarah Lin") >= 0,
+                 "acted summary mentions Sarah Lin");
+          const icon = $("listening-acted-icon").textContent;
+          assert(icon === "@",
+                 "acted channel icon is '@' for Gmail surface");
+          assert($("status-text").textContent === "Done",
+                 "status pill reads 'Done' within 8s of acted timestamp");
+        }
+      }
+
+      async function runTests() {
+        logLine("Running 5 scenarios...", "info");
+        const order = ["off", "listening-quiet", "listening-loud",
+                       "transcribing", "acted-just-now"];
+        for (const name of order) {
+          await runScenario(name);
+          // Beat between scenarios so screencapture can grab each frame.
+          // 1500ms gives the pulsing dot one full breath cycle.
+          await sleep(1500);
+        }
+        // Restore a default render and summarize.
+        const failed = results.filter((r) => !r.ok);
+        logLine("---", "info");
+        if (failed.length === 0) {
+          logLine("PASS: all 5 scenarios render", "pass");
+          console.log("PASS: all 5 scenarios render");
+          document.title = "PASS: all 5 scenarios render";
+        } else {
+          logLine("FAIL: " + failed.length + " of " + results.length
+                  + " assertions failed", "fail");
+          console.error("FAIL: " + failed.length + " of "
+                       + results.length + " assertions failed");
+          document.title = "FAIL: " + failed.length + " of " + results.length;
+        }
+        // Final frame: leave the most interesting scenario rendered so a
+        // human opening the file sees the live state.
+        setScenario("acted-just-now",
+                    SCENARIOS["acted-just-now"].desc);
+        applyMockStatus(SCENARIOS["acted-just-now"].payload);
+      }
+
+      // Expose for an external screencapture driver: a script can call
+      // window.__test.show('listening-loud') to swap the rendered frame
+      // and then take a single screencap synchronously.
+      window.__test = {
+        get scenarios() { return freshScenarios(); },
+        show: (name) => {
+          SCENARIOS = freshScenarios();
+          const spec = SCENARIOS[name];
+          if (!spec) return false;
+          setScenario(name, spec.desc);
+          applyMockStatus(spec.payload);
+          return true;
+        },
+        getResults: () => results,
+      };
+
+      window.addEventListener("DOMContentLoaded", () => {
+        // If ?scenario=NAME is in the URL, render just that scenario and
+        // skip the assertion runner. Used by the headless screenshot
+        // path so each /tmp/listening-ui-NAME.png captures a single
+        // deterministic frame. Falls back to the full test runner when
+        // no scenario param is present.
+        const params = new URLSearchParams(location.search);
+        const scenarioParam = params.get("scenario");
+        if (scenarioParam && SCENARIOS[scenarioParam]) {
+          document.body.classList.add("single-scenario");
+          SCENARIOS = freshScenarios();
+          const spec = SCENARIOS[scenarioParam];
+          setScenario(scenarioParam, spec.desc);
+          applyMockStatus(spec.payload);
+          logLine("Rendering scenario only: " + scenarioParam, "scenario");
+          return;
+        }
+        runTests();
+      });
+    </script>
+  </body>
+</html>

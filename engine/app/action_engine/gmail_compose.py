@@ -121,9 +121,26 @@ def _body_from_text(text: str, marker: str) -> str:
 def parse_draft_intent(text: str) -> DraftRequest | None:
     """Pure regex parser. Generic and stateless: extracts (to, subject,
     body) from a free-text instruction. Kept because it has no recipe
-    knowledge; it is text parsing only."""
+    knowledge; it is text parsing only.
+
+    B-PHASE9-3: this function MUST only fire for safe "draft" / "save"
+    verbs. The previous regex also matched "send", "mail", "share",
+    and "follow up" which silently bypassed the SMS pre-confirm gate
+    for actually-irreversible send actions. The verb whitelist below
+    keeps the gate intact while still catching the explicit draft path
+    (e.g. "draft an email to ...", "compose a draft for ...", "save a
+    draft message to ..."). Send-shape instructions now correctly fall
+    through to the SMS pre-confirm gate.
+    """
     low = (text or "").lower()
-    if not re.search(r"\b(draft|email|mail|gmail|send|follow up|share)\b", low):
+    # Whitelist explicitly safe verbs. The unsafe verbs ("send", "mail",
+    # "share", "follow up", "post", "submit") deliberately do NOT match
+    # so the SMS pre-confirm gate fires for them.
+    if not re.search(
+        r"\b(draft|drafting|compose|composing|prepare|save a draft|"
+        r"create a draft)\b",
+        low,
+    ):
         return None
     to = _first_email(text)
     if not to:

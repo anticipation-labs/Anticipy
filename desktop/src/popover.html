@@ -1461,6 +1461,14 @@
                 </div>
                 <span class="perm-state">Needed</span>
               </div>
+              <div class="wizard-perm" data-perm="screen_recording">
+                <span class="perm-check">OK</span>
+                <div class="perm-body">
+                  <div class="perm-name">Screen recording</div>
+                  <div class="perm-why">Lets Anticipy read what's on screen when a task needs canvas-heavy context. Frames stay on this Mac.</div>
+                </div>
+                <span class="perm-state">Needed</span>
+              </div>
               <div class="wizard-perm" data-perm="accessibility">
                 <span class="perm-check">OK</span>
                 <div class="perm-body">
@@ -1499,7 +1507,7 @@
             <div class="wizard-explainer">
               <div class="title">We copied the folder path for you</div>
               When you hit Load unpacked in Chrome, paste right away. The path is already on your clipboard.
-              <span class="wizard-path-pill" id="wizard-extension-path">/Users/omarebrahim/.anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME</span>
+              <span class="wizard-path-pill" id="wizard-extension-path">~/.anticipy/extension/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME</span>
             </div>
             <ol class="wizard-guide-steps">
               <li class="wizard-guide-step">
@@ -1548,11 +1556,11 @@
             <p class="lede">Anticipy will use these to introduce you when it acts on your behalf and to keep things relevant to where you are.</p>
             <div class="wizard-field">
               <label for="wizard-name">Your name</label>
-              <input id="wizard-name" type="text" autocomplete="name" placeholder="Omar Ebrahim" />
+              <input id="wizard-name" type="text" autocomplete="name" placeholder="Your name" />
             </div>
             <div class="wizard-field">
               <label for="wizard-location">Where you are</label>
-              <input id="wizard-location" type="text" autocomplete="address-level2" placeholder="Vancouver, BC" />
+              <input id="wizard-location" type="text" autocomplete="address-level2" placeholder="City, country" />
             </div>
             <div class="wizard-error hidden" id="wizard-profile-error"></div>
             <div class="wizard-actions">
@@ -1657,17 +1665,17 @@
                      style="width: 100%; padding: 10px 12px; border-radius: 8px;
                             border: 1px solid var(--hairline); background: var(--bg-elevated);
                             color: var(--text); font-size: 13.5px; outline: none;" />
-              <div style="display: flex; gap: 8px;">
+              <div style="display: flex; gap: 8px; align-items: stretch;">
                 <button id="call-phone-submit" class="btn"
-                        style="flex: 1; padding: 9px 12px; border-radius: 8px;
+                        style="flex: 1 1 auto; min-width: 0; padding: 9px 12px; border-radius: 8px;
                                border: 1px solid var(--hairline-strong);
                                background: var(--tint-strong); color: var(--text);
-                               font-size: 13px; cursor: pointer;">Call me now</button>
+                               font-size: 13px; cursor: pointer; white-space: nowrap;">Call me now</button>
                 <button id="call-phone-cancel"
-                        style="padding: 9px 12px; border-radius: 8px;
+                        style="flex: 0 0 auto; min-width: 80px; padding: 9px 14px; border-radius: 8px;
                                border: 1px solid var(--hairline);
                                background: transparent; color: var(--text-dim);
-                               font-size: 13px; cursor: pointer;">Cancel</button>
+                               font-size: 13px; cursor: pointer; white-space: nowrap;">Cancel</button>
               </div>
               <div id="call-phone-error" class="sub" style="color: #ef6f6f; display: none;"></div>
             </div>
@@ -1739,6 +1747,7 @@
           fetch_past_tasks: () => [],
           fetch_dossier_summary: () => ({ entry_count: 0, last_call_at: "", call_in_progress: false, mock_mode: true }),
           fetch_mic_permission_state: () => "granted",
+          fetch_engine_url: () => "http://127.0.0.1:8731",
         };
         return Promise.resolve((mocks[cmd] || (() => null))());
       };
@@ -1750,6 +1759,36 @@
       }
 
       const $ = (id) => document.getElementById(id);
+
+      // BNEW-008: engine URL is the actual port the sidecar bound to
+      // (read from ~/.anticipy/engine.port via the fetch_engine_url
+      // Tauri command). We cache the value on boot so every fetch site
+      // builds against the right port without a Tauri round-trip per
+      // call. If fetch_engine_url is unavailable (older Tauri build,
+      // mock environment), we fall back to the historical default.
+      let _engineUrlCache = "http://127.0.0.1:8731";
+      let _engineUrlReady = false;
+      let _engineUrlPromise = null;
+      function engineUrl() {
+        return _engineUrlCache;
+      }
+      async function refreshEngineUrl() {
+        if (_engineUrlPromise) return _engineUrlPromise;
+        _engineUrlPromise = (async () => {
+          try {
+            const v = await invoke("fetch_engine_url");
+            if (typeof v === "string" && v.trim().startsWith("http")) {
+              _engineUrlCache = v.trim().replace(/\/+$/, "");
+            }
+          } catch (_) { /* keep cached default */ }
+          _engineUrlReady = true;
+          return _engineUrlCache;
+        })();
+        return _engineUrlPromise;
+      }
+      // Kick the refresh immediately so subsequent fetches see the
+      // real port before the first poll fires.
+      refreshEngineUrl();
 
       /* ----- Status row ----- */
       // state: "ready" (green), "warn" (yellow), "error" (red).
@@ -2000,7 +2039,7 @@
         try {
           const ctrl = ("AbortController" in window) ? new AbortController() : null;
           const tid = ctrl ? setTimeout(() => ctrl.abort(), 1800) : null;
-          const r = await fetch("http://127.0.0.1:8731/api/listen/status", {
+          const r = await fetch(engineUrl() + "/api/listen/status", {
             keepalive: true,
             signal: ctrl ? ctrl.signal : undefined,
           });
@@ -2068,6 +2107,13 @@
         if (tlEl) tlEl.classList.toggle("hidden", name !== "timeline");
         const wzEl = $("onboarding-wizard");
         if (wzEl) wzEl.classList.toggle("hidden", name !== "onboarding-wizard");
+        // UX-001 + UX-011: scroll the body back to top every time we
+        // swap views. Without this, a user who scrolled to the bottom
+        // of the welcome view (Call failed banner, perm-note) on a
+        // previous open would see the popover land halfway down on the
+        // next open, with the h1 + lede above the visible area.
+        const bodyEl = document.querySelector(".body");
+        if (bodyEl) bodyEl.scrollTop = 0;
       }
 
       /* ----- Now / Next / Past rendering, idempotent ----- */
@@ -2438,6 +2484,31 @@
         }
       }
 
+      // UX-006: NEVER expose internal Tauri command names, snake_case
+      // arg names, or JSON parse jargon to the user. If the raw error
+      // string contains any of these markers, replace it with a calm
+      // user-friendly line and tuck the raw text behind a Details
+      // disclosure so a curious user (or support session) can still
+      // see it without it looking like a crash to the room.
+      const CALL_ERROR_TECHNICAL_MARKERS = [
+        "phoneE164", "phone_e164",
+        "start_voice_onboarding",
+        "submit_basic_profile",
+        "missing required key",
+        "invalid args",
+        "command ",
+        "InvokeError",
+        "PermissionError",
+        "Traceback",
+      ];
+      function looksLikeTechnicalError(s) {
+        if (!s || typeof s !== "string") return false;
+        const lower = s.toLowerCase();
+        for (const m of CALL_ERROR_TECHNICAL_MARKERS) {
+          if (lower.includes(m.toLowerCase())) return true;
+        }
+        return false;
+      }
       function setCallStatusBanner(kind, title, sub) {
         const box = $("call-status");
         if (!box) return;
@@ -2452,11 +2523,42 @@
         const t = document.createElement("div");
         t.className = "title";
         t.textContent = title || "";
-        const s = document.createElement("div");
-        s.className = "sub";
-        s.textContent = sub || "";
         box.appendChild(t);
-        if (sub) box.appendChild(s);
+        let visibleSub = sub || "";
+        let rawForDetails = "";
+        // Err-only sanitization. info / ok / warn banners pass through
+        // since they only carry our own copy.
+        if (kind === "err" && looksLikeTechnicalError(visibleSub)) {
+          rawForDetails = visibleSub;
+          visibleSub = "I couldn't place the call right now. Try again in a moment.";
+        }
+        if (visibleSub) {
+          const s = document.createElement("div");
+          s.className = "sub";
+          s.textContent = visibleSub;
+          box.appendChild(s);
+        }
+        if (rawForDetails) {
+          const details = document.createElement("details");
+          details.style.marginTop = "4px";
+          const summary = document.createElement("summary");
+          summary.textContent = "Details";
+          summary.style.fontSize = "11px";
+          summary.style.color = "var(--text-faint)";
+          summary.style.cursor = "pointer";
+          summary.style.userSelect = "none";
+          const pre = document.createElement("pre");
+          pre.textContent = rawForDetails;
+          pre.style.fontSize = "10.5px";
+          pre.style.color = "var(--text-faint)";
+          pre.style.marginTop = "6px";
+          pre.style.whiteSpace = "pre-wrap";
+          pre.style.wordBreak = "break-word";
+          pre.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, monospace";
+          details.appendChild(summary);
+          details.appendChild(pre);
+          box.appendChild(details);
+        }
       }
 
       function wireCallPrompt() {
@@ -2568,7 +2670,7 @@
         box.appendChild(sub);
         // Use keepalive so the request survives a popover blur-hide.
         try {
-          const res = await fetch("http://127.0.0.1:8731/api/listen/start", {
+          const res = await fetch(engineUrl() + "/api/listen/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: "{}",
@@ -2612,12 +2714,12 @@
           // the server side. Confirm by re-issuing listen-start once.
           let alive = false;
           try {
-            const h = await fetch("http://127.0.0.1:8731/health", { keepalive: true });
+            const h = await fetch(engineUrl() + "/health", { keepalive: true });
             alive = h.ok;
           } catch (_) { alive = false; }
           if (alive) {
             try {
-              const r2 = await fetch("http://127.0.0.1:8731/api/listen/start", {
+              const r2 = await fetch(engineUrl() + "/api/listen/start", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: "{}",
@@ -2689,9 +2791,27 @@
 
       onEvent("popover-shown", () => {
         document.body.classList.add("is-shown");
-        refresh();
-        checkMicPermission();
+        // UX-001 + UX-011: scroll the body back to top on every open
+        // so the welcome h1 and lede are always the first thing the
+        // user sees. Without this, the WebKit scroll position from a
+        // previous open persists and the user lands halfway down.
+        const bodyEl = document.querySelector(".body");
+        if (bodyEl) bodyEl.scrollTop = 0;
+        // UX-004: clear any sticky "Call failed" banner from the
+        // previous session so it doesn't look like Anticipy is
+        // permanently broken on every fresh open.
+        const callStatus = $("call-status");
+        if (callStatus) {
+          callStatus.classList.add("hidden");
+          callStatus.innerHTML = "";
+        }
+        // UX-005: check onboarding state BEFORE refresh so the wizard
+        // claims the view first when the engine reports
+        // onboarded:false. refresh() runs only if the wizard didn't
+        // already take over.
         checkOnboardingState();
+        if (!WIZARD.forced) refresh();
+        checkMicPermission();
       });
       onEvent("mic-permission-about-to-prompt", (payload) => {
         const msg = (payload && (payload.message || payload.usage)) || "";
@@ -2782,7 +2902,10 @@
          All rendering is idempotent: the seen-key set short-circuits
          when the data hasn't changed since the last poll. */
 
-      const TIMELINE_ENGINE_URL = "http://127.0.0.1:8731";
+      // BNEW-008: TIMELINE_ENGINE_URL kept as a compat alias for the
+      // historical constant name; resolves dynamically via engineUrl()
+      // so timeline fetches use the actual sidecar port.
+      const TIMELINE_ENGINE_URL = ""; // unused; see engineUrl()
       const TIMELINE_KIND_LABEL = {
         email_sent: "Email",
         sms_sent: "SMS",
@@ -2978,7 +3101,7 @@
         try {
           const ctrl = ("AbortController" in window) ? new AbortController() : null;
           const tid = ctrl ? setTimeout(() => ctrl.abort(), 3000) : null;
-          const url = TIMELINE_ENGINE_URL + "/api/timeline/recent?" + timelineQueryParams();
+          const url = engineUrl() + "/api/timeline/recent?" + timelineQueryParams();
           const r = await fetch(url, {
             keepalive: true,
             signal: ctrl ? ctrl.signal : undefined,
@@ -3040,10 +3163,14 @@
         totalSteps: 5,
         perms: {
           microphone: { done: false, request: "request_microphone_permission" },
+          screen_recording: { done: false, request: "request_screen_recording_permission" },
           accessibility: { done: false, request: "request_accessibility_permission" },
           notifications: { done: false, request: "request_notifications_permission" },
         },
-        permOrder: ["microphone", "accessibility", "notifications"],
+        // UX-015: screen recording goes between microphone and
+        // accessibility so the welcome perm-note copy ("microphone,
+        // screen, and Chrome") matches what the wizard actually asks.
+        permOrder: ["microphone", "screen_recording", "accessibility", "notifications"],
         permIndex: 0,
         scrapePollTimer: null,
         scrapeStartedAt: 0,
@@ -3097,8 +3224,10 @@
           if (!next) {
             actionBtn.textContent = "All set, continue";
           } else {
-            const label = next.charAt(0).toUpperCase() + next.slice(1);
-            actionBtn.textContent = "Allow " + label.toLowerCase();
+            // Replace underscores so "screen_recording" reads as
+            // "screen recording" in the button label.
+            const human = String(next).replace(/_/g, " ");
+            actionBtn.textContent = "Allow " + human;
           }
         }
       }
@@ -3213,7 +3342,7 @@
         try {
           const ctrl = ("AbortController" in window) ? new AbortController() : null;
           const tid = ctrl ? setTimeout(() => ctrl.abort(), 4000) : null;
-          const r = await fetch("http://127.0.0.1:8731/api/extension/probe", {
+          const r = await fetch(engineUrl() + "/api/extension/probe", {
             signal: ctrl ? ctrl.signal : undefined,
           });
           if (tid) clearTimeout(tid);
@@ -3317,7 +3446,7 @@
         try {
           const ctrl = ("AbortController" in window) ? new AbortController() : null;
           const tid = ctrl ? setTimeout(() => ctrl.abort(), 4000) : null;
-          const r = await fetch("http://127.0.0.1:8731/api/coldstart/status", {
+          const r = await fetch(engineUrl() + "/api/coldstart/status", {
             signal: ctrl ? ctrl.signal : undefined,
           });
           if (tid) clearTimeout(tid);
@@ -3396,7 +3525,7 @@
           start.textContent = "Reading your sources...";
         }
         try {
-          await fetch("http://127.0.0.1:8731/api/coldstart/start", {
+          await fetch(engineUrl() + "/api/coldstart/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: "{}",
@@ -3436,7 +3565,7 @@
         }
         const body = $("wizard-sms-preview") && $("wizard-sms-preview").textContent || "";
         try {
-          await fetch("http://127.0.0.1:8731/api/onboarding/clarify_sms", {
+          await fetch(engineUrl() + "/api/onboarding/clarify_sms", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ body: body.trim() }),
@@ -3518,7 +3647,7 @@
         try {
           const ctrl = ("AbortController" in window) ? new AbortController() : null;
           const tid = ctrl ? setTimeout(() => ctrl.abort(), 2000) : null;
-          const r = await fetch("http://127.0.0.1:8731/api/state", {
+          const r = await fetch(engineUrl() + "/api/state", {
             signal: ctrl ? ctrl.signal : undefined,
           });
           if (tid) clearTimeout(tid);
@@ -3565,13 +3694,17 @@
 
       wireOnboardCards();
       wireTimelineChips();
-      // Check onboarding state once on boot. If the engine reports
-      // onboarded:false, the wizard takes over immediately. We also
-      // re-check on every popover-shown event so a user who completed
-      // onboarding via the website sees the main view next time they
-      // open the popover.
-      checkOnboardingState();
-      refresh();
+      // UX-005: check onboarding state FIRST on boot so the wizard
+      // claims the view before refresh() ever sets lastView="welcome".
+      // refresh() runs only when the wizard didn't take over, so a
+      // mid-boot race never leaves the user on welcome when the
+      // engine reports onboarded:false. We also re-check on every
+      // popover-shown event so a user who completed onboarding via
+      // the website sees the main view next time they open the popover.
+      (async () => {
+        await checkOnboardingState();
+        if (!WIZARD.forced) refresh();
+      })();
       checkMicPermission();
       pollAmbientStatus();
       pollTimeline();
