@@ -58,6 +58,13 @@ _ALLOWED_ORIGINS = [
     "https://anticipy.ai",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # Tauri WebView origins (the popover fetches /api/* directly).
+    # Without these, fetch() silently fails in the WebView and the
+    # onboarding wizard never triggers on engine.onboarded:false.
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "null",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -2494,21 +2501,250 @@ def _normalize_phone_e164_plus1(raw: str) -> tuple[str, str]:
 _VOICE_PREMIUM_PREFIXES = ("+1900", "+1976")
 
 
+def _direct_twilio_voice_creds() -> dict:
+    """Resolve direct-Twilio voice-call creds from env.
+
+    The Vercel deploy exposes the broker variant
+    (TWILIO_BROKER_ACCOUNT_SID + TWILIO_BROKER_SID + TWILIO_BROKER_TOKEN
+    + TWILIO_BROKER_FROM). Local devs often only have the legacy variant
+    (TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER). We
+    accept either so the engine can place an onboarding call directly
+    through Twilio when no Supabase session is available (the local Mac
+    case where Omar has his own creds in .env.local).
+
+    Returns a dict with keys account_sid, auth_sid, auth_token, from_e164
+    when complete; an empty dict otherwise.
+    """
+    e = os.environ
+    account_sid = (
+        e.get("TWILIO_BROKER_ACCOUNT_SID", "").strip()
+        or e.get("TWILIO_ACCOUNT_SID", "").strip()
+    )
+    # The auth user used in HTTP Basic. With API keys this is the API
+    # key SID (SK...); with legacy creds it is the account SID (AC...).
+    auth_sid = (
+        e.get("TWILIO_BROKER_SID", "").strip()
+        or e.get("TWILIO_API_KEY_SID", "").strip()
+        or account_sid
+    )
+    auth_token = (
+        e.get("TWILIO_BROKER_TOKEN", "").strip()
+        or e.get("TWILIO_API_KEY_SECRET", "").strip()
+        or e.get("TWILIO_AUTH_TOKEN", "").strip()
+    )
+    from_e164 = (
+        e.get("TWILIO_BROKER_FROM", "").strip()
+        or e.get("TWILIO_PHONE_NUMBER", "").strip()
+    )
+    if not (account_sid and auth_sid and auth_token and from_e164):
+        return {}
+    return {
+        "account_sid": account_sid,
+        "auth_sid": auth_sid,
+        "auth_token": auth_token,
+        "from_e164": from_e164,
+    }
+
+
+def _onboarding_twiml_url(account_id: str) -> str:
+    """Public TwiML URL Twilio fetches when the call connects.
+
+    Points at the website's /api/twilio/onboarding/initial which serves
+    the 7-question Anticipy onboarding TwiML. account_id is the join key
+    the answer route uses to land each utterance under the right
+    partition. The handler always uses the public website endpoint
+    because Twilio cannot reach 127.0.0.1.
+    """
+    base = (
+        os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+        or "https://www.anticipy.ai"
+    ).rstrip("/")
+    return (
+        f"{base}/api/twilio/onboarding/initial"
+        f"?account_id={urllib.parse.quote(account_id)}"
+    )
+
+
+def _twilio_status_callback_url() -> str:
+    """Public status-callback URL Twilio POSTs lifecycle events to."""
+    base = (
+        os.environ.get("ANTICIPY_WEBSITE_URL", "").strip()
+        or "https://www.anticipy.ai"
+    ).rstrip("/")
+    return f"{base}/api/twilio/status"
+
+
+def _place_voice_call_via_broker(
+    phone: str, account_id: str, token: str,
+) -> tuple[int, dict]:
+    """Delegate the outbound call to the website-side voice broker.
+
+    Returns (broker_status, parsed_payload). Network/transport errors
+    are surfaced as a synthetic payload so the caller can log + reply
+    with one shape regardless of which path placed the call.
+    """
+    url = _voice_broker_url()
+    try:
+        import httpx as _httpx
+    except Exception as exc:
+        return 0, {
+            "ok": False,
+            "error": f"httpx_import_failed: {type(exc).__name__}: {exc}",
+        }
+    try:
+        with _httpx.Client(timeout=20.0) as client:
+            resp = client.post(
+                url,
+                json={
+                    "to": phone,
+                    "account_id": account_id,
+                    "kind": "onboarding",
+                },
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except Exception as exc:
+        return 0, {
+            "ok": False,
+            "error": f"broker_transport: {type(exc).__name__}: {exc}",
+        }
+    status = int(getattr(resp, "status_code", 0) or 0)
+    try:
+        body = resp.json()
+        if not isinstance(body, dict):
+            body = {"raw": body}
+    except Exception:
+        body = {"raw": (getattr(resp, "text", "") or "")[:600]}
+    return status, body
+
+
+def _place_voice_call_via_direct_twilio(
+    phone: str, account_id: str, creds: dict,
+) -> tuple[int, dict]:
+    """Place the outbound call directly via the Twilio REST API.
+
+    Used when the local engine has its own Twilio creds in env (Omar on
+    his own Mac with .env.local). The TwiML URL still points at the
+    public website endpoint because Twilio cannot reach 127.0.0.1.
+
+    TWILIO_MOCK=1 short-circuits to a synthetic ok response so unit
+    tests + dev runs never accidentally place a real call. Returns
+    (twilio_status, parsed_payload) shaped the same as the broker path.
+    """
+    mock_env = (os.environ.get("TWILIO_MOCK") or "").strip().lower()
+    if mock_env in {"1", "true", "yes", "on"}:
+        return 200, {
+            "ok": True,
+            "mock": True,
+            "call_sid": f"CA_mock_{uuid.uuid4().hex[:24]}",
+            "status": "queued",
+            "to": phone,
+            "from": creds["from_e164"],
+            "initial_url": _onboarding_twiml_url(account_id),
+        }
+    try:
+        import httpx as _httpx
+    except Exception as exc:
+        return 0, {
+            "ok": False,
+            "error": f"httpx_import_failed: {type(exc).__name__}: {exc}",
+        }
+    api_url = (
+        "https://api.twilio.com/2010-04-01/Accounts/"
+        f"{creds['account_sid']}/Calls.json"
+    )
+    form = {
+        "To": phone,
+        "From": creds["from_e164"],
+        "Url": _onboarding_twiml_url(account_id),
+        "Method": "POST",
+        "StatusCallback": _twilio_status_callback_url(),
+        "StatusCallbackMethod": "POST",
+        "Record": "false",
+    }
+    try:
+        with _httpx.Client(timeout=20.0) as client:
+            resp = client.post(
+                api_url,
+                data=form,
+                auth=(creds["auth_sid"], creds["auth_token"]),
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            )
+    except Exception as exc:
+        return 0, {
+            "ok": False,
+            "error": f"twilio_transport: {type(exc).__name__}: {exc}",
+        }
+    status = int(getattr(resp, "status_code", 0) or 0)
+    try:
+        body = resp.json()
+        if not isinstance(body, dict):
+            body = {"raw": body}
+    except Exception:
+        body = {"raw": (getattr(resp, "text", "") or "")[:600]}
+    if 200 <= status < 300:
+        sid = str(body.get("sid") or "")
+        return 200, {
+            "ok": True,
+            "call_sid": sid,
+            "status": str(body.get("status") or "queued"),
+            "to": phone,
+            "from": creds["from_e164"],
+            "initial_url": _onboarding_twiml_url(account_id),
+        }
+    # Surface Twilio code/message verbatim so the popover can show the
+    # real Twilio reason (caller-ID not verified, cap reached, etc).
+    code = body.get("code")
+    message = str(body.get("message") or f"twilio_status_{status}")
+    hint = None
+    if code == 21215:
+        hint = (
+            "Outbound voice caller-ID is not verified. Verify the From "
+            "number in the Twilio console: Phone Numbers -> Verified "
+            "Caller IDs."
+        )
+    return status, {
+        "ok": False,
+        "error": message,
+        "code": code,
+        "twilio_status": status,
+        "twilio_body": body,
+        "hint": hint,
+    }
+
+
 @app.post("/api/onboarding/call_start")
 def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
     """Place an outbound voice-onboarding call for the user.
 
-    Flow:
-      1. Validate the phone to +1 E.164 + reject premium prefixes.
-      2. Resolve the Supabase session token the website broker accepts.
-      3. POST to /api/twilio/voice-relay on the website with the phone
-         and an account_id (defaults to the engine's USER_ID). The
-         broker is the only side that touches Twilio creds.
-      4. Mirror the placement to ~/.anticipy/voice_onboarding_calls.jsonl
-         for local audit and for /api/onboarding/voice_status polling.
+    Two dispatch paths, picked at request time:
 
-    Voice does NOT require A2P 10DLC; that gate is SMS-only. The broker
-    still needs a verified caller-ID for restricted Twilio accounts, so
+      1. If a Supabase session token is resolvable (engine was
+         provisioned by the website or the on-disk session.json is
+         readable), POST to /api/twilio/voice-relay on the website. The
+         broker is the only side that touches Twilio creds for strangers
+         who downloaded the DMG without their own Twilio account.
+
+      2. Else if direct-Twilio creds are present in env (broker variant
+         TWILIO_BROKER_ACCOUNT_SID + TWILIO_BROKER_TOKEN +
+         TWILIO_BROKER_FROM, OR legacy local TWILIO_ACCOUNT_SID +
+         TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER), place the outbound
+         call directly via the Twilio REST API. The TwiML URL still
+         points at the public website endpoint because Twilio cannot
+         reach 127.0.0.1.
+
+      3. Else return a clear error explaining either path is acceptable.
+
+    Both paths mirror the placement to
+    ~/.anticipy/voice_onboarding_calls.jsonl for local audit and for
+    /api/onboarding/voice_status polling.
+
+    Voice does NOT require A2P 10DLC; that gate is SMS-only. Direct
+    Twilio still needs a verified caller-ID for restricted accounts, so
     a 21215 from Twilio is surfaced verbatim with a "verify caller-id"
     hint so the operator knows what to do.
     """
@@ -2525,51 +2761,39 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
         )
 
     account_id = (p.account_id or "").strip() or USER_ID
+
+    # Pick a dispatch path. Prefer the website broker when a Supabase
+    # session is available (the multi-tenant shipping path). Fall back
+    # to direct Twilio when the local engine has its own creds (the
+    # owner-on-own-Mac case). If neither, surface a clear, actionable
+    # error pointing at both remediations.
     token = _voice_broker_supabase_token()
-    if not token:
+    direct_creds = _direct_twilio_voice_creds()
+    dispatch_source: str
+    if token:
+        dispatch_source = "broker"
+        status, payload = _place_voice_call_via_broker(
+            phone, account_id, token,
+        )
+    elif direct_creds:
+        dispatch_source = "direct_twilio"
+        status, payload = _place_voice_call_via_direct_twilio(
+            phone, account_id, direct_creds,
+        )
+    else:
         return JSONResponse({
             "ok": False,
-            "error": "no Supabase session. Sign in on the website first "
-                     "(the engine uses your session to place voice calls "
-                     "through the shared Anticipy broker).",
-        }, status_code=401)
-
-    url = _voice_broker_url()
-    try:
-        import httpx as _httpx
-    except Exception as exc:
-        return JSONResponse({
-            "ok": False,
-            "error": f"httpx_import_failed: {type(exc).__name__}: {exc}",
-        }, status_code=500)
-
-    try:
-        with _httpx.Client(timeout=20.0) as client:
-            resp = client.post(
-                url,
-                json={
-                    "to": phone,
-                    "account_id": account_id,
-                    "kind": "onboarding",
-                },
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json",
-                },
-            )
-    except Exception as exc:
-        return JSONResponse({
-            "ok": False,
-            "error": f"broker_transport: {type(exc).__name__}: {exc}",
-        }, status_code=502)
-
-    status = int(getattr(resp, "status_code", 0) or 0)
-    try:
-        payload = resp.json()
-        if not isinstance(payload, dict):
-            payload = {"raw": payload}
-    except Exception:
-        payload = {"raw": (getattr(resp, "text", "") or "")[:600]}
+            "error": (
+                "Voice call dispatch not configured. Either sign in on "
+                "anticipy.ai so the engine inherits your Supabase "
+                "session for the website broker, OR set "
+                "TWILIO_BROKER_ACCOUNT_SID + TWILIO_BROKER_TOKEN + "
+                "TWILIO_BROKER_FROM (or legacy TWILIO_ACCOUNT_SID + "
+                "TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER) in the engine "
+                "env so it can call Twilio directly."
+            ),
+            "dispatch_source": "none",
+        }, status_code=503)
 
     # Mirror the placement to local audit so /api/onboarding/voice_status
     # has a primary local record even before the answer route writes any
@@ -2579,6 +2803,7 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
         "phone": phone,
         "account_id": account_id,
         "broker_status": status,
+        "dispatch_source": dispatch_source,
         "ok": bool(payload.get("ok")),
         "call_sid": str(payload.get("call_sid") or ""),
         "error": str(payload.get("error") or "") if not payload.get("ok") else "",
@@ -2604,6 +2829,7 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
                     "call_sid": str(payload.get("call_sid") or ""),
                     "purpose": "onboarding",
                     "broker_status": status,
+                    "dispatch_source": dispatch_source,
                 },
             })
         except Exception:
@@ -2615,9 +2841,10 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
             "to": phone,
             "from": str(payload.get("from") or ""),
             "account_id": account_id,
+            "dispatch_source": dispatch_source,
         })
-    # Surface broker error verbatim so the popover can show the real
-    # Twilio reason (caller-ID not verified, cap reached, etc).
+    # Surface error verbatim so the popover can show the real reason
+    # (caller-ID not verified, cap reached, etc).
     try:
         timeline_append({
             "kind": "voice_call",
@@ -2629,6 +2856,7 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
                 "account_id": account_id,
                 "purpose": "onboarding",
                 "broker_status": status,
+                "dispatch_source": dispatch_source,
                 "error": str(payload.get("error")
                             or f"broker_status_{status}"),
             },
@@ -2641,6 +2869,7 @@ def onboarding_call_start(p: VoiceCallStart) -> JSONResponse:
         "broker_status": status,
         "code": payload.get("code"),
         "hint": payload.get("hint"),
+        "dispatch_source": dispatch_source,
     }, status_code=502 if status >= 500 or status == 0 else status)
 
 

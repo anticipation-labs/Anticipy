@@ -1078,6 +1078,274 @@
         letter-spacing: 0.10em;
         margin-bottom: 8px;
       }
+
+      /*
+       * PHASE 5 listening-active view.
+       *
+       * The owner directive: the user must SEE that Anticipy is recording,
+       * SEE the words it heard, and SEE what it is about to do. This view
+       * is the visible heartbeat of the wearable. Surfaces whenever the
+       * engine reports listening:true. Sits at the top of .body so it is
+       * the first thing the eye lands on; the existing views (welcome,
+       * timeline, columns, wizard) remain underneath, unchanged.
+       *
+       * Visual rhythm: rounded 14px corners, dark elevated card, soft
+       * gold tint border so the eye knows this is the live state. The
+       * pulsing red dot is the unmistakable "recording NOW" signal,
+       * styled like a film camera's tally light. Gentle 1.5s breathing
+       * pulse so it never feels aggressive at popover distance.
+       */
+      #listening-active-view {
+        animation: viewIn 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+        margin-bottom: 14px;
+      }
+
+      .listening-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--tint-strong);
+        border-radius: 14px;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 0 0 1px var(--tint-soft) inset;
+        transition:
+          border-color 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          box-shadow 220ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+
+      /* Header row: pulsing red dot + LISTENING label. */
+      .listening-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .listening-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--err);
+        box-shadow:
+          0 0 0 0 rgba(255, 59, 48, 0.55),
+          0 0 6px rgba(255, 59, 48, 0.55);
+        animation: listenPulse 1500ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        flex-shrink: 0;
+      }
+      /* Breathing scale 0.95 to 1.05 with a soft ring that fades out.
+         The ring is a CSS box-shadow ring (not a separate element) so
+         the dot stays one node. Gentle, never aggressive. */
+      @keyframes listenPulse {
+        0% {
+          transform: scale(0.95);
+          box-shadow:
+            0 0 0 0 rgba(255, 59, 48, 0.55),
+            0 0 6px rgba(255, 59, 48, 0.45);
+        }
+        50% {
+          transform: scale(1.05);
+          box-shadow:
+            0 0 0 6px rgba(255, 59, 48, 0.00),
+            0 0 8px rgba(255, 59, 48, 0.55);
+        }
+        100% {
+          transform: scale(0.95);
+          box-shadow:
+            0 0 0 0 rgba(255, 59, 48, 0.00),
+            0 0 6px rgba(255, 59, 48, 0.45);
+        }
+      }
+      .listening-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--gold);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        line-height: 1;
+      }
+      .listening-sub {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-faint);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        line-height: 1;
+      }
+
+      /* Mic level meter. Horizontal bar that animates with the live
+         RMS level coming back from /api/listen/status. Width transitions
+         in 200ms so it always feels like silk, never jumpy. The color
+         shifts from cream at low input to gold at peak so the eye reads
+         "you are being heard" without needing a number. */
+      .listening-meter {
+        position: relative;
+        height: 6px;
+        background: var(--hairline);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .listening-meter-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 0%;
+        background: linear-gradient(
+          90deg,
+          var(--text-dim) 0%,
+          var(--gold) 100%
+        );
+        border-radius: 3px;
+        transition:
+          width 200ms cubic-bezier(0.32, 0.72, 0.18, 1.00),
+          background-color 240ms ease;
+      }
+      .listening-meter-fill.is-quiet {
+        background: var(--text-faint);
+      }
+      .listening-meter-fill.is-active {
+        background: var(--text-dim);
+      }
+      .listening-meter-fill.is-loud {
+        background: linear-gradient(
+          90deg,
+          var(--text-dim) 0%,
+          var(--gold) 100%
+        );
+        box-shadow: 0 0 6px rgba(200, 169, 126, 0.40);
+      }
+
+      /* Transcript stream. Newest line on top, fade-in 300ms. Older
+         lines fade toward text-faint so the eye naturally tracks the
+         most recent words. Up to three rows, oldest drops off. */
+      .listening-transcripts {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .listening-transcripts:empty {
+        display: none;
+      }
+      .listening-transcript {
+        font-size: 13px;
+        font-weight: 400;
+        color: var(--text);
+        line-height: 1.45;
+        letter-spacing: -0.002em;
+        animation: transcriptIn 300ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+        opacity: 1;
+        transition: opacity 300ms ease, color 240ms ease;
+      }
+      .listening-transcript.age-1 {
+        color: var(--text-dim);
+        opacity: 0.82;
+      }
+      .listening-transcript.age-2 {
+        color: var(--text-faint);
+        opacity: 0.62;
+      }
+      .listening-transcript .ts {
+        display: inline-block;
+        margin-right: 8px;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        vertical-align: 1px;
+      }
+      @keyframes transcriptIn {
+        from { opacity: 0; transform: translateY(-3px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .listening-transcripts-empty {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--text-faint);
+        line-height: 1.45;
+        font-style: italic;
+      }
+
+      /* Currently doing / Just acted cards. Sit below the meter, fade
+         in only when the engine reports non-null pending or acted. The
+         channel icon is a small chip that names what surface Anticipy
+         is using (Gmail, SMS, Voice, Web). */
+      .listening-action {
+        background: var(--bg);
+        border: 1px solid var(--hairline-strong);
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        animation: actionIn 240ms cubic-bezier(0.32, 0.72, 0.18, 1.00);
+      }
+      .listening-action.is-pending {
+        border-color: var(--warn-border);
+        background: var(--warn-soft);
+      }
+      .listening-action.is-acted {
+        border-color: var(--ok-border);
+        background: var(--ok-soft);
+      }
+      @keyframes actionIn {
+        from { opacity: 0; transform: translateY(2px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .listening-action-icon {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--bg-elevated);
+        border: 1px solid var(--hairline-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-dim);
+        line-height: 1;
+        letter-spacing: -0.01em;
+      }
+      .listening-action.is-pending .listening-action-icon {
+        color: var(--warn);
+        border-color: var(--warn-border);
+      }
+      .listening-action.is-acted .listening-action-icon {
+        color: var(--ok);
+        border-color: var(--ok-border);
+      }
+      .listening-action-body {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .listening-action-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        color: var(--text-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.10em;
+        line-height: 1;
+        margin-bottom: 4px;
+      }
+      .listening-action.is-pending .listening-action-kicker {
+        color: var(--warn);
+      }
+      .listening-action.is-acted .listening-action-kicker {
+        color: var(--ok);
+      }
+      .listening-action-summary {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        line-height: 1.4;
+        letter-spacing: -0.005em;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+      }
     </style>
   </head>
   <body>
@@ -1116,6 +1384,47 @@
       </div>
 
       <div class="body">
+
+        <!-- PHASE 5 listening-active view.
+             The visible heartbeat of the wearable. Surfaces whenever the
+             engine reports listening:true on /api/listen/status. Sits at
+             the top of .body so the user always sees: a pulsing red dot
+             (recording NOW), a live mic level meter, the last three
+             transcripts the engine heard, what action it is currently
+             working on, and what it just acted on. Hidden by default;
+             the pollAmbientStatus poller flips it on the moment the
+             engine reports a live mic stream. -->
+        <section id="listening-active-view" class="hidden" aria-live="polite">
+          <div class="listening-card">
+            <div class="listening-head">
+              <span class="listening-dot" aria-hidden="true"></span>
+              <span class="listening-label">Listening</span>
+              <span class="listening-sub" id="listening-sub">Live</span>
+            </div>
+            <div class="listening-meter" aria-label="Microphone level">
+              <div class="listening-meter-fill is-quiet" id="listening-meter-fill"></div>
+            </div>
+            <div class="listening-transcripts" id="listening-transcripts">
+              <div class="listening-transcripts-empty" id="listening-transcripts-empty">
+                Anticipy is listening. Say something and it will appear here.
+              </div>
+            </div>
+            <div class="listening-action is-pending hidden" id="listening-pending-card">
+              <span class="listening-action-icon" id="listening-pending-icon">AI</span>
+              <div class="listening-action-body">
+                <div class="listening-action-kicker">Currently working on</div>
+                <div class="listening-action-summary" id="listening-pending-summary"></div>
+              </div>
+            </div>
+            <div class="listening-action is-acted hidden" id="listening-acted-card">
+              <span class="listening-action-icon" id="listening-acted-icon">OK</span>
+              <div class="listening-action-body">
+                <div class="listening-action-kicker">Just did</div>
+                <div class="listening-action-summary" id="listening-acted-summary"></div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <!-- PHASE 5 onboarding wizard. Hidden by default; surfaced
              when /api/state reports onboarded:false. Walks the user
@@ -1462,15 +1771,232 @@
       }
 
       /* ----- Ambient listening status poller -----
-         INVESTOR-DEMO HARDENING: polls /api/listen/status every 4s and
+         INVESTOR-DEMO HARDENING: polls /api/listen/status every 1s and
          maps the engine's observable state to a friendly pill phrase.
          Falls back silently when the engine is mid-restart so the
          existing pill text remains visible. The poll is independent of
          the dossier refresh loop so the pill keeps moving even when
-         dossier reads time out. */
+         dossier reads time out.
+
+         PHASE 5 UI gap: the poller also drives the visible listening
+         card (#listening-active-view): pulsing dot, mic level meter,
+         transcript stream, currently-doing card, just-acted card. The
+         owner directive was "people should SEE that it's recording."
+         That happens here. Polled at 1s so the meter and transcripts
+         feel real-time. */
       let lastAmbientPill = null;
+
+      /* Channel icon resolver for the action cards. The engine returns
+         either a structured plan (with surface / channel hints) or a
+         plain task string. We use that to render a tiny chip that
+         names what surface Anticipy is using (Gmail, SMS, Voice, Web,
+         Calendar, Drive). Falls back to AI for the generic case. */
+      function channelIconFor(action, fallback) {
+        if (!action || typeof action !== "object") return fallback || "AI";
+        const plan = (action.plan && typeof action.plan === "object") ? action.plan : {};
+        const candidates = [
+          plan.channel, plan.surface, plan.surface_hint, plan.tool,
+          action.channel, action.surface,
+        ].filter((v) => typeof v === "string");
+        for (const c of candidates) {
+          const s = c.toLowerCase();
+          if (s.indexOf("gmail") >= 0 || s.indexOf("email") >= 0) return "@";
+          if (s.indexOf("sms") >= 0) return "SMS";
+          if (s.indexOf("voice") >= 0 || s.indexOf("call") >= 0) return "TEL";
+          if (s.indexOf("calendar") >= 0) return "CAL";
+          if (s.indexOf("drive") >= 0 || s.indexOf("doc") >= 0) return "DOC";
+          if (s.indexOf("web") >= 0 || s.indexOf("chrome") >= 0
+              || s.indexOf("browser") >= 0) return "WEB";
+        }
+        // Guess from the task string when no structured hint is available.
+        const task = String(
+          action.task || action.instruction || action.proposal || ""
+        ).toLowerCase();
+        if (task.indexOf("email") >= 0 || task.indexOf("gmail") >= 0
+            || task.indexOf("draft") >= 0) return "@";
+        if (task.indexOf("text ") >= 0 || task.indexOf("sms") >= 0) return "SMS";
+        if (task.indexOf("call") >= 0) return "TEL";
+        if (task.indexOf("book") >= 0 || task.indexOf("schedule") >= 0
+            || task.indexOf("calendar") >= 0) return "CAL";
+        if (task.indexOf("doc") >= 0 || task.indexOf("file") >= 0) return "DOC";
+        return fallback || "AI";
+      }
+
+      /* Friendly summary string for a pending or acted record. The engine
+         returns several shapes; we pick the most user-facing field in
+         order of preference: proposal (already plain English from the
+         planner), task (the resolved goal), instruction (raw words the
+         user said). Falls back to an empty string which the renderer
+         treats as "hide the card". */
+      function actionSummaryFor(action) {
+        if (!action || typeof action !== "object") return "";
+        return String(
+          action.proposal || action.task || action.instruction
+          || (action.plan && action.plan.task) || ""
+        ).trim();
+      }
+
+      /* Idempotent renderers for the listening card. Each compares its
+         input against a remembered key and only updates the DOM when
+         the key changes, so the live meter (which DOES change every
+         tick) does not pile up onto unrelated re-renders. */
+      let _listeningLastLevel = -1;
+      function renderListeningMeter(level) {
+        const fill = $("listening-meter-fill");
+        if (!fill) return;
+        let pct = Number(level) * 100;
+        if (!Number.isFinite(pct) || pct < 0) pct = 0;
+        // RMS values from the mic are typically 0.002 quiet, 0.05 normal,
+        // 0.20+ loud. Scale to 0 to 100 percent so the meter reads.
+        // Square-root compression so quiet speech still moves the bar.
+        const scaled = Math.min(100, Math.sqrt(pct / 100) * 140);
+        // Only repaint when the scaled level changes by 1% or more so
+        // the browser is not flooded with style updates.
+        if (Math.abs(_listeningLastLevel - scaled) < 1) return;
+        _listeningLastLevel = scaled;
+        fill.style.width = scaled + "%";
+        fill.classList.remove("is-quiet", "is-active", "is-loud");
+        if (scaled < 15)      fill.classList.add("is-quiet");
+        else if (scaled < 60) fill.classList.add("is-active");
+        else                  fill.classList.add("is-loud");
+      }
+
+      let _listeningTranscriptKey = "";
+      function renderListeningTranscripts(recent) {
+        const wrap = $("listening-transcripts");
+        if (!wrap) return;
+        const list = Array.isArray(recent) ? recent.slice(0, 3) : [];
+        const key = list.map((r) =>
+          (r && (r.ingest_id || r.ts || r.transcript || ""))
+        ).join("|");
+        if (key === _listeningTranscriptKey) return;
+        _listeningTranscriptKey = key;
+        if (list.length === 0) {
+          wrap.innerHTML =
+            '<div class="listening-transcripts-empty" id="listening-transcripts-empty">' +
+            'Anticipy is listening. Say something and it will appear here.' +
+            '</div>';
+          return;
+        }
+        wrap.innerHTML = "";
+        list.forEach((r, idx) => {
+          const text = String((r && r.transcript) || "").trim();
+          if (!text) return;
+          const row = document.createElement("div");
+          row.className = "listening-transcript" + (idx > 0 ? " age-" + idx : "");
+          if (r && r.ts) {
+            const ts = document.createElement("span");
+            ts.className = "ts";
+            ts.textContent = transcriptTimeAgo(Number(r.ts));
+            row.appendChild(ts);
+          }
+          row.appendChild(document.createTextNode(text));
+          wrap.appendChild(row);
+        });
+      }
+
+      function transcriptTimeAgo(ts) {
+        if (!Number.isFinite(ts) || ts <= 0) return "Now";
+        const ageSec = Math.max(0, Date.now() / 1000 - ts);
+        if (ageSec < 5)   return "Now";
+        if (ageSec < 60)  return Math.floor(ageSec) + "s ago";
+        const mins = Math.floor(ageSec / 60);
+        if (mins < 60) return mins + "m ago";
+        const hrs = Math.floor(mins / 60);
+        return hrs + "h ago";
+      }
+
+      let _listeningPendingKey = "";
+      function renderListeningPending(pending) {
+        const card = $("listening-pending-card");
+        if (!card) return;
+        const action = (pending && typeof pending === "object")
+          ? (Array.isArray(pending) ? pending[0] : pending)
+          : null;
+        const summary = actionSummaryFor(action);
+        const key = summary || "";
+        if (key === _listeningPendingKey) return;
+        _listeningPendingKey = key;
+        if (!summary) {
+          card.classList.add("hidden");
+          return;
+        }
+        card.classList.remove("hidden");
+        const icon = $("listening-pending-icon");
+        const sumEl = $("listening-pending-summary");
+        if (icon) icon.textContent = channelIconFor(action, "AI");
+        if (sumEl) sumEl.textContent = summary;
+      }
+
+      let _listeningActedKey = "";
+      function renderListeningActed(acted) {
+        const card = $("listening-acted-card");
+        if (!card) return;
+        const action = (acted && typeof acted === "object")
+          ? (Array.isArray(acted) ? acted[0] : acted)
+          : null;
+        const summary = actionSummaryFor(action);
+        // Stale-acted suppression: anything older than 30s drops off
+        // the card so the user always sees fresh activity.
+        const ts = action && (action.ts || action.at);
+        const ageSec = (Number.isFinite(Number(ts)) && Number(ts) > 0)
+          ? (Date.now() / 1000 - Number(ts))
+          : 0;
+        const stale = ageSec > 30;
+        const key = summary && !stale ? summary + "|" + Math.floor(Number(ts) || 0) : "";
+        if (key === _listeningActedKey) return;
+        _listeningActedKey = key;
+        if (!summary || stale) {
+          card.classList.add("hidden");
+          return;
+        }
+        card.classList.remove("hidden");
+        const icon = $("listening-acted-icon");
+        const sumEl = $("listening-acted-summary");
+        if (icon) icon.textContent = channelIconFor(action, "OK");
+        if (sumEl) sumEl.textContent = summary;
+      }
+
+      let _listeningOn = null;
+      function renderListeningCard(st) {
+        const view = $("listening-active-view");
+        if (!view) return;
+        // Spec: surface when listening:true. Hide if engine reports
+        // listening:false. Mic-denied path also hides it.
+        const isOn = !!(st && st.on === true);
+        const denied = currentMicState === "denied";
+        const visible = isOn && !denied;
+        if (_listeningOn !== visible) {
+          _listeningOn = visible;
+          view.classList.toggle("hidden", !visible);
+        }
+        if (!visible) return;
+        renderListeningMeter(st.level);
+        renderListeningTranscripts(st.recent);
+        renderListeningPending(st.pending);
+        renderListeningActed(st.acted);
+        // Sub-label in the head row: ambient mic source + window count
+        // so the user has a sense of what they are looking at.
+        const sub = $("listening-sub");
+        if (sub) {
+          const winCount = Number(st.windows) || 0;
+          const txt = winCount > 0
+            ? ("Live  ,  " + winCount + " window" + (winCount === 1 ? "" : "s"))
+            : "Live";
+          if (sub.textContent !== txt) sub.textContent = txt;
+        }
+      }
+
       async function pollAmbientStatus() {
-        if (currentMicState === "denied") return;
+        if (currentMicState === "denied") {
+          // Mic denied wipes the live card; the recovery banner takes over.
+          const view = $("listening-active-view");
+          if (view && !view.classList.contains("hidden")) {
+            view.classList.add("hidden");
+            _listeningOn = false;
+          }
+          return;
+        }
         try {
           const ctrl = ("AbortController" in window) ? new AbortController() : null;
           const tid = ctrl ? setTimeout(() => ctrl.abort(), 1800) : null;
@@ -1481,21 +2007,27 @@
           if (tid) clearTimeout(tid);
           if (!r.ok) return;
           const st = await r.json();
+          // Drive the live card. Idempotent renders below.
+          renderListeningCard(st);
           let label = "Listening";
           // Friendly status hierarchy: active task in progress beats the
           // idle "Listening" state; if neither, fall back to the ambient
           // listening on/off flag.
-          if (st && st.acted && Array.isArray(st.acted) && st.acted.length > 0) {
-            // Most recent acted entry within the last 8 seconds reads as
-            // "Done"; older ones drop back to Listening so the pill is
-            // self-correcting.
-            const last = st.acted[0];
-            const ts = last && (last.ts || last.at || 0);
-            const ageSec = ts ? (Date.now() / 1000 - Number(ts)) : 99;
-            if (ageSec >= 0 && ageSec < 8) label = "Done";
+          if (st && st.acted) {
+            const actedItems = Array.isArray(st.acted) ? st.acted : [st.acted];
+            if (actedItems.length > 0) {
+              // Most recent acted entry within the last 8 seconds reads as
+              // "Done"; older ones drop back to Listening so the pill is
+              // self-correcting.
+              const last = actedItems[0];
+              const ts = last && (last.ts || last.at || 0);
+              const ageSec = ts ? (Date.now() / 1000 - Number(ts)) : 99;
+              if (ageSec >= 0 && ageSec < 8) label = "Done";
+            }
           }
-          if (st && st.pending && Array.isArray(st.pending) && st.pending.length > 0) {
-            label = "Thinking";
+          if (st && st.pending) {
+            const pendingItems = Array.isArray(st.pending) ? st.pending : [st.pending];
+            if (pendingItems.length > 0) label = "Thinking";
           }
           if (st && st.on === false) {
             // Ambient mic not started yet. Show "Getting ready" only if
@@ -1511,6 +2043,19 @@
           /* engine mid-respawn; keep last pill visible */
         }
       }
+
+      // Expose the listening renderers so the standalone test HTML can
+      // drive each scenario without a real engine HTTP server. Production
+      // popover code never reads window.__listening.
+      window.__listening = {
+        renderCard: renderListeningCard,
+        renderMeter: renderListeningMeter,
+        renderTranscripts: renderListeningTranscripts,
+        renderPending: renderListeningPending,
+        renderActed: renderListeningActed,
+        channelIconFor: channelIconFor,
+        actionSummaryFor: actionSummaryFor,
+      };
 
       /* ----- View switching, no flicker ----- */
       let lastView = null;
@@ -1937,7 +2482,7 @@
             submit.disabled = true;
             submit.textContent = "Placing call";
             try {
-              const res = await invoke("start_voice_onboarding", { phone_e164: phone });
+              const res = await invoke("start_voice_onboarding", { phoneE164: phone });
               hideCallPrompt();
               if (res && res.ok) {
                 setCallStatusBanner(
@@ -3036,7 +3581,14 @@
       // engine's ambient listen status so the header reflects what
       // the listener is doing right now ("Listening", "Thinking",
       // "Done") instead of stale dossier-derived state.
-      setInterval(pollAmbientStatus, 4000);
+      // PHASE 5 UI gap: cadence dropped from 4s to 1s so the visible
+      // listening card (mic level meter, transcript stream, currently-
+      // doing card) feels real-time. Each call is keepalive + aborts
+      // after 1.8s so the loop never piles up behind a slow engine.
+      // Visibility change is intentionally NOT used to pause the
+      // poller: when the popover is open the user must see live
+      // recording state at all times (owner directive).
+      setInterval(pollAmbientStatus, 1000);
       // Unified timeline poll. Same 5s cadence as the dossier refresh
       // loop so the popover stays in sync without doubling network
       // traffic. Listed last so a render bug in the timeline poller
