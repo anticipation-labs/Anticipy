@@ -14,8 +14,9 @@ EVENT = "I'll send Sarah the Q3 deck on Friday and book us lunch."
 async def main() -> None:
     core = ControlCore()  # data dir from ANTICIPY_DATA_DIR
 
-    # (4) script the connector to fail once, then succeed
-    core.bus.worker_for("create_event").script("create_event", FAIL, SUCCESS)
+    # (4) script a still-stub worker (write_memory -> memory_stub) to fail once,
+    # then succeed. (create_event is now handled by the real ApiHand, not a stub.)
+    core.bus.worker_for("write_memory").script("write_memory", FAIL, SUCCESS)
 
     await core.start()
     try:
@@ -31,9 +32,9 @@ async def main() -> None:
     intents = [s.intent for s in goal.steps]
     assert intents == ["send_email", "create_event", "write_memory"], intents
 
-    # (4) the connector failed once and was retried to success
-    ce = next(s for s in goal.steps if s.intent == "create_event")
-    assert ce.attempts >= 2 and ce.state == StepState.done, ce
+    # (4) the scripted worker failed once and was retried to success
+    wm = next(s for s in goal.steps if s.intent == "write_memory")
+    assert wm.attempts >= 2 and wm.state == StepState.done, wm
 
     # (5) goal done, and NO step is done without proof
     assert goal.state == GoalState.done, goal.state
@@ -70,7 +71,7 @@ async def main() -> None:
     core.store.save(parked)
 
     print("PART1 PASS")
-    print(f"  goal1={goal.id[:8]} state={goal.state.value} steps={intents} create_event_attempts={ce.attempts}")
+    print(f"  goal1={goal.id[:8]} state={goal.state.value} steps={intents} write_memory_attempts={wm.attempts}")
     print(f"  smart_calls={callers} model_cost={core.gateway.total_cost()}")
     print(f"  glassbox kinds={sorted(kinds)} jobs={n_jobs} results={n_results}")
     print(f"  scorecard={ro}")
