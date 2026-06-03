@@ -30,7 +30,11 @@ brain = Brain()
 core = ControlCore()
 # Real reasoning+vision model for the web-agent loop (kept separate from the
 # brain's stub gateway so the brain/hands tests stay free + deterministic).
-gateway_agent = ModelGateway(provider=PROVIDER_OPENROUTER)
+gateway_agent = ModelGateway(
+    provider=PROVIDER_OPENROUTER,
+    cheap_model="google/gemini-3.1-flash-lite",   # routine see-and-locate steps
+    smart_model="google/gemini-3.5-flash",        # planning / recovery / stuck / judge
+)
 
 
 @asynccontextmanager

@@ -23,7 +23,7 @@ from typing import List, Optional
 
 from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
-from ..core.gateway import SMART, ModelGateway
+from ..core.gateway import CHEAP, SMART, ModelGateway
 
 PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes in sequence
 (e.g., reach the target page; find the target item; select it; perform the action; verify/stop).
@@ -190,12 +190,16 @@ class WebVoyagerAgent:
                 + "RECENT ACTIONS:\n" + ("\n".join(history[-5:]) or "(none)") + "\n\n"
                 + "VISIBLE ELEMENTS:\n" + el_lines + "\n\nNext action JSON:"
             )
-            raw1 = await self.gw.think(prompt, tier=SMART, caller="agent", image=shot,
+            # two-tier ladder: cheap by default; escalate to smart only when stuck
+            # (no progress last step, or an action was forbidden by the anti-loop guard)
+            escalate = (sub_stuck >= 1) or (forbid is not None)
+            tier = SMART if escalate else CHEAP
+            raw1 = await self.gw.think(prompt, tier=tier, caller="agent", image=shot,
                                        json_mode=True, temperature=0.1)
             action = _parse_json(raw1)
             raw2 = ""
             if not action or not action.get("action"):
-                raw2 = await self.gw.think(
+                raw2 = await self.gw.think(  # a non-answer always escalates to smart
                     prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
                     tier=SMART, caller="agent", image=shot, json_mode=True, temperature=0.1)
                 action = _parse_json(raw2)
@@ -211,7 +215,7 @@ class WebVoyagerAgent:
                 if el and PURCHASE_GUARD.search(el.get("name", "") or ""):
                     return self._done(out, step + 1, history, stopped_for_safety=True,
                                       answer=f"STOPPED before a purchase control ('{el.get('name')}'). "
-                                             "Reached checkout but did NOT place the order.")
+                                             "Did NOT place the order — handed back for your confirmation.")
                 if el and committed is None:
                     committed = (el.get("name") or "")[:48]  # commit to this target for the subgoal
 
@@ -279,15 +283,12 @@ class WebVoyagerAgent:
 
 async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] = None) -> dict:
     prompt = (
-        "You are grading a web agent. The FINAL page screenshot is attached. "
+        "You are grading a web agent, with the FINAL page screenshot attached. "
         "Reply ONLY JSON {\"success\":true|false,\"reason\":\"...\"}.\n"
         f"TASK: {task}\nAGENT ANSWER: {result.get('answer')!r}\nFINAL URL: {result.get('final_url')}\n"
-        "Grade GENEROUSLY on substance: a correct fact / star count / price, or a confirmation visible in the "
-        "screenshot, is SUCCESS. Reaching a checkout or sign-in-for-checkout page and stopping without buying IS "
-        "success when the task was to reach checkout — a sign-in page whose URL contains 'checkout' or "
-        "'proceedToCheckout' is the checkout flow, NOT a blocking wall. BUT: if the answer is a SPONSORED/ad result "
-        "when an organic one was required, that is NOT success. A clean hand-off on a captcha/login wall (for a "
-        "READ task) is NOT success."
+        "Decide ONLY from substance: does the answer, corroborated by what is visible in the final screenshot, "
+        "satisfy what the task asked for? Judge on correctness, not phrasing, and apply the SAME standard to every "
+        "site. If the task itself instructed the agent to stop at a particular step, stopping there is success."
     )
     raw = await gw.think(prompt, tier=SMART, caller="agent", image=image, json_mode=True)
     j = _parse_json(raw) or {}

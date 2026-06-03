@@ -103,7 +103,7 @@ async function executeBrowseJob(msg) {
     const textLc = (page.text || "").toLowerCase();
     const captcha = /captcha|unusual traffic|are you a (robot|human)|verify you('| a)re human|press & hold/.test(textLc);
     const authUrl = /\/login|\/signin|\/sign-in|\/onboarding|\/auth\b|accounts\.|mode=login/.test(urlLc);
-    const authText = /continue with (phone|apple|google|email)|sign in to|log ?in to|create (an )?account|enter your password|forgot password/.test(textLc);
+    const authText = /sign ?in|log ?in|create (an )?account|enter your password|forgot password|continue with/.test(textLc);
     if (captcha || (authUrl && authText)) {
       return result(msg, "needs_human",
         { screenshot, url: page.url, title: page.title },
@@ -194,14 +194,14 @@ async function doObserve(msg) {
           let name = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || el.getAttribute('title') || el.innerText || '').trim();
           if (!name) { const img = el.querySelector('img'); if (img) name = (img.getAttribute('alt') || '').trim(); }
           if (!name) name = (el.textContent || '').trim();
-          if (!name) { const anc = el.closest('[data-component-type="s-search-result"], li, article, [role="listitem"], [data-asin]'); if (anc) { const h = anc.querySelector('h2, h3, [role="heading"]'); if (h) name = (h.innerText || '').trim(); } }
+          if (!name) { const anc = el.closest('li, article, section, [role="listitem"], [role="article"]'); if (anc) { const h = anc.querySelector('h1, h2, h3, [role="heading"]'); if (h) name = (h.innerText || '').trim(); } }
           name = name.replace(/\s+/g, ' ').slice(0, 110);
           const role = el.getAttribute('role') || el.tagName.toLowerCase();
           const stt = []; if (el.disabled) stt.push('disabled'); if (el.checked) stt.push('checked');
           const ae = el.getAttribute('aria-expanded'); if (ae) stt.push('expanded=' + ae);
           const inView = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
           let sponsored = false;
-          const sanc = el.closest('li, article, [role="listitem"], [data-component-type="s-search-result"], [data-asin], ytd-rich-item-renderer, ytd-ad-slot-renderer, ytd-promoted-video-renderer');
+          const sanc = el.closest('li, article, section, [role="listitem"], [role="article"]');
           const sp = (((sanc || el).innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).slice(0, 240).toLowerCase();
           if (/sponsored|promoted|advertisement/.test(sp)) sponsored = true;
           out.push({ idx: i, role: role, name: name, type: (el.getAttribute('type') || ''), state: stt.join(','), inView: inView, sponsored: sponsored });
