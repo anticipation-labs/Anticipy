@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Anticipy (the hands)",
+  "version": "0.1.0",
+  "description": "Connects to the local Anticipy engine and reports connected. Scaffold stub — no browser driving yet.",
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Anticipy" },
+  "host_permissions": ["http://127.0.0.1/*"]
+}

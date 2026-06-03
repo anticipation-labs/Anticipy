@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; width: 240px; padding: 16px;
+        font: 13px/1.4 -apple-system, "SF Pro Text", system-ui, sans-serif;
+        background: #17191C; color: #F2F1ED;
+      }
+      .name { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+      .row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: #A9ABB0; }
+      .dot.on { background: #C8A96A; }
+      .status { color: #A9ABB0; }
+      .status.on { color: #F2F1ED; }
+    </style>
+  </head>
+  <body>
+    <div class="name">Anticipy</div>
+    <div class="row">
+      <span id="dot" class="dot"></span>
+      <span id="status" class="status">checking engine…</span>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
