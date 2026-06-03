@@ -12,6 +12,7 @@ The engine is local-first: it binds to 127.0.0.1 only.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
@@ -19,7 +20,7 @@ from pydantic import BaseModel
 from . import __version__
 from .brain import Brain
 from .core.control_core import ControlCore
-from .core.envelopes import Job
+from .core.envelopes import Job, new_id
 
 ENGINE_NAME = "anticipy-engine"
 
@@ -143,6 +144,30 @@ async def ws_browse(body: BrowseIn) -> dict:
     hand = BrowserHand(core.browser_link, timeout=30.0)
     res = await hand.handle(Job(intent=body.intent, args=body.args))
     return res.model_dump(mode="json")
+
+
+class ObserveIn(BaseModel):
+    url: Optional[str] = None
+
+
+class ActIn(BaseModel):
+    action: str
+    index: int = 0
+    text: str = ""
+    url: str = ""
+    dir: str = "down"
+    enter: bool = False
+
+
+@app.post("/ws/observe")
+async def ws_observe(body: ObserveIn) -> dict:
+    args = {k: v for k, v in body.model_dump().items() if v is not None}
+    return await core.browser_link.send_browse(new_id(), "observe", args, timeout=40.0)
+
+
+@app.post("/ws/act")
+async def ws_act(body: ActIn) -> dict:
+    return await core.browser_link.send_browse(new_id(), "act", body.model_dump(), timeout=40.0)
 
 
 @app.websocket("/ws/extension")

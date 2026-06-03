@@ -65,8 +65,11 @@ async function handleMessage(msg) {
   if (msg.type === "pong") return;
   if (msg.type === "reload") { console.log("[anticipy] hot reload"); chrome.runtime.reload(); return; }
   if (msg.type === "browse_job") {
-    const result = await executeBrowseJob(msg);
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(result));
+    let r;
+    if (msg.intent === "observe") r = await doObserve(msg);
+    else if (msg.intent === "act") r = await doAct(msg);
+    else r = await executeBrowseJob(msg);
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(r));
   }
 }
 
@@ -111,6 +114,93 @@ async function executeBrowseJob(msg) {
       { title: page.title, text: (page.text || "").slice(0, 400), group_id: groupId });
   } catch (e) {
     return result(msg, "needs_human", null, { reason: "browser error: " + String(e) });
+  }
+}
+
+// --- agent primitive: OBSERVE (label interactive elements + screenshot) ---
+async function doObserve(msg) {
+  const args = msg.args || {};
+  try {
+    let tab = await getWorkingTab();
+    if (args.url || !tab) {
+      tab = await openInGroup(args.url || (tab ? tab.url : "about:blank"));
+      await waitForComplete(tab.id, 25000);
+      await sleep(800);
+    } else {
+      await ensureGroup(tab.id);
+    }
+    const [{ result: page }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const sel = 'a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [onclick], [contenteditable=""], [contenteditable=true]';
+        const out = []; let i = 0;
+        for (const el of document.querySelectorAll(sel)) {
+          const r = el.getBoundingClientRect();
+          const cs = getComputedStyle(el);
+          if (r.width <= 1 || r.height <= 1 || cs.visibility === 'hidden' || cs.display === 'none') continue;
+          if (r.bottom < 0 || r.right < 0 || r.top > innerHeight + 600) continue;
+          el.setAttribute('data-anticipy-idx', String(i));
+          const label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || el.innerText || el.getAttribute('title') || el.getAttribute('name') || '').trim().replace(/\s+/g, ' ').slice(0, 90);
+          out.push({ idx: i, tag: el.tagName.toLowerCase(), type: (el.getAttribute('type') || el.getAttribute('role') || ''), text: label });
+          if (++i >= 120) break;
+        }
+        return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 2500), elements: out };
+      },
+    });
+    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 40 });
+    return result(msg, "success",
+      { screenshot, url: page.url, title: page.title },
+      { url: page.url, title: page.title, text: page.text, elements: page.elements, group_id: (await getState()).groupId });
+  } catch (e) {
+    return result(msg, "needs_human", null, { reason: "observe error: " + String(e) });
+  }
+}
+
+// --- agent primitive: ACT (click / type / scroll / navigate / back) ---
+async function doAct(msg) {
+  const a = msg.args || {};
+  try {
+    let tab = await getWorkingTab();
+    if (!tab) return result(msg, "needs_human", null, { reason: "no working tab" });
+    if (a.action === "navigate") {
+      tab = await chrome.tabs.update(tab.id, { url: a.url, active: true });
+      await waitForComplete(tab.id, 25000); await sleep(700);
+      return result(msg, "success", null, { ok: true, action: "navigate", url: a.url });
+    }
+    if (a.action === "back") {
+      try { await chrome.tabs.goBack(tab.id); } catch (e) {}
+      await sleep(900);
+      return result(msg, "success", null, { ok: true, action: "back" });
+    }
+    const [{ result: res }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      args: [a],
+      func: (a) => {
+        const pick = (i) => document.querySelector('[data-anticipy-idx="' + i + '"]');
+        if (a.action === "click") {
+          const e = pick(a.index); if (!e) return { ok: false, err: "no element " + a.index };
+          e.scrollIntoView({ block: "center" }); e.click(); return { ok: true };
+        }
+        if (a.action === "type") {
+          const e = pick(a.index); if (!e) return { ok: false, err: "no element " + a.index };
+          e.focus(); try { e.value = a.text; } catch (x) {}
+          e.dispatchEvent(new Event("input", { bubbles: true }));
+          e.dispatchEvent(new Event("change", { bubbles: true }));
+          if (a.enter) {
+            e.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+            e.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+            if (e.form) { try { e.form.requestSubmit ? e.form.requestSubmit() : e.form.submit(); } catch (x) {} }
+          }
+          return { ok: true };
+        }
+        if (a.action === "scroll") { window.scrollBy(0, (a.dir === "up" ? -1 : 1) * innerHeight * 0.8); return { ok: true }; }
+        return { ok: false, err: "unknown action " + a.action };
+      },
+    });
+    await sleep(a.action === "click" || a.enter ? 1200 : 400); // let navigation/JS settle
+    return result(msg, res && res.ok ? "success" : "needs_human", null, { ...(res || {}), action: a.action });
+  } catch (e) {
+    return result(msg, "needs_human", null, { reason: "act error: " + String(e) });
   }
 }
 
