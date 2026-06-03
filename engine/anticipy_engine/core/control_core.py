@@ -9,7 +9,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from .browser_link import BrowserLink
 from .bus import Bus
+from .env import load_local_env
 from .envelopes import Event, EventSource
 from .gateway import ModelGateway
 from .glassbox import GlassBox
@@ -26,7 +28,9 @@ def _base(data_dir=None) -> Path:
 
 class ControlCore:
     def __init__(self, data_dir=None) -> None:
+        load_local_env()  # make .env.local keys (Arcade, etc.) available
         base = _base(data_dir)
+        self.browser_link = BrowserLink()
         self.glassbox = GlassBox(base / "glassbox.jsonl")
         self.scorecard = Scorecard(base / "scorecard.jsonl")
         self.bus = Bus(glassbox=self.glassbox)

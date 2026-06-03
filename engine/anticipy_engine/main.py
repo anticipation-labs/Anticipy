@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from . import __version__
@@ -96,3 +96,40 @@ def glassbox(limit: int = 50) -> dict:
 @app.get("/scorecard")
 def scorecard() -> dict:
     return core.scorecard.readout()
+
+
+# ---- browser hand link (authenticated WebSocket) ----
+@app.get("/ws/token")
+def ws_token() -> dict:
+    # The extension (host-permitted for 127.0.0.1) can read this; a web page can't
+    # (no CORS headers). The token gates the WS so no site/process can pilot Chrome.
+    return {"token": core.browser_link.token}
+
+
+@app.post("/ws/reload")
+async def ws_reload() -> dict:
+    # dev-only hot-reload trigger
+    sent = await core.browser_link.reload()
+    return {"reloaded": sent}
+
+
+@app.websocket("/ws/extension")
+async def ws_extension(ws: WebSocket) -> None:
+    if not core.browser_link.check_token(ws.query_params.get("token")):
+        await ws.close(code=1008)  # reject unauthenticated handshake
+        return
+    await ws.accept()
+    await core.browser_link.attach(ws)
+    core.glassbox.log("extension", {"event": "connected"})
+    try:
+        while True:
+            msg = await ws.receive_json()
+            if msg.get("type") == "ping":
+                await ws.send_json({"type": "pong"})
+            else:
+                await core.browser_link.on_message(msg)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await core.browser_link.detach()
+        core.glassbox.log("extension", {"event": "disconnected"})
