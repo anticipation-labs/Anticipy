@@ -18,14 +18,19 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from . import __version__
+from .agent import WebVoyagerAgent, judge
 from .brain import Brain
 from .core.control_core import ControlCore
 from .core.envelopes import Job, new_id
+from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
 
 ENGINE_NAME = "anticipy-engine"
 
 brain = Brain()
 core = ControlCore()
+# Real reasoning+vision model for the web-agent loop (kept separate from the
+# brain's stub gateway so the brain/hands tests stay free + deterministic).
+gateway_agent = ModelGateway(provider=PROVIDER_OPENROUTER)
 
 
 @asynccontextmanager
@@ -168,6 +173,29 @@ async def ws_observe(body: ObserveIn) -> dict:
 @app.post("/ws/act")
 async def ws_act(body: ActIn) -> dict:
     return await core.browser_link.send_browse(new_id(), "act", body.model_dump(), timeout=40.0)
+
+
+class AgentRunIn(BaseModel):
+    task: str
+    start_url: str
+    max_steps: int = 8
+
+
+@app.post("/agent/run")
+async def agent_run(body: AgentRunIn) -> dict:
+    agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps)
+    return await agent.run(body.task, body.start_url)
+
+
+class AgentJudgeIn(BaseModel):
+    task: str
+    answer: str = ""
+    final_url: str = ""
+
+
+@app.post("/agent/judge")
+async def agent_judge(body: AgentJudgeIn) -> dict:
+    return await judge(gateway_agent, body.task, {"answer": body.answer, "final_url": body.final_url})
 
 
 @app.websocket("/ws/extension")
