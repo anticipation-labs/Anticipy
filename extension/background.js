@@ -117,7 +117,53 @@ async function executeBrowseJob(msg) {
   }
 }
 
-// --- agent primitive: OBSERVE (label interactive elements + screenshot) ---
+// --- trusted input via CDP (chrome.debugger): real isTrusted events that hard
+//     sites accept; replaces synthetic content-script clicks ---
+let attachedTab = null;
+async function ensureDebugger(tabId) {
+  if (attachedTab === tabId) return;
+  try {
+    await chrome.debugger.attach({ tabId }, "1.3");
+    attachedTab = tabId;
+  } catch (e) {
+    const m = String(e);
+    if (m.includes("already attached") || m.includes("Another debugger")) attachedTab = tabId;
+    else throw e;
+  }
+}
+function cdp(tabId, method, params) {
+  return new Promise((res, rej) =>
+    chrome.debugger.sendCommand({ tabId }, method, params || {}, (r) =>
+      chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res(r)));
+}
+async function cdpClick(tabId, x, y) {
+  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
+  await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 1, clickCount: 1 });
+}
+async function cdpType(tabId, text) { if (text) await cdp(tabId, "Input.insertText", { text }); }
+async function cdpKey(tabId, key) {
+  const map = { Enter: { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, text: "\r" } };
+  const k = map[key] || { key };
+  await cdp(tabId, "Input.dispatchKeyEvent", { type: "keyDown", ...k });
+  await cdp(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...k });
+}
+chrome.tabs.onRemoved.addListener((id) => { if (id === attachedTab) attachedTab = null; });
+
+// --- wait for the page to settle (readyState complete + brief idle) ---
+async function settle(tabId, maxMs = 6000) {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    try {
+      const [{ result: rs }] = await chrome.scripting.executeScript({ target: { tabId }, func: () => document.readyState });
+      if (rs === "complete") break;
+    } catch (e) {}
+    await sleep(250);
+  }
+  await sleep(500);
+}
+
+// --- agent primitive: OBSERVE (set-of-marks: numbered boxes + a11y info) ---
 async function doObserve(msg) {
   const args = msg.args || {};
   try {
@@ -125,36 +171,51 @@ async function doObserve(msg) {
     if (args.url || !tab) {
       tab = await openInGroup(args.url || (tab ? tab.url : "about:blank"));
       await waitForComplete(tab.id, 25000);
-      await sleep(800);
+      await settle(tab.id);
     } else {
       await ensureGroup(tab.id);
+      await settle(tab.id);
     }
     const [{ result: page }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
-        const sel = 'a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [onclick], [contenteditable=""], [contenteditable=true]';
+        const old = document.getElementById('anticipy-som'); if (old) old.remove();
+        const sel = 'a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [onclick], [contenteditable=""], [contenteditable=true]';
+        const cont = document.createElement('div'); cont.id = 'anticipy-som';
+        cont.style.cssText = 'position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;';
+        document.documentElement.appendChild(cont);
+        const colors = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#008080', '#f032e6', '#9a6324'];
         const out = []; let i = 0;
         for (const el of document.querySelectorAll(sel)) {
-          const r = el.getBoundingClientRect();
-          const cs = getComputedStyle(el);
-          if (r.width <= 1 || r.height <= 1 || cs.visibility === 'hidden' || cs.display === 'none') continue;
-          if (r.bottom < 0 || r.right < 0 || r.top > innerHeight + 600) continue;
+          const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
+          if (r.width <= 2 || r.height <= 2 || cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
+          if (r.bottom < -50 || r.right < 0 || r.top > innerHeight + 1200 || r.left > innerWidth) continue;
           el.setAttribute('data-anticipy-idx', String(i));
-          let label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || el.getAttribute('title') || el.innerText || '').trim();
-          if (!label) { const img = el.querySelector('img'); if (img) label = (img.getAttribute('alt') || '').trim(); }
-          if (!label) label = (el.textContent || '').trim();
-          if (!label) {
-            const anc = el.closest('[data-component-type="s-search-result"], li, article, [role="listitem"], [data-asin]');
-            if (anc) { const h = anc.querySelector('h2, h3, [role="heading"]'); if (h) label = (h.innerText || '').trim(); }
+          let name = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || el.getAttribute('title') || el.innerText || '').trim();
+          if (!name) { const img = el.querySelector('img'); if (img) name = (img.getAttribute('alt') || '').trim(); }
+          if (!name) name = (el.textContent || '').trim();
+          if (!name) { const anc = el.closest('[data-component-type="s-search-result"], li, article, [role="listitem"], [data-asin]'); if (anc) { const h = anc.querySelector('h2, h3, [role="heading"]'); if (h) name = (h.innerText || '').trim(); } }
+          name = name.replace(/\s+/g, ' ').slice(0, 110);
+          const role = el.getAttribute('role') || el.tagName.toLowerCase();
+          const stt = []; if (el.disabled) stt.push('disabled'); if (el.checked) stt.push('checked');
+          const ae = el.getAttribute('aria-expanded'); if (ae) stt.push('expanded=' + ae);
+          const inView = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
+          out.push({ idx: i, role: role, name: name, type: (el.getAttribute('type') || ''), state: stt.join(','), inView: inView });
+          if (inView) {
+            const c = colors[i % colors.length];
+            const box = document.createElement('div');
+            box.style.cssText = 'position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;outline:2px solid ' + c + ';box-sizing:border-box;';
+            const lab = document.createElement('div'); lab.textContent = String(i);
+            lab.style.cssText = 'position:absolute;left:0;top:0;transform:translateY(-100%);background:' + c + ';color:#fff;font:bold 11px monospace;padding:0 3px;white-space:nowrap;';
+            box.appendChild(lab); cont.appendChild(box);
           }
-          label = label.replace(/\s+/g, ' ').slice(0, 110);
-          out.push({ idx: i, tag: el.tagName.toLowerCase(), type: (el.getAttribute('type') || el.getAttribute('role') || ''), text: label });
           if (++i >= 140) break;
         }
         return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 2500), elements: out };
       },
     });
-    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 40 });
+    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 55 });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => { const e = document.getElementById('anticipy-som'); if (e) e.remove(); } });
     return result(msg, "success",
       { screenshot, url: page.url, title: page.title },
       { url: page.url, title: page.title, text: page.text, elements: page.elements, group_id: (await getState()).groupId });
@@ -169,43 +230,47 @@ async function doAct(msg) {
   try {
     let tab = await getWorkingTab();
     if (!tab) return result(msg, "needs_human", null, { reason: "no working tab" });
+
     if (a.action === "navigate") {
       tab = await chrome.tabs.update(tab.id, { url: a.url, active: true });
-      await waitForComplete(tab.id, 25000); await sleep(700);
+      await waitForComplete(tab.id, 25000); await settle(tab.id);
       return result(msg, "success", null, { ok: true, action: "navigate", url: a.url });
     }
     if (a.action === "back") {
       try { await chrome.tabs.goBack(tab.id); } catch (e) {}
-      await sleep(900);
+      await sleep(1000);
       return result(msg, "success", null, { ok: true, action: "back" });
     }
-    const [{ result: res }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      args: [a],
-      func: (a) => {
-        const pick = (i) => document.querySelector('[data-anticipy-idx="' + i + '"]');
-        if (a.action === "click") {
-          const e = pick(a.index); if (!e) return { ok: false, err: "no element " + a.index };
-          e.scrollIntoView({ block: "center" }); e.click(); return { ok: true };
-        }
-        if (a.action === "type") {
-          const e = pick(a.index); if (!e) return { ok: false, err: "no element " + a.index };
-          e.focus(); try { e.value = a.text; } catch (x) {}
-          e.dispatchEvent(new Event("input", { bubbles: true }));
-          e.dispatchEvent(new Event("change", { bubbles: true }));
-          if (a.enter) {
-            e.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-            e.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
-            if (e.form) { try { e.form.requestSubmit ? e.form.requestSubmit() : e.form.submit(); } catch (x) {} }
-          }
-          return { ok: true };
-        }
-        if (a.action === "scroll") { window.scrollBy(0, (a.dir === "up" ? -1 : 1) * innerHeight * 0.8); return { ok: true }; }
-        return { ok: false, err: "unknown action " + a.action };
-      },
-    });
-    await sleep(a.action === "click" || a.enter ? 1200 : 400); // let navigation/JS settle
-    return result(msg, res && res.ok ? "success" : "needs_human", null, { ...(res || {}), action: a.action });
+    if (a.action === "scroll") {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [a.dir || "down"],
+        func: (d) => window.scrollBy(0, (d === "up" ? -1 : 1) * innerHeight * 0.8) });
+      await sleep(500);
+      return result(msg, "success", null, { ok: true, action: "scroll" });
+    }
+    if (a.action === "click" || a.action === "type") {
+      // locate element, scroll it into view, get its viewport-center coords
+      const [{ result: rc }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id }, args: [a.index],
+        func: (i) => {
+          const e = document.querySelector('[data-anticipy-idx="' + i + '"]');
+          if (!e) return null;
+          e.scrollIntoView({ block: "center", inline: "center" });
+          const r = e.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        },
+      });
+      if (!rc) return result(msg, "needs_human", null, { ok: false, err: "no element " + a.index });
+      await sleep(200);
+      await ensureDebugger(tab.id);
+      await cdpClick(tab.id, rc.x, rc.y);               // TRUSTED click (isTrusted=true)
+      if (a.action === "type") {
+        await sleep(120); await cdpType(tab.id, a.text || "");
+        if (a.enter) { await sleep(120); await cdpKey(tab.id, "Enter"); }
+      }
+      await sleep((a.enter || a.action === "click") ? 1400 : 400);
+      return result(msg, "success", null, { ok: true, action: a.action });
+    }
+    return result(msg, "needs_human", null, { ok: false, err: "unknown action " + a.action });
   } catch (e) {
     return result(msg, "needs_human", null, { reason: "act error: " + String(e) });
   }
