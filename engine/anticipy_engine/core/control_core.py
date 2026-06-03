@@ -54,7 +54,8 @@ class ControlCore:
         # REAL hands replace connector_stub + browser_stub on the frozen contract.
         # channel_stub (reaching the user: call/text) and memory_stub stay (later chunks).
         hands_mode = os.environ.get("ANTICIPY_HANDS_MODE", MODE_MOCK)
-        user_id = os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
+        # Arcade user_id must match the signed-in Arcade.dev account ("users only" mode)
+        user_id = os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
         self.api_hand = ApiHand(user_id=user_id, mode=hands_mode)
         self.browser_hand = BrowserHand(
             self.browser_link, timeout=float(os.environ.get("ANTICIPY_BROWSE_TIMEOUT", "30"))

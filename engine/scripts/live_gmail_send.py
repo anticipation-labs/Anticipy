@@ -20,7 +20,8 @@ from anticipy_engine.hands.api_hand import ApiHand, MODE_LIVE
 
 async def main():
     to = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("TEST_USER_EMAIL", "omar@anticipy.ai")
-    user_id = os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
+    # Arcade user_id must match the signed-in Arcade.dev account
+    user_id = os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
     hand = ApiHand(user_id=user_id, mode=MODE_LIVE)
     job = Job(intent="send_email", risk=Risk.needs_confirm, goal_id="live-proof",
               args={"approved": True, "recipient": to,
