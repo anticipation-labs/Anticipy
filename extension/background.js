@@ -70,14 +70,69 @@ async function handleMessage(msg) {
   }
 }
 
-// Piece 3 fills this with real content-script read/input + a downscaled
-// screenshot for the brain's vision verify. Until then it surfaces needs_human
-// rather than faking a success.
+// Real execution: open the target page in a controlled tab, read it
+// (DOM + accessibility text), capture a compressed screenshot for the brain's
+// vision verify, detect login/verification walls, and clean up. Never fakes
+// success; surfaces needs_human on a wall or error.
 async function executeBrowseJob(msg) {
-  return {
-    type: "result", job_id: msg.job_id, status: "needs_human",
-    output: { reason: "browser execution not wired yet" }, proof: null,
-  };
+  const args = msg.args || {};
+  const url = args.url || extractUrl(args.task);
+  if (!url) {
+    return result(msg, "needs_human", null, { reason: "no url/task to browse" });
+  }
+  let tab = null;
+  try {
+    tab = await chrome.tabs.create({ url, active: true });
+    await waitForComplete(tab.id, 15000);
+    await sleep(600); // let it paint before the screenshot
+
+    const [{ result: page }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => ({
+        title: document.title,
+        url: location.href,
+        text: (document.body ? document.body.innerText : "").slice(0, 1500),
+      }),
+    });
+
+    const probe = ((page.text || "") + " " + (page.url || "")).toLowerCase();
+    if (/captcha|unusual traffic|verify you('| a)re human|sign in to continue/.test(probe)) {
+      await closeTab(tab.id);
+      return result(msg, "needs_human", null, { reason: "login/verification wall — please sign in", url: page.url });
+    }
+
+    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 40 });
+    await closeTab(tab.id);
+    return result(msg, "success",
+      { screenshot, url: page.url, title: page.title },
+      { title: page.title, text: (page.text || "").slice(0, 300) });
+  } catch (e) {
+    if (tab) await closeTab(tab.id);
+    return result(msg, "needs_human", null, { reason: "browser error: " + String(e) });
+  }
+}
+
+function result(msg, status, proof, output) {
+  return { type: "result", job_id: msg.job_id, status, proof, output };
+}
+function extractUrl(task) {
+  const m = task && String(task).match(/https?:\/\/[^\s]+/);
+  return m ? m[0] : null;
+}
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function closeTab(id) { try { await chrome.tabs.remove(id); } catch (e) {} }
+function waitForComplete(tabId, timeout) {
+  return new Promise((resolve, reject) => {
+    const to = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error("load timeout")); }, timeout);
+    function listener(id, info) {
+      if (id === tabId && info.status === "complete") {
+        clearTimeout(to);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    }
+    chrome.tabs.onUpdated.addListener(listener);
+  });
 }
 
 // Keepalive backstop: an alarm wakes the SW even after an idle-kill.
