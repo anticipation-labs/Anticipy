@@ -261,5 +261,5 @@ async def ws_extension(ws: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        await core.browser_link.detach()
+        await core.browser_link.detach(ws)
         core.glassbox.log("extension", {"event": "disconnected"})

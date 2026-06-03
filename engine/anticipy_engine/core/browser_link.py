@@ -24,11 +24,18 @@ class BrowserLink:
         return bool(token) and secrets.compare_digest(token, self.token)
 
     # ---- connection lifecycle (driven by the WS endpoint) ----
-    async def attach(self, websocket) -> None:
+    async def attach(self, websocket) -> bool:
+        # Last-writer-wins: a fresh connection takes over the driver slot (this also
+        # recovers cleanly from a stale socket whose close wasn't detected). The
+        # detach guard below stops a disconnecting OLD socket from clobbering it.
         self._ws = websocket
         self.connected = True
+        return True
 
-    async def detach(self) -> None:
+    async def detach(self, websocket=None) -> None:
+        # A rejected duplicate disconnecting must NOT tear down the live driver.
+        if websocket is not None and websocket is not self._ws:
+            return
         self._ws = None
         self.connected = False
         for fut in self._pending.values():

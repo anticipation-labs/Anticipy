@@ -152,19 +152,15 @@ async function cdpKey(tabId, key) {
 // it isn't the active/visible one, unlike tabs.captureVisibleTab (which fails with
 // "Failed to capture tab: image" on heavy/backgrounded tabs). Falls back if needed.
 async function cdpScreenshot(tabId) {
-  let cdpErr = "";
+  // Capture the WORKING tab only, via CDP. NEVER fall back to captureVisibleTab —
+  // that grabs whatever tab the user is looking at (e.g. a video call), which is a
+  // privacy + correctness bug. On failure return null; the engine re-observes.
   try {
     await ensureDebugger(tabId);
     const r = await cdp(tabId, "Page.captureScreenshot", { format: "jpeg", quality: 55, captureBeyondViewport: false });
     if (r && r.data) return "data:image/jpeg;base64," + r.data;
-    cdpErr = "no-data";
-  } catch (e) { cdpErr = String(e); }
-  try {
-    const t = await chrome.tabs.get(tabId);  // best-effort fallback
-    return await chrome.tabs.captureVisibleTab(t.windowId, { format: "jpeg", quality: 55 });
-  } catch (e2) {
-    throw new Error("cdp[" + cdpErr + "] fallback[" + String(e2) + "]");
-  }
+  } catch (e) {}
+  return null;
 }
 chrome.tabs.onRemoved.addListener((id) => { if (id === attachedTab) attachedTab = null; });
 
