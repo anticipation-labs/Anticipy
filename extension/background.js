@@ -98,7 +98,7 @@ async function executeBrowseJob(msg) {
       }),
     });
 
-    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 40 });
+    const screenshot = await cdpScreenshot(tab.id);
     const urlLc = (page.url || "").toLowerCase();
     const textLc = (page.text || "").toLowerCase();
     const captcha = /captcha|unusual traffic|are you a (robot|human)|verify you('| a)re human|press & hold/.test(textLc);
@@ -147,6 +147,24 @@ async function cdpKey(tabId, key) {
   const k = map[key] || { key };
   await cdp(tabId, "Input.dispatchKeyEvent", { type: "keyDown", ...k });
   await cdp(tabId, "Input.dispatchKeyEvent", { type: "keyUp", ...k });
+}
+// Screenshot via CDP (Page.captureScreenshot) — works on the working tab even when
+// it isn't the active/visible one, unlike tabs.captureVisibleTab (which fails with
+// "Failed to capture tab: image" on heavy/backgrounded tabs). Falls back if needed.
+async function cdpScreenshot(tabId) {
+  let cdpErr = "";
+  try {
+    await ensureDebugger(tabId);
+    const r = await cdp(tabId, "Page.captureScreenshot", { format: "jpeg", quality: 55, captureBeyondViewport: false });
+    if (r && r.data) return "data:image/jpeg;base64," + r.data;
+    cdpErr = "no-data";
+  } catch (e) { cdpErr = String(e); }
+  try {
+    const t = await chrome.tabs.get(tabId);  // best-effort fallback
+    return await chrome.tabs.captureVisibleTab(t.windowId, { format: "jpeg", quality: 55 });
+  } catch (e2) {
+    throw new Error("cdp[" + cdpErr + "] fallback[" + String(e2) + "]");
+  }
 }
 chrome.tabs.onRemoved.addListener((id) => { if (id === attachedTab) attachedTab = null; });
 
@@ -218,7 +236,7 @@ async function doObserve(msg) {
         return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 2500), elements: out };
       },
     });
-    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 55 });
+    const screenshot = await cdpScreenshot(tab.id);
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => { const e = document.getElementById('anticipy-som'); if (e) e.remove(); } });
     return result(msg, "success",
       { screenshot, url: page.url, title: page.title },

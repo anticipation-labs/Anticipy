@@ -16,6 +16,7 @@ Never fakes done; genuinely blocked pages hand off; never clicks a purchase cont
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -135,6 +136,30 @@ class WebVoyagerAgent:
         r = await self.link.send_browse(new_id(), "observe", {"url": url} if url else {}, timeout=60.0)
         return (r.get("output") or {}), (r.get("proof") or {}).get("screenshot")
 
+    @staticmethod
+    def _empty_obs(out) -> bool:
+        # An observation we cannot act on: no actionable elements AND no page
+        # identity. Heavy sites return this if we look before they're ready.
+        o = out or {}
+        return not (o.get("elements") or []) and not o.get("url") and not (o.get("text") or "")
+
+    async def _observe_ready(self, url: Optional[str] = None, tries: int = 4):
+        # GENERAL fix (no site logic): never decide on a not-ready page, and never
+        # let a slow/hung observe crash the run. If the observation is empty (or the
+        # observe times out), wait a beat and re-look (same tab, no re-nav).
+        async def _try(u=None):
+            try:
+                return await self._observe(u)
+            except Exception:
+                return {}, None  # timeout / transport hiccup -> treat as not-ready
+        out, shot = await _try(url)
+        n = 0
+        while self._empty_obs(out) and n < tries:
+            await asyncio.sleep(1.2 + 0.6 * n)
+            out, shot = await _try()
+            n += 1
+        return out, shot
+
     async def _act(self, action: dict):
         return await self.link.send_browse(new_id(), "act", action, timeout=60.0)
 
@@ -145,7 +170,7 @@ class WebVoyagerAgent:
         return [str(s) for s in subs][:6]
 
     def _done(self, out, step, history, **extra):
-        return {"steps": step, "final_url": (out or {}).get("url"), "history": history[-12:],
+        return {"steps": step, "final_url": (out or {}).get("url"), "history": history[-40:],
                 "final_shot": getattr(self, "_cur_shot", None), **extra}
 
     async def _notify(self, msg: str) -> None:
@@ -175,7 +200,7 @@ class WebVoyagerAgent:
         last_thought = ""  # carry the model's own reasoning forward one step (scratchpad)
         forbid = None  # (action, index) forbidden this step after a STUCK
 
-        out, shot = await self._observe(start_url)
+        out, shot = await self._observe_ready(start_url)
         self._cur_shot = shot
         prev_sig = _sig(out.get("url"), out.get("title"), out.get("elements") or [])
         visited[prev_sig] = 1
@@ -254,7 +279,7 @@ class WebVoyagerAgent:
             prev_url = out.get("url")
             label = next((e.get("name", "") for e in els if e.get("idx") == action.get("index")), action.get("text", ""))
             await self._act(_clean_action(action))
-            out, shot = await self._observe()
+            out, shot = await self._observe_ready()
             self._cur_shot = shot
             sub_steps += 1
 

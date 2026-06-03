@@ -184,18 +184,27 @@ class AgentRunIn(BaseModel):
     start_url: str
     max_steps: int = 8
     judge: bool = False
+    model: Optional[str] = None  # per-run brain override (model bake-off); None = default ladder
+
+
+def _gateway_for(model: Optional[str]) -> ModelGateway:
+    if not model:
+        return gateway_agent
+    # single-model gateway for an A/B run (both tiers = the candidate)
+    return ModelGateway(provider=PROVIDER_OPENROUTER, cheap_model=model, smart_model=model)
 
 
 @app.post("/agent/run")
 async def agent_run(body: AgentRunIn) -> dict:
-    agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps,
+    gw = _gateway_for(body.model)
+    agent = WebVoyagerAgent(core.browser_link, gw, max_steps=body.max_steps,
                             notifier=core.notify_user)
     result = await agent.run(body.task, body.start_url)
     shot = result.pop("final_shot", None)  # vision-judge in-process; don't ship the image over HTTP
     # The general judge decides success — but only for an actual answer. A safety
     # stop or a wall handoff is already a correct outcome and is not judged.
     if body.judge and not result.get("needs_human") and not result.get("stopped_for_safety"):
-        result["judgment"] = await judge(gateway_agent, body.task, result, image=shot)
+        result["judgment"] = await judge(gw, body.task, result, image=shot)
     return result
 
 
