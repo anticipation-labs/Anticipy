@@ -140,9 +140,16 @@ async function doObserve(msg) {
           if (r.width <= 1 || r.height <= 1 || cs.visibility === 'hidden' || cs.display === 'none') continue;
           if (r.bottom < 0 || r.right < 0 || r.top > innerHeight + 600) continue;
           el.setAttribute('data-anticipy-idx', String(i));
-          const label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || el.innerText || el.getAttribute('title') || el.getAttribute('name') || '').trim().replace(/\s+/g, ' ').slice(0, 90);
+          let label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.value || el.getAttribute('title') || el.innerText || '').trim();
+          if (!label) { const img = el.querySelector('img'); if (img) label = (img.getAttribute('alt') || '').trim(); }
+          if (!label) label = (el.textContent || '').trim();
+          if (!label) {
+            const anc = el.closest('[data-component-type="s-search-result"], li, article, [role="listitem"], [data-asin]');
+            if (anc) { const h = anc.querySelector('h2, h3, [role="heading"]'); if (h) label = (h.innerText || '').trim(); }
+          }
+          label = label.replace(/\s+/g, ' ').slice(0, 110);
           out.push({ idx: i, tag: el.tagName.toLowerCase(), type: (el.getAttribute('type') || el.getAttribute('role') || ''), text: label });
-          if (++i >= 120) break;
+          if (++i >= 140) break;
         }
         return { url: location.href, title: document.title, text: (document.body ? document.body.innerText : '').slice(0, 2500), elements: out };
       },

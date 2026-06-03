@@ -19,6 +19,14 @@ Prefer clicking/typing visible elements by their index. Type into a search box t
 Use action=answer as soon as you can answer the TASK from what you see. Do not repeat the same action."""
 
 
+# Hard safety net: the agent must NEVER click a purchase-confirm control, no
+# matter what the model decides. Adding to cart / viewing checkout is fine.
+PURCHASE_GUARD = re.compile(
+    r"place\s+(your\s+)?order|buy\s*now|complete\s+(your\s+)?purchase|pay\s+now|submit\s+order|confirm\s+(and\s+)?(order|purchase|pay)",
+    re.I,
+)
+
+
 def _parse_json(raw: str) -> Optional[dict]:
     if not raw:
         return None
@@ -77,6 +85,13 @@ class WebVoyagerAgent:
             if action.get("action") == "answer":
                 return {"answer": action.get("answer", ""), "steps": step + 1,
                         "final_url": out.get("url"), "transcript": transcript}
+            if action.get("action") == "click":
+                el = next((e for e in els if e.get("idx") == action.get("index")), None)
+                if el and PURCHASE_GUARD.search(el.get("text", "") or ""):
+                    return {"answer": f"STOPPED before a purchase control ('{el.get('text')}'). "
+                                      "Reached cart/checkout but did NOT place the order — your confirmation required to buy.",
+                            "steps": step + 1, "final_url": out.get("url"),
+                            "transcript": transcript, "stopped_for_safety": True}
             await self._act(_clean_action(action))
             out, shot = await self._observe()
         return {"answer": "", "steps": self.max_steps, "final_url": out.get("url"),
