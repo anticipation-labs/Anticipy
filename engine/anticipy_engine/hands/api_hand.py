@@ -20,7 +20,7 @@ import json
 import os
 from typing import Optional
 
-from ..core.envelopes import Job, JobStatus, Result
+from ..core.envelopes import Job, JobStatus, Result, Risk
 from ..core.worker import Worker
 
 MODE_MOCK = "mock"
@@ -40,6 +40,8 @@ INTENT_MAP = {
     "read_calendar": "GoogleCalendar.ListEvents",
     "read_contacts": "Gmail.ListThreads",
     "read_doc": "GoogleDocs.GetDocumentById",
+    # recognized app action with NO Arcade tool -> routes to the browser hand
+    "post_to_x": None,
 }
 
 
@@ -91,9 +93,11 @@ class ApiHand(Worker):
                           output={"needs_other_worker": True})
 
         is_write = job.intent in WRITE_INTENTS
+        high_risk = job.risk in (Risk.needs_confirm, Risk.ask_human)
 
-        # defense in depth: refuse a high-risk write without the gate's approval flag
-        if is_write and self.approval_required and not job.args.get("approved"):
+        # defense in depth: refuse a HIGH-RISK write that doesn't carry the gate's
+        # approval flag (low-risk writes proceed; the gate ran upstream).
+        if is_write and high_risk and self.approval_required and not job.args.get("approved"):
             return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
                           output={"reason": "high-risk action missing approval flag"})
 

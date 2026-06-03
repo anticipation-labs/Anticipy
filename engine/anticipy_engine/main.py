@@ -99,6 +99,17 @@ def scorecard() -> dict:
     return core.scorecard.readout()
 
 
+@app.get("/goals/{goal_id}")
+def get_goal(goal_id: str) -> dict:
+    g = core.store.load(goal_id)
+    return g.model_dump(mode="json") if g else {"error": "not found"}
+
+
+@app.get("/gateway")
+def gateway_info() -> dict:
+    return {"smart_calls": len(core.gateway.smart_calls), "total_cost": core.gateway.total_cost()}
+
+
 # ---- browser hand link (authenticated WebSocket) ----
 @app.get("/ws/state")
 def ws_state() -> dict:

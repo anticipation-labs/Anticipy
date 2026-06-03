@@ -78,6 +78,13 @@ def default_stub(task: str, tier: str, caller: str) -> str:
             steps.append({"intent": "write_memory",
                           "args": {"kind": "open_loop", "text": "Send Sarah the Q3 deck Friday"},
                           "risk": "low"})
+        if any(k in t for k in ("post", "tweet", "launch", " x ", " x.", "on x")):
+            steps.append({"intent": "post_to_x",
+                          "args": {"text": "We just launched. "},
+                          "risk": "low"})  # no Arcade tool -> routes to the browser hand
+        if any(k in t for k in ("browse", "open ", "website", "site", "check the")):
+            steps.append({"intent": "browse_task",
+                          "args": {"task": "open the page"}, "risk": "low"})
         if not steps:
             steps.append({"intent": "browse_task", "args": {"task": task}, "risk": "low"})
         return json.dumps({"steps": steps})

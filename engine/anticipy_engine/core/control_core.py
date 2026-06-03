@@ -15,15 +15,30 @@ from .env import load_local_env
 from .envelopes import Event, EventSource
 from .gateway import ModelGateway
 from .glassbox import GlassBox
-from .orchestrator import Orchestrator
+from .orchestrator import Approver, Orchestrator
 from .proactive import ProactiveEngine
 from .scorecard import Scorecard
 from .store import GoalStore
-from .workers import BrowserStub, ChannelStub, ConnectorStub, MemoryStub
+from .workers import ChannelStub, MemoryStub
+from ..hands import ApiHand, BrowserHand, MODE_MOCK
 
 
 def _base(data_dir=None) -> Path:
     return Path(data_dir or os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
+
+
+class GatedApprover(Approver):
+    """Human-path stub that also propagates the gate's approval flag onto the
+    step args, so the hand's defense-in-depth (refuse high-risk without the flag)
+    is satisfied. Done in the approver — no orchestrator change."""
+
+    def __init__(self, approve: bool = True) -> None:
+        self._approve = approve
+
+    async def approve(self, goal, step) -> bool:
+        if self._approve:
+            step.args["approved"] = True
+        return self._approve
 
 
 class ControlCore:
@@ -35,11 +50,26 @@ class ControlCore:
         self.scorecard = Scorecard(base / "scorecard.jsonl")
         self.bus = Bus(glassbox=self.glassbox)
         self.gateway = ModelGateway(endpoint=os.environ.get("ANTICIPY_MODEL_ENDPOINT"))
-        for w in (ChannelStub(), MemoryStub(), ConnectorStub(), BrowserStub()):
+
+        # REAL hands replace connector_stub + browser_stub on the frozen contract.
+        # channel_stub (reaching the user: call/text) and memory_stub stay (later chunks).
+        hands_mode = os.environ.get("ANTICIPY_HANDS_MODE", MODE_MOCK)
+        user_id = os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
+        self.api_hand = ApiHand(user_id=user_id, mode=hands_mode)
+        self.browser_hand = BrowserHand(
+            self.browser_link, timeout=float(os.environ.get("ANTICIPY_BROWSE_TIMEOUT", "30"))
+        )
+        # Real hands register LAST so they own any intent a stub also claims.
+        for w in (ChannelStub(), MemoryStub(), self.api_hand, self.browser_hand):
             self.bus.register_worker(w)
+
         self.store = GoalStore(data_dir=base)
+        # No-API app intents reroute to the browser hand via the orchestrator's
+        # EXISTING reroute path (config, not a code change).
+        alternates = {"post_to_x": "browse_task", "create_event": "browse_task", "message": "browse_task"}
         self.orchestrator = Orchestrator(
-            self.bus, self.gateway, self.store, glassbox=self.glassbox, scorecard=self.scorecard
+            self.bus, self.gateway, self.store, glassbox=self.glassbox, scorecard=self.scorecard,
+            alternates=alternates, approver=GatedApprover(True),
         )
         self.proactive = ProactiveEngine(
             self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard

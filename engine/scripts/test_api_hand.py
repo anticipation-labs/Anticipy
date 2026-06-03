@@ -6,7 +6,7 @@ import asyncio
 import os
 from types import SimpleNamespace
 
-from anticipy_engine.core.envelopes import Job, JobStatus
+from anticipy_engine.core.envelopes import Job, JobStatus, Risk
 from anticipy_engine.hands.api_hand import ApiHand, NotFundedError, MODE_LIVE, MODE_MOCK
 
 
@@ -59,10 +59,11 @@ async def main():
     assert r2.status == JobStatus.success and r2.output.get("idempotent") is True
     assert len(fake.executed) == 1, "must not re-send on retry"
 
-    # defense in depth: write without approval flag -> needs_human, never executes
+    # defense in depth: HIGH-RISK write without approval flag -> needs_human, never executes
     fake2 = FakeArcade()
     hand2 = ApiHand(user_id="u", client=fake2, mode=MODE_LIVE)
-    r = await hand2.handle(job("send_email", recipient="t@x.com"))
+    r = await hand2.handle(Job(intent="send_email", args={"recipient": "t@x.com"},
+                               risk=Risk.needs_confirm, goal_id="g1"))
     assert r.status == JobStatus.needs_human and not fake2.executed
 
     # auth needed -> needs_human + connect URL; never the word "API" in the user surface
