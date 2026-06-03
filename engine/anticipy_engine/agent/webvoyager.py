@@ -40,8 +40,10 @@ Rules:
 - Obey the PROGRESS label and any STUCK note: NEVER repeat an action that caused no change; do something different.
 - Set subgoal_done=true the moment the CURRENT subgoal is achieved. Use action=answer only when the WHOLE task is done."""
 
+# Real purchase-confirm controls only. NOT "submit order" (that's a generic form
+# submit, e.g. demo forms) — too broad a match was false-stopping legit tasks.
 PURCHASE_GUARD = re.compile(
-    r"place\s+(your\s+)?order|buy\s*now|complete\s+(your\s+)?purchase|pay\s+now|submit\s+order|confirm\s+(and\s+)?(order|purchase|pay)",
+    r"place\s+(your\s+)?order|buy\s*now|complete\s+(your\s+)?purchase|pay\s+now|confirm\s+(and\s+)?(order|purchase|pay)",
     re.I,
 )
 BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha",
@@ -188,14 +190,18 @@ class WebVoyagerAgent:
                 + "RECENT ACTIONS:\n" + ("\n".join(history[-5:]) or "(none)") + "\n\n"
                 + "VISIBLE ELEMENTS:\n" + el_lines + "\n\nNext action JSON:"
             )
-            action = _parse_json(await self.gw.think(prompt, tier=SMART, caller="agent", image=shot,
-                                                     json_mode=True, temperature=0.1))
+            raw1 = await self.gw.think(prompt, tier=SMART, caller="agent", image=shot,
+                                       json_mode=True, temperature=0.1)
+            action = _parse_json(raw1)
+            raw2 = ""
             if not action or not action.get("action"):
-                action = _parse_json(await self.gw.think(
+                raw2 = await self.gw.think(
                     prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
-                    tier=SMART, caller="agent", image=shot, json_mode=True, temperature=0.1))
+                    tier=SMART, caller="agent", image=shot, json_mode=True, temperature=0.1)
+                action = _parse_json(raw2)
             if not action or not action.get("action"):
-                return self._done(out, step + 1, history, answer="", reason="no parseable action after retry")
+                return self._done(out, step + 1, history, answer="", reason="no parseable action after retry",
+                                  last_raw=((raw1 or "<empty>")[:220] + " ||RETRY|| " + (raw2 or "<empty>")[:220]))
 
             if action.get("action") == "answer":
                 return self._done(out, step + 1, history, answer=action.get("answer", ""))

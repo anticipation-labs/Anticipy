@@ -9,6 +9,7 @@ and reproducible; the web agent constructs a gateway with provider="openrouter".
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from typing import List, Optional
@@ -80,10 +81,26 @@ class ModelGateway:
             body["response_format"] = {"type": "json_object"}  # force a parseable JSON object
         if temperature is not None:
             body["temperature"] = temperature  # low temp for stable, run-to-run decisions
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(OPENROUTER_URL, headers=headers, json=body)
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
+
+        # Retry transient empties / 429 / 5xx — the provider intermittently returns
+        # empty content under load (this was the Amazon 0/5 cause).
+        last = ""
+        for attempt in range(4):
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    resp = await client.post(OPENROUTER_URL, headers=headers, json=body)
+                if resp.status_code in (429, 500, 502, 503, 504):
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                resp.raise_for_status()
+                content_out = (resp.json()["choices"][0].get("message") or {}).get("content")
+                if content_out:
+                    return content_out
+                last = content_out or ""
+                await asyncio.sleep(1.0 * (attempt + 1))  # empty -> brief backoff, retry
+            except (httpx.TransportError, httpx.HTTPStatusError):
+                await asyncio.sleep(1.5 * (attempt + 1))
+        return last or ""
 
     async def _custom_endpoint(self, task: str, tier: str) -> str:
         import httpx
