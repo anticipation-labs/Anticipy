@@ -60,7 +60,7 @@ class Orchestrator:
         self._cost_start[goal.id] = self.gateway.total_cost()
         goal.state = GoalState.planning
         self.store.save(goal)
-        self._log("goal_planning", goal)
+        self._log("goal_planning", {"goal_id": goal.id})
 
         plan_raw = await self.gateway.think(self._plan_prompt(goal), tier=SMART, caller="plan")
         goal.steps = self._parse_plan(plan_raw)
