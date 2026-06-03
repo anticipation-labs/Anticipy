@@ -39,13 +39,13 @@ class ModelGateway:
         self._key = os.environ.get("OPENROUTER_API_KEY")
 
     async def think(self, task: str, tier: str, caller: str, image: Optional[str] = None,
-                    json_mode: bool = False) -> str:
+                    json_mode: bool = False, temperature: Optional[float] = None) -> str:
         if tier == SMART and caller not in self.SMART_CALLERS:
             raise PermissionError(f"smart tier not allowed from caller '{caller}'")
         self.calls.append({"tier": tier, "caller": caller, "cost": COST.get(tier, 0.0)})
 
         if self.provider == PROVIDER_OPENROUTER:
-            return await self._openrouter(task, tier, image, json_mode)
+            return await self._openrouter(task, tier, image, json_mode, temperature)
         if self.endpoint:
             return await self._custom_endpoint(task, tier)
         return self._stub(task, tier, caller)
@@ -58,7 +58,8 @@ class ModelGateway:
         return round(sum(c["cost"] for c in self.calls), 6)
 
     # ---- real provider: OpenRouter (OpenAI-compatible, vision-capable) ----
-    async def _openrouter(self, task: str, tier: str, image: Optional[str], json_mode: bool = False) -> str:
+    async def _openrouter(self, task: str, tier: str, image: Optional[str], json_mode: bool = False,
+                          temperature: Optional[float] = None) -> str:
         if not self._key:
             raise RuntimeError("OPENROUTER_API_KEY NOT SET / NOT FUNDED")
         import httpx
@@ -77,6 +78,8 @@ class ModelGateway:
         body = {"model": model, "messages": [{"role": "user", "content": content}]}
         if json_mode:
             body["response_format"] = {"type": "json_object"}  # force a parseable JSON object
+        if temperature is not None:
+            body["temperature"] = temperature  # low temp for stable, run-to-run decisions
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             resp = await client.post(OPENROUTER_URL, headers=headers, json=body)
             resp.raise_for_status()

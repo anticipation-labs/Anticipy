@@ -200,7 +200,11 @@ async function doObserve(msg) {
           const stt = []; if (el.disabled) stt.push('disabled'); if (el.checked) stt.push('checked');
           const ae = el.getAttribute('aria-expanded'); if (ae) stt.push('expanded=' + ae);
           const inView = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth;
-          out.push({ idx: i, role: role, name: name, type: (el.getAttribute('type') || ''), state: stt.join(','), inView: inView });
+          let sponsored = false;
+          const sanc = el.closest('li, article, [role="listitem"], [data-component-type="s-search-result"], [data-asin], ytd-rich-item-renderer, ytd-ad-slot-renderer, ytd-promoted-video-renderer');
+          const sp = (((sanc || el).innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).slice(0, 240).toLowerCase();
+          if (/sponsored|promoted|advertisement/.test(sp)) sponsored = true;
+          out.push({ idx: i, role: role, name: name, type: (el.getAttribute('type') || ''), state: stt.join(','), inView: inView, sponsored: sponsored });
           if (inView) {
             const c = colors[i % colors.length];
             const box = document.createElement('div');
