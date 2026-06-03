@@ -13,7 +13,7 @@ ROUND = sys.argv[1] if len(sys.argv) > 1 else "1"
 RUNS = int(sys.argv[2]) if len(sys.argv) > 2 else 5
 
 BATTERY = [
-    {"name": "Amazon: chair -> cart -> checkout (STOP)", "expect": "doable", "max": 28, "win_url": "checkout",
+    {"name": "Amazon: chair -> cart -> checkout (STOP)", "expect": "doable", "max": 28,
      "url": "https://www.amazon.com/s?k=gaming+chair",
      "task": "From the results pick a good-value, NON-SPONSORED gaming chair (low price + solid rating). Open it, click Add to Cart, then open the cart and Proceed to checkout to reach the checkout/sign-in page. STOP there — do NOT place the order or click Buy Now. action=answer with the chair name, price, and that you stopped at checkout."},
     {"name": "Google Flights: cheapest SFO->JFK", "expect": "doable", "max": 16,
@@ -54,9 +54,6 @@ def passed(t, oc):
 def classify(t, r, judged):
     if r.get("stopped_for_safety"):
         return "STOPPED-SAFE"
-    # robust oracle: a "reach checkout" task is satisfied if we landed on a checkout URL
-    if t.get("win_url") and t["win_url"] in (r.get("final_url") or "").lower():
-        return "SUCCESS"
     if r.get("needs_human"):
         return "HANDOFF"
     if t["expect"] == "blocked":

@@ -1,0 +1,7 @@
+# browser-use runs in its OWN Python 3.11 venv (engine/.venv-bu), separate from
+# the 3.10 engine venv. It is the adopted agent loop (planning / set-of-marks /
+# memory / recovery) driven on OpenRouter, connected to a real Chrome over CDP.
+# Setup:
+#   ~/.pyenv/versions/3.11.12/bin/python -m venv engine/.venv-bu
+#   engine/.venv-bu/bin/pip install -r engine/requirements-bu.txt
+browser-use==0.12.9
