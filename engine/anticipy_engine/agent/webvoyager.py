@@ -45,13 +45,25 @@ def _parse_json(raw: str) -> Optional[dict]:
     if not raw:
         return None
     s = re.sub(r"```(json)?", "", raw).strip()
-    m = re.search(r"\{.*\}", s, re.DOTALL)
-    if not m:
-        return None
     try:
-        return json.loads(m.group(0))
+        return json.loads(s)  # json_mode usually returns a clean object
     except Exception:
+        pass
+    start = s.find("{")  # otherwise extract the first balanced {...}
+    if start < 0:
         return None
+    depth = 0
+    for i in range(start, len(s)):
+        if s[i] == "{":
+            depth += 1
+        elif s[i] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(s[start:i + 1])
+                except Exception:
+                    return None
+    return None
 
 
 def _clean_action(a: dict) -> dict:
@@ -77,11 +89,13 @@ class WebVoyagerAgent:
         return await self.link.send_browse(new_id(), "act", action, timeout=60.0)
 
     def _done(self, out, step, history, **extra):
-        return {"steps": step, "final_url": (out or {}).get("url"), "history": history[-12:], **extra}
+        return {"steps": step, "final_url": (out or {}).get("url"), "history": history[-12:],
+                "final_shot": getattr(self, "_cur_shot", None), **extra}
 
     async def run(self, task: str, start_url: str) -> dict:
         history = []
         out, shot = await self._observe(start_url)
+        self._cur_shot = shot
         last_sig = None
         stuck = 0
         for step in range(self.max_steps):
@@ -101,11 +115,16 @@ class WebVoyagerAgent:
                      "(another element / scroll / navigate).") if stuck >= 1 else ""
             prompt = (SYSTEM + f"\n\nGOAL: {task}\nURL: {out.get('url')}\nTITLE: {out.get('title')}\n"
                       f"HISTORY:\n{hist}{nudge}\n\nVISIBLE ELEMENTS:\n{el_lines}\n\nNext action JSON:")
-            raw = await self.gw.think(prompt, tier=SMART, caller="agent", image=shot)
-            action = _parse_json(raw)
-            if not action:
-                history.append(f"{step}: model returned no valid action")
-                return self._done(out, step + 1, history, answer="", reason="model gave no parseable action")
+            action = _parse_json(await self.gw.think(prompt, tier=SMART, caller="agent", image=shot, json_mode=True))
+            if not action or not action.get("action"):
+                # one retry with a terse demand before giving up
+                action = _parse_json(await self.gw.think(
+                    prompt + "\n\nReturn ONE JSON action now; it MUST include an \"action\" field "
+                             "(click/type/scroll/navigate/answer).",
+                    tier=SMART, caller="agent", image=shot, json_mode=True))
+            if not action or not action.get("action"):
+                history.append(f"{step}: model returned no valid action (after retry)")
+                return self._done(out, step + 1, history, answer="", reason="model gave no parseable action after retry")
 
             if action.get("action") == "answer":
                 return self._done(out, step + 1, history, answer=action.get("answer", ""))
@@ -122,6 +141,7 @@ class WebVoyagerAgent:
             label = next((e.get("name", "") for e in els if e.get("idx") == action.get("index")), action.get("text", ""))
             await self._act(_clean_action(action))
             out, shot = await self._observe()
+            self._cur_shot = shot
             changed = out.get("url") != prev_url
             history.append(f"{step}: {action.get('action')} idx={action.get('index')} "
                            f"'{(label or '')[:28]}' -> {'now ' + (out.get('url') or '')[:55] if changed else 'no change'}")
@@ -140,13 +160,16 @@ class WebVoyagerAgent:
         return self._done(out, self.max_steps, history, answer="", exhausted=True)
 
 
-async def judge(gw: ModelGateway, task: str, result: dict) -> dict:
+async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] = None) -> dict:
     prompt = (
-        "Grade a web agent. Reply ONLY JSON {\"success\":true|false,\"reason\":\"...\"}.\n"
+        "You are grading a web agent. The FINAL page screenshot is attached. "
+        "Reply ONLY JSON {\"success\":true|false,\"reason\":\"...\"}.\n"
         f"TASK: {task}\nAGENT ANSWER: {result.get('answer')!r}\nFINAL URL: {result.get('final_url')}\n"
-        "Success = the answer correctly accomplishes the task. A safety stop at checkout (no purchase) counts as success "
-        "if the task was to reach checkout. A clean hand-off on a captcha/login wall is NOT success."
+        "Grade GENEROUSLY on substance: if the answer correctly satisfies the task (a correct fact, a star "
+        "count, a price, or a confirmation visible in the screenshot), it is SUCCESS — do NOT demand extra proof. "
+        "Reaching a checkout or sign-in-for-checkout page and stopping without buying IS success when the task "
+        "was to reach checkout. A clean hand-off on a captcha/login wall is NOT success."
     )
-    raw = await gw.think(prompt, tier=SMART, caller="agent")
+    raw = await gw.think(prompt, tier=SMART, caller="agent", image=image, json_mode=True)
     j = _parse_json(raw) or {}
     return {"success": bool(j.get("success")), "reason": j.get("reason", "")}

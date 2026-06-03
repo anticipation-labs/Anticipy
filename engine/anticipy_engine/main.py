@@ -179,12 +179,17 @@ class AgentRunIn(BaseModel):
     task: str
     start_url: str
     max_steps: int = 8
+    judge: bool = False
 
 
 @app.post("/agent/run")
 async def agent_run(body: AgentRunIn) -> dict:
     agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps)
-    return await agent.run(body.task, body.start_url)
+    result = await agent.run(body.task, body.start_url)
+    shot = result.pop("final_shot", None)  # vision-judge in-process; don't ship the image over HTTP
+    if body.judge:
+        result["judgment"] = await judge(gateway_agent, body.task, result, image=shot)
+    return result
 
 
 class AgentJudgeIn(BaseModel):

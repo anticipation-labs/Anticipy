@@ -69,9 +69,9 @@ async def main():
             except Exception:
                 pass
             await asyncio.sleep(0.25)
-        await c.post(BASE + "/ws/reload")
-        await wait(c, False, 40)
-        if not await wait(c, True):
+        # The MV3 SW may be dormant; it reconnects via its ~30s keepalive alarm.
+        # Wait generously instead of forcing a reload (which adds another drop).
+        if not await wait(c, True, tries=520):  # ~130s
             print("FAIL: extension not connected")
             return
 
@@ -79,15 +79,12 @@ async def main():
         for t in BATTERY:
             try:
                 r = (await c.post(BASE + "/agent/run",
-                                  json={"task": t["task"], "start_url": t["url"], "max_steps": t["max"]})).json()
+                                  json={"task": t["task"], "start_url": t["url"], "max_steps": t["max"],
+                                        "judge": t["expect"] == "doable"})).json()
             except Exception as e:
                 outcomes.append((t, {"answer": "", "reason": f"run error {e}"}, {}, "ERROR"))
                 continue
-            judged = {}
-            if t["expect"] == "doable":
-                judged = (await c.post(BASE + "/agent/judge",
-                                       json={"task": t["task"], "answer": r.get("answer", ""),
-                                             "final_url": r.get("final_url") or ""})).json()
+            judged = r.get("judgment", {})
             outcomes.append((t, r, judged, classify(t, r, judged)))
 
         for t, r, judged, oc in outcomes:
