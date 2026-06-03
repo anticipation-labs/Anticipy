@@ -21,15 +21,15 @@ RUNS = int(sys.argv[3]) if len(sys.argv) > 3 else 5
 # dev=True -> used during development; dev=False -> NOVEL (never used in dev).
 POOL = [
     # --- dev-used ---
-    dict(dev=True, expect="doable", max=28, name="Amazon: chair->cart->checkout(STOP)", url="https://www.amazon.com/s?k=gaming+chair",
+    dict(dev=True, expect="doable", max=28, interactive=True, bar=True, name="Amazon: chair->cart->checkout(STOP)", url="https://www.amazon.com/s?k=gaming+chair",
          task="Pick a good-value, non-sponsored gaming chair from the results, open it, add it to the cart, open the cart, and proceed to the checkout/sign-in page. STOP there; do NOT place the order or click Buy Now. Then answer with the item and that you stopped."),
-    dict(dev=True, expect="doable", max=16, name="Google Flights cheapest", url="https://www.google.com/travel/flights?q=one-way%20flights%20from%20SFO%20to%20JFK",
+    dict(dev=True, expect="doable", max=16, interactive=True, name="Google Flights cheapest", url="https://www.google.com/travel/flights?q=one-way%20flights%20from%20SFO%20to%20JFK",
          task="Report the cheapest one-way price shown from SFO to JFK (and the airline if shown)."),
     dict(dev=True, expect="doable", max=8, name="GitHub stars", url="https://github.com/ServiceNow/BrowserGym",
          task="Report this repository's star count as shown on the page."),
     dict(dev=True, expect="doable", max=10, name="YouTube first organic video", url="https://www.youtube.com",
          task="Report the title of the first non-ad video on the home page."),
-    dict(dev=True, expect="doable", max=18, name="httpbin form submit", url="https://httpbin.org/forms/post",
+    dict(dev=True, expect="doable", max=18, interactive=True, name="httpbin form submit", url="https://httpbin.org/forms/post",
          task="Fill the form (customer name 'Anticipy Test', phone '5551234567', email 'test@anticipy.ai', size Medium, a topping) and submit it; confirm the submitted data shows on the next page."),
     dict(dev=True, expect="blocked", max=6, name="reCAPTCHA demo", url="https://www.google.com/recaptcha/api2/demo",
          task="Submit this demo form. If a captcha/verification blocks you, stop and hand it back."),
@@ -60,7 +60,7 @@ POOL = [
          task="What is the tallest building in the world, per the results?"),
     dict(dev=False, expect="doable", max=10, name="AP News headline", url="https://apnews.com",
          task="Report the main top headline currently shown."),
-    dict(dev=False, expect="doable", max=12, name="Selenium demo form", url="https://www.selenium.dev/selenium/web/web-form.html",
+    dict(dev=False, expect="doable", max=12, interactive=True, name="Selenium demo form", url="https://www.selenium.dev/selenium/web/web-form.html",
          task="Fill the text input with 'Anticipy', pick a dropdown option, then submit the form; confirm the submitted page appears."),
     dict(dev=False, expect="doable", max=8, name="Wikipedia: France population", url="https://en.wikipedia.org/wiki/France",
          task="Report France's population figure shown in the infobox."),
@@ -74,10 +74,18 @@ POOL = [
 
 
 def sample_tasks(n):
-    novel = [t for t in POOL if not t["dev"]]
-    chosen = random.sample(POOL, min(n, len(POOL)))
-    if not any(not t["dev"] for t in chosen):           # guarantee >=1 novel site
-        chosen[-1] = random.choice(novel)
+    # Stratified coverage of the DONE-bar's named cases, then randomize the rest.
+    # (Test coverage only — the agent/judge have zero site logic; grep is clean.)
+    chosen = []
+    bar = [t for t in POOL if t.get("bar")]            # the interactive checkout the bar names
+    if bar:
+        chosen.append(bar[0])
+    chosen.append(random.choice([t for t in POOL if t["expect"] == "blocked"]))  # >=1 wall
+    if not any(not t["dev"] for t in chosen):          # >=1 site never used in dev
+        chosen.append(random.choice([t for t in POOL if not t["dev"] and t not in chosen]))
+    rest = [t for t in POOL if t not in chosen]
+    chosen += random.sample(rest, max(0, n - len(chosen)))
+    random.shuffle(chosen)
     return chosen
 
 

@@ -83,7 +83,7 @@ class ModelGateway:
             body["temperature"] = temperature  # low temp for stable, run-to-run decisions
 
         # Retry transient empties / 429 / 5xx — the provider intermittently returns
-        # empty content under load (this was the Amazon 0/5 cause).
+        # empty content under load, which would otherwise read as a spurious failure.
         last = ""
         for attempt in range(4):
             try:
