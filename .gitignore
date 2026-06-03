@@ -35,3 +35,20 @@ yarn-error.log*
 *.pem
 .idea/
 .vscode/
+
+# python (engine)
+.venv/
+**/.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# swift / macapp build artifacts
+.build/
+macapp/.build/
+*.xcodeproj/xcuserdata/
+DerivedData/
+
+# local engine data stores (memory drawers live here in later rooms)
+.anticipy-data/
