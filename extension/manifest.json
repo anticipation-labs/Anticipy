@@ -5,6 +5,6 @@
   "description": "Connects to the local Anticipy engine over an authenticated link and acts on pages on your behalf. Local and private.",
   "background": { "service_worker": "background.js" },
   "action": { "default_popup": "popup.html", "default_title": "Anticipy" },
-  "permissions": ["storage", "alarms", "scripting", "tabs"],
+  "permissions": ["storage", "alarms", "scripting", "tabs", "tabGroups"],
   "host_permissions": ["http://127.0.0.1/*", "<all_urls>"]
 }

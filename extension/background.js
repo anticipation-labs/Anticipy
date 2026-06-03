@@ -80,35 +80,69 @@ async function executeBrowseJob(msg) {
   if (!url) {
     return result(msg, "needs_human", null, { reason: "no url/task to browse" });
   }
-  let tab = null;
   try {
-    tab = await chrome.tabs.create({ url, active: true });
-    await waitForComplete(tab.id, 15000);
-    await sleep(600); // let it paint before the screenshot
+    const tab = await openInGroup(url);    // ALWAYS operate inside the "Anticipy" tab group
+    const groupId = (await getState()).groupId;
+    await waitForComplete(tab.id, 25000);  // hard sites can be slow
+    await sleep(900);                      // let JS-heavy pages paint/settle
 
     const [{ result: page }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => ({
         title: document.title,
         url: location.href,
-        text: (document.body ? document.body.innerText : "").slice(0, 1500),
+        text: (document.body ? document.body.innerText : "").slice(0, 1800),
       }),
     });
 
-    const probe = ((page.text || "") + " " + (page.url || "")).toLowerCase();
-    if (/captcha|unusual traffic|verify you('| a)re human|sign in to continue/.test(probe)) {
-      await closeTab(tab.id);
-      return result(msg, "needs_human", null, { reason: "login/verification wall — please sign in", url: page.url });
-    }
-
     const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 40 });
-    await closeTab(tab.id);
+    const urlLc = (page.url || "").toLowerCase();
+    const textLc = (page.text || "").toLowerCase();
+    const captcha = /captcha|unusual traffic|are you a (robot|human)|verify you('| a)re human|press & hold/.test(textLc);
+    const authUrl = /\/login|\/signin|\/sign-in|\/onboarding|\/auth\b|accounts\.|mode=login/.test(urlLc);
+    const authText = /continue with (phone|apple|google|email)|sign in to|log ?in to|create (an )?account|enter your password|forgot password/.test(textLc);
+    if (captcha || (authUrl && authText)) {
+      return result(msg, "needs_human",
+        { screenshot, url: page.url, title: page.title },
+        { reason: "login/verification wall — handed back to you", url: page.url, group_id: groupId });
+    }
     return result(msg, "success",
       { screenshot, url: page.url, title: page.title },
-      { title: page.title, text: (page.text || "").slice(0, 300) });
+      { title: page.title, text: (page.text || "").slice(0, 400), group_id: groupId });
   } catch (e) {
-    if (tab) await closeTab(tab.id);
     return result(msg, "needs_human", null, { reason: "browser error: " + String(e) });
+  }
+}
+
+// --- the "Anticipy" tab group: always operate here, reusing one working tab ---
+async function openInGroup(url) {
+  let tab = await getWorkingTab();
+  if (tab) {
+    tab = await chrome.tabs.update(tab.id, { url, active: true });
+  } else {
+    tab = await chrome.tabs.create({ url, active: true });
+    await setState({ workTabId: tab.id });
+  }
+  await ensureGroup(tab.id);
+  return await chrome.tabs.get(tab.id);
+}
+async function getWorkingTab() {
+  const st = await getState();
+  if (st.workTabId != null) {
+    try { return await chrome.tabs.get(st.workTabId); } catch (e) {}
+  }
+  return null;
+}
+async function ensureGroup(tabId) {
+  const st = await getState();
+  let groupId = st.groupId;
+  try {
+    if (groupId == null) throw new Error("no group yet");
+    await chrome.tabs.group({ groupId, tabIds: [tabId] });
+  } catch (e) {
+    groupId = await chrome.tabs.group({ tabIds: [tabId] });
+    try { await chrome.tabGroups.update(groupId, { title: "Anticipy", color: "yellow" }); } catch (_) {}
+    await setState({ groupId });
   }
 }
 
@@ -120,7 +154,6 @@ function extractUrl(task) {
   return m ? m[0] : null;
 }
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-async function closeTab(id) { try { await chrome.tabs.remove(id); } catch (e) {} }
 function waitForComplete(tabId, timeout) {
   return new Promise((resolve, reject) => {
     const to = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error("load timeout")); }, timeout);

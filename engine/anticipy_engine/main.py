@@ -140,7 +140,7 @@ async def ws_browse(body: BrowseIn) -> dict:
     # dev/test: drive the real BrowserHand over the live extension link
     from .hands.browser_hand import BrowserHand
 
-    hand = BrowserHand(core.browser_link, timeout=10.0)
+    hand = BrowserHand(core.browser_link, timeout=30.0)
     res = await hand.handle(Job(intent=body.intent, args=body.args))
     return res.model_dump(mode="json")
 
