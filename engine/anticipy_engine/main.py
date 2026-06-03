@@ -188,10 +188,37 @@ class AgentRunIn(BaseModel):
 
 @app.post("/agent/run")
 async def agent_run(body: AgentRunIn) -> dict:
-    agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps)
+    agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps,
+                            notifier=core.notify_user)
     result = await agent.run(body.task, body.start_url)
     shot = result.pop("final_shot", None)  # vision-judge in-process; don't ship the image over HTTP
-    if body.judge:
+    # The general judge decides success — but only for an actual answer. A safety
+    # stop or a wall handoff is already a correct outcome and is not judged.
+    if body.judge and not result.get("needs_human") and not result.get("stopped_for_safety"):
+        result["judgment"] = await judge(gateway_agent, body.task, result, image=shot)
+    return result
+
+
+class AgentResumeIn(BaseModel):
+    task: str
+    start_url: str          # the page AFTER the human cleared the wall
+    resume_token: str = ""
+    max_steps: int = 12
+    judge: bool = False
+
+
+@app.post("/agent/resume")
+async def agent_resume(body: AgentResumeIn) -> dict:
+    # STUB seam: the human cleared the wall and said "go". Restoring the exact
+    # mid-plan state (same subgoal/history) is the TODO; for now we continue the
+    # task from the now-unblocked page and never re-touch the wall.
+    core.glassbox.log("handoff", {"event": "resume", "token": body.resume_token, "url": body.start_url})
+    agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps,
+                            notifier=core.notify_user)
+    result = await agent.run(body.task, body.start_url)
+    result["resumed"] = True
+    shot = result.pop("final_shot", None)
+    if body.judge and not result.get("needs_human") and not result.get("stopped_for_safety"):
         result["judgment"] = await judge(gateway_agent, body.task, result, image=shot)
     return result
 

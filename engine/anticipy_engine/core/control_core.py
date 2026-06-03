@@ -60,8 +60,9 @@ class ControlCore:
         self.browser_hand = BrowserHand(
             self.browser_link, timeout=float(os.environ.get("ANTICIPY_BROWSE_TIMEOUT", "30"))
         )
+        self.channel = ChannelStub()  # reaching the user (text/call); delivery stubbed for now
         # Real hands register LAST so they own any intent a stub also claims.
-        for w in (ChannelStub(), MemoryStub(), self.api_hand, self.browser_hand):
+        for w in (self.channel, MemoryStub(), self.api_hand, self.browser_hand):
             self.bus.register_worker(w)
 
         self.store = GoalStore(data_dir=base)
@@ -86,6 +87,21 @@ class ControlCore:
         ev = Event(source=EventSource(source), text=text, meta=meta or {})
         await self.bus.publish(ev)                 # log the event to the glass-box
         return await self.proactive.on_event(ev)   # triage -> gate -> act/ask
+
+    async def notify_user(self, text: str, recipient: str | None = None) -> dict:
+        """Text the user — the 'ask' half of a wall handoff (pause -> ask -> resume).
+        Delivery is stubbed until the real channel lands; the seam + glass-box trail
+        are real, and it routes through the same send_text worker the product uses."""
+        from .envelopes import Job
+
+        to = recipient or os.environ.get("ALERT_PHONE") or os.environ.get("TWILIO_TO") or "user"
+        self.glassbox.log("handoff", {"event": "notify_user", "to": to, "text": text})
+        try:
+            res = await self.channel.handle(Job(intent="send_text", args={"recipient": to, "body": text}))
+            return res.model_dump(mode="json")
+        except Exception as e:  # a notify failure must never crash the agent run
+            self.glassbox.log("handoff", {"event": "notify_failed", "error": str(e)})
+            return {"error": str(e)}
 
     async def resume(self) -> list:
         return await self.orchestrator.resume_waiting()

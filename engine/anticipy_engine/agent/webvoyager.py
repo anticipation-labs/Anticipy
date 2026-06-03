@@ -24,6 +24,7 @@ from typing import List, Optional
 from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
 from ..core.gateway import CHEAP, SMART, ModelGateway
+from .handoff import ask_message, classify_wall
 
 PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes in sequence
 (e.g., reach the target page; find the target item; select it; perform the action; verify/stop).
@@ -38,6 +39,8 @@ Rules:
 - AVOID elements marked [AD] (sponsored) — prefer organic results.
 - If the target isn't visible, action=scroll (dir=down) then look again.
 - Obey the PROGRESS label and any STUCK note: NEVER repeat an action that caused no change; do something different.
+- VERIFY, don't assume: the LAST STEP label says whether your previous action actually changed the page. If it did not, your approach was wrong — try something else.
+- When stuck, change the KIND of action (scroll to reveal new options, press enter to submit, or choose a different element) — not merely a different number.
 - Set subgoal_done=true the moment the CURRENT subgoal is achieved. Use action=answer only when the WHOLE task is done."""
 
 # Real purchase-confirm controls only. NOT "submit order" (that's a generic form
@@ -120,11 +123,13 @@ class TaskState:
 
 
 class WebVoyagerAgent:
-    def __init__(self, link: BrowserLink, gateway: ModelGateway, max_steps: int = 28, per_subgoal: int = 8) -> None:
+    def __init__(self, link: BrowserLink, gateway: ModelGateway, max_steps: int = 28,
+                 per_subgoal: int = 8, notifier=None) -> None:
         self.link = link
         self.gw = gateway
         self.max_steps = max_steps
         self.per_subgoal = per_subgoal
+        self.notifier = notifier  # async callable(str)->None; texts the user on a wall (None = log only)
 
     async def _observe(self, url: Optional[str] = None):
         r = await self.link.send_browse(new_id(), "observe", {"url": url} if url else {}, timeout=60.0)
@@ -143,6 +148,22 @@ class WebVoyagerAgent:
         return {"steps": step, "final_url": (out or {}).get("url"), "history": history[-12:],
                 "final_shot": getattr(self, "_cur_shot", None), **extra}
 
+    async def _notify(self, msg: str) -> None:
+        if not self.notifier:
+            return
+        try:
+            await self.notifier(msg)
+        except Exception:
+            pass  # a notify failure must never crash the run
+
+    async def _handoff(self, out, step, history, wall_kind: str, detail: str) -> dict:
+        # pause -> ask the human (text) -> resume later via /agent/resume. We stop
+        # observing here, so we never screenshot what the user types at the wall.
+        ask = ask_message(wall_kind, (out or {}).get("url") or "")
+        await self._notify(ask)
+        return self._done(out, step, history, answer="", needs_human=True, paused=True,
+                          wall_kind=wall_kind, ask=ask, resume_token=new_id(), reason=detail)
+
     async def run(self, task: str, start_url: str) -> dict:
         state = TaskState(await self._plan(task))
         history: List[str] = []
@@ -151,6 +172,7 @@ class WebVoyagerAgent:
         sub_steps = 0
         sub_stuck = 0
         reflection = ""
+        last_thought = ""  # carry the model's own reasoning forward one step (scratchpad)
         forbid = None  # (action, index) forbidden this step after a STUCK
 
         out, shot = await self._observe(start_url)
@@ -162,8 +184,8 @@ class WebVoyagerAgent:
         for step in range(self.max_steps):
             text = (out.get("text") or "").lower()
             if any(k in text for k in BLOCK_MARKERS):
-                return self._done(out, step + 1, history, answer="", needs_human=True,
-                                  reason="captcha / anti-bot wall — handed back with the page open")
+                return await self._handoff(out, step + 1, history, classify_wall(text),
+                                           "captcha / anti-bot wall — handed back with the page open")
 
             all_in = [e for e in (out.get("elements") or []) if e.get("inView")]
             organic = [e for e in all_in if not e.get("sponsored")]
@@ -186,6 +208,7 @@ class WebVoyagerAgent:
                 + f"URL: {out.get('url')}\nTITLE: {out.get('title')}\nLAST STEP: {progress}\n"
                 + (f"COMMITTED TARGET (act on this; don't re-pick): {committed}\n" if committed else "")
                 + (f"REFLECTION: {reflection}\n" if reflection else "")
+                + (f"YOUR LAST THOUGHT: {last_thought}\n" if last_thought else "")
                 + (stuck_note + "\n" if stuck_note else "")
                 + "RECENT ACTIONS:\n" + ("\n".join(history[-5:]) or "(none)") + "\n\n"
                 + "VISIBLE ELEMENTS:\n" + el_lines + "\n\nNext action JSON:"
@@ -206,6 +229,8 @@ class WebVoyagerAgent:
             if not action or not action.get("action"):
                 return self._done(out, step + 1, history, answer="", reason="no parseable action after retry",
                                   last_raw=((raw1 or "<empty>")[:220] + " ||RETRY|| " + (raw2 or "<empty>")[:220]))
+
+            last_thought = (action.get("thought") or "")[:160]  # scratchpad for the next step
 
             if action.get("action") == "answer":
                 return self._done(out, step + 1, history, answer=action.get("answer", ""))
@@ -267,8 +292,8 @@ class WebVoyagerAgent:
                 history.append(f"{step}: subgoal failed ('{subgoal_text[:40]}') -> moving on")
                 committed, sub_steps, sub_stuck, forbid, reflection = None, 0, 0, None, ""
                 if state.done():
-                    return self._done(out, step + 1, history, answer="", needs_human=True,
-                                      reason="could not complete a subgoal after retries — handed back")
+                    return await self._handoff(out, step + 1, history, classify_wall(out.get("text", "")),
+                                               "could not complete a subgoal after retries — handed back")
             prev_sig = new_sig
 
         return self._done(out, self.max_steps, history, answer="", exhausted=True)
