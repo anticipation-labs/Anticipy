@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from . import __version__
 from .brain import Brain
 from .core.control_core import ControlCore
+from .core.envelopes import Job
 
 ENGINE_NAME = "anticipy-engine"
 
@@ -99,6 +100,11 @@ def scorecard() -> dict:
 
 
 # ---- browser hand link (authenticated WebSocket) ----
+@app.get("/ws/state")
+def ws_state() -> dict:
+    return {"connected": core.browser_link.connected}
+
+
 @app.get("/ws/token")
 def ws_token() -> dict:
     # The extension (host-permitted for 127.0.0.1) can read this; a web page can't
@@ -111,6 +117,21 @@ async def ws_reload() -> dict:
     # dev-only hot-reload trigger
     sent = await core.browser_link.reload()
     return {"reloaded": sent}
+
+
+class BrowseIn(BaseModel):
+    intent: str = "browse_task"
+    args: dict = {}
+
+
+@app.post("/ws/browse")
+async def ws_browse(body: BrowseIn) -> dict:
+    # dev/test: drive the real BrowserHand over the live extension link
+    from .hands.browser_hand import BrowserHand
+
+    hand = BrowserHand(core.browser_link, timeout=10.0)
+    res = await hand.handle(Job(intent=body.intent, args=body.args))
+    return res.model_dump(mode="json")
 
 
 @app.websocket("/ws/extension")
