@@ -18,8 +18,9 @@ from typing import Optional, Tuple
 
 from ..proactive.harm import HarmLine
 from ..proactive.triage import Triage
+from ..proactive.trigger import TriggerWatcher
 from .bus import Bus
-from .envelopes import Event, Goal, Job
+from .envelopes import Event, EventSource, Goal, Job, now_ts
 from .gateway import ModelGateway
 from .orchestrator import Orchestrator
 
@@ -56,6 +57,7 @@ class ProactiveEngine:
         self.config = config or GateConfig()
         self.triage = Triage(gateway=gateway)   # Room 1: the bouncer (cheap, first, free in stub)
         self.harm = HarmLine()                  # Room 2: act-first, ask-only-before-harm
+        self.trigger = TriggerWatcher()         # Room 3: time + open-loop watcher (fire-once)
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
 
     async def on_event(self, event: Event) -> dict:
@@ -86,6 +88,24 @@ class ProactiveEngine:
                      memory_forced=verdict.memory_forced)
         return {"decision": decision, "category": verdict.category, "reason": verdict.reason,
                 "detrimental": verdict.detrimental, "memory_forced": verdict.memory_forced, "goal_id": goal_id}
+
+    async def trigger_tick(self, now: Optional[float] = None) -> list:
+        """Room 3: watch the commitment ledger against the clock. Each due/elapsed loop fires a
+        proactive follow-up through the SAME harm-line path (NO new input event), exactly once."""
+        now = now if now is not None else now_ts()
+        res = await self.bus.submit_job(Job(intent="list_open_loops", args={}))
+        loops = (res.output or {}).get("loops", [])
+        fired = self.trigger.tick(loops, now)
+        out = []
+        for loop in fired:
+            task = loop.get("task") or loop.get("text") or "your commitment"
+            ev = Event(source=EventSource.system, text=f"Follow up on your commitment: {task}")
+            decision = await self.on_event(ev)          # SAME triage -> harm-line -> act/ask path
+            if self.glassbox is not None:
+                self.glassbox.log("trigger_fired", {"loop_id": loop.get("id"), "task": task,
+                                                     "decision": decision["decision"]})
+            out.append({"loop_id": loop.get("id"), "task": task, **decision})
+        return out
 
     # ---- steps ----
     def _triage(self, event: Event) -> bool:

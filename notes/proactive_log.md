@@ -68,3 +68,18 @@ fast-forwarded into **local** main (no push). Skeleton being made real:
   "do_and_notify" to act-first safe events — orchestrator/hands logic untouched.
 - **Suite after:** 23/23 GREEN (added harmline).
 - Commit/main hash: see Commit stack (bottom).
+
+### Room 3 — The Trigger Model (time + open-loop watching) ✅
+- **Built:** `proactive/trigger.py::TriggerWatcher` — watches the open_loops ledger against a
+  clock. A loop fires when `due_ts <= now` (TIME) or it's been open `>= stale_after` with no
+  due-time (ELAPSED). Fire-once via an in-memory fired-id set (no storms). `MemoryWorker`
+  gained `list_open_loops` (additive read intent) as the structured condition source.
+  `ProactiveEngine.trigger_tick(now)` runs each fired loop through the SAME
+  triage→harm-line→act/ask path (NO new input event); logs `trigger_fired` to the glass-box.
+- **Test** (`test_trigger.py`): 5 planted loops — due(send) + due(research) + elapsed(draft)
+  fire; future + fresh don't; routing send→**ASK**, research/draft→**ACT**; a second tick at
+  the same clock fires **0** (fire-once). Real MemoryWorker + stub hands; deterministic.
+- **Suite after:** 24/24 GREEN.
+- **Refinements noted:** persist the fired-mark across restart; extract due-TIME from
+  "Friday"→due_ts in capture (the watcher already consumes due_ts when present).
+- Commit/main hash: see Commit stack (bottom).
