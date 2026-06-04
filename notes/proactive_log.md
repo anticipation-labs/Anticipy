@@ -101,3 +101,20 @@ fast-forwarded into **local** main (no push). Skeleton being made real:
   creds (TWILIO_ACCOUNT_SID / AUTH_TOKEN / FROM) + a test number; the inbound-reply webhook that
   calls `resolve_ask` is wired alongside the app approve/deny surface in Room 6 (same round-trip).
 - Commit/main hash: see Commit stack (bottom).
+
+### Room 5 — The Annoyance Budget (wearable 365 days) ✅
+- **Built:** `proactive/budget.py::AnnoyanceBudget` — caps PROACTIVE (engine-initiated,
+  `source=system`) interruptions per rolling day; learns from declines (suppress a declined
+  action-TYPE, signature = harm-category + salient tokens). USER-initiated asks are never
+  suppressed. A SAFE proactive action acts silently (spends no budget — only ASKS count); a
+  suppressed detrimental action is neither executed nor asked (no silent harm, no annoyance).
+  Wired into `on_event` (suppression check before a proactive ask, `now` threaded for the
+  rolling window) + `resolve_ask(no)` records the decline — the SAME signal as the Room 4
+  decline-capture (Deferred-1: one signal, not two).
+- **Test** (`test_annoyance.py`): cap=3 → 6 proactive detrimental = **3 asked + 3 suppressed**;
+  a declined "email investor" type is **suppressed next time** while a different type still
+  asks; a user-initiated ask **bypasses** cap 0 (safety: the user asked).
+- **Suite after:** 26/26 GREEN.
+- **DECISIONS-ONLY-OMAR:** the cap NUMBER is a taste call — built configurable (`max_per_day`),
+  defaulted to 5 (top of the research 3–5/day ceiling), adherence measured, value left to Omar.
+- Commit/main hash: see Commit stack (bottom).

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from ..channels.text import TextChannel
+from ..proactive.budget import AnnoyanceBudget
 from ..proactive.harm import HarmLine
 from ..proactive.triage import Triage
 from ..proactive.trigger import TriggerWatcher
@@ -63,10 +64,12 @@ class ProactiveEngine:
         self.trigger = TriggerWatcher()         # Room 3: time + open-loop watcher (fire-once)
         self.channel = channel or TextChannel() # Room 4: where the ask goes out (Twilio live/mock)
         self.user_contact = user_contact        # the user's number/handle for asks (set in prod)
-        self.pending = {}                       # ask_id -> {goal_id, action, reason} (awaiting reply)
+        self.pending = {}                       # ask_id -> {goal_id, action, reason, category} (awaiting reply)
+        self.budget = AnnoyanceBudget()         # Room 5: cap proactive interruptions; learn from declines
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
 
-    async def on_event(self, event: Event) -> dict:
+    async def on_event(self, event: Event, now: Optional[float] = None) -> dict:
+        now = now if now is not None else now_ts()
         # 1) triage — cheap, local, no smart model; most events die here (Room 1)
         if not self._triage(event):
             self._record(event, "ignore", "triaged out (not actionable)")
@@ -86,12 +89,24 @@ class ProactiveEngine:
             goal_id = goal.id
             decision = "act"
         else:
-            decision = "ask"
             goal = Goal(intent=event.text, description=event.text, state=GoalState.waiting)
             self.orchestrator.store.save(goal)        # persist the PAUSED goal (NOT executed)
             goal_id = goal.id
-            ask_id = self._send_ask(goal, event.text, verdict.reason)
-            self._raise_to_human(event, verdict.reason)
+            # Room 5: cap PROACTIVE (engine-initiated) interruptions + suppress declined types.
+            # User-initiated asks are never suppressed (the user is present and asked).
+            proactive = event.source == EventSource.system
+            suppress = self.budget.suppressed(event.text, verdict.category, now) if proactive else None
+            if suppress:
+                decision = "suppressed"   # not executed AND not asked -> no silent harm, no annoyance
+                if self.glassbox is not None:
+                    self.glassbox.log("suppressed", {"goal_id": goal_id, "category": verdict.category,
+                                                     "reason": suppress, "action": event.text})
+            else:
+                decision = "ask"
+                ask_id = self._send_ask(goal, event.text, verdict.reason, verdict.category)
+                self._raise_to_human(event, verdict.reason)
+                if proactive:
+                    self.budget.record_interruption(now)
             # HARD SUB-GATE: a detrimental goal is WAITING — no step executed until approved (no silent harm).
             assert self.orchestrator.store.load(goal_id).state == GoalState.waiting, "detrimental action must be paused"
         self._record(event, decision, verdict.reason, category=verdict.category,
@@ -100,12 +115,12 @@ class ProactiveEngine:
                 "detrimental": verdict.detrimental, "memory_forced": verdict.memory_forced,
                 "goal_id": goal_id, "ask_id": ask_id}
 
-    def _send_ask(self, goal: Goal, action: str, reason: str) -> str:
+    def _send_ask(self, goal: Goal, action: str, reason: str, category: str = "") -> str:
         """Send the ask over the channel and register it pending a reply."""
         ask_id = goal.id
         msg = (f"Anticipy wants to: {action}\nWhy it paused: {reason}\nReply YES to proceed, NO to skip.")
         sent = self.channel.send(self.user_contact, msg)
-        self.pending[ask_id] = {"goal_id": goal.id, "action": action, "reason": reason}
+        self.pending[ask_id] = {"goal_id": goal.id, "action": action, "reason": reason, "category": category}
         if self.glassbox is not None:
             self.glassbox.log("ask_sent", {"ask_id": ask_id, "goal_id": goal.id, "channel": self.channel.name,
                                            "to": self.user_contact, "sent": bool(sent.get("sent"))})
@@ -125,6 +140,7 @@ class ProactiveEngine:
             return {"ask_id": ask_id, "approved": True, "goal_id": goal.id, "state": goal.state.value}
         goal.state = GoalState.failed                          # declined -> drop the paused goal
         self.orchestrator.store.save(goal)
+        self.budget.record_decline(p["action"], p.get("category", ""))   # Room 5: suppress this type next time
         await self.bus.submit_job(Job(intent="write_memory",
                                       args={"text": f"User declined to: {p['action']}", "kind": "history"}))
         if self.glassbox is not None:
@@ -142,7 +158,7 @@ class ProactiveEngine:
         for loop in fired:
             task = loop.get("task") or loop.get("text") or "your commitment"
             ev = Event(source=EventSource.system, text=f"Follow up on your commitment: {task}")
-            decision = await self.on_event(ev)          # SAME triage -> harm-line -> act/ask path
+            decision = await self.on_event(ev, now=now)   # SAME triage -> harm-line -> act/ask; budget applies
             if self.glassbox is not None:
                 self.glassbox.log("trigger_fired", {"loop_id": loop.get("id"), "task": task,
                                                      "decision": decision["decision"]})
