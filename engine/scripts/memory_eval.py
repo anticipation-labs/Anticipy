@@ -412,6 +412,27 @@ def sample_subset(data, n, seed):
     return chosen
 
 
+def sample_judged(data, n, seed):
+    """Stratified ANSWERABLE-only sample across question types — the judged layer's set,
+    decoupled from the (possibly full-500) deterministic set. Ids recorded in the manifest."""
+    rng = random.Random(seed)
+    by_type = {}
+    for x in data:
+        if not is_abs(x):
+            by_type.setdefault(x["question_type"], []).append(x)
+    pools = {t: rng.sample(v, len(v)) for t, v in by_type.items()}
+    order = sorted(pools)
+    chosen = []
+    while len(chosen) < n and any(pools.values()):
+        for t in order:
+            if len(chosen) >= n:
+                break
+            if pools[t]:
+                chosen.append(pools[t].pop())
+    rng.shuffle(chosen)
+    return chosen
+
+
 def ingest_instance(inst):
     """Ingest the haystack through the REAL capture gate (haystack text ONLY; never the
     gold answer or gold flag). Map gold turns -> produced item ids. Fresh isolated memory."""
@@ -645,39 +666,52 @@ def run_lme(args):
         sys.exit(3)
     mode = os.environ.get("ANTICIPY_MEMORY_MODE", "stub")
     live = mode == "live"
-    print("=== PHASE 2A — LONGMEMEVAL SUBSET BASELINE (external hard yardstick) ===")
+    data = load_lme()
+    scope = "FULL-500" if args.full else f"SUBSET-{args.subset}"
+    det_set = data if args.full else sample_subset(data, args.subset, args.seed)
+    n_abs = sum(1 for x in det_set if is_abs(x))
+    print(f"=== LONGMEMEVAL {scope} SCORECARD (external hard yardstick) ===")
     print(f"  memory_mode    = {mode}" + (f"  embedder={LIVE_MODEL_ID} (dim {embedding_dim()})" if live else "  embedder=hash-stub (dim 256)"))
     print(f"  haystack       = {LME_HAYSTACK}")
     print(f"  dataset sha256 = {lme_dataset_sha()}")
-    data = load_lme()
-    subset = sample_subset(data, args.subset, args.seed)
-    n_abs = sum(1 for x in subset if is_abs(x))
-    print(f"  loaded {len(data)} instances; subset = {len(subset)} "
-          f"(answerable={len(subset) - n_abs}, abstention={n_abs}; seed={args.seed})")
+    print(f"  loaded {len(data)} instances; deterministic set = {len(det_set)} "
+          f"(answerable={len(det_set) - n_abs}, abstention={n_abs}; seed={args.seed})")
 
-    # DETERMINISTIC layer — single pass (zero model calls; deterministic given the subset)
+    # DETERMINISTIC layer — single pass over the WHOLE det set (zero reader/judge calls;
+    # embedder-only under live, local + free of API spend; ~0 variance by construction).
     sc = Scorecard(Path(tempfile.mkdtemp()) / "lme_scorecard.jsonl")
-    det = lme_deterministic(subset, scorecard=sc)
+    det = lme_deterministic(det_set, scorecard=sc)
     agg = aggregate([det])
     print_lme_scorecard(agg, det)
 
-    # JUDGED layer — smaller answerable subset, flag-gated, real model calls (NEVER in CI)
+    # JUDGED layer — stratified ANSWERABLE sample ONLY (never all 500), flag-gated, paid calls.
     judged = None
+    judge_pool = (sample_judged(data, args.judge_subset, args.seed) if args.full
+                  else [x for x in det_set if not is_abs(x)][:args.judge_subset])
     if args.judge or os.environ.get("ANTICIPY_EVAL_JUDGE") == "live":
-        judge_pool = [x for x in subset if not is_abs(x)][:args.judge_subset]
-        print(f"\n=== JUDGED LAYER (pinned judge; real model calls; "
-              f"judge_subset={len(judge_pool)} x {args.judge_repeats} repeats) ===")
-        judged = asyncio.run(lme_judged(judge_pool, repeats=args.judge_repeats))
-        print_lme_attribution(judged)
+        proj = len(judge_pool) * args.judge_repeats * 4   # 2 reads + 2 judges per instance per repeat
+        print(f"\n=== JUDGED LAYER (pinned judge; real model calls) ===")
+        print(f"  stratified answerable sample = {len(judge_pool)} across "
+              f"{len({x['question_type'] for x in judge_pool})} types x {args.judge_repeats} repeats")
+        print(f"  PROJECTED paid calls = {len(judge_pool)} x {args.judge_repeats} x 4 = {proj}   [ceiling ~200]")
+        if proj > 200:
+            print(f"  !! {proj} > 200-call ceiling -> NOT running judged (report only). "
+                  f"Set --judge-subset <= {200 // (args.judge_repeats * 4)} to fit.")
+        else:
+            judged = asyncio.run(lme_judged(judge_pool, repeats=args.judge_repeats))
+            print_lme_attribution(judged)
 
     manifest = {
         "harness_git_sha": _git_sha(),
         "memory_version": "phase2a-longmemeval",
+        "scope": scope,
+        "n_instances": len(det_set),
         "memory_mode": mode,
         "embed_model": (LIVE_MODEL_ID if live else "hash-stub"),
         "embed_dim": (embedding_dim() if live else 256),
         "longmemeval_dataset_sha256": lme_dataset_sha(),
-        "subset_ids": [x["question_id"] for x in subset],
+        "subset_ids": (None if args.full else [x["question_id"] for x in det_set]),
+        "judged_sample_ids": [x["question_id"] for x in judge_pool],
         "seeds": [args.seed],
         "temperature": 0,
         "judge_model_id": JUDGE_MODEL if judged else None,
@@ -692,8 +726,9 @@ def run_lme(args):
         "baseline_ref": None,
         "model_cost_usd": (judged["model_cost_usd"] if judged else 0.0),
     }
+    tag = ("full_" if args.full else "") + mode
     out = Path(args.out if args.out != ".anticipy-data/memory_eval.json"
-               else f".anticipy-data/memory_eval_lme_{mode}.json")
+               else f".anticipy-data/memory_eval_lme_{tag}.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2))
     print(f"\n  versioned JSON -> {out}")
@@ -708,6 +743,7 @@ def main():
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--out", default=".anticipy-data/memory_eval.json")
     ap.add_argument("--lme", action="store_true", help="run the LongMemEval external subset baseline")
+    ap.add_argument("--full", action="store_true", help="LME deterministic core over ALL instances (full 500), not a subset")
     ap.add_argument("--subset", type=int, default=50, help="LME deterministic subset size")
     ap.add_argument("--judge-subset", type=int, default=12, help="LME judged subset size (answerable only)")
     ap.add_argument("--judge-repeats", type=int, default=3, help="LME judged repeats")
