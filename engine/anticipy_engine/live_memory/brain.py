@@ -13,6 +13,7 @@ from ..memory.store import Memory
 from ..shared.schema import CaptureEvent
 from .capture import Capturer
 from .inject import Injector
+from .maintain import Maintainer
 
 
 class LiveMemoryBrain:
@@ -20,6 +21,7 @@ class LiveMemoryBrain:
         self.memory = memory
         self.capturer = Capturer(memory, gateway=gateway)
         self.injector = Injector(memory, gateway=gateway)
+        self.maintainer = Maintainer(memory, gateway=gateway)
 
     def inject(self, context: str = "", k=None) -> Dict[str, object]:
         """REAL hybrid retrieval (semantic+keyword+recency+importance), budgeted,
@@ -32,5 +34,5 @@ class LiveMemoryBrain:
         return self.capturer.capture(event.text, source=getattr(event, "source", ""))
 
     def maintain(self) -> Dict[str, object]:
-        """Stub: housekeeping does nothing yet (ran=False marks it a stub)."""
-        return {"maintained": True, "ran": False}
+        """REAL cold sweep: supersede changed facts, consolidate dup episodes, decay stale."""
+        return self.maintainer.sweep()
