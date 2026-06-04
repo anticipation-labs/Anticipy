@@ -24,6 +24,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
 import math
@@ -280,7 +281,7 @@ def _judge_prompt(ptype, q, gold, resp):
             "Is the model response correct? Answer yes or no only.")
 
 
-def judged_run(data_dir: Path) -> dict:
+async def judged_run(data_dir: Path) -> dict:
     from anticipy_engine.core.env import load_local_env
     from anticipy_engine.core.gateway import CHEAP, PROVIDER_OPENROUTER, ModelGateway
     load_local_env()
@@ -289,15 +290,15 @@ def judged_run(data_dir: Path) -> dict:
     lm, ids = build_week(data_dir)
     inj = Injector(lm.memory, char_budget=10_000_000, k=50)
 
-    def read(probe, ctx_items):
+    async def read(probe, ctx_items):
         ctx = "\n".join(f"- {i.text}" for i in ctx_items) or "(no memories)"
         prompt = ("Answer the question using ONLY the user's stored memories below. "
                   "If they do not contain the answer, say you don't know.\n"
                   f"MEMORIES:\n{ctx}\n\nQUESTION: {probe}\nAnswer concisely:")
-        return (reader.think(prompt, tier=CHEAP, caller="agent", temperature=0) or "").strip()
+        return ((await reader.think(prompt, tier=CHEAP, caller="agent", temperature=0)) or "").strip()
 
-    def judged(ptype, q, gold, resp):
-        raw = (judge.think(_judge_prompt(ptype, q, gold, resp), tier=CHEAP, caller="agent", temperature=0) or "").lower()
+    async def judged(ptype, q, gold, resp):
+        raw = ((await judge.think(_judge_prompt(ptype, q, gold, resp), tier=CHEAP, caller="agent", temperature=0)) or "").lower()
         return "yes" in raw and "no" not in raw.split()  # reject dual; require a clean yes
 
     buckets = {"OK": 0, "RETRIEVAL": 0, "READER_CONTEXT": 0, "REASONING_CEILING": 0, "noise": 0}
@@ -311,8 +312,8 @@ def judged_run(data_dir: Path) -> dict:
         retr_items = [i for i in inj.inject(text)["items"] if i.kind != "open_loop"]
         recall_hit = set(gold).issubset(set(i.id for i in inj.inject(text)["items"][:10]))
         try:
-            o_label = judged(ptype, text, gold_ans, read(text, gold_items))       # oracle context
-            r_label = judged(ptype, text, gold_ans, read(text, retr_items))       # retrieved context
+            o_label = await judged(ptype, text, gold_ans, await read(text, gold_items))   # oracle context
+            r_label = await judged(ptype, text, gold_ans, await read(text, retr_items))   # retrieved context
         except Exception as e:
             buckets["noise"] += 1; rows.append((key, f"judge/reader error: {e}")); continue
         oracle_ok += o_label; retr_ok += r_label
@@ -383,7 +384,7 @@ def main():
     judged = None
     if args.judge or os.environ.get("ANTICIPY_EVAL_JUDGE") == "live":
         print("\n=== JUDGED LAYER (pinned judge; real model calls) ===")
-        judged = judged_run(Path(tempfile.mkdtemp()))
+        judged = asyncio.run(judged_run(Path(tempfile.mkdtemp())))
         print(f"  judge={judged['judge_model']}  reader={judged['reader_model']}  n={judged['n']}")
         print(f"  reasoning ceiling (oracle acc) = {judged['oracle_accuracy']:.3f}")
         print(f"  retrieved accuracy             = {judged['retrieved_accuracy']:.3f}")
