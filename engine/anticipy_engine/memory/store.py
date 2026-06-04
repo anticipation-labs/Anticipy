@@ -1,67 +1,150 @@
-"""Local-only memory stores (read/write stubs).
+"""Local-first memory: four drawers in one SQLite db + a small local vector index.
 
-One JSON file per store under the data dir. The three stores are kept separate
-on disk and in the API; nothing here merges them or reasons over them — that's a
-later chunk. Default data dir is ``.anticipy-data/`` (repo-local, gitignored),
-overridable with ``ANTICIPY_DATA_DIR``.
+Drawers (isolated by `kind`, never merged):
+  - profile   (profile_fact) : slow-changing facts about the user + their people.
+  - open_loops (open_loop)   : the DETERMINISTIC ledger of commitments. Exact
+                               structured records with state (open|waiting|done);
+                               retrievable without embeddings — never silently lost.
+  - history   (history)      : timestamped episodic append-log, embedded for recall.
+  - derived   (derived)      : inferred facts WITH confidence; kept separate from
+                               stated facts, never promoted.
+
+Storage is boring + swappable: structured records (incl. the ledger) live in
+SQLite; each row carries its embedding (JSON) and the vector "index" is a cosine
+scan over the relevant kinds (fine at single-user scale; swap for sqlite-vec later).
+Default data dir is ``.anticipy-data/`` (gitignored), override ANTICIPY_DATA_DIR.
 """
 from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from pathlib import Path
 from typing import List, Optional
 
-from ..shared.schema import MemoryItem, MemoryKind
+from ..shared.schema import MemoryItem, MemoryKind, now_ts
+from .embed import cosine, embed
+
+_COLS = ("id", "kind", "text", "fields", "people", "timestamp", "updated_at",
+         "provenance", "confidence", "importance", "status", "embedding")
 
 
 def _default_data_dir() -> Path:
     return Path(os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
 
 
-class MemoryStore:
-    """A single store. Holds only items of its ``kind``."""
+class MemoryDB:
+    """One SQLite db holding every drawer's rows + their embeddings."""
 
-    def __init__(self, name: str, kind: MemoryKind, data_dir: Path) -> None:
-        self.name = name
-        self.kind = kind
+    def __init__(self, data_dir: Path) -> None:
         data_dir.mkdir(parents=True, exist_ok=True)
-        self.path = data_dir / f"{name}.json"
-        if not self.path.exists():
-            self._persist([])
+        self.path = data_dir / "memory.db"
+        self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS items("
+            "id TEXT PRIMARY KEY, kind TEXT, text TEXT, fields TEXT, people TEXT, "
+            "timestamp REAL, updated_at REAL, provenance TEXT, confidence REAL, "
+            "importance REAL, status TEXT, embedding TEXT)"
+        )
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON items(kind)")
+        self.conn.commit()
 
-    # ---- read ----
-    def all(self) -> List[MemoryItem]:
-        raw = json.loads(self.path.read_text() or "[]")
-        return [MemoryItem(**r) for r in raw]
+    @staticmethod
+    def _row_to_item(r: sqlite3.Row) -> MemoryItem:
+        return MemoryItem(
+            id=r["id"], kind=r["kind"], text=r["text"], fields=json.loads(r["fields"] or "{}"),
+            people=json.loads(r["people"] or "[]"), timestamp=r["timestamp"], updated_at=r["updated_at"],
+            provenance=r["provenance"], confidence=r["confidence"], importance=r["importance"],
+            status=r["status"],
+        )
+
+    def upsert(self, item: MemoryItem, embedding: List[float]) -> None:
+        self.conn.execute(
+            f"INSERT OR REPLACE INTO items({','.join(_COLS)}) VALUES ({','.join('?' * len(_COLS))})",
+            (item.id, item.kind, item.text, json.dumps(item.fields), json.dumps(item.people),
+             item.timestamp, item.updated_at, item.provenance, item.confidence, item.importance,
+             item.status, json.dumps(embedding)),
+        )
+        self.conn.commit()
 
     def get(self, item_id: str) -> Optional[MemoryItem]:
-        return next((i for i in self.all() if i.id == item_id), None)
+        r = self.conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+        return self._row_to_item(r) if r else None
 
-    # ---- write ----
+    def by_kind(self, kind: MemoryKind) -> List[MemoryItem]:
+        rows = self.conn.execute("SELECT * FROM items WHERE kind=? ORDER BY timestamp", (kind,))
+        return [self._row_to_item(r) for r in rows]
+
+    def clear(self, kind: Optional[MemoryKind] = None) -> None:
+        if kind is None:
+            self.conn.execute("DELETE FROM items")
+        else:
+            self.conn.execute("DELETE FROM items WHERE kind=?", (kind,))
+        self.conn.commit()
+
+    def vector_rank(self, query_vec: List[float], kinds: List[str], k: int) -> List[MemoryItem]:
+        if not kinds:
+            return []
+        q = "SELECT id, embedding FROM items WHERE kind IN (%s)" % ",".join("?" * len(kinds))
+        scored = []
+        for r in self.conn.execute(q, tuple(kinds)):
+            emb = json.loads(r["embedding"] or "[]")
+            if emb:
+                scored.append((r["id"], cosine(query_vec, emb)))
+        scored.sort(key=lambda x: -x[1])
+        return [self.get(i) for i, _ in scored[:k]]
+
+
+class MemoryStore:
+    """A single drawer. Reads/writes only items of its ``kind`` (isolation)."""
+
+    def __init__(self, name: str, kind: MemoryKind, db: MemoryDB) -> None:
+        self.name = name
+        self.kind = kind
+        self.db = db
+
+    def all(self) -> List[MemoryItem]:
+        return self.db.by_kind(self.kind)
+
+    def get(self, item_id: str) -> Optional[MemoryItem]:
+        item = self.db.get(item_id)
+        return item if item and item.kind == self.kind else None  # never cross drawers
+
     def write(self, item: MemoryItem) -> MemoryItem:
         item.kind = self.kind  # stores stamp their own kind; never cross-contaminate
-        items = self.all()
-        items.append(item)
-        self._persist([i.model_dump() for i in items])
+        self.db.upsert(item, embed(item.text))
         return item
 
-    def write_text(self, text: str, people: Optional[List[str]] = None) -> MemoryItem:
-        return self.write(MemoryItem(kind=self.kind, text=text, people=people or []))
+    def write_text(self, text: str, people: Optional[List[str]] = None, **fields) -> MemoryItem:
+        return self.write(MemoryItem(kind=self.kind, text=text, people=people or [], **fields))
+
+    def update(self, item: MemoryItem) -> MemoryItem:
+        """Re-persist an existing item (e.g. an open_loop state change). Stamps updated_at."""
+        item.updated_at = now_ts()
+        self.db.upsert(item, embed(item.text))
+        return item
 
     def clear(self) -> None:
-        self._persist([])
-
-    def _persist(self, rows: list) -> None:
-        self.path.write_text(json.dumps(rows, indent=2))
+        self.db.clear(self.kind)
 
 
 class Memory:
-    """Facade over the three separate stores."""
+    """Facade over the four separate drawers + the shared vector index."""
 
     def __init__(self, data_dir: Optional[Path] = None) -> None:
         base = Path(data_dir) if data_dir else _default_data_dir()
-        self.profile = MemoryStore("profile", "profile_fact", base)
-        self.open_loops = MemoryStore("open_loops", "open_loop", base)
-        self.history = MemoryStore("history", "history", base)
+        self.db = MemoryDB(base)
+        self.profile = MemoryStore("profile", "profile_fact", self.db)
+        self.open_loops = MemoryStore("open_loops", "open_loop", self.db)
+        self.history = MemoryStore("history", "history", self.db)
+        self.derived = MemoryStore("derived", "derived", self.db)
         self.data_dir = base
+
+    def drawer(self, kind: MemoryKind) -> MemoryStore:
+        return {"profile_fact": self.profile, "open_loop": self.open_loops,
+                "history": self.history, "derived": self.derived}[kind]
+
+    def search_vec(self, query: str, kinds: List[str], k: int = 8) -> List[MemoryItem]:
+        """Semantic leg of retrieval: cosine over the local index for the given kinds."""
+        return self.db.vector_rank(embed(query), kinds, k)

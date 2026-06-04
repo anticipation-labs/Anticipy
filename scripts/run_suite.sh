@@ -18,7 +18,7 @@ run() {  # name, command...
 }
 
 echo "== unit (free, deterministic) =="
-for t in bus workers gateway orchestrator proactive glassbox_scorecard api_hand browser_hand handoff; do
+for t in bus workers gateway orchestrator proactive glassbox_scorecard api_hand browser_hand handoff memory; do
   run "$t" "$PY" "$REPO/engine/scripts/test_$t.py"
 done
 
