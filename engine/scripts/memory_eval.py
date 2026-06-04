@@ -29,6 +29,7 @@ import hashlib
 import json
 import math
 import os
+import random
 import statistics
 import subprocess
 import sys
@@ -258,6 +259,26 @@ def selftest() -> bool:
     check("knowledge-update -> NEW surfaces", new_id in r2)
     check("knowledge-update -> superseded OLD does NOT surface", old_id not in r2)
 
+    # LME instrument checks — only when the dataset is present (CI runs without it)
+    if LME_HAYSTACK.exists():
+        data = load_lme()
+        art = None
+        for x in data[:30]:
+            if is_abs(x):
+                continue
+            a = ingest_instance(x)
+            if a["gold_item_ids"]:
+                art = a
+                break
+        check("LME ingest+map: a surviving gold turn maps to a retrievable item",
+              art is not None and all(art["lm"].memory.db.get(g) is not None for g in art["gold_item_ids"]))
+        absinst = next((x for x in data if is_abs(x)), None)
+        aart = ingest_instance(absinst) if absinst else None
+        check("LME _abs: empty gold (skipped by recall, folded into abstention)",
+              aart is not None and aart["gold_total"] == 0 and len(aart["gold_item_ids"]) == 0)
+    else:
+        print("  [skip] LME data absent (.anticipy-data/longmemeval) — LME selftest skipped (OK for CI)")
+
     print("INSTRUMENT", "SOUND" if ok else "BROKEN")
     return ok
 
@@ -272,6 +293,8 @@ _JUDGE_RUBRIC = {
     "default": "I will give you a question, a correct answer, and a response from a model. Please answer yes if the response contains the correct answer. Otherwise, answer no. If the response is equivalent to the correct answer or contains all the intermediate steps to get the correct answer, you should also answer yes. If the response only contains a subset of the information required by the answer, answer no.",
     "knowledge-update": "I will give you a question, a correct answer, and a response from a model. Please answer yes if the response contains the correct answer. Otherwise, answer no. If the response contains some previous information along with an updated answer, the response should be considered as correct as long as the updated answer is the required answer.",
     "multi-session": "I will give you a question, a correct answer, and a response from a model. Please answer yes if the response contains the correct answer. Otherwise, answer no. If the response only contains a subset of the information required by the answer, answer no.",
+    "temporal-reasoning": "I will give you a question, a correct answer, and a response from a model. Please answer yes if the response contains the correct answer. Otherwise, answer no. In addition, do not penalize off-by-one errors for the number of days. If the question asks for the number of days/weeks/months, etc., and the model makes off-by-one errors (e.g., predicting 19 days when the answer is 18), the model's response is still correct.",
+    "single-session-preference": "I will give you a question, a rubric for the desired personalized response, and a response from a model. Please answer yes if the response satisfies the desired response. The model does not need to reflect all the points in the rubric. The response is correct as long as it recalls and utilizes the user's personal information correctly.",
 }
 
 
@@ -331,6 +354,216 @@ async def judged_run(data_dir: Path) -> dict:
             "judge_prompt_sha256": hashlib.sha256(json.dumps(_JUDGE_RUBRIC, sort_keys=True).encode()).hexdigest()[:16]}
 
 
+# ===========================================================================
+# PHASE 2A — LongMemEval external dataset adapter
+# Ingest the haystack through the REAL capture gate (no embed-the-gold shortcut),
+# map gold turns -> the item ids they produced, score recall reconciled to
+# session granularity (effective_k), and attribute failures four ways.
+# ===========================================================================
+LME_DIR = Path(os.environ.get("LONGMEMEVAL_DIR", ".anticipy-data/longmemeval"))
+LME_HAYSTACK = LME_DIR / "longmemeval_s.json"
+
+
+def _has_answer(turn) -> bool:
+    return str(turn.get("has_answer", "")).strip().lower() == "true"
+
+
+def is_abs(inst) -> bool:
+    return str(inst["question_id"]).endswith("_abs")
+
+
+def lme_dataset_sha() -> str:
+    try:
+        h = hashlib.sha256()
+        with open(LME_HAYSTACK, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()[:16]
+    except Exception:
+        return "missing"
+
+
+def load_lme():
+    return json.load(open(LME_HAYSTACK))
+
+
+def sample_subset(data, n, seed):
+    """Stratified across question types; ~20% abstention (>=10 when n>=50); knowledge-update first."""
+    rng = random.Random(seed)
+    abs_pool = [x for x in data if is_abs(x)]
+    abs_target = min(len(abs_pool), max(1, round(n * 0.2)))     # ~20%; 10 at n=50; never all-abs for small n
+    chosen = rng.sample(abs_pool, abs_target)
+    by_type = {}
+    for x in data:
+        if not is_abs(x):
+            by_type.setdefault(x["question_type"], []).append(x)
+    pools = {t: rng.sample(v, len(v)) for t, v in by_type.items()}
+    order = sorted(pools)
+    if "knowledge-update" in order:
+        order = ["knowledge-update"] + [t for t in order if t != "knowledge-update"]
+    while len(chosen) < n and any(pools.values()):
+        for t in order:
+            if len(chosen) >= n:
+                break
+            if pools[t]:
+                chosen.append(pools[t].pop())
+    rng.shuffle(chosen)
+    return chosen
+
+
+def ingest_instance(inst):
+    """Ingest the haystack through the REAL capture gate (haystack text ONLY; never the
+    gold answer or gold flag). Map gold turns -> produced item ids. Fresh isolated memory."""
+    lm = LiveMemoryBrain(Memory(data_dir=Path(tempfile.mkdtemp())))   # stub gateway -> zero model calls
+    gold_sessions = set(inst["answer_session_ids"])
+    item_session, gold_item_ids, gold_turn_texts = {}, [], []
+    gold_total = 0
+    for sid, sess in zip(inst["haystack_session_ids"], inst["haystack_sessions"]):
+        gold_sess = sid in gold_sessions
+        for turn in sess:
+            content = (turn.get("content") or "").strip()
+            if not content:
+                continue
+            r = lm.capture(CaptureEvent(source="mac_mic", text=content))   # REAL gate; text only
+            item = r.get("item")
+            if item is not None:
+                item_session[item.id] = sid
+            if gold_sess and _has_answer(turn):
+                gold_total += 1
+                gold_turn_texts.append(content)
+                if item is not None:
+                    gold_item_ids.append(item.id)
+    lm.maintain()
+    return {"lm": lm, "gold_sessions": gold_sessions, "item_session": item_session,
+            "gold_item_ids": gold_item_ids, "gold_turn_texts": gold_turn_texts,
+            "gold_total": gold_total,
+            "capture_recall": (len(set(gold_item_ids)) / gold_total) if gold_total else None}
+
+
+def _covered_sessions(retrieved_ids, item_session):
+    seen = []
+    for iid in retrieved_ids:
+        sid = item_session.get(iid)
+        if sid and sid not in seen:
+            seen.append(sid)
+    return seen
+
+
+def lme_recall(retrieved_ids, item_session, gold_sessions, k):
+    """Session-reconciled recall over the semantic ranking (loops excluded upstream):
+    effective_k = the first k UNIQUE sessions covered by the ranked items."""
+    sess = set(_covered_sessions(retrieved_ids, item_session)[:k])
+    gold = set(gold_sessions)
+    return float(bool(sess & gold)), float(gold.issubset(sess))
+
+
+def lme_deterministic(subset, scorecard=None) -> dict:
+    recall = {f"recall_any@{k}": [] for k in KS}
+    recall.update({f"recall_all@{k}": [] for k in KS})
+    by_type, cap_recalls, abst_pairs, calib_pairs = {}, [], [], []
+    for inst in subset:
+        art = ingest_instance(inst)
+        inj = Injector(art["lm"].memory, char_budget=10_000_000, k=50)
+        out = inj.inject(inst["question"])                          # QUESTION only (anti-cheat)
+        nonloop = [i for i in out["items"] if i.kind != "open_loop"]
+        retrieved = [i.id for i in nonloop]                         # semantic ranking; loops excluded from recall@k
+        top_rel = max((_kw_relevance(inst["question"], i) for i in nonloop), default=0.0)
+        did_abstain = top_rel < ABSTAIN_FLOOR
+        if is_abs(inst):
+            abst_pairs.append((True, did_abstain))
+            continue
+        abst_pairs.append((False, did_abstain))
+        if art["capture_recall"] is not None:
+            cap_recalls.append(art["capture_recall"])
+        a10 = 0.0
+        for k in KS:
+            a, al = lme_recall(retrieved, art["item_session"], art["gold_sessions"], k)
+            recall[f"recall_any@{k}"].append(a)
+            recall[f"recall_all@{k}"].append(al)
+            if k == 10:
+                a10 = a
+                by_type.setdefault(inst["question_type"], []).append(al)
+        calib_pairs.append((top_rel, a10))
+        if scorecard is not None:
+            scorecard.record_recall(inst["question"], bool(a10), len(retrieved), reason=inst["question_type"])
+    ab_recall, ab_over = abstention_metrics(abst_pairs)
+    m = {k: (sum(v) / len(v) if v else 0.0) for k, v in recall.items()}
+    for t, vals in by_type.items():
+        m[f"recall_all@10::{t}"] = sum(vals) / len(vals)
+    m["capture_recall"] = sum(cap_recalls) / len(cap_recalls) if cap_recalls else 0.0
+    m["abstention.recall"] = ab_recall
+    m["abstention.over_rate"] = ab_over
+    m["calibration.ece_eqwidth"] = ece_equiwidth(calib_pairs)
+    m["calibration.ece_eqmass"] = ece_equimass(calib_pairs)
+    m["calibration.brier"] = brier(calib_pairs)
+    m["_n_answerable"] = len(cap_recalls)
+    m["_n_abs"] = sum(1 for s, _ in abst_pairs if s)
+    return m
+
+
+async def lme_judged(subset, repeats=3):
+    """Four-bucket attribution on natural questions (real model calls; NOT in CI)."""
+    from anticipy_engine.core.env import load_local_env
+    from anticipy_engine.core.gateway import CHEAP, PROVIDER_OPENROUTER, ModelGateway
+    load_local_env()
+    reader = ModelGateway(provider=PROVIDER_OPENROUTER, cheap_model=READER_MODEL, smart_model=READER_MODEL)
+    judge = ModelGateway(provider=PROVIDER_OPENROUTER, cheap_model=JUDGE_MODEL, smart_model=JUDGE_MODEL)
+
+    arts = []                                       # ingest each non-abs instance ONCE
+    for inst in subset:
+        if is_abs(inst):
+            continue
+        art = ingest_instance(inst)
+        inj = Injector(art["lm"].memory, char_budget=10_000_000, k=50)
+        out = inj.inject(inst["question"])
+        nonloop = [i for i in out["items"] if i.kind != "open_loop"]   # loops are the spine, not retrieval
+        retr_items = nonloop[:10]                                      # reader context: top-10 retrieved
+        _, rall10 = lme_recall([i.id for i in nonloop], art["item_session"], art["gold_sessions"], 10)
+        arts.append((inst, art, retr_items, rall10))
+
+    async def read(probe, texts):
+        ctx = "\n".join(f"- {t}" for t in texts) or "(no memories)"
+        p = ("Answer the question using ONLY the user's stored memories below. If they do not "
+             f"contain the answer, say you don't know.\nMEMORIES:\n{ctx}\n\nQUESTION: {probe}\nAnswer concisely:")
+        return ((await reader.think(p, tier=CHEAP, caller="agent", temperature=0)) or "").strip()
+
+    async def judged(ptype, q, gold, resp):
+        raw = ((await judge.think(_judge_prompt(ptype, q, gold, resp), tier=CHEAP, caller="agent", temperature=0)) or "").lower()
+        return ("yes" in raw) and ("no" not in raw.split())
+
+    runs = []
+    for _ in range(repeats):
+        b = {"CAPTURE": 0, "RETRIEVAL": 0, "READER_CONTEXT": 0, "REASONING_CEILING": 0, "OK": 0, "noise": 0}
+        oracle_ok = retr_ok = n = 0
+        for inst, art, retr_items, rall10 in arts:
+            n += 1
+            q, gold_ans, ptype = inst["question"], inst["answer"], inst["question_type"]
+            if art["gold_total"] > 0 and not art["gold_item_ids"]:
+                b["CAPTURE"] += 1
+                continue
+            try:
+                o = await judged(ptype, q, gold_ans, await read(q, art["gold_turn_texts"]))     # ungated gold ceiling
+                r = await judged(ptype, q, gold_ans, await read(q, [i.text for i in retr_items]))
+            except Exception:
+                b["noise"] += 1
+                continue
+            oracle_ok += o
+            retr_ok += r
+            # honest precedence: if even ungated gold context fails, it's a reasoning/judge
+            # ceiling, NOT retrieval's fault -> check that first; only blame RETRIEVAL when oracle could.
+            bucket = ("REASONING_CEILING" if not o else "RETRIEVAL" if rall10 == 0
+                      else "READER_CONTEXT" if not r else "OK")
+            b[bucket] += 1
+        runs.append({"buckets": b, "n": n, "oracle_acc": oracle_ok / n if n else 0.0,
+                     "retr_acc": retr_ok / n if n else 0.0})
+    return {"judge_model": JUDGE_MODEL, "reader_model": READER_MODEL, "repeats": repeats, "n": len(arts),
+            "runs": runs, "model_cost_usd": round(reader.total_cost() + judge.total_cost(), 4),
+            "reader_calls": len(reader.calls), "judge_calls": len(judge.calls),
+            "cost_basis": "gateway flat-rate estimate (cheap=$0.0005, smart=$0.02 per call); "
+                          "OpenRouter dashboard is the billed source of truth",
+            "judge_prompt_sha256": hashlib.sha256(json.dumps(_JUDGE_RUBRIC, sort_keys=True).encode()).hexdigest()[:16]}
+
+
 # ---------------------------------------------------------------------------
 # aggregate + report
 # ---------------------------------------------------------------------------
@@ -363,6 +596,103 @@ def print_scorecard(agg):
     print(f"  (runs={n}; max per-metric stddev={sd:.4f} — deterministic core has ~0 variance by design)")
 
 
+def print_lme_scorecard(agg, det):
+    def g(k): return agg.get(k, {}).get("mean", float("nan"))
+    print("\n==== LONGMEMEVAL SUBSET — DETERMINISTIC CORE (session-reconciled; zero model calls) ====")
+    print(f"  answerable={int(round(g('_n_answerable')))}  abstention={int(round(g('_n_abs')))}")
+    print("  RETRIEVAL recall (session granularity; effective_k = first k UNIQUE sessions, loops excluded):")
+    for k in KS:
+        print(f"    recall_any@{k:<2} = {g(f'recall_any@{k}'):.3f}   recall_all@{k:<2} = {g(f'recall_all@{k}'):.3f}")
+    print(f"  CAPTURE-RECALL (gold turns surviving the keep/drop gate) = {g('capture_recall'):.3f}")
+    print("  recall_all@10 by question-type:")
+    for key in sorted(k for k in agg if k.startswith("recall_all@10::")):
+        print(f"    {key.split('::')[1]:<26} = {agg[key]['mean']:.3f}")
+    print(f"  ABSTENTION:  recall = {g('abstention.recall'):.3f}   over_abstention = {g('abstention.over_rate'):.3f}")
+    print(f"  CALIBRATION: ECE(eqwidth)={g('calibration.ece_eqwidth'):.3f}  ECE(eqmass)={g('calibration.ece_eqmass'):.3f}  Brier={g('calibration.brier'):.3f}")
+
+
+def print_lme_attribution(j):
+    runs = j["runs"]
+    cats = ["OK", "CAPTURE", "RETRIEVAL", "READER_CONTEXT", "REASONING_CEILING", "noise"]
+    mean_b = {c: statistics.fmean([r["buckets"].get(c, 0) for r in runs]) for c in cats}
+    oracle = statistics.fmean([r["oracle_acc"] for r in runs])
+    retr = statistics.fmean([r["retr_acc"] for r in runs])
+    labels = {
+        "OK":                "retrieved -> reader answered correctly",
+        "CAPTURE":           "keep/drop gate dropped ALL gold turns",
+        "RETRIEVAL":         "captured, but gold session not in top-10",
+        "READER_CONTEXT":    "gold retrieved, but reader missed it",
+        "REASONING_CEILING": "even ungated gold context fails (reader/judge limit)",
+        "noise":             "judge/reader error",
+    }
+    print(f"  judge={j['judge_model']}  reader={j['reader_model']}  n={j['n']}  repeats={len(runs)}")
+    print(f"  reasoning ceiling (oracle acc)  = {oracle:.3f}")
+    print(f"  retrieved accuracy              = {retr:.3f}")
+    print(f"  retrieval-attributable loss     = {max(0.0, oracle - retr):.3f}")
+    print(f"  FOUR-BUCKET ATTRIBUTION (mean count over repeats; n per repeat = {j['n']}):")
+    for c in cats:
+        print(f"    {c:<18} {mean_b[c]:>5.1f}   ({labels[c]})")
+    print(f"  model calls      = {j.get('reader_calls', 0)} reader + {j.get('judge_calls', 0)} judge "
+          f"= {j.get('reader_calls', 0) + j.get('judge_calls', 0)} total")
+    print(f"  model cost (USD) = {j['model_cost_usd']}  (gateway flat-rate estimate; "
+          f"OpenRouter dashboard = billed source of truth)")
+
+
+def run_lme(args):
+    if not LME_HAYSTACK.exists():
+        print(f"  LongMemEval haystack not found at {LME_HAYSTACK} (set LONGMEMEVAL_DIR). Cannot run --lme.")
+        sys.exit(3)
+    print("=== PHASE 2A — LONGMEMEVAL SUBSET BASELINE (external hard yardstick) ===")
+    print(f"  haystack       = {LME_HAYSTACK}")
+    print(f"  dataset sha256 = {lme_dataset_sha()}")
+    data = load_lme()
+    subset = sample_subset(data, args.subset, args.seed)
+    n_abs = sum(1 for x in subset if is_abs(x))
+    print(f"  loaded {len(data)} instances; subset = {len(subset)} "
+          f"(answerable={len(subset) - n_abs}, abstention={n_abs}; seed={args.seed})")
+
+    # DETERMINISTIC layer — single pass (zero model calls; deterministic given the subset)
+    sc = Scorecard(Path(tempfile.mkdtemp()) / "lme_scorecard.jsonl")
+    det = lme_deterministic(subset, scorecard=sc)
+    agg = aggregate([det])
+    print_lme_scorecard(agg, det)
+
+    # JUDGED layer — smaller answerable subset, flag-gated, real model calls (NEVER in CI)
+    judged = None
+    if args.judge or os.environ.get("ANTICIPY_EVAL_JUDGE") == "live":
+        judge_pool = [x for x in subset if not is_abs(x)][:args.judge_subset]
+        print(f"\n=== JUDGED LAYER (pinned judge; real model calls; "
+              f"judge_subset={len(judge_pool)} x {args.judge_repeats} repeats) ===")
+        judged = asyncio.run(lme_judged(judge_pool, repeats=args.judge_repeats))
+        print_lme_attribution(judged)
+
+    manifest = {
+        "harness_git_sha": _git_sha(),
+        "memory_version": "phase2a-longmemeval",
+        "longmemeval_dataset_sha256": lme_dataset_sha(),
+        "subset_ids": [x["question_id"] for x in subset],
+        "seeds": [args.seed],
+        "temperature": 0,
+        "judge_model_id": JUDGE_MODEL if judged else None,
+        "judge_prompt_sha256": judged["judge_prompt_sha256"] if judged else None,
+        "reader_model_id": READER_MODEL if judged else None,
+    }
+    result = {
+        "run_manifest": manifest,
+        "per_category": agg,
+        "raw_runs": [det],
+        "judged": judged,
+        "baseline_ref": None,
+        "model_cost_usd": (judged["model_cost_usd"] if judged else 0.0),
+    }
+    out = Path(args.out if args.out != ".anticipy-data/memory_eval.json"
+               else ".anticipy-data/memory_eval_lme.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2))
+    print(f"\n  versioned JSON -> {out}")
+    print(f"  TOTAL MODEL COST (USD) = {result['model_cost_usd']}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeat", type=int, default=10)
@@ -370,11 +700,19 @@ def main():
     ap.add_argument("--judge", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--out", default=".anticipy-data/memory_eval.json")
+    ap.add_argument("--lme", action="store_true", help="run the LongMemEval external subset baseline")
+    ap.add_argument("--subset", type=int, default=50, help="LME deterministic subset size")
+    ap.add_argument("--judge-subset", type=int, default=12, help="LME judged subset size (answerable only)")
+    ap.add_argument("--judge-repeats", type=int, default=3, help="LME judged repeats")
     args = ap.parse_args()
 
     if args.selftest:
         print("=== SELF-TEST (instrument soundness; zero model calls) ===")
         sys.exit(0 if selftest() else 1)
+
+    if args.lme:
+        run_lme(args)
+        return
 
     sc = Scorecard(Path(tempfile.mkdtemp()) / "eval_scorecard.jsonl")
     runs = [deterministic_run(Path(tempfile.mkdtemp()), scorecard=sc) for _ in range(args.repeat)]
