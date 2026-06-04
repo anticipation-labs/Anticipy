@@ -83,3 +83,21 @@ fast-forwarded into **local** main (no push). Skeleton being made real:
 - **Refinements noted:** persist the fired-mark across restart; extract due-TIME from
   "Friday"→due_ts in capture (the watcher already consumes due_ts when present).
 - Commit/main hash: see Commit stack (bottom).
+
+### Room 4 — Real Channels + the Ask Round-Trip ✅
+- **Built:** `channels/text.py::TextChannel` is now REAL — a Twilio SMS when
+  `ANTICIPY_CHANNELS_MODE=live` + TWILIO_* creds are present, else MOCK (records to `.sent`;
+  CI-safe + free). Every send (real or mock) is logged. The ask round-trip lives in the engine:
+  a detrimental verdict PERSISTS a `waiting` goal (NOT executed) + sends the ask over the
+  channel + registers `{ask_id → goal}`. `resolve_ask(yes)` → `orchestrator.start_goal` resumes
+  the EXACT paused goal to **done**; `resolve_ask(no)` → goal failed + writes the decline to
+  memory (`write_memory` via the bus) for Room 5. HARD gate asserted in code: a detrimental
+  goal stays WAITING (no step run) until approved — no silent harm.
+- **Test** (`test_ask_roundtrip.py`): detrimental → paused (waiting) + mock send →
+  `resolve_ask(yes)` RESUMES the exact goal to done → a second detrimental → `resolve_ask(no)`
+  drops it + the decline is in memory. Asserts the RESUME (goal state), not just the send.
+- **Suite after:** 25/25 GREEN.
+- **One real proof outstanding (one-time human action):** a real Twilio SMS needs the user's
+  creds (TWILIO_ACCOUNT_SID / AUTH_TOKEN / FROM) + a test number; the inbound-reply webhook that
+  calls `resolve_ask` is wired alongside the app approve/deny surface in Room 6 (same round-trip).
+- Commit/main hash: see Commit stack (bottom).

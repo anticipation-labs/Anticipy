@@ -87,11 +87,12 @@ async def main():
         out = await pro.on_event(Event(source=EventSource.mac_mic, text="Wire money to the contractor."))
     finally:
         await bus.stop()
-    assert out["decision"] == "ask" and out["goal_id"] is None, f"detrimental must not create a goal, got {out}"
-    assert out["detrimental"] and out["category"] == "money"
-    assert any(k == "ask_human" for k, _ in glass.entries)
-    assert len(gw.smart_calls) == 0  # no goal -> no plan; harm-line deterministic
-    print(f"  C detrimental: decision=ask ({out['category']}), NO goal, raised to human")
+    assert out["decision"] == "ask" and out["detrimental"] and out["category"] == "money"
+    assert out["goal_id"] and out["ask_id"], f"ask must pause a goal + register the ask, got {out}"
+    assert orch.store.load(out["goal_id"]).state == GoalState.waiting  # PAUSED, not executed (no silent harm)
+    assert any(k == "ask_human" for k, _ in glass.entries) and any(k == "ask_sent" for k, _ in glass.entries)
+    assert len(gw.smart_calls) == 0  # waiting goal not run -> no plan; harm-line deterministic
+    print(f"  C detrimental: decision=ask ({out['category']}), goal PAUSED (waiting), ask sent")
 
     print("PASS proactive: act-first engine (triage / harm-line / act-or-ask / record)")
 
