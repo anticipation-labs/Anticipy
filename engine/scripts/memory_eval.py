@@ -40,6 +40,7 @@ from anticipy_engine.core.scorecard import Scorecard
 from anticipy_engine.live_memory.brain import LiveMemoryBrain
 from anticipy_engine.live_memory.inject import Injector, _toks
 from anticipy_engine.memory import Memory
+from anticipy_engine.memory.embed import LIVE_MODEL_ID, embedding_dim
 from anticipy_engine.shared.schema import CaptureEvent
 
 KS = (5, 10, 50)
@@ -642,7 +643,10 @@ def run_lme(args):
     if not LME_HAYSTACK.exists():
         print(f"  LongMemEval haystack not found at {LME_HAYSTACK} (set LONGMEMEVAL_DIR). Cannot run --lme.")
         sys.exit(3)
+    mode = os.environ.get("ANTICIPY_MEMORY_MODE", "stub")
+    live = mode == "live"
     print("=== PHASE 2A — LONGMEMEVAL SUBSET BASELINE (external hard yardstick) ===")
+    print(f"  memory_mode    = {mode}" + (f"  embedder={LIVE_MODEL_ID} (dim {embedding_dim()})" if live else "  embedder=hash-stub (dim 256)"))
     print(f"  haystack       = {LME_HAYSTACK}")
     print(f"  dataset sha256 = {lme_dataset_sha()}")
     data = load_lme()
@@ -669,6 +673,9 @@ def run_lme(args):
     manifest = {
         "harness_git_sha": _git_sha(),
         "memory_version": "phase2a-longmemeval",
+        "memory_mode": mode,
+        "embed_model": (LIVE_MODEL_ID if live else "hash-stub"),
+        "embed_dim": (embedding_dim() if live else 256),
         "longmemeval_dataset_sha256": lme_dataset_sha(),
         "subset_ids": [x["question_id"] for x in subset],
         "seeds": [args.seed],
@@ -686,7 +693,7 @@ def run_lme(args):
         "model_cost_usd": (judged["model_cost_usd"] if judged else 0.0),
     }
     out = Path(args.out if args.out != ".anticipy-data/memory_eval.json"
-               else ".anticipy-data/memory_eval_lme.json")
+               else f".anticipy-data/memory_eval_lme_{mode}.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2))
     print(f"\n  versioned JSON -> {out}")

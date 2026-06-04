@@ -99,6 +99,16 @@ class MemoryDB:
     def vector_rank(self, query_vec: List[float], kinds: List[str], k: int) -> List[MemoryItem]:
         return [self.get(i) for i, _ in self.scored(query_vec, kinds)[:k]]
 
+    def reindex(self) -> int:
+        """One-shot: re-embed every stored row under the CURRENT embed() (e.g. after
+        flipping ANTICIPY_MEMORY_MODE stub->live, or swapping models). Returns row count."""
+        rows = self.conn.execute("SELECT id, text FROM items").fetchall()
+        for r in rows:
+            self.conn.execute("UPDATE items SET embedding=? WHERE id=?",
+                              (json.dumps(embed(r["text"])), r["id"]))
+        self.conn.commit()
+        return len(rows)
+
 
 class MemoryStore:
     """A single drawer. Reads/writes only items of its ``kind`` (isolation)."""
@@ -152,3 +162,7 @@ class Memory:
     def search_vec(self, query: str, kinds: List[str], k: int = 8) -> List[MemoryItem]:
         """Semantic leg of retrieval: cosine over the local index for the given kinds."""
         return self.db.vector_rank(embed(query), kinds, k)
+
+    def reindex(self) -> int:
+        """One-shot re-embed of every drawer under the current embed() (stub<->live)."""
+        return self.db.reindex()
