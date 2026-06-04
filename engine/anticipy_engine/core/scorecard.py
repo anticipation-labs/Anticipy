@@ -29,6 +29,18 @@ class Scorecard:
     def record_goal(self, goal_id: str, outcome: str, cost: float) -> None:
         self._append({"ts": now_ts(), "kind": "goal", "goal_id": goal_id, "outcome": outcome, "cost": cost})
 
+    def record_recall(self, query: str, hit: bool, n_items: int, reason: str = "") -> None:
+        # memory self-check logs retrieval quality here so recall is MEASURED, not assumed.
+        self._append({"ts": now_ts(), "kind": "recall", "hit": bool(hit),
+                      "n_items": n_items, "reason": reason, "query": (query or "")[:120]})
+
+    def recall_readout(self) -> dict:
+        rows = [r for r in self.rows() if r.get("kind") == "recall"]
+        hits = sum(1 for r in rows if r.get("hit"))
+        n = len(rows)
+        return {"recall_checked": n, "recall_hits": hits, "recall_misses": n - hits,
+                "recall_hit_rate": round(hits / n, 3) if n else 0.0}
+
     def rows(self) -> list:
         return [json.loads(ln) for ln in self.path.read_text().splitlines() if ln.strip()]
 
