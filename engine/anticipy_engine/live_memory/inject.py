@@ -51,16 +51,19 @@ class Injector:
         loops.sort(key=lambda i: (-i.importance, -i.timestamp))
 
         cos = dict(self.memory.db.scored(qv, _FUZZY))   # id -> cosine (stored embeddings)
-        cands = self.memory.profile.all() + self.memory.history.all() + self.memory.derived.all()
+        # never surface superseded/archived items (a changed fact's old version)
+        cands = [i for i in (self.memory.profile.all() + self.memory.history.all() + self.memory.derived.all())
+                 if i.status not in ("superseded", "archived")]
         now = now_ts()
         scored = []
         for it in cands:
             sem = cos.get(it.id, 0.0)
             kw = self._kw(qtok, it)
+            if kw <= 0.0 and sem < 0.2:
+                continue  # require genuine relevance (keyword or strong semantic), not importance/recency alone
             rec = 1.0 / (1.0 + max(0.0, (now - it.timestamp)) / 86400.0)
             score = 0.55 * sem + 0.30 * kw + 0.10 * rec + 0.05 * it.importance
-            if score > 0:
-                scored.append((score, it))
+            scored.append((score, it))
         scored.sort(key=lambda x: -x[0])
         ranked = [it for _, it in scored[:k]]
 
