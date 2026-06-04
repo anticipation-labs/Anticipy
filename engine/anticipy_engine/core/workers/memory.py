@@ -1,10 +1,47 @@
-"""memory_stub — handles read_context / write_memory. Canned context; records writes."""
+"""memory worker — handles read_context / write_memory on the frozen contract.
+
+MemoryStub: the original canned stub (kept for its unit test).
+MemoryWorker: the REAL worker the control core registers — read_context -> inject()
+relevant memory; write_memory -> force-capture into a drawer. Takes a live-memory
+object (duck-typed: needs .inject(about) + .capturer.capture(text, source, force)),
+so this module stays free of live_memory imports.
+"""
 from __future__ import annotations
 
 from typing import List
 
-from ..envelopes import Job
+from ..envelopes import Job, JobStatus, Result
+from ..worker import Worker
 from .scriptable import ScriptableStub
+
+
+class MemoryWorker(Worker):
+    name = "memory"
+
+    def __init__(self, live_memory) -> None:
+        self.lm = live_memory
+
+    def handles(self) -> List[str]:
+        return ["read_context", "write_memory"]
+
+    async def handle(self, job: Job) -> Result:
+        if job.intent == "read_context":
+            inj = self.lm.inject(job.args.get("about", ""))
+            ctx = {
+                "notes": inj["text"],
+                "open_loops": [i.text for i in inj["open_loops"]],
+                "profile": [i.text for i in inj["profile"]],
+                "history": [i.text for i in inj["history"]],
+            }
+            return Result(job_id=job.id, status=JobStatus.success, output={"context": ctx},
+                          proof={"injected": len(inj["items"]), "open_loops": len(inj["open_loops"])}, cost=0.0)
+        # write_memory: an explicit write — force-keep into the right drawer
+        text = job.args.get("text") or job.args.get("note") or job.args.get("about") or ""
+        res = self.lm.capturer.capture(text, source="write_memory", force=True)
+        item = res.get("item")
+        return Result(job_id=job.id, status=JobStatus.success,
+                      output={"written": bool(res.get("kept"))},
+                      proof={"memory_id": item.id if item else "none", "kind": res.get("kind")}, cost=0.0)
 
 CANNED_CONTEXT = {
     "profile": {"name": "Omar", "role": "founder"},

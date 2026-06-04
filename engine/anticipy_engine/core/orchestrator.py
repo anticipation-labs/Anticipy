@@ -43,8 +43,12 @@ class Orchestrator:
         approver: Optional[Approver] = None,
         max_retries: int = 2,
         alternates: Optional[Dict[str, str]] = None,
+        memory_context=None,
     ) -> None:
         self.bus = bus
+        # INJECT seam: optional callable(about)->dict; pulled BEFORE the plan smart-call.
+        # None (default) -> no memory, prompt unchanged (existing tests unaffected).
+        self.memory_context = memory_context
         self.gateway = gateway
         self.store = store
         self.glassbox = glassbox
@@ -62,7 +66,8 @@ class Orchestrator:
         self.store.save(goal)
         self._log("goal_planning", {"goal_id": goal.id})
 
-        plan_raw = await self.gateway.think(self._plan_prompt(goal), tier=SMART, caller="plan")
+        context = self.memory_context(goal.description or goal.intent) if self.memory_context else {}
+        plan_raw = await self.gateway.think(self._plan_prompt(goal, context), tier=SMART, caller="plan")
         goal.steps = self._parse_plan(plan_raw)
         goal.state = GoalState.running
         self.store.save(goal)
@@ -142,8 +147,9 @@ class Orchestrator:
         return result.proof is not None and bool(result.proof)
 
     # ---- helpers ----
-    def _plan_prompt(self, goal: Goal) -> str:
-        return f"Plan the goal into ordered steps (intent, args, risk): {goal.description or goal.intent}"
+    def _plan_prompt(self, goal: Goal, context=None) -> str:
+        base = f"Plan the goal into ordered steps (intent, args, risk): {goal.description or goal.intent}"
+        return base + (f"\nRELEVANT MEMORY: {context}" if context else "")
 
     @staticmethod
     def _parse_plan(raw: str) -> list:

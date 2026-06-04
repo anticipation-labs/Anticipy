@@ -19,8 +19,10 @@ from .orchestrator import Approver, Orchestrator
 from .proactive import ProactiveEngine
 from .scorecard import Scorecard
 from .store import GoalStore
-from .workers import ChannelStub, MemoryStub
+from .workers import ChannelStub, MemoryWorker
 from ..hands import ApiHand, BrowserHand, MODE_MOCK
+from ..live_memory.brain import LiveMemoryBrain
+from ..memory.store import Memory
 
 
 def _base(data_dir=None) -> Path:
@@ -51,8 +53,13 @@ class ControlCore:
         self.bus = Bus(glassbox=self.glassbox)
         self.gateway = ModelGateway(endpoint=os.environ.get("ANTICIPY_MODEL_ENDPOINT"))
 
+        # REAL memory: four drawers + the live memory agent, on the frozen contract.
+        self.memory = Memory(data_dir=base)
+        self.live_memory = LiveMemoryBrain(self.memory, gateway=self.gateway, scorecard=self.scorecard)
+        self.memory_worker = MemoryWorker(self.live_memory)
+
         # REAL hands replace connector_stub + browser_stub on the frozen contract.
-        # channel_stub (reaching the user: call/text) and memory_stub stay (later chunks).
+        # channel_stub (reaching the user: call/text) stays (later chunk).
         hands_mode = os.environ.get("ANTICIPY_HANDS_MODE", MODE_MOCK)
         # Arcade user_id must match the signed-in Arcade.dev account ("users only" mode)
         user_id = os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
@@ -61,8 +68,9 @@ class ControlCore:
             self.browser_link, timeout=float(os.environ.get("ANTICIPY_BROWSE_TIMEOUT", "30"))
         )
         self.channel = ChannelStub()  # reaching the user (text/call); delivery stubbed for now
-        # Real hands register LAST so they own any intent a stub also claims.
-        for w in (self.channel, MemoryStub(), self.api_hand, self.browser_hand):
+        # Real workers register LAST so they own any intent a stub also claims; the real
+        # MemoryWorker takes over read_context + write_memory.
+        for w in (self.channel, self.api_hand, self.browser_hand, self.memory_worker):
             self.bus.register_worker(w)
 
         self.store = GoalStore(data_dir=base)
@@ -71,7 +79,7 @@ class ControlCore:
         alternates = {"post_to_x": "browse_task", "create_event": "browse_task", "message": "browse_task"}
         self.orchestrator = Orchestrator(
             self.bus, self.gateway, self.store, glassbox=self.glassbox, scorecard=self.scorecard,
-            alternates=alternates, approver=GatedApprover(True),
+            alternates=alternates, approver=GatedApprover(True), memory_context=self._mem_ctx,
         )
         self.proactive = ProactiveEngine(
             self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard
@@ -83,10 +91,16 @@ class ControlCore:
     async def stop(self) -> None:
         await self.bus.stop()
 
+    def _mem_ctx(self, about: str) -> dict:
+        """INJECT seam for the orchestrator's plan: relevant memory for `about`."""
+        inj = self.live_memory.inject(about)
+        return {"notes": inj["text"], "open_loops": [i.text for i in inj["open_loops"]]}
+
     async def feed(self, source: str, text: str, meta: dict | None = None) -> dict:
+        self.live_memory.capturer.capture(text, source=source)  # CAPTURE before anything acts
         ev = Event(source=EventSource(source), text=text, meta=meta or {})
         await self.bus.publish(ev)                 # log the event to the glass-box
-        return await self.proactive.on_event(ev)   # triage -> gate -> act/ask
+        return await self.proactive.on_event(ev)   # triage -> gate -> act/ask (gate reads memory)
 
     async def notify_user(self, text: str, recipient: str | None = None) -> dict:
         """Text the user — the 'ask' half of a wall handoff (pause -> ask -> resume).

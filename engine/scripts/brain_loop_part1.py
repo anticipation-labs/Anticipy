@@ -14,9 +14,11 @@ EVENT = "I'll send Sarah the Q3 deck on Friday and book us lunch."
 async def main() -> None:
     core = ControlCore()  # data dir from ANTICIPY_DATA_DIR
 
-    # (4) script a still-stub worker (write_memory -> memory_stub) to fail once,
-    # then succeed. (create_event is now handled by the real ApiHand, not a stub.)
-    core.bus.worker_for("write_memory").script("write_memory", FAIL, SUCCESS)
+    # NOTE: the plan's three intents are now all REAL workers (send_email +
+    # create_event -> ApiHand, write_memory -> the real MemoryWorker), so there is no
+    # scriptable stub left in the plan to inject a failure. Orchestrator retry/reroute
+    # is covered by test_orchestrator.py; here we prove the end-to-end pipeline and
+    # that the REAL memory worker executes a plan step with proof.
 
     await core.start()
     try:
@@ -32,9 +34,10 @@ async def main() -> None:
     intents = [s.intent for s in goal.steps]
     assert intents == ["send_email", "create_event", "write_memory"], intents
 
-    # (4) the scripted worker failed once and was retried to success
+    # (4) the REAL MemoryWorker handled the write_memory plan step on the frozen
+    # contract and returned proof (memory baked into the orchestrator's dispatch)
     wm = next(s for s in goal.steps if s.intent == "write_memory")
-    assert wm.attempts >= 2 and wm.state == StepState.done, wm
+    assert wm.state == StepState.done and wm.result and wm.result.proof.get("memory_id"), wm
 
     # (5) goal done, and NO step is done without proof
     assert goal.state == GoalState.done, goal.state

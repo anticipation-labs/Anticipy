@@ -91,12 +91,13 @@ class Capturer:
         n = _norm(text)
         return next((it for it in self.memory.drawer(kind).all() if _norm(it.text) == n), None)
 
-    def capture(self, text: str, source: str = "") -> Dict[str, object]:
-        """keep/drop -> classify -> dedupe -> write. Returns what happened + smart_calls."""
+    def capture(self, text: str, source: str = "", force: bool = False) -> Dict[str, object]:
+        """keep/drop -> classify -> dedupe -> write. Returns what happened + smart_calls.
+        force=True skips the gate (explicit write_memory writes are always kept)."""
         if self.mode == "live":
             # TODO(live): cheap-model gate+extraction via self.gateway; never hit in tests.
             pass
-        if not should_keep(text):
+        if not force and not should_keep(text):
             return {"kept": False, "reason": "noise", "smart_calls": 0}
         kind, fields = classify(text)
         dup = self._dup(text, kind)
