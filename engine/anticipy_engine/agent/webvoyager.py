@@ -345,6 +345,8 @@ async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] 
         "satisfy what the task asked for? Judge on correctness, not phrasing, and apply the SAME standard to every "
         "site. If the task itself instructed the agent to stop at a particular step, stopping there is success."
     )
-    raw = await gw.think(prompt, tier=SMART, caller="agent", image=image, json_mode=True)
+    # temperature=0 so identical (answer, screenshot) gets an identical verdict —
+    # the general judge must be deterministic, not flip on a re-grade.
+    raw = await gw.think(prompt, tier=SMART, caller="agent", image=image, json_mode=True, temperature=0)
     j = _parse_json(raw) or {}
     return {"success": bool(j.get("success")), "reason": j.get("reason", "")}
