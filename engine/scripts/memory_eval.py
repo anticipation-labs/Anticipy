@@ -244,11 +244,10 @@ def selftest() -> bool:
     r = [i.id for i in inj.inject("golden retriever Cooper dog")["items"]]
     check("plant fact -> recall_any@10 surfaces it", gid in set(r[:10]))
 
-    # 2) never-stored probe -> abstention fires (nothing clears the relevance floor)
-    probe = "what is my social security number"
-    nonloop = [i for i in inj.inject(probe)["items"] if i.kind != "open_loop"]
-    top_rel = max((_kw_relevance(probe, i) for i in nonloop), default=0.0)
-    check("never-stored probe -> abstain", top_rel < ABSTAIN_FLOOR)
+    # 2) the DERIVED semantic-confidence signal abstains on a never-stored probe but NOT on
+    #    a planted one (Memory Fix 2). Holds under BOTH stub and live (mode-aware floor).
+    check("never-stored probe -> abstain=True (semantic)", inj.inject("what is my social security number")["abstain"] is True)
+    check("planted-fact probe -> abstain=False (semantic)", inj.inject("golden retriever Cooper dog")["abstain"] is False)
 
     # 3) stale OldValue->NewValue -> current-value retrieval surfaces NEW, not superseded OLD
     lm2 = LiveMemoryBrain(Memory(data_dir=Path(tempfile.mkdtemp())))
@@ -482,19 +481,24 @@ def lme_recall(retrieved_ids, item_session, gold_sessions, k):
 def lme_deterministic(subset, scorecard=None) -> dict:
     recall = {f"recall_any@{k}": [] for k in KS}
     recall.update({f"recall_all@{k}": [] for k in KS})
-    by_type, cap_recalls, abst_pairs, calib_pairs = {}, [], [], []
+    by_type, cap_recalls = {}, []
+    abst_sem, abst_kw, calib_pairs = [], [], []     # semantic (Fix 2) vs keyword (the before)
+    floor_used = None
     for inst in subset:
         art = ingest_instance(inst)
         inj = Injector(art["lm"].memory, char_budget=10_000_000, k=50)
         out = inj.inject(inst["question"])                          # QUESTION only (anti-cheat)
         nonloop = [i for i in out["items"] if i.kind != "open_loop"]
         retrieved = [i.id for i in nonloop]                         # semantic ranking; loops excluded from recall@k
-        top_rel = max((_kw_relevance(inst["question"], i) for i in nonloop), default=0.0)
-        did_abstain = top_rel < ABSTAIN_FLOOR
+        floor_used = out["abstain_floor"]
+        sem_conf = out["top_relevance"]                             # DERIVED semantic confidence
+        kw_top = max((_kw_relevance(inst["question"], i) for i in nonloop), default=0.0)
+        did_abstain_sem = out["abstain"]                            # NEW signal (Memory Fix 2)
+        did_abstain_kw = kw_top < ABSTAIN_FLOOR                     # OLD keyword signal (the before)
         if is_abs(inst):
-            abst_pairs.append((True, did_abstain))
+            abst_sem.append((True, did_abstain_sem)); abst_kw.append((True, did_abstain_kw))
             continue
-        abst_pairs.append((False, did_abstain))
+        abst_sem.append((False, did_abstain_sem)); abst_kw.append((False, did_abstain_kw))
         if art["capture_recall"] is not None:
             cap_recalls.append(art["capture_recall"])
         a10 = 0.0
@@ -505,22 +509,72 @@ def lme_deterministic(subset, scorecard=None) -> dict:
             if k == 10:
                 a10 = a
                 by_type.setdefault(inst["question_type"], []).append(al)
-        calib_pairs.append((top_rel, a10))
+        calib_pairs.append((sem_conf, a10))                        # calibration on the SEMANTIC signal
         if scorecard is not None:
             scorecard.record_recall(inst["question"], bool(a10), len(retrieved), reason=inst["question_type"])
-    ab_recall, ab_over = abstention_metrics(abst_pairs)
+    ab_recall, ab_over = abstention_metrics(abst_sem)
+    ab_recall_kw, ab_over_kw = abstention_metrics(abst_kw)
     m = {k: (sum(v) / len(v) if v else 0.0) for k, v in recall.items()}
     for t, vals in by_type.items():
         m[f"recall_all@10::{t}"] = sum(vals) / len(vals)
     m["capture_recall"] = sum(cap_recalls) / len(cap_recalls) if cap_recalls else 0.0
-    m["abstention.recall"] = ab_recall
+    m["abstention.recall"] = ab_recall                  # semantic (Memory Fix 2)
     m["abstention.over_rate"] = ab_over
+    m["abstention.recall_kw"] = ab_recall_kw            # keyword (the before)
+    m["abstention.over_rate_kw"] = ab_over_kw
+    m["abstention.floor"] = floor_used if floor_used is not None else 0.0
     m["calibration.ece_eqwidth"] = ece_equiwidth(calib_pairs)
     m["calibration.ece_eqmass"] = ece_equimass(calib_pairs)
     m["calibration.brier"] = brier(calib_pairs)
     m["_n_answerable"] = len(cap_recalls)
-    m["_n_abs"] = sum(1 for s, _ in abst_pairs if s)
+    m["_n_abs"] = sum(1 for s, _ in abst_sem if s)
     return m
+
+
+def calibrate_abstain(n_ans=20, seed=999):
+    """Fit the semantic-abstain floor on a HELD-OUT slice DISJOINT from the seed-0 eval
+    subset, by Youden's J (max TPR-FPR over candidate thresholds). Never touches the eval
+    subset -> a principled threshold choice, NOT eval-set tuning. Prints floor + diagnostics.
+    Run under ANTICIPY_MEMORY_MODE=live for the real (bge-small) floor."""
+    data = load_lme()
+    eval_ids = {x["question_id"] for x in sample_subset(data, 50, 0)}     # EXCLUDE the eval subset
+    pool = [x for x in data if x["question_id"] not in eval_ids]
+    abs_cal = [x for x in pool if is_abs(x)]                              # all held-out _abs
+    ans_cal = sample_judged(pool, n_ans, seed)                           # stratified answerable
+    cal = abs_cal + ans_cal
+    pairs = []                                                           # (top_relevance, label): 1 = should abstain
+    for inst in cal:
+        art = ingest_instance(inst)
+        inj = Injector(art["lm"].memory, char_budget=10_000_000, k=50)
+        out = inj.inject(inst["question"])                               # QUESTION only (anti-cheat)
+        pairs.append((out["top_relevance"], 1 if is_abs(inst) else 0))
+    cands = sorted({r for r, _ in pairs})
+    best = None
+    for t in cands + [max(cands) + 1e-6]:                                # abstain iff top_relevance < t
+        tp = sum(1 for r, l in pairs if l == 1 and r < t)
+        fn = sum(1 for r, l in pairs if l == 1 and r >= t)
+        fp = sum(1 for r, l in pairs if l == 0 and r < t)
+        tn = sum(1 for r, l in pairs if l == 0 and r >= t)
+        tpr = tp / (tp + fn) if (tp + fn) else 0.0
+        fpr = fp / (fp + tn) if (fp + tn) else 0.0
+        j = tpr - fpr
+        if best is None or j > best["j"]:
+            best = {"floor": round(float(t), 4), "j": round(j, 4), "tpr": round(tpr, 3),
+                    "fpr": round(fpr, 3), "tp": tp, "fp": fp, "fn": fn, "tn": tn}
+    absr = [r for r, l in pairs if l == 1]
+    ansr = [r for r, l in pairs if l == 0]
+    print("=== ABSTAIN-FLOOR CALIBRATION (held-out; Youden's J) ===")
+    print(f"  mode = {os.environ.get('ANTICIPY_MEMORY_MODE', 'stub')}  (run under live for the real floor)")
+    print(f"  calibration set: {len(abs_cal)} _abs + {len(ans_cal)} answerable = {len(cal)}  "
+          f"(seed={seed}; DISJOINT from the seed-0 eval subset)")
+    if absr:
+        print(f"  _abs top_relevance: min={min(absr):.3f} mean={statistics.fmean(absr):.3f} max={max(absr):.3f}")
+    if ansr:
+        print(f"  ans  top_relevance: min={min(ansr):.3f} mean={statistics.fmean(ansr):.3f} max={max(ansr):.3f}")
+    print(f"  CHOSEN FLOOR = {best['floor']}  (Youden J={best['j']}; cal TPR={best['tpr']} FPR={best['fpr']}; "
+          f"tp={best['tp']} fp={best['fp']} fn={best['fn']} tn={best['tn']})")
+    print(f"  cal_ids = {[x['question_id'] for x in cal]}")
+    return best
 
 
 async def lme_judged(subset, repeats=3):
@@ -629,7 +683,8 @@ def print_lme_scorecard(agg, det):
     print("  recall_all@10 by question-type:")
     for key in sorted(k for k in agg if k.startswith("recall_all@10::")):
         print(f"    {key.split('::')[1]:<26} = {agg[key]['mean']:.3f}")
-    print(f"  ABSTENTION:  recall = {g('abstention.recall'):.3f}   over_abstention = {g('abstention.over_rate'):.3f}")
+    print(f"  ABSTENTION (semantic, Fix 2): recall = {g('abstention.recall'):.3f}  over_abstain = {g('abstention.over_rate'):.3f}  (floor={g('abstention.floor'):.3f})")
+    print(f"  ABSTENTION (keyword, before): recall = {g('abstention.recall_kw'):.3f}  over_abstain = {g('abstention.over_rate_kw'):.3f}")
     print(f"  CALIBRATION: ECE(eqwidth)={g('calibration.ece_eqwidth'):.3f}  ECE(eqmass)={g('calibration.ece_eqmass'):.3f}  Brier={g('calibration.brier'):.3f}")
 
 
@@ -709,6 +764,7 @@ def run_lme(args):
         "memory_mode": mode,
         "embed_model": (LIVE_MODEL_ID if live else "hash-stub"),
         "embed_dim": (embedding_dim() if live else 256),
+        "abstain_floor": det.get("abstention.floor"),
         "longmemeval_dataset_sha256": lme_dataset_sha(),
         "subset_ids": (None if args.full else [x["question_id"] for x in det_set]),
         "judged_sample_ids": [x["question_id"] for x in judge_pool],
@@ -741,6 +797,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--judge", action="store_true")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--calibrate-abstain", action="store_true", help="fit the abstain floor on a held-out slice (Youden's J); run under live")
     ap.add_argument("--out", default=".anticipy-data/memory_eval.json")
     ap.add_argument("--lme", action="store_true", help="run the LongMemEval external subset baseline")
     ap.add_argument("--full", action="store_true", help="LME deterministic core over ALL instances (full 500), not a subset")
@@ -752,6 +809,10 @@ def main():
     if args.selftest:
         print("=== SELF-TEST (instrument soundness; zero model calls) ===")
         sys.exit(0 if selftest() else 1)
+
+    if args.calibrate_abstain:
+        calibrate_abstain()
+        return
 
     if args.lme:
         run_lme(args)

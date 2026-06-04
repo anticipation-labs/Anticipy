@@ -25,6 +25,20 @@ def _toks(s: str) -> set:
 
 _FUZZY = ["profile_fact", "history", "derived"]
 
+# Memory Fix 2 — semantic-confidence abstention. Abstain ("i don't know") when the best
+# ACTIVE memory's cosine to the query falls below a calibrated floor. The signal is DERIVED
+# from the real embedder's distance, NOT a number the model reports about itself. Mode-aware:
+# bge-small (live) embeddings sit in a high-baseline cone (~0.5 even for unrelated text); the
+# hash stub is sparse (~0). The live floor is fit on a HELD-OUT slice (disjoint from the eval)
+# by Youden's J — never tuned to the eval set. Override per-run with ANTICIPY_ABSTAIN_FLOOR.
+# live=0.66 fit on a held-out 20 _abs + 20 answerable slice (seed 999): J=0.60, TPR=0.75,
+# FPR=0.15. stub=0.22 is a CI sanity value (deterministic test embedder), not calibrated.
+ABSTAIN_FLOOR = {"live": 0.66, "stub": 0.22}
+
+
+def abstain_floor(mode: str) -> float:
+    return float(os.environ.get("ANTICIPY_ABSTAIN_FLOOR", ABSTAIN_FLOOR.get(mode, ABSTAIN_FLOOR["stub"])))
+
 
 class Injector:
     def __init__(self, memory: Memory, gateway=None, char_budget: int = 2000,
@@ -67,6 +81,12 @@ class Injector:
         scored.sort(key=lambda x: -x[0])
         ranked = [it for _, it in scored[:k]]
 
+        # semantic confidence (Memory Fix 2): how well the BEST active memory matches the
+        # query. Below the calibrated floor -> abstain instead of fabricating an answer.
+        top_relevance = max((cos.get(it.id, 0.0) for it in cands), default=0.0)
+        floor = abstain_floor(self.mode)
+        abstain = top_relevance < floor
+
         ambiguous = len(scored) >= 2 and abs(scored[0][0] - scored[1][0]) < 0.05 and scored[0][0] < 0.4
         if self.mode == "live" and ambiguous and self.gateway:
             pass  # TODO(live): escalate to a smart model to disambiguate; never in tests
@@ -91,6 +111,9 @@ class Injector:
             "items": items,
             "text": "\n".join(parts),
             "ambiguous": ambiguous,
+            "top_relevance": top_relevance,   # derived semantic confidence (Memory Fix 2)
+            "abstain": abstain,               # True -> "i don't know" (don't fabricate)
+            "abstain_floor": floor,
             "smart_calls": 0,
             "stub": False,
         }
