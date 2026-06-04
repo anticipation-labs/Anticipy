@@ -16,6 +16,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
+from ..proactive.triage import Triage
 from .bus import Bus
 from .envelopes import Event, Goal, Job
 from .gateway import SMART, ModelGateway
@@ -52,6 +53,7 @@ class ProactiveEngine:
         self.glassbox = glassbox
         self.scorecard = scorecard
         self.config = config or GateConfig()
+        self.triage = Triage(gateway=gateway)   # Room 1: the bouncer (cheap, first, free in stub)
 
     async def on_event(self, event: Event) -> dict:
         # 1) triage — cheap, local, no smart model; most events die here
@@ -78,8 +80,7 @@ class ProactiveEngine:
 
     # ---- steps ----
     def _triage(self, event: Event) -> bool:
-        text = event.text.lower()
-        return any(cue in text for cue in self.config.actionable_cues)
+        return self.triage.actionable(event.text)   # Room 1: high-recall bouncer, zero smart calls in stub
 
     def _gate_prompt(self, event: Event, context: dict) -> str:
         return f"Decide how to handle this event given context.\nEVENT: {event.text}\nCONTEXT: {context}"
