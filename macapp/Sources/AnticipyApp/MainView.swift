@@ -33,8 +33,50 @@ final class FeedModel: ObservableObject {
     }
 }
 
+// ---- Room 6: the "needs you" surface — pending detrimental actions awaiting approve/deny ----
+struct PendingItem: Decodable, Identifiable {
+    let ask_id: String
+    let action: String
+    let reason: String
+    let category: String
+    var id: String { ask_id }
+}
+
+private struct PendingResponse: Decodable { let pending: [PendingItem] }
+
+@MainActor
+final class PendingModel: ObservableObject {
+    @Published var items: [PendingItem] = []
+    private let base = "http://127.0.0.1:8787"
+
+    func refresh() {
+        Task {
+            guard let url = URL(string: base + "/pending") else { return }
+            if let (data, _) = try? await URLSession.shared.data(from: url),
+               let decoded = try? JSONDecoder().decode(PendingResponse.self, from: data) {
+                self.items = decoded.pending
+            }
+        }
+    }
+
+    /// The app tap that resolves the REAL paused goal (mirrors the text/call round-trip).
+    func resolve(_ askId: String, approved: Bool) {
+        Task {
+            guard let url = URL(string: base + "/resolve") else { return }
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(withJSONObject: ["ask_id": askId, "approved": approved])
+            _ = try? await URLSession.shared.data(for: req)
+            self.items.removeAll { $0.ask_id == askId }   // optimistic; the glass-box feed confirms
+            self.refresh()
+        }
+    }
+}
+
 struct MainView: View {
     @StateObject private var feed = FeedModel()
+    @StateObject private var pending = PendingModel()
     private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -51,6 +93,8 @@ struct MainView: View {
                 Spacer()
                 RecordControls()
             }
+
+            if !pending.items.isEmpty { NeedsYou(model: pending) }
 
             Card(elevated: true) {
                 if feed.entries.isEmpty {
@@ -71,8 +115,8 @@ struct MainView: View {
         .padding(DS.s4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(DS.bg)
-        .onAppear { feed.refresh() }
-        .onReceive(timer) { _ in feed.refresh() }
+        .onAppear { feed.refresh(); pending.refresh() }
+        .onReceive(timer) { _ in feed.refresh(); pending.refresh() }
     }
 }
 
@@ -122,6 +166,45 @@ private struct EmptyFeed: View {
                 .multilineTextAlignment(.center).lineSpacing(4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity).padding(DS.s4)
+    }
+}
+
+private struct NeedsYou: View {
+    @ObservedObject var model: PendingModel
+    var body: some View {
+        Card(elevated: true) {
+            VStack(alignment: .leading, spacing: DS.s2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.raised.fill").font(.system(size: 13)).foregroundColor(DS.accent)
+                    Text("Needs you").font(DS.title()).foregroundColor(DS.textPrimary)
+                    Spacer()
+                    Text("\(model.items.count)").font(DS.secondary()).foregroundColor(DS.textSecondary)
+                }
+                ForEach(model.items) { item in
+                    VStack(alignment: .leading, spacing: DS.s1) {
+                        Text(item.action).font(DS.body(.medium)).foregroundColor(DS.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(item.reason).font(DS.secondary()).foregroundColor(DS.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: DS.s1) {
+                            Button { model.resolve(item.ask_id, approved: true) } label: {
+                                Text("Approve").font(DS.body(.medium)).foregroundColor(DS.bg)
+                                    .padding(.horizontal, DS.s3).padding(.vertical, DS.s1 + 4)
+                                    .background(DS.accent)
+                                    .clipShape(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous))
+                            }.buttonStyle(.plain)
+                            Button { model.resolve(item.ask_id, approved: false) } label: {
+                                Text("Skip").font(DS.body(.medium)).foregroundColor(DS.textSecondary)
+                                    .padding(.horizontal, DS.s3).padding(.vertical, DS.s1 + 4)
+                                    .overlay(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous).stroke(DS.hairline))
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, DS.s1)
+                    .overlay(Rectangle().fill(DS.hairline).frame(height: 1), alignment: .bottom)
+                }
+            }
+        }
     }
 }
 

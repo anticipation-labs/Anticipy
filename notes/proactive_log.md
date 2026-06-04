@@ -118,3 +118,18 @@ fast-forwarded into **local** main (no push). Skeleton being made real:
 - **DECISIONS-ONLY-OMAR:** the cap NUMBER is a taste call — built configurable (`max_per_day`),
   defaulted to 5 (top of the research 3–5/day ceiling), adherence measured, value left to Omar.
 - Commit/main hash: see Commit stack (bottom).
+
+### Room 6 — Frontend Wiring (everything works from the download) ✅
+- **Built (backend):** `ControlCore.pending_asks()` (the "needs you" list) + `ControlCore.resolve
+  (ask_id, approved)` → the engine's `resolve_ask` (same round-trip as the SMS reply). Exposed
+  over HTTP: `GET /pending`, `POST /resolve` (next to the existing `GET /glassbox`).
+- **Built (app):** `MainView.swift` gains a **"Needs you"** Card (polls `/pending` every 2s;
+  Approve/Skip buttons POST `/resolve` to resolve the REAL paused goal) above the existing live
+  glass-box feed — in the existing dark / SF-Pro / champagne design system.
+- **Test** (`test_frontend_api.py`, deterministic ControlCore): detrimental → PAUSED + appears
+  in `pending_asks()`; approve → the exact paused goal RESUMES to done + clears from the surface;
+  deny → goal dropped + decline written; glass-box carries the full trail. **The SwiftUI app
+  BUILDS** — `bash macapp/scripts/build_app.sh` → `macapp/dist/Anticipy.app` (Build complete; the
+  CLT modulemap fix was in place, no toolchain wall).
+- **Suite after:** 27/27 GREEN.
+- Commit/main hash: see Commit stack (bottom).

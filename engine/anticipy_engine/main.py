@@ -68,6 +68,11 @@ class EventIn(BaseModel):
     source: str = "app"
 
 
+class ResolveIn(BaseModel):
+    ask_id: str
+    approved: bool
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": ENGINE_NAME, "version": __version__}
@@ -102,6 +107,18 @@ async def event(body: EventIn) -> dict:
 @app.get("/glassbox")
 def glassbox(limit: int = 50) -> dict:
     return {"entries": core.glassbox.summaries(limit)}
+
+
+@app.get("/pending")
+def pending() -> dict:
+    """Room 6: the 'needs you' surface — detrimental actions paused awaiting approve/deny."""
+    return {"pending": core.pending_asks()}
+
+
+@app.post("/resolve")
+async def resolve(body: ResolveIn) -> dict:
+    """Room 6: the app's approve/deny -> resolves the REAL paused goal (brain -> app -> back)."""
+    return await core.resolve(body.ask_id, body.approved)
 
 
 @app.get("/scorecard")

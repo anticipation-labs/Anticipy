@@ -119,3 +119,14 @@ class ControlCore:
 
     async def resume(self) -> list:
         return await self.orchestrator.resume_waiting()
+
+    # ---- Room 6: the "needs you" surface (decisions flow brain -> app -> back) ----
+    def pending_asks(self) -> list:
+        """Detrimental actions paused awaiting the user's yes/no — what the app surfaces."""
+        return [{"ask_id": aid, "action": p["action"], "reason": p["reason"],
+                 "category": p.get("category", ""), "goal_id": p["goal_id"]}
+                for aid, p in self.proactive.pending.items()]
+
+    async def resolve(self, ask_id: str, approved: bool) -> dict:
+        """The app's approve/deny -> resolves the REAL paused goal (mirrors the text/call round-trip)."""
+        return await self.proactive.resolve_ask(ask_id, approved)
