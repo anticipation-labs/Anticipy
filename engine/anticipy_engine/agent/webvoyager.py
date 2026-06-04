@@ -161,7 +161,12 @@ class WebVoyagerAgent:
         return out, shot
 
     async def _act(self, action: dict):
-        return await self.link.send_browse(new_id(), "act", action, timeout=60.0)
+        # An act that hangs/times out must NOT crash the run. Fail fast (20s); the
+        # next observe shows no change and the anti-loop guard recovers or hands off.
+        try:
+            return await self.link.send_browse(new_id(), "act", action, timeout=20.0)
+        except Exception:
+            return {"status": "error"}
 
     async def _plan(self, task: str) -> List[str]:
         raw = await self.gw.think(PLAN_SYS + f"\n\nTASK: {task}", tier=SMART, caller="agent",

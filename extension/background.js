@@ -132,9 +132,19 @@ async function ensureDebugger(tabId) {
   }
 }
 function cdp(tabId, method, params) {
-  return new Promise((res, rej) =>
-    chrome.debugger.sendCommand({ tabId }, method, params || {}, (r) =>
-      chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res(r)));
+  // Internal timeout: if the debugger silently detached, sendCommand's callback can
+  // never fire and the click would hang forever. Fail fast (12s) and drop the
+  // attachment so the next call re-attaches a fresh debugger.
+  return new Promise((res, rej) => {
+    let done = false;
+    const to = setTimeout(() => { if (!done) { done = true; attachedTab = null; rej(new Error("cdp timeout: " + method)); } }, 12000);
+    chrome.debugger.sendCommand({ tabId }, method, params || {}, (r) => {
+      if (done) return;
+      done = true; clearTimeout(to);
+      if (chrome.runtime.lastError) { attachedTab = null; rej(new Error(chrome.runtime.lastError.message)); }
+      else res(r);
+    });
+  });
 }
 async function cdpClick(tabId, x, y) {
   await cdp(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
@@ -163,6 +173,7 @@ async function cdpScreenshot(tabId) {
   return null;
 }
 chrome.tabs.onRemoved.addListener((id) => { if (id === attachedTab) attachedTab = null; });
+chrome.debugger.onDetach.addListener((src) => { if (src && src.tabId === attachedTab) attachedTab = null; });
 
 // --- wait for the page to settle (readyState complete + brief idle) ---
 async function settle(tabId, maxMs = 6000) {
