@@ -12,6 +12,7 @@ from typing import Dict, List
 from ..memory.store import Memory
 from ..shared.schema import CaptureEvent
 from .capture import Capturer
+from .infer import Inferrer
 from .inject import Injector
 from .maintain import Maintainer
 
@@ -22,6 +23,11 @@ class LiveMemoryBrain:
         self.capturer = Capturer(memory, gateway=gateway)
         self.injector = Injector(memory, gateway=gateway)
         self.maintainer = Maintainer(memory, gateway=gateway)
+        self.inferrer = Inferrer(memory, gateway=gateway)
+
+    def infer(self) -> Dict[str, object]:
+        """Derive routines/recurring-people as DERIVED facts (never promoted)."""
+        return self.inferrer.infer()
 
     def inject(self, context: str = "", k=None) -> Dict[str, object]:
         """REAL hybrid retrieval (semantic+keyword+recency+importance), budgeted,
