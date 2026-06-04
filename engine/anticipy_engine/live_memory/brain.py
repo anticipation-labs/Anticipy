@@ -11,14 +11,16 @@ from typing import Dict, List
 
 from ..memory.store import Memory
 from ..shared.schema import CaptureEvent, MemoryItem
+from .capture import Capturer
 
 
 class LiveMemoryBrain:
-    def __init__(self, memory: Memory) -> None:
+    def __init__(self, memory: Memory, gateway=None) -> None:
         self.memory = memory
+        self.capturer = Capturer(memory, gateway=gateway)
 
     def inject(self, context: str = "") -> Dict[str, object]:
-        """Stub: real relevance selection lands next chunk. Returns shape only."""
+        """Stub: real relevance selection lands in piece 3. Returns shape only."""
         empty: List[MemoryItem] = []
         return {
             "context": context,
@@ -28,9 +30,10 @@ class LiveMemoryBrain:
             "stub": True,
         }
 
-    def capture(self, event: CaptureEvent) -> MemoryItem:
-        """Fold a capture event into the history store (shared data language)."""
-        return self.memory.history.write_text(event.text, people=[])
+    def capture(self, event: CaptureEvent) -> Dict[str, object]:
+        """REAL capture: keep/drop gate -> classify -> dedupe -> route to a drawer.
+        Returns {kept, kind, item, reason, smart_calls}."""
+        return self.capturer.capture(event.text, source=getattr(event, "source", ""))
 
     def maintain(self) -> Dict[str, object]:
         """Stub: housekeeping does nothing yet (ran=False marks it a stub)."""
