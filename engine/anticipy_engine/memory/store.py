@@ -83,17 +83,21 @@ class MemoryDB:
             self.conn.execute("DELETE FROM items WHERE kind=?", (kind,))
         self.conn.commit()
 
-    def vector_rank(self, query_vec: List[float], kinds: List[str], k: int) -> List[MemoryItem]:
+    def scored(self, query_vec: List[float], kinds: List[str]):
+        """(id, cosine) for every embedded item in the given kinds, best first."""
         if not kinds:
             return []
         q = "SELECT id, embedding FROM items WHERE kind IN (%s)" % ",".join("?" * len(kinds))
-        scored = []
+        out = []
         for r in self.conn.execute(q, tuple(kinds)):
             emb = json.loads(r["embedding"] or "[]")
             if emb:
-                scored.append((r["id"], cosine(query_vec, emb)))
-        scored.sort(key=lambda x: -x[1])
-        return [self.get(i) for i, _ in scored[:k]]
+                out.append((r["id"], cosine(query_vec, emb)))
+        out.sort(key=lambda x: -x[1])
+        return out
+
+    def vector_rank(self, query_vec: List[float], kinds: List[str], k: int) -> List[MemoryItem]:
+        return [self.get(i) for i, _ in self.scored(query_vec, kinds)[:k]]
 
 
 class MemoryStore:

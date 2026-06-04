@@ -10,25 +10,21 @@ from __future__ import annotations
 from typing import Dict, List
 
 from ..memory.store import Memory
-from ..shared.schema import CaptureEvent, MemoryItem
+from ..shared.schema import CaptureEvent
 from .capture import Capturer
+from .inject import Injector
 
 
 class LiveMemoryBrain:
     def __init__(self, memory: Memory, gateway=None) -> None:
         self.memory = memory
         self.capturer = Capturer(memory, gateway=gateway)
+        self.injector = Injector(memory, gateway=gateway)
 
-    def inject(self, context: str = "") -> Dict[str, object]:
-        """Stub: real relevance selection lands in piece 3. Returns shape only."""
-        empty: List[MemoryItem] = []
-        return {
-            "context": context,
-            "profile": empty,
-            "open_loops": empty,
-            "history": empty,
-            "stub": True,
-        }
+    def inject(self, context: str = "", k=None) -> Dict[str, object]:
+        """REAL hybrid retrieval (semantic+keyword+recency+importance), budgeted,
+        with ALL open/waiting loops always surfaced."""
+        return self.injector.inject(context, k=k)
 
     def capture(self, event: CaptureEvent) -> Dict[str, object]:
         """REAL capture: keep/drop gate -> classify -> dedupe -> route to a drawer.

@@ -1,0 +1,93 @@
+"""INJECT — the hot read path: hybrid retrieval -> rank -> dedupe -> budget.
+
+For a moment's context query, combine four signals over the fuzzy drawers
+(profile/history/derived): semantic (embeddings) + structured/keyword (incl.
+people + fields) + recency + importance. Rank, dedupe, fit a char budget. The
+open_loops ledger is NOT retrieval-dependent — ALL open/waiting loops are ALWAYS
+surfaced (never drop a ball). Escalate to a smart model only when genuinely
+ambiguous (seam; never fires in stub mode -> free).
+"""
+from __future__ import annotations
+
+import os
+import re
+from typing import Dict, List, Optional
+
+from ..memory.embed import embed
+from ..memory.store import Memory
+from ..shared.schema import MemoryItem, now_ts
+
+_TOK = re.compile(r"[a-z0-9]+")
+
+
+def _toks(s: str) -> set:
+    return set(_TOK.findall((s or "").lower()))
+
+_FUZZY = ["profile_fact", "history", "derived"]
+
+
+class Injector:
+    def __init__(self, memory: Memory, gateway=None, char_budget: int = 2000,
+                 k: int = 12, mode: Optional[str] = None) -> None:
+        self.memory = memory
+        self.gateway = gateway
+        self.char_budget = char_budget
+        self.k = k
+        self.mode = mode or os.environ.get("ANTICIPY_MEMORY_MODE", "stub")
+
+    def _kw(self, qtok: set, item: MemoryItem) -> float:
+        if not qtok:
+            return 0.0
+        hay = _toks(item.text) | _toks(" ".join(item.people)) | _toks(" ".join(str(v) for v in item.fields.values()))
+        return len(qtok & hay) / len(qtok)
+
+    def inject(self, context: str = "", k: Optional[int] = None) -> Dict[str, object]:
+        k = k or self.k
+        qv = embed(context)
+        qtok = _toks(context)
+
+        # the deterministic ledger: ALL open/waiting loops, always (importance, recent first)
+        loops = [i for i in self.memory.open_loops.all() if i.status in ("open", "waiting")]
+        loops.sort(key=lambda i: (-i.importance, -i.timestamp))
+
+        cos = dict(self.memory.db.scored(qv, _FUZZY))   # id -> cosine (stored embeddings)
+        cands = self.memory.profile.all() + self.memory.history.all() + self.memory.derived.all()
+        now = now_ts()
+        scored = []
+        for it in cands:
+            sem = cos.get(it.id, 0.0)
+            kw = self._kw(qtok, it)
+            rec = 1.0 / (1.0 + max(0.0, (now - it.timestamp)) / 86400.0)
+            score = 0.55 * sem + 0.30 * kw + 0.10 * rec + 0.05 * it.importance
+            if score > 0:
+                scored.append((score, it))
+        scored.sort(key=lambda x: -x[0])
+        ranked = [it for _, it in scored[:k]]
+
+        ambiguous = len(scored) >= 2 and abs(scored[0][0] - scored[1][0]) < 0.05 and scored[0][0] < 0.4
+        if self.mode == "live" and ambiguous and self.gateway:
+            pass  # TODO(live): escalate to a smart model to disambiguate; never in tests
+
+        # assemble within the char budget: loops first (the spine), then ranked items
+        items: List[MemoryItem] = []
+        parts: List[str] = []
+        used = 0
+        for it in loops + ranked:
+            line = f"[{it.kind}] {it.text}"
+            if used + len(line) + 1 <= self.char_budget:
+                items.append(it)
+                parts.append(line)
+                used += len(line) + 1
+
+        return {
+            "context": context,
+            "open_loops": loops,                                       # ALWAYS all open/waiting
+            "profile": [i for i in ranked if i.kind == "profile_fact"],
+            "history": [i for i in ranked if i.kind == "history"],
+            "derived": [i for i in ranked if i.kind == "derived"],
+            "items": items,
+            "text": "\n".join(parts),
+            "ambiguous": ambiguous,
+            "smart_calls": 0,
+            "stub": False,
+        }
