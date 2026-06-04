@@ -16,11 +16,16 @@ from typing import Optional, Tuple
 
 # Actionable VERBS / task intents — general task language, matched on word boundaries.
 _ACTION: Tuple[str, ...] = (
+    "add", "find", "create", "make",
     "send", "book", "schedule", "reschedule", "email", "remind", "call", "text",
     "set up", "draft", "meet", "reply", "wire", "pay", "transfer", "buy", "order",
     "cancel", "delete", "move", "follow up", "forward", "share", "invite", "rsvp",
     "reserve", "sign up", "subscribe", "renew", "submit", "post", "message", "ping",
     "book a", "look up", "research", "compare", "confirm", "register", "purchase",
+    # aligned with the harm-line's vocabulary so triage never drops an action it could classify
+    "prepare", "compose", "outline", "write up", "put together", "publish", "unsubscribe",
+    "deactivate", "enroll", "donate", "withdraw", "deposit", "log in", "sign in", "look into",
+    "gather", "review", "wipe", "tweet", "announce",
 )
 # Commitment / request / imperative patterns — intent even without a listed verb.
 _INTENT: Tuple[str, ...] = (

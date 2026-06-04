@@ -23,6 +23,7 @@ for t in bus workers gateway orchestrator proactive triage harmline trigger ask_
 done
 
 run memory_eval_selftest "$PY" "$REPO/engine/scripts/memory_eval.py" --selftest  # instrument soundness (zero model calls)
+run proactive_eval_selftest "$PY" "$REPO/engine/scripts/proactive_eval.py" --selftest  # proactive report-card instrument (zero model calls)
 
 echo "== integration (boot engine/extension; free/stub) =="
 run brain_loop      bash "$REPO/scripts/brain_loop.sh"
