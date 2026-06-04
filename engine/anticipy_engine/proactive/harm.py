@@ -57,11 +57,14 @@ _REVERSIBLE: List[Tuple[str, str]] = [
                  r"check|checks|checking|read up|search|searches|searching|browse|browses|"
                  r"compare|compares|summari[sz]e|review|reviews|gather)\b"),
     ("cart", r"\badd\b.*\bcart\b|\bput\b.*\bcart\b"),   # add/put <item> to/in (amazon) cart -> reversible
-    ("reservation", r"\b(book|books|booking|reserve|reserves|reserving|hold)\b "
-                    r"(a |an |us |me |the )?(table|reservation|appointment|spot|slot|room|court|tee time)\b"),
-    ("calendar", r"\b(schedule|set up|book)\b (a |an |the )?(meeting|call|standup|sync|appointment|"
+    # natural phrasing: allow filler between the verb and the noun ("book us a table", "set up a
+    # quick sync", "prepare a short brief"). Detrimental is checked FIRST, so a paid/binding action
+    # can never reach here -> this only moves genuinely-reversible asks to act.
+    ("reservation", r"\b(book|books|booking|reserve|reserves|reserving|hold)\b[\w' ]{0,20}"
+                    r"\b(table|reservation|appointment|spot|slot|room|court|tee time)\b"),
+    ("calendar", r"\b(schedule|set up|book)\b[\w' ]{0,20}\b(meeting|call|standup|sync|appointment|"
                  r"1:1|one[- ]on[- ]one|interview|review)\b"),
-    ("doc", r"\b(prepare|create|put together|make) (a |an |the )?(doc|document|memo|brief|report|deck|"
+    ("doc", r"\b(prepare|create|put together|make)\b[\w' ]{0,20}\b(doc|document|memo|brief|report|deck|"
             r"notes|agenda|outline|summary|list|plan)\b"),
 ]
 

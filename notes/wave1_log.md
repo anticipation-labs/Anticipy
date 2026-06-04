@@ -58,3 +58,55 @@ a real model; the real-HANDS number is gated on Omar's setup.
 
   Remaining death (det + live) = 1 × HARMLINE_OVERASK_STALL → Killer 3.
 - **Commit:** see Commit stack (bottom).
+
+## KILLER 3 — HARMLINE_OVERASK_STALL ✅
+- **Root cause:** over-rigid reversible patterns. "book us a table" has TWO articles ("us a"),
+  but the reservation pattern allowed only ONE before the noun → no match → unclassified →
+  fail-safe ask → the journey stalled instead of completing.
+- **Fix (general):** loosen the reversible patterns (reservation / calendar / doc) to allow
+  filler words between the verb and the noun (`book [..] table`, `set up [..] sync`, `prepare
+  [..] brief`). HARD CONSTRAINT honored: detrimental is checked FIRST, so a paid/binding action
+  can never reach the reversible branch — the loosening only moves genuinely-reversible asks to
+  act, never a detrimental one.
+- **Measured (whole house) + the HARD safety gate:**
+
+  | metric | before | after |
+  |---|---:|---:|
+  | deterministic completion | 0.976 | **1.000** |
+  | deterministic DIED-WHERE | OVERASK=1 | **none** |
+  | live completion (real-model + stub exec) | 9/10 | **10/10** |
+  | live DIED-WHERE | OVERASK=1 | **none** |
+  | Room 2 battery detrimental recall | 1.000 | **1.000** (gate held — no detrimental flipped to act) |
+  | Room 2 battery over-ask | 0 | 0 |
+  | SILENT_HARM (det + live) | 0 | **0** |
+  | full suite | 29/29 | 29/29 |
+- **Commit:** see Commit stack (bottom).
+
+---
+
+## Commit stack (wave1/fixes → ff'd into LOCAL main, no push)
+```
+  Killer 1  robust plan-parse (PLAN_BAD)        f615ec2
+  Killer 2  triage colloquial speech (TRIAGE)    1d3a9f1
+  Killer 3  loosen reversible patterns (OVERASK) (this commit)
+```
+Final journey_eval: deterministic completion **1.000** (0 deaths), live slice (real-model
+planning + stub execution) **10/10**, SILENT_HARM **0** throughout. Full suite 29/29 green.
+
+## REAL-HANDS SETUP — the one-time human step Omar runs next (NOT a code fix)
+The live slice above measures the **real MODEL** (planning) with **stub hands**. To measure a
+true **real-HANDS** completion number, Omar does this one-time setup, then we point the live
+tier at the real hands (`ControlCore`) instead of the stub driver:
+1. **Start the engine** (hosts the browser-hand WS): 
+   `engine/.venv/bin/python -m uvicorn --app-dir engine anticipy_engine.main:app --port 8787`
+2. **Browser hand** — load the MV3 extension unpacked in Chrome: chrome://extensions → Developer
+   mode → Load unpacked → select `extension/`; then `rsync -a extension/ <each desktop copy>/`
+   and `curl -XPOST 127.0.0.1:8787/ws/reload` (the desktop-copy gotcha from the browser work).
+   Confirm `GET /ws/state` shows connected.
+3. **API hand (Arcade)** — set `ARCADE_API_KEY` + `ARCADE_USER_ID` (your signed-in Arcade.dev
+   account) and `ANTICIPY_HANDS_MODE=live` in `.env.local`; run `engine/scripts/live_gmail_send.py`
+   once and approve the Arcade OAuth connect-URL in the browser (Gmail/Calendar).
+4. **Real model** — `OPENROUTER_API_KEY` is already set; the live tier uses the OpenRouter gateway.
+Once 1–4 are done, a real-HANDS journey run is a one-line harness switch (live tier → `ControlCore`
+real hands) — that's the next wave's first measurement, NOT this wave. Do not fake it; do not
+auto-authenticate past any wall (the harm-line + wall-handoff stay in force).
