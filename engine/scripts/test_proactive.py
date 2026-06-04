@@ -1,4 +1,10 @@
-"""Piece 5 test: proactive skeleton — triage, gate, hand-off, record.
+"""Proactive engine test — ACT-FIRST (Room 1 triage + Room 2 harm-line).
+
+The engine acts by default and stops to ask ONLY before something detrimental:
+  A) clearly-safe/reversible actionable event -> ACT (goal created + run to done)
+  B) ambient noise                            -> triaged out -> ignore (zero smart calls)
+  C) detrimental event (spend money)          -> ASK (no goal; raised to human) [hard sub-gate]
+The harm-line is deterministic (no smart call); only the orchestrator's plan uses smart.
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_proactive.py
 """
@@ -48,22 +54,22 @@ def make():
 
 
 async def main():
-    # A) actionable event -> gate decides do_and_notify -> goal created and run to done
+    # A) clearly-safe/reversible actionable event -> ACT -> goal created and run to done
     tmp, bus, gw, glass, score, orch, pro = make()
     await bus.start()
     try:
         out = await pro.on_event(Event(source=EventSource.mac_mic,
-                                       text="I'll send Sarah the Q3 deck on Friday and book us lunch."))
+                                       text="Look up flight options to Lisbon and put together a trip outline."))
     finally:
         await bus.stop()
-    assert out["decision"] == "do_and_notify" and out["goal_id"]
+    assert out["decision"] == "act" and out["goal_id"], f"expected act+goal, got {out}"
+    assert not out["detrimental"]
     assert orch.store.load(out["goal_id"]).state == GoalState.done
-    assert len(gw.smart_calls) == 2  # gate + plan
-    assert "do_and_notify" in score.decisions
-    assert any(k == "decision" for k, _ in glass.entries)
-    print("  A actionable: decision=do_and_notify, goal done, smart calls =", len(gw.smart_calls))
+    assert len(gw.smart_calls) == 1, f"harm-line is deterministic; only plan is smart, got {len(gw.smart_calls)}"
+    assert "act" in score.decisions
+    print(f"  A safe: decision=act ({out['category']}), goal done, smart calls = {len(gw.smart_calls)}")
 
-    # B) nothing event -> triaged out -> ignore, no goal, no smart call
+    # B) ambient noise -> triaged out -> ignore, no goal, no smart call
     tmp, bus, gw, glass, score, orch, pro = make()
     await bus.start()
     try:
@@ -72,20 +78,22 @@ async def main():
         await bus.stop()
     assert out["decision"] == "ignore" and out["goal_id"] is None
     assert len(gw.smart_calls) == 0  # triage is free; no smart model touched
-    print("  B nothing: triaged out -> ignore; smart calls =", len(gw.smart_calls))
+    print("  B noise: triaged out -> ignore; smart calls =", len(gw.smart_calls))
 
-    # C) risky event -> gate says ask_first -> raised to human, no goal
+    # C) detrimental (spend money) -> ASK -> raised to human, NO goal (hard sub-gate: no silent harm)
     tmp, bus, gw, glass, score, orch, pro = make()
     await bus.start()
     try:
         out = await pro.on_event(Event(source=EventSource.mac_mic, text="Wire money to the contractor."))
     finally:
         await bus.stop()
-    assert out["decision"] == "ask_first" and out["goal_id"] is None
+    assert out["decision"] == "ask" and out["goal_id"] is None, f"detrimental must not create a goal, got {out}"
+    assert out["detrimental"] and out["category"] == "money"
     assert any(k == "ask_human" for k, _ in glass.entries)
-    print("  C risky: decision=ask_first, raised to human, no goal")
+    assert len(gw.smart_calls) == 0  # no goal -> no plan; harm-line deterministic
+    print(f"  C detrimental: decision=ask ({out['category']}), NO goal, raised to human")
 
-    print("PASS piece 5: proactive engine skeleton (triage / gate / hand-off / record)")
+    print("PASS proactive: act-first engine (triage / harm-line / act-or-ask / record)")
 
 
 if __name__ == "__main__":

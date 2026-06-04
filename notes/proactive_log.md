@@ -46,3 +46,25 @@ fast-forwarded into **local** main (no push). Skeleton being made real:
   = 1.000**, **smart-model calls = 0** (cost spine).
 - **Suite after:** 22/22 GREEN (21 + triage; `test_proactive` unchanged).
 - Commit/main hash: see Commit stack (bottom).
+
+### Room 2 — The Harm-Line (act-first, ask-only-before-harm) ✅
+- **Built:** `proactive/harm.py::HarmLine` — ONE deterministic, inspectable policy (enforcement
+  close to the action, per current guidance). DETRIMENTAL (ask), checked first + override:
+  money, destroy, post-public, binding-send, sign-up, auth-wall. REVERSIBLE (act): research,
+  draft (NOT send), add-to-cart, reminder/calendar-hold, reserve, prepare-doc. Handles
+  draft-vs-send ("draft a reply" acts; "reply to X" asks) and reminder-frame ("remind me to
+  email X" acts — the future action is re-gated when it fires, Room 3). Gray middle = memory:
+  a send fails safe to ASK unless memory is HIGH-confidence the recipient is casual;
+  low-confidence/abstain → `memory_forced` ASK, counted + logged (Deferred-2).
+- **Rewired** `ProactiveEngine.on_event` act-first: triage → read_context → harm-line → act
+  (start_goal) | ask (raise). HARD assert in code: a detrimental verdict NEVER creates a goal.
+  `read_context` output enriched additively (+top_relevance, +abstain) for the gray middle
+  (frozen worker CONTRACT untouched — method sig + proof unchanged).
+- **Test** (`test_harmline.py`, 50 labeled actions): **DETRIMENTAL recall 27/27 = 1.000**
+  (HARD SUB-GATE — no silent harm), **safe act-rate 23/23 = 1.000** (act-first, no over-ask),
+  act-precision 1.000, **memory-forced asks = 5** (the binding sends — the Deferred-2 count
+  that measures how badly we need the stronger confidence signal). `test_proactive` rewired to
+  act-first; 3 downstream tests (glassbox / brain_loop / hands_loop) moved off the old
+  "do_and_notify" to act-first safe events — orchestrator/hands logic untouched.
+- **Suite after:** 23/23 GREEN (added harmline).
+- Commit/main hash: see Commit stack (bottom).

@@ -34,17 +34,17 @@ async def test_control_core():
     core = ControlCore(data_dir=tmp)
     await core.start()
     try:
-        out = await core.feed("mac_mic", "I'll send Sarah the Q3 deck on Friday and book us lunch.")
+        out = await core.feed("mac_mic", "Draft the Q3 deck and remind me to follow up on Friday.")
     finally:
         await core.stop()
-    assert out["decision"] == "do_and_notify" and out["goal_id"]
+    assert out["decision"] == "act" and out["goal_id"]   # act-first: safe/reversible -> just do it
 
     kinds = {e["kind"] for e in core.glassbox.entries()}
     for required in ("event", "decision", "job", "result", "goal_done"):
         assert required in kinds, f"glass-box missing {required}: {kinds}"
 
     ro = core.scorecard.readout()
-    assert ro["decisions"].get("do_and_notify") == 1
+    assert ro["decisions"].get("act") == 1
     assert ro["goal_outcomes"].get("success") == 1
     assert ro["total_model_cost"] > 0
     print("  control core: glass-box trail =", sorted(kinds))

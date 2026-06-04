@@ -33,7 +33,10 @@ class MemoryWorker(Worker):
                 "profile": [i.text for i in inj["profile"]],
                 "history": [i.text for i in inj["history"]],
             }
-            return Result(job_id=job.id, status=JobStatus.success, output={"context": ctx},
+            return Result(job_id=job.id, status=JobStatus.success,
+                          output={"context": ctx,
+                                  "top_relevance": inj.get("top_relevance", 0.0),   # for the harm-line gray middle
+                                  "abstain": inj.get("abstain", True)},
                           proof={"injected": len(inj["items"]), "open_loops": len(inj["open_loops"])}, cost=0.0)
         # write_memory: an explicit write — force-keep into the right drawer
         text = job.args.get("text") or job.args.get("note") or job.args.get("about") or ""

@@ -1,25 +1,26 @@
-"""The proactive engine skeleton — the decider.
+"""The proactive engine — the decider. ACT-FIRST, ask-only-before-harm.
 
 Loop over Events:
-  1. triage (cheap, local, NO smart model): drop the obvious nothing.
-  2. gate: read context, then make the real decision (smart model allowed here) —
-     one of act_silently / do_and_notify / ask_first / ignore.
-  3. act -> create a Goal and hand to the orchestrator; ask_first -> human path.
-  4. record every decision to the glass-box and the scorecard.
+  1. triage (Room 1; cheap, local, NO smart model): drop the ~99% that isn't actionable.
+  2. read memory context (cheap worker) for the harm-line's gray middle.
+  3. the HARM-LINE (Room 2): is this detrimental? confident-no -> ACT (hand a Goal to the
+     orchestrator and DO IT); yes or UNSURE -> ASK (pause; never execute until approved).
+  4. record every decision (+ category, memory_forced) to the glass-box and scorecard.
 
-Build the framework; the judgment QUALITY is tuned later on real data. Thresholds
-and cues live in GateConfig so tuning is a config change, not a rewrite.
+The harm-line is deterministic + inspectable (proactive/harm.py); the smart model is used
+only when a decision is genuinely hard. Triage cues live in proactive/triage.py.
+(GateConfig is a vestigial knob bag from the skeleton — retained for construction compat.)
 """
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from ..proactive.harm import HarmLine
 from ..proactive.triage import Triage
 from .bus import Bus
 from .envelopes import Event, Goal, Job
-from .gateway import SMART, ModelGateway
+from .gateway import ModelGateway
 from .orchestrator import Orchestrator
 
 
@@ -54,48 +55,55 @@ class ProactiveEngine:
         self.scorecard = scorecard
         self.config = config or GateConfig()
         self.triage = Triage(gateway=gateway)   # Room 1: the bouncer (cheap, first, free in stub)
+        self.harm = HarmLine()                  # Room 2: act-first, ask-only-before-harm
+        self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
 
     async def on_event(self, event: Event) -> dict:
-        # 1) triage — cheap, local, no smart model; most events die here
+        # 1) triage — cheap, local, no smart model; most events die here (Room 1)
         if not self._triage(event):
-            self._record(event, "ignore", "triaged out (no actionable cue)")
+            self._record(event, "ignore", "triaged out (not actionable)")
             return {"decision": "ignore", "triaged": True, "goal_id": None}
 
-        # 2) gate — read context (cheap worker), then the real decision (smart)
+        # 2) read memory context (the harm-line uses it for the gray middle; cheap worker, no smart)
         ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": event.text}))
-        context = (ctx.output or {}).get("context", {})
-        decision_raw = await self.gateway.think(self._gate_prompt(event, context), tier=SMART, caller="gate")
-        parsed = self._parse_decision(decision_raw)
-        decision, reason = parsed["decision"], parsed.get("reason", "")
-        self._record(event, decision, reason)
+        mem = ctx.output or {}
 
-        # 3) act / ask
+        # 3) THE HARM-LINE (Room 2) — act-first: is this detrimental? deterministic; fail-safe to ask.
+        verdict = self.harm.assess(event.text, mem)
+
+        # 4) act (JUST DO IT) / ask (pause before harm; Room 4 makes the ask a real round-trip)
         goal_id = None
-        if decision in ("act_silently", "do_and_notify"):
+        if not verdict.detrimental:
             goal = await self.orchestrator.start_goal(Goal(intent=event.text, description=event.text))
             goal_id = goal.id
-        elif decision == "ask_first":
-            self._raise_to_human(event, reason)
-        return {"decision": decision, "reason": reason, "goal_id": goal_id}
+            decision = "act"
+        else:
+            decision = "ask"
+            self._raise_to_human(event, verdict.reason)
+        # HARD SUB-GATE: a detrimental verdict NEVER produced a goal (no silent harm — 100%).
+        assert not (verdict.detrimental and goal_id is not None), "harm-line breach: detrimental action executed"
+        self._record(event, decision, verdict.reason, category=verdict.category,
+                     memory_forced=verdict.memory_forced)
+        return {"decision": decision, "category": verdict.category, "reason": verdict.reason,
+                "detrimental": verdict.detrimental, "memory_forced": verdict.memory_forced, "goal_id": goal_id}
 
     # ---- steps ----
     def _triage(self, event: Event) -> bool:
         return self.triage.actionable(event.text)   # Room 1: high-recall bouncer, zero smart calls in stub
 
-    def _gate_prompt(self, event: Event, context: dict) -> str:
-        return f"Decide how to handle this event given context.\nEVENT: {event.text}\nCONTEXT: {context}"
-
-    @staticmethod
-    def _parse_decision(raw: str) -> dict:
-        return json.loads(raw)
-
     def _raise_to_human(self, event: Event, reason: str) -> None:
         if self.glassbox is not None:
             self.glassbox.log("ask_human", {"event_id": event.id, "text": event.text, "reason": reason})
 
-    def _record(self, event: Event, decision: str, reason: str) -> None:
+    def _record(self, event: Event, decision: str, reason: str,
+                category: str = "", memory_forced: bool = False) -> None:
+        if memory_forced:
+            self.memory_forced_asks += 1
         if self.glassbox is not None:
-            self.glassbox.log("decision", {"event_id": event.id, "text": event.text,
-                                           "decision": decision, "reason": reason})
+            self.glassbox.log("decision", {"event_id": event.id, "text": event.text, "decision": decision,
+                                           "category": category, "reason": reason, "memory_forced": memory_forced})
+            if memory_forced:
+                self.glassbox.log("memory_forced_ask",
+                                  {"event_id": event.id, "text": event.text, "reason": reason})
         if self.scorecard is not None:
             self.scorecard.record_decision(decision, event.id, reason)

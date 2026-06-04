@@ -12,7 +12,7 @@ import websockets
 
 BASE = sys.argv[1].rstrip("/")
 WS = BASE.replace("http", "ws") + "/ws/extension"
-EVENT = "Email Sarah the Q3 deck and post our launch on X."
+EVENT = "Draft the Q3 deck for Sarah and check the launch page on the website."
 
 
 async def extension(ws):
@@ -39,7 +39,7 @@ async def main():
         async with httpx.AsyncClient(timeout=30) as c:
             assert await wait_connected(c, True)
             ev = (await c.post(BASE + "/event", json={"text": EVENT, "source": "app"})).json()
-            assert ev["decision"] == "do_and_notify" and ev["goal_id"], ev
+            assert ev["decision"] == "act" and ev["goal_id"], ev   # act-first: safe -> just do it
             goal = (await c.get(BASE + f"/goals/{ev['goal_id']}")).json()
             sc = (await c.get(BASE + "/scorecard")).json()
             gw = (await c.get(BASE + "/gateway")).json()
@@ -60,7 +60,7 @@ async def main():
     for s in goal["steps"]:
         assert not (s["state"] == "done" and not (s.get("result") and s["result"].get("proof"))), s
 
-    assert gw["smart_calls"] == 2, gw                       # gate + plan only
+    assert gw["smart_calls"] == 1, gw                       # act-first: plan only (harm-line is deterministic)
     assert sc["goal_outcomes"].get("success", 0) >= 1, sc
     kinds = {e["kind"] for e in gb}
     for need in ("event", "decision", "job", "result", "goal_done", "reroute"):

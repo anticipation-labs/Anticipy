@@ -8,7 +8,7 @@ from anticipy_engine.core.control_core import ControlCore
 from anticipy_engine.core.envelopes import Goal, GoalState, JobStatus, Result, Risk, Step, StepState
 from anticipy_engine.core.workers import FAIL, SUCCESS
 
-EVENT = "I'll send Sarah the Q3 deck on Friday and book us lunch."
+EVENT = "Draft the Q3 deck, schedule a review, and remind me to follow up on Friday."
 
 
 async def main() -> None:
@@ -26,8 +26,8 @@ async def main() -> None:
     finally:
         await core.stop()
 
-    # (2) the gate triaged it actionable and decided; goal handed off
-    assert out["decision"] == "do_and_notify" and out["goal_id"], out
+    # (2) triaged actionable; harm-line found it safe/reversible -> ACT; goal handed off
+    assert out["decision"] == "act" and out["goal_id"], out
     goal = core.store.load(out["goal_id"])
 
     # (3) planned into the three stub-backed steps, in order
@@ -44,9 +44,9 @@ async def main() -> None:
     for s in goal.steps:
         assert s.state == StepState.done and s.result and s.result.proof, s
 
-    # (7) the smart model was used exactly twice: gate + plan
+    # (7) act-first: the harm-line is deterministic (NO gate smart call); only plan is smart
     callers = sorted(c["caller"] for c in core.gateway.smart_calls)
-    assert callers == ["gate", "plan"], callers
+    assert callers == ["plan"], callers
 
     # (8) glass-box has the full trail; scorecard recorded the decision + outcome
     entries = core.glassbox.entries()
@@ -57,7 +57,7 @@ async def main() -> None:
     n_results = sum(1 for e in entries if e["kind"] == "result")
     assert n_jobs >= 4 and n_results >= 4, (n_jobs, n_results)
     ro = core.scorecard.readout()
-    assert ro["decisions"].get("do_and_notify") == 1, ro
+    assert ro["decisions"].get("act") == 1, ro
     assert ro["goal_outcomes"].get("success") == 1, ro
 
     # (6 setup) park a second goal in 'waiting', persisted, for the restart test
