@@ -26,6 +26,7 @@ _ACTION: Tuple[str, ...] = (
     "prepare", "compose", "outline", "write up", "put together", "publish", "unsubscribe",
     "deactivate", "enroll", "donate", "withdraw", "deposit", "log in", "sign in", "look into",
     "gather", "review", "wipe", "tweet", "announce",
+    "captcha", "grab", "snag", "pull up", "check out", "checkout", "log on",   # colloquial action words
 )
 # Commitment / request / imperative patterns — intent even without a listed verb.
 _INTENT: Tuple[str, ...] = (
@@ -35,6 +36,10 @@ _INTENT: Tuple[str, ...] = (
     r"\bwe need to\b", r"\bgotta\b", r"\bneed to\b", r"\bhave to\b",
     r"\bby (mon|tue|wed|thu|fri|sat|sun|tomorrow|tonight|next|end of|noon|eod)",
     r"\bdue\b", r"\bdeadline\b", r"\boverdue\b",   # deadlines imply a task (general signal)
+    # spoken/colloquial: SEPARABLE phrasal verbs (words may sit between the verb + particle)
+    r"\bsign\b[\w' ]{0,12}\bup\b", r"\bset\b[\w' ]{0,10}\bup\b", r"\bfill\b[\w' ]{0,10}\b(in|out)\b",
+    r"\blog ?in(to)?\b", r"\bsign ?in(to)?\b", r"\bsign on\b", r"\blogin\b",
+    r"\bget (past|through|into)\b", r"\btake care of\b", r"\bdeal with\b", r"\bsort out\b",
 )
 # Pure-noise: fillers / greetings / acks. Exact-match (whole utterance) -> drop.
 _FILLER = {
