@@ -95,3 +95,18 @@ iterate to catch the 2 misses: the cardinal gate is already 0, and chasing recal
 risks trading against it (a false action ≫ a missed promise) and edges toward tuning-to-the-key.
 (3) These are provisional; this does NOT mean "the proactive engine works" — it means the measurable
 thing it gets judged on exists, and the false-action count is 0 on this key.
+
+## TRACK B bonus — graded the EXISTING SHIPPED decider on the SAME key (deterministic, verifiable)
+`overnight/track_b/score_existing_engine.py` runs the real `triage.py`+`harm.py` path:
+- CARDINAL false-action: **0** (cardinal-SAFE — the harm-line fail-safes vents to ASK, not ACT).
+- caught commitments 30/30 = 1.00; SILENT recall **21/30 = 0.70** → **over-asks on 9/30 noise lines**
+  (e.g. "If I won the lottery I'd buy an island" → ASK). Annoyance problem, not a catastrophe.
+- Takeaway: the shipped engine won't catastrophically act on a vent, but it's noisy; the Track B
+  decider holds the cardinal gate AND is quiet (0 over-asks). Not wired in (future supervised change).
+
+## TRACK C — Gmail DRAFT path: BUILT, NOT VERIFIED (honest auth gate)
+`overnight/track_c/{draft_worker,draft_judge,draft_runner}.py` mirror the proven calendar path for
+`Gmail.WriteDraftEmail` (draft NEVER sends; recipient forced to your own address). Added the real
+connector `send_email_draft → Gmail.WriteDraftEmail` to `api_hand.py` (schema-verified, unexecuted).
+Runner tonight correctly **BLOCKED** (scope `pending`) and printed the connect URL — it cannot fake a
+draft. Suite 29/29 after the addition. Verifies for real the moment you tap (URL in WAKEUP.md §2a).

@@ -1,0 +1,542 @@
+[
+  {
+    "id": "A00",
+    "line": "I'll send Sarah the Q3 deck tonight.",
+    "label": "ACT",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A01",
+    "line": "Remind me to call the accountant before Friday.",
+    "label": "ACT",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A02",
+    "line": "Add milk and coffee to the list.",
+    "label": "ACT",
+    "split": "heldout",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A03",
+    "line": "Did the dispute ever get filed? I should chase it.",
+    "label": "ACT",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A00",
+    "line": "Let's grab dinner Friday, I'll book somewhere.",
+    "label": "ASK",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A01",
+    "line": "Cancel my 3pm, something came up.",
+    "label": "ASK",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A02",
+    "line": "I'll email the landlord about the leak, or maybe just call.",
+    "label": "ASK",
+    "split": "heldout",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "S00",
+    "line": "Ugh, my gym is such a ripoff.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S01",
+    "line": "I should get back into Spanish someday.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "S02",
+    "line": "We should move to Lisbon, haha.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "seed",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "S03",
+    "line": "Mark's been so flaky lately.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S04",
+    "line": "This podcast is incredible.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "seed",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "A04",
+    "line": "Remind me to take out the trash tonight.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A05",
+    "line": "Add 'renew passport' to my todo list.",
+    "label": "ACT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A06",
+    "line": "Put 'submit the expense report' on my list for Monday.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A07",
+    "line": "I'll write up the meeting notes after lunch.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A08",
+    "line": "Remind me to water the plants when I get home.",
+    "label": "ACT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A09",
+    "line": "Add eggs, bread, and butter to the shopping list.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A10",
+    "line": "Find me the cheapest flight to Denver next month.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A11",
+    "line": "Look up what time the hardware store closes today.",
+    "label": "ACT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A12",
+    "line": "I'll draft the thank-you note to the team tonight.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A13",
+    "line": "Remind me to send the invoice on the first.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A14",
+    "line": "Don't let me forget to pay rent this week.",
+    "label": "ACT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A15",
+    "line": "Can you check if my package shipped yet?",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A16",
+    "line": "I need to follow up with the plumber tomorrow \u2014 remind me.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A03",
+    "line": "Book us a table for four on Saturday night.",
+    "label": "ASK",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ACT"
+  },
+  {
+    "id": "A04",
+    "line": "Send the signed contract back to the agency.",
+    "label": "ASK",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A05",
+    "line": "Reply to Priya and tell her we're in.",
+    "label": "ASK",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A06",
+    "line": "Cancel the gym membership, I'm done with it.",
+    "label": "ASK",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A07",
+    "line": "I'll RSVP yes to the wedding for both of us.",
+    "label": "ASK",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A08",
+    "line": "Forward the contract to legal.",
+    "label": "ASK",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A09",
+    "line": "Move my 2pm to 4pm and let Sam know.",
+    "label": "ASK",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "A10",
+    "line": "Schedule the kickoff with the client for next week.",
+    "label": "ASK",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "S05",
+    "line": "I'm so done with this weather.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S06",
+    "line": "Honestly the new update is kind of ugly.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S07",
+    "line": "Maybe I'll start running again at some point.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "S08",
+    "line": "Wouldn't it be nice to just quit and sail around the world.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S09",
+    "line": "That restaurant was a huge letdown.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S10",
+    "line": "My boss is impossible sometimes.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S11",
+    "line": "I kind of want a dog eventually.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S12",
+    "line": "Traffic was insane today.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S13",
+    "line": "We really should hang out more.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S14",
+    "line": "I can't believe it's already June.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S15",
+    "line": "She never texts back, it's so annoying.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S16",
+    "line": "I'd kill for a vacation right now.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S17",
+    "line": "If I won the lottery I'd buy an island.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "ASK"
+  },
+  {
+    "id": "S18",
+    "line": "The Wi-Fi here is garbage.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S19",
+    "line": "He's always late, every single time.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S20",
+    "line": "That movie did not deserve the hype.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S21",
+    "line": "I wish my apartment had more light.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S22",
+    "line": "Our team's been killing it lately.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S23",
+    "line": "Ugh, Mondays.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": false,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S24",
+    "line": "I really need to call my mom.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": true,
+    "pred": "ASK"
+  },
+  {
+    "id": "S25",
+    "line": "We should book that trip soon.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": true,
+    "pred": "ASK"
+  },
+  {
+    "id": "S26",
+    "line": "I might email the professor about the deadline.",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": true,
+    "pred": "ASK"
+  },
+  {
+    "id": "S27",
+    "line": "I keep meaning to cancel that subscription.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": true,
+    "pred": "ASK"
+  },
+  {
+    "id": "S28",
+    "line": "I've got to get back to the dentist one of these days.",
+    "label": "SILENT",
+    "split": "train",
+    "source": "mine",
+    "nearline": true,
+    "pred": "SILENT"
+  },
+  {
+    "id": "S29",
+    "line": "Maybe we grab coffee this week?",
+    "label": "SILENT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": true,
+    "pred": "ASK"
+  },
+  {
+    "id": "A17",
+    "line": "I'll probably tidy up the garage this weekend.",
+    "label": "ACT",
+    "split": "heldout",
+    "source": "mine",
+    "nearline": true,
+    "pred": "ASK"
+  },
+  {
+    "id": "A18",
+    "line": "I told Jen I'd send her the photos.",
+    "label": "ACT",
+    "split": "train",
+    "source": "mine",
+    "nearline": true,
+    "pred": "ASK"
+  }
+]

@@ -26,13 +26,15 @@ from ..core.worker import Worker
 MODE_MOCK = "mock"
 MODE_LIVE = "live"
 
-WRITE_INTENTS = {"send_email", "create_event", "message"}
+WRITE_INTENTS = {"send_email", "send_email_draft", "create_event", "message"}
 
-# One place to extend. Tool names follow Arcade's catalog (Gmail.SendEmail is
-# confirmed live; others are best-known and validated when wired live).
+# One place to extend. Tool names follow Arcade's catalog (Gmail.SendEmail + GoogleCalendar.*
+# are confirmed live; Gmail.WriteDraftEmail discovered via tools.list, schema verified, awaiting the
+# gmail.compose scope grant; others are best-known and validated when wired live).
 INTENT_MAP = {
     # writes
     "send_email": "Gmail.SendEmail",
+    "send_email_draft": "Gmail.WriteDraftEmail",   # creates a draft; NEVER sends
     "create_event": "GoogleCalendar.CreateEvent",
     "message": "Slack.SendMessageToChannel",
     # reads (onboarding reuses these)
