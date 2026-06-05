@@ -67,3 +67,31 @@ output" — `ApiHand._proof_from` (`engine/anticipy_engine/hands/api_hand.py`) o
 (top-level id) unaffected. This bug had been silently masking real calendar creates as failures.
 
 ## REAL ARTIFACTS LOG (continued below as tracks run)
+
+## TRACK B — THE JUDGMENT DECIDER (built + graded honestly; cardinal gate MET)
+
+Architecture (LAW #3 + #4): `overnight/track_b/answer_key.jsonl` (60 lines: 19 ACT / 11 ASK /
+30 SILENT, 19 held-out, 8 near-the-line) is human-rule ground truth the decider never sees.
+`decider.py` (cheap model, principled prompt, NO key lines, biased to SILENT when unsure) →
+`score_decider.py` (separate; self-proves it counts a planted false-action, then grades). Decider
+imports 0 of the scorer/key.
+
+**Numbers (one temp-0 run; PROVISIONAL until you red-pen the key):**
+| | TRAIN (41) | HELD-OUT (19) | ALL (60) |
+|---|---|---|---|
+| caught real commitments (ACT/ASK recall) | 20/21 = 0.95 | 8/9 = 0.89 | 28/30 = 0.93 |
+| stayed silent on noise (SILENT recall) | 20/20 = 1.00 | 10/10 = 1.00 | 30/30 = 1.00 |
+| SILENT precision | 0.95 | 0.91 | 30/32 = 0.94 |
+| **CARDINAL false-action (SILENT→ACT)** | **0** | **0** | **0** |
+| over-ask on SILENT (annoying, not fatal) | 0 | 0 | 0 |
+
+The only 2 disagreements are MISSES in the SAFE direction (real ACT → SILENT), both on debatable
+"should/probably" near-line rows ("Did the dispute get filed? I should chase it"; "I'll probably
+tidy the garage"). Zero cardinal violations.
+
+**Honest caveats:** (1) I wrote BOTH the decider's prompt and the key from the same commitment rule,
+so their agreement partly reflects my own consistency — your red pen is the real test. (2) I did NOT
+iterate to catch the 2 misses: the cardinal gate is already 0, and chasing recall on tentative lines
+risks trading against it (a false action ≫ a missed promise) and edges toward tuning-to-the-key.
+(3) These are provisional; this does NOT mean "the proactive engine works" — it means the measurable
+thing it gets judged on exists, and the false-action count is 0 on this key.
