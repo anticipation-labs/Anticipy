@@ -12,8 +12,10 @@ class FakeLink:
     def __init__(self, connected=True, behavior="success"):
         self.connected = connected
         self.behavior = behavior
+        self.last_args = None
 
     async def send_browse(self, job_id, intent, args, timeout):
+        self.last_args = args
         if self.behavior == "timeout":
             raise asyncio.TimeoutError()
         if self.behavior == "disconnect":
@@ -51,7 +53,23 @@ async def main():
     r = await BrowserHand(FakeLink(behavior="no_proof")).handle(Job(intent="browse_task"))
     assert r.status == JobStatus.failed  # success without a screenshot is NOT done
 
-    print("PASS piece 3 (unit): browser hand — success/proof, not-connected, timeout, disconnect, login-wall, no-proof")
+    # search-fallback: a URL-less task becomes a real search navigation (the killer of every
+    # open-ended browse journey: the extension needs a URL, the model gives a goal).
+    link = FakeLink(behavior="success")
+    await BrowserHand(link).handle(Job(intent="browse_task", args={"task": "current USD to EUR exchange rate"}))
+    assert link.last_args.get("url", "").startswith("https://duckduckgo.com/?q="), link.last_args
+    assert "exchange" in link.last_args["url"]
+    # an explicit URL is left untouched (no clobber)
+    link2 = FakeLink(behavior="success")
+    await BrowserHand(link2).handle(Job(intent="browse_task", args={"url": "https://example.com", "task": "read it"}))
+    assert link2.last_args["url"] == "https://example.com", link2.last_args
+    # a task that already contains a URL is left for the extension to extract
+    link3 = FakeLink(behavior="success")
+    await BrowserHand(link3).handle(Job(intent="browse_task", args={"task": "open https://anticipy.ai now"}))
+    assert "url" not in link3.last_args, link3.last_args
+
+    print("PASS piece 3 (unit): browser hand — success/proof, not-connected, timeout, disconnect, "
+          "login-wall, no-proof, search-fallback (url-less task -> search; explicit url preserved)")
 
 
 if __name__ == "__main__":

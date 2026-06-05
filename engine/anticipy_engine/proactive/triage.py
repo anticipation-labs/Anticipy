@@ -21,7 +21,7 @@ _ACTION: Tuple[str, ...] = (
     "set up", "draft", "meet", "reply", "wire", "pay", "transfer", "buy", "order",
     "cancel", "delete", "move", "follow up", "forward", "share", "invite", "rsvp",
     "reserve", "sign up", "subscribe", "renew", "submit", "post", "message", "ping",
-    "book a", "look up", "research", "compare", "confirm", "register", "purchase",
+    "book a", "look up", "search", "research", "compare", "confirm", "register", "purchase",
     # aligned with the harm-line's vocabulary so triage never drops an action it could classify
     "prepare", "compose", "outline", "write up", "put together", "publish", "unsubscribe",
     "deactivate", "enroll", "donate", "withdraw", "deposit", "log in", "sign in", "look into",

@@ -6,6 +6,11 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="$REPO/engine/.venv/bin/python"
 export PYTHONPATH="$REPO/engine"
+# CI is ALWAYS free + deterministic: force stub model + mock hands so the .env.local live flags
+# (real model / live hands for the running engine) never leak into the test suite. load_local_env
+# uses load_dotenv(override=False), so these shell exports win over .env.local.
+export ANTICIPY_MODEL_PROVIDER=stub
+export ANTICIPY_HANDS_MODE=mock
 pass=0; fail=0; failed=""
 
 run() {  # name, command...

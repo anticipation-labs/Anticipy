@@ -192,6 +192,11 @@ class Orchestrator:
         # the deterministic tier's prompt (and plans) stay byte-identical.
         if getattr(self.gateway, "provider", None) == "openrouter":
             base += "\nUse ONLY these intents (pick the closest fit): " + ", ".join(sorted(self.bus._workers)) + "."
+            base += ('\nArg shapes - browse_task{"task":<plain-English what to do/find on the web>}, '
+                     'read_page{"task":<what to read>}, send_email{"recipient","subject","body"}, '
+                     'send_text{"recipient","body"}, create_event{"title","when"}, create_doc{"title","body"}, '
+                     'write_memory{"text"}. For any web search / lookup / shopping / browsing step, use '
+                     'browse_task with a "task" string.')
         return base + (f"\nRELEVANT MEMORY: {context}" if context else "")
 
     @staticmethod

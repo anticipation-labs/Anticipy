@@ -80,9 +80,23 @@ class ApiHand(Worker):
         raw = f"{job.goal_id}|{job.intent}|{json.dumps(job.args, sort_keys=True, default=str)}"
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
-    @staticmethod
-    def _tool_input(job: Job) -> dict:
-        return {k: v for k, v in job.args.items() if k != "approved"}
+    # Natural arg aliases -> the tool's REAL input contract. A real planner emits human-natural
+    # names ("to" for an email's recipient); the executor owns its tool's schema and adapts. General
+    # (not per-task) and evidence-anchored: Arcade's Gmail.SendEmail@7 requires "recipient", not "to"
+    # (a mismatch silently 400s the send). Only the LIVE execute path calls this, so mock tests are
+    # untouched. A canonical key the model already produced always wins over an alias.
+    _ALIASES = {
+        "Gmail.SendEmail": {"to": "recipient", "recipients": "recipient", "email": "recipient",
+                            "to_email": "recipient", "address": "recipient"},
+    }
+
+    @classmethod
+    def _tool_input(cls, job: Job) -> dict:
+        out = {k: v for k, v in job.args.items() if k != "approved"}
+        for src, dst in cls._ALIASES.get(INTENT_MAP.get(job.intent) or "", {}).items():
+            if src in out and dst not in out:
+                out[dst] = out.pop(src)
+        return out
 
     async def handle(self, job: Job) -> Result:
         tool = INTENT_MAP.get(job.intent)

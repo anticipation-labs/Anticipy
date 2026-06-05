@@ -134,7 +134,17 @@ def get_goal(goal_id: str) -> dict:
 
 @app.get("/gateway")
 def gateway_info() -> dict:
-    return {"smart_calls": len(core.gateway.smart_calls), "total_cost": core.gateway.total_cost()}
+    # Cost counters PLUS the real run-mode signals, so a caller (e.g. the journey gauge's
+    # precondition) can VERIFY the engine is actually live — real model + live API hand —
+    # rather than assume it. These read the engine's actual wired objects, not env strings.
+    return {
+        "smart_calls": len(core.gateway.smart_calls),
+        "total_cost": core.gateway.total_cost(),
+        "provider": core.gateway.provider,
+        "cheap_model": core.gateway.cheap_model,
+        "smart_model": core.gateway.smart_model,
+        "api_hands_mode": core.api_hand.mode,
+    }
 
 
 # ---- browser hand link (authenticated WebSocket) ----
