@@ -159,12 +159,31 @@ class ApiHand(Worker):
         return Result(job_id=job.id, status=JobStatus.success, proof=proof,
                       output={"value": value if isinstance(value, dict) else str(value)})
 
-    @staticmethod
-    def _proof_from(value, tool: str) -> dict:
+    # id fields Arcade tools return, across toolkits. Some tools nest the result under a single
+    # wrapper ({"event": {...}} for Calendar, {"draft": {...}} for Gmail drafts), so we look at the
+    # top level AND one level into child dicts. General (not per-tool); never descends far enough to
+    # grab an unrelated nested id (e.g. creator/organizer carry email, not these id keys).
+    _ID_KEYS = ("id", "message_id", "messageId", "eventId", "event_id", "draft_id", "draftId",
+                "thread_id", "threadId", "ts")
+
+    @classmethod
+    def _find_id(cls, value, _depth: int = 0):
+        if not isinstance(value, dict):
+            return None
+        for k in cls._ID_KEYS:
+            if value.get(k):
+                return value[k]
+        if _depth < 1:
+            for v in value.values():
+                got = cls._find_id(v, _depth + 1)
+                if got:
+                    return got
+        return None
+
+    @classmethod
+    def _proof_from(cls, value, tool: str) -> dict:
         if isinstance(value, dict):
-            mid = (value.get("id") or value.get("message_id") or value.get("messageId")
-                   or value.get("eventId") or value.get("event_id") or value.get("ts"))
-            return {"id": mid, "tool": tool, "value": value}
+            return {"id": cls._find_id(value), "tool": tool, "value": value}
         return {"id": str(value) if value else None, "tool": tool}
 
     async def _on_error(self, job: Job, exc: Exception) -> Result:
