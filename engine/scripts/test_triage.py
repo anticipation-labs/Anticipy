@@ -28,6 +28,7 @@ STREAM = [
     ("I should follow up with Dana about the contract.", True),
     ("Buy more coffee filters.", True),
     ("Set up a meeting with the design team.", True),
+    ("Put a hold on my calendar for the project review.", True),
     ("I have to cancel my gym membership.", True),
     ("Please forward the invoice to finance.", True),
     ("I should really get back to Mom this week.", True),   # intent-only, no listed verb

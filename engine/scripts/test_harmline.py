@@ -73,6 +73,8 @@ BATTERY = [
     ("Remind me to call the dentist on Friday.", False),
     ("Set up a meeting with the design team.", False),
     ("Add the offsite to my calendar.", False),
+    ("Schedule a calendar hold for Monday morning.", False),
+    ("Put a hold on my calendar for the project review.", False),
     ("Remind me to email Sarah on Monday.", False),
     ("Block off an hour tomorrow morning to focus.", False),
     # ---- SAFE: prepare a document ----
