@@ -1,27 +1,28 @@
 # Last Lap
 
-Lap: 20260606T124709Z
-Date: 2026-06-06T13:51:14Z
+Lap: 20260606T151119Z
+Date: 2026-06-06T15:13:49Z
 Milestone: M0 - ugly floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- Builder commit `7a8ddc9` changed live OpenRouter planning so internal support intents were not advertised as user-task completion intents.
-- The slice filtered live plans to user-task intents and left empty live plans waiting instead of completing.
-- Focused checks passed in the builder session, and the builder-visible raw MP3 realday completed. This was builder-side evidence only.
+- Fixed zero-step completions: goals with no executable steps now wait instead of becoming `done`.
+- Added conservative action fallback for live planning: clear scheduling/email/message/lookup categories route to app-backed steps or wait. Unknown action text no longer becomes blind browser search.
+- Normalized Calendar writes to the proven `summary/start_datetime/end_datetime` schema and parse common relative times.
+- Build/test safety now covers API writes and SMS: test events are tagged, vague events wait, non-self emails and real third-party messages are blocked, and Twilio is mocked unless external real actions are explicitly allowed.
+- OpenRouter low-credit 402s no longer silently become empty plans. Output caps adapt downward when possible, and planner budget errors become waiting goals.
+
+Checks:
+- Focused safety and fallback checks passed.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- Builder-visible raw transcript run completed with `line_count=3228`, `act=26`, `ask=387`, `ignore=2815`, `goal_outcomes success=7 waiting=18`, `wall_seconds=100.613`, and `cost_usd=0.36`.
 
 Judge status:
-- Verdict: `FAKE`. The separate judge ruled this lap was not real.
-- Held-out run: `line_count=1606`, `act=13`, `ask=176`, `ignore=1417`, `wall_seconds=897.381`.
-- Verified current-lap external artifacts: `0`.
-- Internal false completions observed: `13` act goals marked `done` with zero steps and zero proof keys.
-- Planted-fake self-check passed, computer-use self-test passed, tamper scan passed, Calendar connector read-back plus Calendar/Gmail screenshots found no current-lap artifact, and Gemini cross-check agreed with `FAKE` at confidence `1.0`.
-- M0 still requires a fresh unseen held-out day to produce a real verified artifact in a real app.
-
-Gate action:
-- Builder commit `7a8ddc9` was reverted by `1a63207`.
-- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
-- The held-out day did not rotate out because failed laps do not burn held-out days.
+- Verdict: `PENDING_JUDGE`.
+- Builder-side successes are not proof. M0 still requires the separate judge to run a held-out real day and verify a current-lap real artifact in a real app with connector read-back and screenshot.
+- OpenRouter credit is very low and caused one intermediate builder raw run to fail with a 402 prompt-budget error. If the judge cross-check cannot run because the key is unfunded, that is a human money/key gate.
 
 Next:
-- Start the next builder lap. Do not spend another lap on planner prompt/filter-only proof. Fix the zero-step completion path so action goals either create real API/browser jobs with artifact proof or explicitly wait/ask.
+- Commit this lap on `autopilot/build`.
+- Run the separate judge for lap `20260606T151119Z` with the resulting builder commit.
+- Apply the normal gate. Keep only if the judge rules REAL and all oversight checks pass; otherwise revert and log the failure.

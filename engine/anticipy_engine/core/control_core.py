@@ -76,7 +76,7 @@ class ControlCore:
         self.store = GoalStore(data_dir=base)
         # No-API app intents reroute to the browser hand via the orchestrator's
         # EXISTING reroute path (config, not a code change).
-        alternates = {"post_to_x": "browse_task", "create_event": "browse_task", "message": "browse_task"}
+        alternates = {"post_to_x": "browse_task"}
         self.orchestrator = Orchestrator(
             self.bus, self.gateway, self.store, glassbox=self.glassbox, scorecard=self.scorecard,
             alternates=alternates, approver=GatedApprover(True), memory_context=self._mem_ctx,

@@ -18,7 +18,10 @@ import asyncio
 import hashlib
 import json
 import os
+import re
+from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..core.envelopes import Job, JobStatus, Result, Risk
 from ..core.worker import Worker
@@ -27,6 +30,7 @@ MODE_MOCK = "mock"
 MODE_LIVE = "live"
 
 WRITE_INTENTS = {"send_email", "send_email_draft", "create_event", "message"}
+TEST_EVENT_PREFIX = "[Anticipy test]"
 
 # One place to extend. Tool names follow Arcade's catalog (Gmail.SendEmail + GoogleCalendar.*
 # are confirmed live; Gmail.WriteDraftEmail discovered via tools.list, schema verified, awaiting the
@@ -90,6 +94,9 @@ class ApiHand(Worker):
     _ALIASES = {
         "Gmail.SendEmail": {"to": "recipient", "recipients": "recipient", "email": "recipient",
                             "to_email": "recipient", "address": "recipient"},
+        "GoogleCalendar.CreateEvent": {"title": "summary", "start": "start_datetime",
+                                       "start_time": "start_datetime", "end": "end_datetime",
+                                       "end_time": "end_datetime"},
     }
 
     @classmethod
@@ -98,7 +105,24 @@ class ApiHand(Worker):
         for src, dst in cls._ALIASES.get(INTENT_MAP.get(job.intent) or "", {}).items():
             if src in out and dst not in out:
                 out[dst] = out.pop(src)
+        if INTENT_MAP.get(job.intent) == "GoogleCalendar.CreateEvent":
+            cls._normalize_calendar_input(out)
         return out
+
+    @classmethod
+    def _normalize_calendar_input(cls, out: dict) -> None:
+        if "summary" in out:
+            out["summary"] = str(out["summary"]).strip()
+        when = str(out.get("when") or "").strip()
+        if when and "start_datetime" not in out:
+            parsed = _parse_natural_event_time(when)
+            if parsed:
+                out.update(parsed)
+                out.pop("when", None)
+        if "start_datetime" in out and "end_datetime" not in out:
+            start = _parse_iso_datetime(str(out["start_datetime"]))
+            if start is not None:
+                out["end_datetime"] = (start + timedelta(minutes=30)).isoformat()
 
     async def handle(self, job: Job) -> Result:
         tool = INTENT_MAP.get(job.intent)
@@ -116,6 +140,10 @@ class ApiHand(Worker):
         if is_write and high_risk and self.approval_required and not job.args.get("approved"):
             return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
                           output={"reason": "high-risk action missing approval flag"})
+
+        safety = self._apply_build_test_safety(job)
+        if safety is not None:
+            return safety
 
         # idempotency: a retried write that already produced proof must NOT re-send
         ikey = self._idem_key(job)
@@ -213,3 +241,160 @@ class ApiHand(Worker):
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           error=f"transient ({name}), will retry")
         return Result(job_id=job.id, status=JobStatus.failed, proof=None, error=f"{name}: {exc}")
+
+    def _build_test_safe_mode(self) -> bool:
+        if self.mode != MODE_LIVE:
+            return False
+        explicit = os.environ.get("ANTICIPY_BUILD_TEST_SAFE_MODE")
+        if explicit is not None:
+            return explicit.strip().lower() not in {"0", "false", "no", "off"}
+        if os.environ.get("ANTICIPY_ALLOW_EXTERNAL_REAL_ACTIONS", "").strip().lower() in {"1", "true", "yes", "on"}:
+            return False
+        return self._client is None
+
+    def _self_owned_email(self) -> str:
+        return (
+            os.environ.get("ANTICIPY_TEST_EMAIL")
+            or os.environ.get("ADMIN_EMAIL")
+            or os.environ.get("ARCADE_USER_ID")
+            or self.user_id
+        ).strip().lower()
+
+    def _apply_build_test_safety(self, job: Job) -> Optional[Result]:
+        """Autopilot/build-test live writes must be reversible and self-owned."""
+        if not self._build_test_safe_mode() or job.intent not in WRITE_INTENTS:
+            return None
+
+        if job.intent in {"send_email", "send_email_draft"}:
+            args = self._tool_input(job)
+            recipient = str(args.get("recipient") or "").strip().lower()
+            if not recipient or recipient != self._self_owned_email():
+                return Result(
+                    job_id=job.id,
+                    status=JobStatus.needs_human,
+                    proof=None,
+                    output={
+                        "reason": "build/test safety blocked email to a non-self recipient",
+                        "blocked": True,
+                    },
+                )
+            job.args.update(args)
+            return None
+
+        if job.intent == "create_event":
+            args = self._tool_input(job)
+            if not args.get("summary") or not args.get("start_datetime") or not args.get("end_datetime"):
+                return Result(
+                    job_id=job.id,
+                    status=JobStatus.needs_human,
+                    proof=None,
+                    output={
+                        "reason": "build/test safety blocked calendar event without a concrete time",
+                        "blocked": True,
+                    },
+                )
+            title = str(args.get("summary") or "Anticipy event").strip()
+            if not title.startswith(TEST_EVENT_PREFIX):
+                args["summary"] = f"{TEST_EVENT_PREFIX} {title}"
+            job.args.update(args)
+            return None
+
+        if job.intent == "message":
+            return Result(
+                job_id=job.id,
+                status=JobStatus.needs_human,
+                proof=None,
+                output={
+                    "reason": "build/test safety blocked messaging a real third party",
+                    "blocked": True,
+                },
+            )
+
+        return None
+
+
+def _parse_iso_datetime(value: str):
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def _local_tz():
+    name = os.environ.get("ANTICIPY_TIMEZONE") or os.environ.get("TZ")
+    if name:
+        try:
+            return ZoneInfo(name)
+        except ZoneInfoNotFoundError:
+            pass
+    return datetime.now().astimezone().tzinfo
+
+
+def _parse_natural_event_time(text: str) -> Optional[dict]:
+    now = datetime.now(_local_tz())
+    day = now.date()
+    lower = text.lower()
+
+    if "tomorrow" in lower:
+        day = (now + timedelta(days=1)).date()
+    else:
+        weekday = _weekday_target(lower, now)
+        if weekday is not None:
+            day = (now + timedelta(days=weekday)).date()
+
+    hour, minute = _time_of_day(lower)
+    if hour is None:
+        return None
+
+    start = datetime(day.year, day.month, day.day, hour, minute, tzinfo=now.tzinfo)
+    if start <= now:
+        start += timedelta(days=1)
+    end = start + _duration(lower)
+    return {"start_datetime": start.isoformat(), "end_datetime": end.isoformat()}
+
+
+def _time_of_day(text: str) -> tuple[Optional[int], int]:
+    m = re.search(r"\b(?:at\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", text)
+    if m:
+        hour = int(m.group(1))
+        minute = int(m.group(2) or 0)
+        suffix = m.group(3)
+        if suffix == "pm" and hour != 12:
+            hour += 12
+        if suffix == "am" and hour == 12:
+            hour = 0
+        return hour, minute
+
+    m = re.search(r"\b(?:at\s*)?([01]?\d|2[0-3]):([0-5]\d)\b", text)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return None, 0
+
+
+def _duration(text: str) -> timedelta:
+    m = re.search(r"\bfor\s+(\d{1,2})\s*(hour|hours|hr|hrs)\b", text)
+    if m:
+        return timedelta(hours=int(m.group(1)))
+    m = re.search(r"\bfor\s+(\d{1,3})\s*(minute|minutes|min|mins)\b", text)
+    if m:
+        return timedelta(minutes=int(m.group(1)))
+    return timedelta(minutes=30)
+
+
+def _weekday_target(text: str, now: datetime) -> Optional[int]:
+    weekdays = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+    for name, index in weekdays.items():
+        if re.search(rf"\b(next|this)?\s*{name}\b", text):
+            days = (index - now.weekday()) % 7
+            if re.search(rf"\bnext\s+{name}\b", text) and days == 0:
+                days = 7
+            return days
+    return None
