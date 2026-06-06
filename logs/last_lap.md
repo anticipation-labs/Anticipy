@@ -1,20 +1,22 @@
 # Last Lap
 
-Lap: 20260606T013101Z
-Date: 2026-06-06T01:31:30Z
+Lap: 20260606T013339Z
+Date: 2026-06-06T02:01:53Z
 Milestone: M0 - ugly floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- Added generic local MP3 transcription in `engine/anticipy_engine/capture/transcribe.py` using ffmpeg speech-region detection and local Whisper chunks.
-- Updated `scripts/realday.sh` to feed audio realdays through that transcriber instead of rejecting MP3 inputs.
-- Declared `openai-whisper>=20250625` in `engine/requirements.txt`.
-- Logged the harness contradiction in `autopilot/LESSONS.md`.
+- The builder attempted a generic calendar-hold policy slice and ran the required builder-visible MP3 realday.
+- The separate judge ruled `BLOCKED_NO_HOLDOUT` because its strict current accounting treated all four holdout files as already referenced by an older verdict.
+- The unproven builder commit `1cbf82337d2a8fb4550720945f79bd2d31e9a360` was reverted by gate in `9bdc118`; verdict artifacts were preserved in `logs/verdicts/20260606T013339Z.md`.
 
 Checks:
-- Capped builder-visible MP3 smoke: `AUTOPILOT_LAP=20260606T013101Z ANTICIPY_REALDAY_AUDIO_MAX_SECONDS=90 bash scripts/realday.sh realdays/raw/2026-05-20_07_34_11.mp3` reached the live engine, posted 15 transcript lines, and produced 15 ignores with zero actions.
-- `bash scripts/run_suite.sh` passed 29/29. This remains deterministic stub/mock coverage only.
-- This was control-plane plumbing, not a judge pass. M0 remains unproven.
+- Judge planted-fake self-check passed.
+- Judge computer-use self-test passed with Chrome on `https://example.com`; screenshot is in `logs/verdicts/20260606T013339Z/computer_use_selftest_example_domain.png`.
+- Judge tamper scan was clean for the builder diff.
+- Different-family OpenRouter cross-check used `google/gemini-3.5-flash`, agreed with `BLOCKED_NO_HOLDOUT`, and cost 0.0085275.
+- No held-out realday run completed and no real app artifact was verified. M0 remains unproven. Generalization remains UNPROVEN.
 
 Next:
-- Rerun M0 through the amended loop. The next judge should be able to run a held-out MP3 through `scripts/realday.sh`; it still must verify any real-world artifact with connector read-back and screenshots before M0 can count.
+- Repair holdout burn accounting without reading `realdays/holdout/`: inventory references must not burn files, but any held-out day actually opened, transcribed, or used in a verdict must rotate out.
+- Then rerun the loop so the judge can select a genuinely fresh held-out MP3 and verify any produced real app artifact with connector read-back and screenshots.
