@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Launch one fresh builder session. The session must do one slice, run realday,
+# update logs, commit, and stop without grading itself.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO"
+
+mkdir -p logs/codex logs/trace
+LAP="${AUTOPILOT_LAP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+OUT="logs/codex/build_${LAP}.last.txt"
+EVENTS="logs/codex/build_${LAP}.jsonl"
+
+codex \
+  -a never \
+  -s danger-full-access \
+  -c model_reasoning_effort='"xhigh"' \
+  exec \
+  -C "$REPO" \
+  -m gpt-5.5 \
+  --json \
+  -o "$OUT" \
+  - > "$EVENTS" <<EOF
+You are one BUILD lap for Anticipy. Fresh context. Lap id: $LAP.
+
+Obey these rules exactly:
+1. Read autopilot/02_LAWS.md, CODEX_BRIEF.md, logs/last_lap.md if present, autopilot/09_REPO_FACTS.md, and the top OPEN item in autopilot/07_MILESTONES.md.
+2. Do one small vertical slice toward that milestone. Use the real Mac, real Chrome, and computer use whenever it helps.
+3. Do not touch tests/realday/, realdays/holdout/, judge/, or logs/verdicts/. Those belong to the judge.
+4. Run the whole system on a builder-visible day with: AUTOPILOT_LAP=$LAP bash scripts/realday.sh
+5. Write or append:
+   - logs/trace/$LAP.jsonl for every meaningful command, edit, browser action, and test.
+   - logs/journal.md with one paragraph for this lap.
+   - logs/last_lap.md with what changed, what realday did, and what should happen next.
+   - logs/scorecard.csv with a row for this lap. Use judge_verdict=PENDING because the judge has not ruled yet.
+6. If a real human-only gate appears, append the exact actionable item to PENDING_FOR_OMAR.md and keep working on anything unblocked.
+7. Commit your kept work locally on autopilot/build with a one-line message. Never push.
+8. Stop. Do not declare success. The separate judge decides.
+EOF

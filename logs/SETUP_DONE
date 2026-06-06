@@ -1,0 +1,28 @@
+Setup completed: 2026-06-06T00:51:18Z (2026-06-05 17:51:18 PDT)
+
+Repo: /Users/omarebrahim/Desktop/Anticipy-executor-working
+Branch: autopilot/build
+
+Codex config applied in /Users/omarebrahim/.codex/config.toml:
+- model = "gpt-5.5"
+- model_reasoning_effort = "xhigh"
+- approval_policy = "never"
+- sandbox_mode = "danger-full-access"
+- computer use plugin remains enabled
+
+Config syntax was verified with:
+TERM=xterm-256color codex --strict-config doctor --summary --ascii
+Result: 13 ok, 0 fail. Notes only: newer Codex version available, mixed ChatGPT/API-key auth signals.
+
+Setup smoke checks:
+- Engine already running as PID 29260 on 127.0.0.1:8787.
+- GET /health returned ok.
+- GET /gateway returned provider=openrouter and api_hands_mode=live.
+- bash scripts/run_suite.sh returned 29 passed, 0 failed. This suite force-stubs model and hands.
+- Computer Use opened real Chrome. It showed signed-in profile Omar, visible Anticipy extension, and example.com in a real Chrome tab.
+- macapp/scripts/build_app.sh built macapp/dist/Anticipy.app.
+- AUTOPILOT_LAP=setup-smoke bash scripts/realday.sh wrote logs/trace/setup-smoke.jsonl and logs/last_realday.json. The setup sample line was ignored.
+- AUTOPILOT_LAP=setup-smoke autopilot/judge_lap --self-check launched a separate Codex session and wrote logs/verdicts/setup-smoke_selfcheck.md with Verdict: FAKE.
+
+Observed repo-fact drift:
+- engine/.venv-bu-311 is not present. Current embedder code imports sentence-transformers from engine/.venv, and that venv has sentence-transformers, torch, numpy, and sklearn installed. autopilot/09_REPO_FACTS.md was updated.
