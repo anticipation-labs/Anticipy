@@ -33,14 +33,6 @@ struct RootView: View {
         case connect = "Connect"
         case main = "Main"
         var id: String { rawValue }
-
-        var shortcut: KeyEquivalent {
-            switch self {
-            case .onboarding: return "1"
-            case .connect: return "2"
-            case .main: return "3"
-            }
-        }
     }
 
     @State private var screen: Screen = .onboarding
@@ -88,11 +80,9 @@ private struct Rail: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut(s.shortcut, modifiers: .command)
-                .accessibilityLabel(s.rawValue)
             }
             Spacer()
-            Text("scaffold")
+            Text("scaffold · inert")
                 .font(DS.caption())
                 .foregroundColor(DS.textSecondary.opacity(0.7))
         }

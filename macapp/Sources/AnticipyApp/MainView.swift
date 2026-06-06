@@ -33,55 +33,6 @@ final class FeedModel: ObservableObject {
     }
 }
 
-@MainActor
-final class TaskInputModel: ObservableObject {
-    @Published var text = ""
-    @Published var isSubmitting = false
-    @Published var lastError: String?
-    @Published var lastAccepted = false
-
-    private let url = URL(string: "http://127.0.0.1:8787/event")!
-
-    var canSubmit: Bool {
-        !isSubmitting && !trimmedText.isEmpty
-    }
-
-    func submit(afterAccepted: @escaping () -> Void) {
-        let bodyText = trimmedText
-        guard !bodyText.isEmpty, !isSubmitting else { return }
-
-        isSubmitting = true
-        lastError = nil
-        lastAccepted = false
-
-        Task {
-            do {
-                var req = URLRequest(url: url)
-                req.httpMethod = "POST"
-                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                req.httpBody = try JSONSerialization.data(withJSONObject: ["source": "app", "text": bodyText])
-                let (_, response) = try await URLSession.shared.data(for: req)
-
-                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                    throw URLError(.badServerResponse)
-                }
-
-                text = ""
-                lastAccepted = true
-                afterAccepted()
-            } catch {
-                lastError = "Engine did not accept that task."
-            }
-
-            isSubmitting = false
-        }
-    }
-
-    private var trimmedText: String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
 // ---- Room 6: the "needs you" surface — pending detrimental actions awaiting approve/deny ----
 struct PendingItem: Decodable, Identifiable {
     let ask_id: String
@@ -126,7 +77,6 @@ final class PendingModel: ObservableObject {
 struct MainView: View {
     @StateObject private var feed = FeedModel()
     @StateObject private var pending = PendingModel()
-    @StateObject private var taskInput = TaskInputModel()
     private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -142,11 +92,6 @@ struct MainView: View {
                 }
                 Spacer()
                 RecordControls()
-            }
-
-            TaskComposer(model: taskInput) {
-                feed.refresh()
-                pending.refresh()
             }
 
             if !pending.items.isEmpty { NeedsYou(model: pending) }
@@ -165,73 +110,13 @@ struct MainView: View {
             }
             .frame(maxHeight: .infinity)
 
+            SideDoor()
         }
         .padding(DS.s4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(DS.bg)
         .onAppear { feed.refresh(); pending.refresh() }
         .onReceive(timer) { _ in feed.refresh(); pending.refresh() }
-    }
-}
-
-private struct TaskComposer: View {
-    @ObservedObject var model: TaskInputModel
-    let afterAccepted: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.s1) {
-            HStack(spacing: DS.s1) {
-                Image(systemName: "text.cursor")
-                    .font(.system(size: 12))
-                    .foregroundColor(DS.textSecondary)
-                    .frame(width: 18)
-
-                TextField("Tell Anticipy something...", text: $model.text)
-                    .textFieldStyle(.plain)
-                    .font(DS.body())
-                    .foregroundColor(DS.textPrimary)
-                    .disabled(model.isSubmitting)
-                    .onSubmit { submit() }
-                    .accessibilityLabel("Task input")
-
-                if model.isSubmitting {
-                    ProgressView()
-                        .scaleEffect(0.65)
-                        .frame(width: 22, height: 22)
-                }
-
-                Button(action: submit) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 28, height: 24)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(model.canSubmit ? DS.bg : DS.textSecondary.opacity(0.55))
-                .background(model.canSubmit ? DS.accent : DS.elevated)
-                .clipShape(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous))
-                .disabled(!model.canSubmit)
-                .help("Send task")
-                .accessibilityLabel("Send task")
-            }
-            .padding(.horizontal, DS.s2)
-            .padding(.vertical, DS.s1)
-            .background(DS.surface)
-            .overlay(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous).stroke(DS.hairline))
-
-            if let error = model.lastError {
-                Text(error)
-                    .font(DS.secondary())
-                    .foregroundColor(DS.titanium)
-            } else if model.lastAccepted {
-                Text("Sent to the engine.")
-                    .font(DS.secondary())
-                    .foregroundColor(DS.textSecondary)
-            }
-        }
-    }
-
-    private func submit() {
-        model.submit(afterAccepted: afterAccepted)
     }
 }
 
@@ -340,5 +225,20 @@ private struct RecordControls: View {
             .background(DS.elevated)
             .clipShape(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous))
         }
+    }
+}
+
+private struct SideDoor: View {
+    var body: some View {
+        HStack(spacing: DS.s1) {
+            Image(systemName: "text.cursor").font(.system(size: 12)).foregroundColor(DS.textSecondary)
+            Text("Tell Anticipy something…")
+                .font(DS.secondary()).foregroundColor(DS.textSecondary.opacity(0.7))
+            Spacer()
+        }
+        .padding(.horizontal, DS.s2).padding(.vertical, DS.s1)
+        .frame(maxWidth: 360)
+        .background(DS.surface)
+        .overlay(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous).stroke(DS.hairline))
     }
 }
