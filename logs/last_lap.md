@@ -1,26 +1,29 @@
 # Last Lap
 
-Lap: 20260606T113648Z
-Date: 2026-06-06T12:43:44Z
+Lap: 20260606T124709Z
+Date: 2026-06-06T13:23:15Z
 Milestone: M0 - ugly floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- Builder commit `7623805` added an orchestrator final completion guard intended to stop action-like goals from reaching `goal_done` using only support evidence.
-- Focused checks passed in the builder session, and the builder-visible raw MP3 realday completed. This was builder-side evidence only.
+- The live OpenRouter planner no longer receives internal support tools as valid user-task completion intents.
+- Live plans are filtered to artifact-capable user-task intents: `send_email`, `send_email_draft`, `create_event`, `message`, `post_to_x`, and `browse_task`.
+- If a live plan contains no valid user-task step after one bounded re-ask, the goal now waits instead of being marked done with empty or support-only proof.
+
+Builder checks:
+- Focused fake-live planner routing check passed.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/core/orchestrator.py` passed.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+
+Realday:
+- Required command ran: `AUTOPILOT_LAP=20260606T124709Z bash scripts/realday.sh`.
+- Builder-visible raw MP3 `2026-05-20_07_34_11` completed with `line_count=3228`, `act=28`, `ask=385`, `ignore=2815`, and `wall_seconds=1845.675`.
+- This is builder-side evidence only. No judge has verified a current-lap external artifact.
 
 Judge status:
-- Verdict: `FAKE`. The separate judge ruled this lap was not real.
-- Held-out run: `line_count=1606`, `act=13`, `ask=176`, `ignore=1417`, `wall_seconds=883.615`.
-- Verified current-lap external artifacts: `0`.
-- Internal false completions observed: `13` `goal_done` entries with no artifact-shaped proof.
-- Planted-fake self-check passed, computer-use self-test passed, tamper scan passed, Calendar connector read-back plus Calendar/Gmail screenshots found no current-lap artifact, and Gemini cross-check agreed with `FAKE` at confidence `1.0`.
-- M0 still requires a fresh unseen held-out day to produce a real verified artifact in a real app.
-
-Gate action:
-- Builder commit `7623805` was reverted by `84fe1d0`.
-- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
-- The held-out day did not rotate out because failed laps do not burn held-out days.
+- Verdict: `PENDING`.
+- M0 still requires the separate judge to verify a real task really happened on a fresh unseen held-out day.
 
 Next:
-- Start the next builder lap. Do not spend another lap on guard-only proof. Route action tasks into API hands first, then the real browser agent hand, else explicit ask/needs-human.
+- Run the separate judge for lap `20260606T124709Z`.
+- If the judge finds no real external artifact, revert this slice and pivot again toward real API-hand action creation or explicit needs-human surfacing.

@@ -18,6 +18,16 @@ from .gateway import SMART, ModelGateway
 from .store import GoalStore
 
 
+USER_TASK_INTENTS = (
+    "send_email",
+    "send_email_draft",
+    "create_event",
+    "message",
+    "post_to_x",
+    "browse_task",
+)
+
+
 class Approver:
     async def approve(self, goal: Goal, step: Step) -> bool:  # pragma: no cover - interface
         raise NotImplementedError
@@ -97,14 +107,20 @@ class Orchestrator:
         self._log("goal_planning", {"goal_id": goal.id})
 
         context = self.memory_context(goal.description or goal.intent) if self.memory_context else {}
+        allowed_intents = self._allowed_live_plan_intents()
         plan_raw = await self.gateway.think(self._plan_prompt(goal, context), tier=SMART, caller="plan", json_mode=True)
-        goal.steps = self._parse_plan(plan_raw)
+        goal.steps = self._parse_plan(plan_raw, allowed_intents=allowed_intents)
         if not goal.steps:   # ONE bounded re-ask for clean JSON (real models drift; the stub never needs it)
             strict = (self._plan_prompt(goal, context)
                       + '\n\nYour previous reply could not be parsed. Reply with ONLY valid minified JSON '
                         '{"steps":[{"intent":"...","args":{},"risk":"low"}]} and nothing else.')
             plan_raw = await self.gateway.think(strict, tier=SMART, caller="plan", json_mode=True)
-            goal.steps = self._parse_plan(plan_raw)
+            goal.steps = self._parse_plan(plan_raw, allowed_intents=allowed_intents)
+        if not goal.steps:
+            goal.state = GoalState.waiting
+            self.store.save(goal)
+            self._log("goal_waiting", {"goal_id": goal.id, "reason": "no_valid_user_task_plan"})
+            return goal
         goal.state = GoalState.running
         self.store.save(goal)
         self._log("goal_planned", {"goal_id": goal.id, "steps": [s.intent for s in goal.steps]})
@@ -191,25 +207,37 @@ class Orchestrator:
         # chooses). The stub gateway greps the prompt for keywords, so this is gated to a real provider —
         # the deterministic tier's prompt (and plans) stay byte-identical.
         if getattr(self.gateway, "provider", None) == "openrouter":
-            base += "\nUse ONLY these intents (pick the closest fit): " + ", ".join(sorted(self.bus._workers)) + "."
-            base += ('\nArg shapes - browse_task{"task":<plain-English what to do/find on the web>}, '
-                     'read_page{"task":<what to read>}, send_email{"recipient","subject","body"}, '
-                     'send_text{"recipient","body"}, create_event{"title","when"}, create_doc{"title","body"}, '
-                     'write_memory{"text"}. For any web search / lookup / shopping / browsing step, use '
-                     'browse_task with a "task" string.')
+            base += "\nUse ONLY these user-task intents: " + ", ".join(self._allowed_live_plan_intents()) + "."
+            base += ('\nInternal support tools are not completion proof and must not appear in a user-task plan: '
+                     'read_context, write_memory, list_open_loops, send_text, call.'
+                     '\nArg shapes - browse_task{"task":<plain-English what to do/find on the web>}, '
+                     'send_email{"recipient","subject","body"}, '
+                     'send_email_draft{"recipient","subject","body"}, '
+                     'create_event{"title","when"}, message{"channel","text"}, post_to_x{"text"}. '
+                     'Use create_event for reminders, deadlines, calendar holds, scheduling, and blocked time. '
+                     'Use an API-backed intent when one fits; use browse_task only when no API-backed intent fits.')
         return base + (f"\nRELEVANT MEMORY: {context}" if context else "")
 
+    def _allowed_live_plan_intents(self) -> Optional[tuple[str, ...]]:
+        if getattr(self.gateway, "provider", None) != "openrouter":
+            return None
+        available = set(self.bus._workers)
+        return tuple(intent for intent in USER_TASK_INTENTS if intent in available)
+
     @staticmethod
-    def _parse_plan(raw: str) -> list:
+    def _parse_plan(raw: str, allowed_intents: Optional[tuple[str, ...]] = None) -> list:
         """Robust: tolerate fenced / prose-wrapped / {steps:[...]} or bare-list output; skip a
         malformed step rather than dropping the whole plan (the Wave-0 PLAN_BAD @ live killer)."""
         data = _robust_json(raw)
         steps_raw = data.get("steps") if isinstance(data, dict) else (data if isinstance(data, list) else None)
         if not isinstance(steps_raw, list):
             return []
+        allowed = set(allowed_intents) if allowed_intents is not None else None
         out = []
         for s in steps_raw:
             if not isinstance(s, dict) or not s.get("intent"):
+                continue
+            if allowed is not None and s["intent"] not in allowed:
                 continue
             risk = s.get("risk", "low")
             risk = Risk(risk) if risk in ("low", "needs_confirm", "ask_human") else Risk.low
