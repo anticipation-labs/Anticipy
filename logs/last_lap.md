@@ -21,8 +21,8 @@ Judge status:
 - Verdict: `PENDING_JUDGE`.
 - Builder-side successes are not proof. M0 still requires the separate judge to run a held-out real day and verify a current-lap real artifact in a real app with connector read-back and screenshot.
 - OpenRouter credit is very low and caused one intermediate builder raw run to fail with a 402 prompt-budget error. If the judge cross-check cannot run because the key is unfunded, that is a human money/key gate.
+- Judge launch attempts after commit `df47205`: the plain `autopilot/judge_lap` startup hit a Supabase MCP OAuth token-refresh error before verdict; a manual equivalent with `-c mcp_servers.supabase.enabled=false` bypassed only that unused MCP, then hit Codex CLI usage limit before any held-out read. Retry after `2026-06-06 08:42 America/Vancouver`. No held-out day was burned.
 
 Next:
-- Commit this lap on `autopilot/build`.
-- Run the separate judge for lap `20260606T151119Z` with the resulting builder commit.
+- After the Codex usage reset, run the separate judge for lap `20260606T151119Z` with `AUTOPILOT_BUILDER_COMMIT=df47205`. If the Supabase MCP startup error repeats, use the same judge prompt with per-invocation `-c mcp_servers.supabase.enabled=false`; do not disable computer-use/browser tools.
 - Apply the normal gate. Keep only if the judge rules REAL and all oversight checks pass; otherwise revert and log the failure.

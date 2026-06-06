@@ -14,7 +14,8 @@ Proven:
 - No M0 real task is proven on a fresh unseen day. Builder-side raw audio runs, builder-side acts, app UI inspection, DuckDuckGo searches, read-context proof, write-memory proof, channel-stub proof, stale eval artifacts, support-only internal proof, unjudged app input work, unjudged completion-guard work, reverted planner-filtering work, and pending builder successes are not judge-verified M0 proof.
 
 Pending gates:
-- Separate judge is pending for lap `20260606T151119Z` after the builder commit is created.
+- Separate judge is pending for lap `20260606T151119Z` against builder commit `df47205`. Do not start a new builder lap before judging it.
+- Judge launch notes: plain `autopilot/judge_lap` failed before verdict because the unused Supabase MCP hit an OAuth token-refresh startup error. A manual equivalent with per-invocation `-c mcp_servers.supabase.enabled=false` keeps computer-use/browser tools enabled and bypasses only that Supabase MCP. That second launch then hit Codex CLI usage limit before any held-out read or verdict. Retry after `2026-06-06 08:42 America/Vancouver`. No held-out day was burned.
 - OpenRouter credit is very low. A builder raw run failed once on a 402 prompt-budget error before fallback-first routing. If the separate judge's different-family cross-check cannot run because the key is unfunded or prompt-limited, that becomes a human money/key gate in `PENDING_FOR_OMAR.md`.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 - Several judge laps found Gmail read-only connector read-back returns `auth_status: pending`; UI screenshots were used for those verdicts, but a future Gmail artifact still needs connector read-back or a recorded scope gate.
@@ -50,8 +51,7 @@ Dead ends not to retry blindly:
 - OpenRouter low credit can produce truncated prose or 402 prompt-budget errors. Do not assume JSON mode is reliable under credit pressure; use deterministic app-backed routing for clear actions and treat real key exhaustion as a human gate.
 
 Next:
-- Commit lap `20260606T151119Z` on `autopilot/build`.
-- Run the separate judge for `20260606T151119Z` with `AUTOPILOT_BUILDER_COMMIT` set to the resulting commit.
+- Run the separate judge for `20260606T151119Z` with `AUTOPILOT_BUILDER_COMMIT=df47205` after the Codex CLI usage reset. If the Supabase MCP startup error repeats, use the same judge prompt with per-invocation `-c mcp_servers.supabase.enabled=false`; do not disable computer-use/browser tools.
 - Apply the normal gate from `autopilot/04_LOOP.md`: keep only if the judge rules REAL, the different-family cross-check agrees, the diff scan is clean, and no tripwire fires. Otherwise revert and log.
 
 Law digest:
