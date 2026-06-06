@@ -1,41 +1,35 @@
 # Last Lap
 
-Lap: 20260606T060511Z
-Date: 2026-06-06T06:56:20Z
-Milestone: M0 - ugly floor
+Lap: 20260606T070041Z
+Date: 2026-06-06T07:39:05Z
+Milestone: M0 - ugly floor, with M2 real app input perimeter slice
 ALL_MILESTONES_DONE: false
 
 What changed:
-- The builder added an orchestrator-level external-action completion guard and support-only plan rejection.
-- Focused orchestrator checks, a direct guard smoke, and `bash scripts/run_suite.sh` passed.
-- The required builder-visible raw MP3 realday ran to completion with 3,228 kept segments and decisions `act=28`, `ask=385`, `ignore=2815`.
-- The separate judge ran a held-out realday and ruled `FAKE`.
-- The unproven code slice from commit `590f1c060112134bcca12b9939c962cdbc027dcb` was reverted by the gate.
+- Replaced the inert Mac app side-door text with a real typed task input in `macapp/Sources/AnticipyApp/MainView.swift`.
+- Added `TaskInputModel`, which posts `{"source":"app","text":...}` to `http://127.0.0.1:8787/event`.
+- Added submit state, failure state, a paper-plane send button, Return-key submit, and feed/pending refresh after a successful handoff.
+- Rebuilt the tracked local app bundle at `macapp/dist/Anticipy.app`.
 
-Judge checks:
-- Planted-fake self-check passed at `logs/verdicts/20260606T060511Z_selfcheck.md`.
-- Computer-use self-test passed with Chrome on `https://example.com`; screenshot is in `logs/verdicts/20260606T060511Z/computer_use_selftest_example_domain.png`.
-- Tamper scan passed for the target builder commit and later control-plane commits.
-- Held-out run completed with decisions `act=0`, `ask=49`, `ignore=394` in 129.922 seconds.
-- Calendar and Gmail checks found no current-lap artifact; screenshots are in `logs/verdicts/20260606T060511Z/`.
-- OpenRouter cross-check used a different model family and agreed with `FAKE` at confidence 1.0.
+Verification:
+- `bash macapp/scripts/build_app.sh` passed and built `macapp/dist/Anticipy.app`.
+- Harmless app-source API smoke posted to `/event`, returned `decision=ignore`, and appeared in glassbox.
+- Computer Use launched the built app and reached the Main surface. It did not reliably expose or focus the edited field because the pending list filled the surface, so functional submit proof came from the shared `/event` path rather than a completed UI typing action.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 
-Why it failed:
-- M0 requires a real task from a fresh unseen day to complete in a real app.
-- The held-out run produced no current-lap real-world artifact.
-- Calendar connector read-back and screenshots found no matching current-lap event.
-- Gmail read-only connector read-back still returned `auth_status: pending`; Gmail Sent screenshot found no matching current-lap email.
-- The guard reduced false completions but did not make the system act successfully on a real day.
+Realday:
+- Required command ran: `AUTOPILOT_LAP=20260606T070041Z bash scripts/realday.sh`.
+- Builder-visible raw audio id: `2026-05-20_07_34_11`.
+- Local Whisper kept 3,228 segments.
+- Decisions: `act=28`, `ask=385`, `ignore=2815`.
+- Wall time: 1,802.66 seconds.
+- This is not judge proof and does not advance M0.
 
-Proof and status:
-- Verdict: `logs/verdicts/20260606T060511Z.md`.
-- Durable screenshot proofs: `logs/verdicts/20260606T060511Z/computer_use_selftest_example_domain.png`, `logs/verdicts/20260606T060511Z/calendar_search_current_lap_no_results.png`, and `logs/verdicts/20260606T060511Z/gmail_sent_search_current_lap_no_results.png`.
-- Raw held-out traces and raw read-back JSON are local-only and ignored.
-- Failed judge runs do not burn held-out days under Amendment 2.
-- M0 remains open. Generalization remains UNPROVEN. Reality judge verified pass rate is 0/5 under amended rules.
-- DRIFT is active: builder tests remain 29/29 while reality judge pass rate remains 0 percent. Do not advance.
+Judge status:
+- Judge verdict: `PENDING`.
+- No separate held-out judge verdict exists for this lap yet.
+- M0 remains open until the judge verifies a current-lap real artifact on a fresh unseen day.
 
 Next:
-- Move a perimeter milestone slice next, preferably M2 real app input, while still running the whole-house realday. Do not spend a fourth consecutive lap only on inference/brain.
-- Keep the lesson from the human FYI: whole-task text in a search bar is not thinking. Search is allowed only for explicit information lookup; action tasks must decompose into API hands, the real browser agent hand, or ask/needs-human.
-- Do not add another narrow browser regex patch. Fix routing or product perimeter, then judge it.
+- Separate judge must run planted-fake self-check, computer-use self-test, diff scan, held-out realday, real app proof, and different-family cross-check.
+- If this lap is kept, the next build slice should continue product perimeter work, preferably making the app-side typed task path easier to inspect directly when pending asks fill the surface or wiring another real hand path, while still running the whole-house realday.
