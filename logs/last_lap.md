@@ -21,7 +21,8 @@ Judge status:
 - Verdict: `PENDING`. The separate judge has not ruled on this lap.
 - M0 still requires a fresh unseen held-out day to produce a real verified artifact in a real app.
 - Boundary maintenance at `2026-06-06T09:13:41Z` rechecked Amendment 2 on disk and untracked ignored setup judge replay logs from git with `git rm --cached`, leaving the local copies in place.
+- A judge launch at `2026-06-06T09:14:47Z` failed before any held-out read because Codex CLI hit its usage limit and reported retry after `2026-06-06 03:37 America/Vancouver`. No verdict exists and no held-out day was burned.
 
 Next:
-- Run the separate judge with planted-fake self-check, computer-use self-test, diff scan, held-out realday, real app proof, and different-family cross-check.
+- After the usage reset, run `AUTOPILOT_LAP=20260606T082329Z AUTOPILOT_BUILDER_COMMIT=e062cdb autopilot/judge_lap` with planted-fake self-check, computer-use self-test, diff scan, held-out realday, real app proof, and different-family cross-check.
 - If the judge again finds no real artifact, keep perimeter momentum but prioritize routing action tasks into API hands, the real browser agent hand, or explicit ask/needs-human instead of internal read-context completions.

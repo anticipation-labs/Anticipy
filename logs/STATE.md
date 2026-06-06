@@ -1,6 +1,6 @@
 # STATE
 
-Current milestone: M0, ugly floor. Latest judged lap `20260606T070041Z` was `FAKE`: the separate judge ran a held-out realday, found `act=31`, `ask=271`, `ignore=1690`, and verified no current-lap Calendar, Gmail, browser, or other external real-world artifact. Current builder lap `20260606T082329Z` made an M2 perimeter slice by adding a real, directly visible Mac app task composer and is awaiting separate judge verdict `PENDING`. M0 remains open until a fresh held-out real day produces a real verified artifact in a separate judge session.
+Current milestone: M0, ugly floor. Latest judged lap `20260606T070041Z` was `FAKE`: the separate judge ran a held-out realday, found `act=31`, `ask=271`, `ignore=1690`, and verified no current-lap Calendar, Gmail, browser, or other external real-world artifact. Current builder lap `20260606T082329Z` made an M2 perimeter slice by adding a real, directly visible Mac app task composer and is awaiting separate judge verdict `PENDING`. A judge launch at `2026-06-06T09:14:47Z` failed before any held-out read because the Codex CLI account hit its usage limit and reported retry after `2026-06-06 03:37 America/Vancouver`; no verdict exists and no held-out day was burned. M0 remains open until a fresh held-out real day produces a real verified artifact in a separate judge session.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -13,7 +13,7 @@ Proven:
 - No M0 real task is proven on a fresh unseen day. Builder-side raw audio runs, builder-side acts, app UI inspection, DuckDuckGo searches, read-context proof, write-memory proof, channel-stub proof, stale eval artifacts, support-only internal proof, and unjudged app input work are not judge-verified M0 proof.
 
 Pending gates:
-- No current hard human gate blocks M0.
+- Temporary execution gate: Codex CLI usage limit blocks starting a fresh separate judge until the reported reset at `2026-06-06 03:37 America/Vancouver`. Spending money to buy credits is a human-only gate and will not be done; waiting and retrying after reset is the current path.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 - Judge laps `20260606T020452Z`, `20260606T025532Z`, `20260606T060511Z`, and `20260606T070041Z` found Gmail read-only connector read-back returns `auth_status: pending`; UI screenshots were used for those verdicts, but a future Gmail artifact still needs connector read-back or a recorded scope gate.
 - Lap `20260606T082329Z` judge verdict is pending.
@@ -46,7 +46,7 @@ Dead ends not to retry blindly:
 - The `20260606T070041Z` app input slice was not proven by the judge and was reverted. Lap `20260606T082329Z` retries the M2 input slice with the composer directly visible above the feed and keyboard-reachable, but it still requires a real judged action before M2 or M0 can be claimed.
 
 Next:
-- The next required action is the separate judge for lap `20260606T082329Z`, including planted-fake self-check, computer-use self-test, diff scan, held-out realday, real app proof, and different-family cross-check.
+- The next required action after the Codex CLI usage reset is the separate judge for lap `20260606T082329Z`, including planted-fake self-check, computer-use self-test, diff scan, held-out realday, real app proof, and different-family cross-check. Run `AUTOPILOT_LAP=20260606T082329Z AUTOPILOT_BUILDER_COMMIT=e062cdb autopilot/judge_lap`.
 - If the judge rules `FAKE`, revert the unproven slice by gate and pivot toward routing action tasks into API hands, the real browser agent hand, or explicit ask/needs-human. Do not add more inference-only proof.
 - Do not shrink M0 and do not count builder-visible raw audio or app UI inspection as proof.
 
