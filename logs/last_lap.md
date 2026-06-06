@@ -1,23 +1,28 @@
 # Last Lap
 
-Lap: 20260606T013339Z
-Date: 2026-06-06T02:01:53Z
+Lap: 20260606T020452Z
+Date: 2026-06-06T02:22:38Z
 Milestone: M0 - ugly floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- The builder attempted a generic calendar-hold policy slice and ran the required builder-visible MP3 realday.
-- The separate judge ruled `BLOCKED_NO_HOLDOUT` because its strict current accounting treated all four holdout files as already referenced by an older verdict.
-- The unproven builder commit `1cbf82337d2a8fb4550720945f79bd2d31e9a360` was reverted by gate in `9bdc118`; verdict artifacts were preserved in `logs/verdicts/20260606T013339Z.md`.
-- Control-plane holdout burn accounting is being clarified so inventory-only filename lists do not consume held-out days. This is not milestone proof.
+- Changed capped local audio transcription so a max-audio cap samples speech from distributed bands across the day instead of only the first capped seconds.
+- Left `scripts/realday.sh`, tests, judge files, holdout files, and verdict files untouched.
+- No human gate was encountered.
 
 Checks:
-- Judge planted-fake self-check passed.
-- Judge computer-use self-test passed with Chrome on `https://example.com`; screenshot is in `logs/verdicts/20260606T013339Z/computer_use_selftest_example_domain.png`.
-- Judge tamper scan was clean for the builder diff.
-- Different-family OpenRouter cross-check used `google/gemini-3.5-flash`, agreed with `BLOCKED_NO_HOLDOUT`, and cost 0.0085275.
-- No held-out realday run completed and no real app artifact was verified. M0 remains unproven. Generalization remains UNPROVEN.
+- `_cap_chunks` helper smoke passed with `PYTHONPATH=engine`, showing a 90 second cap chooses spread-out chunks instead of the front of the list.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- Live engine health was ok on `127.0.0.1:8787`; `/gateway` reported OpenRouter with live hands.
+- Required run completed: `AUTOPILOT_LAP=20260606T020452Z bash scripts/realday.sh`.
+- That run used the builder-visible MP3 `realdays/raw/2026-05-20_07_34_11.mp3`, did not read holdout, ran uncapped because the exact command had no cap env, processed 3,228 transcript segments, and produced 28 act, 385 ask, and 2,815 ignore decisions in 698.807 seconds.
+
+Proof and status:
+- Proof refs: `logs/trace/20260606T020452Z.jsonl` and `logs/last_realday.json`.
+- Judge verdict is PENDING. Builder-side acts are not proof and may include false positives from rough transcription.
+- M0 remains open. Generalization remains UNPROVEN.
 
 Next:
-- Rerun the loop so the judge can select a genuinely fresh held-out MP3. Any held-out day actually opened, transcribed, attempted, or used in a verdict must rotate out.
-- Verify any produced real app artifact with connector read-back and screenshots. No milestone advances without that.
+- Judge should run on a genuinely fresh held-out MP3 without treating inventory-only filename lists as burned.
+- Any held-out day actually opened, transcribed, attempted, selected, or used in a verdict must rotate out.
+- Next builder work should reduce generic false-action and noisy-ask behavior before trying to claim M0 progress.

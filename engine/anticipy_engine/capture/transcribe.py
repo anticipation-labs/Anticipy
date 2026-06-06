@@ -8,6 +8,7 @@ model.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 from pathlib import Path
 import re
@@ -225,17 +226,66 @@ def _split_intervals(
 def _cap_chunks(chunks: Sequence[Tuple[float, float]], *, max_total_seconds: float) -> List[Tuple[float, float]]:
     if max_total_seconds <= 0:
         return list(chunks)
+    usable = [(start, end) for start, end in chunks if end > start]
+    if not usable:
+        return []
+    total_available = sum(end - start for start, end in usable)
+    if total_available <= max_total_seconds:
+        return usable
+
+    # A realday cap is a cost guard, not permission to inspect only the first
+    # minutes of a day. Sample across the available speech so the builder-visible
+    # smoke has a chance to exercise morning, middle, and later events.
+    target_seconds = max(5.0, float(os.environ.get("ANTICIPY_AUDIO_CHUNK_SECONDS", "30")))
+    bands = max(1, min(len(usable), math.ceil(max_total_seconds / target_seconds)))
+    per_band = max_total_seconds / bands
     kept: List[Tuple[float, float]] = []
-    total = 0.0
-    for start, end in chunks:
-        remaining = max_total_seconds - total
-        if remaining <= 0:
-            break
-        if end - start > remaining:
-            end = start + remaining
-        kept.append((start, end))
-        total += max(0.0, end - start)
-    return kept
+    used: set[int] = set()
+
+    for band in range(bands):
+        start_idx = int(band * len(usable) / bands)
+        end_idx = int((band + 1) * len(usable) / bands)
+        band_indices = list(range(start_idx, max(start_idx + 1, end_idx)))
+        band_budget = per_band
+        for idx in _center_out(band_indices):
+            if idx in used or band_budget <= 0:
+                continue
+            start, end = usable[idx]
+            take = min(end - start, band_budget)
+            kept.append((start, start + take))
+            used.add(idx)
+            band_budget -= take
+
+    total = sum(end - start for start, end in kept)
+    if total < max_total_seconds:
+        for idx in _center_out(list(range(len(usable)))):
+            if idx in used:
+                continue
+            remaining = max_total_seconds - total
+            if remaining <= 0:
+                break
+            start, end = usable[idx]
+            take = min(end - start, remaining)
+            kept.append((start, start + take))
+            used.add(idx)
+            total += take
+
+    return sorted(kept)
+
+
+def _center_out(indices: Sequence[int]) -> List[int]:
+    if not indices:
+        return []
+    mid = (len(indices) - 1) // 2
+    ordered: List[int] = []
+    for offset in range(len(indices)):
+        left = mid - offset
+        right = mid + offset
+        if left >= 0:
+            ordered.append(indices[left])
+        if right != left and right < len(indices):
+            ordered.append(indices[right])
+    return ordered
 
 
 def _extract_wav(src: Path, dest: Path, start: float, end: float) -> None:
