@@ -9,6 +9,7 @@ Proven:
 - Judge proof for `20260606T082329Z` exists at `logs/verdicts/20260606T082329Z.md`: planted-fake self-check passed, computer-use self-test passed with screenshot, tamper scan was clean for target builder commit `e062cdb` and later control-plane commits, a held-out MP3 ran end to end, Calendar and Gmail read-back/screenshots found no current-lap artifact, Gemini OpenRouter cross-check agreed with `FAKE`, and no held-out day rotated out.
 - Builder lap `20260606T082329Z` added a real Mac app Main task composer that posts app tasks to `/event`, rail keyboard shortcuts, and task accessibility labels; `bash macapp/scripts/build_app.sh` passed; `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. The separate judge did not prove a real artifact, so the code slice is reverted and M2 is not claimed.
 - Gate verification after reverting `e062cdb`: `bash macapp/scripts/build_app.sh` passed and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- Gate commits for `20260606T082329Z`: revert commit `b07a1d0`, proof/log commit `5cd8076`.
 - Builder-visible raw realday for `20260606T082329Z` completed on raw audio id `2026-05-20_07_34_11` with `line_count=3228`, `act=28`, `ask=385`, `ignore=2815`, and `wall_seconds=2090.558`. This is builder-side evidence only, not judge proof.
 - Amendment 2 is active: raw traces, `logs/last_realday.json`, transcript files, `.anticipy-data/`, and raw verdict JSON/JSONL are local-only and ignored. Builder-readable durable files contain verdicts, counts, proof links, and lessons only, not raw held-out transcript text.
 - Boundary maintenance at `2026-06-06T09:13:41Z` rechecked Amendment 2 on disk and untracked ignored setup judge replay logs from git with `git rm --cached`, leaving the local copies in place.
@@ -47,8 +48,7 @@ Dead ends not to retry blindly:
 - The `20260606T070041Z` app input slice was not proven by the judge and was reverted. Lap `20260606T082329Z` retried the M2 input slice with the composer directly visible above the feed and keyboard-reachable, but the judge again verified no real artifact, so that unproven slice is reverted and cannot be claimed.
 
 Next:
-- Commit the gate result for lap `20260606T082329Z`, keeping only allowed verdict summaries/screenshots and local-only ignored raw judge artifacts.
-- Start the next builder lap after the gate commit. Pivot toward routing action tasks into API hands, the real browser agent hand, or explicit ask/needs-human. Do not add more inference-only proof.
+- Start the next builder lap. Pivot toward routing action tasks into API hands, the real browser agent hand, or explicit ask/needs-human. Do not add more inference-only proof.
 - Do not shrink M0 and do not count builder-visible raw audio or app UI inspection as proof.
 
 Law digest:
