@@ -129,7 +129,10 @@ def default_stub(task: str, tier: str, caller: str) -> str:
                           "risk": "needs_confirm"})
         if any(k in t for k in ("lunch", "book", "calendar", "meet", "schedule")):
             steps.append({"intent": "create_event",
-                          "args": {"title": "Lunch with Sarah", "when": "Friday 12:00"}, "risk": "low"})
+                          "args": {"summary": "Lunch with Sarah",
+                                   "start_datetime": "2030-01-04T12:00:00-08:00",
+                                   "end_datetime": "2030-01-04T12:30:00-08:00"},
+                          "risk": "low"})
         if any(k in t for k in ("remind", "friday", "follow", "later")):
             steps.append({"intent": "write_memory",
                           "args": {"kind": "open_loop", "text": "Send Sarah the Q3 deck Friday"}, "risk": "low"})

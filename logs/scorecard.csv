@@ -1,2 +1,3 @@
 lap,date,milestone,realday_id,judge_verdict,real_tasks_attempted,real_tasks_verified,false_actions,regressions,taste_confidence,cost_usd,wall_seconds,notes
 setup-smoke,2026-06-06T00:51:18Z,SETUP,setup-smoke-sample,SELF_CHECK_FAKE_OK,0,0,0,0,LOW,0.0,0.081,"synthetic setup smoke only; suite 29/29 stub/mock; real fresh-day proof not claimed"
+20260606T005447Z,2026-06-06T01:02:20Z,M0,20260606T005447Z-m0-calendar,PENDING,1,0,0,0,LOW,0.02,6.853,"live realday acted through GoogleCalendar.CreateEvent; builder-side event id r38vc9ps5hnejm9idatknuia0o; judge pending"

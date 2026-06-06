@@ -29,6 +29,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+logs/codex/build_*.jsonl
 
 # os / editor
 .DS_Store
