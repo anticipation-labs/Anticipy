@@ -21,8 +21,7 @@ Realday:
 - Builder-visible raw MP3: `realdays/raw/2026-05-20_07_34_11.mp3`.
 - Source summary: 18,000.04 seconds of audio, 665 chunks, 3,228 kept transcript segments, local Whisper `tiny.en`.
 - Result: `act=28`, `ask=385`, `ignore=2815`, wall time 1110.238 seconds.
-- Summary artifact: `logs/last_realday.json`.
-- Trace artifact: `logs/trace/20260606T060511Z.jsonl`.
+- Raw summary and trace artifacts are local-only and ignored by git under Amendment 2.
 
 Proof and status:
 - Judge verdict: PENDING. No separate judge has ruled on this lap.
@@ -30,5 +29,6 @@ Proof and status:
 - No holdout file was read by the builder.
 
 Next:
-- Separate judge should run the remaining fresh held-out realday with planted-fake self-check, computer-use self-test, diff scan, real app proof, and different-family cross-check.
+- Separate judge should run a held-out realday with planted-fake self-check, computer-use self-test, diff scan, real app proof, and different-family cross-check.
+- Failed judge runs do not burn held-out days under Amendment 2. A held-out day rotates out only after contributing to a milestone PASS.
 - If the judge still finds false completion, inspect planner output and goal proofs around any `goal_done` rows before adding another hand-level patch.

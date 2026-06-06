@@ -4,12 +4,17 @@ The judge exists because you cannot be trusted to grade yourself, and neither ca
 
 The judge is always a separate, fresh Codex session from the builder. It has computer use on. The builder can never write to the judge's outputs. The judge's verdict reasoning is cross-checked by a different model family than the builder through OpenRouter. Builder is Codex/GPT-5.5; use a non-Codex family such as Gemini or Claude for the cross-check. If the Codex judge and the different-family check disagree, rule FAIL and flag it.
 
+## Held-out leakage and privacy
+Anything derived from a held-out day is held-out content. That includes the transcript, judge-run trace, `logs/last_realday.json` from a judge run, raw glassbox or pending snapshots after the held-out run, and cross-check request payloads that include held-out evidence. The builder must never read it, and it must never be committed to git.
+
+Judge verdict summaries may record verdicts, counts, proof links, and lessons. They must not include raw held-out transcript text. Screenshots may be kept as proof when they show real app artifacts, but raw JSON/JSONL evidence from the held-out run stays local-only and ignored.
+
 ## Judge one: the reality judge (for anything that touches an app)
 For every milestone slice that does something in the world, the reality judge does this:
 1. Self-check first ("verify the verifier"). Feed the judge a planted, known-fake result (for example a claim that an email was sent when it was not). If the judge does not catch the planted fake, HALT the whole loop and write `logs/verdicts/JUDGE_BROKEN.md`. A judge that passes a fake is worse than no judge.
 2. Computer-use self-test. Open a known page and confirm the judge can read it. If computer use cannot reliably drive or read the browser, HALT and write `COMPUTER_USE_BROKEN`. A judge that cannot see reality must not rule.
-3. Tamper scan. Look at the builder's last commit diff. Auto-FAIL and HALT on any edit under `tests/`, `judge/`, `realdays/holdout/`, or `scripts/realday.sh`; any hardcoded literal tied to the eval in product code, prompts, or tests outside policy text (the owner's name, their apps, or student-specific words such as FAFSA or roommate); any milestone marked done on fewer than 5 diverse fresh real days; or any pass claimed on self-made or synthetic data. Also scan for secrets. Write `TAMPER` in the verdict when this fires.
-4. Take a real day the builder has never seen, from `realdays/holdout/`. The builder must never read `realdays/holdout/`. Reading, opening, transcribing, attempting, or using a held-out day as verdict evidence burns it. Once a day is used in a verdict, rotate it out so it is never reused as fresh. A mere inventory list of available holdout filenames does not burn those days.
+3. Tamper scan. Look at the builder's last commit diff. Auto-FAIL and HALT on any edit under `tests/`, `judge/`, `realdays/holdout/`, or `scripts/realday.sh`; any hardcoded literal tied to the eval in product code, prompts, or tests outside policy text (the owner's name, their apps, or student-specific words such as FAFSA or roommate); any milestone marked done on fewer than 5 diverse fresh real days; or any pass claimed on self-made or synthetic data. Also scan for secrets and raw held-out or transcript files. Write `TAMPER` in the verdict when this fires.
+4. Take a real day the builder has never seen, from `realdays/holdout/`. The builder must never read `realdays/holdout/`. A held-out day is burned and rotated out only when it contributes to a milestone PASS. A FAILED lap does not burn a day; since the builder never reads held-out content, the judge may reuse those days on later laps. A mere inventory list of available holdout filenames does not burn those days.
 5. Run the whole system on the held-out day.
 6. Open the real apps with computer use and confirm what actually happened. Also read the artifact back through the connector where one exists. For Calendar and Gmail, the judge must do both: API read-back and screenshot. Examples: is the message really in Gmail Sent with that recipient and body. Did the calendar event really get created with that time. Did the cart on the real site really update. Save screenshots as proof under `logs/verdicts/<lap>/`.
 7. Run a different-family OpenRouter cross-check over the evidence and proposed verdict. The cross-check is not proof; it checks the judge's reasoning. If it disagrees with the Codex judge, rule FAIL and flag.
@@ -17,6 +22,13 @@ For every milestone slice that does something in the world, the reality judge do
 9. Write the verdict and proof to `logs/verdicts/<lap>.md`. The builder may never write here.
 
 The reality judge's standard: not "the code looks right," not "a test passed," but "I opened the real app and saw the real result." Seeing is the standard.
+
+## Safe build/test actions
+During build and test, every real artifact must be safe and reversible:
+- Emails: send only to the human's own address. Never send to a real third party.
+- Calendar events and files: create only clearly tagged test items such as `[Anticipy test]`, and delete them once the judge has verified them.
+- Never delete, modify, or overwrite the human's real existing data.
+- Money is a hard stop. Any action that is not trivially reversible, or that touches a real third party, is also a stop. Queue it in `PENDING_FOR_OMAR.md` and prove capability on self-owned or sandbox targets instead.
 
 ## Judge two: the taste judge (for act vs ask vs silent)
 Some of the product is a judgment call with no app to check: was that a real task, or just venting. There is no artifact in the world that proves "that was a vent." The only ground truth is the human's own marks.
@@ -35,6 +47,8 @@ Some of the product is a judgment call with no app to check: was that a real tas
 
 ## Generalization defense
 - A milestone is done only when the reality judge confirms it on at least 5 different held-out real days spanning different situations, not 5 variations of one. Score by the worst case, never the average. One pass means nothing.
+- There are only a few real recordings. The Steve Jobs / Bill Gates interview is not a task-bearing day. Use it only as a silence control: correct behavior is to do nothing. It never counts for or against task completion and never toward the 5-day requirement.
+- If fewer than 5 distinct real task-bearing days exist, do not manufacture, synthesize, or duplicate real days to reach the count. Write plainly in the scorecard `only N real days available; generalization UNPROVEN`, treat passing on available days as a floor, and keep building the perimeter. Faking the count is the disease.
 - Breadth attack: synthetic diverse days for unlike personas may be generated only to break generalization. They can lower confidence and create findings. They can never raise confidence and never count as a pass.
 - Until real diverse users exist, every verdict and scorecard must label generalization as UNPROVEN. Never claim the product works for everyone.
 - Human calibration: every 5 kept laps, write a `CALIBRATION` block into `PENDING_FOR_OMAR.md` with 3 recent verdicts and their actual artifacts/screenshots, asking the human to confirm or overturn. If the human overturns, HALT and recalibrate the judge.

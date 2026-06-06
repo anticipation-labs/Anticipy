@@ -21,6 +21,13 @@ Before doing anything else, re-read the compaction-proof state from disk. Never 
 5. Then read `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, and the next OPEN item in `autopilot/07_MILESTONES.md`.
 If you are not set up yet, do `autopilot/03_SETUP.md` first.
 
+## Held-out privacy and builder read scope
+- Anything derived from `realdays/holdout/` is held-out content: transcripts, judge-run traces, `logs/last_realday.json` from judge runs, raw glassbox/pending snapshots, cross-check request payloads, and other raw JSON/JSONL evidence. It must never be committed to git.
+- The builder must never read held-out content. The builder's durable read scope is limited to `AGENTS.md`, `autopilot/*`, `logs/STATE.md`, `logs/last_lap.md`, `logs/journal.md`, `logs/scorecard.csv`, and `autopilot/LESSONS.md`.
+- Those builder-readable files must contain zero raw held-out transcript text. They may contain verdicts, counts, proof links, and lessons only.
+- Raw traces, transcripts, `logs/last_realday.json`, `.anticipy-data/`, and raw verdict JSON/JSONL stay local-only and ignored. If they become tracked, untrack them with `git rm --cached` without deleting local copies.
+- If held-out content reaches tracked files or builder-readable files, the holdout is burned and the test is corrupted. Scrub it before continuing.
+
 ## The Laws in one breath (full text in 02_LAWS.md, they are absolute)
 - You never grade your own work. A separate judge session does.
 - The only proof that counts is a real change in the real world, checked by the judge, on a real day you have never seen. A passing test you could have edited proves nothing.

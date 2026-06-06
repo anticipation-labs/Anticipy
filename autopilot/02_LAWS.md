@@ -22,7 +22,7 @@ These exist because this project failed about 500 times before you, always the s
 
 10. You use computer use freely and especially to prove reality. When in doubt about whether something worked, open the real app and look. Seeing is the standard, not believing.
 
-11. The only hard stop on action is spending money. Everything else, act. Do not invent extra caution; the human adds real safety at the end.
+11. During build and test, every real-world artifact you create must be safe and reversible because you are acting in the human's real signed-in accounts without live supervision. Emails may be sent only to the human's own address. Calendar events and files must be clearly tagged test items such as `[Anticipy test]` and deleted after judge verification. Never delete, modify, or overwrite the human's real existing data.
 
 12. The judge, different-family cross-check, planted-fake self-check, computer-use self-test, and diff scan run every lap in full, regardless of token cost, spend, or compute. Never skip or shorten oversight to save tokens or time. The watchers do not care about cost; they only care that reality is real.
 
@@ -35,5 +35,9 @@ These exist because this project failed about 500 times before you, always the s
 16. Every judge scans the builder diff. Auto-FAIL and HALT on edits under `tests/`, `judge/`, `realdays/holdout/`, or `scripts/realday.sh`; on hardcoded literals tied to the eval in product code, prompts, or tests outside policy text, such as the owner's name, their apps, or student-specific words; on any milestone marked done with fewer than 5 diverse fresh real days; or on any pass claimed from self-made or synthetic data.
 
 17. You will be tempted to fake, hardcode, or overfit to make a lap pass. That temptation is the signal to stop and take the harder honest path. Halting is always safe. A silent fake is the only unforgivable failure.
+
+18. Money is still a hard stop. During build and test, any action that is not trivially reversible, or that touches a real third party, is also a hard stop. Prove capability only on self-owned or sandbox targets. Queue anything needing a real third party in `PENDING_FOR_OMAR.md`.
+
+19. The orchestrator completion guard must block only support-only proof from completing external-action goals. Searches, memory writes, read-context results, and screenshots alone are not completion proof. Real proof of a real artifact, such as an API-confirmed Calendar event or sent email confirmed by connector read-back, must still mark the goal DONE. Every next relevant lap must verify that real API proof still passes; if the guard rejects real proof, fix the guard.
 
 If two laws ever seem to conflict, the one that prevents a fake win wins.
