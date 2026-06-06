@@ -13,7 +13,7 @@ Proven:
 - No M0 real task is proven on a fresh unseen day. Builder-side raw audio runs, builder-side acts, app UI inspection, DuckDuckGo searches, read-context proof, write-memory proof, channel-stub proof, stale eval artifacts, support-only internal proof, and unjudged app input work are not judge-verified M0 proof.
 
 Pending gates:
-- Temporary execution gate: Codex CLI usage limit blocks starting a fresh separate judge until the reported reset at `2026-06-06 03:37 America/Vancouver`. Spending money to buy credits is a human-only gate and will not be done; waiting and retrying after reset is the current path.
+- Temporary execution gate: Codex CLI usage limit blocks starting a fresh separate judge until the reported reset at `2026-06-06 03:37 America/Vancouver`. Spending money to buy credits is a human-only gate and will not be done; waiting and retrying after reset is the current path. Thread heartbeat `resume-anticipy-judge-after-usage-reset` is scheduled for shortly after reset to resume the pending judge command and delete itself after the judge is running or completed.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 - Judge laps `20260606T020452Z`, `20260606T025532Z`, `20260606T060511Z`, and `20260606T070041Z` found Gmail read-only connector read-back returns `auth_status: pending`; UI screenshots were used for those verdicts, but a future Gmail artifact still needs connector read-back or a recorded scope gate.
 - Lap `20260606T082329Z` judge verdict is pending.
