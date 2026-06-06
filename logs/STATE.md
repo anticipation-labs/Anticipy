@@ -9,6 +9,7 @@ Proven:
 - Builder lap `20260606T082329Z` added a real Mac app Main task composer that posts app tasks to `/event`, rail keyboard shortcuts, and task accessibility labels; `bash macapp/scripts/build_app.sh` passed; `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 - Builder-visible raw realday for `20260606T082329Z` completed on raw audio id `2026-05-20_07_34_11` with `line_count=3228`, `act=28`, `ask=385`, `ignore=2815`, and `wall_seconds=2090.558`. This is builder-side evidence only, not judge proof.
 - Amendment 2 is active: raw traces, `logs/last_realday.json`, transcript files, `.anticipy-data/`, and raw verdict JSON/JSONL are local-only and ignored. Builder-readable durable files contain verdicts, counts, proof links, and lessons only, not raw held-out transcript text.
+- Boundary maintenance at `2026-06-06T09:13:41Z` rechecked Amendment 2 on disk and untracked ignored setup judge replay logs from git with `git rm --cached`, leaving the local copies in place.
 - No M0 real task is proven on a fresh unseen day. Builder-side raw audio runs, builder-side acts, app UI inspection, DuckDuckGo searches, read-context proof, write-memory proof, channel-stub proof, stale eval artifacts, support-only internal proof, and unjudged app input work are not judge-verified M0 proof.
 
 Pending gates:

@@ -20,6 +20,7 @@ Builder verification:
 Judge status:
 - Verdict: `PENDING`. The separate judge has not ruled on this lap.
 - M0 still requires a fresh unseen held-out day to produce a real verified artifact in a real app.
+- Boundary maintenance at `2026-06-06T09:13:41Z` rechecked Amendment 2 on disk and untracked ignored setup judge replay logs from git with `git rm --cached`, leaving the local copies in place.
 
 Next:
 - Run the separate judge with planted-fake self-check, computer-use self-test, diff scan, held-out realday, real app proof, and different-family cross-check.
