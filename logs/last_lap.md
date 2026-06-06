@@ -1,38 +1,34 @@
 # Last Lap
 
-Lap: 20260606T025532Z
-Date: 2026-06-06T06:01:59Z
+Lap: 20260606T060511Z
+Date: 2026-06-06T06:30:20Z
 Milestone: M0 - ugly floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- The builder added a generic browser-hand guard so read/search screenshot proof could not complete external action tasks such as sending, booking, buying, posting, submitting, or calling.
-- The builder ran `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py`, `bash scripts/run_suite.sh`, and the required builder-visible MP3 realday.
-- The separate judge then ran a fresh held-out MP3 end to end and ruled `FAKE`.
-- The unproven builder commit `2807f32aae57aee85093372916714eee79bc084d` was reverted by gate in `1df9494`.
+- Added an orchestrator-level guard for external action goals. Plans that contain only support/read steps now stop as waiting before dispatch instead of running `read_context`, `write_memory`, `read_page`, or direct `browse_task` as if they could complete an external action.
+- Added completion verification for external action goals. `goal_done` now requires API/connector-style write proof or explicit browser external confirmation keys; memory proof, channel stub proof, and screenshot-only browser proof do not satisfy external action completion.
+- Tightened the live planner prompt so real models are told that support/read proof and search screenshots cannot complete outside-app changes.
 
-Judge checks:
-- Planted-fake self-check passed at `logs/verdicts/20260606T025532Z_selfcheck.md`.
-- Computer-use self-test passed with Chrome on `https://example.com`; screenshot is in `logs/verdicts/20260606T025532Z/computer_use_selftest_example_domain.png`.
-- Tamper scan was clean for forbidden paths, secrets, and owner/student/eval literals in product code. The test diff contained prior-failure-style phrases and is recorded as a caution.
-- Held-out run used `realdays/holdout/2026-05-21_12_19_20.mp3`, which is now burned.
-- Held-out run completed with decisions `act=13`, `ask=176`, `ignore=1417` in about 498.961 seconds.
-- OpenRouter cross-check used `google/gemini-3.5-flash` and agreed with `FAKE` at confidence 1.0.
+Checks:
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/core/orchestrator.py` passed.
+- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_orchestrator.py` passed.
+- A one-off guard smoke passed: support-only external plans waited before dispatch, and screenshot-only browser reroutes waited instead of `goal_done`.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 
-Why it failed:
-- No fresh current-lap Calendar or Gmail artifact was verified.
-- Several `done` goals were only `write_memory`, `read_context`, or DuckDuckGo proof, not a real external artifact.
-- A calendar-labeled meeting goal was marked `done` with only `read_context`.
-- Stale eval-literal Calendar and Gmail artifacts from older laps contaminated current planning.
-- Calendar and Gmail screenshots plus connector read-back attempts are saved under `logs/verdicts/20260606T025532Z/`.
+Realday:
+- Ran `AUTOPILOT_LAP=20260606T060511Z bash scripts/realday.sh`.
+- Builder-visible raw MP3: `realdays/raw/2026-05-20_07_34_11.mp3`.
+- Source summary: 18,000.04 seconds of audio, 665 chunks, 3,228 kept transcript segments, local Whisper `tiny.en`.
+- Result: `act=28`, `ask=385`, `ignore=2815`, wall time 1110.238 seconds.
+- Summary artifact: `logs/last_realday.json`.
+- Trace artifact: `logs/trace/20260606T060511Z.jsonl`.
 
 Proof and status:
-- Verdict: `logs/verdicts/20260606T025532Z.md`.
-- Preserved held-out run artifacts: `logs/verdicts/20260606T025532Z/heldout_last_realday.json`, `logs/verdicts/20260606T025532Z/heldout_trace.jsonl`, and `logs/verdicts/20260606T025532Z/act_goal_summary.json`.
-- M0 remains open. Generalization remains UNPROVEN. Reality judge verified pass rate is 0/4 under amended rules.
-- DRIFT is active: builder tests remain 29/29 while reality judge pass rate remains 0 percent. Do not advance.
+- Judge verdict: PENDING. No separate judge has ruled on this lap.
+- Builder-side checks are not M0 proof. No milestone advances from this lap until the judge verifies a fresh held-out real-world artifact.
+- No holdout file was read by the builder.
 
 Next:
-- Pivot at the planner and routing boundary. Do not add another browser regex patch.
-- Stop whole task text from being typed into search as a substitute for planning. Browser search may only be proof for explicit information lookup tasks; action tasks must decompose into a real API hand, real browser agent hand, or ask/needs-human.
-- Purge stale proof contamination from current-lap planning and make old eval titles or previous-lap proof ids abstain or ask, not act.
+- Separate judge should run the remaining fresh held-out realday with planted-fake self-check, computer-use self-test, diff scan, real app proof, and different-family cross-check.
+- If the judge still finds false completion, inspect planner output and goal proofs around any `goal_done` rows before adding another hand-level patch.
