@@ -74,66 +74,9 @@ final class PendingModel: ObservableObject {
     }
 }
 
-private enum TaskSubmitError: Error, CustomStringConvertible {
-    case server(Int)
-
-    var description: String {
-        switch self {
-        case .server(let code): return "Engine returned \(code)."
-        }
-    }
-}
-
-@MainActor
-final class TaskInputModel: ObservableObject {
-    @Published var text = ""
-    @Published var isSubmitting = false
-    @Published var statusText: String?
-    @Published var didFail = false
-
-    private let url = URL(string: "http://127.0.0.1:8787/event")!
-
-    var canSubmit: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSubmitting
-    }
-
-    func submit() async -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isSubmitting else { return false }
-
-        isSubmitting = true
-        statusText = nil
-        didFail = false
-        defer { isSubmitting = false }
-
-        do {
-            var req = URLRequest(url: url)
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            req.httpBody = try JSONSerialization.data(
-                withJSONObject: ["source": "app", "text": trimmed]
-            )
-
-            let (_, response) = try await URLSession.shared.data(for: req)
-            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-                throw TaskSubmitError.server(http.statusCode)
-            }
-
-            text = ""
-            statusText = "Sent to Anticipy."
-            return true
-        } catch {
-            didFail = true
-            statusText = error is TaskSubmitError ? String(describing: error) : "Engine offline."
-            return false
-        }
-    }
-}
-
 struct MainView: View {
     @StateObject private var feed = FeedModel()
     @StateObject private var pending = PendingModel()
-    @StateObject private var taskInput = TaskInputModel()
     private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -167,10 +110,7 @@ struct MainView: View {
             }
             .frame(maxHeight: .infinity)
 
-            SideDoor(model: taskInput) {
-                feed.refresh()
-                pending.refresh()
-            }
+            SideDoor()
         }
         .padding(DS.s4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -289,56 +229,16 @@ private struct RecordControls: View {
 }
 
 private struct SideDoor: View {
-    @ObservedObject var model: TaskInputModel
-    let afterSubmit: () -> Void
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: DS.s1) {
-                Image(systemName: "text.cursor")
-                    .font(.system(size: 12))
-                    .foregroundColor(DS.textSecondary)
-                TextField("Tell Anticipy something...", text: $model.text, prompt: Text("Tell Anticipy something..."))
-                    .textFieldStyle(.plain)
-                    .font(DS.secondary())
-                    .foregroundColor(DS.textPrimary)
-                    .onSubmit { submit() }
-                    .disabled(model.isSubmitting)
-                Button { submit() } label: {
-                    if model.isSubmitting {
-                        ProgressView()
-                            .controlSize(.small)
-                            .frame(width: 16, height: 16)
-                    } else {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(model.canSubmit ? DS.bg : DS.textSecondary)
-                .frame(width: 28, height: 24)
-                .background(model.canSubmit ? DS.accent : DS.elevated)
-                .clipShape(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous))
-                .disabled(!model.canSubmit)
-                .help("Send")
-            }
-            if let statusText = model.statusText {
-                Text(statusText)
-                    .font(DS.caption())
-                    .foregroundColor(model.didFail ? DS.titanium : DS.textSecondary)
-            }
+        HStack(spacing: DS.s1) {
+            Image(systemName: "text.cursor").font(.system(size: 12)).foregroundColor(DS.textSecondary)
+            Text("Tell Anticipy something…")
+                .font(DS.secondary()).foregroundColor(DS.textSecondary.opacity(0.7))
+            Spacer()
         }
         .padding(.horizontal, DS.s2).padding(.vertical, DS.s1)
-        .frame(maxWidth: 420, alignment: .leading)
+        .frame(maxWidth: 360)
         .background(DS.surface)
         .overlay(RoundedRectangle(cornerRadius: DS.controlRadius, style: .continuous).stroke(DS.hairline))
-    }
-
-    private func submit() {
-        Task {
-            if await model.submit() {
-                afterSubmit()
-            }
-        }
     }
 }

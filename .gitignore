@@ -37,6 +37,8 @@ logs/codex/judge_*.jsonl
 logs/codex/judge_*.last.txt
 logs/verdicts/**/*.json
 logs/verdicts/**/*.jsonl
+logs/verdicts/**/*.tsv
+logs/verdicts/**/*.csv
 *.transcript
 *.transcript.*
 *.transcript.json
