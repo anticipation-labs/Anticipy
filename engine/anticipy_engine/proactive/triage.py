@@ -27,7 +27,6 @@ _ACTION: Tuple[str, ...] = (
     "deactivate", "enroll", "donate", "withdraw", "deposit", "log in", "sign in", "look into",
     "gather", "review", "wipe", "tweet", "announce",
     "captcha", "grab", "snag", "pull up", "check out", "checkout", "log on",   # colloquial action words
-    "pencil in", "calendar hold", "put a hold",
 )
 # Commitment / request / imperative patterns — intent even without a listed verb.
 _INTENT: Tuple[str, ...] = (

@@ -12,4 +12,4 @@
 2026-06-06T01:33:39Z Lap 20260606T013339Z started. Base commit 18c0c3b3acd9d128e46f96f8c5f6ad7298dc7598.
 2026-06-06T01:50:00Z Lap 20260606T013339Z made a narrow generic policy fix: triage now lets common calendar-hold phrasing through, and the harm-line treats calendar holds/events as reversible, with builder-owned batteries covering the new phrasing. `bash scripts/run_suite.sh` passed 29/29. The required uncapped builder-visible MP3 realday ran for 617.016 seconds, transcribed 18,000.04 seconds of audio into 3,228 segments, and returned 26 act, 387 ask, and 2,815 ignore decisions; the live scorecard ended at 52 successful goals and $1.04 model cost. This is still not judge proof, no holdout was read, M0 remains unproven, and the high ask count is the next generic quality problem to reduce.
 2026-06-06T01:58:11Z Lap 20260606T013339Z was not proven REAL. See logs/verdicts/20260606T013339Z.md.
-
+2026-06-06T01:59:00Z Lap 20260606T013339Z commit 1cbf82337d2a8fb4550720945f79bd2d31e9a360 reverted by gate after judge verdict `BLOCKED_NO_HOLDOUT`; verdict artifacts are preserved.

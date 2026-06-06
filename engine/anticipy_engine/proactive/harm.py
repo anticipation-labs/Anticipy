@@ -48,10 +48,7 @@ _HARD_SEND = re.compile(r"\b(send|sends|sending|forward|forwards|forwarding|dm|d
 _SOFT_SEND = re.compile(r"\b(email|emails|emailing|message|messages|messaging|text|texts|texting|"
                         r"reply|replies|replying|respond|responds|responding)\b")
 _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t forget|pencil in)\b"
-                       r"|\badd .* to (my |the )?calendar\b"
-                       r"|\b(schedule|create|make|set up)\b[\w' ]{0,24}\bcalendar\b[\w' ]{0,16}\b(hold|block|event)\b"
-                       r"|\bput\b[\w' ]{0,12}\bhold\b[\w' ]{0,20}\b(on|in) (my |the )?calendar\b"
-                       r"|\bblock (off |out )?(time|my calendar|an hour|the morning|the afternoon)\b")
+                       r"|\badd .* to (my |the )?calendar\b|\bblock (off |out )?(time|my calendar|an hour|the morning|the afternoon)\b")
 _DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafting|prepare|prepares|preparing|compose|composes|composing|"
                           r"write up|writes up|outline|outlines|put together)\b")
 # --- other reversible (ACT) ---
