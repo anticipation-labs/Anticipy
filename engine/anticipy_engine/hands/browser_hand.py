@@ -25,6 +25,16 @@ from ..core.envelopes import Job, JobStatus, Result
 from ..core.worker import Worker
 
 _URL_RE = re.compile(r"https?://\S+")
+_EXTERNAL_ACTION_RE = re.compile(
+    r"\b("
+    r"send|email|mail|message|dm|text|"
+    r"book|schedule|reschedule|reserve|"
+    r"buy|purchase|order|checkout|pay|transfer|wire|donate|"
+    r"post|tweet|publish|submit|apply|register|sign up|"
+    r"cancel|delete|deactivate|unsubscribe|call"
+    r")\b",
+    re.I,
+)
 # A URL-less browse task ("find the exchange rate") is a GOAL, not a destination. The extension
 # navigates to a concrete URL, so without one it dead-ends at "no url/task to browse". General
 # fallback: turn any URL-less task into a real search-results navigation. Engine-side on purpose —
@@ -46,6 +56,13 @@ def _with_target(args: dict) -> dict:
     return out
 
 
+def _external_action_task(args: dict) -> str:
+    if not isinstance(args, dict):
+        return ""
+    task = str(args.get("task") or "").strip()
+    return task if task and _EXTERNAL_ACTION_RE.search(task) else ""
+
+
 class BrowserHand(Worker):
     def __init__(self, link: BrowserLink, timeout: float = 30.0) -> None:
         self.link = link
@@ -58,6 +75,17 @@ class BrowserHand(Worker):
         if not self.link.connected:
             return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
                           output={"reason": "the browser helper isn't connected"})
+        blocked_task = _external_action_task(job.args)
+        if blocked_task:
+            return Result(
+                job_id=job.id,
+                status=JobStatus.needs_human,
+                proof=None,
+                output={
+                    "reason": "browser read/search proof cannot complete an external action",
+                    "task": blocked_task,
+                },
+            )
         try:
             resp = await self.link.send_browse(job.id, job.intent, _with_target(job.args), timeout=self.timeout)
         except asyncio.TimeoutError:

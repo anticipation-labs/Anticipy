@@ -59,6 +59,19 @@ async def main():
     await BrowserHand(link).handle(Job(intent="browse_task", args={"task": "current USD to EUR exchange rate"}))
     assert link.last_args.get("url", "").startswith("https://duckduckgo.com/?q="), link.last_args
     assert "exchange" in link.last_args["url"]
+    # URL-less external actions must not become DuckDuckGo screenshot proof. The current
+    # browser hand reads pages; it does not book, send, buy, post, submit, or change apps.
+    action_link = FakeLink(behavior="success")
+    r = await BrowserHand(action_link).handle(
+        Job(intent="browse_task", args={"task": "book an allergy appointment"})
+    )
+    assert r.status == JobStatus.needs_human and "external action" in r.output["reason"]
+    assert action_link.last_args is None
+    action_url_link = FakeLink(behavior="success")
+    r = await BrowserHand(action_url_link).handle(
+        Job(intent="browse_task", args={"task": "send the social links from https://example.com"})
+    )
+    assert r.status == JobStatus.needs_human and action_url_link.last_args is None
     # an explicit URL is left untouched (no clobber)
     link2 = FakeLink(behavior="success")
     await BrowserHand(link2).handle(Job(intent="browse_task", args={"url": "https://example.com", "task": "read it"}))
@@ -69,7 +82,8 @@ async def main():
     assert "url" not in link3.last_args, link3.last_args
 
     print("PASS piece 3 (unit): browser hand — success/proof, not-connected, timeout, disconnect, "
-          "login-wall, no-proof, search-fallback (url-less task -> search; explicit url preserved)")
+          "login-wall, no-proof, search-fallback for info lookup, external action handoff, "
+          "explicit url preserved")
 
 
 if __name__ == "__main__":

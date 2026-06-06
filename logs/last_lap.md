@@ -1,35 +1,27 @@
 # Last Lap
 
-Lap: 20260606T020452Z
-Date: 2026-06-06T02:53:26Z
+Lap: 20260606T025532Z
+Date: 2026-06-06T03:16:01Z
 Milestone: M0 - ugly floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- The builder changed capped local audio transcription so a max-audio cap sampled speech from distributed bands across the day instead of only the first capped seconds.
-- The builder ran `bash scripts/run_suite.sh` successfully in stub/mock mode and ran the required builder-visible MP3 realday.
-- The separate judge then ran a fresh held-out MP3 end to end and ruled `FAKE`.
-- The unproven builder commit `4f647c3dea821485aa09f9576516d2d90f2e1c50` was reverted by gate in `ceb357d`.
+- Added a generic browser-hand proof guard in `engine/anticipy_engine/hands/browser_hand.py`: read/search screenshot proof can no longer complete external action tasks that imply sending, booking, buying, posting, submitting, calling, or changing an app.
+- Kept information lookup behavior: URL-less research tasks still use DuckDuckGo search fallback.
+- Updated `engine/scripts/test_browser_hand.py` to cover both sides of the boundary, including no-dispatch `needs_human` for action-like browse tasks.
 
-Judge checks:
-- Planted-fake self-check passed at `logs/verdicts/20260606T020452Z_selfcheck.md`.
-- Computer-use self-test passed with Chrome on `https://example.com`; screenshot is in `logs/verdicts/20260606T020452Z/computer_use_selftest_example_domain.png`.
-- Tamper scan was clean for the builder diff.
-- Held-out run used `realdays/holdout/2026-05-21_08_11_04 2.mp3`, which is now burned.
-- Held-out run completed with 2,934 transcript segments and decisions `act=43`, `ask=368`, `ignore=2523` in 871.406 seconds.
-- OpenRouter cross-check used `google/gemini-3.5-flash` and agreed with `FAKE` at confidence 1.0.
+Builder checks:
+- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- `AUTOPILOT_LAP=20260606T025532Z bash scripts/realday.sh` exited 0 on builder-visible raw MP3 `2026-05-20_07_34_11`.
+- Realday summary: 3,228 transcript lines, decisions `act=28`, `ask=385`, `ignore=2815`, wall time 978.152 seconds. Proof is in `logs/last_realday.json` and `logs/trace/20260606T025532Z.jsonl`.
 
-Why it failed:
-- No fresh current-lap Calendar or Gmail artifact was verified.
-- Some action goals treated DuckDuckGo searches as completed real-world actions, including sending social links and booking an allergy appointment.
-- The planner also introduced stale eval-literal Calendar/Gmail tasks from an older M0 proof lap.
-- Calendar and Gmail screenshots plus connector read-back attempts are saved under `logs/verdicts/20260606T020452Z/`.
-
-Proof and status:
-- Verdict: `logs/verdicts/20260606T020452Z.md`.
-- Preserved held-out run artifacts: `logs/verdicts/20260606T020452Z/heldout_last_realday.json`, `logs/verdicts/20260606T020452Z/heldout_trace.jsonl`, and `logs/verdicts/20260606T020452Z/act_goal_summary.json`.
-- M0 remains open. Generalization remains UNPROVEN. Reality judge verified pass rate is 0/3 under amended rules.
+Status:
+- Judge verdict: PENDING.
+- M0 remains open. This lap did not prove a real-world artifact on a fresh held-out day.
+- Generalization remains UNPROVEN.
+- No hard human gate appeared.
 
 Next:
-- Continue with a generic false-action fix. Prevent browse/search-only proof from marking real-world action tasks `done`, and make stale eval-literal contamination abstain or ask instead of planning an action.
-- The next lap must still run the whole builder-visible realday and then be judged on a remaining fresh held-out day.
+- Separate judge must run a remaining fresh held-out real day, perform the required self-checks, diff scan, computer-use proof, and different-family cross-check.
+- If the judge still sees false actions, continue with stale eval-literal contamination and planner/action abstention. Do not treat builder-side raw audio or browser search pages as milestone proof.
