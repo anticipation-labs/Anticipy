@@ -24,7 +24,7 @@ Realday audio:
 - Four timestamped student MP3s are judge-only in `realdays/holdout/`.
 - Builder must never read `realdays/holdout/`.
 - Audio realdays are handled by local ffmpeg plus Whisper in `engine/anticipy_engine/capture/transcribe.py`; no always-on cloud STT.
-- Current blocker: the 013339 judge treated all holdout files as unusable because an older verdict named them as inventory. Fix holdout burn accounting without reading holdout contents: only a held-out day actually opened, transcribed, or used in a verdict should rotate out.
+- Current control-plane repair in progress: the 013339 judge treated all holdout files as unusable because an older verdict named them as inventory. Holdout burn accounting is being clarified without reading holdout contents: only a held-out day actually opened, transcribed, attempted, or used in a verdict should rotate out.
 
 Dead ends not to retry blindly:
 - Google Sheets and Google Docs canvas synthetic input.
