@@ -33,26 +33,6 @@ class AutoApprover(Approver):
         return self._approve
 
 
-SUPPORT_ONLY_INTENTS = {"read_context", "write_memory", "list_open_loops", "read_page"}
-EXTERNAL_ACTION_INTENTS = {
-    "send_email", "send_email_draft", "send_text", "call", "create_event", "create_doc",
-    "update_record", "message", "post_to_x",
-}
-EXTERNAL_ACTION_RE = re.compile(
-    r"\b("
-    r"send|email|mail|message|text|call|draft|schedule|book|reschedule|cancel|delete|"
-    r"buy|purchase|order|reserve|register|post|tweet|submit|apply|pay|transfer|create|"
-    r"invite|share|upload|file|fill|sign"
-    r")\b",
-    re.I,
-)
-REMINDER_ONLY_RE = re.compile(r"\b(remind me|remind us|remember to|set (a )?reminder)\b", re.I)
-BROWSER_EXTERNAL_PROOF_KEYS = {
-    "confirmation_id", "confirmation", "submitted", "submitted_url", "order_id",
-    "reservation_id", "booking_id", "cart_id", "transaction_id", "record_id",
-}
-
-
 def _robust_json(raw):
     """Resilient extraction of a JSON object/array from a model reply that may be fenced,
     prose-wrapped, or slightly off (the browser-agent pattern, reused): strip fences, try the
@@ -125,15 +105,6 @@ class Orchestrator:
                         '{"steps":[{"intent":"...","args":{},"risk":"low"}]} and nothing else.')
             plan_raw = await self.gateway.think(strict, tier=SMART, caller="plan", json_mode=True)
             goal.steps = self._parse_plan(plan_raw)
-        if self._needs_external_artifact(goal) and not self._has_external_action_candidate(goal):
-            goal.state = GoalState.waiting
-            self.store.save(goal)
-            self._log("goal_needs_human", {
-                "goal_id": goal.id,
-                "reason": "planner produced only support/read steps for an external action goal",
-                "steps": [s.intent for s in goal.steps],
-            })
-            return goal
         goal.state = GoalState.running
         self.store.save(goal)
         self._log("goal_planned", {"goal_id": goal.id, "steps": [s.intent for s in goal.steps]})
@@ -163,15 +134,6 @@ class Orchestrator:
 
         # every step verified done -> collect proof, finish
         goal.proof = {f"{i}:{s.intent}": s.result.proof for i, s in enumerate(goal.steps) if s.result}
-        if self._needs_external_artifact(goal) and not self._has_external_completion_proof(goal):
-            goal.state = GoalState.waiting
-            self.store.save(goal)
-            self._log("goal_needs_human", {
-                "goal_id": goal.id,
-                "reason": "support or read-only proof is not enough for external action completion",
-                "proof": goal.proof,
-            })
-            return goal
         goal.state = GoalState.done
         self.store.save(goal)
         self._log("goal_done", {"goal_id": goal.id, "proof": goal.proof})
@@ -220,42 +182,6 @@ class Orchestrator:
         """No proof, not done."""
         return result.proof is not None and bool(result.proof)
 
-    @staticmethod
-    def _needs_external_artifact(goal: Goal) -> bool:
-        text = f"{goal.intent} {goal.description}".lower()
-        if REMINDER_ONLY_RE.search(text):
-            return False
-        return bool(EXTERNAL_ACTION_RE.search(text))
-
-    @staticmethod
-    def _has_external_action_candidate(goal: Goal) -> bool:
-        return any(
-            step.intent not in SUPPORT_ONLY_INTENTS and step.intent in EXTERNAL_ACTION_INTENTS
-            for step in goal.steps
-        )
-
-    @staticmethod
-    def _result_proof_is_external_action(step: Step) -> bool:
-        result = step.result
-        if result is None:
-            return False
-        proof = result.proof or {}
-        output = result.output or {}
-        if proof.get("tool") or proof.get("record_id") or proof.get("action"):
-            return True
-        return any(bool(proof.get(k) or output.get(k)) for k in BROWSER_EXTERNAL_PROOF_KEYS)
-
-    @classmethod
-    def _has_external_completion_proof(cls, goal: Goal) -> bool:
-        for step in goal.steps:
-            if step.state != StepState.done or step.result is None or not cls._verify(step.result):
-                continue
-            if step.intent in EXTERNAL_ACTION_INTENTS and cls._result_proof_is_external_action(step):
-                return True
-            if step.intent == "browse_task" and cls._result_proof_is_external_action(step):
-                return True
-        return False
-
     # ---- helpers ----
     def _plan_prompt(self, goal: Goal, context=None) -> str:
         base = ('Plan the goal into ordered steps. Respond with ONLY a JSON object '
@@ -270,11 +196,7 @@ class Orchestrator:
                      'read_page{"task":<what to read>}, send_email{"recipient","subject","body"}, '
                      'send_text{"recipient","body"}, create_event{"title","when"}, create_doc{"title","body"}, '
                      'write_memory{"text"}. For any web search / lookup / shopping / browsing step, use '
-                     'browse_task with a "task" string. read_context, write_memory, read_page, and search '
-                     'screenshots are support/read proof only. For goals that send, book, schedule, post, '
-                     'submit, buy, call, file, create, or otherwise change an outside app, include at least '
-                     'one matching action intent. If no action-capable intent exists, use risk "ask_human" '
-                     'instead of pretending a search or memory write completed it.')
+                     'browse_task with a "task" string.')
         return base + (f"\nRELEVANT MEMORY: {context}" if context else "")
 
     @staticmethod
