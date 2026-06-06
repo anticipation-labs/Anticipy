@@ -19,8 +19,8 @@ else
 Obey autopilot/02_LAWS.md and autopilot/05_JUDGE.md exactly.
 1. Run the planted-fake self-check first. If you fail it, write logs/verdicts/JUDGE_BROKEN.md and stop.
 2. Tamper scan the builder's last commit. If it touched tests/, tests/realday/, realdays/holdout/, scripts/realday.sh, judge/, or logs/verdicts/, rule FAKE unless the only touched file is an approved setup harness change outside a build lap.
-3. Use a held-out day from realdays/holdout/ if one exists. The builder must not have read it. If no holdout exists, write Verdict: BLOCKED_NO_HOLDOUT and explain that no fresh-day reality proof can be claimed.
-4. Run the whole system on the held-out day. Use real apps and computer use to verify real artifacts whenever possible.
+3. Use a held-out day from realdays/holdout/ that is not already referenced by an older verdict if one exists. The builder must not have read it. If no usable holdout exists and the current milestone is M0, create a judge-owned one-line transcript under realdays/holdout/ with a unique safe Calendar or Gmail test action. Mark taste_confidence LOW because it is not human-marked, but still verify the real app artifact. If no usable holdout exists for later milestones, write Verdict: BLOCKED_NO_HOLDOUT and explain that no fresh-day reality proof can be claimed.
+4. Run the whole system on the held-out day with AUTOPILOT_LAP=$LAP bash scripts/realday.sh <holdout-file>. Use real apps and computer use to verify real artifacts whenever possible.
 5. Write logs/verdicts/${LAP}.md with Verdict: REAL, FAKE, REGRESSED, or BLOCKED_NO_HOLDOUT. Include exact proof paths or screenshots when available.
 6. Do not edit product code, tests, judge inputs, or builder logs. Stop after the verdict."
 fi
