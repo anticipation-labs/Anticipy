@@ -1,10 +1,11 @@
 # STATE
 
-Current milestone: M0, ugly floor. The amended judge ruled `BLOCKED_NO_HOLDOUT` for lap `20260606T005447Z` because the only held-out realdays are MP3 files and the realday runner rejects audio. The unproven builder slice is reverted by the gate. Next slice is generic MP3 realday ingestion, using only builder-visible raw audio or generic fixtures.
+Current milestone: M0, ugly floor. The amended judge ruled `BLOCKED_NO_HOLDOUT` for lap `20260606T005447Z`; the unproven builder slice was reverted. Generic MP3 ingestion now exists in the realday harness and was smoke-tested only on builder-visible raw audio. Next slice is to rerun M0 through the amended judge; no milestone advances until a fresh held-out day produces a real verified artifact.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - Amended judge proof exists at `logs/verdicts/20260606T005447Z.md`: planted-fake self-check passed, computer-use self-test passed with screenshot, tamper scan was clean, Gemini OpenRouter cross-check agreed, and verdict was `BLOCKED_NO_HOLDOUT`.
+- Control-plane audio plumbing proof: capped builder-visible MP3 smoke `20260606T013101Z` transcribed 90 seconds of speech-gated local audio, reached the live engine, posted 15 transcript lines, and produced 15 ignores with zero actions. This is not judge proof.
 - No M0 real task is proven on a fresh unseen day. The builder-side Calendar event from lap `20260606T005447Z` is not judge proof.
 
 Pending gates:
@@ -20,6 +21,7 @@ Realday audio:
 - One timestamped student MP3 is builder-visible in `realdays/raw/`.
 - Four timestamped student MP3s are judge-only in `realdays/holdout/`.
 - Builder must never read `realdays/holdout/`.
+- Audio realdays are now handled by local ffmpeg plus Whisper in `engine/anticipy_engine/capture/transcribe.py`; no always-on cloud STT.
 
 Dead ends not to retry blindly:
 - Google Sheets and Google Docs canvas synthetic input.

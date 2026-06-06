@@ -21,6 +21,10 @@ import urllib.error
 import urllib.request
 
 REPO = Path.cwd()
+sys.path.insert(0, str(REPO / "engine"))
+
+from anticipy_engine.capture.transcribe import is_audio_file, transcribe_audio
+
 BASE = os.environ.get("ANTICIPY_ENGINE_BASE", "http://127.0.0.1:8787")
 LAP = os.environ.get("AUTOPILOT_LAP") or dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 TRACE = REPO / "logs" / "trace" / f"{LAP}.jsonl"
@@ -63,35 +67,43 @@ def http(method: str, path: str, body: dict | None = None, timeout: int = 180) -
     return json.loads(raw) if raw else {}
 
 
-def choose_day(argv: list[str]) -> tuple[str, list[str], bool]:
+def choose_day(argv: list[str]) -> tuple[str, list[str], bool, dict]:
     if argv:
         p = Path(argv[0]).expanduser()
         if not p.is_absolute():
             p = REPO / p
-        if p.suffix.lower() in {".mp3", ".m4a", ".wav", ".aac"}:
-            raise SystemExit(f"audio realdays are not implemented yet: {p}")
+        if is_audio_file(p):
+            transcript = transcribe_audio(p)
+            return p.stem, transcript.lines, False, {"kind": "audio", **transcript.metadata}
         text = p.read_text(encoding="utf-8")
-        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False
+        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False, {"kind": "text", "path": str(p)}
 
     raw = sorted((REPO / "realdays" / "raw").glob("*"))
-    readable = [p for p in raw if p.is_file() and p.suffix.lower() not in {".mp3", ".m4a", ".wav", ".aac"}]
+    readable = [p for p in raw if p.is_file() and not is_audio_file(p)]
     if readable:
         p = readable[0]
         text = p.read_text(encoding="utf-8")
-        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False
+        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False, {"kind": "text", "path": str(p)}
+
+    audio = [p for p in raw if p.is_file() and is_audio_file(p)]
+    if audio:
+        p = audio[0]
+        transcript = transcribe_audio(p)
+        return p.stem, transcript.lines, False, {"kind": "audio", **transcript.metadata}
 
     return (
         "setup-smoke-sample",
         ["The weather is nice today. This setup smoke line should stay silent."],
         True,
+        {"kind": "synthetic_setup_sample"},
     )
 
 
 def main() -> int:
     TRACE.parent.mkdir(parents=True, exist_ok=True)
-    day_id, lines, synthetic = choose_day(sys.argv[1:])
     start = time.perf_counter()
-    write_step("select_day", "realdays/raw", day_id, "ok", synthetic_setup_sample=synthetic)
+    day_id, lines, synthetic, source = choose_day(sys.argv[1:])
+    write_step("select_day", "realdays/raw", day_id, "ok", synthetic_setup_sample=synthetic, source=source)
 
     try:
         health = http("GET", "/health", timeout=5)
@@ -131,6 +143,7 @@ def main() -> int:
         "realday_id": day_id,
         "synthetic_setup_sample": synthetic,
         "line_count": len(lines),
+        "source": source,
         "decisions": decisions,
         "events": rows,
         "glassbox_tail": glassbox,

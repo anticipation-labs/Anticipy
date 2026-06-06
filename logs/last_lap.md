@@ -1,20 +1,20 @@
 # Last Lap
 
-Lap: 20260606T005447Z
-Date: 2026-06-06T01:20:30Z
+Lap: 20260606T013101Z
+Date: 2026-06-06T01:31:30Z
 Milestone: M0 - ugly floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- Builder lap `9d5e679` created a builder-visible Calendar slice, but it was not proven under the amended rules.
-- The amended judge ran the planted-fake self-check, computer-use self-test, tamper scan, held-out command, and Gemini OpenRouter cross-check.
-- Judge verdict: `BLOCKED_NO_HOLDOUT` at `logs/verdicts/20260606T005447Z.md`.
-- The gate reverted the unproven builder slice. M0 remains open.
+- Added generic local MP3 transcription in `engine/anticipy_engine/capture/transcribe.py` using ffmpeg speech-region detection and local Whisper chunks.
+- Updated `scripts/realday.sh` to feed audio realdays through that transcriber instead of rejecting MP3 inputs.
+- Declared `openai-whisper>=20250625` in `engine/requirements.txt`.
+- Logged the harness contradiction in `autopilot/LESSONS.md`.
 
-Current limitations:
-- The only held-out realdays are MP3 files.
-- `scripts/realday.sh` rejects MP3 inputs with `audio realdays are not implemented yet`, so the judge cannot run a fresh held-out day end to end.
-- Generalization remains UNPROVEN.
+Checks:
+- Capped builder-visible MP3 smoke: `AUTOPILOT_LAP=20260606T013101Z ANTICIPY_REALDAY_AUDIO_MAX_SECONDS=90 bash scripts/realday.sh realdays/raw/2026-05-20_07_34_11.mp3` reached the live engine, posted 15 transcript lines, and produced 15 ignores with zero actions.
+- `bash scripts/run_suite.sh` passed 29/29. This remains deterministic stub/mock coverage only.
+- This was control-plane plumbing, not a judge pass. M0 remains unproven.
 
 Next:
-- Implement a non-hardcoded MP3 realday ingestion path without reading `realdays/holdout/` from the builder. Use builder-visible raw audio or a generic fixture, then rerun M0 through the amended judge.
+- Rerun M0 through the amended loop. The next judge should be able to run a held-out MP3 through `scripts/realday.sh`; it still must verify any real-world artifact with connector read-back and screenshots before M0 can count.

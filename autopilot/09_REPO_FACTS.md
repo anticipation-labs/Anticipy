@@ -73,6 +73,7 @@ Hard rule from this project's history: research the official docs before editing
 - `realdays/raw/` contains builder-visible audio or transcripts. `realdays/holdout/` is judge-only. The builder session must never read `realdays/holdout/`. Reading a held-out day burns it. The judge draws only from holdout, and once a day is used in a verdict it rotates out so it is never reused as fresh.
 - Current local placement after the 2026-06-06 amendment: one timestamped student MP3 in `realdays/raw/` for builder-visible plumbing, four timestamped student MP3s in `realdays/holdout/` for judge-only evaluation. Audio files are local eval data and are intentionally ignored by git.
 - The provided `Steve_Jobs_Bill_Gates_A_Conversation_That_Shaped_Technology.mp3` is a multi-speaker public conversation, not the one-person student realday. It must not count as realday proof, holdout proof, or generalization proof.
+- As of lap `20260606T013101Z`, `scripts/realday.sh` can ingest MP3/M4A/WAV/AAC/FLAC/OGG by delegating to `engine/anticipy_engine/capture/transcribe.py`. That path uses local `ffmpeg` speech-region detection plus local Whisper chunks (`openai-whisper`, default model `tiny.en`). It is generic plumbing, not a milestone pass. The builder smoke used only `realdays/raw/`, never holdout.
 
 ## Proven dead-ends (do NOT burn laps retrying these blindly)
 - Google Sheets and Google Docs canvas resist synthetic input: multi-cell commit fails via CDP. Navigation and extraction work; the editable canvas does not. Accept it, route around it, do not retry from scratch.
