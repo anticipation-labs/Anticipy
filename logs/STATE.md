@@ -1,10 +1,11 @@
 # STATE
 
-Current milestone: M0, ugly floor. Builder-side slice `9d5e679` created a live Google Calendar event through the engine, but the amended reality judge has not yet ruled under the new laws.
+Current milestone: M0, ugly floor. The amended judge ruled `BLOCKED_NO_HOLDOUT` for lap `20260606T005447Z` because the only held-out realdays are MP3 files and the realday runner rejects audio. The unproven builder slice is reverted by the gate. Next slice is generic MP3 realday ingestion, using only builder-visible raw audio or generic fixtures.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
-- Builder-side, not judge proof: live realday `20260606T005447Z-m0-calendar` acted through `GoogleCalendar.CreateEvent` and builder-side `GoogleCalendar.ListEvents` found event id `r38vc9ps5hnejm9idatknuia0o`. This is not a verdict.
+- Amended judge proof exists at `logs/verdicts/20260606T005447Z.md`: planted-fake self-check passed, computer-use self-test passed with screenshot, tamper scan was clean, Gemini OpenRouter cross-check agreed, and verdict was `BLOCKED_NO_HOLDOUT`.
+- No M0 real task is proven on a fresh unseen day. The builder-side Calendar event from lap `20260606T005447Z` is not judge proof.
 
 Pending gates:
 - No current hard human gate blocks M0.
@@ -12,7 +13,7 @@ Pending gates:
 
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
-- Reality judge verified pass rate on fresh unseen days under amended rules: 0/0 so far. No amended judge verdict yet.
+- Reality judge verified pass rate on fresh unseen days under amended rules: 0/1 attempts verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 
 Realday audio:
