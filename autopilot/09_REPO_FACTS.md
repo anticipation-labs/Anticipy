@@ -66,6 +66,14 @@ Hard rule from this project's history: research the official docs before editing
 ## Test suite reality
 - `bash scripts/run_suite.sh` is 29/29 green, but it force-exports `ANTICIPY_MODEL_PROVIDER=stub` and `ANTICIPY_HANDS_MODE=mock` at the top. So the suite tests the deterministic logic on STUB paths only. Green here does NOT mean the product works. Real proof is a real artifact in a real app, checked by the judge.
 
+## Realday audio
+- Real timestamped audio days are local MP3 files under `realdays/`. They are the human's own recordings of one person in one scenario: a student.
+- They are EVAL-ONLY. They are a floor, not a finish. If the system cannot handle even this one real day, it is broken. Passing this audio proves the ears-to-brain-to-hands plumbing works on one narrow slice of reality. It proves nothing about whether the product generalizes.
+- Never hardcode, special-case, or tune toward anything in this audio. No code keyed to the person's name, their specific apps, or student-specific words such as FAFSA or roommate. The mesh is discovered per person, never coded.
+- `realdays/raw/` contains builder-visible audio or transcripts. `realdays/holdout/` is judge-only. The builder session must never read `realdays/holdout/`. Reading a held-out day burns it. The judge draws only from holdout, and once a day is used in a verdict it rotates out so it is never reused as fresh.
+- Current local placement after the 2026-06-06 amendment: one timestamped student MP3 in `realdays/raw/` for builder-visible plumbing, four timestamped student MP3s in `realdays/holdout/` for judge-only evaluation. Audio files are local eval data and are intentionally ignored by git.
+- The provided `Steve_Jobs_Bill_Gates_A_Conversation_That_Shaped_Technology.mp3` is a multi-speaker public conversation, not the one-person student realday. It must not count as realday proof, holdout proof, or generalization proof.
+
 ## Proven dead-ends (do NOT burn laps retrying these blindly)
 - Google Sheets and Google Docs canvas resist synthetic input: multi-cell commit fails via CDP. Navigation and extraction work; the editable canvas does not. Accept it, route around it, do not retry from scratch.
 - Amazon.ca consistently blocks Playwright. Use web_search for prices and flag them approximate; do not fight it with more automation.

@@ -30,6 +30,14 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 logs/codex/build_*.jsonl
+logs/codex/build_*.last.txt
+logs/codex/judge_*.jsonl
+logs/codex/judge_*.last.txt
+
+# local realday audio. Keep it on this Mac, not in git.
+realdays/raw/*.mp3
+realdays/marked/*.mp3
+realdays/holdout/**
 
 # os / editor
 .DS_Store

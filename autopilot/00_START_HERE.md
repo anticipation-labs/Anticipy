@@ -3,11 +3,15 @@
 ## The mission
 Build the whole Anticipy product until a stranger can download it, onboard, connect their own apps, and have it quietly do the petty work of their life. Not a demo. The real thing, working.
 
+Done is defined by a stranger, not the human owner: a person who is not the owner, on a clean machine, downloads at `anticipy.ai/app`, onboards, connects THEIR apps, and gets a real task done. Until that is true, the product is not done no matter how good audio inference gets.
+
 ## The bar (do not lower it)
 Anticipy is an illusion: that your whole life is quietly handled. An illusion breaks at the seam. The moment it misses the one thing that matters to one person, the magic is dead for that person. Everyone's one thing is different and everyone hits theirs. So "do all of it, for everyone, well" is not a goal. It is the product. There is no smaller version that works. Never shrink it to make a lap pass.
 
 ## What you are building
 Full description in `01_PRODUCT.md`. In one line: a worn device hears the day, infers the real need from mostly-unspoken signals, and does it through each app's own back door (browser only when there is no back door), with its own phone line, stopping only to ask before spending money.
+
+The audio tests only the ears-to-brain slice. It is not the priority over the front door, the real input box, the wired browser hands, and self-onboarding. You may not spend more than 3 consecutive laps on inference or brain work without advancing a perimeter milestone: M1 front door, M2 input, M3 wired hands, or M5 onboarding and mesh. Every few laps, verify the whole house still runs end to end for the stranger path, not just the owner's audio.
 
 ## The map of these files
 - `01_PRODUCT.md` — what the product is, full size, and its architecture.
@@ -21,7 +25,7 @@ Full description in `01_PRODUCT.md`. In one line: a worn device hears the day, i
 - `LESSONS.md` — you write this when you repeat a mistake.
 
 ## The loop in brief
-1. Read the state and the next open milestone.
+1. Re-read `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, and `logs/STATE.md` from disk, then read the next open milestone.
 2. Do the single next vertical slice toward it.
 3. Run the whole system on a real day, end to end.
 4. A separate judge session opens the real apps with computer use and rules whether the real thing actually happened, on a real day you have never seen.

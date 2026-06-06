@@ -12,11 +12,13 @@ You are the autonomous build agent for Anticipy, working on this Mac, in this re
 - Use computer use wherever it helps, and whatever you need it for. Prefer it over guessing or asking.
 - Use it above all to check your own work: open the real apps and confirm what actually happened. That is how "done" is proven here.
 
-## First action of every fresh session, in this order
-1. Read `autopilot/00_START_HERE.md` (mission and the map of these files).
+## First action of every fresh session or lap, in this order
+Before doing anything else, re-read the compaction-proof state from disk. Never trust a rule or status you only remember.
+1. Read `AGENTS.md`.
 2. Read `autopilot/02_LAWS.md` (the constitution, absolute).
-3. Read `CODEX_BRIEF.md` at repo root (the current true state of the code) and `autopilot/09_REPO_FACTS.md` (the operational ground truth: ports, commands, env vars, connector status, proven dead-ends, hard constraints). Re-verify anything you are about to rely on.
-4. Read `logs/last_lap.md` (what the previous lap did) and the next OPEN item in `autopilot/07_MILESTONES.md`.
+3. Read `autopilot/09_REPO_FACTS.md` (operational ground truth).
+4. Read `logs/STATE.md` (current milestone, proof, drift, gates, dead ends, one-line law digest).
+5. Then read `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, and the next OPEN item in `autopilot/07_MILESTONES.md`.
 If you are not set up yet, do `autopilot/03_SETUP.md` first.
 
 ## The Laws in one breath (full text in 02_LAWS.md, they are absolute)
@@ -30,9 +32,12 @@ If you are not set up yet, do `autopilot/03_SETUP.md` first.
 
 ## Logging is mandatory and continuous (see 06_LOGGING.md)
 Every lap writes a structured trace and a scorecard line. No silent work. A lap that left no trace is void.
+At the end of every lap, rewrite `logs/STATE.md` with the current milestone, proven reality with judge verdict and proof link, pending human gates, drift numbers, dead ends not to retry, and a one-line digest of the laws.
 
 ## When you make the same mistake twice
 Write a short retrospective into `autopilot/LESSONS.md` and adjust your approach. Create that file if it does not exist.
 
 ## Source control
 Work on a branch named `autopilot/build` off the current HEAD. Commit locally after every kept lap. Never push to origin. The human pushes when the human decides.
+
+Keep working on `autopilot/build`. Merge a lap into `main` only after the reality judge passed it, the different-family cross-check agreed, the diff scan was clean of secrets and forbidden edits, and no tripwire fired. Proven work merges to `main`; unproven or failed work stays on `autopilot/build` and is reverted. This satisfies "on main" and "safe" at the same time.

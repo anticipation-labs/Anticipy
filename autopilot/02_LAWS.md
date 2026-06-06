@@ -24,4 +24,16 @@ These exist because this project failed about 500 times before you, always the s
 
 11. The only hard stop on action is spending money. Everything else, act. Do not invent extra caution; the human adds real safety at the end.
 
+12. The judge, different-family cross-check, planted-fake self-check, computer-use self-test, and diff scan run every lap in full, regardless of token cost, spend, or compute. Never skip or shorten oversight to save tokens or time. The watchers do not care about cost; they only care that reality is real.
+
+13. The judge and builder are different sessions, and the judge's verdict reasoning must be cross-checked by a different model family than the builder through the OpenRouter key. Builder is Codex/GPT-5.5; use a non-Codex family such as Gemini or Claude for the verdict reasoning cross-check. If Codex judge and the different-family check disagree, treat the lap as FAIL and flag it.
+
+14. Reality is ground truth. For app artifacts, use computer use plus a real connector read-back when one exists. Calendar and Gmail require API read-back and screenshots. A model's opinion is never proof.
+
+15. Every lap before judging, the judge runs the planted-fake self-check and a computer-use self-test by opening a known page and confirming it can read it. If the judge cannot reliably drive the browser, it must HALT and flag, not guess.
+
+16. Every judge scans the builder diff. Auto-FAIL and HALT on edits under `tests/`, `judge/`, `realdays/holdout/`, or `scripts/realday.sh`; on hardcoded literals tied to the eval in product code, prompts, or tests outside policy text, such as the owner's name, their apps, or student-specific words; on any milestone marked done with fewer than 5 diverse fresh real days; or on any pass claimed from self-made or synthetic data.
+
+17. You will be tempted to fake, hardcode, or overfit to make a lap pass. That temptation is the signal to stop and take the harder honest path. Halting is always safe. A silent fake is the only unforgivable failure.
+
 If two laws ever seem to conflict, the one that prevents a fake win wins.

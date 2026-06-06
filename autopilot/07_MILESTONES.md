@@ -1,8 +1,16 @@
 # 07 MILESTONES — the ordered backlog
 
-Each milestone's "done" is a real-world check by the judge (`05_JUDGE.md`), never a green unit test. Do them roughly in order. Always: one vertical slice per lap, the whole system on a real day every lap, never shrink the goal, money is the only stop.
+Each milestone's "done" is a real-world check by the judge (`05_JUDGE.md`), never a green unit test. A milestone is done only when the reality judge confirms it on at least 5 different held-out real days spanning different situations, not 5 variations of one. Score by the worst case, never the average. One pass means nothing.
+
+Do them roughly in order. Always: one vertical slice per lap, the whole system on a real day every lap, never shrink the goal, money is the only stop. Until real diverse users exist, label generalization as UNPROVEN in every scorecard and never claim the product works for everyone.
 
 The current state is in `CODEX_BRIEF.md`. Short version: the decision spine, memory, and a stranded multi-step browser agent are real; the product around them (front door, input, onboarding, the mesh beyond two apps, the proactive scheduler, distribution) is mostly absent. You are building that perimeter and wiring the real engine into a usable product.
+
+"Done" is defined by a stranger, not the owner: a person who is not the human, on a clean machine, downloads at `anticipy.ai/app`, onboards, connects their apps, and gets a real task done. Until that is true, the product is not done no matter how good audio inference is.
+
+The owner audio tests only the ears-to-brain slice. It is not the priority over the front door, real input box, wired browser hands, and self-onboarding. You may not spend more than 3 consecutive laps on inference or brain without advancing a perimeter milestone: M1, M2, M3, or M5. Every few laps, verify the whole house still runs end to end for the stranger path, not just the owner's audio.
+
+Breadth attack: you may generate synthetic diverse days for personas unlike the human (founder, parent, lawyer, doctor) only to try to break generalization. Hard asymmetry: a synthetic day can only lower confidence by exposing a failure. It can never raise confidence and never count as a pass. A break is a real finding that halts progress. Real confidence comes only from real diverse users, which do not exist yet.
 
 ## M0 — the ugly floor (do this first)
 Make the whole house limp through ONE real day, end to end, on this Mac: ingest a day (a transcript is fine to start), infer one real need, do it through one real app, and have the judge open that app and confirm the real artifact.
