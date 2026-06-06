@@ -27,7 +27,7 @@ Judge status:
 - Boundary maintenance at `2026-06-06T09:13:41Z` rechecked Amendment 2 on disk and untracked ignored setup judge replay logs from git with `git rm --cached`, leaving the local copies in place.
 - A judge launch at `2026-06-06T09:14:47Z` failed before any held-out read because Codex CLI hit its usage limit and reported retry after `2026-06-06 03:37 America/Vancouver`. No verdict exists and no held-out day was burned.
 - The resumed judge ran after reset and wrote `logs/verdicts/20260606T082329Z.md`. The held-out day did not rotate out because it did not contribute to a milestone PASS.
+- Gate action: builder commit `e062cdb` was reverted. Post-revert `bash macapp/scripts/build_app.sh` passed and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 
 Next:
-- The gate reverts builder commit `e062cdb`; do not claim M2 or M0.
-- Start the next builder lap only after the gate commit. Keep perimeter momentum, but prioritize routing action tasks into API hands, the real browser agent hand, or explicit ask/needs-human instead of internal read-context completions.
+- Commit the gate result, then start the next builder lap. Keep perimeter momentum, but prioritize routing action tasks into API hands, the real browser agent hand, or explicit ask/needs-human instead of internal read-context completions.
