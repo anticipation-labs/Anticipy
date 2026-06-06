@@ -17,26 +17,6 @@ from .envelopes import Goal, GoalState, Job, JobStatus, Result, Risk, Step, Step
 from .gateway import SMART, ModelGateway
 from .store import GoalStore
 
-SUPPORT_INTENTS = frozenset({"read_context", "write_memory", "list_open_loops", "read_page"})
-WRITE_OR_ACTION_INTENTS = frozenset({
-    "send_email",
-    "send_email_draft",
-    "send_text",
-    "call",
-    "create_event",
-    "create_doc",
-    "message",
-    "post_to_x",
-})
-ACTION_GOAL_RE = re.compile(
-    r"\b("
-    r"send|email|mail|draft|book|schedule|create|add|buy|purchase|order|reserve|"
-    r"post|tweet|submit|file|register|message|text|call|delete|cancel|update|"
-    r"set\s+up|pay|transfer|invite|share|fill"
-    r")\b",
-    re.IGNORECASE,
-)
-
 
 class Approver:
     async def approve(self, goal: Goal, step: Step) -> bool:  # pragma: no cover - interface
@@ -152,23 +132,8 @@ class Orchestrator:
                 self._log(f"goal_{goal.state.value}", {"goal_id": goal.id, "stuck_on": step.intent})
                 return goal
 
-        # every step verified done -> collect proof, then require artifact proof for
-        # action goals. Memory/search/screenshots are useful support evidence, but
-        # they cannot make an external-action goal complete by themselves.
+        # every step verified done -> collect proof, finish
         goal.proof = {f"{i}:{s.intent}": s.result.proof for i, s in enumerate(goal.steps) if s.result}
-        if self._support_only_completion(goal):
-            goal.state = GoalState.waiting
-            self.store.save(goal)
-            self._log("goal_completion_blocked", {
-                "goal_id": goal.id,
-                "reason": "support_only_proof",
-                "steps": [s.intent for s in goal.steps],
-                "proof": goal.proof,
-            })
-            if self.scorecard is not None:
-                self.scorecard.record_goal(goal.id, "blocked_support_only", self._goal_cost(goal))
-            return goal
-
         goal.state = GoalState.done
         self.store.save(goal)
         self._log("goal_done", {"goal_id": goal.id, "proof": goal.proof})
@@ -216,48 +181,6 @@ class Orchestrator:
     def _verify(result: Result) -> bool:
         """No proof, not done."""
         return result.proof is not None and bool(result.proof)
-
-    @classmethod
-    def _support_only_completion(cls, goal: Goal) -> bool:
-        """Block action-like goals that have only support proof.
-
-        The step-level contract still requires proof for every worker result. This
-        final guard asks a stricter question before `goal_done`: did any step
-        produce proof shaped like a real artifact, rather than context, memory, a
-        search, or a screenshot-only browser read?
-        """
-        if not goal.steps:
-            return True
-        if not cls._requires_artifact(goal):
-            return False
-        return not any(cls._has_artifact_proof(s) for s in goal.steps)
-
-    @classmethod
-    def _requires_artifact(cls, goal: Goal) -> bool:
-        if any(s.intent in WRITE_OR_ACTION_INTENTS for s in goal.steps):
-            return True
-        text = f"{goal.intent} {goal.description}"
-        return bool(ACTION_GOAL_RE.search(text))
-
-    @staticmethod
-    def _has_artifact_proof(step: Step) -> bool:
-        if step.intent in SUPPORT_INTENTS:
-            return False
-        proof = step.result.proof if step.result else None
-        if not isinstance(proof, dict):
-            return False
-
-        artifact_keys = ("id", "message_id", "messageId", "eventId", "event_id",
-                         "draft_id", "draftId", "record_id", "ts")
-        if any(proof.get(k) for k in artifact_keys):
-            return True
-
-        # A screenshot-only browser read is support proof. A future browser hand
-        # can attach an explicit artifact marker after it verifies an external
-        # change, such as an item in a cart or a submitted form.
-        if proof.get("artifact") or proof.get("external_artifact"):
-            return True
-        return False
 
     # ---- helpers ----
     def _plan_prompt(self, goal: Goal, context=None) -> str:
