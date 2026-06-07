@@ -12,6 +12,7 @@ Non-blocking useful input later:
 - Approve Google Drive file scope for GoogleDocs.GetDocumentById when M6 reaches Docs. Arcade produced a Google OAuth URL during the setup probe.
 - Slack.SendMessageToChannel is not currently available through Arcade. The setup probe returned tool_not_found for Slack.SendMessageToChannel@0.
 - Apple Developer ID signing and notarization are not available on this Mac. `security find-identity -v -p codesigning` returns 0 valid identities. The M1 judge also found the production DMG app fails `codesign` and `spctl` with resource-signature errors. Full zero-warning public Mac install needs Developer ID/notarization or a corrected signed build and installer path.
+- M1 signing action: install or provide access to an Apple Developer ID Application certificate for `ai.anticipy.*`, plus notarization credentials or an App Store Connect API key, so the release package can be signed and notarized. Lap `20260607T114534Z` reconfirmed local ad-hoc `codesign` passes but `spctl` rejects the app with 0 valid identities.
 
 ## CALIBRATION 2026-06-07T03:42:32Z
 

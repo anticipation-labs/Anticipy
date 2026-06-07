@@ -1,32 +1,33 @@
 # Last Lap
 
-Lap: 20260607T084004Z
-Date: 2026-06-07T11:39:27Z
+Lap: 20260607T114534Z
+Date: 2026-06-07T11:54:00Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
-Judge verdict: FAKE, Tamper: NO
+Judge verdict: PENDING
 
 What changed:
-- The builder added a local executor download page and local zip package path, stripped and ad-hoc signed the local Swift app, and removed some owner/eval literals from changed package-path code.
-- These were local executor changes, not a proven production front-door fix.
+- `macapp/scripts/build_app.sh` now signs the assembled Swift app bundle with `ANTICIPY_CODESIGN_IDENTITY` or ad-hoc `-` by default, then runs `codesign --verify --strict`.
+- `macapp/scripts/package_app.sh` now builds the app, creates a zip, writes a package report, and generates a local download page for M1 package smoke testing.
+- Because `macapp/dist` is already tracked in this repo, the built local app bundle was kept in its signed state with a resource seal.
 
-Judge finding:
-- Planted-fake self-check passed.
-- Computer-use self-test passed by reading Example Domain in Chrome.
-- Tamper scan passed for builder commit `d51f4eb` plus control-plane commit `b0653cf`.
-- Clean public `https://www.anticipy.ai/app` showed an account form, not a direct app download.
-- The judge downloaded the canonical public DMG, mounted it, and found `Anticipy.app`, but `codesign --verify` and `spctl` failed with the resource-signature error.
-- Launching the public app showed macOS security and permission prompts instead of a readable live Anticipy surface.
-- Different-family Gemini cross-check agreed with `FAKE`.
+What the M1 surface did:
+- `AUTOPILOT_LAP=20260607T114534Z bash macapp/scripts/package_app.sh` generated `.anticipy-data/m1_20260607T114534Z/release/Anticipy_20260607T114534Z_aarch64.zip`.
+- Package report: size `132078`, SHA-256 `da20b930ceeeabb84f3651eed3c362fe207fda276de4dc3d6a35f18a7ddd9641`, `codesign_status=PASS`, `spctl_status=FAIL`, and `0 valid identities found`.
+- Real Chrome opened `http://127.0.0.1:9153/`, showed the local download page, downloaded the zip, and the downloaded file hash matched the report.
+- The app extracted from the Chrome-downloaded zip passed `codesign --verify --strict --verbose=2` and failed `spctl --assess --type execute`, confirming the remaining Developer ID/notarization gate.
+
+Checks:
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- `git diff --check` passed.
+- Chrome extension and in-app Browser automation backends were unavailable in this session, but Computer Use against real Chrome worked.
 
 Gate:
-- M1 is not proven.
-- The unproven builder commit `d51f4eb` was reverted by `3ead64f`.
-- Post-revert `bash macapp/scripts/build_app.sh` passed.
-- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
-- Generalization remains UNPROVEN.
+- M1 is not proven. This is local package evidence only, not production public-front-door proof.
+- Developer ID signing and notarization remain required for clean public launch.
+- Production `anticipy.ai/app` and the public DMG still need a tracked, judgeable production-source fix.
 
 Next:
-- Continue M1 with a different approach against the actual production-linked source path in a tracked, judgeable way.
-- Remove or isolate owner/person-specific literals from packaged product code before rebuilding packages, then fix the public front door, public DMG signature, launch surface, and artifact size.
+- Continue M1 against the production-linked source path in a tracked, judgeable way.
+- Remove or isolate packaged owner/person literals, then rebuild the public artifact with the same package validation checks and a Developer ID/notarization path.
