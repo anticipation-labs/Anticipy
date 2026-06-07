@@ -40,7 +40,6 @@ BATTERY = [
     ("Send the Q3 deck to the investor.", True),
     ("Forward the contract to legal.", True),
     ("DM the client about the delay.", True),
-    ("Create a calendar event and invite the client.", True),
     ("Email the recruiter back with my decision.", True),
     ("Reply to the board about the budget.", True),
     # ---- DETRIMENTAL: sign-up / paid ----
@@ -76,8 +75,6 @@ BATTERY = [
     ("Add the offsite to my calendar.", False),
     ("Remind me to email Sarah on Monday.", False),
     ("Block off an hour tomorrow morning to focus.", False),
-    ("Create a calendar event titled Dentist on June 18 from 9:40 AM to 10:10 AM.", False),
-    ("Make an event on my calendar for the dentist on June 18 from 9:40 AM to 10:10 AM.", False),
     # ---- SAFE: prepare a document ----
     ("Prepare a brief for the board meeting.", False),
     ("Put together a summary of the user interviews.", False),

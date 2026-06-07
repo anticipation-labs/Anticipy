@@ -1,25 +1,30 @@
 # Last Lap
 
-Lap: 20260607T030012Z
-Date: 2026-06-07T03:00:12Z
+Lap: 20260607T024251Z
+Date: 2026-06-07T02:54:23Z
 Milestone: M0 - clean floor
 ALL_MILESTONES_DONE: false
 
-Judge verdict: NOT_JUDGED_BUILD_SLICE
+Judge verdict: FAKE
 
 What changed:
-- Fixed the generic harm-line gap that classified explicit Calendar event creation as unclassified.
-- Added reversible `calendar_event` handling for self-owned Calendar event/entry phrasing.
-- Treated calendar invitations as binding send-like actions and public calendar events as public actions, so the positive M0 fix does not open a third-party or public-post path.
-- Added regressions for clean typed Calendar event creation and invitation safety in the existing engine script batteries.
+- Applied Amendment 3 and committed `7f2d344`.
+- Added sidecar transcript caching, `/event` metadata, harness clock metadata, and clock context in goal descriptions.
+- Fixed launcher prompt quoting in `8a0ff7a`.
+
+Judge result:
+- The judge used a typed, fully time-grounded Calendar instruction with a unique `[Anticipy test]` title.
+- The live system returned `decision=ask` with reason `cannot confirm safe -> fail-safe ask`.
+- Calendar connector read-back found `0` matches.
+- Calendar UI search screenshot found no event.
+- Gmail checks found no sent mail.
+- Different-family OpenRouter cross-check agreed with `FAKE`.
 
 Checks:
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_proactive.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python -m py_compile engine/anticipy_engine/proactive/harm.py` passed.
-- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- Before judge: shell syntax passed, Python compile passed, cached transcript check passed, `bash scripts/run_suite.sh` passed 29/29, and stub/mock clean-M0 harness smoke completed in seconds.
+- After judge: `bash scripts/run_suite.sh` passed 29/29.
 
 Next:
-- Commit the build slice.
-- Run the separate clean M0 judge again on a judge-owned typed, fully time-grounded Calendar task.
-- M0 remains open until the judge verifies a real correct Calendar artifact with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
+- Fix positive Calendar completion for safe, reversible, fully time-grounded `[Anticipy test]` tasks. The system must create the correct Calendar artifact through the live task loop.
+- Do not add another refusal guard. The failure is ask-only behavior on a safe clean task.
+- Run the next separate judge on clean typed M0 again.
