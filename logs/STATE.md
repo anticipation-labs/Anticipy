@@ -4,23 +4,23 @@ Current milestone: M1, real front door. M1 means a clean profile can download a 
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `76fc00d`, and found no tamper. It opened the clean public front door, downloaded the public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify --strict` and `spctl --assess` failed with `code has no resources but signature indicates they must be present`, and launch produced an invisible app process with zero windows instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Pending unjudged builder slice: lap `20260607T131802Z` produced production-linked source commit `ccc96264` on `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean`. It fixes the public `/app` source gate, app bundle resource signing before DMG creation, launch surface visibility, owner/eval literals in packaged paths, bridge screenshot home paths, and dirty-tree extension packaging. Local checks passed: changed Python compile, `node --check`, `plutil`, `git diff --check`, `cargo check`, `npm run build`, `bash scripts/build_dmg.sh`, regenerated zip literal scan, mounted-DMG `codesign --verify --strict`, and screenshot `/tmp/anticipy-m1-launch-after-wait.png` showing a readable Anticipy surface. This is build-side evidence only. The canonical public `anticipy.ai/app` and R2 DMG have not been judge-verified from this commit, and the separate Codex CLI runner is currently usage-limited.
+Pending unjudged builder slices: lap `20260607T131802Z` produced production-linked source commit `ccc96264` on `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean`, and lap `20260607T133227Z` advanced that candidate to commit `20de47b5`. The current candidate is `20de47b5`. It fixes the public `/app` source gate, app bundle resource signing before DMG creation, launch surface visibility, owner/eval literals in packaged paths, bridge screenshot home paths, dirty-tree extension packaging, and the M1 artifact-size blocker. The default front-door DMG no longer bundles the 2.3 GB Parakeet ASR model; audio weights are optional via `ANTICIPY_BUNDLE_ASR_MODEL=1` and otherwise lazy-load on first real audio use. Local checks passed across the two slices: changed Python compile, `node --check`, `plutil`, JSON config check, `git diff --check`, `cargo check`, `npm run build`, `bash scripts/build_dmg.sh`, regenerated zip literal scan, mounted-DMG `codesign --verify --strict`, no Parakeet resource in the app bundle, and screenshots `/tmp/anticipy-m1-launch-after-wait.png` plus `/tmp/anticipy-m1-small-dmg-launch.png` showing a readable Anticipy surface. The fresh local DMG is 178,804,210 bytes, about 171 MB, sha256 `682bf791b807e3127741a8a9499798d5e9e15fade9fefc5bd05328f9dfa96617`. This is build-side evidence only. The canonical public `anticipy.ai/app` and R2 DMG have not been judge-verified from this commit, and the separate Codex CLI runner is currently usage-limited.
 
-Gate status: no hard human gate blocks all work. The failed builder commit `76fc00d` was reverted by `969218d` and must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed, and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`. The pending production commit `ccc96264` is not M1 proof and must not be represented as done until the separate judge verifies the real public front door.
+Gate status: no hard human gate blocks all work. The failed builder commit `76fc00d` was reverted by `969218d` and must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed, and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`. The pending production commit `20de47b5` is not M1 proof and must not be represented as done until the separate judge verifies the real public front door.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - M0 clean floor is proven once: `logs/verdicts/20260607T032947Z.md` verifies one real typed Calendar task with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
 
 Build-side evidence, not proof:
-- Pending production-linked source commit `ccc96264` fixes the previously observed local M1 failure paths in a tracked, judgeable source tree: clean `/app` download source, strict app-bundle signing with sealed resources, visible launch surface, tracked-only extension packaging, and package literal scrub. Mounted local DMG strict codesign passes, but this is not public proof.
+- Pending production-linked source commit `20de47b5` fixes the previously observed local M1 failure paths in a tracked, judgeable source tree: clean `/app` download source, strict app-bundle signing with sealed resources, visible launch surface, tracked-only extension packaging, package literal scrub, and a 171 MB default front-door DMG with no bundled Parakeet weights. Mounted local DMG strict codesign passes, but this is not public proof.
 - The reverted `20260607T114534Z` slice added a local executor package smoke and caught a local ad-hoc signing pass, but the separate judge proved it did not fix production M1.
 - The reverted `20260607T084004Z` slice built a local executor download page and ad-hoc signed zip, and it removed some owner/eval literals from changed package-path code. The separate judge proved this did not fix production M1.
 - The reverted `20260607T075335Z` slice showed a local production-linked DMG could be rebuilt with sealed resources after ad-hoc signing, but the judge ruled it `FAKE/TAMPER` before public verification because the product diff was outside the judged executor commit and the rebuilt packaged archive contained owner/person-specific product literals.
 - The reverted `20260607T064745Z` slice showed the local executor Swift app can open on Main, but the separate judge proved this does not change or prove production `anticipy.ai/app`.
 - The reverted `20260607T035948Z` slice showed a local executor app can be packaged as a zip and served from the local Next app, but the separate judge proved this does not prove the production public front door.
 - Production `https://www.anticipy.ai/app` belongs to Vercel project `anticipy`, not this repo's linked `anticipy-executor-working` project.
-- Production `/download` and canonical `/dl/Anticipy_1.0.0_aarch64.dmg` still need a release-path fix, signature/resource fix, launch-surface fix, and clean judge verification. Builder header checks and local screenshots are not proof.
+- Production `/download` and canonical `/dl/Anticipy_1.0.0_aarch64.dmg` still need a safe release path for the `20de47b5` candidate and clean judge verification. Builder header checks and local screenshots are not proof.
 
 Not proven:
 - M1 is not proven. The actual production public app must launch to a readable live Anticipy surface from a clean front-door path.
@@ -51,7 +51,7 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating production-linked source commit `ccc96264` as M1 proof. It is pending build evidence until the canonical public front door and public DMG are updated and separately judged.
+- Treating production-linked source commit `20de47b5` or its parent `ccc96264` as M1 proof. They are pending build evidence until the canonical public front door and public DMG are updated and separately judged.
 - Running `scripts/ship.sh` blindly. It rebuilds, uploads to R2, commits a manifest, and pushes `HEAD:main`. That may be the eventual ship path, but it must be reconciled with main-branch safety and judgeability before use.
 - Making product changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` while the judged executor commit contains only logs. The judge will scan the external tree and treat uncommitted product deltas as a tamper risk. Product changes must live in a tracked, reviewable commit in the source tree being judged, or the loop must explicitly adapt to commit and scan the production-linked repo.
 - Rebuilding packaged extension or app archives that contain owner/person-specific literals such as owner names or example third-party names in product code. Clean or isolate those literals before packaging.
@@ -60,7 +60,7 @@ Dead ends not to retry blindly:
 - Blindly deploying this executor worktree to production `anticipy`, because production has a larger app and belongs to the older `Anticipy-DEV-FINAL` source tree.
 - Treating authenticated-owner Chrome observations as clean stranger proof.
 - Treating public headers, local app launch, local screenshots, or app activation by name as M1 proof without the separate judge.
-- Treating the current 2.5 GB public DMG as a healthy normal verifier path. It completed, but it made a single M1 judge take tens of minutes.
+- Treating the current 2.5 GB public DMG as a healthy normal verifier path. It completed, but it made a single M1 judge take tens of minutes. The local `20de47b5` candidate reduces the default DMG to 171 MB, but the public artifact is not updated yet.
 - Google Sheets and Google Docs canvas synthetic input.
 - Amazon.ca Playwright automation.
 - Anti-bot arms races for captcha or Cloudflare challenges.
@@ -71,8 +71,8 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Resolve the safe production deploy/judge path for production commit `ccc96264`, then run the separate M1 judge against the canonical public front door once Codex CLI quota allows it.
-- Keep shrinking or deferring the 2.5 GB public artifact as a follow-up, because a normal M1 judge should complete in minutes.
+- Resolve the safe production deploy/judge path for production commit `20de47b5`, then run the separate M1 judge against the canonical public front door once Codex CLI quota allows it.
+- Keep the public artifact small enough that a normal M1 judge completes in minutes.
 
 Law digest:
 Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.

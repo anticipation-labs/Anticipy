@@ -1,31 +1,31 @@
 # Last Lap
 
-Lap: 20260607T131802Z
-Date: 2026-06-07T13:18:02Z
+Lap: 20260607T133227Z
+Date: 2026-06-07T13:32:27Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked source commit `ccc96264` on branch `rebuild/spine-clean`.
-- Public `/app` source now defaults to the download surface and no longer gates the download view behind an account session.
-- Tauri package wrapper now ad-hoc signs the app bundle root and verifies it before DMG creation, so sealed resources are present.
-- The app launch path now eagerly shows the Anticipy popover and no longer hides it when macOS permission prompts steal focus.
-- Packaged product paths were scrubbed of owner/eval literals; hardcoded bridge screenshot paths now use `Path.home()`.
-- Extension packaging now copies only git-tracked files, then regenerated the tracked extension zips.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked source commit `20de47b5` on branch `rebuild/spine-clean`.
+- This builds on `ccc96264` and removes the multi-gigabyte Parakeet ASR model from the default M1 front-door DMG.
+- `scripts/build_dmg.sh` skips bundled ASR weights unless `ANTICIPY_BUNDLE_ASR_MODEL=1`.
+- `desktop/src-tauri/tauri.conf.json` no longer includes Parakeet model files as default Tauri resources.
+- `scripts/build_dmg.sh` now copies the fresh wrapper DMG from `desktop/target` instead of the stale 2.5 GB `desktop/src-tauri/target` image.
+- `engine/app/audiostack/audio.py` documents that front-door builds lazy-load ASR weights on first real audio use, leaving raw audio for later milestones.
 
 Checks:
-- `python3 -m py_compile` passed for changed Python files.
-- `node --check extension_v4/background.js` passed.
-- `plutil -lint desktop/scripts/com.anticipy.engine-watchdog.plist` passed.
+- `python3 -m py_compile engine/app/audiostack/audio.py` passed.
+- `bash -n scripts/build_dmg.sh desktop/scripts/bundle-parakeet-model.sh scripts/v7/package_extension_v6.sh` passed.
+- `python3 -m json.tool desktop/src-tauri/tauri.conf.json` passed.
 - `git diff --check` passed.
-- `cargo check --manifest-path desktop/src-tauri/Cargo.toml` passed.
-- `npm run build` passed and included `/app`.
 - `bash scripts/build_dmg.sh` passed.
+- The fresh wrapper DMG is 178,804,210 bytes, about 171 MB, sha256 `682bf791b807e3127741a8a9499798d5e9e15fade9fefc5bd05328f9dfa96617`.
+- The built app bundle is 176 MB and contains no `parakeet` resource.
 - Mounted `target/release/bundle/dmg/Anticipy_1.0.0_aarch64.dmg`; `codesign --verify --strict --verbose=4 /Volumes/Anticipy/Anticipy.app` passed with sealed resources.
 - `spctl --assess` still rejected the app because it is ad-hoc signed and this Mac has no Developer ID identity.
-- Local launch screenshot `/tmp/anticipy-m1-launch-after-wait.png` showed a readable Anticipy surface.
+- Local launch screenshot `/tmp/anticipy-m1-small-dmg-launch.png` showed a readable Anticipy surface.
 
 Gate:
 - M1 is not proven. The canonical public `anticipy.ai/app` and R2 DMG are not verified from this commit by the separate judge.
@@ -34,5 +34,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- Resolve the safe production deploy/judge path for commit `ccc96264`, then run the separate M1 judge against the canonical public front door.
+- Resolve the safe production deploy/judge path for commit `20de47b5`, then run the separate M1 judge against the canonical public front door.
 - Do not run `scripts/ship.sh` blindly: it uploads to R2 and pushes `HEAD:main`.
