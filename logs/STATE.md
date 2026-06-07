@@ -4,7 +4,7 @@ Current milestone: M1, real front door. M1 means a clean profile can download a 
 
 Latest judged lap: `20260607T084004Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `d51f4eb` plus control-plane commit `b0653cf`, and found no tamper. It then opened the clean public front door, downloaded the public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify` and `spctl` failed with `code has no resources but signature indicates they must be present`, and launch showed macOS security and permission prompts instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T084004Z.md`.
 
-Gate status: no hard human gate blocks all work. The failed builder commit `d51f4eb` is being reverted by the current gate. It must not be merged to `main`. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`.
+Gate status: no hard human gate blocks all work. The failed builder commit `d51f4eb` was reverted by `3ead64f` and must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed, and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -64,7 +64,6 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Finish the gate for `20260607T084004Z`: complete the revert, run post-revert verification, commit the gate logs, then continue M1 with a different approach.
 - Continue M1 against the actual production-linked source path in a tracked, judgeable way. First remove or isolate owner/person-specific literals from packaged product code, then fix the public front door path, public DMG resource signature, app launch surface, and artifact size.
 - Keep the public artifact small enough that a normal M1 judge can complete in minutes, or document why the verifier must download the full artifact.
 

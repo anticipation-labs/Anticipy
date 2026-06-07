@@ -22,10 +22,11 @@ Judge finding:
 
 Gate:
 - M1 is not proven.
-- The unproven builder commit `d51f4eb` is being reverted by the current gate.
+- The unproven builder commit `d51f4eb` was reverted by `3ead64f`.
+- Post-revert `bash macapp/scripts/build_app.sh` passed.
+- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 - Generalization remains UNPROVEN.
 
 Next:
-- Finish post-revert verification and commit the gate logs.
 - Continue M1 with a different approach against the actual production-linked source path in a tracked, judgeable way.
 - Remove or isolate owner/person-specific literals from packaged product code before rebuilding packages, then fix the public front door, public DMG signature, launch surface, and artifact size.
