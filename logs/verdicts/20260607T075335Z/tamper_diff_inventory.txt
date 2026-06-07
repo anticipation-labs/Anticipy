@@ -1,0 +1,22 @@
+Executor target commit f229496 files:
+M	logs/STATE.md
+M	logs/journal.md
+M	logs/last_lap.md
+M	logs/scorecard.csv
+
+Production-linked working diff name-status:
+M	desktop/scripts/tauri.mjs
+M	desktop/src-tauri/resources/anticipy-extension.zip
+M	desktop/src-tauri/src/lib.rs
+M	package.json
+M	public/anticipy-extension-v6.zip
+M	public/anticipy-extension.zip
+
+Production-linked working diff stat:
+ desktop/scripts/tauri.mjs                          |  14 +-
+ desktop/src-tauri/resources/anticipy-extension.zip | Bin 1038265 -> 942471 bytes
+ desktop/src-tauri/src/lib.rs                       | 363 +++++++++------------
+ package.json                                       |   8 +
+ public/anticipy-extension-v6.zip                   | Bin 1038265 -> 942471 bytes
+ public/anticipy-extension.zip                      | Bin 1038265 -> 942471 bytes
+ 6 files changed, 183 insertions(+), 202 deletions(-)

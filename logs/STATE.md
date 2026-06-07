@@ -2,15 +2,16 @@
 
 Current milestone: M1, real front door. M1 means a clean profile can download a `.app` from the public front door at `anticipy.ai/app`, launch it, and see the live surface. M0 clean floor is proven once, but the product is not done until a stranger can download, onboard, connect their own apps, and get a real task done.
 
-Latest judged lap: `20260607T064745Z` was `FAKE`. The separate M1 judge passed planted-fake self-check, computer-use self-test, tamper scan, and different-family OpenRouter cross-check. It verified that clean public `/app` still shows account creation and no direct download link, the public DMG downloads and mounts, but `codesign` and `spctl` fail with resource-signature errors and the launched public app shows only a macOS microphone permission prompt rather than a readable live Anticipy surface. Proof: `logs/verdicts/20260607T064745Z.md`.
+Latest judged lap: `20260607T075335Z` was `FAKE` with `Tamper: YES`. The separate M1 judge passed the planted-fake self-check and computer-use self-test, then halted at tamper scan before public M1 launch verification. It found that the executor builder commit `f229496` was only a logging commit while the product changes lived as an uncommitted diff in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`, and that rebuilt packaged archive files contained owner/person-specific literals in product code. The different-family OpenRouter cross-check agreed with `FAKE/TAMPER`. Proof: `logs/verdicts/20260607T075335Z.md`.
 
-Gate status: the failed builder commit `b109be8` is reverted on `autopilot/build` by the current gate commit. It must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+Gate status: the failed builder commit `f229496` is reverted on `autopilot/build` by `d80f0ce`. The failed tracked production-linked diff is removed from `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` and preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice`. It must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - M0 clean floor is proven once: `logs/verdicts/20260607T032947Z.md` verifies one real typed Calendar task with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
 
 Build-side evidence, not proof:
+- The reverted `20260607T075335Z` slice showed a local production-linked DMG could be rebuilt with sealed resources after ad-hoc signing, but the judge ruled it `FAKE/TAMPER` before public verification because the product diff was outside the judged executor commit and the rebuilt packaged archive contained owner/person-specific product literals.
 - The reverted `20260607T064745Z` slice showed the local executor Swift app can open on Main, but the separate judge proved this does not change or prove production `anticipy.ai/app`.
 - The reverted `20260607T035948Z` slice showed a local executor app can be packaged as a zip and served from the local Next app, but the separate judge proved this does not prove the production public front door.
 - Production `https://www.anticipy.ai/app` belongs to Vercel project `anticipy`, not this repo's linked `anticipy-executor-working` project.
@@ -31,7 +32,7 @@ Pending gates:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/2 verified, 0 percent.
+- M1 reality judge pass rate: 0/3 verified, 0 percent.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 - Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet.
@@ -44,6 +45,8 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
+- Making product changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` while the judged executor commit contains only logs. The judge will scan the external tree and treat uncommitted product deltas as a tamper risk. Product changes must live in a tracked, reviewable commit in the source tree being judged, or the loop must explicitly adapt to commit and scan the production-linked repo.
+- Rebuilding packaged extension or app archives that contain owner/person-specific literals such as owner names or example third-party names in product code. Clean or isolate those literals before packaging.
 - Treating the local executor Next page, local zip, or local Swift app launch as proof for production `anticipy.ai/app`.
 - Blindly deploying this executor worktree to production `anticipy`, because production has a larger app and belongs to the older `Anticipy-DEV-FINAL` source tree.
 - Treating authenticated-owner Chrome observations as clean stranger proof.
@@ -59,7 +62,7 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Continue M1 with a different approach: inspect the actual production source/deployment path for `https://www.anticipy.ai/app`, fix the public front door path, fix the public DMG resource signature, and make the launched public app show a readable live surface.
+- Continue M1 with a different approach: first eliminate owner/person-specific literals from packaged product code or exclude stale archives, then make the production-linked product diff tracked and judgeable. Only then fix the public front door path, public DMG resource signature, and launch surface.
 - Keep the public artifact small enough that a normal M1 judge can complete in minutes, or document why the verifier must download the full artifact.
 
 Law digest:

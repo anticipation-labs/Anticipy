@@ -1,0 +1,71 @@
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/__init__.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/__init__.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/openrouter_client.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/openrouter_client.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine: vision_image_prep.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine: vision_router.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: agent.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/anticipy: spine.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: authsec
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: bridge.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: browser.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: captcha.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/coldstart/auto_inhale.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/coldstart/auto_inhale.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/coldstart: extension_dossier_bridge.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/coldstart/sources/gmail.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/coldstart/sources/gmail.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: costctl
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: critic.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: desktop_app.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/dossier: call.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: e2e
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: harness.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/llm_router: __init__.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/llm_router: budget.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/llm_router: cache.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/llm_router: providers.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/llm_router: router.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: main.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/memory.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/memory.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: memory_v2
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/middle: __init__.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/middle: dispatcher.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/middle: policy.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/middle: skill_distiller.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/middle: skill_router.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/middle: skill_visual_metadata.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/middle: slot_resolver.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: observ
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: offline
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: orchestrator.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/proactive: diarization.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/proactive/notifier.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/proactive/notifier.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/proactive: vad.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: proactive_routes.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_dispatcher.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_dispatcher.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_engine_api_wire.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_engine_api_wire.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_planner.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_planner.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/confirm_card_wire.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/confirm_card_wire.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/context_attacher_wire.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/context_attacher_wire.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/dossier_active_loader.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/dossier_active_loader.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/dossier_router_wire.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/dossier_router_wire.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product: live_app.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product: lookup_detect.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/memory_cloud_sync_wire.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/memory_cloud_sync_wire.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/memory_provenance_endpoints.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/memory_provenance_endpoints.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product: multi_intent.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/native_action_wire.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/native_action_wire.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/scoped_memory.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/scoped_memory.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/scoped_memory_router_wire.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/scoped_memory_router_wire.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/surface_runtime_vision.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/surface_runtime_vision.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/product/universal_surface_runtime.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/engine/app/product/universal_surface_runtime.py differ
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: recovery
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: reflector.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: safetyx
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/sectors: __init__.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/sectors: detector.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/sectors: loader.py
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app/sectors: profiles
+Only in /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/engine/app: server.py
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/native_host/anticipy_agent.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/DAEMON-INSTALLER/native_host/native_bridge.py differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js differ
+Files /tmp/anticipy-zipdiff.nzCJrD/old/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js and /tmp/anticipy-zipdiff.nzCJrD/new/anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/content.js differ

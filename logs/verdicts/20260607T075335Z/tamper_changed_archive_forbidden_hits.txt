@@ -1,0 +1,55 @@
+anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js:17: * Key rule, from Omar: NEVER open about:blank as a seed tab. The first
+anticipy-v6/EXTENSION-LOAD-THIS-IN-CHROME/background.js:440:// CRITICAL: per Omar's v4 spec — navigate MUST open a real URL. The
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:453:#   1) ANTICIPY_ACCOUNT_ID env (deterministic override; Omar's launchctl
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:1541:    if os.environ.get("OPENROUTER_API_KEY", "").startswith("sk-or-"):
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:1548:            if ln.strip().startswith("OPENROUTER_API_KEY="):
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:1550:                if v.startswith("sk-or-"):
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:1551:                    os.environ["OPENROUTER_API_KEY"] = v
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:1992:    # B044: previously a prefix check alone accepted "sk-or-anything", flipping
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:1996:    if not candidate.startswith("sk-or-"):
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:1997:        return JSONResponse({"ok": False, "error": "not an sk-or- key"},
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2029:                         if not l.strip().startswith("OPENROUTER_API_KEY="))
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2031:                   + f"OPENROUTER_API_KEY={candidate}\n")
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2032:    os.environ["OPENROUTER_API_KEY"] = candidate
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2675:            os.environ.get("TWILIO_AUTH_TOKEN"),
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2796:    (TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER). We
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2799:    case where Omar has his own creds in .env.local).
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2819:        or e.get("TWILIO_AUTH_TOKEN", "").strip()
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:2914:    Used when the local engine has its own Twilio creds in env (Omar on
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:3023:         TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER), place the outbound
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:3111:                "TWILIO_AUTH_TOKEN + TWILIO_PHONE_NUMBER) in the engine "
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:4859:    Omar 2026-05-26 directive: the system never flat-declines a real
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:4898:# Universal dispatcher routing (Omar 2026-05-26 "never decline" directive)
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:5427:    Per the Omar 2026-05-26 "never decline" directive: this function used
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:5500:    Omar 2026-05-26 directive: never flat-decline. This function used to
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:5636:    Omar 2026-05-26 directive: never flat-decline. CRM record updates are
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:5730:    Omar 2026-05-26 directive: the four sub-classifiers now return
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:5746:    Omar 2026-05-26 directive: never flat-decline. The function name is
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:5854:    Omar 2026-05-26 directive: never flat-decline. Creating a Calendar
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:6257:    - ANTICIPY_ACCOUNT_ID env wins (deterministic override; Omar's
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:6391:# "Marcus asked me to send him") and returns the first such name.
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:6442:    # Possessive pattern: "Elena's reply", "Marcus's follow up".
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:6450:    # Subject-then-verb pattern: "Elena texted", "Marcus asked",
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:6542:            # follow up", "Marcus asked me to send him the receipts")
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:8559:    lines += ["", "Best,", (wearer or "Omar")]
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:10281:            # On Omar's dev Mac, BlackHole 2ch advertises is_default=true
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:11708:    # provisioned (offline / no OPENROUTER_API_KEY mode).
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:13361:#     TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_PHONE_NUMBER
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:13382:    # Stranger-install safety: do NOT default to Omar's email. Use the
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:13454:        and os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:13529:    who export TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN /
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:14263:    # Omar 2026-05-26 directive: never flat-decline. The competent_decline
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:14809:    auth_token = (os.environ.get("TWILIO_AUTH_TOKEN") or "").strip()
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:16659:        and os.environ.get("TWILIO_AUTH_TOKEN")
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/server.py:16672:            "detail": "set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/surface_runtime_vision.py:126:        self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/surface_runtime_vision.py:129:                "OPENROUTER_API_KEY required for VisionSurface "
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_planner.py:115:        self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/action_planner.py:238:            return "", "OPENROUTER_API_KEY missing"
+anticipy-v6/DAEMON-INSTALLER/engine/app/product/multi_intent.py:262:    key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/openrouter_client.py:95:        self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
+anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/openrouter_client.py:98:        if not self.api_key.startswith("sk-or-") and not (
+anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/openrouter_client.py:101:                "OPENROUTER_API_KEY missing/malformed and Anticipy model "
+anticipy-v6/DAEMON-INSTALLER/engine/app/action_engine/openrouter_client.py:173:        if self.api_key.startswith("sk-or-"):
+anticipy-v6/DAEMON-INSTALLER/engine/app/proactive/notifier.py:184:    tok = (os.environ.get("TWILIO_AUTH_TOKEN") or "").strip()
+anticipy-v6/DAEMON-INSTALLER/engine/app/proactive/notifier.py:188:            "twilio creds missing: set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN"

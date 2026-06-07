@@ -1,32 +1,32 @@
 # Last Lap
 
-Lap: 20260607T064745Z
-Date: 2026-06-07T07:47:19Z
+Lap: 20260607T075335Z
+Date: 2026-06-07T08:36:45Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
-Judge verdict: FAKE
+Judge verdict: FAKE, Tamper: YES
 
 What changed:
-- The builder made the local Swift macOS app open on `Main`, the live surface, instead of the inert onboarding screen.
-- The local app rail footer no longer said `scaffold · inert`.
-- The local bundle metadata changed to `ai.anticipy.app` version `1.0.0`.
+- The builder made production-linked Tauri and packaging changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`, but committed only builder-readable logs in this executor repo.
+- The local production-linked build showed sealed resources after ad-hoc signing, but it was not deployed to the public artifact path.
 
 Judge finding:
-- Clean public `/app` still showed account creation and a cookie-free scan found no direct download link.
-- The public 2.5 GB DMG downloaded, mounted, and contained `Anticipy.app`.
-- `codesign` and `spctl` failed on the public app with resource-signature errors.
-- Launching the app from the mounted public DMG showed a macOS microphone permission prompt, not a readable live Anticipy surface.
-- A later activation by app name started `/Applications/Anticipy.app`, which the judge correctly did not count as public-DMG proof.
-- Different-family OpenRouter cross-check agreed with `FAKE` after paid Gemini returned HTTP 402 and the judge used a free Google-family model.
+- Planted-fake self-check passed.
+- Computer-use self-test passed by reading Example Domain in Chrome.
+- Tamper scan failed before public M1 verification. The target executor commit `f229496` was log-only, while product changes were uncommitted in the production-linked tree.
+- Rebuilt packaged archive files contained owner/person-specific literals in product code, including owner-name comments and fallback signature text.
+- Different-family OpenRouter cross-check agreed with `FAKE/TAMPER`.
 
 Gate:
 - M1 is not proven.
-- The unproven builder commit `b109be8` is reverted by gate.
+- The unproven builder commit `f229496` is reverted by `d80f0ce`.
+- The failed tracked production-linked diff is removed from the worktree and preserved as stash `stash@{0}: failed lap 20260607T075335Z m1 package slice`.
 - Post-revert `bash macapp/scripts/build_app.sh` passed.
 - Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M1 with a different approach: fix the actual production front door and public Mac app runtime, not the local executor app alone.
-- The next slice should reduce or route around the 2.5 GB verifier bottleneck and fix the public app resource signature and launch surface.
+- Clean owner/person-specific literals out of packaged product code or exclude stale archives before rebuilding packages.
+- Make the production-linked product diff tracked and judgeable before claiming any public artifact progress.
+- Then resume the public front-door, DMG signature, and launch-surface work.
