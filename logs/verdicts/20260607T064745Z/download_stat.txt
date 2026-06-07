@@ -1,0 +1,1 @@
+path=/tmp/anticipy-m1-judge-20260607T064745Z.0VWmRs/downloads/Anticipy_1.0.0_aarch64.dmg size=2516712351

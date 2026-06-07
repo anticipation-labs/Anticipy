@@ -1,0 +1,30 @@
+### codesign display
+Executable=/private/tmp/anticipy-m1-judge-20260607T064745Z.0VWmRs/mount/AnticipyPublic/Anticipy.app/Contents/MacOS/Anticipy
+Identifier=anticipy-70984cd55e6574d3
+Format=app bundle with Mach-O thin (arm64)
+CodeDirectory v=20400 size=92472 flags=0x20002(adhoc,linker-signed) hashes=2886+0 location=embedded
+VersionPlatform=1
+VersionMin=720896
+VersionSDK=984320
+Hash type=sha256 size=32
+CandidateCDHash sha256=20c69bb466136b7ac97a862ef8b7a3b2e300b8d8
+CandidateCDHashFull sha256=20c69bb466136b7ac97a862ef8b7a3b2e300b8d8a47fa4c0c5eb43687f5955de
+Hash choices=sha256
+CMSDigest=20c69bb466136b7ac97a862ef8b7a3b2e300b8d8a47fa4c0c5eb43687f5955de
+CMSDigestType=2
+Executable Segment base=0
+Executable Segment limit=8781824
+Executable Segment flags=0x1
+Page size=4096
+CDHash=20c69bb466136b7ac97a862ef8b7a3b2e300b8d8
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Sealed Resources=none
+Internal requirements=none
+### codesign verify
+/tmp/anticipy-m1-judge-20260607T064745Z.0VWmRs/mount/AnticipyPublic/Anticipy.app: code has no resources but signature indicates they must be present
+codesign_verify_exit=1
+### spctl assess
+/tmp/anticipy-m1-judge-20260607T064745Z.0VWmRs/mount/AnticipyPublic/Anticipy.app: code has no resources but signature indicates they must be present
+spctl_exit=1

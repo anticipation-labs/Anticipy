@@ -1,0 +1,8 @@
+launch_command=open -n /tmp/anticipy-m1-judge-20260607T064745Z.0VWmRs/mount/AnticipyPublic/Anticipy.app
+2026-06-07T07:40:05Z
+open_exit=0
+### pgrep Anticipy after launch
+3606 /bin/bash /Users/omarebrahim/Anticipy-Content/bin/watcher.sh
+3719 fswatch -0 --event Created --event MovedTo /Users/omarebrahim/Anticipy-Content/raw
+3720 /bin/bash /Users/omarebrahim/Anticipy-Content/bin/watcher.sh
+50754 /private/tmp/anticipy-m1-judge-20260607T064745Z.0VWmRs/mount/AnticipyPublic/Anticipy.app/Contents/MacOS/Anticipy

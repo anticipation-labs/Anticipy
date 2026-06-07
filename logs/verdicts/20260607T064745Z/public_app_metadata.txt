@@ -1,0 +1,8 @@
+### Info.plist
+ai.anticipy.app
+1.0.0
+1.0.0
+### executable
+total 359704
+-rwxr-xr-x@ 1 omarebrahim  staff   11910688 May 30 10:32 Anticipy
+-rwxr-xr-x@ 1 omarebrahim  staff  172256320 May 30 10:31 anticipy-engine

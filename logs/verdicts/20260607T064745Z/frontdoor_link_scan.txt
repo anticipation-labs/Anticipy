@@ -1,0 +1,16 @@
+frontdoor_url=https://www.anticipy.ai/app
+html_bytes=17513
+
+found_download_like_lines:
+http://www.w3.org/2000/svg&#x27;
+https://schema.org
+https://schema.org/InStock
+https://schema.org/InStock\\\
+https://schema.org\\\
+https://www.anticipy.ai
+https://www.anticipy.ai/app
+https://www.anticipy.ai/app\
+https://www.anticipy.ai/app\\\
+https://www.anticipy.ai/opengraph-image?486114948dbeab2e
+https://www.anticipy.ai/opengraph-image?486114948dbeab2e\
+https://www.anticipy.ai\\\

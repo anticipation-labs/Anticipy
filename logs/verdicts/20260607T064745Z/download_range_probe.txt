@@ -1,0 +1,17 @@
+HTTP/2 200
+accept-ranges: bytes
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/x-apple-diskimage
+date: Sun, 07 Jun 2026 07:13:22 GMT
+permissions-policy: microphone=(self), camera=(), geolocation=()
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+vary: RSC, Next-Router-State-Tree, Next-Router-Prefetch
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-matched-path: /dl/Anticipy_1.0.0_aarch64.dmg
+x-vercel-cache: MISS
+x-vercel-id: pdx1::iad1::9n72m-1780816402836-d6850c34aa9c
+content-length: 2515666283

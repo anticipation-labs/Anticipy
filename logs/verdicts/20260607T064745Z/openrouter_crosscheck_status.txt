@@ -1,0 +1,2 @@
+gemini_http=402
+free_http=200

@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// App shell: opens on the live surface while keeping setup screens reachable.
+/// Scaffold shell: a slim rail to preview the three (inert) screens, in order.
 struct RootView: View {
     enum Screen: String, CaseIterable, Identifiable {
         case onboarding = "Onboarding"
@@ -35,7 +35,7 @@ struct RootView: View {
         var id: String { rawValue }
     }
 
-    @State private var screen: Screen = .main
+    @State private var screen: Screen = .onboarding
 
     var body: some View {
         HStack(spacing: 0) {
@@ -82,7 +82,7 @@ private struct Rail: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            Text("live surface")
+            Text("scaffold · inert")
                 .font(DS.caption())
                 .foregroundColor(DS.textSecondary.opacity(0.7))
         }

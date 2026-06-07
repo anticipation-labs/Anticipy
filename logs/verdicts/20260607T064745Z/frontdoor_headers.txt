@@ -1,0 +1,20 @@
+HTTP/2 200
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 687193
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline
+content-type: text/html; charset=utf-8
+date: Sun, 07 Jun 2026 07:10:55 GMT
+etag: "5ad97450c5de79bebeea1c38fd5841ea"
+permissions-policy: microphone=(self), camera=(), geolocation=()
+referrer-policy: strict-origin-when-cross-origin
+server: Vercel
+strict-transport-security: max-age=31536000; includeSubDomains; preload
+vary: RSC, Next-Router-State-Tree, Next-Router-Prefetch
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-matched-path: /app
+x-vercel-cache: HIT
+x-vercel-id: pdx1::9n72m-1780816255093-c16909d72b8e
+content-length: 17513
