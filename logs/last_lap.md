@@ -1,32 +1,30 @@
 # Last Lap
 
-Lap: 20260607T064745Z
-Date: 2026-06-07T07:47:19Z
+Lap: 20260607T075335Z
+Date: 2026-06-07T08:22:56Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
-Judge verdict: FAKE
+Judge verdict: PENDING
 
 What changed:
-- The builder made the local Swift macOS app open on `Main`, the live surface, instead of the inert onboarding screen.
-- The local app rail footer no longer said `scaffold · inert`.
-- The local bundle metadata changed to `ai.anticipy.app` version `1.0.0`.
+- In the production-linked source tree `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`, changed the Tauri app so first launch shows the Anticipy popover and the Rust microphone permission request is only user-initiated through the wizard.
+- Changed `desktop/scripts/tauri.mjs` so the `.app` is ad-hoc signed before DMG creation.
+- Fixed the same wrapper to write every plausible DMG output path, preventing `scripts/build_dmg.sh` from copying a stale unsealed DMG.
 
-Judge finding:
-- Clean public `/app` still showed account creation and a cookie-free scan found no direct download link.
-- The public 2.5 GB DMG downloaded, mounted, and contained `Anticipy.app`.
-- `codesign` and `spctl` failed on the public app with resource-signature errors.
-- Launching the app from the mounted public DMG showed a macOS microphone permission prompt, not a readable live Anticipy surface.
-- A later activation by app name started `/Applications/Anticipy.app`, which the judge correctly did not count as public-DMG proof.
-- Different-family OpenRouter cross-check agreed with `FAKE` after paid Gemini returned HTTP 402 and the judge used a free Google-family model.
+What M1 verification did:
+- Ran `bash scripts/build_dmg.sh` through the production packaging path after the fixes.
+- Mounted the regenerated root DMG and verified `/tmp/anticipy-m1-mount-20260607T075335Z/Anticipy.app` with `codesign --verify --deep --strict --verbose=2`.
+- Confirmed `codesign -dvvv` reports `Sealed Resources version=2`.
+- Confirmed `spctl --assess --type execute -vv` still rejects because the app is ad-hoc signed and not Developer ID signed/notarized.
+- Local root DMG SHA-256: `ddd20a490ac6a301fc9f6d321fd4ec53e6d74711364929171c869882119c7692`.
+- Public `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` still serves the old artifact size, so the rebuilt DMG is not deployed.
 
-Gate:
-- M1 is not proven.
-- The unproven builder commit `b109be8` is reverted by gate.
-- Post-revert `bash macapp/scripts/build_app.sh` passed.
-- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
-- Generalization remains UNPROVEN.
+What was inconclusive:
+- Mounted-DMG GUI launch showed the Anticipy popover, but the screen was already polluted by unresolved microphone permission prompts in Safari/Chrome. This is not clean launch proof.
+- The production-linked repo had substantial pre-existing dirt; this lap only intentionally changed `desktop/src-tauri/src/lib.rs` and `desktop/scripts/tauri.mjs`, while package builds also regenerated extension zips and an engine spec.
 
 Next:
-- Continue M1 with a different approach: fix the actual production front door and public Mac app runtime, not the local executor app alone.
-- The next slice should reduce or route around the 2.5 GB verifier bottleneck and fix the public app resource signature and launch surface.
+- Cleanly isolate the remaining microphone prompt source on first launch and prevent any automatic prompt before the visible surface.
+- Decide a safe publish path for the production-linked repo that does not run `scripts/ship.sh` as-is, because that script pushes to `origin main`.
+- Upload/deploy only after the local mounted DMG launches cleanly and the separate judge can verify the public artifact.
