@@ -27,8 +27,8 @@ The audio tests only the ears-to-brain slice. It is not the priority over the fr
 ## The loop in brief
 1. Re-read `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, and `logs/STATE.md` from disk, then read the next open milestone.
 2. Do the single next vertical slice toward it.
-3. Run the whole system on a real day, end to end.
-4. A separate judge session opens the real apps with computer use and rules whether the real thing actually happened, on a real day you have never seen.
+3. Run the whole system on the current milestone input. Clean M0 uses typed, fully time-grounded input; later audio milestones use cached transcript text from real days.
+4. A separate judge session opens the real apps with computer use and rules whether the real thing actually happened. Clean M0 uses a judge-owned typed task; later audio milestones use held-out real days you have never seen.
 5. If it is real and the score went up and nothing regressed, keep it and advance. If not, revert, save the failure as a permanent test, and try a different way.
 6. Log everything. Start the next lap with a fresh context.
 

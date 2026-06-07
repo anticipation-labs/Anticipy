@@ -1,26 +1,29 @@
 # Last Lap
 
-Lap: 20260607T011820Z
-Date: 2026-06-07T01:50:00Z
-Milestone: M0 - ugly floor
+Lap: 20260607T024251Z
+Date: 2026-06-07T02:42:51Z
+Milestone: M0 - clean floor
 ALL_MILESTONES_DONE: false
 
 What changed:
-- Added `CURRENT_LOCAL_TIME` and the concrete Calendar arg shape `summary/start_datetime/end_datetime` to the real-provider planner prompt.
-- Added a live API hand guard for `create_event`: if the job lacks concrete ISO-like `start_datetime` and `end_datetime`, it returns `needs_human` before Arcade authorize/execute. It does not parse natural language or invent a duration.
+- Applied Amendment 3 to the control plane. M0 is now the clean typed floor: one fully time-grounded typed task must complete through the live system and be verified in the real app.
+- Moved audio out of the inner loop by adding sidecar transcript caching in `transcribe_audio()`. Builder-visible sidecars may be read by the builder. Held-out sidecars stay judge-only.
+- Added `/event` metadata and passed `observed_at`, capture start, transcript offset, and timezone from the realday harness into the engine.
+- Added capture clock context to goal descriptions so the planner can ground relative time from supplied context instead of guessing.
+- Updated build and judge prompts to use clean typed M0 before held-out audio.
+
+Stopped judge:
+- The judge for `20260607T011820Z` was cleanly stopped without a verdict after tens of minutes on the old audio-first path.
+- No held-out day was burned and no proof is claimed from that stopped judge.
+- The previous Calendar guard remains a safety floor but does not advance M0.
 
 Checks:
-- Focused Calendar guard check passed: ambiguous `when: Friday 12:00` did not execute, concrete start/end datetimes executed against a fake live client.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_api_hand.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python -m py_compile engine/anticipy_engine/hands/api_hand.py engine/anticipy_engine/core/orchestrator.py` passed.
+- `bash -n scripts/realday.sh autopilot/build_lap autopilot/judge_lap` passed.
+- `py_compile` passed for the edited Python files.
+- Cached transcript check used the existing builder-visible sidecar and did not load Whisper.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
-
-Realday:
-- Required command ran: `AUTOPILOT_LAP=20260607T011820Z bash scripts/realday.sh`.
-- Builder-visible source: `realdays/raw/2026-05-20_07_34_11.transcript`.
-- Summary: `line_count=3228`, `act=28`, `ask=385`, `ignore=2815`, `wall_seconds=1422.806`.
-- This is builder-side evidence only. `judge_verdict=PENDING`.
+- A stub/mock clean-M0 harness smoke completed in seconds and confirmed `observed_at` metadata reached `/event`.
 
 Next:
-- Run the separate judge for lap `20260607T011820Z`.
-- The judge must verify whether the guard prevents wrong Calendar writes on held-out audio and whether any real artifact is correctly completed. M0 remains open until a fresh held-out judge verifies one real task.
+- Run a separate judge against the current commit using the clean typed M0 path.
+- The judge must create a unique safe `[Anticipy test]` typed Calendar task, run it through the live system, verify the real artifact by connector read-back and screenshot, delete it after verification, run cross-check, and write a verdict.

@@ -27,7 +27,7 @@ Obey these rules exactly:
 1. Before anything else, read AGENTS.md, autopilot/02_LAWS.md, autopilot/09_REPO_FACTS.md, and logs/STATE.md from disk. Then read autopilot/00_START_HERE.md, CODEX_BRIEF.md, logs/last_lap.md if present, and the top OPEN item in autopilot/07_MILESTONES.md.
 2. Do one small vertical slice toward that milestone. Use the real Mac, real Chrome, and computer use whenever it helps.
 3. Do not touch tests/realday/, realdays/holdout/, judge/, or logs/verdicts/. Those belong to the judge. Never read realdays/holdout/.
-4. Run the whole system on a builder-visible day with: AUTOPILOT_LAP=$LAP bash scripts/realday.sh
+4. For the current clean M0, run the whole system on a builder-visible typed, fully time-grounded task. Create it under .anticipy-data/typed/ with the lap id in the `[Anticipy test]` title, then run: AUTOPILOT_LAP=$LAP bash scripts/realday.sh .anticipy-data/typed/m0_$LAP.txt. Do not use multi-hour audio in the inner loop. For later audio milestones, use cached transcripts, not repeated MP3 transcription.
 5. Write or append:
    - logs/trace/$LAP.jsonl for every meaningful command, edit, browser action, and test.
    - logs/journal.md with one paragraph for this lap.

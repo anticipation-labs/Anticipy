@@ -37,6 +37,20 @@ def transcribe_audio(path: Path) -> AudioTranscript:
     if not is_audio_file(path):
         raise ValueError(f"not an audio file: {path}")
 
+    sidecar = path.with_suffix(".transcript")
+    cached = _read_cached_transcript(sidecar)
+    if cached is not None:
+        return AudioTranscript(
+            lines=cached,
+            metadata={
+                "audio_path": str(path),
+                "transcript_path": str(sidecar),
+                "transcriber": "cached_sidecar",
+                "cached": True,
+                "segments_kept": len(cached),
+            },
+        )
+
     duration = _probe_duration(path)
     silence = _detect_silence(path)
     speech = _speech_intervals(duration, silence)
@@ -85,19 +99,34 @@ def transcribe_audio(path: Path) -> AudioTranscript:
                 lines.append(f"[{_stamp(seg_start)}-{_stamp(seg_end)}] {text}")
                 segment_count += 1
 
-    return AudioTranscript(
+    transcript = AudioTranscript(
         lines=lines,
         metadata={
             "audio_path": str(path),
+            "transcript_path": str(sidecar),
             "duration_seconds": round(duration, 3),
             "speech_intervals": len(speech),
             "chunks": len(chunks),
             "segments_kept": segment_count,
             "model": model_name,
             "transcriber": "local_whisper",
+            "cached": False,
             "max_audio_seconds": float(os.environ.get("ANTICIPY_REALDAY_AUDIO_MAX_SECONDS", "0") or "0"),
         },
     )
+    _write_cached_transcript(sidecar, transcript.lines)
+    return transcript
+
+
+def _read_cached_transcript(path: Path) -> List[str] | None:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _write_cached_transcript(path: Path, lines: Sequence[str]) -> None:
+    path.write_text("\n".join(lines).rstrip() + ("\n" if lines else ""), encoding="utf-8")
 
 
 def _load_whisper_model(name: str):

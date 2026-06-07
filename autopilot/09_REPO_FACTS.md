@@ -77,6 +77,16 @@ Hard rule from this project's history: research the official docs before editing
 - The Steve Jobs / Bill Gates interview may be used only as a silence control. Correct behavior is to do nothing. It never counts for or against task completion and never toward the 5-day requirement.
 - Raw traces, `logs/last_realday.json`, transcript files, `.anticipy-data/`, and raw verdict JSON/JSONL are local-only and ignored by git. Durable builder-readable files may contain verdicts, counts, proof links, and lessons, but no raw held-out transcript text.
 - As of lap `20260606T013101Z`, `scripts/realday.sh` can ingest MP3/M4A/WAV/AAC/FLAC/OGG by delegating to `engine/anticipy_engine/capture/transcribe.py`. That path uses local `ffmpeg` speech-region detection plus local Whisper chunks (`openai-whisper`, default model `tiny.en`). It is generic plumbing, not a milestone pass. The builder smoke used only `realdays/raw/`, never holdout.
+- Amendment 3 speed rule: audio transcription is outside the inner loop after the first pass. Each audio file gets a sidecar transcript next to it. If the sidecar exists, the harness must use cached text and must not re-transcribe. Held-out sidecars stay in `realdays/holdout/` and remain judge-only. A normal lap on cached or typed input should complete in minutes; tens-of-minutes laps are a flagged harness failure, not normal progress.
+- Current speed finding: judge lap `20260607T011820Z` was cleanly stopped without a verdict after spending tens of minutes on the old audio-first path. The held-out day is not burned because no milestone PASS occurred and the builder did not read held-out content.
+
+## Current milestone order after Amendment 3
+- M0 is now the clean floor: complete one typed, fully time-grounded, safe, reversible task through the live system, and have the judge verify a real correct artifact in the real app. Calendar is the preferred first proof because Calendar create/list/delete is already authorized and proven.
+- M1 front door, M2 real typed input box, and M3 wired WebVoyager hands come before raw audio inference. Build the perimeter on clean input first.
+- Raw audio inference is the last hard layer and should be tested rarely as a final exam, not as the daily gate.
+
+## Harness clock grounding
+- The wrong Calendar writes came from feeding text with no reliable clock context, so relative phrases could not be grounded. The fix is to pass real wall-clock time and transcript timing into the engine. If a task fails for missing context, supply the context. Do not add another guard that only refuses. Existing guards remain as a floor against unsafe writes, but they are not the fix and not milestone progress.
 
 ## Proven dead-ends (do NOT burn laps retrying these blindly)
 - Google Sheets and Google Docs canvas resist synthetic input: multi-cell commit fails via CDP. Navigation and extraction work; the editable canvas does not. Accept it, route around it, do not retry from scratch.

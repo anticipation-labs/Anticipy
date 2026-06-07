@@ -15,10 +15,12 @@ import datetime as dt
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
+from zoneinfo import ZoneInfo
 
 REPO = Path.cwd()
 sys.path.insert(0, str(REPO / "engine"))
@@ -67,6 +69,60 @@ def http(method: str, path: str, body: dict | None = None, timeout: int = 180) -
     return json.loads(raw) if raw else {}
 
 
+STAMP_RE = re.compile(r"^\[(\d{2}:\d{2}:\d{2})(?:-(\d{2}:\d{2}:\d{2}))?\]\s*(.*)$")
+
+
+def local_zone():
+    name = os.environ.get("ANTICIPY_REALDAY_TIMEZONE") or "America/Los_Angeles"
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return dt.datetime.now().astimezone().tzinfo
+
+
+def capture_start_from_path(path: Path) -> str | None:
+    m = re.search(r"(\d{4}-\d{2}-\d{2})_(\d{2})_(\d{2})_(\d{2})", path.stem)
+    if not m:
+        return None
+    zone = local_zone()
+    observed = dt.datetime.strptime(
+        f"{m.group(1)} {m.group(2)}:{m.group(3)}:{m.group(4)}",
+        "%Y-%m-%d %H:%M:%S",
+    ).replace(tzinfo=zone)
+    return observed.isoformat()
+
+
+def seconds_from_stamp(stamp: str) -> int:
+    h, m, s = (int(part) for part in stamp.split(":"))
+    return h * 3600 + m * 60 + s
+
+
+def normalize_line(line: str, source: dict, fallback_observed_at: str) -> tuple[str, dict]:
+    meta = {
+        "harness_lap": LAP,
+        "input_kind": source.get("kind"),
+        "timezone": os.environ.get("ANTICIPY_REALDAY_TIMEZONE") or "America/Los_Angeles",
+    }
+    capture_started_at = source.get("capture_started_at")
+    if capture_started_at:
+        meta["capture_started_at"] = capture_started_at
+    match = STAMP_RE.match(line)
+    if match:
+        start_offset = seconds_from_stamp(match.group(1))
+        end_offset = seconds_from_stamp(match.group(2)) if match.group(2) else None
+        meta["transcript_offset_seconds"] = start_offset
+        if end_offset is not None:
+            meta["transcript_end_offset_seconds"] = end_offset
+        if capture_started_at:
+            base = dt.datetime.fromisoformat(capture_started_at)
+            meta["observed_at"] = (base + dt.timedelta(seconds=start_offset)).isoformat()
+        else:
+            meta["observed_at"] = fallback_observed_at
+        return match.group(3).strip(), meta
+    meta["observed_at"] = fallback_observed_at
+    return line.strip(), meta
+
+
 def choose_day(argv: list[str]) -> tuple[str, list[str], bool, dict]:
     if argv:
         p = Path(argv[0]).expanduser()
@@ -74,22 +130,38 @@ def choose_day(argv: list[str]) -> tuple[str, list[str], bool, dict]:
             p = REPO / p
         if is_audio_file(p):
             transcript = transcribe_audio(p)
-            return p.stem, transcript.lines, False, {"kind": "audio", **transcript.metadata}
+            return p.stem, transcript.lines, False, {
+                "kind": "audio",
+                "capture_started_at": capture_start_from_path(p),
+                **transcript.metadata,
+            }
         text = p.read_text(encoding="utf-8")
-        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False, {"kind": "text", "path": str(p)}
+        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False, {
+            "kind": "text",
+            "path": str(p),
+            "capture_started_at": capture_start_from_path(p),
+        }
 
     raw = sorted((REPO / "realdays" / "raw").glob("*"))
     readable = [p for p in raw if p.is_file() and not is_audio_file(p)]
     if readable:
         p = readable[0]
         text = p.read_text(encoding="utf-8")
-        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False, {"kind": "text", "path": str(p)}
+        return p.stem, [ln.strip() for ln in text.splitlines() if ln.strip()], False, {
+            "kind": "text",
+            "path": str(p),
+            "capture_started_at": capture_start_from_path(p),
+        }
 
     audio = [p for p in raw if p.is_file() and is_audio_file(p)]
     if audio:
         p = audio[0]
         transcript = transcribe_audio(p)
-        return p.stem, transcript.lines, False, {"kind": "audio", **transcript.metadata}
+        return p.stem, transcript.lines, False, {
+            "kind": "audio",
+            "capture_started_at": capture_start_from_path(p),
+            **transcript.metadata,
+        }
 
     return (
         "setup-smoke-sample",
@@ -102,6 +174,7 @@ def choose_day(argv: list[str]) -> tuple[str, list[str], bool, dict]:
 def main() -> int:
     TRACE.parent.mkdir(parents=True, exist_ok=True)
     start = time.perf_counter()
+    run_observed_at = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     day_id, lines, synthetic, source = choose_day(sys.argv[1:])
     write_step("select_day", "realdays/raw", day_id, "ok", synthetic_setup_sample=synthetic, source=source)
 
@@ -114,12 +187,15 @@ def main() -> int:
 
     decisions: dict[str, int] = {}
     rows: list[dict] = []
-    for idx, line in enumerate(lines, start=1):
+    for idx, raw_line in enumerate(lines, start=1):
+        line, meta = normalize_line(raw_line, source, run_observed_at)
+        if not line:
+            continue
         try:
-            out = http("POST", "/event", {"text": line, "source": "app"}, timeout=240)
+            out = http("POST", "/event", {"text": line, "source": "app", "meta": meta}, timeout=240)
             decision = str(out.get("decision", "unknown"))
             decisions[decision] = decisions.get(decision, 0) + 1
-            rows.append({"line": idx, "decision": decision, "response": out})
+            rows.append({"line": idx, "decision": decision, "response": out, "meta": meta})
             write_step("post_event", BASE + "/event", line[:180], "ok", decision=decision, response=out)
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "replace")

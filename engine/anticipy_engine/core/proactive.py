@@ -84,12 +84,13 @@ class ProactiveEngine:
 
         # 4) act (JUST DO IT) / ask (PAUSE before harm, send the ask; Room 4 round-trip)
         goal_id = ask_id = None
+        description = self._goal_description(event)
         if not verdict.detrimental:
-            goal = await self.orchestrator.start_goal(Goal(intent=event.text, description=event.text))
+            goal = await self.orchestrator.start_goal(Goal(intent=event.text, description=description))
             goal_id = goal.id
             decision = "act"
         else:
-            goal = Goal(intent=event.text, description=event.text, state=GoalState.waiting)
+            goal = Goal(intent=event.text, description=description, state=GoalState.waiting)
             self.orchestrator.store.save(goal)        # persist the PAUSED goal (NOT executed)
             goal_id = goal.id
             # Room 5: cap PROACTIVE (engine-initiated) interruptions + suppress declined types.
@@ -166,6 +167,20 @@ class ProactiveEngine:
         return out
 
     # ---- steps ----
+    def _goal_description(self, event: Event) -> str:
+        meta = event.meta or {}
+        context_keys = (
+            "observed_at",
+            "capture_started_at",
+            "transcript_offset_seconds",
+            "transcript_end_offset_seconds",
+            "timezone",
+        )
+        lines = [f"{key}={meta[key]}" for key in context_keys if meta.get(key) is not None]
+        if not lines:
+            return event.text
+        return event.text + "\n\nCAPTURE_CONTEXT:\n" + "\n".join(lines)
+
     def _triage(self, event: Event) -> bool:
         return self.triage.actionable(event.text)   # Room 1: high-recall bouncer, zero smart calls in stub
 

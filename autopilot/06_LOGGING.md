@@ -21,6 +21,8 @@ Raw traces are local-only privacy artifacts. `logs/trace/`, `logs/last_realday.j
 
 Builder-readable durable logs are limited to `logs/STATE.md`, `logs/last_lap.md`, `logs/journal.md`, and `logs/scorecard.csv`. These files may contain verdicts, counts, proof links, and lessons only. They must contain zero raw held-out transcript text.
 
+Audio is not allowed to dominate the inner loop. Transcribe each real day's audio to text once and save the sidecar transcript next to the audio. Builder-visible sidecars may be used by the builder; held-out sidecars stay under `realdays/holdout/` and are judge-only. Never re-transcribe the same file when a sidecar transcript exists. A normal build plus judge lap on cached or typed input must complete in minutes. If a lap takes tens of minutes, flag it in `logs/journal.md` and do not accept the delay as normal.
+
 ### 2. Scorecard: `logs/scorecard.csv`
 One row per lap. This is the curve we actually watch.
 ```
@@ -31,6 +33,7 @@ taste_confidence, cost_usd, wall_seconds, notes
 - `real_tasks_verified` on fresh, never-seen days is THE number. It must go up over time and never slide back.
 - `false_actions` (acted on a vent or a non-task) must stay zero. A single false action fails the lap.
 - `taste_confidence` is LOW until enough human-marked days exist; while LOW, do not claim judgment progress.
+- A guard-only or abstain-only lap is a failed product lap for milestone purposes. Log it plainly. It may be useful safety work, but `real_tasks_verified` stays zero until a real, correct artifact is verified in a real app.
 - Every scorecard row must include or mention the drift numbers: own tests' pass rate and reality judge verified pass rate on fresh unseen days. If the schema cannot hold both cleanly, put them in `notes`.
 - Until real diverse users exist, every scorecard row must label generalization as `UNPROVEN` in `notes`. Never claim the product works for everyone.
 - If fewer than 5 distinct real task-bearing days exist, write `only N real days available; generalization UNPROVEN` in `notes`. Do not manufacture, duplicate, or synthesize real days to satisfy the count.

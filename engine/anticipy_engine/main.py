@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import __version__
 from .agent import WebVoyagerAgent, judge
@@ -66,6 +66,7 @@ class ExtensionHello(BaseModel):
 class EventIn(BaseModel):
     text: str
     source: str = "app"
+    meta: dict = Field(default_factory=dict)
 
 
 class ResolveIn(BaseModel):
@@ -101,7 +102,7 @@ def extension_hello(body: ExtensionHello) -> dict:
 # ---- control core ----
 @app.post("/event")
 async def event(body: EventIn) -> dict:
-    return await core.feed(body.source, body.text)
+    return await core.feed(body.source, body.text, body.meta)
 
 
 @app.get("/glassbox")

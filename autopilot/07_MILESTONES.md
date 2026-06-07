@@ -1,6 +1,6 @@
 # 07 MILESTONES — the ordered backlog
 
-Each milestone's "done" is a real-world check by the judge (`05_JUDGE.md`), never a green unit test. A milestone is done only when the reality judge confirms it on at least 5 different held-out real days spanning different situations, not 5 variations of one. Score by the worst case, never the average. One pass means nothing.
+Each milestone's "done" is a real-world check by the judge (`05_JUDGE.md`), never a green unit test. A milestone is done only when the reality judge confirms it on the required real surface. For broad reality milestones, require at least 5 different held-out real days spanning different situations, not 5 variations of one. Score by the worst case, never the average. One pass means nothing.
 
 Do them roughly in order. Always: one vertical slice per lap, the whole system on a real day every lap, never shrink the goal, money is the only stop. Until real diverse users exist, label generalization as UNPROVEN in every scorecard and never claim the product works for everyone.
 
@@ -8,13 +8,13 @@ The current state is in `CODEX_BRIEF.md`. Short version: the decision spine, mem
 
 "Done" is defined by a stranger, not the owner: a person who is not the human, on a clean machine, downloads at `anticipy.ai/app`, onboards, connects their apps, and gets a real task done. Until that is true, the product is not done no matter how good audio inference is.
 
-The owner audio tests only the ears-to-brain slice. It is not the priority over the front door, real input box, wired browser hands, and self-onboarding. You may not spend more than 3 consecutive laps on inference or brain without advancing a perimeter milestone: M1, M2, M3, or M5. Every few laps, verify the whole house still runs end to end for the stranger path, not just the owner's audio.
+The owner audio tests only the ears-to-brain slice. It is not the priority over the front door, real input box, wired browser hands, and self-onboarding. You may not spend more than 3 consecutive laps on inference or brain without advancing a perimeter milestone: M1, M2, M3, or M5. Every few laps, verify the whole house still runs end to end for the stranger path, not just the owner's audio. Raw audio inference is the last hard layer and a final exam, not the daily gate.
 
 Breadth attack: you may generate synthetic diverse days for personas unlike the human (founder, parent, lawyer, doctor) only to try to break generalization. Hard asymmetry: a synthetic day can only lower confidence by exposing a failure. It can never raise confidence and never count as a pass. A break is a real finding that halts progress. Real confidence comes only from real diverse users, which do not exist yet.
 
-## M0 — the ugly floor (do this first)
-Make the whole house limp through ONE real day, end to end, on this Mac: ingest a day (a transcript is fine to start), infer one real need, do it through one real app, and have the judge open that app and confirm the real artifact.
-Done when: the judge verifies one real task really happened, from one real day, through the live system. Record the ugly first score. This is the floor you climb from.
+## M0 — the clean floor (do this first)
+Make the whole house complete ONE real task from a typed, fully time-grounded instruction on this Mac. Example shape: `create calendar event "[Anticipy test] Dentist" 2026-06-12 15:00-16:00`. The instruction must be unambiguous, safe, reversible, and sent through the live system, not a direct connector call.
+Done when: the judge verifies one real, correct artifact in the real app from a typed clean instruction, with connector read-back where one exists, screenshot proof, and cleanup of test artifacts after verification. A guard that abstains or prevents a fake does not advance M0. M0 requires positive capability: real task, done correctly, proven in the real app.
 
 ## M1 — a real front door
 Build, sign, and publish a real Mac app download at the project's Cloudflare R2 link, replacing the static placeholder.
@@ -41,8 +41,8 @@ Extend beyond the two working connectors (Calendar and Gmail-send today) using t
 Done when: for each newly connected app, the judge verifies a real task completed through it.
 
 ## M7 — the three inputs live
-Make MP3, transcript, and live Bluetooth ingestion all work (the three buttons). The system transcribes MP3 days itself; the human does not sort them.
-Done when: a real MP3 of a whole day flows end to end and the judge verifies the real tasks it produced.
+Make MP3, transcript, and live Bluetooth ingestion all work (the three buttons). The system transcribes each MP3 once into a sidecar transcript and then uses cached text in the inner loop; the human does not sort them.
+Done when: a real MP3 of a whole day flows end to end from cached transcript text, the harness passes wall-clock and transcript timing into the engine, and the judge verifies the real tasks it produced. This is a final exam after the typed-input perimeter works, not the daily development gate.
 
 ## M8 — the full body (deferred, listed for completeness)
 The iPhone app, the pendant firmware, and a one-click way to flash the pendant and pair it to a Mac. Sequence this after the software prototype is real. Flashing the physical pendant is a human gate.

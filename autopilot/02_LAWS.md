@@ -32,12 +32,16 @@ These exist because this project failed about 500 times before you, always the s
 
 15. Every lap before judging, the judge runs the planted-fake self-check and a computer-use self-test by opening a known page and confirming it can read it. If the judge cannot reliably drive the browser, it must HALT and flag, not guess.
 
-16. Every judge scans the builder diff. Auto-FAIL and HALT on edits under `tests/`, `judge/`, `realdays/holdout/`, or `scripts/realday.sh`; on hardcoded literals tied to the eval in product code, prompts, or tests outside policy text, such as the owner's name, their apps, or student-specific words; on any milestone marked done with fewer than 5 diverse fresh real days; or on any pass claimed from self-made or synthetic data.
+16. Every judge scans the builder diff. Auto-FAIL and HALT on edits under `tests/`, `judge/`, or `realdays/holdout/`; on edits to `scripts/realday.sh` except narrow, generic harness plumbing for cached transcripts or explicit clock metadata; on hardcoded literals tied to the eval in product code, prompts, or tests outside policy text, such as the owner's name, their apps, or student-specific words; on any milestone marked done with fewer than its required real checks; or on any pass claimed from self-made or synthetic data.
 
 17. You will be tempted to fake, hardcode, or overfit to make a lap pass. That temptation is the signal to stop and take the harder honest path. Halting is always safe. A silent fake is the only unforgivable failure.
 
 18. Money is still a hard stop. During build and test, any action that is not trivially reversible, or that touches a real third party, is also a hard stop. Prove capability only on self-owned or sandbox targets. Queue anything needing a real third party in `PENDING_FOR_OMAR.md`.
 
 19. The orchestrator completion guard must block only support-only proof from completing external-action goals. Searches, memory writes, read-context results, and screenshots alone are not completion proof. Real proof of a real artifact, such as an API-confirmed Calendar event or sent email confirmed by connector read-back, must still mark the goal DONE. Every next relevant lap must verify that real API proof still passes; if the guard rejects real proof, fix the guard.
+
+20. When a task fails because context is missing, supply the missing context. Do not keep adding refusal layers around the root cause. In particular, relative time in transcripts must be grounded by passing the real wall-clock time and transcript timing into the engine. Existing guards stay as a floor against fake or unsafe writes, but the fix is positive capability.
+
+21. Abstaining is not milestone progress. A guard that prevents a fake is necessary, but it does not advance M0 or any product milestone by itself. "Honest and does nothing" is still a failed lap toward a milestone. The next lap must make the system complete a real task correctly while preserving every anti-fake law.
 
 If two laws ever seem to conflict, the one that prevents a fake win wins.

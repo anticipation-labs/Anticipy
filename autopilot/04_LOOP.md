@@ -8,7 +8,7 @@ Long autonomous runs fail when one session's context grows huge and the model dr
 
 ```
 while milestones_remain and not human_gate_open:
-    build_lap        # fresh builder session, one slice + whole-house real-day run
+    build_lap        # fresh builder session, one slice + current-milestone whole-house run
     judge_lap        # fresh, separate judge session, opens real apps via computer use
                      # plus self-checks, diff scan, connector read-back, screenshots,
                      # and different-family OpenRouter cross-check
@@ -27,9 +27,9 @@ The builder session is launched with a prompt like this:
 You are one build lap for Anticipy. Fresh context. Do exactly this:
 1. Before anything else, read AGENTS.md, autopilot/02_LAWS.md, autopilot/09_REPO_FACTS.md, and logs/STATE.md. Then read autopilot/00_START_HERE.md, CODEX_BRIEF.md, logs/last_lap.md, and the top OPEN item in autopilot/07_MILESTONES.md.
 2. Do the single next vertical slice toward that milestone. Smallest real step that moves the whole system forward. Use computer use as needed.
-3. Run the whole system on a real day: bash scripts/realday.sh (it picks a builder-visible real day, never a holdout one).
+3. Run the whole system on the current milestone input. For clean M0, use a builder-visible typed, fully time-grounded task. For later audio milestones, run `bash scripts/realday.sh` on cached builder-visible transcript text, never a holdout file.
 4. Write logs/trace/<lap>.jsonl (every step), append logs/journal.md, write logs/last_lap.md, update logs/scorecard.csv, and rewrite logs/STATE.md.
-5. Do NOT touch anything under tests/realday/ , realdays/holdout/ , judge/ , logs/verdicts/ , or scripts/realday.sh. Never read realdays/holdout/. Those belong to the judge. Editing them is a Law 4 violation.
+5. Do NOT touch anything under tests/realday/ , realdays/holdout/ , judge/ , or logs/verdicts/. Only touch `scripts/realday.sh` for narrow, generic cache or clock harness plumbing. Never read realdays/holdout/. Those belong to the judge.
 6. Commit your work on autopilot/build with a one-line message. Stop. Do not declare success; the judge decides.
 ```
 
@@ -40,15 +40,15 @@ Rules inside a build lap:
 - Never route work to the human; only real gates go to `PENDING_FOR_OMAR.md` (Law 8).
 
 ## One JUDGE lap
-Run per `05_JUDGE.md`. In short: a fresh separate session, computer use on, takes a real day the builder has never seen, runs the system, then opens the real apps and confirms whether the real artifact exists. It first runs a planted-fake self-check and a computer-use self-test. It scans the builder's last commit for forbidden edits, hardcoded eval literals, secrets, and fake pass claims. It verifies artifacts by real app inspection, connector read-back where one exists, screenshots, and a different-family OpenRouter cross-check. It writes a verdict with proof to `logs/verdicts/`, which the builder may never write to.
+Run per `05_JUDGE.md`. In short: a fresh separate session, computer use on, uses the current milestone's judge-owned input, runs the system, then opens the real apps and confirms whether the real artifact exists. Clean M0 uses a typed, fully time-grounded safe task. Later audio milestones use held-out real days the builder has never seen. It first runs a planted-fake self-check and a computer-use self-test. It scans the builder's last commit for forbidden edits, hardcoded eval literals, secrets, and fake pass claims. It verifies artifacts by real app inspection, connector read-back where one exists, screenshots, and a different-family OpenRouter cross-check. It writes a verdict with proof to `logs/verdicts/`, which the builder may never write to.
 
 ## The GATE
 After the judge rules:
-- Verdict REAL, different-family cross-check agreed, self-checks passed, diff scan clean, scorecard's verified-on-fresh-days count went up or held, false actions stayed zero, and no regression fired: keep the commit. Advance a milestone only after at least 5 different held-out real days spanning different situations pass.
+- Verdict REAL, different-family cross-check agreed, self-checks passed, diff scan clean, scorecard's verified count went up or held, false actions stayed zero, and no regression fired: keep the commit. Advance a milestone only after its real done-criterion is met. Broad reality milestones still require at least 5 different held-out real days spanning different situations.
 - Verdict FAKE, REGRESSED, BLOCKED_NO_HOLDOUT, COMPUTER_USE_BROKEN, CROSSCHECK_DISAGREE, any forbidden edit, any hardcoded eval literal, any secret, any planted-fake failure, or any skipped oversight: revert the slice (`git revert` or reset the lap's commit), save the failing real day into `tests/realday/regressions/` where allowed, and do not advance. Next lap tries a different approach.
 - Human gate hit at any point: append the specific need to `PENDING_FOR_OMAR.md`, keep working on anything not blocked, and only pause fully if everything is blocked.
 
 ## What we are climbing
-Not a green 100 percent. There is no 100 percent; real days are endless. The one number to drive up and never let slide is verified real tasks on fresh, never-seen days (the scorecard in `06_LOGGING.md`). The first numbers will be ugly. Log them ugly. The loop's only job is to bend that curve up without faking.
+Not a green 100 percent. There is no 100 percent; real days are endless. The first number to get off zero is a verified real task from clean typed input. Then the number to drive up and never let slide is verified real tasks on fresh, never-seen days (the scorecard in `06_LOGGING.md`). The first numbers will be ugly. Log them ugly. The loop's only job is to bend that curve up without faking.
 
 Watch drift every lap: if builder-owned tests rise while reality-judge pass rate stays flat or falls, stop and write `DRIFT` in the journal. Until real diverse users exist, generalization is UNPROVEN.
