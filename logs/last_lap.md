@@ -1,27 +1,27 @@
 # Last Lap
 
-Lap: 20260607T032738Z
-Date: 2026-06-07T03:27:38Z
+Lap: 20260607T032947Z
+Date: 2026-06-07T03:42:32Z
 Milestone: M0 - clean floor
 ALL_MILESTONES_DONE: false
 
-Judge verdict: NOT_JUDGED_BUILD_SLICE
+Judge verdict: REAL
+Proof: logs/verdicts/20260607T032947Z.md
 
 What changed:
-- Added a deterministic planner path for explicit, fully grounded Calendar event instructions.
-- The deterministic Calendar path emits the proven API arg shape: `summary`, `start_datetime`, `end_datetime`, and `timezone`.
-- Empty plans now mark the goal `failed` instead of `done`, so zero-step goals cannot fake completion.
-- Reintroduced generic safe `calendar_event` harm-line handling, with invitations and public event creation still gated.
+- The kept builder slice from `20260607T032738Z` is now judged real for clean M0.
+- Explicit, fully grounded Calendar event text produced a real `create_event` job with `summary`, `start_datetime`, `end_datetime`, and timezone.
+- Empty plans no longer complete goals, so zero-step action goals cannot fake success.
 
-Checks:
-- `PYTHONPATH=engine engine/.venv/bin/python -m py_compile engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/proactive/harm.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_orchestrator.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_proactive.py` passed.
-- Exact judge-shaped Calendar text produced one `create_event` step with concrete ISO datetimes.
-- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+Judge proof:
+- The live `/event` endpoint handled a judge-owned typed Calendar task.
+- Calendar connector read-back found exactly the expected test event.
+- Google Calendar UI screenshot showed the matching title and time.
+- Gmail false-action search found no matching sent message.
+- The judge deleted the test event and verified it was gone.
+- Planted-fake self-check, computer-use self-test, clean diff scan, and Gemini cross-check all passed.
 
 Next:
-- Commit the build slice.
-- Run the separate clean M0 judge again on a judge-owned typed, fully time-grounded Calendar task.
-- M0 remains open until the judge verifies a real correct Calendar artifact with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
+- Advance to M1, the real front door.
+- Build the smallest safe slice toward a real Mac app download at `anticipy.ai/app`.
+- Keep generalization labeled UNPROVEN. M0 proves only one clean typed Calendar task, not audio, not five held-out days, and not the full stranger path.
