@@ -1,14 +1,17 @@
 # STATE
 
-Current milestone: M0, ugly floor. Latest judged lap `20260606T151119Z` was `FAKE`: the separate judge ran a held-out realday, found `line_count=1606`, `act=13`, `ask=176`, `ignore=1417`, and `wall_seconds=491.257`. The live system created one real Calendar artifact, but the artifact was semantically wrong and was deleted after judge verification. Correct real tasks verified: `0`. Wrong external actions verified: `1`. Builder commit `df47205` is reverted by this gate. M0 remains open.
+Current milestone: M0, ugly floor. Latest judged lap `20260606T151119Z` was `FAKE`: the separate judge ran a held-out realday, found `line_count=1606`, `act=13`, `ask=176`, `ignore=1417`, and `wall_seconds=491.257`. The live system created one real Calendar artifact, but the artifact was semantically wrong and was deleted after judge verification. Correct real tasks verified: `0`. Wrong external actions verified: `1`. Builder commit `df47205` was reverted by that gate. M0 remains open.
+
+Current unjudged builder lap: `20260607T011820Z` is kept on `autopilot/build` pending judge. It narrowed the last failure by requiring concrete Calendar times before any live `create_event` reaches Arcade. The planner prompt now supplies `CURRENT_LOCAL_TIME`, asks for `summary/start_datetime/end_datetime`, and says not to use capture time unless the user asked for now. The API hand now returns `needs_human` for live Calendar writes without concrete ISO-like `start_datetime` and `end_datetime`. Builder-visible realday completed with `line_count=3228`, `act=28`, `ask=385`, `ignore=2815`, and `wall_seconds=1422.806`. This is not proof. `judge_verdict=PENDING`.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - Prior amended judge proofs exist through `logs/verdicts/20260606T151119Z.md`. Each kept proof includes planted-fake self-check, computer-use self-test, tamper scan, different-family OpenRouter cross-check, and a separate verdict. None verified M0.
-- Judge proof for `20260606T151119Z` exists at `logs/verdicts/20260606T151119Z.md`: planted-fake self-check passed, computer-use self-test passed with screenshot, tamper scan was clean for builder commit `df47205` plus later control-plane commit `0b7d1dd`, a held-out MP3 ran end to end, Calendar connector read-back and screenshot verified one current-lap `[Anticipy test]` event, the semantic check ruled the event wrong, the judge deleted it and confirmed post-delete read-back matched the event id zero times, Gmail screenshot found no sent message, and Gemini through OpenRouter agreed with `FAKE` after a tiny low-credit retry.
+- Judge proof for `20260606T151119Z` exists at `logs/verdicts/20260606T151119Z.md`: planted-fake self-check passed, computer-use self-test passed with screenshot, tamper scan was clean, a held-out MP3 ran end to end, Calendar connector read-back and screenshot verified one current-lap `[Anticipy test]` event, the semantic check ruled the event wrong, the judge deleted it and confirmed post-delete read-back matched the event id zero times, Gmail screenshot found no sent message, and Gemini through OpenRouter agreed with `FAKE` after a tiny low-credit retry.
 - Gate verification after reverting `df47205`: `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- Current lap local checks passed: focused Calendar guard check, `test_api_hand.py`, Python compile for edited files, and `bash scripts/run_suite.sh` 29/29. These are builder-side checks only.
 - Amendment 2 is active: raw traces, `logs/last_realday.json`, transcript files, `.anticipy-data/`, and raw verdict JSON/JSONL are local-only and ignored. Builder-readable durable files contain verdicts, counts, proof links, and lessons only, not raw held-out transcript text.
-- No M0 real task is proven on a fresh unseen day. Builder-side raw audio runs, builder-side acts, app UI inspection, DuckDuckGo searches, read-context proof, write-memory proof, channel-stub proof, stale eval artifacts, support-only internal proof, wrong real artifacts, unjudged app input work, unjudged completion-guard work, reverted planner-filtering work, and reverted real-action-routing work are not judge-verified M0 proof.
+- No M0 real task is proven on a fresh unseen day. Builder-side raw audio runs, builder-side acts, app UI inspection, DuckDuckGo searches, read-context proof, write-memory proof, channel-stub proof, stale eval artifacts, support-only internal proof, wrong real artifacts, unjudged app input work, unjudged completion-guard work, reverted planner-filtering work, reverted real-action-routing work, and the current unjudged Calendar guard are not judge-verified M0 proof.
 
 Pending gates:
 - No current hard human gate blocks all work.
@@ -20,7 +23,7 @@ Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Reality judge verified pass rate on amended fresh unseen attempts: 0/10 verified, 0 percent.
 - Latest judged held-out run: `20260606T151119Z`, `act=13`, `ask=176`, `ignore=1417`; correct real tasks verified: 0; real external artifacts verified: 1 but semantically wrong and cleaned up; wrong external actions verified: 1.
-- Latest builder-visible realday run from the reverted `20260606T151119Z` slice: `line_count=3228`, `act=26`, `ask=387`, `ignore=2815`, `goal_outcomes success=7 waiting=18`, `wall_seconds=100.613`, and `cost_usd=0.36`. This remains builder-side evidence only.
+- Latest unjudged builder-visible realday run: `20260607T011820Z`, `line_count=3228`, `act=28`, `ask=385`, `ignore=2815`, `wall_seconds=1422.806`. Cost is not isolated from the cumulative local scorecard.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 - Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet. Generalization remains UNPROVEN.
 - Drift siren: DRIFT is active. Builder test pass remains high while judge pass remains 0 percent. Do not advance a milestone from builder-side evidence.
@@ -47,8 +50,9 @@ Dead ends not to retry blindly:
 - The `20260606T151119Z` real-action-routing slice was not proven by the judge and was reverted. A real Calendar artifact with the wrong time is a wrong external action, not progress. Do not use capture timestamps as requested event times unless the user explicitly asked for now; parse future-relative time semantically or abstain.
 
 Next:
-- Start the next builder lap from the reverted tree. The closest M0 failure is generic temporal semantics for Calendar actions: create a real event only when the requested time can be grounded from the user's language and the current run anchor; otherwise wait or ask. Keep the perimeter constraint active and do not spend more than 3 consecutive inference or brain laps without advancing M1, M2, M3, or M5.
-- Apply the full loop: one narrow slice, builder-visible realday, separate judge, uncapped oversight, and gate.
+- Run the separate judge for builder lap `20260607T011820Z`. The judge must verify whether the Calendar guard prevents wrong artifacts and whether any real task is correctly completed on held-out audio.
+- If the judge still finds no correct artifact, keep the failed slice isolated on `autopilot/build`, revert if required by the gate, and pivot to propagating a real event-time anchor from the realday source into planning or to explicit ask behavior.
+- Keep the perimeter constraint active and do not spend more than 3 consecutive inference or brain laps without advancing M1, M2, M3, or M5.
 
 Law digest:
 Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.

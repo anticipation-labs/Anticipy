@@ -8,6 +8,7 @@ without proof for every step; never silently drops a step.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import re
 from typing import Dict, Optional
@@ -192,11 +193,16 @@ class Orchestrator:
         # the deterministic tier's prompt (and plans) stay byte-identical.
         if getattr(self.gateway, "provider", None) == "openrouter":
             base += "\nUse ONLY these intents (pick the closest fit): " + ", ".join(sorted(self.bus._workers)) + "."
+            base += "\nCURRENT_LOCAL_TIME: " + dt.datetime.now().astimezone().isoformat(timespec="seconds") + "."
             base += ('\nArg shapes - browse_task{"task":<plain-English what to do/find on the web>}, '
                      'read_page{"task":<what to read>}, send_email{"recipient","subject","body"}, '
-                     'send_text{"recipient","body"}, create_event{"title","when"}, create_doc{"title","body"}, '
+                     'send_text{"recipient","body"}, '
+                     'create_event{"summary","start_datetime","end_datetime"}, create_doc{"title","body"}, '
                      'write_memory{"text"}. For any web search / lookup / shopping / browsing step, use '
-                     'browse_task with a "task" string.')
+                     'browse_task with a "task" string. For Calendar writes, only use create_event when '
+                     'the user supplied a concrete date and clock time, or a relative day plus clock time '
+                     'that can be grounded from CURRENT_LOCAL_TIME. Never use capture time as the event time '
+                     'unless the user explicitly asked for now.')
         return base + (f"\nRELEVANT MEMORY: {context}" if context else "")
 
     @staticmethod

@@ -18,6 +18,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from typing import Optional
 
 from ..core.envelopes import Job, JobStatus, Result, Risk
@@ -117,6 +118,10 @@ class ApiHand(Worker):
             return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
                           output={"reason": "high-risk action missing approval flag"})
 
+        blocked = self._block_ungrounded_calendar_write(job)
+        if blocked is not None:
+            return blocked
+
         # idempotency: a retried write that already produced proof must NOT re-send
         ikey = self._idem_key(job)
         if is_write and ikey in self.idem:
@@ -213,3 +218,50 @@ class ApiHand(Worker):
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           error=f"transient ({name}), will retry")
         return Result(job_id=job.id, status=JobStatus.failed, proof=None, error=f"{name}: {exc}")
+
+    def _block_ungrounded_calendar_write(self, job: Job) -> Optional[Result]:
+        if self.mode != MODE_LIVE or job.intent != "create_event":
+            return None
+        if _has_concrete_calendar_window(job.args):
+            return None
+        return Result(
+            job_id=job.id,
+            status=JobStatus.needs_human,
+            proof=None,
+            output={
+                "reason": (
+                    "calendar write blocked until the event has concrete "
+                    "start_datetime and end_datetime values"
+                ),
+                "blocked": True,
+            },
+        )
+
+
+_ISO_DATE_TIME = re.compile(r"\b\d{4}-\d{2}-\d{2}[T ][0-2]?\d:[0-5]\d")
+
+
+def _looks_concrete_datetime(value) -> bool:
+    if isinstance(value, dict):
+        return any(_looks_concrete_datetime(value.get(k)) for k in ("dateTime", "date_time", "datetime"))
+    if not isinstance(value, str):
+        return False
+    return bool(_ISO_DATE_TIME.search(value.strip()))
+
+
+def _calendar_value(args: dict, key: str):
+    if key in args:
+        return args.get(key)
+    event = args.get("event")
+    if isinstance(event, dict) and key in event:
+        return event.get(key)
+    return None
+
+
+def _has_concrete_calendar_window(args: dict) -> bool:
+    if not isinstance(args, dict):
+        return False
+    return (
+        _looks_concrete_datetime(_calendar_value(args, "start_datetime"))
+        and _looks_concrete_datetime(_calendar_value(args, "end_datetime"))
+    )
