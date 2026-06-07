@@ -109,6 +109,9 @@ Hard rule from this project's history: research the official docs before editing
 
 ## Distribution
 - The download front door is `anticipy.ai/app`. Cloudflare R2 is already set up to serve the build from there. Today `app/page.js` is a static placeholder ("Vibe your life."). M1 publishes a real signed `.app` to R2 and replaces the placeholder.
+- Live observation on 2026-06-07: `https://www.anticipy.ai` is a Vercel deployment for project `anticipy` (`prj_tXOcukH12CdlBNS3bIrRs1FBLgAA`), not the current repo's linked Vercel project `anticipy-executor-working` (`prj_BoANZrE5orccFSQr5O212Va7uvPY`). The older local worktree `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` is linked to the production `anticipy` project and is dirty. Do not blindly deploy this executor worktree to the production `anticipy` project, because it would overwrite a larger public app.
+- Live observation on 2026-06-07: production `https://www.anticipy.ai/app` already serves an account/download flow, `https://www.anticipy.ai/download` and `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` return `application/x-apple-diskimage` with a 2.4 GB DMG, and `https://www.anticipy.ai/install.sh` installs that build plus the Chrome native bridge. This is not M1 proof until the separate judge downloads and launches it from a clean profile.
+- Local signing observation on 2026-06-07: `security find-identity -v -p codesigning` reports 0 valid identities. The executor Mac app can be ad-hoc signed and `codesign --verify` passes, but `spctl --assess` rejects it because it is not Developer ID signed or notarized. Full no-warning stranger install requires an Apple Developer ID certificate and notarization; the existing production installer works around quarantine for the un-notarized build.
 
 ## Voice for anything you write that the human will read
 - No em-dashes, ever. Use periods, commas, or sentence breaks.

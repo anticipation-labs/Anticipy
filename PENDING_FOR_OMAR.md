@@ -10,6 +10,7 @@ Non-blocking useful input later:
 - Approve Google Gmail compose scope for Gmail.WriteDraftEmail when M6 reaches drafts. Arcade produced a Google OAuth URL during the setup probe.
 - Approve Google Drive file scope for GoogleDocs.GetDocumentById when M6 reaches Docs. Arcade produced a Google OAuth URL during the setup probe.
 - Slack.SendMessageToChannel is not currently available through Arcade. The setup probe returned tool_not_found for Slack.SendMessageToChannel@0.
+- Apple Developer ID signing and notarization are not available on this Mac. `security find-identity -v -p codesigning` returns 0 valid identities. The current builds can be ad-hoc signed, but Gatekeeper rejects them without the documented Open Anyway or installer workaround. Full zero-warning public Mac install needs a Developer ID certificate and notarization.
 
 ## CALIBRATION 2026-06-07T03:42:32Z
 

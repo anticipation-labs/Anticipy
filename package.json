@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "package:mac": "bash macapp/scripts/package_download.sh",
     "lint": "next lint"
   },
   "dependencies": {
