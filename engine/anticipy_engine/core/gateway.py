@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 from typing import List, Optional
 
 CHEAP = "cheap"
@@ -47,7 +46,7 @@ class ModelGateway:
         self.calls.append({"tier": tier, "caller": caller, "cost": COST.get(tier, 0.0)})
 
         if self.provider == PROVIDER_OPENROUTER:
-            return await self._openrouter(task, tier, caller, image, json_mode, temperature)
+            return await self._openrouter(task, tier, image, json_mode, temperature)
         if self.endpoint:
             return await self._custom_endpoint(task, tier)
         return self._stub(task, tier, caller)
@@ -60,7 +59,7 @@ class ModelGateway:
         return round(sum(c["cost"] for c in self.calls), 6)
 
     # ---- real provider: OpenRouter (OpenAI-compatible, vision-capable) ----
-    async def _openrouter(self, task: str, tier: str, caller: str, image: Optional[str], json_mode: bool = False,
+    async def _openrouter(self, task: str, tier: str, image: Optional[str], json_mode: bool = False,
                           temperature: Optional[float] = None) -> str:
         if not self._key:
             raise RuntimeError("OPENROUTER_API_KEY NOT SET / NOT FUNDED")
@@ -77,13 +76,7 @@ class ModelGateway:
             "HTTP-Referer": "https://anticipy.ai",
             "X-Title": "Anticipy",
         }
-        max_tokens_env = os.environ.get("ANTICIPY_MODEL_MAX_TOKENS")
-        default_max_tokens = 2048 if caller == "agent" else 128
-        try:
-            max_tokens = int(max_tokens_env) if max_tokens_env else default_max_tokens
-        except ValueError:
-            max_tokens = default_max_tokens
-        body = {"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens}
+        body = {"model": model, "messages": [{"role": "user", "content": content}]}
         if json_mode:
             body["response_format"] = {"type": "json_object"}  # force a parseable JSON object
         if temperature is not None:
@@ -99,24 +92,13 @@ class ModelGateway:
                 if resp.status_code in (429, 500, 502, 503, 504):
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
-                if 400 <= resp.status_code < 500:
-                    try:
-                        detail = resp.json().get("error") or resp.text
-                    except Exception:
-                        detail = resp.text
-                    affordable = _affordable_tokens(detail)
-                    if resp.status_code == 402 and affordable and 64 <= affordable < int(body["max_tokens"]):
-                        body["max_tokens"] = affordable
-                        await asyncio.sleep(0.2)
-                        continue
-                    raise RuntimeError(f"OpenRouter non-retryable error {resp.status_code}: {str(detail)[:300]}")
                 resp.raise_for_status()
                 content_out = (resp.json()["choices"][0].get("message") or {}).get("content")
                 if content_out:
                     return content_out
                 last = content_out or ""
                 await asyncio.sleep(1.0 * (attempt + 1))  # empty -> brief backoff, retry
-            except httpx.TransportError:
+            except (httpx.TransportError, httpx.HTTPStatusError):
                 await asyncio.sleep(1.5 * (attempt + 1))
         return last or ""
 
@@ -160,9 +142,3 @@ def default_stub(task: str, tier: str, caller: str) -> str:
         return json.dumps({"steps": steps})
 
     return f"[stub:{tier}:{caller}] {task[:120]}"
-
-
-def _affordable_tokens(detail) -> Optional[int]:
-    message = detail.get("message") if isinstance(detail, dict) else str(detail)
-    match = re.search(r"can only afford\s+(\d+)", message or "")
-    return int(match.group(1)) if match else None

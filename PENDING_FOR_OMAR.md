@@ -5,6 +5,7 @@ BLOCKS_ALL: false
 No hard human gate is blocking current work.
 
 Non-blocking useful input later:
+- OpenRouter credit/key funding needs attention soon. Judge lap `20260606T151119Z` hit HTTP 402 on two larger different-family cross-check attempts, then a tiny Gemini retry succeeded and agreed with `FAKE`.
 - Add real day transcripts or recordings to realdays/holdout/ so the judge can test on fresh days the builder has never read.
 - Approve Google Gmail compose scope for Gmail.WriteDraftEmail when M6 reaches drafts. Arcade produced a Google OAuth URL during the setup probe.
 - Approve Google Drive file scope for GoogleDocs.GetDocumentById when M6 reaches Docs. Arcade produced a Google OAuth URL during the setup probe.

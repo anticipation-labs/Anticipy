@@ -39,6 +39,7 @@ logs/verdicts/**/*.json
 logs/verdicts/**/*.jsonl
 logs/verdicts/**/*.tsv
 logs/verdicts/**/*.csv
+logs/verdicts/**/*_content.txt
 *.transcript
 *.transcript.*
 *.transcript.json

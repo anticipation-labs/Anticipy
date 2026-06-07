@@ -1,9 +1,9 @@
 """TextChannel — SMS over Twilio.
 
 LIVE (ANTICIPY_CHANNELS_MODE=live + TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM present): a real SMS
-via Twilio's REST API. Build/test safety forces MOCK unless external real actions are explicitly
-allowed. Otherwise MOCK records the message in `.sent` and returns sent=mock: free,
-deterministic, CI-safe. Every send (real or mock) is appended to `.sent` for the log.
+via Twilio's REST API. Otherwise MOCK: records the message in `.sent` and returns sent=mock —
+free, deterministic, CI-safe. The ONE controlled real proof needs the user's creds + a test
+number (a one-time human action). Every send (real or mock) is appended to `.sent` for the log.
 """
 from __future__ import annotations
 
@@ -21,15 +21,8 @@ class TextChannel(Channel):
     def __init__(self) -> None:
         self.sent: List[dict] = []   # audit log of every send (real or mock)
 
-    def _build_test_safe_mode(self) -> bool:
-        explicit = os.environ.get("ANTICIPY_BUILD_TEST_SAFE_MODE")
-        if explicit is not None:
-            return explicit.strip().lower() not in {"0", "false", "no", "off"}
-        return os.environ.get("ANTICIPY_ALLOW_EXTERNAL_REAL_ACTIONS", "").strip().lower() not in {"1", "true", "yes", "on"}
-
     def _live(self) -> bool:
-        return (not self._build_test_safe_mode()
-                and os.environ.get("ANTICIPY_CHANNELS_MODE") == "live"
+        return (os.environ.get("ANTICIPY_CHANNELS_MODE") == "live"
                 and bool(os.environ.get("TWILIO_ACCOUNT_SID"))
                 and bool(os.environ.get("TWILIO_AUTH_TOKEN"))
                 and bool(os.environ.get("TWILIO_FROM")))

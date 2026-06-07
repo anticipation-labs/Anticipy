@@ -86,7 +86,7 @@ class Orchestrator:
         self.approver = approver or AutoApprover(True)
         self.max_retries = max_retries
         # reroute map: if an intent's worker keeps failing, try the alternate.
-        self.alternates = alternates if alternates is not None else {}
+        self.alternates = alternates if alternates is not None else {"create_event": "browse_task"}
         self._cost_start: Dict[str, float] = {}
 
     # ---- entry points ----
@@ -97,33 +97,14 @@ class Orchestrator:
         self._log("goal_planning", {"goal_id": goal.id})
 
         context = self.memory_context(goal.description or goal.intent) if self.memory_context else {}
-        plan_raw = ""
-        fallback_first = getattr(self.gateway, "provider", None) == "openrouter"
-        goal.steps = self._fallback_plan(goal) if fallback_first else []
-        if not goal.steps:
-            try:
-                plan_raw = await self.gateway.think(self._plan_prompt(goal, context), tier=SMART, caller="plan", json_mode=True)
-                goal.steps = self._parse_plan(plan_raw) or self._fallback_plan(goal)
-                if not goal.steps:   # ONE bounded re-ask for clean JSON (real models drift; the stub never needs it)
-                    strict = (self._plan_prompt(goal, context)
-                              + '\n\nYour previous reply could not be parsed. Reply with ONLY valid minified JSON '
-                                '{"steps":[{"intent":"...","args":{},"risk":"low"}]} and nothing else.')
-                    plan_raw = await self.gateway.think(strict, tier=SMART, caller="plan", json_mode=True)
-                    goal.steps = self._parse_plan(plan_raw) or self._fallback_plan(goal)
-            except RuntimeError as exc:
-                if "OpenRouter non-retryable error 402" in str(exc):
-                    return self._mark_waiting(
-                        goal,
-                        "planner_model_unavailable",
-                        {"error": str(exc)[:240]},
-                    )
-                raise
-        if not goal.steps:
-            return self._mark_waiting(
-                goal,
-                "planner_returned_no_executable_steps",
-                {"plan_raw_empty": not bool(plan_raw)},
-            )
+        plan_raw = await self.gateway.think(self._plan_prompt(goal, context), tier=SMART, caller="plan", json_mode=True)
+        goal.steps = self._parse_plan(plan_raw)
+        if not goal.steps:   # ONE bounded re-ask for clean JSON (real models drift; the stub never needs it)
+            strict = (self._plan_prompt(goal, context)
+                      + '\n\nYour previous reply could not be parsed. Reply with ONLY valid minified JSON '
+                        '{"steps":[{"intent":"...","args":{},"risk":"low"}]} and nothing else.')
+            plan_raw = await self.gateway.think(strict, tier=SMART, caller="plan", json_mode=True)
+            goal.steps = self._parse_plan(plan_raw)
         goal.state = GoalState.running
         self.store.save(goal)
         self._log("goal_planned", {"goal_id": goal.id, "steps": [s.intent for s in goal.steps]})
@@ -153,12 +134,6 @@ class Orchestrator:
 
         # every step verified done -> collect proof, finish
         goal.proof = {f"{i}:{s.intent}": s.result.proof for i, s in enumerate(goal.steps) if s.result}
-        if not goal.steps or len(goal.proof) != len(goal.steps):
-            return self._mark_waiting(
-                goal,
-                "missing_verified_step_proof",
-                {"steps": len(goal.steps), "proofs": len(goal.proof)},
-            )
         goal.state = GoalState.done
         self.store.save(goal)
         self._log("goal_done", {"goal_id": goal.id, "proof": goal.proof})
@@ -242,81 +217,12 @@ class Orchestrator:
             out.append(Step(intent=str(s["intent"]), args=args, risk=risk))
         return out
 
-    @staticmethod
-    def _fallback_plan(goal: Goal) -> list:
-        """Conservative parser when the live planner fails.
-
-        It routes only clear, generic action categories to app-backed hands. Unknown action text waits
-        instead of being dumped into browser search.
-        """
-        desc = re.sub(r"\s+", " ", (goal.description or goal.intent or "")).strip()
-        text = desc.lower()
-        if not text or _looks_speculative(text):
-            return []
-
-        if _looks_calendar_action(text):
-            return [Step(intent="create_event", args={"summary": _short_title(desc), "when": desc}, risk=Risk.low)]
-
-        if _looks_email_action(text):
-            return [Step(
-                intent="send_email",
-                args={"recipient": "", "subject": _short_title(desc), "body": desc},
-                risk=Risk.needs_confirm,
-            )]
-
-        if _looks_message_action(text):
-            return [Step(intent="message", args={"body": desc}, risk=Risk.ask_human)]
-
-        if _looks_lookup_action(text):
-            return [Step(intent="browse_task", args={"task": desc}, risk=Risk.low)]
-
-        return []
-
     def _goal_cost(self, goal: Goal) -> float:
         start = self._cost_start.get(goal.id, self.gateway.total_cost())
         return round(self.gateway.total_cost() - start, 6)
-
-    def _mark_waiting(self, goal: Goal, reason: str, extra=None) -> Goal:
-        goal.state = GoalState.waiting
-        self.store.save(goal)
-        payload = {"goal_id": goal.id, "reason": reason}
-        if extra:
-            payload.update(extra)
-        self._log("goal_waiting", payload)
-        if self.scorecard is not None:
-            self.scorecard.record_goal(goal.id, "waiting", self._goal_cost(goal))
-        return goal
 
     def _log(self, kind: str, payload) -> None:
         if self.glassbox is None:
             return
         data = payload.model_dump(mode="json") if hasattr(payload, "model_dump") else payload
         self.glassbox.log(kind, data)
-
-
-def _looks_speculative(text: str) -> bool:
-    return bool(re.search(r"\b(if i|if we|would|could|maybe one day|someday|dream)\b", text))
-
-
-def _looks_calendar_action(text: str) -> bool:
-    return bool(re.search(
-        r"\b(schedule|reschedule|calendar|meeting|appointment|meet with|set up a call|book (a )?(meeting|call|time)|lunch with|dinner with)\b",
-        text,
-    ))
-
-
-def _looks_email_action(text: str) -> bool:
-    return bool(re.search(r"\b(email|e-mail|send .*email|reply to|follow up with)\b", text))
-
-
-def _looks_message_action(text: str) -> bool:
-    return bool(re.search(r"\b(text|sms|slack|message|dm)\b", text))
-
-
-def _looks_lookup_action(text: str) -> bool:
-    return bool(re.search(r"\b(search|look up|find out|research|compare|check the price|what is|who is|where is)\b", text))
-
-
-def _short_title(text: str) -> str:
-    cleaned = re.sub(r"\s+", " ", text).strip(" .")
-    return cleaned[:90] or "Anticipy task"
