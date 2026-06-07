@@ -14,7 +14,7 @@ General categories only — no site/test-specific branches. Order matters:
      it fires; Room 3).
   4. soft send (email/reply/message) WITHOUT a draft frame — binding, gray via memory.
   5. draft / prepare (incl. drafting a message) — reversible.
-  6. other reversible (research / add-to-cart / reserve / schedule a meeting / prepare a doc).
+  6. other reversible (research / add-to-cart / reserve / calendar event / prepare a doc).
   7. unclassified -> cannot confirm safe -> fail-safe ASK.
 Recipe + sources: notes/proactive_room2.md.
 """
@@ -37,14 +37,16 @@ _HARD = [
                 r"|\bdrop (the )?(table|database|db)\b"),  # cancel needs an object (avoids "noise-cancelling")
     ("public", r"\b(publish|publishes|publishing|tweet|tweets|announce|broadcast)\b"
                r"|\bpost\b.*\b(public|online|twitter|x|linkedin|instagram|blog|forum|sub-?reddit)\b"
-               r"|\b(share|make) (it |this |them )?(public|publicly)\b|\bgo live\b"),
+               r"|\b(share|make) (it |this |them )?(public|publicly)\b|\bgo live\b"
+               r"|\bpublic (calendar )?event\b"),
     ("signup", r"\b(sign up|signs up|signing up|subscribe|subscribes|enroll|enrolls)\b"
                r"|\bcreate (an |a )?account\b|\bstart (a )?(trial|subscription|membership)\b"
                r"|\bregister (for|with|on|at)\b"),
     ("auth_wall", r"\b(log ?in|sign ?in|password|passcode|captcha|authenticate|2fa|"
                   r"two[- ]factor|otp|one[- ]time (code|password))\b|\bverify (my |your )?identity\b"),
 ]
-_HARD_SEND = re.compile(r"\b(send|sends|sending|forward|forwards|forwarding|dm|dms|reach out)\b")
+_HARD_SEND = re.compile(r"\b(send|sends|sending|forward|forwards|forwarding|dm|dms|reach out|"
+                        r"invite|invites|inviting)\b")
 _SOFT_SEND = re.compile(r"\b(email|emails|emailing|message|messages|messaging|text|texts|texting|"
                         r"reply|replies|replying|respond|responds|responding)\b")
 _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t forget|pencil in)\b"
@@ -64,6 +66,8 @@ _REVERSIBLE: List[Tuple[str, str]] = [
                     r"\b(table|reservation|appointment|spot|slot|room|court|tee time)\b"),
     ("calendar", r"\b(schedule|set up|book)\b[\w' ]{0,20}\b(meeting|call|standup|sync|appointment|"
                  r"1:1|one[- ]on[- ]one|interview|review)\b"),
+    ("calendar_event", r"\b(create|add|make|put)\b[\w' \"\[\]\-:,.]{0,80}"
+                       r"\b(calendar event|calendar entry|event (on|in) (my |the )?calendar)\b"),
     ("doc", r"\b(prepare|create|put together|make)\b[\w' ]{0,20}\b(doc|document|memo|brief|report|deck|"
             r"notes|agenda|outline|summary|list|plan)\b"),
 ]
