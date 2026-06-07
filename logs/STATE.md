@@ -2,15 +2,18 @@
 
 Current milestone: M1, real front door. M1 means a clean profile can download a `.app` from the public front door at `anticipy.ai/app`, launch it, and see the live surface. M0 clean floor is proven once, but the product is not done until a stranger can download, onboard, connect their own apps, and get a real task done.
 
+Latest builder lap: `20260607T084004Z` is PENDING separate judge. It produced a local executor download slice: local page link, packaged zip, ad-hoc signed Swift app, and owner/eval literal cleanup on the package path. It is not proof. The child builder hung after local verification and was interrupted; the outer session wrote durable logs without writing any judge verdict.
+
 Latest judged lap: `20260607T075335Z` was `FAKE` with `Tamper: YES`. The separate M1 judge passed the planted-fake self-check and computer-use self-test, then halted at tamper scan before public M1 launch verification. It found that the executor builder commit `f229496` was only a logging commit while the product changes lived as an uncommitted diff in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`, and that rebuilt packaged archive files contained owner/person-specific literals in product code. The different-family OpenRouter cross-check agreed with `FAKE/TAMPER`. Proof: `logs/verdicts/20260607T075335Z.md`.
 
-Gate status: the failed builder commit `f229496` is reverted on `autopilot/build` by `d80f0ce`. The failed tracked production-linked diff is removed from `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` and preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice`. It must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+Gate status: no hard human gate blocks all work. Lap `20260607T084004Z` must be judged before it is kept or reverted. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - M0 clean floor is proven once: `logs/verdicts/20260607T032947Z.md` verifies one real typed Calendar task with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
 
 Build-side evidence, not proof:
+- `20260607T084004Z` packaged `public/downloads/Anticipy-mac.zip` locally, verified its browser-downloaded hash, and saw the local/copied app open one window. The direct extracted quarantined/translocated bundle still showed zero windows. This is PENDING judge and not M1 proof.
 - The reverted `20260607T075335Z` slice showed a local production-linked DMG could be rebuilt with sealed resources after ad-hoc signing, but the judge ruled it `FAKE/TAMPER` before public verification because the product diff was outside the judged executor commit and the rebuilt packaged archive contained owner/person-specific product literals.
 - The reverted `20260607T064745Z` slice showed the local executor Swift app can open on Main, but the separate judge proved this does not change or prove production `anticipy.ai/app`.
 - The reverted `20260607T035948Z` slice showed a local executor app can be packaged as a zip and served from the local Next app, but the separate judge proved this does not prove the production public front door.
@@ -25,14 +28,14 @@ Not proven:
 
 Pending gates:
 - No hard human gate blocks all work.
-- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed, but full zero-warning stranger install needs Developer ID and notarization. The judge also found the production DMG app has a resource-signature failure, which must be fixed or explicitly routed through a safe install flow before M1 can pass.
+- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed and `codesign --verify` passes, but full zero-warning stranger install needs Developer ID and notarization. The current local zip still shows a zero-window launch from a directly extracted quarantined/translocated bundle.
 - OpenRouter credit is very low. Paid Gemini cross-check hit HTTP 402 during M1 judges; the judge used a free Google-family model that agreed with `FAKE`. If all required different-family cross-checks become unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked paths.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/3 verified, 0 percent.
+- M1 reality judge pass rate: 0/3 verified, 0 percent, pending lap `20260607T084004Z` not counted.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 - Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet.
@@ -48,6 +51,7 @@ Dead ends not to retry blindly:
 - Making product changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` while the judged executor commit contains only logs. The judge will scan the external tree and treat uncommitted product deltas as a tamper risk. Product changes must live in a tracked, reviewable commit in the source tree being judged, or the loop must explicitly adapt to commit and scan the production-linked repo.
 - Rebuilding packaged extension or app archives that contain owner/person-specific literals such as owner names or example third-party names in product code. Clean or isolate those literals before packaging.
 - Treating the local executor Next page, local zip, or local Swift app launch as proof for production `anticipy.ai/app`.
+- Treating the current local zip as proof when the directly extracted quarantined/translocated app shows zero windows.
 - Blindly deploying this executor worktree to production `anticipy`, because production has a larger app and belongs to the older `Anticipy-DEV-FINAL` source tree.
 - Treating authenticated-owner Chrome observations as clean stranger proof.
 - Treating public headers, local app launch, local screenshots, or app activation by name as M1 proof without the separate judge.
@@ -62,7 +66,8 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Continue M1 with a different approach: first eliminate owner/person-specific literals from packaged product code or exclude stale archives, then make the production-linked product diff tracked and judgeable. Only then fix the public front door path, public DMG resource signature, and launch surface.
+- Run the separate judge for lap `20260607T084004Z` after committing the candidate. If it fails, revert the candidate and pivot back to tracked production-linked source work.
+- Continue M1 with a different approach if the local executor front door fails again: first eliminate owner/person-specific literals from packaged product code or exclude stale archives, then make the production-linked product diff tracked and judgeable. Only then fix the public front door path, public DMG resource signature, and launch surface.
 - Keep the public artifact small enough that a normal M1 judge can complete in minutes, or document why the verifier must download the full artifact.
 
 Law digest:

@@ -27,7 +27,7 @@ def main():
                                        people=["Sarah"], status="open"))
     L2 = m.open_loops.write(MemoryItem(kind="open_loop", text="Submit the tax forms", status="done"))
 
-    m.profile.write_text("User's name is Omar; he is a founder.", people=["Omar"])
+    m.profile.write_text("User's name is Jordan; they are a founder.", people=["Jordan"])
     H1 = m.history.write_text("Discussed ergonomic office chair options for the standing desk.")
     H2 = m.history.write_text("Sarah said she is moving apartments next month.", people=["Sarah"])
     H3 = m.history.write_text("Booked a dentist appointment for Monday morning.")

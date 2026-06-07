@@ -19,7 +19,7 @@ def main():
     m = Memory(data_dir=tmp)
 
     # a stated fact that inference must never touch/duplicate
-    m.profile.write_text("My name is Omar.")
+    m.profile.write_text("My name is Jordan.")
     profile_before = [p.id for p in m.profile.all()]
 
     # a clear routine: the gym recurs across four episodes

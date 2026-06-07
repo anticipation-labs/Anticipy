@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Anticipy — Executor (Working)",
-  description: "Vibe your life.",
+  title: "Anticipy for Mac",
+  description: "Download the Anticipy Mac app.",
 };
 
 export default function RootLayout({ children }) {
@@ -18,12 +18,9 @@ export default function RootLayout({ children }) {
         style={{
           margin: 0,
           minHeight: "100vh",
-          background: "#1c1b19",
-          color: "#f4efe6",
+          background: "#101113",
+          color: "#f4f0e8",
           fontFamily: "Inter, system-ui, sans-serif",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
         }}
       >
         {children}

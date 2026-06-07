@@ -1,32 +1,33 @@
 # Last Lap
 
-Lap: 20260607T075335Z
-Date: 2026-06-07T08:36:45Z
+Lap: 20260607T084004Z
+Date: 2026-06-07T08:59:44Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
-Judge verdict: FAKE, Tamper: YES
+Judge verdict: PENDING
 
 What changed:
-- The builder made production-linked Tauri and packaging changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`, but committed only builder-readable logs in this executor repo.
-- The local production-linked build showed sealed resources after ad-hoc signing, but it was not deployed to the public artifact path.
+- Added a local executor download front door in `app/page.js` and updated page metadata in `app/layout.js`.
+- Added `macapp/scripts/package_app.sh` to build and zip `macapp/dist/Anticipy.app` into `public/downloads/Anticipy-mac.zip`.
+- Updated `macapp/scripts/build_app.sh` to strip and ad-hoc sign the Swift app bundle.
+- Ignored generated app and zip artifacts with `.gitignore` and removed tracked generated `macapp/dist` files from the candidate diff.
+- Removed owner/eval literals from package-relevant engine defaults and script fixtures.
 
-Judge finding:
-- Planted-fake self-check passed.
-- Computer-use self-test passed by reading Example Domain in Chrome.
-- Tamper scan failed before public M1 verification. The target executor commit `f229496` was log-only, while product changes were uncommitted in the production-linked tree.
-- Rebuilt packaged archive files contained owner/person-specific literals in product code, including owner-name comments and fallback signature text.
-- Different-family OpenRouter cross-check agreed with `FAKE/TAMPER`.
+Builder checks:
+- `bash macapp/scripts/package_app.sh` passed and produced zip sha256 `fa1edca1d7fb98b1a06b7da16d7632f116cc92ef622a604ee1486c2484bc42cd` after the outer rerun.
+- `codesign --verify --deep --strict --verbose=2` passed on the generated and extracted app bundles.
+- `spctl --assess` rejected the app because it is ad-hoc signed and this Mac has `0 valid identities found` for codesigning.
+- Local Next page and zip endpoints returned `200 OK`.
+- Chrome rendered the local download page and downloaded a zip whose hash matched the generated artifact.
+- Fresh local/copy launches showed one Anticipy window, but a directly extracted quarantined/translocated app process showed zero windows.
+- `npm run build`, `bash scripts/run_suite.sh`, and `git diff --check` passed.
 
 Gate:
-- M1 is not proven.
-- The unproven builder commit `f229496` is reverted by `d80f0ce`.
-- The failed tracked production-linked diff is removed from the worktree and preserved as stash `stash@{0}: failed lap 20260607T075335Z m1 package slice`.
-- Post-revert `bash macapp/scripts/build_app.sh` passed.
-- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
-- Generalization remains UNPROVEN.
+- No proof is claimed. The separate judge must decide.
+- M1 is not proven. The real production front door at `https://www.anticipy.ai/app` and the clean downloaded app launch path remain the judge standard.
+- The child builder session hung after verification and had to be interrupted; durable trace and logs were written by the outer session without writing a verdict.
 
 Next:
-- Clean owner/person-specific literals out of packaged product code or exclude stale archives before rebuilding packages.
-- Make the production-linked product diff tracked and judgeable before claiming any public artifact progress.
-- Then resume the public front-door, DMG signature, and launch-surface work.
+- Run `AUTOPILOT_LAP=20260607T084004Z AUTOPILOT_BUILDER_COMMIT=<commit> autopilot/judge_lap`.
+- If the judge rules fake or tamper, revert the candidate commit and pivot back to a tracked production-linked source fix.

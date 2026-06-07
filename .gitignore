@@ -69,6 +69,8 @@ __pycache__/
 # swift / macapp build artifacts
 .build/
 macapp/.build/
+macapp/dist/
+public/downloads/*.zip
 *.xcodeproj/xcuserdata/
 DerivedData/
 

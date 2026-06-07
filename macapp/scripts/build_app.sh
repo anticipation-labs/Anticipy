@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Room 3 build: compile the SwiftUI app with SwiftPM (no Xcode) and assemble a
-# launchable .app bundle.
+# Compile the SwiftUI app with SwiftPM (no Xcode) and assemble a launchable app
+# bundle.
 set -euo pipefail
 
 MACAPP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,6 +18,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp "$MACAPP/Resources/Info.plist" "$APP/Contents/Info.plist"
+xcrun strip -S "$APP/Contents/MacOS/$APP_NAME"
+codesign --force --sign - "$APP"
 
 echo "--- PASS: built $APP ---"
 ls -la "$APP/Contents/MacOS"

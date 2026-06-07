@@ -17,7 +17,7 @@ def main():
     m = Memory(data_dir=tmp)
 
     # write one item into each of the four drawers
-    pf = m.profile.write_text("User's name is Omar; he's a founder.", people=["Omar"])
+    pf = m.profile.write_text("User's name is Jordan; they are a founder.", people=["Jordan"])
     ol = m.open_loops.write_text("Call mom on Friday", people=["Mom"],
                                  fields={"due": "Friday", "task": "call"}, status="open")
     hi = m.history.write_text("Talked about gaming chairs.")

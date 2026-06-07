@@ -23,7 +23,7 @@ STREAM = [
     ("yeah sure", "noise"),
     ("I'll call Sarah about the invoice tomorrow", "open_loop"),
     ("Remind me to pay rent on Friday", "open_loop"),
-    ("My name is Omar and I'm a founder", "profile_fact"),
+    ("My name is Jordan and I'm a founder", "profile_fact"),
     ("I work at Anticipy", "profile_fact"),
     ("We talked about the new ergonomic chair design for a while", "history"),
     ("I'll call Sarah about the invoice tomorrow", "dup"),   # exact repeat

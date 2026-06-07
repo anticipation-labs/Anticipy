@@ -24,7 +24,7 @@ def main():
     # SUPERSEDE: an older employer fact + a newer one; a name fact must coexist
     old_job = m.profile.write(MemoryItem(kind="profile_fact", text="I work at OldCo Inc", timestamp=now - 5 * DAY))
     new_job = m.profile.write(MemoryItem(kind="profile_fact", text="I work at NewCo Labs", timestamp=now - 10))
-    name = m.profile.write(MemoryItem(kind="profile_fact", text="My name is Omar", timestamp=now - 3 * DAY))
+    name = m.profile.write(MemoryItem(kind="profile_fact", text="My name is Jordan", timestamp=now - 3 * DAY))
 
     # CONSOLIDATE: three near-duplicate episodes
     for t in (now - 300, now - 200, now - 100):
