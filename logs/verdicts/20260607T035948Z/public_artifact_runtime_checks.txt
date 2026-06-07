@@ -1,0 +1,15 @@
+download file:
+2516712351 bytes /tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/downloads/Anticipy_1.0.0_aarch64.dmg
+
+mounted app:
+2.5G	/tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/mounts/Anticipy/Anticipy.app
+
+processes:
+  PID     ELAPSED STAT COMMAND
+21091       02:29 S    /private/tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/mounts/Anticipy/Anticipy.app/Contents/MacOS/Anticipy
+21188       02:12 S    /Applications/Anticipy.app/Contents/MacOS/Anticipy
+49715 05-02:13:59 SN   /Users/omarebrahim/.pyenv/versions/3.10.14/bin/python engine/app/product/server.py
+
+listeners:
+python3.1 21281 omarebrahim   11u  IPv4 0x7d63cbd7b512329a      0t0  TCP 127.0.0.1:7777 (LISTEN)
+python3.1 49715 omarebrahim   11u  IPv4 0xcb052a7886bfc586      0t0  TCP 127.0.0.1:8731 (LISTEN)

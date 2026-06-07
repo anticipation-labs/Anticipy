@@ -1,26 +1,31 @@
 # Last Lap
 
 Lap: 20260607T035948Z
-Date: 2026-06-07T04:08:28Z
+Date: 2026-06-07T06:35:15Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
-Judge verdict: STOPPED_JUDGE_USAGE_LIMIT
+Judge verdict: FAKE
 
 What changed:
-- The M1 build slice was committed as `7b430a4`.
-- No product code changed after that commit.
-- The separate judge was started with `AUTOPILOT_LAP=20260607T035948Z AUTOPILOT_BUILDER_COMMIT=7b430a4 autopilot/judge_lap`.
-- The judge process exited before writing a verdict because Codex CLI reported the ChatGPT Codex usage limit and said to try again at 10:50 PM PDT. The purchase path was not used because spending money is a hard stop.
+- Builder commit `7b430a4` packaged a local executor Mac app and local Next download page.
+- The first judge launch hit the Codex usage limit before verdict; after reset, the same separate judge ran to completion with Supabase MCP disabled.
+- The judge downloaded the real production DMG from `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg`, mounted it, launched the app, captured screenshots/checks, and ran a different-family OpenRouter cross-check.
 
-Current status:
-- M1 remains unproven.
-- The M1 build commit remains on `autopilot/build` and must not be merged to `main` unless a later separate judge rules REAL, the different-family cross-check agrees, and the diff scan is clean.
-- No held-out data was used or burned.
-- No raw judge artifact was read by the builder.
+Judge finding:
+- Public `/download` returns a 2.5 GB DMG and the mounted DMG contains `Anticipy.app`.
+- Clean `/app` showed an account form, not a direct download path.
+- `codesign` and `spctl` failed with resource-signature errors.
+- Launching the app exposed only a macOS microphone permission prompt, not a readable Anticipy live surface.
+- Different-family cross-check agreed with `FAKE`.
+
+Gate:
+- M1 is not proven.
+- The unproven builder commit `7b430a4` is reverted by gate.
+- The local M1 packaging/page evidence does not count as product proof.
+- Post-revert `bash macapp/scripts/build_app.sh` passed.
+- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- Generalization remains UNPROVEN.
 
 Next:
-- After the quota reset, rerun the same separate judge:
-  `AUTOPILOT_LAP=20260607T035948Z AUTOPILOT_BUILDER_COMMIT=7b430a4 autopilot/judge_lap`
-- Use the Supabase MCP-disabled invocation if the known OAuth startup error recurs.
-- Gate the result according to `autopilot/04_LOOP.md`.
+- Continue M1 with a different approach: fix the actual production front door and public Mac app runtime, then rerun the separate M1 judge.

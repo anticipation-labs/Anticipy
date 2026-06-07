@@ -1,0 +1,7 @@
+codesign --verify --deep --strict --verbose=4
+/tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/mounts/Anticipy/Anticipy.app: code has no resources but signature indicates they must be present
+codesign_exit=1
+
+spctl --assess --type execute --verbose=4
+/tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/mounts/Anticipy/Anticipy.app: code has no resources but signature indicates they must be present
+spctl_exit=1

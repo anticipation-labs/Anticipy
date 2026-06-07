@@ -1,0 +1,137 @@
+Format Description: UDIF read-only compressed (zlib)
+Class Name: CUDIFDiskImage
+Checksum Type: CRC32
+Size Information:
+	CUDIFEncoding-bytes-total: 2516535276
+	Total Empty Bytes: 621009920
+	Sector Count: 6480305
+	Total Bytes: 3317916160
+	CUDIFEncoding-bytes-wasted: 1126395
+	Total Non-Empty Bytes: 2696906240
+	Compressed Ratio: 0.93270145869068111
+	CUDIFEncoding-bytes-in-use: 2515408881
+	Compressed Bytes: 2515408881
+Checksum Value: $04F8DEDD
+Segments:
+	0: /tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/downloads/Anticipy_1.0.0_aarch64.dmg
+Partition Information:
+	3:
+		Name: EFI System Partition (C12A7328-F81F-11D2-BA4B-00A0C93EC93B : 4)
+		Partition Number: 3
+		Checksum Type: CRC32
+		Checksum Value: $B54B659C
+	4:
+		Name: disk image (Apple_APFS : 5)
+		Partition Number: 4
+		Checksum Type: CRC32
+		Checksum Value: $F2B13D17
+	0:
+		Name: GPT Header (Primary GPT Header : 1)
+		Partition Number: 0
+		Checksum Type: CRC32
+		Checksum Value: $75DE814C
+	5:
+		Name: GPT Partition Data (Backup GPT Table : 6)
+		Partition Number: 5
+		Checksum Type: CRC32
+		Checksum Value: $C59C1DFC
+	1:
+		Name: GPT Partition Data (Primary GPT Table : 2)
+		Partition Number: 1
+		Checksum Type: CRC32
+		Checksum Value: $C59C1DFC
+	6:
+		Name: GPT Header (Backup GPT Header : 7)
+		Partition Number: 6
+		Checksum Type: CRC32
+		Checksum Value: $AFFDD76C
+	-1:
+		Name: Protective Master Boot Record (MBR : 0)
+		Partition Number: -1
+		Checksum Type: CRC32
+		Checksum Value: $7C9E34E0
+	2:
+		Name:  (Apple_Free : 3)
+		Partition Number: 2
+		Checksum Type: CRC32
+		Checksum Value: $00000000
+Format: UDZO
+Backing Store Information:
+	URL: file:///tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/downloads/Anticipy_1.0.0_aarch64.dmg
+	Name: Anticipy_1.0.0_aarch64.dmg
+	Class Name: CUDIFEncoding
+	Backing Store Information:
+		URL: file:///tmp/anticipy-m1-judge-20260607T035948Z.oZBCxd/downloads/Anticipy_1.0.0_aarch64.dmg
+		Name: Anticipy_1.0.0_aarch64.dmg
+		Class Name: CBSDBackingStore
+partitions:
+	partition-scheme: GUID
+	block-size: 512
+	partitions:
+		0:
+			partition-name: Protective Master Boot Record
+			partition-start: 0
+			partition-synthesized: true
+			partition-length: 1
+			partition-hint: MBR
+		1:
+			partition-name: GPT Header
+			partition-start: 1
+			partition-synthesized: true
+			partition-length: 1
+			partition-hint: Primary GPT Header
+		2:
+			partition-name: GPT Partition Data
+			partition-start: 2
+			partition-synthesized: true
+			partition-length: 32
+			partition-hint: Primary GPT Table
+		3:
+			partition-name:
+			partition-start: 34
+			partition-synthesized: true
+			partition-length: 6
+			partition-hint: Apple_Free
+		4:
+			partition-UUID: 8FDF1F6C-B7BE-4C4B-B577-694906BDBB10
+			partition-name: EFI System Partition
+			partition-hint-UUID: C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+			partition-start: 40
+			partition-number: 1
+			partition-length: 409600
+			partition-hint: C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+			partition-filesystems:
+				FAT32: EFI
+		5:
+			partition-UUID: B4A09088-B699-4A42-B00A-0297E6EEB6BE
+			partition-name: disk image
+			partition-hint-UUID: 7C3457EF-0000-11AA-AA11-00306543ECAC
+			partition-start: 409640
+			partition-number: 2
+			partition-length: 6070632
+			partition-hint: Apple_APFS
+			partition-filesystems:
+				APFS: Untitled
+		6:
+			partition-name: GPT Partition Data
+			partition-start: 6480272
+			partition-synthesized: true
+			partition-length: 32
+			partition-hint: Backup GPT Table
+		7:
+			partition-name: GPT Header
+			partition-start: 6480304
+			partition-synthesized: true
+			partition-length: 1
+			partition-hint: Backup GPT Header
+	burnable: false
+udif-ordered-chunks: false
+Properties:
+	Encrypted: false
+	Kernel Compatible: true
+	Checksummed: true
+	Software License Agreement: false
+	Partitioned: false
+	Compressed: true
+Resize limits (per hdiutil resize -limits):
+5541888	6070632	6070632

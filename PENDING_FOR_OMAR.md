@@ -6,11 +6,12 @@ No hard human gate is blocking current work.
 
 Non-blocking useful input later:
 - OpenRouter credit/key funding needs attention soon. Judge lap `20260606T151119Z` hit HTTP 402 on two larger different-family cross-check attempts, then a tiny Gemini retry succeeded and agreed with `FAKE`.
+- OpenRouter credit/key funding is still low. M1 judge lap `20260607T035948Z` hit HTTP 402 on paid Gemini cross-check, then a free Google-family model agreed with `FAKE`.
 - Add real day transcripts or recordings to realdays/holdout/ so the judge can test on fresh days the builder has never read.
 - Approve Google Gmail compose scope for Gmail.WriteDraftEmail when M6 reaches drafts. Arcade produced a Google OAuth URL during the setup probe.
 - Approve Google Drive file scope for GoogleDocs.GetDocumentById when M6 reaches Docs. Arcade produced a Google OAuth URL during the setup probe.
 - Slack.SendMessageToChannel is not currently available through Arcade. The setup probe returned tool_not_found for Slack.SendMessageToChannel@0.
-- Apple Developer ID signing and notarization are not available on this Mac. `security find-identity -v -p codesigning` returns 0 valid identities. The current builds can be ad-hoc signed, but Gatekeeper rejects them without the documented Open Anyway or installer workaround. Full zero-warning public Mac install needs a Developer ID certificate and notarization.
+- Apple Developer ID signing and notarization are not available on this Mac. `security find-identity -v -p codesigning` returns 0 valid identities. The M1 judge also found the production DMG app fails `codesign` and `spctl` with resource-signature errors. Full zero-warning public Mac install needs Developer ID/notarization or a corrected signed build and installer path.
 
 ## CALIBRATION 2026-06-07T03:42:32Z
 
