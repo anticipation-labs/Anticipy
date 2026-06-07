@@ -4,28 +4,29 @@ Current milestone: M1, real front door. M1 means a clean profile can download a 
 
 Latest judged lap: `20260607T064745Z` was `FAKE`. The separate M1 judge passed planted-fake self-check, computer-use self-test, tamper scan, and different-family OpenRouter cross-check. It verified that clean public `/app` still shows account creation and no direct download link, the public DMG downloads and mounts, but `codesign` and `spctl` fail with resource-signature errors and the launched public app shows only a macOS microphone permission prompt rather than a readable live Anticipy surface. Proof: `logs/verdicts/20260607T064745Z.md`.
 
-Current build lap: `20260607T075335Z` is unjudged and has `judge_verdict=PENDING`. It worked in the production-linked source tree at `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`, not the local executor placeholder front door. Build-side evidence only:
-- The Tauri app now calls `show_popover(app.handle())` on launch and no longer starts the Rust microphone permission bootstrap automatically.
-- `desktop/scripts/tauri.mjs` now ad-hoc signs the app before DMG creation and writes all plausible DMG output paths instead of returning after the first one.
-- `bash scripts/build_dmg.sh` completed after those fixes.
-- The regenerated local root DMG hash is `ddd20a490ac6a301fc9f6d321fd4ec53e6d74711364929171c869882119c7692`.
-- The app inside the mounted local root DMG passed `codesign --verify --deep --strict --verbose=2` and `codesign -dvvv` reported `Sealed Resources version=2`.
-- `spctl --assess --type execute -vv` still rejected the app because it is ad-hoc signed, not Developer ID signed or notarized.
-- Public `https://www.anticipy.ai/app`, `/download`, and `/dl/Anticipy_1.0.0_aarch64.dmg` still serve the old public artifact. The rebuilt DMG is not deployed.
-- Mounted-DMG GUI launch showed the Anticipy popover, but screenshots were contaminated by unresolved microphone permission prompts already present in Safari/Chrome. This is not clean launch proof.
-
-Gate status: no hard human gate blocks all work. Apple Developer ID signing and notarization remain unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Full no-warning stranger install still needs Developer ID/notarization. OpenRouter credit is very low; if all required different-family cross-checks become unavailable, record a money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked paths. Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`.
+Gate status: the failed builder commit `b109be8` is reverted on `autopilot/build` by the current gate commit. It must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - M0 clean floor is proven once: `logs/verdicts/20260607T032947Z.md` verifies one real typed Calendar task with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
 
+Build-side evidence, not proof:
+- The reverted `20260607T064745Z` slice showed the local executor Swift app can open on Main, but the separate judge proved this does not change or prove production `anticipy.ai/app`.
+- The reverted `20260607T035948Z` slice showed a local executor app can be packaged as a zip and served from the local Next app, but the separate judge proved this does not prove the production public front door.
+- Production `https://www.anticipy.ai/app` belongs to Vercel project `anticipy`, not this repo's linked `anticipy-executor-working` project.
+- Production `/download` and canonical `/dl/Anticipy_1.0.0_aarch64.dmg` still need a release-path fix, signature/resource fix, launch-surface fix, and clean judge verification. Builder header checks and local screenshots are not proof.
+
 Not proven:
 - M1 is not proven. The actual production public app must launch to a readable live Anticipy surface from a clean front-door path.
-- The rebuilt local production-linked DMG is not public and has not been judged.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
 - The full stranger path is not proven. Public download alone is not onboarding, self-connect, or stranger task completion.
+
+Pending gates:
+- No hard human gate blocks all work.
+- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed, but full zero-warning stranger install needs Developer ID and notarization. The judge also found the production DMG app has a resource-signature failure, which must be fixed or explicitly routed through a safe install flow before M1 can pass.
+- OpenRouter credit is very low. Paid Gemini cross-check hit HTTP 402 during M1 judges; the judge used a free Google-family model that agreed with `FAKE`. If all required different-family cross-checks become unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked paths.
+- Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
@@ -45,10 +46,9 @@ Realday audio:
 Dead ends not to retry blindly:
 - Treating the local executor Next page, local zip, or local Swift app launch as proof for production `anticipy.ai/app`.
 - Blindly deploying this executor worktree to production `anticipy`, because production has a larger app and belongs to the older `Anticipy-DEV-FINAL` source tree.
-- Running production `scripts/ship.sh` as-is from `Anticipy-DEV-FINAL` in this lap, because it pushes to `origin main`; use a safe non-push publish path or explicitly isolate the publish step.
 - Treating authenticated-owner Chrome observations as clean stranger proof.
 - Treating public headers, local app launch, local screenshots, or app activation by name as M1 proof without the separate judge.
-- Treating the current 2.5 GB public DMG as a healthy normal verifier path. It completed, but it made M1 judges take tens of minutes.
+- Treating the current 2.5 GB public DMG as a healthy normal verifier path. It completed, but it made a single M1 judge take tens of minutes.
 - Google Sheets and Google Docs canvas synthetic input.
 - Amazon.ca Playwright automation.
 - Anti-bot arms races for captcha or Cloudflare challenges.
@@ -59,9 +59,7 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Continue M1 with the production-linked source path. Cleanly isolate and remove any remaining automatic microphone prompt before the visible surface.
-- Rebuild and launch from a clean UI state so the local mounted DMG shows the readable live surface without prompt contamination.
-- Publish the corrected DMG to the real public artifact path only after the local mounted DMG passes clean launch checks; do not push from this executor worktree.
+- Continue M1 with a different approach: inspect the actual production source/deployment path for `https://www.anticipy.ai/app`, fix the public front door path, fix the public DMG resource signature, and make the launched public app show a readable live surface.
 - Keep the public artifact small enough that a normal M1 judge can complete in minutes, or document why the verifier must download the full artifact.
 
 Law digest:
