@@ -1,38 +1,38 @@
 # Last Lap
 
-Lap: 20260607T144002Z
-Date: 2026-06-07T14:40:02Z
+Lap: 20260607T152933Z
+Date: 2026-06-07T15:29:33Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked source commit `bdc0e76e` on branch `rebuild/spine-clean`.
-- This builds on `ca16ffe1`, `20de47b5`, and `ccc96264`, so the public candidate includes the fixed front door, smaller default DMG, sealed app resources, visible launch surface, and packaged typed composer.
-- Added a no-push candidate ship path in `scripts/ship_candidate.sh`: build DMG, upload it to a commit-addressed R2 key, write manifest metadata, pull Vercel production settings, build locally, deploy prebuilt production output, and verify public state plus public DMG SHA.
-- The public download route now reads R2 URL and byte size from `state/builds/manifest.json` instead of stale hard-coded byte counts.
-- Removed stale untracked `public/Anticipy.dmg` from the Vercel build surface by moving it out of `public/`, adding `.vercelignore`, and ignoring root `target/`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `f370f7c9` on branch `rebuild/spine-clean`.
+- `f370f7c9` removes the remaining owner/eval literals found in the packaged archive scan: the stale dev-recipient cleanup regex no longer names the owner, and two trivia seed facts no longer contain the Steve Jobs / Bill Gates silence-control names.
+- Rebuilt deterministic extension archives from the cleaned source and committed them with the source cleanup.
+- Manifest commit `c3d12fce` points public release metadata at the `f370f7c9` DMG. `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the committed web tree to production without pushing git.
 
 Checks:
-- `npm run build` passed before and after the manifest update.
-- `bash -n scripts/ship_candidate.sh` passed after every script change.
-- Candidate DMG built from commit `4c4fbe32`, uploaded to R2 key `builds/4c4fbe326b4cc39dbe2320fa478fb54c2583b92b/Anticipy_1.0.0_aarch64.dmg`.
-- Candidate DMG size is `178811741` bytes and SHA-256 is `e527a3d8ba8d52512f35d48bc55bad8a51cbf33f8ed875a9446ccada6f861aac`.
-- R2 candidate HEAD returned `200`, `Content-Type: application/x-apple-diskimage`, and `Content-Length: 178811741`.
-- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the committed tree to Vercel without pushing git.
-- Public `https://www.anticipy.ai/api/app/state` reports build commit `bdc0e76ee8a1252680565bd232f6f373f90734f8`, release SHA `e527a3d8ba8d52512f35d48bc55bad8a51cbf33f8ed875a9446ccada6f861aac`, manifest commit `4c4fbe326b4cc39dbe2320fa478fb54c2583b92b`, and `bytes: 178811741`.
-- Public `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` HEAD returns `200`, `Content-Type: application/x-apple-diskimage`, and `Content-Length: 178811741`.
-- Full public DMG SHA verification passed through the ship script.
-- Real Chrome owner-profile sanity check loaded `anticipy.ai/app` and showed the Anticipy live surface. This is not clean stranger proof.
+- `engine/.venv/bin/python -m py_compile engine/app/task_queue/store.py engine/app/trivia/seed_facts.py` passed.
+- Rebuilt `desktop/src-tauri/resources/anticipy-extension.zip`, `public/anticipy-extension-v6.zip`, and `public/anticipy-extension.zip`; all three have SHA-256 `1de86d9e3a4d6c42818c94f07429d3e226949faac1e15d860ae713b6d0c91239`.
+- Rebuilt archive scan found no targeted owner/eval literals or obvious secret-token shapes.
+- `bash scripts/build_dmg.sh` passed and produced a 178,816,135 byte public candidate DMG.
+- R2 candidate HEAD returned `200`, `application/x-apple-diskimage`, and `Content-Length: 178816135`.
+- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` passed. Public state is live at site commit `c3d12fc` and release SHA `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a`.
+- Public `/app` returns 200 HTML. Public `/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 disk image with `Content-Length: 178816135`.
+- Downloaded the canonical public DMG from `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg`; SHA-256 matched `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a` and byte count matched `178816135`.
+- Mounted the public DMG read-only. `codesign --verify --strict --verbose=4` passed for `Anticipy.app`; `spctl --assess` rejected as expected because the app is ad-hoc signed and this Mac has no Developer ID identity.
+- Launched the mounted public app. The bundled sidecar owned port 8731 and `/health`, `/api/state`, `/api/listen/status`, and `/api/dossier/events` responded. `/api/state` showed `key_ok: true`, `provisioned: true`, `onboarded: true`, and `engine_health.bundled_binary: true`.
+- Real screen screenshot `/tmp/anticipy-public-m1-f370-before-click.png` showed the visible Anticipy surface with microphone status, typed task box, Run button, and onboarding cards. macOS also showed a microphone permission prompt. The builder did not click Allow.
 
 Gate:
-- M1 is not proven. The separate judge has not yet downloaded the public candidate from a clean profile, mounted it, verified signing, launched it, and confirmed a readable live Anticipy surface.
+- M1 is not proven. These are builder-side deploy and launch rehearsals, not a separate clean-profile judge verdict.
 - M2 is not proven. The separate judge has not typed a safe, reversible task in the packaged app and verified a real artifact.
 - Separate Codex CLI builder/judge runner is blocked by usage quota until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. Spending money is a human gate and was not taken.
 - Apple Developer ID signing and notarization remain unavailable on this Mac, so `spctl` is expected to reject ad-hoc builds.
 - Generalization remains UNPROVEN.
 
 Next:
-- When separate judge quota is available, run an M1 judge against production build `bdc0e76e` and public release SHA `e527a3d8ba8d52512f35d48bc55bad8a51cbf33f8ed875a9446ccada6f861aac`.
+- When separate judge quota is available, run an M1 judge against production site commit `c3d12fce` and public release SHA `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a`.
 - If M1 passes, run an M2 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact.
