@@ -63,6 +63,51 @@ async def test_verify_before_done():
     print("  verify-before-done: send_email NOT marked done (no proof); goal state =", goal.state.value)
 
 
+async def test_empty_plan_never_done():
+    tmp, bus, gw, store, _ = make_env()
+    gw = ModelGateway(stub=lambda task, tier, caller: "")
+    orch = Orchestrator(bus, gw, store, approver=AutoApprover(True), max_retries=0)
+    await bus.start()
+    try:
+        goal = await orch.start_goal(Goal(intent="x", description="Do the vague thing somehow"))
+    finally:
+        await bus.stop()
+    assert goal.state == GoalState.failed, goal.state
+    assert goal.steps == []
+    assert store.load(goal.id).state == GoalState.failed
+    print("  empty plan: failed loudly, not marked done")
+
+
+async def test_deterministic_calendar_plan():
+    tmp, bus, gw, store, _ = make_env()
+    # Even if the model would return nothing, an explicit concrete Calendar event
+    # should become a real create_event step with the proven API arg shape.
+    gw = ModelGateway(stub=lambda task, tier, caller: "")
+    orch = Orchestrator(bus, gw, store, approver=AutoApprover(True))
+    await bus.start()
+    try:
+        goal = await orch.start_goal(Goal(
+            intent="calendar",
+            description=(
+                "Create a calendar event titled [Anticipy test] Dentist "
+                "on June 18, 2026 from 9:40 AM to 10:10 AM America/Los_Angeles."
+            ),
+        ))
+    finally:
+        await bus.stop()
+
+    assert goal.state == GoalState.done, goal.state
+    assert [s.intent for s in goal.steps] == ["create_event"], goal.steps
+    args = goal.steps[0].args
+    assert args["summary"] == "[Anticipy test] Dentist", args
+    assert args["start_datetime"].startswith("2026-06-18T09:40:00"), args
+    assert args["end_datetime"].startswith("2026-06-18T10:10:00"), args
+    assert args["timezone"] == "America/Los_Angeles", args
+    assert goal.steps[0].result and goal.steps[0].result.proof
+    assert len(gw.smart_calls) == 0
+    print("  deterministic calendar: create_event step done with concrete args")
+
+
 async def test_approval_denied():
     tmp, bus, gw, store, _ = make_env()
     orch = Orchestrator(bus, gw, store, approver=AutoApprover(False))  # deny everything risky
@@ -109,6 +154,8 @@ async def test_persist_and_resume():
 async def main():
     await test_happy_path_with_retry()
     await test_verify_before_done()
+    await test_empty_plan_never_done()
+    await test_deterministic_calendar_plan()
     await test_approval_denied()
     await test_persist_and_resume()
     print("PASS piece 4: orchestrator (plan/dispatch/verify/retry/reroute/persist/resume)")

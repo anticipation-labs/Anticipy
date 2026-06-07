@@ -12,6 +12,7 @@ import datetime as dt
 import json
 import re
 from typing import Dict, Optional
+from zoneinfo import ZoneInfo
 
 from .bus import Bus
 from .envelopes import Goal, GoalState, Job, JobStatus, Result, Risk, Step, StepState
@@ -63,6 +64,117 @@ def _robust_json(raw):
     return None
 
 
+_MONTHS = {
+    "jan": 1, "january": 1,
+    "feb": 2, "february": 2,
+    "mar": 3, "march": 3,
+    "apr": 4, "april": 4,
+    "may": 5,
+    "jun": 6, "june": 6,
+    "jul": 7, "july": 7,
+    "aug": 8, "august": 8,
+    "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10,
+    "nov": 11, "november": 11,
+    "dec": 12, "december": 12,
+}
+_MONTH_RE = "|".join(sorted(_MONTHS, key=len, reverse=True))
+_CALENDAR_EVENT_RE = re.compile(
+    r"\b(calendar event|calendar entry|event (on|in) (my |the )?calendar)\b",
+    re.I,
+)
+_TITLE_RE = re.compile(r"\b(?:titled|called|named)\s+(?P<title>.+?)\s+\bon\b", re.I | re.S)
+_DATE_RE = re.compile(
+    rf"\b(?P<month>{_MONTH_RE})\s+(?P<day>\d{{1,2}})(?:st|nd|rd|th)?(?:,?\s+(?P<year>\d{{4}}))?\b",
+    re.I,
+)
+_TIME_RANGE_RE = re.compile(
+    r"\bfrom\s+(?P<start>\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s+"
+    r"(?:to|until|-)\s+(?P<end>\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b",
+    re.I,
+)
+_CLOCK_RE = re.compile(r"^\s*(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm)?\s*$", re.I)
+_TZ_RE = re.compile(r"\b(?P<tz>[A-Z][A-Za-z_]+/[A-Z][A-Za-z_]+)\b")
+
+
+def _parse_clock(raw: str, fallback_ampm: str | None = None) -> tuple[int, int] | None:
+    m = _CLOCK_RE.match(raw or "")
+    if not m:
+        return None
+    hour = int(m.group("hour"))
+    minute = int(m.group("minute") or "0")
+    if hour > 23 or minute > 59:
+        return None
+    ampm = (m.group("ampm") or fallback_ampm or "").lower()
+    if ampm:
+        if hour < 1 or hour > 12:
+            return None
+        if ampm == "am":
+            hour = 0 if hour == 12 else hour
+        elif ampm == "pm":
+            hour = 12 if hour == 12 else hour + 12
+    return hour, minute
+
+
+def _zone_from_text(text: str):
+    m = _TZ_RE.search(text or "")
+    if m:
+        try:
+            return ZoneInfo(m.group("tz")), m.group("tz")
+        except Exception:
+            pass
+    local = dt.datetime.now().astimezone().tzinfo
+    return local, str(local)
+
+
+def _calendar_event_step(text: str) -> Optional[Step]:
+    """Deterministic plan for explicit, fully grounded Calendar-event requests."""
+    if not _CALENDAR_EVENT_RE.search(text or ""):
+        return None
+    date_m = _DATE_RE.search(text)
+    range_m = _TIME_RANGE_RE.search(text)
+    if not date_m or not range_m:
+        return None
+
+    end_ampm_m = re.search(r"(am|pm)\s*$", range_m.group("end"), re.I)
+    start_ampm_m = re.search(r"(am|pm)\s*$", range_m.group("start"), re.I)
+    fallback_ampm = end_ampm_m.group(1).lower() if end_ampm_m and not start_ampm_m else None
+    start_clock = _parse_clock(range_m.group("start"), fallback_ampm=fallback_ampm)
+    end_clock = _parse_clock(range_m.group("end"))
+    if not start_clock or not end_clock:
+        return None
+
+    now = dt.datetime.now().astimezone()
+    month = _MONTHS[date_m.group("month").lower()]
+    day = int(date_m.group("day"))
+    year = int(date_m.group("year") or now.year)
+    zone, zone_name = _zone_from_text(text)
+    try:
+        start = dt.datetime(year, month, day, start_clock[0], start_clock[1], tzinfo=zone)
+        end = dt.datetime(year, month, day, end_clock[0], end_clock[1], tzinfo=zone)
+    except ValueError:
+        return None
+    if end <= start:
+        return None
+
+    title_m = _TITLE_RE.search(text)
+    summary = title_m.group("title") if title_m else "Calendar event"
+    summary = re.sub(r"\s+", " ", summary).strip(" \"'“”.,")
+    if not summary:
+        summary = "Calendar event"
+
+    return Step(
+        intent="create_event",
+        args={
+            "summary": summary,
+            "start_datetime": start.isoformat(timespec="seconds"),
+            "end_datetime": end.isoformat(timespec="seconds"),
+            "timezone": zone_name,
+        },
+        risk=Risk.low,
+    )
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -98,17 +210,29 @@ class Orchestrator:
         self._log("goal_planning", {"goal_id": goal.id})
 
         context = self.memory_context(goal.description or goal.intent) if self.memory_context else {}
-        plan_raw = await self.gateway.think(self._plan_prompt(goal, context), tier=SMART, caller="plan", json_mode=True)
-        goal.steps = self._parse_plan(plan_raw)
-        if not goal.steps:   # ONE bounded re-ask for clean JSON (real models drift; the stub never needs it)
-            strict = (self._plan_prompt(goal, context)
-                      + '\n\nYour previous reply could not be parsed. Reply with ONLY valid minified JSON '
-                        '{"steps":[{"intent":"...","args":{},"risk":"low"}]} and nothing else.')
-            plan_raw = await self.gateway.think(strict, tier=SMART, caller="plan", json_mode=True)
+        goal.steps = self._deterministic_plan(goal)
+        plan_source = "deterministic" if goal.steps else "model"
+        if not goal.steps:
+            plan_raw = await self.gateway.think(self._plan_prompt(goal, context), tier=SMART, caller="plan", json_mode=True)
             goal.steps = self._parse_plan(plan_raw)
+            if not goal.steps:   # ONE bounded re-ask for clean JSON (real models drift; the stub never needs it)
+                strict = (self._plan_prompt(goal, context)
+                          + '\n\nYour previous reply could not be parsed. Reply with ONLY valid minified JSON '
+                            '{"steps":[{"intent":"...","args":{},"risk":"low"}]} and nothing else.')
+                plan_raw = await self.gateway.think(strict, tier=SMART, caller="plan", json_mode=True)
+                goal.steps = self._parse_plan(plan_raw)
+            plan_source = "model"
+        if not goal.steps:
+            goal.state = GoalState.failed
+            self.store.save(goal)
+            self._log("goal_failed", {"goal_id": goal.id, "reason": "empty_plan"})
+            if self.scorecard is not None:
+                self.scorecard.record_goal(goal.id, "failed", self._goal_cost(goal))
+            return goal
         goal.state = GoalState.running
         self.store.save(goal)
-        self._log("goal_planned", {"goal_id": goal.id, "steps": [s.intent for s in goal.steps]})
+        self._log("goal_planned", {"goal_id": goal.id, "steps": [s.intent for s in goal.steps],
+                                   "source": plan_source})
         return await self._drive(goal)
 
     async def resume_waiting(self) -> list:
@@ -184,6 +308,12 @@ class Orchestrator:
         return result.proof is not None and bool(result.proof)
 
     # ---- helpers ----
+    @staticmethod
+    def _deterministic_plan(goal: Goal) -> list:
+        text = goal.description or goal.intent
+        calendar = _calendar_event_step(text)
+        return [calendar] if calendar is not None else []
+
     def _plan_prompt(self, goal: Goal, context=None) -> str:
         base = ('Plan the goal into ordered steps. Respond with ONLY a JSON object '
                 '{"steps":[{"intent":"...","args":{...},"risk":"low|needs_confirm|ask_human"}]} '

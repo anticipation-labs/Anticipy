@@ -69,6 +69,21 @@ async def main():
     assert "act" in score.decisions
     print(f"  A safe: decision=act ({out['category']}), goal done, smart calls = {len(gw.smart_calls)}")
 
+    # A2) clean typed calendar event -> ACT, not ask. This is the M0 floor shape; the
+    # live judge proves the real app artifact, this only protects the route.
+    tmp, bus, gw, glass, score, orch, pro = make()
+    await bus.start()
+    try:
+        out = await pro.on_event(Event(
+            source=EventSource.app,
+            text="Create a calendar event titled Dentist on June 18, 2026 from 9:40 AM to 10:10 AM.",
+        ))
+    finally:
+        await bus.stop()
+    assert out["decision"] == "act" and out["category"] == "calendar_event", f"expected calendar act, got {out}"
+    assert orch.store.load(out["goal_id"]).state == GoalState.done
+    print(f"  A2 clean calendar: decision=act ({out['category']}), goal done")
+
     # B) ambient noise -> triaged out -> ignore, no goal, no smart call
     tmp, bus, gw, glass, score, orch, pro = make()
     await bus.start()

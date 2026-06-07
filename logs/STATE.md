@@ -2,6 +2,8 @@
 
 Current milestone: M0, clean floor. M0 is a typed, fully time-grounded task through the live system. Done means the separate judge verifies one real, correct, safe, reversible artifact in the real app with connector read-back where available, screenshot proof, different-family cross-check, clean diff scan, and cleanup after verification.
 
+Latest build slice: `20260607T032738Z` is `NOT_JUDGED_BUILD_SLICE`. It adds a deterministic planner path for explicit fully grounded Calendar event instructions, emits a real `create_event` step with `summary`, `start_datetime`, `end_datetime`, and `timezone`, and makes empty plans fail instead of marking zero-step goals done. It also reintroduces generic safe `calendar_event` harm-line handling with invitation and public-event gating. Focused orchestrator, harm-line, and proactive checks passed; the exact judge-shaped phrase produced concrete ISO Calendar args; `bash scripts/run_suite.sh` passed 29/29. This is not M0 proof.
+
 Latest judged lap: `20260607T030839Z` was `FAKE`. The judge ran a typed, fully time-grounded Calendar task through the live `/event` endpoint. The system returned `decision=act`, but the resulting goal was marked `done` with zero steps and empty proof. Calendar connector read-back matched `0` events, Google Calendar UI search found no event, Gmail Sent search found no message, and the different-family OpenRouter/Gemini cross-check agreed with `FAKE`. Failed builder commit `330ff05` was reverted by `82447bc`. M0 remains open.
 
 Latest stopped lap: `20260607T030217Z` has no verdict. Its separate judge attempt was stopped after repeated startup/runtime warnings and no final verdict markdown. No held-out day was used or burned, and no proof is claimed. The replacement judge `20260607T030839Z` produced the current verdict.
@@ -14,11 +16,12 @@ Current kept infrastructure:
 - `ProactiveEngine` includes that clock context in the goal description used by the planner.
 - Build and judge prompts use clean typed M0 before audio.
 - Calendar concrete-time guard remains a safety floor: live `create_event` jobs without concrete `start_datetime` and `end_datetime` are blocked before Arcade execution.
+- Empty plans fail instead of completing, and explicit concrete Calendar tasks have deterministic API-step planning.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - Prior amended judge proofs exist through `logs/verdicts/20260607T030839Z.md`. None verified M0.
-- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+- Current build-side checks passed: Python compile for edited files, `engine/scripts/test_orchestrator.py`, `engine/scripts/test_harmline.py`, `engine/scripts/test_proactive.py`, exact judge-shaped deterministic Calendar plan probe, and `bash scripts/run_suite.sh` 29/29.
 - No M0 real task is proven. Builder-side checks, stopped judge work, guard-only work, abstention, cached transcript plumbing, and stub/mock clean-M0 smoke are not judge proof.
 
 Pending gates:
@@ -51,8 +54,8 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Fix the empty-plan completion path. An action goal with zero planned steps must never be marked done.
-- For safe clean typed Calendar tasks, make the live planner/orchestrator produce a real `create_event` job with concrete `summary`, `start_datetime`, and `end_datetime`, or fail/wait loudly.
+- Commit the build slice for `20260607T032738Z`.
+- Run the separate clean M0 judge again. The system must create the correct Calendar artifact through the live task loop.
 - Do not add another refusal-only guard. The next milestone attempt must create a real correct artifact verified by the judge.
 
 Law digest:

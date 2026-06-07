@@ -1,31 +1,27 @@
 # Last Lap
 
-Lap: 20260607T030839Z
-Date: 2026-06-07T03:18:38Z
+Lap: 20260607T032738Z
+Date: 2026-06-07T03:27:38Z
 Milestone: M0 - clean floor
 ALL_MILESTONES_DONE: false
 
-Judge verdict: FAKE
+Judge verdict: NOT_JUDGED_BUILD_SLICE
 
 What changed:
-- Builder commit `330ff05` attempted to allow explicit safe Calendar event creation.
-- The first judge attempt `20260607T030217Z` was stopped without verdict after startup/runtime warnings.
-- The replacement judge ran with the unused Supabase MCP disabled for that invocation.
+- Added a deterministic planner path for explicit, fully grounded Calendar event instructions.
+- The deterministic Calendar path emits the proven API arg shape: `summary`, `start_datetime`, `end_datetime`, and `timezone`.
+- Empty plans now mark the goal `failed` instead of `done`, so zero-step goals cannot fake completion.
+- Reintroduced generic safe `calendar_event` harm-line handling, with invitations and public event creation still gated.
 
-Judge result:
-- The live `/event` response returned `decision=act`.
-- The goal read-back was `done` with zero steps and empty proof.
-- Calendar connector read-back found `0` matching events for the judge-owned lap title.
-- Google Calendar UI search screenshot showed no matching event.
-- Gmail Sent search found no matching message.
-- Different-family Gemini cross-check agreed with `FAKE`.
-- No cleanup was needed because no matching Calendar test artifact existed.
-
-Gate:
-- Failed builder commit `330ff05` was reverted by `82447bc`.
-- Post-revert `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+Checks:
+- `PYTHONPATH=engine engine/.venv/bin/python -m py_compile engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/proactive/harm.py` passed.
+- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_orchestrator.py` passed.
+- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
+- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_proactive.py` passed.
+- Exact judge-shaped Calendar text produced one `create_event` step with concrete ISO datetimes.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
 
 Next:
-- Fix the empty-plan completion path. An action goal with zero planned steps must not be marked done.
-- For clean typed Calendar tasks, the live planner/orchestrator must produce a real `create_event` job with concrete `summary`, `start_datetime`, and `end_datetime`, or fail/wait loudly.
-- Run the separate clean M0 judge again after the fix.
+- Commit the build slice.
+- Run the separate clean M0 judge again on a judge-owned typed, fully time-grounded Calendar task.
+- M0 remains open until the judge verifies a real correct Calendar artifact with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
