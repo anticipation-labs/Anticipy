@@ -5,7 +5,7 @@ Date: 2026-06-07T08:59:44Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
-Judge verdict: PENDING
+Judge verdict: PENDING. Startup stopped on Codex usage limit before verdict.
 
 What changed:
 - Added a local executor download front door in `app/page.js` and updated page metadata in `app/layout.js`.
@@ -27,7 +27,8 @@ Gate:
 - No proof is claimed. The separate judge must decide.
 - M1 is not proven. The real production front door at `https://www.anticipy.ai/app` and the clean downloaded app launch path remain the judge standard.
 - The child builder session hung after verification and had to be interrupted; durable trace and logs were written by the outer session without writing a verdict.
+- The first judge launch failed on the known MCP OAuth startup path. The Supabase-disabled retry then hit the Codex usage limit and produced no verdict. The CLI said to try again at 3:51 AM.
 
 Next:
-- Run `AUTOPILOT_LAP=20260607T084004Z AUTOPILOT_BUILDER_COMMIT=<commit> autopilot/judge_lap`.
+- Run `AUTOPILOT_LAP=20260607T084004Z AUTOPILOT_BUILDER_COMMIT=d51f4eb autopilot/judge_lap` after the usage reset. If the MCP OAuth startup error returns, rerun with Supabase MCP disabled for that invocation.
 - If the judge rules fake or tamper, revert the candidate commit and pivot back to a tracked production-linked source fix.

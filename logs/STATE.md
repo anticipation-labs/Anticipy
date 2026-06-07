@@ -2,11 +2,11 @@
 
 Current milestone: M1, real front door. M1 means a clean profile can download a `.app` from the public front door at `anticipy.ai/app`, launch it, and see the live surface. M0 clean floor is proven once, but the product is not done until a stranger can download, onboard, connect their own apps, and get a real task done.
 
-Latest builder lap: `20260607T084004Z` is PENDING separate judge. It produced a local executor download slice: local page link, packaged zip, ad-hoc signed Swift app, and owner/eval literal cleanup on the package path. It is not proof. The child builder hung after local verification and was interrupted; the outer session wrote durable logs without writing any judge verdict.
+Latest builder lap: `20260607T084004Z` is committed as `d51f4eb` and is PENDING separate judge. It produced a local executor download slice: local page link, packaged zip, ad-hoc signed Swift app, and owner/eval literal cleanup on the package path. It is not proof. The child builder hung after local verification and was interrupted; the outer session wrote durable logs without writing any judge verdict. The first judge launch failed on the known MCP OAuth startup path, and the Supabase-disabled retry stopped before verdict because the Codex CLI hit the usage limit. The CLI said to try again at 3:51 AM.
 
 Latest judged lap: `20260607T075335Z` was `FAKE` with `Tamper: YES`. The separate M1 judge passed the planted-fake self-check and computer-use self-test, then halted at tamper scan before public M1 launch verification. It found that the executor builder commit `f229496` was only a logging commit while the product changes lived as an uncommitted diff in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`, and that rebuilt packaged archive files contained owner/person-specific literals in product code. The different-family OpenRouter cross-check agreed with `FAKE/TAMPER`. Proof: `logs/verdicts/20260607T075335Z.md`.
 
-Gate status: no hard human gate blocks all work. Lap `20260607T084004Z` must be judged before it is kept or reverted. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`.
+Gate status: no hard human gate blocks all work, but the autopilot loop is waiting for the Codex usage reset before the pending judge can run. Lap `20260607T084004Z` must be judged before it is kept or reverted; do not start another builder lap first. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -66,7 +66,7 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Run the separate judge for lap `20260607T084004Z` after committing the candidate. If it fails, revert the candidate and pivot back to tracked production-linked source work.
+- After the Codex usage reset, run the separate judge for lap `20260607T084004Z` against builder commit `d51f4eb`: `AUTOPILOT_LAP=20260607T084004Z AUTOPILOT_BUILDER_COMMIT=d51f4eb autopilot/judge_lap`. If the known MCP OAuth startup error returns before verdict, rerun that same judge prompt with Supabase MCP disabled for the invocation. If the judge fails, revert `d51f4eb` and pivot back to tracked production-linked source work.
 - Continue M1 with a different approach if the local executor front door fails again: first eliminate owner/person-specific literals from packaged product code or exclude stale archives, then make the production-linked product diff tracked and judgeable. Only then fix the public front door path, public DMG resource signature, and launch surface.
 - Keep the public artifact small enough that a normal M1 judge can complete in minutes, or document why the verifier must download the full artifact.
 
