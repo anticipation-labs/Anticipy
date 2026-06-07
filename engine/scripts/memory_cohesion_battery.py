@@ -62,7 +62,7 @@ def main():
 
     # ---- onboarding: bulk profile import ----
     onb.bulk_import([
-        "My name is Jordan and I'm a founder.",
+        "My name is Omar and I'm a founder.",
         "I work at OldCo Inc.",            # employer (changes mid-week)
         "My wife is Mia.",
         "My boss is Dana.",

@@ -55,7 +55,7 @@ class MemoryWorker(Worker):
                       proof={"memory_id": item.id if item else "none", "kind": res.get("kind")}, cost=0.0)
 
 CANNED_CONTEXT = {
-    "profile": {},
+    "profile": {"name": "Omar", "role": "founder"},
     "open_loops": [],
     "recent": [],
 }

@@ -91,7 +91,7 @@ def _first_match(text: str, table: List[Tuple[str, str]]) -> Optional[str]:
 
 _CASUAL = ("mom", "mum", "dad", "wife", "husband", "partner", "spouse", "brother", "sister",
            "friend", "friends", "buddy", "family", "kid", "kids", "son", "daughter",
-           "girlfriend", "boyfriend", "sibling")
+           "girlfriend", "boyfriend", "roommate", "sibling")
 
 
 class HarmLine:

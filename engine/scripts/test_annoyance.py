@@ -57,7 +57,7 @@ async def main():
     await bus.start()
     try:
         # PART 1 — interruption budget caps proactive asks
-        pro.budget = AnnoyanceBudget(max_per_day=3)   # small cap for the test
+        pro.budget = AnnoyanceBudget(max_per_day=3)   # small cap for the test (DECISIONS-ONLY-OMAR)
         outs = [await pro.on_event(Event(source=EventSource.system, text=f"Wire payment {i} to a vendor."), now=now)
                 for i in range(6)]
         asks = [o for o in outs if o["decision"] == "ask"]
@@ -95,7 +95,7 @@ async def main():
     print(f"  PART 1 budget(cap=3): 6 proactive detrimental -> {len(asks)} asked, {len(supp)} suppressed (<= cap)")
     print(f"  PART 2 decline-learning: declined 'email investor' -> same type suppressed; different type still asks")
     print(f"  PART 3 user-initiated ask bypasses budget (cap 0); proactive ask suppressed")
-    print(f"  NOTE: the default cap follows the research ceiling ~3-5/day; default 5")
+    print(f"  NOTE: the cap NUMBER is DECISIONS-ONLY-OMAR (research ceiling ~3-5/day; default 5)")
     if fails:
         print("==== FAIL ===="); [print("   -", f) for f in fails]; raise SystemExit(1)
     print("==== PASS ====")

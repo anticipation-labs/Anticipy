@@ -4,7 +4,7 @@ An interruption is a withdrawal from a finite daily account, not a deposit: proa
 hit a hard ceiling of ~3-5 notifications/day before users take the pendant off. This caps
 PROACTIVE interruptions (asks the ENGINE initiates), learns from declines (don't re-propose a
 declined action-type), and prefers SUPPRESSING over deferring. USER-initiated asks are never
-suppressed. The cap number is configurable and defaults to
+suppressed. The cap NUMBER is Omar's (DECISIONS-ONLY-OMAR) — configurable, default anchored to
 the research 3-5/day ceiling. Recipe + sources: notes/proactive_room5.md.
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ def _signature(action: str, category: str) -> str:
 
 class AnnoyanceBudget:
     def __init__(self, max_per_day: int = 5, window_s: float = 86400.0) -> None:
-        self.max_per_day = max_per_day          # research ceiling ~3-5/day
+        self.max_per_day = max_per_day          # DECISIONS-ONLY-OMAR (research ceiling ~3-5/day)
         self.window_s = window_s
         self._interruptions: List[float] = []   # timestamps of proactive asks sent
         self._declined: Set[str] = set()        # action-type signatures the user has declined
