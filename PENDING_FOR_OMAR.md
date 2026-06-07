@@ -6,7 +6,7 @@ No hard human gate is blocking current work.
 
 Non-blocking useful input later:
 - Codex CLI usage for separate builder/judge sessions is exhausted. The CLI reported reset on June 12, 2026 at 5:34 PM local time, with purchasing more credits as the other option. Spending money is a hard human gate and was not taken.
-- Production-linked M1 source commit `20de47b5` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` is locally built and pending separate judge/deploy path. It includes the `ccc96264` launch/package fixes and reduces the default DMG to about 171 MB. It is not M1 proof until the canonical public `anticipy.ai/app` and public DMG are verified by the separate judge.
+- Production-linked source commit `ca16ffe1` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` is locally built and pending separate judge/deploy path. It includes the `ccc96264` launch/package fixes, the `20de47b5` small-DMG fix, the packaged typed-input composer, and deterministic package artifact fixes. It is not M1 or M2 proof until the canonical public `anticipy.ai/app`, public DMG, and a real typed task are verified by the separate judge.
 - OpenRouter credit/key funding needs attention soon. Judge lap `20260606T151119Z` hit HTTP 402 on two larger different-family cross-check attempts, then a tiny Gemini retry succeeded and agreed with `FAKE`.
 - OpenRouter credit/key funding is still low. M1 judge lap `20260607T035948Z` hit HTTP 402 on paid Gemini cross-check, then a free Google-family model agreed with `FAKE`.
 - OpenRouter credit/key funding remains low. M1 judge lap `20260607T114534Z` hit HTTP 402 on larger Gemini cross-check attempts, then a tiny Gemini-family retry succeeded and agreed with `FAKE`.

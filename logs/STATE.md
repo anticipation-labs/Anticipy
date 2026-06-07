@@ -4,33 +4,44 @@ Current milestone: M1, real front door. M1 means a clean profile can download a 
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `76fc00d`, and found no tamper. It opened the clean public front door, downloaded the public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify --strict` and `spctl --assess` failed with `code has no resources but signature indicates they must be present`, and launch produced an invisible app process with zero windows instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Pending unjudged builder slices: lap `20260607T131802Z` produced production-linked source commit `ccc96264` on `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean`, and lap `20260607T133227Z` advanced that candidate to commit `20de47b5`. The current candidate is `20de47b5`. It fixes the public `/app` source gate, app bundle resource signing before DMG creation, launch surface visibility, owner/eval literals in packaged paths, bridge screenshot home paths, dirty-tree extension packaging, and the M1 artifact-size blocker. The default front-door DMG no longer bundles the 2.3 GB Parakeet ASR model; audio weights are optional via `ANTICIPY_BUNDLE_ASR_MODEL=1` and otherwise lazy-load on first real audio use. Local checks passed across the two slices: changed Python compile, `node --check`, `plutil`, JSON config check, `git diff --check`, `cargo check`, `npm run build`, `bash scripts/build_dmg.sh`, regenerated zip literal scan, mounted-DMG `codesign --verify --strict`, no Parakeet resource in the app bundle, and screenshots `/tmp/anticipy-m1-launch-after-wait.png` plus `/tmp/anticipy-m1-small-dmg-launch.png` showing a readable Anticipy surface. The fresh local DMG is 178,804,210 bytes, about 171 MB, sha256 `682bf791b807e3127741a8a9499798d5e9e15fade9fefc5bd05328f9dfa96617`. This is build-side evidence only. The canonical public `anticipy.ai/app` and R2 DMG have not been judge-verified from this commit, and the separate Codex CLI runner is currently usage-limited.
+Current pending unjudged production candidate: `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean`, commit `ca16ffe1`, building on `20de47b5` and `ccc96264`. This candidate is tracked and judgeable in the production-linked source tree. It is not pushed and not proof.
 
-Gate status: no hard human gate blocks all work. The failed builder commit `76fc00d` was reverted by `969218d` and must not be merged to `main`. Post-revert `bash macapp/scripts/build_app.sh` passed, and `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`. The pending production commit `20de47b5` is not M1 proof and must not be represented as done until the separate judge verifies the real public front door.
+What `ca16ffe1` contains:
+- M1 fixes from `ccc96264`: public `/app` source starts on the download surface, Tauri signs and verifies the app bundle root before DMG creation, packaged app launch shows a readable Anticipy popover, package-path owner/eval literals were scrubbed, bridge screenshot paths use the current home directory, and extension packaging copies only git-tracked files.
+- M1 size fix from `20de47b5`: default front-door DMG skips the 2.3 GB Parakeet ASR model unless `ANTICIPY_BUNDLE_ASR_MODEL=1`, leaving audio weights for later audio milestones.
+- M2 perimeter slice from `ca16ffe1`: the packaged Tauri popover now has a persistent typed-task composer. Submit calls `/api/listen/inject` first and then `/api/act` when work remains; already-acted browser fast-path injects render done; confirm-required actions render Approve and Reject controls backed by `/api/act/confirm/{task_id}`.
+- Packaging hardening from `ca16ffe1`: `scripts/build_dmg.sh` prefers the fresh target-specific Tauri DMG path and only falls back to newest mtime, so the root `target/release` copy no longer path-sorts into stale 2.5 GB artifacts. `scripts/v7/package_extension_v6.sh` now writes deterministic zips with fixed timestamps and sorted file order.
+
+Build-side checks for `ca16ffe1`, not proof:
+- Inline `desktop/src/popover.html` script parsed with Node.
+- `git diff --check` passed.
+- `npm --prefix desktop run test:e2e` passed 3/3 unchanged popover tests.
+- One-off Playwright render probe filled the composer, verified `/api/listen/inject` then `/api/act`, and saw Done. Screenshot: `/tmp/anticipy-typed-composer-debug.png`.
+- `bash -n scripts/build_dmg.sh` and `bash -n scripts/v7/package_extension_v6.sh` passed.
+- Extension packaging reran twice with resource copy and stayed stable at sha256 `5eb861645b227deea75b349fbe7ac4e6e3869ba618ac4e1e554491af10dc12da`.
+- `bash scripts/build_dmg.sh` passed.
+- Final root DMG: 178,809,185 bytes, sha256 `1e22a83aa17efda875095134db63f220c0f4c24b9fe4fd5845d55fbaac4b5035`.
+- Mounted final root DMG strict codesign passed: `codesign --verify --strict --verbose=4 /Volumes/Anticipy/Anticipy.app`.
+- Mounted app contained zero Parakeet resources.
+- `spctl --assess` still rejected the app because it is ad-hoc signed and this Mac has no Developer ID identity.
+- Packaged launch screenshot `/tmp/anticipy-m2-final-mounted-launch.png` showed the typed composer visible in the real mounted app.
+
+Gate status: no hard human gate blocks all work. The failed builder commit `76fc00d` was reverted by `969218d` and must not be merged to `main`. The failed lap `20260607T075335Z` remains reverted by `d80f0ce`, with its failed production-linked diff preserved as `stash@{0}: failed lap 20260607T075335Z m1 package slice` in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL`. The pending production commit `ca16ffe1` is not M1 or M2 proof and must not be represented as done until the separate judge verifies the real public front door and real typed-task artifact.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
 - M0 clean floor is proven once: `logs/verdicts/20260607T032947Z.md` verifies one real typed Calendar task with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
 
-Build-side evidence, not proof:
-- Pending production-linked source commit `20de47b5` fixes the previously observed local M1 failure paths in a tracked, judgeable source tree: clean `/app` download source, strict app-bundle signing with sealed resources, visible launch surface, tracked-only extension packaging, package literal scrub, and a 171 MB default front-door DMG with no bundled Parakeet weights. Mounted local DMG strict codesign passes, but this is not public proof.
-- The reverted `20260607T114534Z` slice added a local executor package smoke and caught a local ad-hoc signing pass, but the separate judge proved it did not fix production M1.
-- The reverted `20260607T084004Z` slice built a local executor download page and ad-hoc signed zip, and it removed some owner/eval literals from changed package-path code. The separate judge proved this did not fix production M1.
-- The reverted `20260607T075335Z` slice showed a local production-linked DMG could be rebuilt with sealed resources after ad-hoc signing, but the judge ruled it `FAKE/TAMPER` before public verification because the product diff was outside the judged executor commit and the rebuilt packaged archive contained owner/person-specific product literals.
-- The reverted `20260607T064745Z` slice showed the local executor Swift app can open on Main, but the separate judge proved this does not change or prove production `anticipy.ai/app`.
-- The reverted `20260607T035948Z` slice showed a local executor app can be packaged as a zip and served from the local Next app, but the separate judge proved this does not prove the production public front door.
-- Production `https://www.anticipy.ai/app` belongs to Vercel project `anticipy`, not this repo's linked `anticipy-executor-working` project.
-- Production `/download` and canonical `/dl/Anticipy_1.0.0_aarch64.dmg` still need a safe release path for the `20de47b5` candidate and clean judge verification. Builder header checks and local screenshots are not proof.
-
 Not proven:
-- M1 is not proven. The actual production public app must launch to a readable live Anticipy surface from a clean front-door path.
+- M1 is not proven. The actual production public app must launch to a readable live Anticipy surface from a clean public front-door path.
+- M2 is not proven. The separate judge has not typed a task in the packaged app and verified a real, correct, safe artifact.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
 - The full stranger path is not proven. Public download alone is not onboarding, self-connect, or stranger task completion.
 
 Pending gates:
 - No hard human gate blocks all work.
-- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed, but full zero-warning stranger install needs Developer ID and notarization. The production DMG app also has a resource-signature failure, which is a fixable packaging defect and not a reason to mark M1 done.
+- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed and strict codesign passes, but full zero-warning stranger install needs Developer ID and notarization.
 - Codex CLI usage for separate builder/judge sessions is currently exhausted. The CLI reported a reset on June 12, 2026 at 5:34 PM local time, with purchasing more credits as the other option. Spending money is a hard human gate and was not taken. Current-session local work can continue, but the separate judge cannot run until quota resets or the human chooses to spend money.
 - OpenRouter credit is very low. Paid Gemini cross-checks hit HTTP 402 during M1 judges; the latest judge used a tiny Gemini-family prompt that agreed with `FAKE`. If all required different-family cross-checks become unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked paths.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
@@ -39,10 +50,11 @@ Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
+- M2 packaged typed-input reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 - Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet.
-- Drift siren: active. Builder-owned tests remain green while M1 reality pass rate is 0 percent. Do not advance M1 from local app launch, local packaging, public headers, authenticated-owner Chrome observations, or screenshots without the separate judge seeing the clean production front door launch a readable live surface.
+- Drift siren: active. Builder-owned tests remain green while M1 reality pass rate is 0 percent. Do not advance M1 or M2 from local app launch, local packaging, mocked Playwright probes, public headers, authenticated-owner Chrome observations, or screenshots without the separate judge seeing the clean production front door and real app artifact.
 
 Realday audio:
 - One timestamped student MP3 and a builder-visible transcript are in `realdays/raw/`.
@@ -51,16 +63,16 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating production-linked source commit `20de47b5` or its parent `ccc96264` as M1 proof. They are pending build evidence until the canonical public front door and public DMG are updated and separately judged.
+- Treating production-linked source commit `ca16ffe1` or its ancestors `20de47b5` and `ccc96264` as M1 or M2 proof. They are pending build evidence until the canonical public front door, public DMG, and packaged typed task are separately judged.
 - Running `scripts/ship.sh` blindly. It rebuilds, uploads to R2, commits a manifest, and pushes `HEAD:main`. That may be the eventual ship path, but it must be reconciled with main-branch safety and judgeability before use.
+- Using path-sorted DMG selection after a Tauri build. That selected stale `desktop/target/release/...` 2.5 GB artifacts. Prefer the target-specific fresh DMG path.
+- Letting extension zip archive metadata churn dirty the tree every package run. Use the deterministic packager from `ca16ffe1`.
 - Making product changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` while the judged executor commit contains only logs. The judge will scan the external tree and treat uncommitted product deltas as a tamper risk. Product changes must live in a tracked, reviewable commit in the source tree being judged, or the loop must explicitly adapt to commit and scan the production-linked repo.
 - Rebuilding packaged extension or app archives that contain owner/person-specific literals such as owner names or example third-party names in product code. Clean or isolate those literals before packaging.
 - Treating the local executor Next page, local zip, local package smoke, or local Swift app launch as proof for production `anticipy.ai/app`.
-- Treating the local executor download slice from `20260607T084004Z` or the local package smoke from `20260607T114534Z` as a production fix. The judge proved public M1 still fails.
-- Blindly deploying this executor worktree to production `anticipy`, because production has a larger app and belongs to the older `Anticipy-DEV-FINAL` source tree.
 - Treating authenticated-owner Chrome observations as clean stranger proof.
-- Treating public headers, local app launch, local screenshots, or app activation by name as M1 proof without the separate judge.
-- Treating the current 2.5 GB public DMG as a healthy normal verifier path. It completed, but it made a single M1 judge take tens of minutes. The local `20de47b5` candidate reduces the default DMG to 171 MB, but the public artifact is not updated yet.
+- Treating public headers, local app launch, local screenshots, mocked Playwright probes, or app activation by name as proof without the separate judge.
+- Treating the current 2.5 GB public DMG as a healthy normal verifier path. It completed, but it made a single M1 judge take tens of minutes. The local `ca16ffe1` candidate reduces the default DMG to about 171 MB, but the public artifact is not updated yet.
 - Google Sheets and Google Docs canvas synthetic input.
 - Amazon.ca Playwright automation.
 - Anti-bot arms races for captcha or Cloudflare challenges.
@@ -71,7 +83,8 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Resolve the safe production deploy/judge path for production commit `20de47b5`, then run the separate M1 judge against the canonical public front door once Codex CLI quota allows it.
+- Resolve the safe production deploy/judge path for production commit `ca16ffe1`, then run the separate M1 judge against the canonical public front door once Codex CLI quota allows it.
+- After M1 is public-judgeable, run an M2 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact.
 - Keep the public artifact small enough that a normal M1 judge completes in minutes.
 
 Law digest:
