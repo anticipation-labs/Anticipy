@@ -1,30 +1,26 @@
 # Last Lap
 
 Lap: 20260607T035948Z
-Date: 2026-06-07T03:59:48Z
+Date: 2026-06-07T04:08:28Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
-Judge verdict: PENDING
+Judge verdict: STOPPED_JUDGE_USAGE_LIMIT
 
 What changed:
-- Added `macapp/scripts/package_download.sh` to build, ad-hoc sign, zip, and checksum the Mac app.
-- Generated `public/downloads/Anticipy-mac.zip` and `public/downloads/Anticipy-mac.zip.sha256`.
-- Replaced the local placeholder `app/` page with a real Mac download page and favicon.
-- Updated the autopilot build and judge prompts so M1 laps verify the front door instead of rerunning M0 Calendar.
-- Recorded live distribution facts: `anticipy.ai` is the production Vercel project `anticipy`; this repo is linked to `anticipy-executor-working`; production already serves a 2.4 GB DMG and `install.sh`.
+- The M1 build slice was committed as `7b430a4`.
+- No product code changed after that commit.
+- The separate judge was started with `AUTOPILOT_LAP=20260607T035948Z AUTOPILOT_BUILDER_COMMIT=7b430a4 autopilot/judge_lap`.
+- The judge process exited before writing a verdict because Codex CLI reported the ChatGPT Codex usage limit and said to try again at 10:50 PM PDT. The purchase path was not used because spending money is a hard stop.
 
-Checks:
-- `npm install` completed and produced `package-lock.json`.
-- `npm run package:mac` passed.
-- Extracted `public/downloads/Anticipy-mac.zip`; extracted app executable exists and `codesign --verify --deep --strict --verbose=2` passed.
-- `spctl --assess --type execute --verbose=4 macapp/dist/Anticipy.app` rejected the app because there is no Developer ID signing/notarization.
-- `npm run build` passed.
-- Browser opened `http://127.0.0.1:3000` and rendered title `Anticipy for Mac`.
-- `curl -I http://127.0.0.1:3000/downloads/Anticipy-mac.zip` returned 200 with `application/zip`.
-- `bash -n autopilot/build_lap autopilot/judge_lap macapp/scripts/package_download.sh` passed.
-- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode.
+Current status:
+- M1 remains unproven.
+- The M1 build commit remains on `autopilot/build` and must not be merged to `main` unless a later separate judge rules REAL, the different-family cross-check agrees, and the diff scan is clean.
+- No held-out data was used or burned.
+- No raw judge artifact was read by the builder.
 
 Next:
-- Run the separate M1 judge. It must verify `https://www.anticipy.ai/app`, download the public Mac artifact, launch Anticipy, and rule on reality.
-- If the judge cannot launch because of Developer ID/notarization or a sign-in/download gate, log the exact blocker and continue on unblocked perimeter work.
+- After the quota reset, rerun the same separate judge:
+  `AUTOPILOT_LAP=20260607T035948Z AUTOPILOT_BUILDER_COMMIT=7b430a4 autopilot/judge_lap`
+- Use the Supabase MCP-disabled invocation if the known OAuth startup error recurs.
+- Gate the result according to `autopilot/04_LOOP.md`.

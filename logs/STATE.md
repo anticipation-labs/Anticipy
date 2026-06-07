@@ -2,9 +2,11 @@
 
 Current milestone: M1, real front door. M1 means a clean profile can download a `.app` from the public front door at `anticipy.ai/app`, launch it, and see the live surface. M0 clean floor is proven once, but the product is not done until a stranger can download, onboard, connect their own apps, and get a real task done.
 
-Latest build slice: `20260607T035948Z` is `PENDING_JUDGE`. It added a local packaging path for the executor Mac app, generated `public/downloads/Anticipy-mac.zip` plus SHA-256, replaced the local placeholder page with a real Mac download page, and updated the autopilot prompts so M1 is judged as a front-door download instead of rerunning M0 Calendar. It also recorded that production `anticipy.ai` is Vercel project `anticipy`, while this repo is linked to `anticipy-executor-working`.
+Latest build slice: `20260607T035948Z` was committed on `autopilot/build` as `7b430a4`. It added a local packaging path for the executor Mac app, generated `public/downloads/Anticipy-mac.zip` plus SHA-256, replaced the local placeholder page with a real Mac download page, and updated the autopilot prompts so M1 is judged as a front-door download instead of rerunning M0 Calendar. It also recorded that production `anticipy.ai` is Vercel project `anticipy`, while this repo is linked to `anticipy-executor-working`.
 
-Latest judged lap: `20260607T032947Z` was `REAL`. The separate judge ran a typed, fully time-grounded, safe, reversible Calendar instruction through the live `/event` endpoint. It verified the real Calendar artifact by connector read-back and Google Calendar UI screenshot, confirmed no Gmail sent-message false action, deleted the test event, verified post-delete cleanup, and got Gemini OpenRouter agreement with the Codex judge. Proof: `logs/verdicts/20260607T032947Z.md`.
+Latest judge attempt: `20260607T035948Z` against builder commit `7b430a4` stopped before verdict because the separate Codex CLI judge hit the ChatGPT Codex usage limit. The CLI reported: try again at 10:50 PM PDT, with purchase as the other option. Spending money is a hard stop, so no purchase was attempted. No M1 proof is claimed.
+
+Latest judged lap with verdict: `20260607T032947Z` was `REAL`. The separate judge ran a typed, fully time-grounded, safe, reversible Calendar instruction through the live `/event` endpoint. It verified the real Calendar artifact by connector read-back and Google Calendar UI screenshot, confirmed no Gmail sent-message false action, deleted the test event, verified post-delete cleanup, and got Gemini OpenRouter agreement with the Codex judge. Proof: `logs/verdicts/20260607T032947Z.md`.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -25,7 +27,8 @@ Not proven:
 - The full stranger path is not proven. Public download alone is not onboarding, self-connect, or stranger task completion.
 
 Pending gates:
-- No hard human gate blocks all work.
+- Temporary gate: the separate Codex CLI judge cannot start until the ChatGPT Codex usage reset at 10:50 PM PDT on 2026-06-06. Purchase was offered by the CLI but was not used because spending money is a hard stop.
+- No hard human gate blocks all work after the quota reset.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed, but full zero-warning stranger install needs Developer ID and notarization.
 - OpenRouter credit is very low. Recent judges used tiny Gemini cross-checks successfully. If a required different-family cross-check cannot run because the key is unfunded or prompt-limited, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked paths.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
@@ -33,7 +36,7 @@ Pending gates:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/0 verified, pending first M1 judge.
+- M1 reality judge pass rate: 0/0 verified, pending first M1 verdict. The startup-limited judge attempt does not count as a product failure or pass.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 - Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet.
@@ -57,8 +60,7 @@ Dead ends not to retry blindly:
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 
 Next:
-- Commit the M1 build slice.
-- Run the separate M1 judge with `AUTOPILOT_LAP=20260607T035948Z AUTOPILOT_BUILDER_COMMIT=<commit> autopilot/judge_lap`, preferably with Supabase MCP disabled if the known startup issue recurs.
+- After the Codex usage reset, rerun the separate M1 judge with `AUTOPILOT_LAP=20260607T035948Z AUTOPILOT_BUILDER_COMMIT=7b430a4 autopilot/judge_lap`, preferably with Supabase MCP disabled if the known startup issue recurs.
 - Gate the result. If REAL, merge proven work to `main`; if FAKE or BLOCKED, revert unproven code or log the real gate and continue on unblocked perimeter work.
 
 Law digest:
