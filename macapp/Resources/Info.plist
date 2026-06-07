@@ -4,9 +4,9 @@
 <dict>
     <key>CFBundleName</key><string>Anticipy</string>
     <key>CFBundleDisplayName</key><string>Anticipy</string>
-    <key>CFBundleIdentifier</key><string>ai.anticipy.scaffold</string>
-    <key>CFBundleVersion</key><string>0.1.0</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleIdentifier</key><string>ai.anticipy.app</string>
+    <key>CFBundleVersion</key><string>1.0.0</string>
+    <key>CFBundleShortVersionString</key><string>1.0.0</string>
     <key>CFBundleExecutable</key><string>Anticipy</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
