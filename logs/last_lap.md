@@ -1,33 +1,35 @@
 # Last Lap
 
-Lap: 20260608T142404Z
-Date: 2026-06-08T14:34:53Z
-Milestone: M3 - search bar no-submit browser fill candidate
+Lap: 20260608T143827Z
+Date: 2026-06-08T14:51:54Z
+Milestone: M3 - search target type repair candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `60e3ddd049b2d94f14327dc07f061b54a9b0e3c6` and manifest/site commit `0d8f8a74f0d11ceee9f72fafb0b6d4537bcd6117` on branch `rebuild/spine-clean`.
-- The deterministic safe no-submit browser fill path now recognizes ordinary `search bar` wording by accepting `bar` as a safe no-submit form target noun.
-- The hermetic probe showed `Type blue shoes into the search bar without submitting.` fills the search field with only `blue shoes`, verifies bridge read-back, and does not call the planner.
-- Unsafe or incomplete wording still does not enter the deterministic fill path.
-- The package manifest now points at DMG source commit `60e3ddd049b2d94f14327dc07f061b54a9b0e3c6`.
-- The public DMG SHA is `6ec3a58c74687834640cd03f275aa465f0d19a27d1faa91a846bdf73fd2f995a`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `c763919807d69b2d08986295968d2cdfa24b436a` and manifest/site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6` on branch `rebuild/spine-clean`.
+- The overbroad search-type repair path now recognizes natural target names including `search bar`, `search input`, and `query input`.
+- The query extractor now accepts `open/go to site and then search for X` wording and strips explicit no-submit tails before matching.
+- The dispatcher-level probe forced a bad planner to type the whole instruction into a search input, and the dispatcher repaired it so the runtime typed only `black boots`.
+- The package manifest now points at DMG source commit `c763919807d69b2d08986295968d2cdfa24b436a`.
+- The public DMG SHA is `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`.
 
 Checks:
 - `python3 -m py_compile engine/app/product/action_dispatcher.py` passed.
-- Hermetic parser and dispatcher probe with fake DOM and fake bridge read-back parsed field `search`, value `blue shoes`, filled `#q`, reported `readback_match: true`, kept `no_submit: true`, and did not call the planner.
+- Hermetic query-extractor and repair probes passed for `search bar`, `search input`, `query input`, and `open example.com and then search for hiking socks`.
+- Negative probe kept a normal notes textarea unchanged.
+- Dispatcher-level fake planner probe returned `status: success` and recorded runtime typed args `{"selector": "M1", "text": "black boots"}`.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scans found no matches in the touched product diff.
-- Product source commit `60e3ddd049b2d94f14327dc07f061b54a9b0e3c6` and manifest/site commit `0d8f8a74f0d11ceee9f72fafb0b6d4537bcd6117` were committed locally for future judge diff scanning.
-- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `6ec3a58c74687834640cd03f275aa465f0d19a27d1faa91a846bdf73fd2f995a` and size `178889114` bytes.
-- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178889114`.
+- Product source commit `c763919807d69b2d08986295968d2cdfa24b436a` and manifest/site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6` were committed locally for future judge diff scanning.
+- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714` and size `178890184` bytes.
+- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178890184`.
 - `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the candidate and verified the full public DMG SHA.
-- Public `https://www.anticipy.ai/api/app/state` reports site commit `0d8f8a7`, release commit `60e3ddd049b2d94f14327dc07f061b54a9b0e3c6`, SHA `6ec3a58c74687834640cd03f275aa465f0d19a27d1faa91a846bdf73fd2f995a`, and `178889114` bytes.
+- Public `https://www.anticipy.ai/api/app/state` reports site commit `8200499`, release commit `c763919807d69b2d08986295968d2cdfa24b436a`, SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`, and `178890184` bytes.
 - Public `/app` and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`.
-- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build 60e3ddd | 178.9 MB | Updated 2026-06-08 | SHA-256 6ec3a58c7468...df73fd2f995a`, the canonical DMG link, the install command, and zero page console warnings/errors.
-- Screenshot is local at `/tmp/anticipy-public-app-20260608T142404Z.png`.
+- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build c763919 | 178.9 MB | Updated 2026-06-08 | SHA-256 fbc7dd7af5ba...6fe943986714`, the canonical DMG link, the install command, and zero page console warnings/errors.
+- Screenshot is local at `/tmp/anticipy-public-app-20260608T143827Z.png`.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded, installed, and launched the public app from this candidate.
@@ -39,5 +41,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `0d8f8a74f0d11ceee9f72fafb0b6d4537bcd6117` and release SHA `6ec3a58c74687834640cd03f275aa465f0d19a27d1faa91a846bdf73fd2f995a`.
+- When judge quota returns, run the separate M1 judge against public production site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6` and release SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`.
 - Continue unblocked perimeter work without claiming proof.
