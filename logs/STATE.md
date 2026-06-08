@@ -1,47 +1,36 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M5/M3 onboarding browser self-test gate candidate, publicly deployed but unjudged.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M1 public front-door console cleanup candidate, publicly deployed but unjudged.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260608T111847Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `4430773073f30ea535994f00e7eab4c420080bed` and tracked manifest/site commit `a4949e06aa283c4f39d2994a129bdd1999a80083`.
+Latest builder lap: `20260608T113650Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked site commit `353c92c63f2c4cf8f8848eb05e7ae4b08a96e48d`. The release manifest still points at DMG source commit `4430773073f30ea535994f00e7eab4c420080bed`.
 
 Latest product change:
-- Onboarding Step 2 now requires the safe local browser-hands self-test after Chrome bridge readiness is detected.
-- A bridge that merely appears connected cannot advance to profile setup unless `/api/surface/selftest` passes native bridge fill and read-back.
-- Failed self-test results stay on Step 2 with an inline error.
-- This is onboarding honesty around browser-hands readiness. It does not claim that a real Chrome extension, browser action, onboarding mesh, or external artifact was verified by the builder.
+- Root site layout now renders `@vercel/analytics` only when `NEXT_PUBLIC_ENABLE_VERCEL_WEB_ANALYTICS=1`.
+- This removes the public `/app` console error caused by injecting the disabled Web Analytics script while leaving Speed Insights enabled.
+- The release manifest was not rewritten and still points at the latest DMG from commit `4430773073f30ea535994f00e7eab4c420080bed`.
+- This is front-door polish. It does not claim that a clean-profile app download, launch, onboarding mesh, browser action, or external artifact was verified by the builder.
 
 Current public production candidate, pending judge:
-- Public site commit: `a4949e06aa283c4f39d2994a129bdd1999a80083`.
+- Public site commit: `353c92c63f2c4cf8f8848eb05e7ae4b08a96e48d`.
 - Public DMG source commit in manifest: `4430773073f30ea535994f00e7eab4c420080bed`.
 - Public DMG SHA-256: `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - Public DMG size: `178890489` bytes.
 - Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/4430773073f30ea535994f00e7eab4c420080bed/Anticipy_1.0.0_aarch64.dmg`.
-- `https://www.anticipy.ai/api/app/state` reports site commit `a4949e0`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
+- `https://www.anticipy.ai/api/app/state` reports site commit `353c92c`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
 - `https://www.anticipy.ai/app` returns 200 HTML.
 - `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 disk image.
 - The commit-addressed R2 object returns 200, `application/x-apple-diskimage`, and `178890489` bytes.
 
 Latest checks, candidate evidence only:
-- `node --check` on the extracted popover script passed.
+- Public `/_vercel/insights/script.js` returns 404 because Web Analytics is not enabled, while public `/_vercel/speed-insights/script.js` returns 200.
 - `git diff --check` passed.
 - Diff scan found no forbidden test/judge/holdout/script paths and no owner/eval literals in the touched product diff.
-- In-app Browser validation was attempted first. It failed with a session-tab mismatch, then retry reported no active Codex browser pane.
-- Local Playwright fallback showed the simulated native bridge read-back mismatch stayed on Step 2 with an inline error, and simulated self-test success advanced to Step 3. Screenshots: `/tmp/anticipy-onboarding-selftest-failure-20260608T111847Z.png` and `/tmp/anticipy-onboarding-selftest-success-20260608T111847Z.png`.
-- `npm run test:e2e` in `desktop/` passed 3/3.
-- `bash scripts/build_dmg.sh` passed after product commit.
-- Known build byproducts were restored.
-- Final local DMG size was `178890489` bytes and SHA-256 was `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
-- Strict codesign passed for the packaged app.
-- Embedded app commit verification passed for `4430773073f30ea535994f00e7eab4c420080bed`.
-- `hdiutil imageinfo` reported a valid compressed UDZO image.
-- `SHIP_SKIP_DMG_BUILD=1 scripts/ship_candidate.sh` uploaded the DMG and wrote the manifest.
-- Manifest commit `a4949e06aa283c4f39d2994a129bdd1999a80083` was committed and deployed with `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh`.
-- The deploy script confirmed public state and verified the public DMG SHA.
-- Public `/api/app/state`, `/app` HEAD, `/dl` HEAD, and commit-addressed R2 HEAD checks passed.
-- Headless public `/app` render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`.
-- Headless public render also saw a non-blocking Vercel Insights script 404/MIME console error from root analytics injection. It did not block render or the download link and remains a narrow follow-up candidate.
+- Local `npm run build` passed.
+- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the site-only commit and verified the unchanged public DMG SHA.
+- Public `/api/app/state` and `/app` HEAD checks passed.
+- Headless public `/app` render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`, only one Vercel script request for Speed Insights, and zero console messages.
 - No real external artifact, UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, or account action was performed by the builder.
 
 Current M2/M3/M5 candidates in the production-linked source, pending judge:
@@ -75,7 +64,7 @@ Not proven:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `a4949e0` plus release `8fd2f0cf...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `353c92c` plus release `8fd2f0cf...` is pending judge and does not change this number.
 - M2 packaged typed-input/listen-control/clock-grounding reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands reality judge pass rate: 0/0 verified; not run.
 - M5 packaged/self-onboarding reality judge pass rate: 0/0 verified; not run.
@@ -91,7 +80,7 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating any production-linked source or manifest commit, including `44307730` or `a4949e0`, as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
+- Treating any production-linked source or manifest commit, including `44307730` or `353c92c`, as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
 - Treating planner prompt edits, search-type repair probes, no-submit fill probes, typed-result render probes, ask-user option render probes, onboarding self-test render probes, SMS gate probes, fake-runtime probes, local tests, direct probes, targeted pytest, mocked Playwright, browser automation page loads, public headers, public SHA checks, owner Chrome, local packaging, strict codesign, process/window enumeration, or screenshots as proof.
 - Letting action-shaped prose become browser search. Explicit lookup may search; action tasks must route to API hands, browser hands with explicit site context, or a visible ask/needs-human.
 - Letting browser planner model failures loop to the dispatcher step cap. Low-credit or missing-model paths must fail fast, ask clearly, and stay visible in logs.
@@ -113,7 +102,7 @@ Dead ends not to retry blindly:
 - Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `a4949e06aa283c4f39d2994a129bdd1999a80083` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `353c92c63f2c4cf8f8848eb05e7ae4b08a96e48d` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - If M1 passes, run an M2/M3/M5 judge that types a safe, reversible, fully time-grounded task in the packaged app, verifies the real artifact or browser action, verifies packaged listen control behavior, and verifies onboarding mesh on a fresh account.
 - While judge quota is blocked, keep improving unblocked perimeter work without claiming proof. A narrow next slice could remove or fix the public Vercel Insights script 404/MIME console error if it persists.
 
