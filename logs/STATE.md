@@ -1,10 +1,10 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2/M3 perimeter work may continue as candidate work only. M2 has an unjudged typed Calendar routing candidate, and M3 now has two unjudged browser-action routing candidates, but none of these are proof.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2/M3 perimeter work may continue as candidate work only. M2 has an unjudged typed Calendar routing candidate, and M3 now has unjudged browser-action/read candidates, but none of these are proof.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `76fc00d`, and found no tamper. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify --strict` and `spctl --assess` failed with `code has no resources but signature indicates they must be present`, and launch produced an invisible app process with zero windows instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260608T033211Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `af23bf28a3e26f5d4612c680aaa39fc2b92186f9`. It adds deterministic explicit-site `browser_action` planning, stops model-cascade failures from looping through the dispatcher step cap, shows clarify questions in the packaged typed-task UI, and lets packaged launches honor `ANTICIPY_ENGINE_PORT` so test/update launches do not attach to an older sidecar. The packaged task-box smoke routed to `universal_action_dispatcher` and opened `https://example.com`, then honestly asked because planner credit is unavailable. This is candidate work, not M3 proof.
+Latest builder lap: `20260608T033645Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `229cb45a170806308acc0a317bdd37028b15d360`. It answers simple read-only browser tasks from concrete surface state without planner spend when the opened page already exposes the requested title, heading, URL, or short page text. Answered read-only `NOTIFY` results complete as `SUCCESS`; side-effect tasks and checkbox actions remain outside that completion path. The packaged task-box UI now renders answered browser reads as `Done`.
 
 Current public production candidate, pending judge:
 - Public site commit: `9a2aa8858ad3b2a6186a983b2160a081c8089421`.
@@ -15,13 +15,14 @@ Current public production candidate, pending judge:
 - `https://www.anticipy.ai/api/app/state` reports the expected site commit, release SHA, manifest release commit, and byte count.
 - `https://www.anticipy.ai/app` returns 200 HTML.
 - `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178815398`.
-- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed full public DMG SHA verification.
+- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed full public DMG SHA verification for this public candidate.
 
 Current unshipped M2/M3 candidates, pending judge and deploy decision:
 - Product source commit `8d1898259ecb05f86b678d4e686e46744bb6e382` routes explicit typed Calendar instructions with full date/time into a pending `calendar_event` plan and Google Calendar template URL instead of generic browser search.
 - Product source commit `f05cc8449c278b96b9a2cb1d18bdf7bfa25a0808` stops no-context browser action tasks from falling into search and wires explicit-site browser tasks into the bridge-backed dispatcher.
 - Product source commit `af23bf28a3e26f5d4612c680aaa39fc2b92186f9` adds deterministic explicit-site action planning, fast planner-unavailable ask behavior, clearer typed-task ask display, and alternate-port packaged sidecar launch support.
-- Checks passed across these candidates include Python compile, JS parse, Rust format/check, planner probes, non-destructive HTTP smokes, `bash scripts/build_dmg.sh`, packaged strict codesign, packaged sidecar smoke, Computer Use packaged UI inspection, and forbidden-literal scans on regenerated extension zips.
+- Product source commit `229cb45a170806308acc0a317bdd37028b15d360` completes simple read-only browser tasks from observed surface state without planner spend and shows the packaged UI result as `Done`.
+- Checks across these candidates include Python compile, JS parse, Rust format/check, planner probes, non-destructive HTTP smokes, `bash scripts/build_dmg.sh`, packaged strict codesign, packaged sidecar smoke, Computer Use packaged UI inspection, and forbidden-literal scans on regenerated extension zips.
 - These are not M2 or M3 proof. The separate judge has not typed a task in the packaged app and verified a correct real artifact or browser action.
 
 Gate status: no hard human gate blocks all work. Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. Spending money is a hard human gate and was not taken. Current-session local/product work can continue, but the separate judge cannot run until quota resets or the human chooses to spend money.
@@ -29,7 +30,7 @@ Gate status: no hard human gate blocks all work. Separate Codex CLI usage for in
 Pending cleanup/gates:
 - Possible cleanup item: a native Apple Calendar smoke may have created `[Anticipy test] M2 typed smoke 20260607-continue` on June 12, 2026 from 15:00 to 16:00. Local read-back/delete was blocked by macOS privacy/TCC and AppleScript list timeouts. This is queued in `PENDING_FOR_OMAR.md`; do not delete or modify real existing Calendar data.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed and strict codesign passes, but full zero-warning stranger install needs Developer ID and notarization.
-- OpenRouter credit is very low. Paid Gemini cross-checks hit HTTP 402 during recent M1 judges, and the packaged M3 smoke showed the browser action planner cannot currently get model steps. If required different-family cross-checks or planner calls are unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked deterministic paths.
+- OpenRouter credit is very low. Paid Gemini cross-checks hit HTTP 402 during recent M1 judges, and the packaged model-driven browser action planner cannot currently get model steps. If required different-family cross-checks or planner calls are unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked deterministic paths.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 
 Proven:
@@ -62,7 +63,7 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating production-linked source commits `af23bf28`, `f05cc844`, `8d189825`, `9a2aa885`, `ff5c470f`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, or their ancestors as M1, M2, or M3 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, packaged typed task, and real action artifact.
+- Treating production-linked source commits `229cb45a`, `af23bf28`, `f05cc844`, `8d189825`, `9a2aa885`, `ff5c470f`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, or their ancestors as M1, M2, or M3 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, packaged typed task, and real action artifact.
 - Using native local Apple Calendar as an autonomous proof path when read-back/delete is blocked by macOS privacy or AppleScript hangs. Do not create real Calendar artifacts unless cleanup and read-back are reliable.
 - Running old `scripts/ship.sh` blindly. It rebuilds, uploads to the old canonical R2 key, commits a manifest, and pushes `HEAD:main`. Use the no-push `scripts/ship_candidate.sh` path for judgeable public candidates.
 - Comparing Vercel live commit seven characters to Git's default eight-character short SHA. Use `git rev-parse --short=7 HEAD`.
@@ -88,7 +89,7 @@ Dead ends not to retry blindly:
 Next:
 - When separate judge quota is available, run the separate M1 judge against public production site commit `9a2aa8858ad3b2a6186a983b2160a081c8089421` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
 - If M1 passes, run an M2/M3 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact or browser action.
-- While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof. The next useful slice is deterministic low-risk M3 browser handling that can complete simple read/fill tasks even when model planner credit is unavailable.
+- While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof. The next useful slice is deterministic low-risk M3 browser form-field handling that can fill simple fields without submit when concrete surface marks are sufficient, while keeping all irreversible actions behind confirmation.
 
 Law digest:
 Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, public headers, owner Chrome checks, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
