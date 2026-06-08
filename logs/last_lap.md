@@ -1,38 +1,41 @@
 # Last Lap
 
-Lap: 20260608T110511Z
-Date: 2026-06-08T11:15:10Z
-Milestone: M2/M3 - public ask-user typed choices candidate
+Lap: 20260608T111847Z
+Date: 2026-06-08T11:31:28Z
+Milestone: M5/M3 - public onboarding browser self-test gate candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `8063f557309ad25aa6c50e41cf8bf2535e9dca9c` on branch `rebuild/spine-clean`.
-- The packaged typed-task result card now renders usable option buttons for ask-user results.
-- `retry` re-runs the original typed task, `cancel` clears into a no-action card, and other options populate the typed input for review before the user presses Run.
-- Existing structured browser proof rows remain visible alongside the choice buttons.
-- The public release manifest/site commit is now `e41684851f7a3de6ebe39273ccb89970664d7916`, pointing at DMG source commit `8063f557309ad25aa6c50e41cf8bf2535e9dca9c`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `4430773073f30ea535994f00e7eab4c420080bed` on branch `rebuild/spine-clean`.
+- Onboarding Step 2 now requires the existing safe local browser-hands self-test after Chrome bridge readiness is detected.
+- A bridge that only appears connected no longer advances the wizard to profile setup; `/api/surface/selftest` must pass native bridge fill and read-back.
+- Failed self-test results show an inline error and keep Step 2 visible.
+- The public release manifest/site commit is now `a4949e06aa283c4f39d2994a129bdd1999a80083`, pointing at DMG source commit `4430773073f30ea535994f00e7eab4c420080bed`.
 
 Checks:
 - `node --check` on the extracted popover script passed.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scan found no matches in the touched product diff.
+- In-app Browser validation was attempted first. It failed with a session-tab mismatch, then retry reported no active Codex browser pane, so local Playwright fallback was used.
+- Local Playwright render check passed both paths: simulated native bridge read-back mismatch stayed on Step 2 with an inline error; simulated self-test success advanced to Step 3.
+- Playwright screenshots: `/tmp/anticipy-onboarding-selftest-failure-20260608T111847Z.png` and `/tmp/anticipy-onboarding-selftest-success-20260608T111847Z.png`.
 - `npm run test:e2e` in `desktop/` passed 3/3.
-- Local Playwright render check showed an ask-user card with `Retry` and `Cancel`, structured site/field/failure rows, retry invoking the stubbed submit path once, cancel producing a no-action card, and a custom option populating the typed input for review.
 - `bash scripts/build_dmg.sh` passed after product commit.
 - Known build byproducts were restored.
-- Final local DMG size was `178889896` bytes and SHA-256 was `fa4bba3ff30570db6558924a58074ded6ff368467f19e6a4d939e05b14513a92`.
+- Final local DMG size was `178890489` bytes and SHA-256 was `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - Strict codesign passed for the packaged app.
-- Packaged app binary contains commit `8063f557309ad25aa6c50e41cf8bf2535e9dca9c`.
+- Packaged app binary contains commit `4430773073f30ea535994f00e7eab4c420080bed`.
 - `hdiutil imageinfo` reported a valid compressed UDZO image.
 - `SHIP_SKIP_DMG_BUILD=1 scripts/ship_candidate.sh` uploaded the DMG and wrote the manifest.
-- Manifest commit `e41684851f7a3de6ebe39273ccb89970664d7916` was committed and deployed with `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh`.
+- Manifest commit `a4949e06aa283c4f39d2994a129bdd1999a80083` was committed and deployed with `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh`.
 - The deploy script confirmed public state and verified the public DMG SHA.
-- Public `/api/app/state` reports site commit `e416848`, release SHA `fa4bba3ff30570db6558924a58074ded6ff368467f19e6a4d939e05b14513a92`, manifest release commit `8063f557309ad25aa6c50e41cf8bf2535e9dca9c`, and `178889896` bytes.
+- Public `/api/app/state` reports site commit `a4949e0`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
 - Public `/app` returned `200` HTML and public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image.
-- Commit-addressed R2 HEAD returned `200`, `application/x-apple-diskimage`, and `178889896` bytes.
+- Commit-addressed R2 HEAD returned `200`, `application/x-apple-diskimage`, and `178890489` bytes.
 - Headless public `/app` render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`.
+- Headless public `/app` render also saw a non-blocking Vercel Insights script 404/MIME console error from root analytics injection; it did not block page render or the download link.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded and launched the public app from this candidate.
@@ -44,5 +47,6 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `e41684851f7a3de6ebe39273ccb89970664d7916` and release SHA `fa4bba3ff30570db6558924a58074ded6ff368467f19e6a4d939e05b14513a92`.
+- When judge quota returns, run the separate M1 judge against public production site commit `a4949e06aa283c4f39d2994a129bdd1999a80083` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - Continue unblocked perimeter work without claiming proof.
+- Consider a narrow public-site cleanup for the Vercel Insights script console 404 if it persists.
