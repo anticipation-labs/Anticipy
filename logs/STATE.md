@@ -1,50 +1,49 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M3 search target type-repair candidate, publicly deployed but unjudged.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M3 explicit Google search phrasing candidate, publicly deployed but unjudged.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260608T143827Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked engine source commit `c763919807d69b2d08986295968d2cdfa24b436a` and manifest/site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6`.
+Latest builder lap: `20260608T145524Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked engine source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf` and manifest/site commit `9153bbee69c032ae38001428a2348dd7fce30442`.
 
 Latest product change:
-- The overbroad search-type repair path now recognizes natural target names including `search bar`, `search input`, and `query input`.
-- The query extractor now accepts `open/go to site and then search for X` wording and strips explicit no-submit tails before matching.
-- A dispatcher-level fake planner probe forced full-instruction typing into a search input, and the dispatcher repaired it so the runtime typed only `black boots`.
-- The package manifest now points at DMG source commit `c763919807d69b2d08986295968d2cdfa24b436a`.
+- The server-side direct browser plan recognizes explicit Google lookup phrasing such as `open google and search for hiking socks`.
+- The route returns `open_search_tab` with only the extracted query, preventing the whole instruction from being typed into a search bar for this explicit Google search pattern.
+- Non-Google and non-search action text stays out of this direct search path.
+- The package manifest now points at DMG source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf`.
 
 Current public production candidate, pending judge:
-- Public site commit: `82004994aaa8ae78a670e0d8162296ed9f2fbbf6`.
-- Public DMG source commit in manifest: `c763919807d69b2d08986295968d2cdfa24b436a`.
-- Public DMG SHA-256: `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`.
-- Public DMG size: `178890184` bytes.
-- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/c763919807d69b2d08986295968d2cdfa24b436a/Anticipy_1.0.0_aarch64.dmg`.
-- `https://www.anticipy.ai/api/app/state` reports site commit `8200499`, release SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`, manifest release commit `c763919807d69b2d08986295968d2cdfa24b436a`, and `178890184` bytes.
+- Public site commit: `9153bbee69c032ae38001428a2348dd7fce30442`.
+- Public DMG source commit in manifest: `ed5c45ccec915ff076bab249d8fe467a57e42ebf`.
+- Public DMG SHA-256: `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`.
+- Public DMG size: `178891486` bytes.
+- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/ed5c45ccec915ff076bab249d8fe467a57e42ebf/Anticipy_1.0.0_aarch64.dmg`.
+- `https://www.anticipy.ai/api/app/state` reports site commit `9153bbe`, release SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`, manifest release commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf`, and `178891486` bytes.
 - `https://www.anticipy.ai/app` returns 200 HTML.
 - `https://www.anticipy.ai/install.sh` returns 200 shell script.
-- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 disk image with content length `178890184`.
-- The public `/app` rendered release line is `Build c763919 | 178.9 MB | Updated 2026-06-08 | SHA-256 fbc7dd7af5ba...6fe943986714`.
+- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 disk image with content length `178891486`.
+- The public `/app` rendered release line is `Build ed5c45c | 178.9 MB | Updated 2026-06-08 | SHA-256 d4c442db4691...590dd90944da`.
 
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, and `autopilot/07_MILESTONES.md`.
-- `python3 -m py_compile engine/app/product/action_dispatcher.py` passed.
-- Hermetic query-extractor and repair probes passed for `search bar`, `search input`, `query input`, and `open example.com and then search for hiking socks`.
-- Negative probe kept a normal notes textarea unchanged.
-- Dispatcher-level fake planner probe returned `status: success` and recorded runtime typed args `{"selector": "M1", "text": "black boots"}`.
+- `python3 -m py_compile engine/app/product/server.py` passed.
+- Direct server probes mapped 3 explicit Google lookup variants to `open_search_tab` with query-only targets.
+- Negative probes for Google Calendar, non-Google site search, and dentist booking text did not become `open_search_tab`.
 - `git diff --check` passed.
 - Forbidden path scan found no edits under `tests/`, `judge/`, `realdays/holdout/`, or `scripts/realday.sh`.
 - Owner/eval literal scan found no matches in the touched product diff.
-- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714` and size `178890184` bytes.
-- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178890184`.
+- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da` and size `178891486` bytes.
+- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178891486`.
 - `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the candidate and verified the full public DMG SHA.
-- Public `/api/app/state`, `/app` HEAD, and `/dl/Anticipy_1.0.0_aarch64.dmg` HEAD checks passed.
+- Public `/api/app/state`, `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` checks passed.
 - Fresh Playwright browser context on `https://www.anticipy.ai/app` found the current release line, canonical DMG link, install command, and zero page console warnings/errors.
-- Screenshot evidence is local at `/tmp/anticipy-public-app-20260608T143827Z.png`.
+- Screenshot evidence is local at `/tmp/anticipy-public-app-20260608T145524Z.png`.
 - Product repo has no tracked dirty files after deploy; only pre-existing untracked artifacts remain.
-- No installer was executed, and no real external artifact, UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, phone call, local engine write, audio upload, account action, third-party action, or form submission was performed by the builder.
+- No installer was executed, and no real external artifact, UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, phone call, audio upload, account action, third-party action, or form submission was performed by the builder.
 
 Current M2/M3/M5 candidates in the production-linked source, pending judge:
-- M2 typed task and Calendar candidates include explicit typed Calendar routing, API-backed Google Calendar create, API read-back before success, packaged typed-task result UI, structured browser proof rows, ask-user choice buttons, persistent listening start/stop control, typed client clock grounding, and this lap's account form submit behavior.
-- M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit browser form fill, multi-field no-submit form fill, broader safe no-submit fill wording for input/box/textarea/text area plus set/put verbs, search-bar no-submit fill wording, broader search-target type repair for search bar/search input/query input/open-site-and-then-search wording, visible proof rows, ask-user retry/cancel/review choices, native bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status and diagnostics, native bridge self-test, native action-search guard, broader action-search boundary, generic bridge primitive dispatch for click/type/key/read/extract/DOM snapshot, search-box type repair, broader site-search phrasing repair, early SMS pre-confirm for internal action-engine callers, direct browser primitive bridge preference when CDP is unavailable, and browser listen fastpath honesty that marks background open/search as `started` and `ATTEMPTED` until completion proof exists.
+- M2 typed task and Calendar candidates include explicit typed Calendar routing, API-backed Google Calendar create, API read-back before success, packaged typed-task result UI, structured browser proof rows, ask-user choice buttons, persistent listening start/stop control, typed client clock grounding, and account form submit behavior.
+- M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit browser form fill, multi-field no-submit form fill, broader safe no-submit fill wording for input/box/textarea/text area plus set/put verbs, search-bar no-submit fill wording, broader search-target type repair, direct explicit Google search phrasing, visible proof rows, ask-user retry/cancel/review choices, native bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status and diagnostics, native bridge self-test, native action-search guard, broader action-search boundary, generic bridge primitive dispatch for click/type/key/read/extract/DOM snapshot, search-box type repair, broader site-search phrasing repair, early SMS pre-confirm for internal action-engine callers, direct browser primitive bridge preference when CDP is unavailable, and browser listen fastpath honesty that marks background open/search as `started` and `ATTEMPTED` until completion proof exists.
 - M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness honesty, cold-start status polling honesty, onboarding SMS endpoint, browser readiness requiring a real local native-bridge self-test before Step 2 advances, clean account-path form plus no pre-session localhost probe, call-onboarding form plus no submit before explicit engine readiness, chat-onboarding explicit start with no model or loopback work on page load, and audio-onboarding explicit engine readiness before file selection or upload.
 - These are not proof. The separate judge has not typed a task in the packaged app and verified a real artifact, browser action, native bridge action, record-control behavior, relative-date clock behavior, or onboarding mesh.
 
@@ -68,12 +67,12 @@ Not proven:
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
-- The full stranger path is not proven. Public account form, call/chat onboarding forms, installer safety, public renders, and preflight checks are not onboarding, self-connect, or stranger task completion.
+- The full stranger path is not proven. Public account form, onboarding forms, installer safety, public renders, and preflight checks are not onboarding, self-connect, or stranger task completion.
 
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `8200499` plus release `fbc7dd7a...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `9153bbe` plus release `d4c442db...` is pending judge and does not change this number.
 - M2 packaged typed-input/listen-control/clock-grounding reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands reality judge pass rate: 0/0 verified; not run.
 - M5 packaged/self-onboarding reality judge pass rate: 0/0 verified; not run.
@@ -89,8 +88,7 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating any production-linked source, manifest commit, public build commit, public headers, public SHA, public release metadata, public install script, successful site deploy, public account/onboarding form check, public audio-readiness check, public installer cleanup, public installer safe replacement, delayed installer service stops, installer preflight checks, or browser-rendered public page as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
-- Treating planner prompt edits, search-type repair probes, no-submit fill probes, typed-result render probes, ask-user option render probes, onboarding self-test render probes, SMS gate probes, fake-runtime probes, local tests, direct probes, targeted pytest, mocked Playwright, browser automation page loads, public headers, owner Chrome, local packaging, strict codesign, process/window enumeration, or screenshots as proof.
+- Treating any production-linked source, manifest commit, public build commit, public headers, public SHA, public release metadata, public install script, successful site deploy, public account/onboarding form check, public audio-readiness check, public installer cleanup, public installer safe replacement, delayed installer service stops, installer preflight checks, browser-rendered public page, local packaging, local launch, owner Chrome, screenshot, or process/window enumeration as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
 - Letting action-shaped prose become browser search. Explicit lookup may search; action tasks must route to API hands, browser hands with explicit site context, or a visible ask/needs-human.
 - Letting browser planner model failures loop to the dispatcher step cap. Low-credit or missing-model paths must fail fast, ask clearly, and stay visible in logs.
 - Running old `scripts/ship.sh` blindly. It rebuilds, uploads to the old canonical R2 key, commits a manifest, and pushes `HEAD:main`. Use `scripts/ship_candidate.sh` and never push.
@@ -102,7 +100,6 @@ Dead ends not to retry blindly:
 - Using native local Apple Calendar as autonomous proof when read-back/delete is blocked by macOS privacy or AppleScript hangs.
 - Dumping raw Chrome profile preference files. Use filtered JSON parsing for the Anticipy extension id only.
 - Assuming Chrome AppleScript JavaScript is enabled.
-- Treating the local self-test endpoint, extension value read-back, extension zip hashes, refreshed Desktop extension folders, archive payload inspection, fake-network Calendar probes, mocked server branch probes, Browser/Playwright renders, Chrome page-origin logs, process/window enumeration, public download metadata, release integrity metadata, public installer checksum checks, public installer cleanup checks, public installer replacement checks, delayed public installer service stops, installer preflight checks, account form keyboard checks, onboarding call form checks, onboarding chat page-load checks, or onboarding audio readiness checks as proof.
 - Google Sheets and Google Docs canvas synthetic input.
 - Amazon.ca Playwright automation.
 - Anti-bot arms races for captcha or Cloudflare challenges.
@@ -111,9 +108,9 @@ Dead ends not to retry blindly:
 - Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6` and release SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `9153bbee69c032ae38001428a2348dd7fce30442` and release SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`.
 - If M1 passes, run an M2/M3/M5 judge that types a safe, reversible, fully time-grounded task in the packaged app, verifies the real artifact or browser action, verifies packaged listen control behavior, and verifies onboarding mesh on a fresh account.
 - While judge quota is blocked, keep improving unblocked perimeter work without claiming proof.
 
 Law digest:
-Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, public headers, release metadata, public account/onboarding checks, public installer checks, installer cleanup, installer replacement checks, delayed installer service stops, installer preflight checks, owner/browser checks, process/window enumeration, screenshots, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
+Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, public headers, release metadata, public account/onboarding checks, public installer checks, owner/browser checks, process/window enumeration, screenshots, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.

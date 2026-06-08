@@ -1,35 +1,35 @@
 # Last Lap
 
-Lap: 20260608T143827Z
-Date: 2026-06-08T14:51:54Z
-Milestone: M3 - search target type repair candidate
+Lap: 20260608T145524Z
+Date: 2026-06-08T15:09:28Z
+Milestone: M3 - explicit Google search phrasing candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `c763919807d69b2d08986295968d2cdfa24b436a` and manifest/site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6` on branch `rebuild/spine-clean`.
-- The overbroad search-type repair path now recognizes natural target names including `search bar`, `search input`, and `query input`.
-- The query extractor now accepts `open/go to site and then search for X` wording and strips explicit no-submit tails before matching.
-- The dispatcher-level probe forced a bad planner to type the whole instruction into a search input, and the dispatcher repaired it so the runtime typed only `black boots`.
-- The package manifest now points at DMG source commit `c763919807d69b2d08986295968d2cdfa24b436a`.
-- The public DMG SHA is `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf` and manifest/site commit `9153bbee69c032ae38001428a2348dd7fce30442` on branch `rebuild/spine-clean`.
+- The server-side direct browser plan now recognizes explicit Google lookup phrasing such as `open google and search for hiking socks`, `go to google and then look up waterproof backpack`, and `navigate to google.com then find trail shoes`.
+- The new path returns `open_search_tab` with only the extracted query, not the whole task text.
+- Non-Google and non-search action text stays out of this direct search path.
+- The package manifest now points at DMG source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf`.
+- The public DMG SHA is `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`.
 
 Checks:
-- `python3 -m py_compile engine/app/product/action_dispatcher.py` passed.
-- Hermetic query-extractor and repair probes passed for `search bar`, `search input`, `query input`, and `open example.com and then search for hiking socks`.
-- Negative probe kept a normal notes textarea unchanged.
-- Dispatcher-level fake planner probe returned `status: success` and recorded runtime typed args `{"selector": "M1", "text": "black boots"}`.
+- `python3 -m py_compile engine/app/product/server.py` passed.
+- Direct server probes mapped 3 explicit Google lookup variants to `open_search_tab` with query-only targets.
+- Negative probes for Google Calendar, non-Google site search, and dentist booking text did not become `open_search_tab`.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scans found no matches in the touched product diff.
-- Product source commit `c763919807d69b2d08986295968d2cdfa24b436a` and manifest/site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6` were committed locally for future judge diff scanning.
-- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714` and size `178890184` bytes.
-- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178890184`.
+- Product source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf` and manifest/site commit `9153bbee69c032ae38001428a2348dd7fce30442` were committed locally for future judge diff scanning.
+- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da` and size `178891486` bytes.
+- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178891486`.
 - `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the candidate and verified the full public DMG SHA.
-- Public `https://www.anticipy.ai/api/app/state` reports site commit `8200499`, release commit `c763919807d69b2d08986295968d2cdfa24b436a`, SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`, and `178890184` bytes.
-- Public `/app` and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`.
-- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build c763919 | 178.9 MB | Updated 2026-06-08 | SHA-256 fbc7dd7af5ba...6fe943986714`, the canonical DMG link, the install command, and zero page console warnings/errors.
-- Screenshot is local at `/tmp/anticipy-public-app-20260608T143827Z.png`.
+- Public `https://www.anticipy.ai/api/app/state` reports site commit `9153bbee69c032ae38001428a2348dd7fce30442`, release commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf`, SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`, and `178891486` bytes.
+- Public `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`; the DMG HEAD had content length `178891486`.
+- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build ed5c45c | 178.9 MB | Updated 2026-06-08 | SHA-256 d4c442db4691...590dd90944da`, the canonical DMG link, the install command, and zero page console warnings/errors.
+- Screenshot is local at `/tmp/anticipy-public-app-20260608T145524Z.png`.
+- Product repo has no tracked dirty files after deploy; only pre-existing untracked artifacts remain.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded, installed, and launched the public app from this candidate.
@@ -41,5 +41,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `82004994aaa8ae78a670e0d8162296ed9f2fbbf6` and release SHA `fbc7dd7af5ba8ccc46b92aa147ef703a3322d3be1fdbeb050ddb6fe943986714`.
+- When judge quota returns, run the separate M1 judge against public production site commit `9153bbee69c032ae38001428a2348dd7fce30442` and release SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`.
 - Continue unblocked perimeter work without claiming proof.
