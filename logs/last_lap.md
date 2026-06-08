@@ -1,34 +1,34 @@
 # Last Lap
 
-Lap: 20260608T145524Z
-Date: 2026-06-08T15:09:28Z
-Milestone: M3 - explicit Google search phrasing candidate
+Lap: 20260608T151300Z
+Date: 2026-06-08T15:22:48Z
+Milestone: M3 - explicit web search planning candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf` and manifest/site commit `9153bbee69c032ae38001428a2348dd7fce30442` on branch `rebuild/spine-clean`.
-- The server-side direct browser plan now recognizes explicit Google lookup phrasing such as `open google and search for hiking socks`, `go to google and then look up waterproof backpack`, and `navigate to google.com then find trail shoes`.
-- The new path returns `open_search_tab` with only the extracted query, not the whole task text.
-- Non-Google and non-search action text stays out of this direct search path.
-- The package manifest now points at DMG source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf`.
-- The public DMG SHA is `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `abd305b1462c327265fe7de4047aef2eb9cf766f` and manifest/site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da` on branch `rebuild/spine-clean`.
+- The direct browser search plan now accepts punctuation after explicit Google navigation, such as `open google, search for trail shoes`, `go to google.com: look up waterproof backpack`, and `navigate to www.google.com; find lightweight rain jacket`.
+- The direct browser search plan now handles explicit web lookup verbs: `search the web`, `look up`, `look it up`, `find out`, and `research`.
+- The path still avoids a generic action-to-search fallback. App-specific or action-shaped text such as Gmail search, Google Calendar search, booking, Calendar creation, or email send instructions does not become `open_search_tab`.
+- The package manifest now points at DMG source commit `abd305b1462c327265fe7de4047aef2eb9cf766f`.
+- The public DMG SHA is `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9`.
 
 Checks:
 - `python3 -m py_compile engine/app/product/server.py` passed.
-- Direct server probes mapped 3 explicit Google lookup variants to `open_search_tab` with query-only targets.
-- Negative probes for Google Calendar, non-Google site search, and dentist booking text did not become `open_search_tab`.
+- Direct server probes mapped 5 explicit lookup variants to `open_search_tab` with query-only targets.
+- Negative probes for Gmail search, Google Calendar search, dentist booking, Calendar creation, and email send text did not become `open_search_tab`.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scans found no matches in the touched product diff.
-- Product source commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf` and manifest/site commit `9153bbee69c032ae38001428a2348dd7fce30442` were committed locally for future judge diff scanning.
-- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da` and size `178891486` bytes.
-- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178891486`.
+- Product source commit `abd305b1462c327265fe7de4047aef2eb9cf766f` and manifest/site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da` were committed locally for future judge diff scanning.
+- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9` and size `178891889` bytes.
+- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178891889`.
 - `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the candidate and verified the full public DMG SHA.
-- Public `https://www.anticipy.ai/api/app/state` reports site commit `9153bbee69c032ae38001428a2348dd7fce30442`, release commit `ed5c45ccec915ff076bab249d8fe467a57e42ebf`, SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`, and `178891486` bytes.
-- Public `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`; the DMG HEAD had content length `178891486`.
-- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build ed5c45c | 178.9 MB | Updated 2026-06-08 | SHA-256 d4c442db4691...590dd90944da`, the canonical DMG link, the install command, and zero page console warnings/errors.
-- Screenshot is local at `/tmp/anticipy-public-app-20260608T145524Z.png`.
+- Public `https://www.anticipy.ai/api/app/state` reports site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da`, release commit `abd305b1462c327265fe7de4047aef2eb9cf766f`, SHA `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9`, and `178891889` bytes.
+- Public `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`; the DMG HEAD had content length `178891889`.
+- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build abd305b | 178.9 MB | Updated 2026-06-08 | SHA-256 d8b957936772...2b04fb3909a9`, the canonical DMG link, the install command, and zero page console warnings/errors.
+- Screenshot is local at `/tmp/anticipy-public-app-20260608T151300Z.png`.
 - Product repo has no tracked dirty files after deploy; only pre-existing untracked artifacts remain.
 
 Gate:
@@ -41,5 +41,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `9153bbee69c032ae38001428a2348dd7fce30442` and release SHA `d4c442db4691b8ce717977fa9b39b5eb359a76852db27cd1a284590dd90944da`.
+- When judge quota returns, run the separate M1 judge against public production site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da` and release SHA `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9`.
 - Continue unblocked perimeter work without claiming proof.
