@@ -1,37 +1,41 @@
 # Last Lap
 
-Lap: 20260608T095039Z
-Date: 2026-06-08T09:50:39Z
-Milestone: M3 - public search typing repair candidate
+Lap: 20260608T100630Z
+Date: 2026-06-08T10:23:49Z
+Milestone: M3 - public browser action routing hardening candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `c3686feb49ef778f7287ae21082c417830c17566` on branch `rebuild/spine-clean`.
-- The universal action dispatcher now repairs an overbroad planner `type` step when the target is a search-like field and the planner tried to type the full instruction.
-- The repair extracts only the query or object from generic search commands, so `search example.com for black shoes` types `black shoes`, not the full task or the website name.
-- Non-search fields are left untouched.
-- The planner prompt now states the same rule before the deterministic repair has to catch it.
-- The public release manifest/site commit is now `2e8102aafc7648a55c34ce44d114b12db50f3b02`, pointing at DMG source commit `c3686feb49ef778f7287ae21082c417830c17566`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `09a01f08958210ba6f48a8409c467897107d26ad` on branch `rebuild/spine-clean`.
+- Search-box type repair now handles additional generic phrasings such as `on example.com search for black shoes`, `use example.com to search for black shoes`, and `type black shoes in the search box on example.com`.
+- The repair keeps normal query text like `search for black shoes with laces` intact.
+- `sms_pre_confirm.should_pre_confirm()` no longer treats safe-looking intent labels as safe when the instruction or task contains a real-send verb.
+- `_run_action_engine()` now runs the SMS pre-confirm gate before Calendar, browser, bridge, or DSv4 paths can touch the real world, including direct internal callers.
+- Direct browser primitives that reach `_run_action_engine()` with CDP unavailable now try the native extension bridge before the universal action loop, so simple open/search goals are not swallowed into ask/loop behavior.
+- The public release manifest/site commit is now `94152be1c21a4fecef122ac4d9ead65dbe24867a`, pointing at DMG source commit `09a01f08958210ba6f48a8409c467897107d26ad`.
 
 Checks:
-- `engine/.venv/bin/python -m py_compile engine/app/product/action_dispatcher.py engine/app/product/action_planner.py` passed.
-- Fake-runtime dispatcher probe passed: a search field that would have received the whole instruction instead received only `black shoes`.
-- Negative fake-runtime dispatcher probe passed: a normal notes field preserved the original typed text.
+- `engine/.venv/bin/python -m py_compile engine/app/product/action_dispatcher.py engine/app/product/action_planner.py engine/app/product/sms_pre_confirm.py engine/app/product/server.py` passed.
+- Pure search extraction probe passed for existing and new site-search phrasings, and preserved `search for black shoes with laces`.
+- Pure SMS policy probe passed: send/submit cases require pre-confirm, lookup and plain Calendar event cases do not.
+- `_run_action_engine()` gate-order probe on throwaway port `18731` returned pending SMS confirm before any monkeypatched side-effect path fired, while a reversible open action still reached the browser path.
+- Targeted pytest first exposed two direct-bridge routing failures and one known pyenv `starlette`/`httpx` `TestClient` mismatch. After the routing fix, `scripts/v7/test_universal_runtime.py scripts/v7/test_action_engine_api.py engine/tests/test_action_dispatch_via_extension.py -k 'not api_act_extension_path_returns_no_legacy_error'` passed `14 passed, 1 deselected`; `engine/tests/test_tier7_sms_preconfirm_voice.py` passed `1 passed`.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scan found no matches in the touched diff.
 - `bash scripts/build_dmg.sh` passed after product commit.
-- Final local DMG size was `178887372` bytes and SHA-256 was `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`.
+- Final local DMG size was `178886375` bytes and SHA-256 was `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`.
 - Strict codesign passed for the packaged app.
-- Packaged app binary contains commit `c3686feb49ef778f7287ae21082c417830c17566`.
+- Packaged app binary contains commit `09a01f08958210ba6f48a8409c467897107d26ad`.
 - `hdiutil imageinfo` reported a valid compressed UDZO image.
-- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178887372` bytes.
-- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed successfully and verified the public DMG SHA.
-- Public `/api/app/state` reports site commit `2e8102a`, release SHA `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`, manifest release commit `c3686feb49ef778f7287ae21082c417830c17566`, and `178887372` bytes.
-- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178887372` bytes, and full streamed public DMG SHA matched `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`.
+- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178886375` bytes.
+- First deploy-only attempt reused the previous committed manifest and was rejected for candidate alignment; staged upload mode then wrote and committed the corrected manifest, and the corrected deploy reached public state.
+- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` exited nonzero on a final convergence race after public build commit `94152be` appeared; manual public checks confirmed convergence.
+- Public `/api/app/state` reports site commit `94152be`, release SHA `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`, manifest release commit `09a01f08958210ba6f48a8409c467897107d26ad`, and `178886375` bytes.
+- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178886375` bytes, and full streamed public DMG SHA matched `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`.
 - Headless render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`.
-- Computer Use read the real Chrome window at `anticipy.ai/app`; because the owner Chrome profile is signed in, it showed the signed-in app surface with Listen UI, not the clean public download page. No proof is claimed from that beyond a visual sanity check.
+- Chrome-backed read-only browser sanity opened the real owner Chrome page at `https://www.anticipy.ai/app`, found the same H1 and download link, and closed the agent-created tab. The screenshot capture timed out and tab finalizer was unavailable, so the tab was closed directly. No proof is claimed from owner Chrome.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded and launched the public app from this candidate.
@@ -43,5 +47,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `2e8102aafc7648a55c34ce44d114b12db50f3b02` and release SHA `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`.
+- When judge quota returns, run the separate M1 judge against public production site commit `94152be1c21a4fecef122ac4d9ead65dbe24867a` and release SHA `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`.
 - Continue unblocked perimeter work without claiming proof.
