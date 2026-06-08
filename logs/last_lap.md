@@ -1,31 +1,31 @@
 # Last Lap
 
-Lap: 20260608T115737Z
-Date: 2026-06-08T12:07:22Z
-Milestone: M1 - public installer checksum guard candidate
+Lap: 20260608T121027Z
+Date: 2026-06-08T12:18:29Z
+Milestone: M1 - public installer mounted-image cleanup candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked site/tooling commit `06c3715a4f00af0a03f3c8c61dc2dac496fea244` on branch `rebuild/spine-clean`.
-- Public `install.sh` now fetches `/api/release-meta`, extracts the public release SHA-256, and verifies the downloaded DMG with `shasum -a 256` before `hdiutil imageinfo`, mounting, copying, or launching anything.
-- `scripts/ship_candidate.sh` now defaults Vercel deploys to `--archive tgz`, with `VERCEL_ARCHIVE_FORMAT=` as an escape hatch. This worked around Vercel's `api-upload-free` upload rate limit without spending money.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked site commit `5b2b1907e38915b85039bdb5fca7cd4385a9d4fd` on branch `rebuild/spine-clean`.
+- Public `install.sh` now tracks the mounted DMG volume in `MNT`, uses `detach_mounted_image`, and calls that helper from the exit cleanup trap as well as explicit no-app and successful-copy paths.
+- This reduces failed-install residue by trying to detach the mounted image even if `cp -R` or a later installer command exits before the old explicit detach line.
 - The release manifest was not rewritten; it still points at DMG source commit `4430773073f30ea535994f00e7eab4c420080bed`.
 - The public DMG SHA remains `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 
 Checks:
 - `bash -n public/install.sh` passed.
 - `bash -n scripts/ship_candidate.sh` passed.
-- Live `/api/release-meta` SHA extraction returned `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scan found no matches in the touched product diff.
 - Local `npm run build` passed.
-- The first `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` attempt failed after three Vercel deploy retries with `api-upload-free`; after amending the script to use archived upload, the same command deployed successfully and verified the unchanged public DMG SHA.
-- Public `/api/app/state` reports site commit `06c3715`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
-- Public `install.sh` contains `RELEASE_META_URL`, `expected_release_sha`, `verify_download_sha`, `shasum`, and calls `verify_download_sha "$EXPECTED_SHA"` before `hdiutil imageinfo`.
+- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed successfully with archived upload and verified the unchanged public DMG SHA.
+- Public `/api/app/state` reports site commit `5b2b190`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
+- Public `install.sh` contains `MNT=""`, `detach_mounted_image`, `cleanup`, and `hdiutil detach "$MNT"` through the helper.
 - Public `install.sh` returned `200` with `content-type: application/x-sh`; public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` with `content-type: application/x-apple-diskimage` and `content-length: 178890489`.
-- Browser-rendered public `/app` still found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, canonical DMG link, install command, release line `Build 4430773 | 178.9 MB | Updated 2026-06-08 | SHA-256 8fd2f0cfb8ca...91e0730df587`, only one Vercel script request for Speed Insights, and zero console warnings/errors.
+- Chrome-rendered public `/app` found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, canonical DMG link, install command, release line `Build 4430773 | 178.9 MB | Updated 2026-06-08 | SHA-256 8fd2f0cfb8ca...91e0730df587`, one Speed Insights Vercel script, and zero page-origin console warnings/errors. Chrome emitted unrelated wallet-extension warnings from `chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn`.
+- Screenshot is local at `/tmp/anticipy-public-app-20260608T121027Z.png`.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded, installed, and launched the public app from this candidate.
@@ -37,5 +37,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `06c3715a4f00af0a03f3c8c61dc2dac496fea244` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
+- When judge quota returns, run the separate M1 judge against public production site commit `5b2b1907e38915b85039bdb5fca7cd4385a9d4fd` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - Continue unblocked perimeter work without claiming proof.
