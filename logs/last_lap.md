@@ -1,32 +1,32 @@
 # Last Lap
 
-Lap: 20260608T075759Z
-Date: 2026-06-08T07:57:59Z
-Milestone: M1/M5 - public deploy cold-start readiness honesty candidate
+Lap: 20260608T081425Z
+Date: 2026-06-08T08:14:25Z
+Milestone: M1/M5 - public deploy cold-start status polling candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `81031a55028e7496897ca9905dd4ac3730e032c6` on branch `rebuild/spine-clean`.
-- Onboarding Step 4 now checks browser-hands readiness before starting cold-start source reading.
-- `/api/coldstart/start` must return an OK response and not return `ok:false` before the wizard marks source reading as running.
-- Failed starts reset the progress UI to retry instead of marking Gmail active or implying background reading.
-- The public release manifest/site commit is now `bb2c78beb625928cc8d7fa40095b99bc581b7b95`, pointing at DMG source commit `81031a55028e7496897ca9905dd4ac3730e032c6`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `ef6ea1a1d713ee511a4aaa03be34615f5081d55d` on branch `rebuild/spine-clean`.
+- Onboarding Step 4 now reads the real cold-start status payload: `state`, `source_row_counts`, `ok_sources`, and `failed_sources`.
+- `state:running` renders source row counts as active work, `state:done` shows completion, and `state:failed` or `ok:false` resets to retry with a visible error.
+- Repeated status-contact failures reset to retry instead of implying the source read is still progressing.
+- The public release manifest/site commit is now `643b8d4ac3b02a499da45f1af5b027d092867b92`, pointing at DMG source commit `ef6ea1a1d713ee511a4aaa03be34615f5081d55d`.
 
 Checks:
-- Popover inline JavaScript parsed successfully.
-- Mocked Playwright cold-start readiness checks passed: bridge-not-ready did not call `/api/coldstart/start`, start `ok:false` stayed in retry with no source progress, and start success marked reading active.
-- Mocked Playwright profile/SMS persistence checks still passed.
+- Popover inline JavaScript parsed successfully during the active lap.
+- Mocked Playwright cold-start status polling checks passed for `running`, `done`, `failed`, and `ok:false` status responses.
 - `git diff --check` passed, and the touched file had no forbidden owner/eval literals.
 - `bash scripts/build_dmg.sh` passed.
-- Local DMG size was `178876888` bytes and SHA-256 was `379d11b0abf67beeaa5df5c4d521ce1f2e320ad6a353fd6037114360681e3a25`.
-- Strict codesign passed for the packaged app, the packaged app binary contains commit `81031a55028e7496897ca9905dd4ac3730e032c6`, and `hdiutil imageinfo` reported a valid compressed UDZO image.
-- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178876888` bytes.
-- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed without pushing git, reported public state live at `bb2c78b`, and verified the full public DMG SHA.
-- Public `https://www.anticipy.ai/api/app/state` reports site commit `bb2c78b`, release SHA `379d11b0abf67beeaa5df5c4d521ce1f2e320ad6a353fd6037114360681e3a25`, manifest release commit `81031a55028e7496897ca9905dd4ac3730e032c6`, and `178876888` bytes.
-- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178876888` bytes, and a headless page render found the expected app title, H1, and canonical macOS download link.
-- Computer Use `get_app_state` timed out for the exact packaged app path, so no UI screen proof is claimed.
+- Local DMG size was `178877719` bytes and SHA-256 was `0617689be25e2c8aed22bb4703a2221545fa4aaa0d0f075dd25cb19d14d633f2`.
+- Strict codesign passed for the packaged app, the packaged app binary contains commit `ef6ea1a1d713ee511a4aaa03be34615f5081d55d`, and `hdiutil imageinfo` reported a valid compressed UDZO image.
+- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178877719` bytes.
+- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed without pushing git, reported public state live at `643b8d4`, and verified the full public DMG SHA.
+- Public `https://www.anticipy.ai/api/app/state` reports site commit `643b8d4`, release SHA `0617689be25e2c8aed22bb4703a2221545fa4aaa0d0f075dd25cb19d14d633f2`, manifest release commit `ef6ea1a1d713ee511a4aaa03be34615f5081d55d`, and `178877719` bytes.
+- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178877719` bytes, and a headless page render found the expected app title, H1, and canonical macOS download link.
+- Computer Use read the signed-in Chrome public page and saw the live Anticipy surface. This is owner-profile sanity only, not clean-profile proof.
+- Computer Use timed out for the exact packaged app path, so no packaged-app UI proof is claimed.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded and launched the public app from this candidate.
@@ -37,5 +37,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `bb2c78beb625928cc8d7fa40095b99bc581b7b95` and release SHA `379d11b0abf67beeaa5df5c4d521ce1f2e320ad6a353fd6037114360681e3a25`.
+- When judge quota returns, run the separate M1 judge against public production site commit `643b8d4ac3b02a499da45f1af5b027d092867b92` and release SHA `0617689be25e2c8aed22bb4703a2221545fa4aaa0d0f075dd25cb19d14d633f2`.
 - Continue unblocked perimeter work without claiming proof.
