@@ -1,41 +1,41 @@
 # Last Lap
 
-Lap: 20260608T100630Z
-Date: 2026-06-08T10:23:49Z
-Milestone: M3 - public browser action routing hardening candidate
+Lap: 20260608T102850Z
+Date: 2026-06-08T10:42:03Z
+Milestone: M3 - public multi-field no-submit fill candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `09a01f08958210ba6f48a8409c467897107d26ad` on branch `rebuild/spine-clean`.
-- Search-box type repair now handles additional generic phrasings such as `on example.com search for black shoes`, `use example.com to search for black shoes`, and `type black shoes in the search box on example.com`.
-- The repair keeps normal query text like `search for black shoes with laces` intact.
-- `sms_pre_confirm.should_pre_confirm()` no longer treats safe-looking intent labels as safe when the instruction or task contains a real-send verb.
-- `_run_action_engine()` now runs the SMS pre-confirm gate before Calendar, browser, bridge, or DSv4 paths can touch the real world, including direct internal callers.
-- Direct browser primitives that reach `_run_action_engine()` with CDP unavailable now try the native extension bridge before the universal action loop, so simple open/search goals are not swallowed into ask/loop behavior.
-- The public release manifest/site commit is now `94152be1c21a4fecef122ac4d9ead65dbe24867a`, pointing at DMG source commit `09a01f08958210ba6f48a8409c467897107d26ad`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `c41e422b5056192426193b6e49ec457198ab9d59` on branch `rebuild/spine-clean`.
+- The universal browser action dispatcher now handles multiple safe no-submit form fills in one instruction, for example filling name and email fields without submitting.
+- The no-submit path still requires explicit `do not submit` / `without submitting` style wording and bridge read-back for every filled field before returning success.
+- If some fields fill but another field cannot be verified, the dispatcher asks the user instead of claiming success.
+- Single-field no-submit fills keep the previous `typed_field` proof shape for compatibility.
+- The no-submit safety check now catches positive submit/save/send style verbs even at the start of the remaining instruction.
+- The public release manifest/site commit is now `e7aeaa49658520595b85e0034b9bb9fd03600c78`, pointing at DMG source commit `c41e422b5056192426193b6e49ec457198ab9d59`.
 
 Checks:
-- `engine/.venv/bin/python -m py_compile engine/app/product/action_dispatcher.py engine/app/product/action_planner.py engine/app/product/sms_pre_confirm.py engine/app/product/server.py` passed.
-- Pure search extraction probe passed for existing and new site-search phrasings, and preserved `search for black shoes with laces`.
-- Pure SMS policy probe passed: send/submit cases require pre-confirm, lookup and plain Calendar event cases do not.
-- `_run_action_engine()` gate-order probe on throwaway port `18731` returned pending SMS confirm before any monkeypatched side-effect path fired, while a reversible open action still reached the browser path.
-- Targeted pytest first exposed two direct-bridge routing failures and one known pyenv `starlette`/`httpx` `TestClient` mismatch. After the routing fix, `scripts/v7/test_universal_runtime.py scripts/v7/test_action_engine_api.py engine/tests/test_action_dispatch_via_extension.py -k 'not api_act_extension_path_returns_no_legacy_error'` passed `14 passed, 1 deselected`; `engine/tests/test_tier7_sms_preconfirm_voice.py` passed `1 passed`.
+- Parser probes passed for leading-site multi-field wording, comma-plus-and multi-field wording, single-field compatibility, and positive submit/save blocking.
+- Fake-runtime dispatcher probes passed for multi-field success, partial read-back failure asking the user, and single-field compatibility. No real Chrome or account was touched.
+- `PYTHONPATH=engine engine/.venv/bin/python -m py_compile engine/app/product/action_dispatcher.py` passed.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scan found no matches in the touched diff.
+- Targeted pytest passed: `14 passed, 1 deselected` for universal runtime/action API/extension dispatch, and `6 passed` for product surface runtime primitives.
 - `bash scripts/build_dmg.sh` passed after product commit.
-- Final local DMG size was `178886375` bytes and SHA-256 was `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`.
+- Known build byproducts were restored.
+- Final local DMG size was `178890205` bytes and SHA-256 was `d22ed82375c6ea0842c16046f390ecf21d217cd876886215eba19d80e76fc75e`.
 - Strict codesign passed for the packaged app.
-- Packaged app binary contains commit `09a01f08958210ba6f48a8409c467897107d26ad`.
+- Packaged app binary contains commit `c41e422b5056192426193b6e49ec457198ab9d59`.
 - `hdiutil imageinfo` reported a valid compressed UDZO image.
-- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178886375` bytes.
-- First deploy-only attempt reused the previous committed manifest and was rejected for candidate alignment; staged upload mode then wrote and committed the corrected manifest, and the corrected deploy reached public state.
-- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` exited nonzero on a final convergence race after public build commit `94152be` appeared; manual public checks confirmed convergence.
-- Public `/api/app/state` reports site commit `94152be`, release SHA `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`, manifest release commit `09a01f08958210ba6f48a8409c467897107d26ad`, and `178886375` bytes.
-- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178886375` bytes, and full streamed public DMG SHA matched `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`.
-- Headless render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`.
-- Chrome-backed read-only browser sanity opened the real owner Chrome page at `https://www.anticipy.ai/app`, found the same H1 and download link, and closed the agent-created tab. The screenshot capture timed out and tab finalizer was unavailable, so the tab was closed directly. No proof is claimed from owner Chrome.
+- `SHIP_SKIP_DMG_BUILD=1 scripts/ship_candidate.sh` uploaded the DMG and wrote the manifest.
+- Manifest commit `e7aeaa49658520595b85e0034b9bb9fd03600c78` was committed and deployed with `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh`.
+- The deploy script confirmed public state and verified the public DMG SHA.
+- Public `/api/app/state` reports site commit `e7aeaa4`, release SHA `d22ed82375c6ea0842c16046f390ecf21d217cd876886215eba19d80e76fc75e`, manifest release commit `c41e422b5056192426193b6e49ec457198ab9d59`, and `178890205` bytes.
+- Public `/app` returned `200` HTML and public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178890205` bytes.
+- Commit-addressed R2 HEAD returned `200`, `application/x-apple-diskimage`, and `178890205` bytes.
+- Browser automation rendered `/app` and found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and the canonical DMG link. Chrome extension automation could not attach in this session, so Playwright fallback was used for read-only browser sanity. No proof is claimed from this.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded and launched the public app from this candidate.
@@ -47,5 +47,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `94152be1c21a4fecef122ac4d9ead65dbe24867a` and release SHA `ac760532f7f547b2e08ea5665f1321738b79e4ba24b441ac87ba560e32698703`.
+- When judge quota returns, run the separate M1 judge against public production site commit `e7aeaa49658520595b85e0034b9bb9fd03600c78` and release SHA `d22ed82375c6ea0842c16046f390ecf21d217cd876886215eba19d80e76fc75e`.
 - Continue unblocked perimeter work without claiming proof.
