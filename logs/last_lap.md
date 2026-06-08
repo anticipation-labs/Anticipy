@@ -1,16 +1,16 @@
 # Last Lap
 
-Lap: 20260608T122454Z
-Date: 2026-06-08T12:30:13Z
-Milestone: M1 - public installer safe replacement candidate
+Lap: 20260608T123333Z
+Date: 2026-06-08T12:42:15Z
+Milestone: M1 - public installer delayed service-stop candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked site commit `8f9386e1b6672ede918c2c702a7bea5f612eb80d` on branch `rebuild/spine-clean`.
-- Public `install.sh` now copies the mounted app into `/Applications/.Anticipy.app.installing.$$` before touching `/Applications/Anticipy.app`.
-- If an existing app is present, the installer moves it to `/Applications/.Anticipy.app.previous.$$` only during the final swap, restores it if the swap fails, and deletes the backup after the new app is committed.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked site commit `5a7cc9a106d5ca9b9c56b836a1629936e3d29997` on branch `rebuild/spine-clean`.
+- Public `install.sh` now delays `stop_existing_engine`, `stop_existing_bridge`, and the optional legacy native-bridge install until after release metadata is read, the DMG is downloaded, SHA-256 is verified, the image is checked, the DMG is mounted, and the mounted `.app` is found.
+- This reduces failed-install blast radius: metadata, download, checksum, image, mount, or no-app failures should not stop an already-running local Anticipy.
 - The release manifest was not rewritten; it still points at DMG source commit `4430773073f30ea535994f00e7eab4c420080bed`.
 - The public DMG SHA remains `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 
@@ -21,10 +21,10 @@ Checks:
 - Forbidden path and owner/eval literal scan found no matches in the touched product diff.
 - Local `npm run build` passed.
 - `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed successfully with archived upload and verified the unchanged public DMG SHA.
-- Public `/api/app/state` reports site commit `8f9386e`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
-- Public `install.sh` contains `INSTALL_DEST`, `INSTALL_STAGE`, `INSTALL_BACKUP`, `INSTALL_COMMITTED`, `restore_previous_app`, staged `cp -R "$APP" "$INSTALL_STAGE"`, and `mv "$INSTALL_STAGE" "$INSTALL_DEST"`.
-- Public `install.sh` returned `200` with `content-type: application/x-sh`; public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` with `content-type: application/x-apple-diskimage` and `content-length: 178890489`.
-- Playwright-rendered public `/app` found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, canonical DMG link, install command, release line `Build 4430773 | 178.9 MB | Updated 2026-06-08 | SHA-256 8fd2f0cfb8ca...91e0730df587`, one Speed Insights Vercel script, and zero console warnings/errors.
+- Public `/api/app/state` reports site commit `5a7cc9a`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
+- Public `install.sh` returned `200` with `content-type: application/x-sh` and contains the service-stop calls after release metadata, download, mount, and app discovery.
+- Public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` with `content-type: application/x-apple-diskimage` and `content-length: 178890489`.
+- Playwright-rendered public `/app` found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, canonical DMG link, install command, release line `Build 4430773 | 178.9 MB | Updated 2026-06-08 | SHA-256 8fd2f0cfb8ca...91e0730df587`, one Speed Insights Vercel script, and zero console warnings/errors. Screenshot is local at `/tmp/anticipy-public-app-20260608T123333Z.png`.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded, installed, and launched the public app from this candidate.
@@ -36,5 +36,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `8f9386e1b6672ede918c2c702a7bea5f612eb80d` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
+- When judge quota returns, run the separate M1 judge against public production site commit `5a7cc9a106d5ca9b9c56b836a1629936e3d29997` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - Continue unblocked perimeter work without claiming proof.
