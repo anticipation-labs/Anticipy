@@ -1,51 +1,56 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2/M3/M5 perimeter work may continue as candidate work only. M2 now has unjudged typed Calendar routing, API-backed Google Calendar create, and API read-back UI candidates; M3 has unjudged browser-action, browser-read, no-submit form-fill, native-bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status, honest Chrome setup gating, native bridge local self-test, browser bridge diagnostic, and native action-search guard candidates; M5 has unjudged onboarding persistence and cold-start readiness honesty candidates. None of these are proof.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest candidate is M1/M3 browser action-search boundary hardening, publicly deployed but unjudged.
 
-Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `76fc00d`, and found no tamper. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify --strict` and `spctl --assess` failed with `code has no resources but signature indicates they must be present`, and launch produced an invisible app process with zero windows instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T114534Z.md`.
+Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260608T082842Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `ae41f370586299a0d16a991cf071383b1c69ea43` and tracked manifest/site commit `a4a73234f5c6266c5256fefab5c365bc55d9d4b1`. The product commit adds the missing `/api/onboarding/clarify_sms` endpoint used by onboarding Step 5. The endpoint requires a non-empty body, a configured self SMS destination, and a real non-mock success from the existing SMS sender before returning `ok:true`; no-destination, send failure, and mock/no-send delivery return failure so the wizard cannot pretend a text was sent. The staged ship path uploaded the latest `178879629` byte DMG to a commit-addressed R2 key, committed the manifest, deployed the prebuilt public site without pushing git, and verified public state convergence plus full public DMG SHA. Public `https://www.anticipy.ai/api/app/state` now reports site commit `a4a7323`, release SHA `d5671999845e9e038096bb29911732b91eabd7162799c1839f38b2678964fb2c`, manifest release commit `ae41f370586299a0d16a991cf071383b1c69ea43`, and `178879629` bytes. Checks passed Python compile for the product server, direct monkey-patched route probes on an alternate port for empty body, missing destination, mock/no-send, send failure, and successful non-mock delivery shape with no real SMS sent, `git diff --check`, forbidden-literal scan, `bash scripts/build_dmg.sh`, strict codesign, embedded commit verification, DMG imageinfo, R2 HEAD, public `/app` HEAD, public `/dl/Anticipy_1.0.0_aarch64.dmg` HEAD, full public DMG SHA verification, and headless public page inspection showing the expected app title, H1, and canonical macOS download link. Computer Use read the signed-in Chrome public page and saw the live Anticipy surface, but that is owner-profile sanity only. Computer Use timed out on the exact packaged app path, so no packaged-app UI proof is claimed. The separate judge has not verified this public candidate.
+Latest builder lap: `20260608T084430Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `bb4319ab8e2d7d16725f04137e3cb8b88ea18b1e` and tracked manifest/site commit `549322cec573c8667e908c84a16c2736540d9e81`.
+
+Latest product change:
+- Broadened the browser action-search boundary in `engine/app/product/surface_runtime.py` and `engine/app/product/server.py`.
+- Action-shaped typed tasks using message, text, call, invite, RSVP, register, unsubscribe, apply, purchase, checkout, appointment, reservation, delete, remove, and related verbs are now side-effect tasks, not generic lookup/search.
+- `SurfaceRuntime.run_browser_task` refuses action-shaped `open_search_tab` before bridge availability or browser navigation.
+- The universal browser dispatcher uses the same side-effect helper when no explicit site/app context exists, returning `needs_browser_context` instead of search.
+- Explicit-site browser tasks with the new verbs become deterministic `browser_action` plans.
 
 Current public production candidate, pending judge:
-- Public site commit: `a4a73234f5c6266c5256fefab5c365bc55d9d4b1`.
-- Public DMG source commit in manifest: `ae41f370586299a0d16a991cf071383b1c69ea43`.
-- Public DMG SHA-256: `d5671999845e9e038096bb29911732b91eabd7162799c1839f38b2678964fb2c`.
-- Public DMG size: `178879629` bytes.
-- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/ae41f370586299a0d16a991cf071383b1c69ea43/Anticipy_1.0.0_aarch64.dmg`.
-- `https://www.anticipy.ai/api/app/state` reports the expected site commit, release SHA, manifest release commit, and byte count.
+- Public site commit: `549322cec573c8667e908c84a16c2736540d9e81`.
+- Public DMG source commit in manifest: `bb4319ab8e2d7d16725f04137e3cb8b88ea18b1e`.
+- Public DMG SHA-256: `c0e8ca6778ce969fc32f02e7773ddb2026992c5162344132535f79182041f172`.
+- Public DMG size: `178880091` bytes.
+- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/bb4319ab8e2d7d16725f04137e3cb8b88ea18b1e/Anticipy_1.0.0_aarch64.dmg`.
+- `https://www.anticipy.ai/api/app/state` reports site commit `549322c`, release SHA `c0e8ca6778ce969fc32f02e7773ddb2026992c5162344132535f79182041f172`, manifest release commit `bb4319ab8e2d7d16725f04137e3cb8b88ea18b1e`, and `178880091` bytes.
 - `https://www.anticipy.ai/app` returns 200 HTML.
-- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178879629`.
-- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed full public DMG SHA verification for this public candidate.
+- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200, `application/x-apple-diskimage`, and `Content-Length: 178880091`.
+- Full public DMG SHA verification matched `c0e8ca6778ce969fc32f02e7773ddb2026992c5162344132535f79182041f172`.
+
+Latest checks, candidate evidence only:
+- Python compile passed for touched product files.
+- Direct no-network routing probes passed for `SurfaceRuntime`, server helper functions, `_try_universal_browser_action`, and a patched `/api/act` path returning `needs_browser_context` without a search fallback.
+- `git diff --check` passed and the touched diff had no forbidden owner/eval literals.
+- Focused pytest could not run because the product venv lacks `pytest`.
+- `bash scripts/build_dmg.sh` passed.
+- Strict codesign passed.
+- Embedded app commit verification passed.
+- `hdiutil imageinfo` reported a valid compressed UDZO image.
+- R2 HEAD passed for the commit-addressed DMG.
+- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed without pushing git but exited nonzero after a final convergence check. Manual public checks showed correct convergence.
+- Browser automation loaded the public front door, and a headless render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and the canonical DMG link.
+- No real external artifact, UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, or account action was performed by the builder.
 
 Current M2/M3/M5 candidates in the production-linked source, pending judge:
-- Product source commit `8d1898259ecb05f86b678d4e686e46744bb6e382` routes explicit typed Calendar instructions with full date/time into a pending `calendar_event` plan and Google Calendar template URL instead of generic browser search.
-- Product source commit `f05cc8449c278b96b9a2cb1d18bdf7bfa25a0808` stops no-context browser action tasks from falling into search and wires explicit-site browser tasks into the bridge-backed dispatcher.
-- Product source commit `af23bf28a3e26f5d4612c680aaa39fc2b92186f9` adds deterministic explicit-site action planning, fast planner-unavailable ask behavior, clearer typed-task ask display, and alternate-port packaged sidecar launch support.
-- Product source commit `229cb45a170806308acc0a317bdd37028b15d360` completes simple read-only browser tasks from observed surface state without planner spend and shows the packaged UI result as `Done`.
-- Product source commit `235dc1f39f79e109af14132fa24c25c673aeb25d` fills one simple standard form field on explicit loopback no-submit tasks with DOM-derived selector targeting and exact read-back.
-- Product source commit `0c867f9690e08cb5ebfc3197620ed1f7f2c6d28c` lets the native host retry trigger listener binding and lets packaged Tauri stop only Anticipy-owned stale legacy loopback bridge processes before native messaging binds.
-- Product source commit `049f4ad07250881f2034520b00fe578f6b95ebde` refreshes product-owned Desktop load-unpacked extension copies from the bundled v6 payload and aligns the wizard path with the Desktop folder Chrome is registered to load.
-- Product source commit `47e92b6e10c6909dd7f65080fa3ed383c4c71020` surfaces browser bridge readiness in the packaged app through a read-only Tauri status command and a visible popover warning for disabled or miswired Chrome extension/native-host states.
-- Product source commit `b57e3b1a13439471ebe479a48bdbc5c1a40d3810` makes browser bridge setup honest by rejecting stale legacy loopback status, detecting Chrome extension path mismatches, adding Copy path, and requiring a real bridge connection before wizard Step 2 advances.
-- Product source commit `71829156f6db358adc1cc2448c3144dbed280498` adds a native-bridge-only local browser hands self-test, value read-back from extension type commands, value-preserving command proof, a ready-only popover self-test card, refreshed committed extension archives, and refreshed Desktop load-unpacked copies.
-- Product source commit `5942dc0dff99647013e7a8573e59fdb7c8295318` adds visible browser bridge diagnostics to the packaged popover warning for extension staging, native host, Chrome registration/enabled/path-match state, and bridge state.
-- Product source commit `cf8178e2c2454fe91a8b86788656d206d23eab5a` adds an API-backed Google Calendar create path for explicit typed, fully time-grounded Calendar tasks and packages the helper into the sidecar.
-- Product source commit `9184ce213d7d1b7676007fae670d6c0fc827b0ef` requires Google Calendar API read-back before success, returns `VERIFY_FAILED` for created-but-unverified side effects without browser fallback, and surfaces read-back status in the typed-task UI.
-- Product source commit `babe3da796808413d4ba1c38b42a525446cd0e8d` refuses action-shaped prose sent as `open_search_tab` at the common native surface runtime unless the task is explicitly lookup/search.
-- Product source commit `175f8994b1caa16138baf5f587661d1badce0320` keeps onboarding honest by refusing to advance from profile save or SMS queue steps when persistence fails, while preserving explicit user skip for SMS.
-- Product source commit `81031a55028e7496897ca9905dd4ac3730e032c6` keeps cold-start onboarding honest by checking browser readiness before starting source scraping and refusing to show source-reading progress unless `/api/coldstart/start` succeeds.
-- Product source commit `ef6ea1a1d713ee511a4aaa03be34615f5081d55d` keeps cold-start status polling honest by interpreting the real `state`/source-count status payload and resetting to retry on failed or unreachable status instead of implying source reading completed.
-- Product source commit `ae41f370586299a0d16a991cf071383b1c69ea43` adds the missing Step 5 onboarding clarification SMS route and refuses to complete on mock/no-send delivery.
-- Checks across these candidates include Python compile, JS parse, Rust format/check, planner probes, non-destructive HTTP smokes, local loopback form smokes, isolated stale-bridge smoke, isolated extension-copy smoke, local native bridge self-test endpoint/page smoke, Browser localhost render, archive payload inspection, fake-network Calendar API insert and read-back probes, mocked Calendar server branch probes, mocked Playwright onboarding persistence and cold-start readiness checks, headless Playwright and Computer Use renders, `bash scripts/build_dmg.sh`, packaged strict codesign, packaged sidecar smoke, filtered Chrome status checks, Computer Use packaged UI/screen inspection where available, and forbidden-literal scans.
-- These are not M2, M3, or M5 proof. The separate judge has not typed a task in the packaged app and verified a correct real artifact, browser action, native browser bridge, or fresh-account onboarding mesh.
+- M2 typed task and Calendar candidates include explicit typed Calendar routing, API-backed Google Calendar create, and API read-back before success.
+- M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit form fill, native bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status and diagnostics, native bridge self-test, native action-search guard, and the latest broader action-search boundary.
+- M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness honesty, cold-start status polling honesty, and the onboarding SMS endpoint.
+- These are not proof. The separate judge has not typed a task in the packaged app and verified a real artifact, browser action, native bridge action, or onboarding mesh.
 
-Gate status: no hard human gate blocks all work. Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. Spending money is a hard human gate and was not taken. Current-session local/product work can continue, but the separate judge cannot run until quota resets or the human chooses to spend money.
-
-Pending cleanup/gates:
-- Possible cleanup item: a native Apple Calendar smoke may have created `[Anticipy test] M2 typed smoke 20260607-continue` on June 12, 2026 from 15:00 to 16:00. Local read-back/delete was blocked by macOS privacy/TCC and AppleScript list timeouts. This is queued in `PENDING_FOR_OMAR.md`; do not delete or modify real existing Calendar data.
+Gate status:
+- No hard human gate blocks all work.
+- Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed and strict codesign passes, but full zero-warning stranger install needs Developer ID and notarization.
-- OpenRouter credit is very low. Paid Gemini cross-checks hit HTTP 402 during recent M1 judges, and the packaged model-driven browser action planner cannot currently get model steps. If required different-family cross-checks or planner calls are unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked deterministic paths.
-- Owner Chrome currently has Anticipy extension id `npnpagopediecennpleihemoochikggb` registered at `/Users/omarebrahim/Desktop/Anticipy-Extension`, but disabled. The builder did not enable it through UI because browser-extension install/enable through Computer Use requires action-time confirmation. Continue unblocked product work and leave judge-visible proof to the separate judge or a user-confirmed enable path.
+- OpenRouter credit is very low. Paid Gemini cross-checks hit HTTP 402 during recent M1 judges, and packaged model-driven browser action planning can fail fast to ask. If required different-family cross-checks or planner calls are unavailable, record a money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked deterministic paths.
+- Owner Chrome has Anticipy extension id `npnpagopediecennpleihemoochikggb` registered at `/Users/omarebrahim/Desktop/Anticipy-Extension`, but disabled. The builder did not enable it through UI because extension enablement is a user-action confirmation. Leave judge-visible proof to the separate judge or an explicit user-confirmed enable path.
+- Possible cleanup item: a native Apple Calendar smoke may have created `[Anticipy test] M2 typed smoke 20260607-continue` on June 12, 2026 from 15:00 to 16:00. Local read-back/delete was blocked by macOS privacy/TCC and AppleScript list timeouts. This is queued in `PENDING_FOR_OMAR.md`; do not delete or modify real existing Calendar data.
 - Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 
 Proven:
@@ -53,9 +58,10 @@ Proven:
 - M0 clean floor is proven once: `logs/verdicts/20260607T032947Z.md` verifies one real typed Calendar task with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
 
 Not proven:
-- M1 is not proven. The actual production public app must be downloaded and launched by the separate judge from a clean public front-door path.
+- M1 is not proven. The current public production app must be downloaded and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed a task in the packaged app and verified a real, correct, safe artifact.
 - M3 is not proven. The separate judge has not verified a real browser action through the packaged app and bridge-backed hands.
+- M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
 - The full stranger path is not proven. Public download alone is not onboarding, self-connect, or stranger task completion.
@@ -63,13 +69,13 @@ Not proven:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `a4a7323` plus release `d5671999...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `549322c` plus release `c0e8ca...` is pending judge and does not change this number.
 - M2 packaged typed-input reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 - Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet.
-- Drift siren: active. Builder-owned tests remain green while M1 reality pass rate is 0 percent. Do not advance M1, M2, or M3 from local app launch, local packaging, public headers, public SHA checks, owner Chrome observations, or screenshots without the separate judge seeing the clean production front door and real app artifact.
+- Drift siren: active. Builder-owned tests remain green while M1 reality pass rate is 0 percent. Do not advance M1, M2, M3, or M5 from local app launch, local packaging, public headers, public SHA checks, browser automation observations, owner Chrome observations, or screenshots without the separate judge seeing the clean production front door and real app artifact.
 
 Realday audio:
 - One timestamped student MP3 and a builder-visible transcript are in `realdays/raw/`.
@@ -78,40 +84,31 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating production-linked source commits `229cb45a`, `af23bf28`, `f05cc844`, `8d189825`, `9a2aa885`, `ff5c470f`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, `dd9b3e4a`, `9184ce21`, `babe3da7`, `d9cae38`, `175f8994`, `eaf83da`, `81031a55`, `bb2c78b`, `ef6ea1a1`, `643b8d4`, `ae41f370`, `a4a7323`, or their ancestors as M1, M2, M3, or M5 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, packaged typed task, browser/action artifact, and fresh-account onboarding path.
-- Treating production-linked source commits `235dc1f3`, `0c867f96`, `049f4ad0`, `47e92b6e`, `b57e3b1a`, `71829156`, `5942dc0d`, `cf8178e2`, `9184ce21`, `babe3da7`, `175f8994`, `81031a55`, `ef6ea1a1`, or `ae41f370` as M2, M3, or M5 proof. They are pending until the separate judge verifies the packaged app, typed task, API artifact, browser hands, or onboarding mesh on a safe, reversible task.
-- Treating the packaged browser bridge diagnostic banner or Computer Use read-only app inspection as M3 proof. The banner is recovery UI only until a separate judge verifies packaged native bridge action.
-- Treating the local self-test endpoint, extension value read-back, extension zip hashes, refreshed Desktop extension folders, archive payload inspection, fake-network Calendar insert probe, mocked server branch probe, or Browser localhost popover render as proof. They are candidate plumbing only until a separate judge verifies a real artifact or browser action.
-- Assuming Chrome AppleScript JavaScript is enabled. It was off in the normal owner Chrome on this Mac; controlled CDP was used only for safe loopback smoke. For real product proof, prefer the installed extension/native bridge path or another explicit, judge-visible browser-control path.
-- Treating the current stale-loopback cleanup as proof that the native Chrome extension bridge is connected. The latest smoke proved safe cleanup and a free trigger port only. It did not prove extension native-host selector typing.
-- Treating refreshed Desktop extension folders as proof that Chrome native messaging is connected. The folders are v6 with native messaging, but owner Chrome currently has the extension disabled and `127.0.0.1:7777` does not answer.
-- Dumping raw Chrome profile preference files. Use filtered JSON parsing for the Anticipy extension id only.
-- Using native local Apple Calendar as an autonomous proof path when read-back/delete is blocked by macOS privacy or AppleScript hangs. Do not create real Calendar artifacts unless cleanup and read-back are reliable.
-- Running old `scripts/ship.sh` blindly. It rebuilds, uploads to the old canonical R2 key, commits a manifest, and pushes `HEAD:main`. Use the no-push `scripts/ship_candidate.sh` path for judgeable public candidates.
-- Comparing Vercel live commit seven characters to Git's default eight-character short SHA. Use `git rev-parse --short=7 HEAD`.
+- Treating any production-linked source or manifest commit, including `bb4319ab` or `549322c`, as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, or fresh-account onboarding path.
+- Treating local tests, direct probes, mocked Playwright, browser automation page loads, public headers, public SHA checks, owner Chrome, local packaging, strict codesign, or screenshots as proof.
+- Letting action-shaped prose become browser search. Explicit lookup may search; action tasks must route to API hands, browser hands with explicit site context, or a visible ask/needs-human.
+- Letting browser planner model failures loop to the dispatcher step cap. Low-credit or missing-model paths must fail fast, ask clearly, and stay visible in logs.
+- Running old `scripts/ship.sh` blindly. It rebuilds, uploads to the old canonical R2 key, commits a manifest, and pushes `HEAD:main`. Use `scripts/ship_candidate.sh` and never push.
+- Treating a nonzero `scripts/ship_candidate.sh` final convergence check as success without manual public state, header, and full SHA verification.
 - Letting stale untracked `public/Anticipy.dmg` enter Vercel output. It exceeds Vercel's 100 MB file limit and is not the canonical R2 download.
-- Using path-sorted DMG selection after a Tauri build. That selected stale 2.5 GB artifacts. Prefer the target-specific fresh DMG path.
-- Letting extension zip archive metadata churn dirty the tree every package run. Use the deterministic packager from `ca16ffe1`, and do not commit regenerated zips unless extension source changed or the package content intentionally changed.
-- Making product changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` while the judged executor commit contains only logs. The judge will scan the external tree and treat uncommitted product deltas as a tamper risk. Product changes must live in a tracked, reviewable commit in the source tree being judged, or the loop must explicitly adapt to commit and scan the production-linked repo.
-- Rebuilding packaged extension or app archives that contain owner/person-specific literals or eval-control literals in product code. Clean or isolate those literals before packaging.
-- Treating the local executor Next page, local zip, local package smoke, local Swift app launch, owner Chrome, public headers, public SHA, or mocked Playwright probes as proof for production `anticipy.ai/app`.
-- Treating authenticated-owner Chrome observations as clean stranger proof.
-- Treating the old 2.5 GB public DMG as a healthy normal verifier path. It made a single M1 judge take tens of minutes. The public `9a2aa885` candidate is about 171 MB, but still needs separate judge proof.
+- Letting extension zip archive metadata churn dirty the tree every package run. Restore regenerated zips unless extension source changed or package content intentionally changed.
+- Making product changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` without a tracked, judgeable product commit in that source tree.
+- Rebuilding packaged extension or app archives that contain owner/person-specific literals or eval-control literals in product code.
+- Using native local Apple Calendar as autonomous proof when read-back/delete is blocked by macOS privacy or AppleScript hangs.
+- Dumping raw Chrome profile preference files. Use filtered JSON parsing for the Anticipy extension id only.
+- Assuming Chrome AppleScript JavaScript is enabled.
+- Treating the local self-test endpoint, extension value read-back, extension zip hashes, refreshed Desktop extension folders, archive payload inspection, fake-network Calendar probes, mocked server branch probes, or Browser/Playwright renders as proof.
 - Google Sheets and Google Docs canvas synthetic input.
 - Amazon.ca Playwright automation.
 - Anti-bot arms races for captcha or Cloudflare challenges.
 - Always-on cloud transcription.
 - Old audio-first M0 as the daily gate. Audio is a final exam after clean typed perimeter works.
-- Do not treat DuckDuckGo/browser search pages, read-context, write-memory, channel-stub proof, screenshot-only browser proof, guard-only proof, abstention, ask-only behavior, empty-plan `goal_done`, or any support-only proof as completed real-world actions.
-- Do not let the planner type a whole task into a browser search bar as a substitute for decomposition. Explicit lookup may search; action tasks must route to API hands, the real browser agent hand, or ask/needs-human.
-- Do not let browser planner model failures loop to the dispatcher step cap. Low-credit or missing-model paths must fail fast, ask clearly, and stay visible in logs.
-- Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
 - Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `a4a73234f5c6266c5256fefab5c365bc55d9d4b1` and release SHA `d5671999845e9e038096bb29911732b91eabd7162799c1839f38b2678964fb2c`.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `549322cec573c8667e908c84a16c2736540d9e81` and release SHA `c0e8ca6778ce969fc32f02e7773ddb2026992c5162344132535f79182041f172`.
 - If M1 passes, run an M2/M3 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact or browser action.
-- While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof. The next useful slices are continuing safe browser-hands readiness work or preparing the pending M1/M2 judge path for when separate judge quota returns.
+- While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof.
 
 Law digest:
-Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, public headers, owner Chrome checks, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
+Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, public headers, owner/browser checks, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
