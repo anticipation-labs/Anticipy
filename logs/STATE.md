@@ -4,40 +4,41 @@ Current milestone: M1, real front door. M1 means a clean profile can download a 
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `76fc00d`, and found no tamper. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify --strict` and `spctl --assess` failed with `code has no resources but signature indicates they must be present`, and launch produced an invisible app process with zero windows instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Current pending unjudged production candidate: `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean`. Product DMG source commit is `f370f7c9749d204234acc9618f0691b5f23ad1e3`. Public site/manifest commit is `c3d12fcee626050054995107efc3e326d116c4df`. The candidate is tracked, deployed to public `https://www.anticipy.ai`, and not pushed to git origin. It is not M1 proof until the separate judge verifies the clean public front door and public app launch.
+Current pending unjudged production candidate: `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean`. Product DMG source commit is `ff5c470f65c42ad24f0f55be68d6acf702d525d5`. Public site/manifest commit is `9a2aa8858ad3b2a6186a983b2160a081c8089421`. The candidate is tracked, deployed to public `https://www.anticipy.ai`, and not pushed to git origin. It is not M1 proof until the separate judge verifies the clean public front door and public app launch.
 
 What the public candidate contains:
 - M1 fixes from `ccc96264`: public `/app` source starts on the download surface, Tauri signs and verifies the app bundle root before DMG creation, packaged app launch shows a readable Anticipy popover, package-path owner/eval literals were scrubbed, bridge screenshot paths use the current home directory, and extension packaging copies only git-tracked files.
 - M1 size fix from `20de47b5`: default front-door DMG skips the 2.3 GB Parakeet ASR model unless `ANTICIPY_BUNDLE_ASR_MODEL=1`, leaving audio weights for later audio milestones.
 - M2 perimeter slice from `ca16ffe1`: the packaged Tauri popover has a persistent typed-task composer. Submit calls `/api/listen/inject` first and then `/api/act` when work remains; already-acted browser fast-path injects render done; confirm-required actions render Approve and Reject controls backed by `/api/act/confirm/{task_id}`.
 - Packaging hardening from `ca16ffe1`: `scripts/build_dmg.sh` prefers the fresh target-specific Tauri DMG path and only falls back to newest mtime, so stale 2.5 GB artifacts are no longer selected. `scripts/v7/package_extension_v6.sh` writes deterministic zips with fixed timestamps and sorted file order.
-- Public ship path from `4c4fbe32` through `c3d12fce`: `scripts/ship_candidate.sh` stages a commit-addressed R2 object, writes manifest URL/bytes/SHA, pulls Vercel production settings, builds, deploys prebuilt production output without git push, retries transient Vercel upload failures, excludes stale local DMGs from Vercel output, and verifies public state plus public DMG SHA.
+- Public ship path from `4c4fbe32` through `9a2aa885`: `scripts/ship_candidate.sh` stages a commit-addressed R2 object, writes manifest URL/bytes/SHA, pulls Vercel production settings, builds, deploys prebuilt production output without git push, retries transient Vercel upload failures, excludes stale local DMGs from Vercel output, and verifies public state plus public DMG SHA.
 - Boot import fixes from `9a2ccffd`: packaged first launch has safe compatibility modules for `app.dossier.call` and `app.anticipy.spine`, so `/api/state` and `/api/dossier/events` no longer fail on missing imports.
-- Archive cleanup from `f370f7c9`: rebuilt packaged archives no longer include the remaining owner/eval literals found by the zip scan. The stale dev-recipient cleanup regex is generic, and trivia seed facts no longer contain the Steve Jobs / Bill Gates silence-control names.
+- Archive cleanup from `f370f7c9`: rebuilt packaged archives no longer include the remaining owner/eval literals found by the zip scan. The stale dev-recipient cleanup regex is generic, and trivia seed facts no longer contain the silence-control names.
+- First-launch UX fix from `ff5c470f`: macOS microphone permission is no longer prompted on app launch. It is deferred until explicit listening or onboarding action, and the welcome copy reflects that timing.
 
 Public candidate facts, not judge proof:
-- Public site commit: `c3d12fcee626050054995107efc3e326d116c4df`.
-- Public DMG source commit in manifest: `f370f7c9749d204234acc9618f0691b5f23ad1e3`.
-- Public DMG SHA-256: `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a`.
-- Public DMG size: `178816135` bytes.
-- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/f370f7c9749d204234acc9618f0691b5f23ad1e3/Anticipy_1.0.0_aarch64.dmg`.
+- Public site commit: `9a2aa8858ad3b2a6186a983b2160a081c8089421`.
+- Public DMG source commit in manifest: `ff5c470f65c42ad24f0f55be68d6acf702d525d5`.
+- Public DMG SHA-256: `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
+- Public DMG size: `178815398` bytes.
+- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/ff5c470f65c42ad24f0f55be68d6acf702d525d5/Anticipy_1.0.0_aarch64.dmg`.
 - `https://www.anticipy.ai/api/app/state` reports the expected site commit, release SHA, manifest release commit, and byte count.
 - `https://www.anticipy.ai/app` returns 200 HTML.
-- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178816135`.
+- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178815398`.
 - `SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed full public DMG SHA verification.
 
 Build-side checks for the current production stack, not proof:
-- `engine/.venv/bin/python -m py_compile engine/app/task_queue/store.py engine/app/trivia/seed_facts.py` passed.
-- `bash scripts/build_dmg.sh` passed for `f370f7c9`.
-- Rebuilt deterministic extension archives have matching SHA-256 `1de86d9e3a4d6c42818c94f07429d3e226949faac1e15d860ae713b6d0c91239`.
-- Rebuilt archive scan found no targeted owner/eval literals, no held-out paths, and no obvious token shapes.
+- `cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check` passed.
+- `git diff --check` passed.
+- `cargo check --manifest-path desktop/src-tauri/Cargo.toml` passed.
+- `bash scripts/build_dmg.sh` passed for `ff5c470f`.
+- Mounted-DMG `codesign --verify --strict --verbose=4` passed for `Anticipy.app`.
+- `spctl --assess` still rejects the app because it is ad-hoc signed and this Mac has no Developer ID identity.
 - R2 candidate HEAD returned correct disk-image content type and byte length.
 - Vercel prebuilt deploy succeeded.
-- Public DMG was downloaded from the canonical `/dl` route in about two minutes. SHA-256 and byte count matched the manifest.
-- Mounted public DMG `codesign --verify --strict --verbose=4` passed for `Anticipy.app`.
-- `spctl --assess` still rejects the app because it is ad-hoc signed and this Mac has no Developer ID identity.
-- Mounted public app launch rehearsal started the bundled sidecar on port 8731. `/health`, `/api/state`, `/api/listen/status`, and `/api/dossier/events` responded. `/api/state` showed `key_ok: true`, `provisioned: true`, `onboarded: true`, and `engine_health.bundled_binary: true`.
-- Screenshot `/tmp/anticipy-public-m1-f370-before-click.png` showed a visible Anticipy surface with microphone status, typed task box, Run button, and onboarding cards. macOS also showed a microphone permission prompt. The builder did not grant microphone permission.
+- Public state converged to site commit `9a2aa88` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
+- The full public DMG SHA verification passed.
+- Final builder package rehearsal reset microphone TCC to unknown, mounted the final local DMG, launched the app, confirmed the bundled sidecar on port 8731, and captured screenshot `/tmp/anticipy-final-ff5c.pUGuEW/final-launch.png`. The screenshot showed a visible Anticipy surface with task box, Run button, onboarding cards, and no macOS microphone permission prompt. After the rehearsal, TCC was reset back to unknown and the test app/mount were cleaned up.
 
 Gate status: no hard human gate blocks all work. The failed builder commits `76fc00d`, `d51f4eb`, and earlier failed executor-local package slices remain reverted and must not be merged to `main`. The current production candidate is public and judgeable but must not be represented as M1 or M2 done until the separate judge verifies reality.
 
@@ -62,7 +63,7 @@ Pending gates:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `c3d12fce` plus release `7ef9c6b6...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `9a2aa885` plus release `0638e321...` is pending judge and does not change this number.
 - M2 packaged typed-input reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -76,17 +77,17 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating production-linked source commits `c3d12fce`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, or their ancestors as M1 or M2 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, and packaged typed task.
+- Treating production-linked source commits `9a2aa885`, `ff5c470f`, `c3d12fce`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, or their ancestors as M1 or M2 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, and packaged typed task.
 - Running old `scripts/ship.sh` blindly. It rebuilds, uploads to the old canonical R2 key, commits a manifest, and pushes `HEAD:main`. Use the no-push `scripts/ship_candidate.sh` path for judgeable public candidates.
 - Comparing Vercel live commit seven characters to Git's default eight-character short SHA. Use `git rev-parse --short=7 HEAD`.
 - Letting stale untracked `public/Anticipy.dmg` enter Vercel output. It exceeds Vercel's 100 MB file limit and is not the canonical R2 download.
-- Using path-sorted DMG selection after a Tauri build. That selected stale `desktop/target/release/...` 2.5 GB artifacts. Prefer the target-specific fresh DMG path.
+- Using path-sorted DMG selection after a Tauri build. That selected stale 2.5 GB artifacts. Prefer the target-specific fresh DMG path.
 - Letting extension zip archive metadata churn dirty the tree every package run. Use the deterministic packager from `ca16ffe1`.
 - Making product changes in `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` while the judged executor commit contains only logs. The judge will scan the external tree and treat uncommitted product deltas as a tamper risk. Product changes must live in a tracked, reviewable commit in the source tree being judged, or the loop must explicitly adapt to commit and scan the production-linked repo.
 - Rebuilding packaged extension or app archives that contain owner/person-specific literals or eval-control literals in product code. Clean or isolate those literals before packaging.
 - Treating the local executor Next page, local zip, local package smoke, local Swift app launch, owner Chrome, public headers, public SHA, or mocked Playwright probes as proof for production `anticipy.ai/app`.
 - Treating authenticated-owner Chrome observations as clean stranger proof.
-- Treating the old 2.5 GB public DMG as a healthy normal verifier path. It made a single M1 judge take tens of minutes. The public `c3d12fce` candidate is about 171 MB, but still needs separate judge proof.
+- Treating the old 2.5 GB public DMG as a healthy normal verifier path. It made a single M1 judge take tens of minutes. The public `9a2aa885` candidate is about 171 MB, but still needs separate judge proof.
 - Google Sheets and Google Docs canvas synthetic input.
 - Amazon.ca Playwright automation.
 - Anti-bot arms races for captcha or Cloudflare challenges.
@@ -95,11 +96,12 @@ Dead ends not to retry blindly:
 - Do not treat DuckDuckGo/browser search pages, read-context, write-memory, channel-stub proof, screenshot-only browser proof, guard-only proof, abstention, ask-only behavior, empty-plan `goal_done`, or any support-only proof as completed real-world actions.
 - Do not let the planner type a whole task into a browser search bar as a substitute for decomposition. Explicit lookup may search; action tasks must route to API hands, the real browser agent hand, or ask/needs-human.
 - Do not use capture timestamps as event times unless the user explicitly asked for now. Supply real observed clock and transcript timing context instead.
+- Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- Run the separate M1 judge against public production site commit `c3d12fce` and release SHA `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a` when Codex CLI quota allows it.
+- Run the separate M1 judge against public production site commit `9a2aa8858ad3b2a6186a983b2160a081c8089421` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad` when Codex CLI quota allows it.
 - If M1 passes, run an M2 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact.
-- Keep the public artifact small enough that a normal M1 judge completes in minutes.
+- While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof.
 
 Law digest:
 Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, public headers, owner Chrome checks, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.

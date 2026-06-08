@@ -1,30 +1,30 @@
 # Last Lap
 
-Lap: 20260607T152933Z
-Date: 2026-06-07T15:29:33Z
+Lap: 20260607T163112Z
+Date: 2026-06-07T16:31:12Z
 Milestone: M1 - real front door
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `f370f7c9` on branch `rebuild/spine-clean`.
-- `f370f7c9` removes the remaining owner/eval literals found in the packaged archive scan: the stale dev-recipient cleanup regex no longer names the owner, and two trivia seed facts no longer contain the Steve Jobs / Bill Gates silence-control names.
-- Rebuilt deterministic extension archives from the cleaned source and committed them with the source cleanup.
-- Manifest commit `c3d12fce` points public release metadata at the `f370f7c9` DMG. `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the committed web tree to production without pushing git.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `ff5c470f65c42ad24f0f55be68d6acf702d525d5` on branch `rebuild/spine-clean`.
+- `ff5c470f` defers the macOS microphone permission prompt until an explicit listening or onboarding action instead of prompting on first launch.
+- The first-launch welcome copy now tells the user that macOS asks when they choose listening or browser access, not immediately on app open.
+- Manifest/site commit `9a2aa8858ad3b2a6186a983b2160a081c8089421` points public release metadata at the `ff5c470f` DMG. `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the committed web tree to production without pushing git.
 
 Checks:
-- `engine/.venv/bin/python -m py_compile engine/app/task_queue/store.py engine/app/trivia/seed_facts.py` passed.
-- Rebuilt `desktop/src-tauri/resources/anticipy-extension.zip`, `public/anticipy-extension-v6.zip`, and `public/anticipy-extension.zip`; all three have SHA-256 `1de86d9e3a4d6c42818c94f07429d3e226949faac1e15d860ae713b6d0c91239`.
-- Rebuilt archive scan found no targeted owner/eval literals or obvious secret-token shapes.
-- `bash scripts/build_dmg.sh` passed and produced a 178,816,135 byte public candidate DMG.
-- R2 candidate HEAD returned `200`, `application/x-apple-diskimage`, and `Content-Length: 178816135`.
-- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` passed. Public state is live at site commit `c3d12fc` and release SHA `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a`.
-- Public `/app` returns 200 HTML. Public `/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 disk image with `Content-Length: 178816135`.
-- Downloaded the canonical public DMG from `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg`; SHA-256 matched `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a` and byte count matched `178816135`.
-- Mounted the public DMG read-only. `codesign --verify --strict --verbose=4` passed for `Anticipy.app`; `spctl --assess` rejected as expected because the app is ad-hoc signed and this Mac has no Developer ID identity.
-- Launched the mounted public app. The bundled sidecar owned port 8731 and `/health`, `/api/state`, `/api/listen/status`, and `/api/dossier/events` responded. `/api/state` showed `key_ok: true`, `provisioned: true`, `onboarded: true`, and `engine_health.bundled_binary: true`.
-- Real screen screenshot `/tmp/anticipy-public-m1-f370-before-click.png` showed the visible Anticipy surface with microphone status, typed task box, Run button, and onboarding cards. macOS also showed a microphone permission prompt. The builder did not click Allow.
+- `cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check` passed.
+- `git diff --check` passed.
+- `cargo check --manifest-path desktop/src-tauri/Cargo.toml` passed.
+- `bash scripts/build_dmg.sh` passed for committed product source `ff5c470f`.
+- Local committed DMG strict codesign passed for `desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Anticipy.app`.
+- `scripts/ship_candidate.sh` staged the DMG under a commit-addressed R2 key for `ff5c470f`; manifest SHA is `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad` and byte count is `178815398`.
+- R2 candidate HEAD returned `200`, `application/x-apple-diskimage`, and `Content-Length: 178815398`.
+- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` passed. Public state is live at site commit `9a2aa88` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
+- Public `/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178815398`; the deploy script also verified the full public DMG SHA.
+- Final local package rehearsal reset the app microphone permission to unknown, mounted the final local DMG, passed `codesign --verify --strict --verbose=4`, launched the mounted app, confirmed the bundled sidecar owned port 8731, and captured screenshot `/tmp/anticipy-final-ff5c.pUGuEW/final-launch.png`.
+- The final launch screenshot showed the visible Anticipy surface with task box, Run button, and onboarding cards, with no macOS microphone permission prompt. After the rehearsal, the app was quit, remaining sidecar processes were stopped, the DMG was detached, and microphone TCC was reset back to unknown.
 
 Gate:
 - M1 is not proven. These are builder-side deploy and launch rehearsals, not a separate clean-profile judge verdict.
@@ -34,5 +34,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When separate judge quota is available, run an M1 judge against production site commit `c3d12fce` and public release SHA `7ef9c6b6be5b632a67350413ac39a3b298a4b1dd039a709d621e65afa0e3698a`.
+- When separate judge quota is available, run an M1 judge against production site commit `9a2aa8858ad3b2a6186a983b2160a081c8089421` and public release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
 - If M1 passes, run an M2 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact.
