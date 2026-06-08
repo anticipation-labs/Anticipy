@@ -1,26 +1,25 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M5 chat-onboarding explicit-start candidate, publicly deployed but unjudged.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M5 audio-onboarding explicit-readiness candidate, publicly deployed but unjudged.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260608T133043Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked site commit `a4d69edd6628ba84633a3a339ab96012f44187f7`. The release manifest still points at DMG source commit `4430773073f30ea535994f00e7eab4c420080bed`.
+Latest builder lap: `20260608T134105Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked site commit `c0e40279044ff1ec178279c1bc8f294117aa7bb8`. The release manifest still points at DMG source commit `4430773073f30ea535994f00e7eab4c420080bed`.
 
 Latest product change:
-- Public `/onboarding/chat` no longer calls the broker model automatically on page load.
-- Chat onboarding now starts only when the user clicks explicit `Begin conversation`.
-- The local-engine check is an explicit `type="button"` action. The page no longer probes `127.0.0.1` automatically on load.
-- The reply input is hidden until the conversation has started, and then uses a real form submit path.
-- Profile persistence now stops locally unless the user has explicitly checked that the local engine is connected.
+- Public `/onboarding/audio` now requires an explicit local-engine readiness check before file pick, drag-drop upload, or audio upload to the local Mac engine.
+- The readiness panel renders `Local engine: not checked` and a `Check local engine` button before any upload is allowed.
+- Pre-readiness file selection stops locally with a visible message and sends no localhost or onboarding-upload request.
+- The audio upload path no longer performs its own automatic localhost health preflight when the user chooses a file.
 - The release manifest was not rewritten and still points at the latest DMG from commit `4430773073f30ea535994f00e7eab4c420080bed`.
 
 Current public production candidate, pending judge:
-- Public site commit: `a4d69edd6628ba84633a3a339ab96012f44187f7`.
+- Public site commit: `c0e40279044ff1ec178279c1bc8f294117aa7bb8`.
 - Public DMG source commit in manifest: `4430773073f30ea535994f00e7eab4c420080bed`.
 - Public DMG SHA-256: `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - Public DMG size: `178890489` bytes.
 - Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/4430773073f30ea535994f00e7eab4c420080bed/Anticipy_1.0.0_aarch64.dmg`.
-- `https://www.anticipy.ai/api/app/state` reports site commit `a4d69ed`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
+- `https://www.anticipy.ai/api/app/state` reports site commit `c0e4027`, release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`, manifest release commit `4430773073f30ea535994f00e7eab4c420080bed`, and `178890489` bytes.
 - `https://www.anticipy.ai/app` returns 200 HTML.
 - `https://www.anticipy.ai/install.sh` returns 200 shell script.
 - `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 disk image with content length `178890489`.
@@ -31,18 +30,17 @@ Latest checks, candidate evidence only:
 - Forbidden path scan found no edits under `tests/`, `judge/`, `realdays/holdout/`, or `scripts/realday.sh`.
 - Owner/eval literal scan found no matches in the touched product diff.
 - Local `npm run build` passed.
-- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` succeeded and verified the unchanged public DMG SHA.
-- Public `/api/app/state`, `/onboarding/chat` HEAD, and `/dl/Anticipy_1.0.0_aarch64.dmg` HEAD checks passed.
-- Fresh Playwright browser context on `https://www.anticipy.ai/onboarding/chat` found explicit `Begin conversation` and `Check local engine` buttons, no reply input before start, zero forms before start, and engine status `not checked`.
-- Broker model endpoint, localhost endpoint, and auth endpoint call counts were zero on page load.
-- The chat onboarding page had zero page-origin console warnings/errors.
-- Screenshot evidence is local at `/tmp/anticipy-onboarding-chat-20260608T133043Z.png`.
-- No installer was executed, and no real external artifact, model call, submitting UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, phone call, local engine write, or account action was performed by the builder.
+- Local Playwright render on `/onboarding/audio` found readiness UI, blocked pre-readiness file selection, and zero localhost/upload requests on load or after blocked click.
+- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed a production URL but exited nonzero on the known final convergence edge; manual public checks were required and passed.
+- Public `/api/app/state`, `/onboarding/audio` HEAD, and `/dl/Anticipy_1.0.0_aarch64.dmg` full SHA checks passed.
+- Fresh Playwright browser context on `https://www.anticipy.ai/onboarding/audio` found explicit `Check local engine`, engine status `not checked`, one dropzone, no file chooser before readiness, visible blocked message, zero localhost/upload requests on load or after blocked click, and zero page console warnings/errors.
+- Screenshot evidence is local at `/tmp/anticipy-public-onboarding-audio-20260608T134105Z.png`.
+- No installer was executed, and no real external artifact, model call, submitting UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, phone call, local engine write, audio upload, or account action was performed by the builder.
 
 Current M2/M3/M5 candidates in the production-linked source, pending judge:
 - M2 typed task and Calendar candidates include explicit typed Calendar routing, API-backed Google Calendar create, API read-back before success, packaged typed-task result UI, structured browser proof rows, ask-user choice buttons, persistent listening start/stop control, typed client clock grounding, and this lap's account form submit behavior.
 - M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit browser form fill, multi-field no-submit form fill, visible proof rows, ask-user retry/cancel/review choices, native bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status and diagnostics, native bridge self-test, native action-search guard, broader action-search boundary, generic bridge primitive dispatch for click/type/key/read/extract/DOM snapshot, search-box type repair, broader site-search phrasing repair, early SMS pre-confirm for internal action-engine callers, and direct browser primitive bridge preference when CDP is unavailable.
-- M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness honesty, cold-start status polling honesty, onboarding SMS endpoint, browser readiness requiring a real local native-bridge self-test before Step 2 advances, clean account-path form plus no pre-session localhost probe, call-onboarding form plus no submit before explicit engine readiness, and chat-onboarding explicit start with no model or loopback work on page load.
+- M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness honesty, cold-start status polling honesty, onboarding SMS endpoint, browser readiness requiring a real local native-bridge self-test before Step 2 advances, clean account-path form plus no pre-session localhost probe, call-onboarding form plus no submit before explicit engine readiness, chat-onboarding explicit start with no model or loopback work on page load, and audio-onboarding explicit engine readiness before file selection or upload.
 - These are not proof. The separate judge has not typed a task in the packaged app and verified a real artifact, browser action, native bridge action, record-control behavior, relative-date clock behavior, or onboarding mesh.
 
 Gate status:
@@ -70,7 +68,7 @@ Not proven:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `a4d69ed` plus release `8fd2f0cf...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `c0e4027` plus release `8fd2f0cf...` is pending judge and does not change this number.
 - M2 packaged typed-input/listen-control/clock-grounding reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands reality judge pass rate: 0/0 verified; not run.
 - M5 packaged/self-onboarding reality judge pass rate: 0/0 verified; not run.
@@ -86,7 +84,7 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating any production-linked source, manifest commit, public build commit, public headers, public SHA, public release metadata, public install script, successful site deploy, public account/onboarding form check, public installer cleanup, public installer safe replacement, delayed installer service stops, installer preflight checks, or browser-rendered public page as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
+- Treating any production-linked source, manifest commit, public build commit, public headers, public SHA, public release metadata, public install script, successful site deploy, public account/onboarding form check, public audio-readiness check, public installer cleanup, public installer safe replacement, delayed installer service stops, installer preflight checks, or browser-rendered public page as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
 - Treating planner prompt edits, search-type repair probes, no-submit fill probes, typed-result render probes, ask-user option render probes, onboarding self-test render probes, SMS gate probes, fake-runtime probes, local tests, direct probes, targeted pytest, mocked Playwright, browser automation page loads, public headers, owner Chrome, local packaging, strict codesign, process/window enumeration, or screenshots as proof.
 - Letting action-shaped prose become browser search. Explicit lookup may search; action tasks must route to API hands, browser hands with explicit site context, or a visible ask/needs-human.
 - Letting browser planner model failures loop to the dispatcher step cap. Low-credit or missing-model paths must fail fast, ask clearly, and stay visible in logs.
@@ -99,7 +97,7 @@ Dead ends not to retry blindly:
 - Using native local Apple Calendar as autonomous proof when read-back/delete is blocked by macOS privacy or AppleScript hangs.
 - Dumping raw Chrome profile preference files. Use filtered JSON parsing for the Anticipy extension id only.
 - Assuming Chrome AppleScript JavaScript is enabled.
-- Treating the local self-test endpoint, extension value read-back, extension zip hashes, refreshed Desktop extension folders, archive payload inspection, fake-network Calendar probes, mocked server branch probes, Browser/Playwright renders, Chrome page-origin logs, process/window enumeration, public download metadata, release integrity metadata, public installer checksum checks, public installer cleanup checks, public installer replacement checks, delayed public installer service stops, installer preflight checks, account form keyboard checks, onboarding call form checks, or onboarding chat page-load checks as proof.
+- Treating the local self-test endpoint, extension value read-back, extension zip hashes, refreshed Desktop extension folders, archive payload inspection, fake-network Calendar probes, mocked server branch probes, Browser/Playwright renders, Chrome page-origin logs, process/window enumeration, public download metadata, release integrity metadata, public installer checksum checks, public installer cleanup checks, public installer replacement checks, delayed public installer service stops, installer preflight checks, account form keyboard checks, onboarding call form checks, onboarding chat page-load checks, or onboarding audio readiness checks as proof.
 - Google Sheets and Google Docs canvas synthetic input.
 - Amazon.ca Playwright automation.
 - Anti-bot arms races for captcha or Cloudflare challenges.
@@ -108,7 +106,7 @@ Dead ends not to retry blindly:
 - Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `a4d69edd6628ba84633a3a339ab96012f44187f7` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `c0e40279044ff1ec178279c1bc8f294117aa7bb8` and release SHA `8fd2f0cfb8ca62873c78db0df82150a03273ebf0fea5bdd6bca891e0730df587`.
 - If M1 passes, run an M2/M3/M5 judge that types a safe, reversible, fully time-grounded task in the packaged app, verifies the real artifact or browser action, verifies packaged listen control behavior, and verifies onboarding mesh on a fresh account.
 - While judge quota is blocked, keep improving unblocked perimeter work without claiming proof.
 
