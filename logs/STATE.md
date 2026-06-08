@@ -1,22 +1,12 @@
 # STATE
 
-Current milestone: M1, real front door. M1 means a clean profile can download a Mac app from the public front door at `anticipy.ai/app`, launch it, and see the live Anticipy surface. M0 clean floor is proven once, but the product is not done until a stranger can download, onboard, connect their own apps, and get a real task done.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2/M3 perimeter work may continue as candidate work only. M2 now has an unjudged typed Calendar routing candidate, but it is not proof.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `76fc00d`, and found no tamper. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify --strict` and `spctl --assess` failed with `code has no resources but signature indicates they must be present`, and launch produced an invisible app process with zero windows instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Current pending unjudged production candidate: `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean`. Product DMG source commit is `ff5c470f65c42ad24f0f55be68d6acf702d525d5`. Public site/manifest commit is `9a2aa8858ad3b2a6186a983b2160a081c8089421`. The candidate is tracked, deployed to public `https://www.anticipy.ai`, and not pushed to git origin. It is not M1 proof until the separate judge verifies the clean public front door and public app launch.
+Latest builder lap: `20260608T025410Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `8d1898259ecb05f86b678d4e686e46744bb6e382`. It routes explicit typed Calendar instructions with full date/time into a pending `calendar_event` plan and Google Calendar template URL instead of generic browser search. Completion is recorded only after the existing browser driver reports both done and verified. The active native Apple Calendar path was removed because macOS privacy blocked reliable read-back and cleanup.
 
-What the public candidate contains:
-- M1 fixes from `ccc96264`: public `/app` source starts on the download surface, Tauri signs and verifies the app bundle root before DMG creation, packaged app launch shows a readable Anticipy popover, package-path owner/eval literals were scrubbed, bridge screenshot paths use the current home directory, and extension packaging copies only git-tracked files.
-- M1 size fix from `20de47b5`: default front-door DMG skips the 2.3 GB Parakeet ASR model unless `ANTICIPY_BUNDLE_ASR_MODEL=1`, leaving audio weights for later audio milestones.
-- M2 perimeter slice from `ca16ffe1`: the packaged Tauri popover has a persistent typed-task composer. Submit calls `/api/listen/inject` first and then `/api/act` when work remains; already-acted browser fast-path injects render done; confirm-required actions render Approve and Reject controls backed by `/api/act/confirm/{task_id}`.
-- Packaging hardening from `ca16ffe1`: `scripts/build_dmg.sh` prefers the fresh target-specific Tauri DMG path and only falls back to newest mtime, so stale 2.5 GB artifacts are no longer selected. `scripts/v7/package_extension_v6.sh` writes deterministic zips with fixed timestamps and sorted file order.
-- Public ship path from `4c4fbe32` through `9a2aa885`: `scripts/ship_candidate.sh` stages a commit-addressed R2 object, writes manifest URL/bytes/SHA, pulls Vercel production settings, builds, deploys prebuilt production output without git push, retries transient Vercel upload failures, excludes stale local DMGs from Vercel output, and verifies public state plus public DMG SHA.
-- Boot import fixes from `9a2ccffd`: packaged first launch has safe compatibility modules for `app.dossier.call` and `app.anticipy.spine`, so `/api/state` and `/api/dossier/events` no longer fail on missing imports.
-- Archive cleanup from `f370f7c9`: rebuilt packaged archives no longer include the remaining owner/eval literals found by the zip scan. The stale dev-recipient cleanup regex is generic, and trivia seed facts no longer contain the silence-control names.
-- First-launch UX fix from `ff5c470f`: macOS microphone permission is no longer prompted on app launch. It is deferred until explicit listening or onboarding action, and the welcome copy reflects that timing.
-
-Public candidate facts, not judge proof:
+Current public production candidate, pending judge:
 - Public site commit: `9a2aa8858ad3b2a6186a983b2160a081c8089421`.
 - Public DMG source commit in manifest: `ff5c470f65c42ad24f0f55be68d6acf702d525d5`.
 - Public DMG SHA-256: `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
@@ -27,20 +17,19 @@ Public candidate facts, not judge proof:
 - `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178815398`.
 - `SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed full public DMG SHA verification.
 
-Build-side checks for the current production stack, not proof:
-- `cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check` passed.
-- `git diff --check` passed.
-- `cargo check --manifest-path desktop/src-tauri/Cargo.toml` passed.
-- `bash scripts/build_dmg.sh` passed for `ff5c470f`.
-- Mounted-DMG `codesign --verify --strict --verbose=4` passed for `Anticipy.app`.
-- `spctl --assess` still rejects the app because it is ad-hoc signed and this Mac has no Developer ID identity.
-- R2 candidate HEAD returned correct disk-image content type and byte length.
-- Vercel prebuilt deploy succeeded.
-- Public state converged to site commit `9a2aa88` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
-- The full public DMG SHA verification passed.
-- Final builder package rehearsal reset microphone TCC to unknown, mounted the final local DMG, launched the app, confirmed the bundled sidecar on port 8731, and captured screenshot `/tmp/anticipy-final-ff5c.pUGuEW/final-launch.png`. The screenshot showed a visible Anticipy surface with task box, Run button, onboarding cards, and no macOS microphone permission prompt. After the rehearsal, TCC was reset back to unknown and the test app/mount were cleaned up.
+Current unshipped M2 candidate, pending judge and deploy decision:
+- Product source commit: `8d1898259ecb05f86b678d4e686e46744bb6e382`.
+- Checks passed: `python3 -m py_compile engine/app/product/server.py`, `git diff --check`, `cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check`, `cargo check --manifest-path desktop/src-tauri/Cargo.toml`, typed Calendar parser probe, non-destructive HTTP smoke on `/api/listen/inject`, `bash scripts/build_dmg.sh`, packaged app strict codesign, and packaged sidecar smoke.
+- The final smoke did not call `/api/act` and did not intentionally create another real artifact.
+- This is not M2 proof. The separate judge has not typed a task in the packaged app and verified a correct real artifact.
 
-Gate status: no hard human gate blocks all work. The failed builder commits `76fc00d`, `d51f4eb`, and earlier failed executor-local package slices remain reverted and must not be merged to `main`. The current production candidate is public and judgeable but must not be represented as M1 or M2 done until the separate judge verifies reality.
+Gate status: no hard human gate blocks all work. Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. Spending money is a hard human gate and was not taken. Current-session local/product work can continue, but the separate judge cannot run until quota resets or the human chooses to spend money.
+
+Pending cleanup/gates:
+- Possible cleanup item: a native Apple Calendar smoke may have created `[Anticipy test] M2 typed smoke 20260607-continue` on June 12, 2026 from 15:00 to 16:00. Local read-back/delete was blocked by macOS privacy/TCC and AppleScript list timeouts. This is queued in `PENDING_FOR_OMAR.md`; do not delete or modify real existing Calendar data.
+- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed and strict codesign passes, but full zero-warning stranger install needs Developer ID and notarization.
+- OpenRouter credit is very low. Paid Gemini cross-checks hit HTTP 402 during recent M1 judges; tiny Gemini-family retries succeeded. If required different-family cross-checks become unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked paths.
+- Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -52,13 +41,6 @@ Not proven:
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
 - The full stranger path is not proven. Public download alone is not onboarding, self-connect, or stranger task completion.
-
-Pending gates:
-- No hard human gate blocks all work.
-- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities. Current builds can be ad-hoc signed and strict codesign passes, but full zero-warning stranger install needs Developer ID and notarization.
-- Codex CLI usage for separate builder/judge sessions is currently exhausted. The CLI reported a reset on June 12, 2026 at 5:34 PM local time, with purchasing more credits as the other option. Spending money is a hard human gate and was not taken. Current-session local work can continue, but the separate judge cannot run until quota resets or the human chooses to spend money.
-- OpenRouter credit is very low. Paid Gemini cross-checks hit HTTP 402 during M1 judges; the latest judge used a tiny Gemini-family prompt that agreed with `FAKE`. If all required different-family cross-checks become unavailable, record a human money/key gate in `PENDING_FOR_OMAR.md` and keep working on unblocked paths.
-- Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
 
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
@@ -77,7 +59,8 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating production-linked source commits `9a2aa885`, `ff5c470f`, `c3d12fce`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, or their ancestors as M1 or M2 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, and packaged typed task.
+- Treating production-linked source commits `8d189825`, `9a2aa885`, `ff5c470f`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, or their ancestors as M1 or M2 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, and packaged typed task.
+- Using native local Apple Calendar as an autonomous proof path when read-back/delete is blocked by macOS privacy or AppleScript hangs. Do not create real Calendar artifacts unless cleanup and read-back are reliable.
 - Running old `scripts/ship.sh` blindly. It rebuilds, uploads to the old canonical R2 key, commits a manifest, and pushes `HEAD:main`. Use the no-push `scripts/ship_candidate.sh` path for judgeable public candidates.
 - Comparing Vercel live commit seven characters to Git's default eight-character short SHA. Use `git rev-parse --short=7 HEAD`.
 - Letting stale untracked `public/Anticipy.dmg` enter Vercel output. It exceeds Vercel's 100 MB file limit and is not the canonical R2 download.
@@ -99,9 +82,9 @@ Dead ends not to retry blindly:
 - Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- Run the separate M1 judge against public production site commit `9a2aa8858ad3b2a6186a983b2160a081c8089421` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad` when Codex CLI quota allows it.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `9a2aa8858ad3b2a6186a983b2160a081c8089421` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
 - If M1 passes, run an M2 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact.
-- While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof.
+- While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof. The next useful slice is M2/M3 positive hands wiring that avoids search-bar fallback and avoids creating unverifiable real artifacts.
 
 Law digest:
 Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, public headers, owner Chrome checks, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
