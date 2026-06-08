@@ -1,51 +1,47 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M1/M2 packaged typed-clock grounding candidate, publicly deployed but unjudged.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, and M5 perimeter work may continue as candidate work only. The latest public candidate is an M3 packaged bridge-primitive candidate, publicly deployed but unjudged.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260608T092823Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `a7ac429c62c8f4ec292acf008bc629ed9f6ba777` and tracked manifest/site commit `659ded72756e3ae96086f31bad36f76fec79ab61`.
+Latest builder lap: `20260608T094528Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `7ab2680b7f11ec34f1f88274d1c27c965e73394a` and tracked manifest/site commit `6e3779c656d36766e6265f4863faaec9ba2e5681`.
 
 Latest product change:
-- Added client wall-clock metadata to the packaged typed task form's `/api/listen/inject` request.
-- Typed requests now send ISO `client_now`, JS `client_offset_minutes`, and best-effort IANA `client_timezone`.
-- The engine records that clock on listen records and direct Calendar pending plans.
-- Direct Calendar request parsing, direct Google Calendar action start, Google Calendar prefill URL generation, and Calendar page read-back now resolve relative dates using the provided client clock when available.
-- This addresses the root cause of timezone/day-boundary Calendar errors for typed clean-input tasks. It is positive capability, not a new abstention layer.
+- The native Chrome bridge dispatch seam now maps generic browser primitives, not just navigation/search.
+- Supported generic bridge primitives now include `click`, `type`, `key`, `read`, `extract`, and `getDOMSnapshot`, with aliases such as `tap`, `press`, `fill`, `enter_text`, and `set_value`.
+- Product `_dispatch_via_extension_bridge` now preserves primitive plans from `/api/act` instead of re-deriving every browser plan as a URL or search.
+- This is M3 wiring work: it opens a route for real browser hands to click/type/read through the production native bridge. It is not a judge-proven browser action.
 
 Current public production candidate, pending judge:
-- Public site commit: `659ded72756e3ae96086f31bad36f76fec79ab61`.
-- Public DMG source commit in manifest: `a7ac429c62c8f4ec292acf008bc629ed9f6ba777`.
-- Public DMG SHA-256: `c1af163a45983ce1db26431a58294ebb38a845fc795e51a5995e47b6276aed6f`.
-- Public DMG size: `178903903` bytes.
-- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/a7ac429c62c8f4ec292acf008bc629ed9f6ba777/Anticipy_1.0.0_aarch64.dmg`.
-- `https://www.anticipy.ai/api/app/state` reports site commit `659ded7`, release SHA `c1af163a45983ce1db26431a58294ebb38a845fc795e51a5995e47b6276aed6f`, manifest release commit `a7ac429c62c8f4ec292acf008bc629ed9f6ba777`, and `178903903` bytes.
+- Public site commit: `6e3779c656d36766e6265f4863faaec9ba2e5681`.
+- Public DMG source commit in manifest: `7ab2680b7f11ec34f1f88274d1c27c965e73394a`.
+- Public DMG SHA-256: `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`.
+- Public DMG size: `178662853` bytes.
+- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/7ab2680b7f11ec34f1f88274d1c27c965e73394a/Anticipy_1.0.0_aarch64.dmg`.
+- `https://www.anticipy.ai/api/app/state` reports site commit `6e3779c`, release SHA `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`, manifest release commit `7ab2680b7f11ec34f1f88274d1c27c965e73394a`, and `178662853` bytes.
 - `https://www.anticipy.ai/app` returns 200 HTML.
-- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200, `application/x-apple-diskimage`, and `Content-Length: 178903903`.
+- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200, `application/x-apple-diskimage`, and `Content-Length: 178662853`.
 
 Latest checks, candidate evidence only:
-- `engine/.venv/bin/python -m py_compile engine/app/product/server.py` passed.
-- Extracted popover inline script parse passed.
+- `engine/.venv/bin/python -m py_compile engine/app/bridge_extension.py engine/app/product/server.py` passed.
+- Fake-runtime `app.bridge_extension.dispatch` probe passed for navigate, click, type, fill, key, read, and `getDOMSnapshot`; no real Chrome or accounts were touched.
+- Fake-dispatch `app.product.server._dispatch_via_extension_bridge` probe passed for primitive `type`, `click`, and `key` plans, proving the `/api/act` helper seam preserves primitive payloads.
 - `git diff --check` passed.
-- Direct engine boundary probe passed: `client_now=2026-06-08T06:30:00.000Z` plus `America/Vancouver` resolves `tomorrow` to `2026-06-08T15:00:00`; UTC-only would resolve to `2026-06-09`.
-- Route-level `/api/listen/inject` probe with monkeypatched processing confirmed `source_mode=typed_input`, `client_now`, `client_timezone`, and `client_offset_minutes` reach `_process_utterance`.
-- Headless Playwright popover form probe passed: one real form submit sent typed text plus ISO client time, `America/Vancouver`, and offset `420` to `/api/listen/inject`.
-- `npm --prefix desktop run test:e2e` passed 3/3.
 - Diff scan found no forbidden test/judge/holdout/script paths and no owner/eval literals in the touched diff.
 - `bash scripts/build_dmg.sh` passed after product commit.
-- Final local DMG size was `178903903` bytes and SHA-256 was `c1af163a45983ce1db26431a58294ebb38a845fc795e51a5995e47b6276aed6f`.
+- Final local DMG size was `178662853` bytes and SHA-256 was `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`.
 - Strict codesign passed for the packaged app.
-- Embedded app commit verification passed for `a7ac429c62c8f4ec292acf008bc629ed9f6ba777`.
+- Embedded app commit verification passed for `7ab2680b7f11ec34f1f88274d1c27c965e73394a`.
 - `hdiutil imageinfo` reported a valid compressed UDZO image.
 - R2 HEAD for the commit-addressed DMG passed.
-- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed successfully and verified public SHA convergence.
-- Public `/api/app/state`, `/app` HEAD, `/dl` HEAD, and headless rendered `/app` checks passed.
+- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed but exited nonzero after reporting public state live at `6e3779c`; manual public checks showed correct convergence.
+- Public `/api/app/state`, `/app` HEAD, `/dl` HEAD, full streamed public DMG SHA, and headless rendered `/app` checks passed.
 - Computer Use read the real signed-in Chrome window at `anticipy.ai/app`; because this owner profile is signed in, it showed the signed-in app surface, not the clean public download page. No milestone proof is claimed from that.
 - No real external artifact, UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, or account action was performed by the builder.
 
 Current M2/M3/M5 candidates in the production-linked source, pending judge:
 - M2 typed task and Calendar candidates include explicit typed Calendar routing, API-backed Google Calendar create, API read-back before success, packaged typed-task result UI, persistent listening start/stop control, and typed client clock grounding.
-- M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit form fill, native bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status and diagnostics, native bridge self-test, native action-search guard, and broader action-search boundary.
+- M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit form fill, native bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status and diagnostics, native bridge self-test, native action-search guard, broader action-search boundary, and generic bridge primitive dispatch for click/type/key/read/extract/DOM snapshot.
 - M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness honesty, cold-start status polling honesty, and the onboarding SMS endpoint.
 - These are not proof. The separate judge has not typed a task in the packaged app and verified a real artifact, browser action, native bridge action, record-control behavior, relative-date clock behavior, or onboarding mesh.
 
@@ -74,7 +70,7 @@ Not proven:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `659ded7` plus release `c1af163a...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `6e3779c` plus release `dc8eaeb9...` is pending judge and does not change this number.
 - M2 packaged typed-input/listen-control/clock-grounding reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
@@ -89,7 +85,7 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating any production-linked source or manifest commit, including `a7ac429c` or `659ded7`, as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
+- Treating any production-linked source or manifest commit, including `7ab2680b` or `6e3779c`, as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, browser/action artifact, listen-control behavior, relative-date clock behavior, or fresh-account onboarding path.
 - Treating local tests, direct probes, mocked Playwright, browser automation page loads, public headers, public SHA checks, owner Chrome, local packaging, strict codesign, process/window enumeration, or screenshots as proof.
 - Letting action-shaped prose become browser search. Explicit lookup may search; action tasks must route to API hands, browser hands with explicit site context, or a visible ask/needs-human.
 - Letting browser planner model failures loop to the dispatcher step cap. Low-credit or missing-model paths must fail fast, ask clearly, and stay visible in logs.
@@ -111,7 +107,7 @@ Dead ends not to retry blindly:
 - Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `659ded72756e3ae96086f31bad36f76fec79ab61` and release SHA `c1af163a45983ce1db26431a58294ebb38a845fc795e51a5995e47b6276aed6f`.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `6e3779c656d36766e6265f4863faaec9ba2e5681` and release SHA `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`.
 - If M1 passes, run an M2/M3 judge that types a safe, reversible, fully time-grounded relative-date task in the packaged app and verifies the real artifact or browser action, and also verifies the packaged listen control honestly starts/stops or surfaces permission failure.
 - While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof.
 
