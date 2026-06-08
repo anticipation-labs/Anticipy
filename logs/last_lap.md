@@ -1,31 +1,33 @@
 # Last Lap
 
-Lap: 20260608T064322Z
-Date: 2026-06-08T06:43:22Z
-Milestone: M2 - typed input, Google Calendar API create path
+Lap: 20260608T070149Z
+Date: 2026-06-08T07:01:49Z
+Milestone: M2 - typed input, Google Calendar API read-back proof
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `cf8178e2c2454fe91a8b86788656d206d23eab5a` on branch `rebuild/spine-clean`.
-- Explicit typed Calendar tasks with full date and time now attempt a Google Calendar API create on the primary calendar before falling back to the browser template path.
-- The new helper uses the existing encrypted OAuth token format, refreshes tokens when needed, sends `sendUpdates=none`, returns `event_id` and `html_link` proof, and does not log token material.
-- A PyInstaller hidden import was added so the packaged sidecar includes `app.product.google_calendar_api`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `9184ce213d7d1b7676007fae670d6c0fc827b0ef` on branch `rebuild/spine-clean`.
+- The Google Calendar API create path now calls `events.get` after `events.insert` and marks success only when read-back confirms the event id.
+- If Google appears to create an event but read-back fails, the server returns `VERIFY_FAILED`, records the unverified side effect, clears pending state, and does not retry through browser-template fallback.
+- The packaged typed-task UI shows `API read-back verified` or `API read-back not verified` with a shortened Calendar event id.
 
 Checks:
-- Official Google docs were checked for Calendar `events.insert` and OAuth refresh-token request shape.
 - `engine/.venv/bin/python -m py_compile engine/app/product/server.py engine/app/product/google_calendar_api.py` passed.
+- The extracted popover script parsed with Node.
 - `git diff --check` and staged `git diff --cached --check` passed.
 - Forbidden-literal scan of the touched files returned no matches.
-- Fake-network Calendar insert probe verified POST to `/calendar/v3/calendars/primary/events?sendUpdates=none`, Authorization header presence, event body shape, and no token in returned proof.
-- Mocked server branch probe on alternate lock port verified `SUCCESS`, `path=google_calendar_api`, event id proof, pending cleared, and acted surface `google_calendar_api`.
-- `bash scripts/build_dmg.sh` passed before and after product commit. The final post-commit build embedded commit `cf8178e2c2454fe91a8b86788656d206d23eab5a`.
-- Recursive PyInstaller archive listing showed `app.product.google_calendar_api` in the packaged sidecar.
-- Final root DMG: `target/release/bundle/dmg/Anticipy_1.0.0_aarch64.dmg`, `178873974` bytes, SHA-256 `8e9611723bf91cd1959116067f1b852c91c853b142aba31afbfb102e03b49754`.
+- Fake-network helper probe covered verified create, create-without-read-back, and missing-token behavior with no real Google network calls.
+- Alternate-port server branch probe verified `SUCCESS` and `VERIFY_FAILED` response shapes, pending-state cleanup, and no browser fallback target after a created-but-unverified side effect.
+- Headless Playwright render probe verified the typed-task success and warning banners.
+- `bash scripts/build_dmg.sh` passed from the committed product source.
+- Final root DMG: `target/release/bundle/dmg/Anticipy_1.0.0_aarch64.dmg`, `178876640` bytes, SHA-256 `8c2090efa2365dc67e6dc8f99986ed37783142875c45700dc6e8f2ed173d0d49`.
 - Packaged app strict `codesign --verify --deep --strict --verbose=2` passed.
+- Packaged app binary contains embedded commit `9184ce213d7d1b7676007fae670d6c0fc827b0ef`.
+- Recursive PyInstaller archive listing showed `app.product.google_calendar_api` in the packaged sidecar.
 - Computer Use read-only inspection opened the build-path packaged app and showed the real Anticipy window with the task box and browser-hands warning. No clicks, typing, extension enablement, or real account actions were performed.
-- The build-path app was closed. No process from `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` remained. Generated extension zips and PyInstaller spec were cleaned as build churn.
+- The build-path app was closed. No process from the build-path Anticipy bundle remained. Generated extension zips and PyInstaller spec were cleaned as build churn.
 - Product tracked working tree is clean after the commit and build, aside from long-standing untracked local artifacts.
 
 Gate:
@@ -38,5 +40,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue unblocked perimeter work without claiming proof. A useful next slice is exposing clearer API-backed Calendar proof/read-back status in the typed-task UI or continuing safe browser-hands readiness work.
+- Continue unblocked perimeter work without claiming proof. Useful next slices are improving safe browser-hands readiness or preparing the pending M1/M2 judge path for when separate judge quota returns.
 - When judge quota returns, M1 should still be judged first, then M2/M3 with a safe, reversible real action.
