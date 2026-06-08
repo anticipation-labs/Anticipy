@@ -1,41 +1,42 @@
 # Last Lap
 
-Lap: 20260608T091017Z
-Date: 2026-06-08T09:10:17Z
-Milestone: M1/M2 - public listening control candidate
+Lap: 20260608T092823Z
+Date: 2026-06-08T09:28:23Z
+Milestone: M1/M2 - public typed clock grounding candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `d6f8207bda91b74246bfb7aa072968d17c4bde24` on branch `rebuild/spine-clean`.
-- The packaged popover now has a persistent microphone control next to typed input. It shows `Start listening` when idle, `Stop listening` while the engine reports listening, and a concrete status such as microphone idle, device name, or microphone unavailable.
-- The control calls the real local `/api/listen/start` and `/api/listen/stop` endpoints. The stop path hides the live listening card and sets the status pill to `Not listening`.
-- The start path no longer retries forever on microphone or transport failure. It makes at most three start attempts, then returns to an enabled `Start listening` control with a visible microphone-unavailable state.
-- The header no longer labels the product `Listening` before `/api/listen/status` reports an active stream.
-- The public release manifest/site commit is now `77b14288138bf9edb7abb745a068765ddf2f1a3f`, pointing at DMG source commit `d6f8207bda91b74246bfb7aa072968d17c4bde24`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `a7ac429c62c8f4ec292acf008bc629ed9f6ba777` on branch `rebuild/spine-clean`.
+- The packaged typed task form now sends client clock metadata with `/api/listen/inject`: ISO `client_now`, JS `client_offset_minutes`, and best-effort IANA `client_timezone`.
+- The engine stores that clock on the listen record and direct Calendar plan.
+- Direct typed Calendar parsing, Google Calendar fast path, Calendar prefill URL generation, and Calendar page read-back now use the provided client clock when resolving relative dates such as `tomorrow`.
+- The public release manifest/site commit is now `659ded72756e3ae96086f31bad36f76fec79ab61`, pointing at DMG source commit `a7ac429c62c8f4ec292acf008bc629ed9f6ba777`.
 
 Checks:
-- Extracted popover script syntax check passed.
-- Headless Playwright popover probe with mocked localhost engine passed: one start call, one stop call, listening card visible while on, status returned to `Mic idle`.
-- Headless Playwright bounded-failure probe passed: failed start stopped after three attempts, re-enabled `Start listening`, and showed `Microphone unavailable`.
-- `npm --prefix desktop run test:e2e` passed 3/3.
+- `engine/.venv/bin/python -m py_compile engine/app/product/server.py` passed.
+- Extracted popover inline script parse passed.
 - `git diff --check` passed.
-- Diff scan found no forbidden test/judge/holdout/script paths and no owner/eval literals in the touched diff.
+- Direct engine probe passed at a UTC day boundary: `client_now=2026-06-08T06:30:00.000Z` plus `America/Vancouver` resolved `tomorrow` to `2026-06-08T15:00:00`; UTC-only would have resolved to `2026-06-09`.
+- Route-level `/api/listen/inject` probe with monkeypatched processing confirmed the endpoint forwards `source_mode=typed_input`, `client_now`, `client_timezone`, and `client_offset_minutes`.
+- Headless Playwright popover form probe passed: one real form submit sent `/api/listen/inject` with text, ISO client time, `America/Vancouver`, and offset `420`.
+- `npm --prefix desktop run test:e2e` passed 3/3.
+- Forbidden path and owner/eval literal scan found no matches in the touched diff.
 - `bash scripts/build_dmg.sh` passed after product commit.
-- Final local DMG size was `178880025` bytes and SHA-256 was `a5c6f6cda25cdb205b671de671844f670dd098933769d2fd9a22dd348f04bdd1`.
+- Final local DMG size was `178903903` bytes and SHA-256 was `c1af163a45983ce1db26431a58294ebb38a845fc795e51a5995e47b6276aed6f`.
 - Strict codesign passed for the packaged app.
-- Packaged app binary contains commit `d6f8207bda91b74246bfb7aa072968d17c4bde24`.
+- Packaged app binary contains commit `a7ac429c62c8f4ec292acf008bc629ed9f6ba777`.
 - `hdiutil imageinfo` reported a valid compressed UDZO image.
-- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178880025` bytes.
+- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178903903` bytes.
 - `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed successfully and verified the public DMG SHA.
-- Public `https://www.anticipy.ai/api/app/state` reports site commit `77b1428`, release SHA `a5c6f6cda25cdb205b671de671844f670dd098933769d2fd9a22dd348f04bdd1`, manifest release commit `d6f8207bda91b74246bfb7aa072968d17c4bde24`, and `178880025` bytes.
-- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178880025` bytes, and headless render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`.
-- Computer Use timed out on Anticipy app accessibility state. Shell fallback confirmed Anticipy processes/windows exist, but no UI proof is claimed from that.
+- Public `https://www.anticipy.ai/api/app/state` reports site commit `659ded7`, release SHA `c1af163a45983ce1db26431a58294ebb38a845fc795e51a5995e47b6276aed6f`, manifest release commit `a7ac429c62c8f4ec292acf008bc629ed9f6ba777`, and `178903903` bytes.
+- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178903903` bytes, and headless render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`.
+- Computer Use read the real Chrome window at `anticipy.ai/app`; because the owner Chrome profile is signed in, it showed the signed-in app surface, not the clean public download page. No proof is claimed from that beyond a visual sanity check.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded and launched the public app from this candidate.
-- This is not M2 proof. The separate judge has not typed a task in the packaged app or verified a real correct artifact, and has not verified the real record control on a clean install.
+- This is not M2 proof. The separate judge has not typed a relative-date task in the packaged app and verified a real correct artifact.
 - This is not M3 proof. The separate judge has not verified a real browser action or native Chrome extension bridge.
 - This is not M5 proof. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - No real external artifact, UI click, extension enablement, browser action, SMS, email, Calendar action, source scrape, or account action was performed by the builder.
@@ -43,5 +44,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `77b14288138bf9edb7abb745a068765ddf2f1a3f` and release SHA `a5c6f6cda25cdb205b671de671844f670dd098933769d2fd9a22dd348f04bdd1`.
+- When judge quota returns, run the separate M1 judge against public production site commit `659ded72756e3ae96086f31bad36f76fec79ab61` and release SHA `c1af163a45983ce1db26431a58294ebb38a845fc795e51a5995e47b6276aed6f`.
 - Continue unblocked perimeter work without claiming proof.
