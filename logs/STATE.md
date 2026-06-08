@@ -4,20 +4,20 @@ Current milestone: M1 remains the active judged milestone because the public fro
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, passed the computer-use self-test, scanned builder commit `76fc00d`, and found no tamper. It opened the clean public front door, downloaded the then-public 2.5 GB DMG, mounted it, and launched the public app. The public app failed M1 because `codesign --verify --strict` and `spctl --assess` failed with `code has no resources but signature indicates they must be present`, and launch produced an invisible app process with zero windows instead of a readable live Anticipy surface. The different-family Gemini cross-check agreed with `FAKE`. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260608T070149Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked product commit `9184ce213d7d1b7676007fae670d6c0fc827b0ef`. The Google Calendar API create path now follows `events.insert` with `events.get` read-back and marks success only when the created event id is confirmed. If insert returns an event id but read-back fails, the server returns `VERIFY_FAILED`, records the unverified side effect, clears pending state, and does not fall through to the browser-template fallback. The packaged typed-task UI now shows `API read-back verified` or `API read-back not verified` with a shortened event id. Checks passed: Python compile, popover JavaScript parse, `git diff` checks, forbidden-literal scan with no matches, fake-network helper probe, alternate-port server branch probe for `SUCCESS` and `VERIFY_FAILED` without fallback, headless UI render probe, `bash scripts/build_dmg.sh`, strict codesign, embedded commit verification, recursive PyInstaller archive helper check, and Computer Use read-only build-path app inspection showing the real Anticipy window with the task box and browser warning. Final local DMG is `178876640` bytes with SHA-256 `8c2090efa2365dc67e6dc8f99986ed37783142875c45700dc6e8f2ed173d0d49`. No real Calendar event was created by the builder. The separate judge has not verified it.
+Latest builder lap: `20260608T070852Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked manifest/site commit `dd9b3e4a97805145a884a4714c00a52f7f333282`, pointing the public release manifest at product commit `9184ce213d7d1b7676007fae670d6c0fc827b0ef`. The staged ship path uploaded the latest `178876640` byte DMG to a commit-addressed R2 key, committed the manifest, deployed the prebuilt public site without pushing git, and verified public state convergence plus full public DMG SHA. Public `https://www.anticipy.ai/api/app/state` now reports site commit `dd9b3e4`, release SHA `8c2090efa2365dc67e6dc8f99986ed37783142875c45700dc6e8f2ed173d0d49`, manifest release commit `9184ce213d7d1b7676007fae670d6c0fc827b0ef`, and `178876640` bytes. Checks also passed R2 HEAD, public `/app` HEAD, public `/dl/Anticipy_1.0.0_aarch64.dmg` HEAD, and headless public page inspection showing the download page plus macOS DMG link. The separate judge has not verified this public candidate.
 
 Current public production candidate, pending judge:
-- Public site commit: `9a2aa8858ad3b2a6186a983b2160a081c8089421`.
-- Public DMG source commit in manifest: `ff5c470f65c42ad24f0f55be68d6acf702d525d5`.
-- Public DMG SHA-256: `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
-- Public DMG size: `178815398` bytes.
-- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/ff5c470f65c42ad24f0f55be68d6acf702d525d5/Anticipy_1.0.0_aarch64.dmg`.
+- Public site commit: `dd9b3e4a97805145a884a4714c00a52f7f333282`.
+- Public DMG source commit in manifest: `9184ce213d7d1b7676007fae670d6c0fc827b0ef`.
+- Public DMG SHA-256: `8c2090efa2365dc67e6dc8f99986ed37783142875c45700dc6e8f2ed173d0d49`.
+- Public DMG size: `178876640` bytes.
+- Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/9184ce213d7d1b7676007fae670d6c0fc827b0ef/Anticipy_1.0.0_aarch64.dmg`.
 - `https://www.anticipy.ai/api/app/state` reports the expected site commit, release SHA, manifest release commit, and byte count.
 - `https://www.anticipy.ai/app` returns 200 HTML.
-- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178815398`.
+- `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns `200`, `application/x-apple-diskimage`, and `Content-Length: 178876640`.
 - `SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed full public DMG SHA verification for this public candidate.
 
-Current unshipped M2/M3 candidates, pending judge and deploy decision:
+Current M2/M3 candidates included in the public candidate, pending judge:
 - Product source commit `8d1898259ecb05f86b678d4e686e46744bb6e382` routes explicit typed Calendar instructions with full date/time into a pending `calendar_event` plan and Google Calendar template URL instead of generic browser search.
 - Product source commit `f05cc8449c278b96b9a2cb1d18bdf7bfa25a0808` stops no-context browser action tasks from falling into search and wires explicit-site browser tasks into the bridge-backed dispatcher.
 - Product source commit `af23bf28a3e26f5d4612c680aaa39fc2b92186f9` adds deterministic explicit-site action planning, fast planner-unavailable ask behavior, clearer typed-task ask display, and alternate-port packaged sidecar launch support.
@@ -58,7 +58,7 @@ Not proven:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `9a2aa885` plus release `0638e321...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `dd9b3e4a` plus release `8c2090ef...` is pending judge and does not change this number.
 - M2 packaged typed-input reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
@@ -73,7 +73,7 @@ Realday audio:
 - The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
 
 Dead ends not to retry blindly:
-- Treating production-linked source commits `229cb45a`, `af23bf28`, `f05cc844`, `8d189825`, `9a2aa885`, `ff5c470f`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, or their ancestors as M1, M2, or M3 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, packaged typed task, and real action artifact.
+- Treating production-linked source commits `229cb45a`, `af23bf28`, `f05cc844`, `8d189825`, `9a2aa885`, `ff5c470f`, `f370f7c9`, `bdc0e76e`, `ca16ffe1`, `dd9b3e4a`, `9184ce21`, or their ancestors as M1, M2, or M3 proof. They are pending until the separate judge verifies the canonical public front door, public DMG, app launch, packaged typed task, and real action artifact.
 - Treating production-linked source commits `235dc1f3`, `0c867f96`, `049f4ad0`, `47e92b6e`, `b57e3b1a`, `71829156`, `5942dc0d`, `cf8178e2`, or `9184ce21` as M2 or M3 proof. They are pending until the separate judge verifies the packaged app, typed task, API artifact, or browser hands on a safe, reversible task.
 - Treating the packaged browser bridge diagnostic banner or Computer Use read-only app inspection as M3 proof. The banner is recovery UI only until a separate judge verifies packaged native bridge action.
 - Treating the local self-test endpoint, extension value read-back, extension zip hashes, refreshed Desktop extension folders, archive payload inspection, fake-network Calendar insert probe, mocked server branch probe, or Browser localhost popover render as proof. They are candidate plumbing only until a separate judge verifies a real artifact or browser action.
@@ -104,7 +104,7 @@ Dead ends not to retry blindly:
 - Do not auto-prompt macOS microphone permission on first launch. It is a user-action permission, not part of the M1 stranger first-view surface.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `9a2aa8858ad3b2a6186a983b2160a081c8089421` and release SHA `0638e321c791039926cb66369462a5f068b00164f4ae5b81f7b51115c4ee10ad`.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `dd9b3e4a97805145a884a4714c00a52f7f333282` and release SHA `8c2090efa2365dc67e6dc8f99986ed37783142875c45700dc6e8f2ed173d0d49`.
 - If M1 passes, run an M2/M3 judge that types a safe, reversible, fully time-grounded task in the packaged app and verifies the real artifact or browser action.
 - While judge quota is blocked, keep improving unblocked production-source perimeter slices without claiming proof. The next useful slices are continuing safe browser-hands readiness work or preparing the pending M1/M2 judge path for when separate judge quota returns.
 
