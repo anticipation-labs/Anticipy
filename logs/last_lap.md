@@ -1,34 +1,35 @@
 # Last Lap
 
-Lap: 20260608T151300Z
-Date: 2026-06-08T15:22:48Z
-Milestone: M3 - explicit web search planning candidate
+Lap: 20260608T152604Z
+Date: 2026-06-08T20:09:44Z
+Milestone: M3 - no-submit fill type repair candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `abd305b1462c327265fe7de4047aef2eb9cf766f` and manifest/site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da` on branch `rebuild/spine-clean`.
-- The direct browser search plan now accepts punctuation after explicit Google navigation, such as `open google, search for trail shoes`, `go to google.com: look up waterproof backpack`, and `navigate to www.google.com; find lightweight rain jacket`.
-- The direct browser search plan now handles explicit web lookup verbs: `search the web`, `look up`, `look it up`, `find out`, and `research`.
-- The path still avoids a generic action-to-search fallback. App-specific or action-shaped text such as Gmail search, Google Calendar search, booking, Calendar creation, or email send instructions does not become `open_search_tab`.
-- The package manifest now points at DMG source commit `abd305b1462c327265fe7de4047aef2eb9cf766f`.
-- The public DMG SHA is `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked engine source commit `675aa4a294e97c51a73ad9c68ae2a24679ff29c0` and manifest/site commit `d6f29001e5618fd7dfb9cc4b1c0c0f5e2bc48bca` on branch `rebuild/spine-clean`.
+- The action dispatcher now repairs a bad planner `type` step when all of these are true: the user explicitly gave a no-submit form-fill instruction, the planner tried to type the whole instruction, and the target field matches the requested field.
+- The repair changes only the text argument to the explicit field value. It does not run without no-submit wording and does not infer a value for action-shaped text.
+- The package manifest now points at DMG source commit `675aa4a294e97c51a73ad9c68ae2a24679ff29c0`.
+- The public DMG SHA is `17f4669a3bfcc4774fea26a7e2b935cef34e4add8afb1315a50c0f70aa4e0741`.
 
 Checks:
-- `python3 -m py_compile engine/app/product/server.py` passed.
-- Direct server probes mapped 5 explicit lookup variants to `open_search_tab` with query-only targets.
-- Negative probes for Gmail search, Google Calendar search, dentist booking, Calendar creation, and email send text did not become `open_search_tab`.
+- `python3 -m py_compile engine/app/product/action_dispatcher.py` passed.
+- Fake-runtime dispatcher probe forced a bad planner to type the whole no-submit form-fill instruction into a matching message field; the dispatcher repaired it to type only `hello there`.
+- Negative fake-runtime probe without no-submit wording left the planner's full text unchanged.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scans found no matches in the touched product diff.
-- Product source commit `abd305b1462c327265fe7de4047aef2eb9cf766f` and manifest/site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da` were committed locally for future judge diff scanning.
-- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9` and size `178891889` bytes.
-- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178891889`.
-- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the candidate and verified the full public DMG SHA.
-- Public `https://www.anticipy.ai/api/app/state` reports site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da`, release commit `abd305b1462c327265fe7de4047aef2eb9cf766f`, SHA `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9`, and `178891889` bytes.
-- Public `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`; the DMG HEAD had content length `178891889`.
-- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build abd305b | 178.9 MB | Updated 2026-06-08 | SHA-256 d8b957936772...2b04fb3909a9`, the canonical DMG link, the install command, and zero page console warnings/errors.
-- Screenshot is local at `/tmp/anticipy-public-app-20260608T151300Z.png`.
+- Product source commit `675aa4a294e97c51a73ad9c68ae2a24679ff29c0` and manifest/site commit `d6f29001e5618fd7dfb9cc4b1c0c0f5e2bc48bca` were committed locally for future judge diff scanning.
+- `scripts/ship_candidate.sh` built and uploaded the package DMG with SHA `17f4669a3bfcc4774fea26a7e2b935cef34e4add8afb1315a50c0f70aa4e0741` and size `178984873` bytes.
+- The package build took much longer than normal in the sidecar/Tauri packaging phase. This is a packaging slowness finding and should not be treated as normal inner-loop speed.
+- Local DMG SHA matched the manifest, and R2 HEAD returned `200` with content length `178984873`.
+- First manifest commit attempt was rejected because the central-nerve hook initially saw the local engine as unavailable. Local `/health` and `/api/state` then responded on `127.0.0.1:8731`, and the rerun passed the hook.
+- `SHIP_DEPLOY=1 scripts/ship_candidate.sh` published the candidate but exited nonzero on its final convergence check after seeing public state at `d6f2900`; manual public verification was required.
+- Public `https://www.anticipy.ai/api/app/state` reports site commit `d6f29001e5618fd7dfb9cc4b1c0c0f5e2bc48bca`, release commit `675aa4a294e97c51a73ad9c68ae2a24679ff29c0`, SHA `17f4669a3bfcc4774fea26a7e2b935cef34e4add8afb1315a50c0f70aa4e0741`, and `178984873` bytes.
+- Public `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`; `/dl` is a 302 redirect for GET, and following it with `curl -L` downloaded `178984873` bytes with SHA `17f4669a3bfcc4774fea26a7e2b935cef34e4add8afb1315a50c0f70aa4e0741`. Direct R2 download matched the same SHA.
+- Fresh Playwright browser context on `https://www.anticipy.ai/app` found the release line `Build 675aa4a | 179.0 MB | Updated 2026-06-08 | SHA-256 17f4669a3bfc...0f70aa4e0741`, the canonical DMG link, the install command, and zero page console warnings/errors.
+- Screenshot is local at `/tmp/anticipy-public-app-20260608T152604Z.png`.
 - Product repo has no tracked dirty files after deploy; only pre-existing untracked artifacts remain.
 
 Gate:
@@ -41,5 +42,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `0d2860a219c3578d40c9d0db7b566fea9e3a88da` and release SHA `d8b95793677210aa6141bb9238e1ad4d334891b92a0177a190c02b04fb3909a9`.
-- Continue unblocked perimeter work without claiming proof.
+- When judge quota returns, run the separate M1 judge against public production site commit `d6f29001e5618fd7dfb9cc4b1c0c0f5e2bc48bca` and release SHA `17f4669a3bfcc4774fea26a7e2b935cef34e4add8afb1315a50c0f70aa4e0741`.
+- Continue unblocked perimeter work without claiming proof. Investigate package build slowness if it repeats.
