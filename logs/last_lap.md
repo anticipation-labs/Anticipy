@@ -1,36 +1,37 @@
 # Last Lap
 
-Lap: 20260608T094528Z
-Date: 2026-06-08T09:45:28Z
-Milestone: M3 - public bridge primitive candidate
+Lap: 20260608T095039Z
+Date: 2026-06-08T09:50:39Z
+Milestone: M3 - public search typing repair candidate
 ALL_MILESTONES_DONE: false
 
 Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `7ab2680b7f11ec34f1f88274d1c27c965e73394a` on branch `rebuild/spine-clean`.
-- The native Chrome bridge dispatch seam now maps generic browser primitives, not just navigation/search.
-- Supported generic bridge primitives now include `click`, `type`, `key`, `read`, `extract`, and `getDOMSnapshot`, with aliases such as `tap`, `press`, `fill`, `enter_text`, and `set_value`.
-- Product `_dispatch_via_extension_bridge` now preserves primitive plans from `/api/act` instead of re-deriving every browser plan as a URL or search.
-- The public release manifest/site commit is now `6e3779c656d36766e6265f4863faaec9ba2e5681`, pointing at DMG source commit `7ab2680b7f11ec34f1f88274d1c27c965e73394a`.
+- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked product commit `c3686feb49ef778f7287ae21082c417830c17566` on branch `rebuild/spine-clean`.
+- The universal action dispatcher now repairs an overbroad planner `type` step when the target is a search-like field and the planner tried to type the full instruction.
+- The repair extracts only the query or object from generic search commands, so `search example.com for black shoes` types `black shoes`, not the full task or the website name.
+- Non-search fields are left untouched.
+- The planner prompt now states the same rule before the deterministic repair has to catch it.
+- The public release manifest/site commit is now `2e8102aafc7648a55c34ce44d114b12db50f3b02`, pointing at DMG source commit `c3686feb49ef778f7287ae21082c417830c17566`.
 
 Checks:
-- `engine/.venv/bin/python -m py_compile engine/app/bridge_extension.py engine/app/product/server.py` passed.
-- Fake-runtime `app.bridge_extension.dispatch` probe passed for navigate, click, type, fill, key, read, and `getDOMSnapshot`; no real Chrome or accounts were touched.
-- Fake-dispatch `app.product.server._dispatch_via_extension_bridge` probe passed for primitive `type`, `click`, and `key` plans, proving the `/api/act` helper seam preserves primitive payloads.
+- `engine/.venv/bin/python -m py_compile engine/app/product/action_dispatcher.py engine/app/product/action_planner.py` passed.
+- Fake-runtime dispatcher probe passed: a search field that would have received the whole instruction instead received only `black shoes`.
+- Negative fake-runtime dispatcher probe passed: a normal notes field preserved the original typed text.
 - `git diff --check` passed.
 - Forbidden path and owner/eval literal scan found no matches in the touched diff.
 - `bash scripts/build_dmg.sh` passed after product commit.
-- Final local DMG size was `178662853` bytes and SHA-256 was `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`.
+- Final local DMG size was `178887372` bytes and SHA-256 was `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`.
 - Strict codesign passed for the packaged app.
-- Packaged app binary contains commit `7ab2680b7f11ec34f1f88274d1c27c965e73394a`.
+- Packaged app binary contains commit `c3686feb49ef778f7287ae21082c417830c17566`.
 - `hdiutil imageinfo` reported a valid compressed UDZO image.
-- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178662853` bytes.
-- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed but exited nonzero after reporting public state live at `6e3779c`.
-- Manual public checks passed after the script's convergence edge: public `/api/app/state` reports site commit `6e3779c`, release SHA `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`, manifest release commit `7ab2680b7f11ec34f1f88274d1c27c965e73394a`, and `178662853` bytes.
-- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178662853` bytes, and full streamed public DMG SHA matched `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`.
+- R2 HEAD for the commit-addressed DMG returned `200`, `application/x-apple-diskimage`, and `178887372` bytes.
+- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` completed successfully and verified the public DMG SHA.
+- Public `/api/app/state` reports site commit `2e8102a`, release SHA `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`, manifest release commit `c3686feb49ef778f7287ae21082c417830c17566`, and `178887372` bytes.
+- Public `/app` returned `200` HTML, public `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200` disk image with `178887372` bytes, and full streamed public DMG SHA matched `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`.
 - Headless render found title `Anticipy App | Anticipy`, H1 `Bring Anticipy onto your Mac.`, and canonical DMG link `/dl/Anticipy_1.0.0_aarch64.dmg`.
-- Computer Use read the real Chrome window at `anticipy.ai/app`; because the owner Chrome profile is signed in, it showed the signed-in app surface, not the clean public download page. No proof is claimed from that beyond a visual sanity check.
+- Computer Use read the real Chrome window at `anticipy.ai/app`; because the owner Chrome profile is signed in, it showed the signed-in app surface with Listen UI, not the clean public download page. No proof is claimed from that beyond a visual sanity check.
 
 Gate:
 - This is not M1 proof. The separate clean-profile judge has not downloaded and launched the public app from this candidate.
@@ -42,5 +43,5 @@ Gate:
 - Generalization remains UNPROVEN.
 
 Next:
-- When judge quota returns, run the separate M1 judge against public production site commit `6e3779c656d36766e6265f4863faaec9ba2e5681` and release SHA `dc8eaeb92a73024132a775015ed4c01c4146913d7768e7dc6acc0918f03a0781`.
+- When judge quota returns, run the separate M1 judge against public production site commit `2e8102aafc7648a55c34ce44d114b12db50f3b02` and release SHA `c79082d399399e1a322e882bb6825f1b0475dfc6c18351824bdce96663302570`.
 - Continue unblocked perimeter work without claiming proof.
