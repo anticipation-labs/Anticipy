@@ -100,7 +100,7 @@ CONTENT_URL_RE = re.compile(
 COMMERCE_PRODUCT_URL_RE = {
     "target.com": re.compile(r"/(?:p/|-/A-)", re.I),
     "walmart.com": re.compile(r"/ip/", re.I),
-    "bestbuy.com": re.compile(r"/site/.+/\d+\.p(?:[?#]|$)", re.I),
+    "bestbuy.com": re.compile(r"/(?:site/.+/\d+\.p|product/[^/?#]+/[^/?#]+(?:/sku/\d+)?)(?:[/?#]|$)", re.I),
     "homedepot.com": re.compile(r"/p/", re.I),
     "lowes.com": re.compile(r"/pd/", re.I),
     "ikea.com": re.compile(r"/p/", re.I),
