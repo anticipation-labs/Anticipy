@@ -100,6 +100,8 @@ COMMERCE_SEARCH_URLS = {
     "thriftbooks.com": "https://www.thriftbooks.com/browse/?b.search={q}",
     "vitaminshoppe.com": "https://www.vitaminshoppe.com/search?search={q}",
     "crateandbarrel.com": "https://www.crateandbarrel.com/search?query={q}",
+    "fivebelow.com": "https://www.fivebelow.com/search?q={q}",
+    "dickblick.com": "https://www.dickblick.com/search/?q={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -135,6 +137,8 @@ COMMERCE_CART_URLS = {
     "thriftbooks.com": "https://www.thriftbooks.com/shopping-cart/",
     "vitaminshoppe.com": "https://www.vitaminshoppe.com/cart/shopping-cart",
     "crateandbarrel.com": "https://www.crateandbarrel.com/checkout/cart",
+    "fivebelow.com": "https://www.fivebelow.com/cart",
+    "dickblick.com": "https://www.dickblick.com/cart/",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
@@ -201,6 +205,8 @@ COMMERCE_PRODUCT_URL_RE = {
     "thriftbooks.com": re.compile(r"/w/[^?#]+/\d+/?$", re.I),
     "vitaminshoppe.com": re.compile(r"/p/[^?#]+/[a-z0-9-]+$", re.I),
     "crateandbarrel.com": re.compile(r"/[^/?#]+/s\d+(?:[/?#]|$)", re.I),
+    "fivebelow.com": re.compile(r"/products/[^/?#]+", re.I),
+    "dickblick.com": re.compile(r"/products/[^/?#]+/?$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -393,7 +399,7 @@ def _looks_buyable_product_url(url: str, start_url: str = "") -> bool:
     if not absolute or not _same_site(start_url, absolute):
         return False
     parsed = urllib.parse.urlparse(absolute)
-    if re.search(r"\b(review|reviews|qa|q-and-a|ask-question)\b", parsed.fragment or "", re.I):
+    if re.search(r"\b(review|reviews|qa|q-and-a|q-&-a|ask-question)\b", parsed.fragment or "", re.I):
         return False
     if re.search(r"/(?:cart|basket|bag|checkout|login|signin|sign-in)(?:[/?#]|$)", absolute, re.I):
         return False
