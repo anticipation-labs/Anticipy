@@ -39,6 +39,7 @@ ACTIONABLE_ROLES = {
 }
 MAX_NATIVE_MARKS = 600
 MAX_NATIVE_LABEL_CHARS = 180
+MAX_NATIVE_TEXT_CHARS = 25_000
 VOID_TAGS = {
     "area",
     "base",
@@ -708,7 +709,7 @@ class NativeBridgeLink:
             return []
         raw = " ".join(
             " ".join(params.get(key, []))
-            for key in ("q", "query", "keywords", "search", "searchTerm", "searchinfo", "st", "s", "Ntt", "d")
+            for key in ("q", "query", "keyword", "keywords", "search", "searchTerm", "searchinfo", "st", "s", "Ntt", "d")
         )
         tokens = re.findall(r"[a-z0-9]{3,}", raw.lower())
         return [t for t in tokens if t not in {"the", "and", "for", "with"}][:6]
@@ -952,7 +953,7 @@ class NativeBridgeLink:
                   rect.top <= window.innerHeight && rect.left <= window.innerWidth;
                 const hay = (name + ' ' + href).toLowerCase();
                 const actionish = /\b(add|put)\b.{0,60}\b(cart|basket|bag)\b|\b(view|open|go to)\b.{0,30}\b(cart|basket|bag)\b/.test(hay);
-                const productish = /\/(product|products|p|ip|pd|dp)(\/|$)|\/a\/products\/|\/site\/.+\/\d+\.p|\/sku\/\d+|\/[^\/?#]+-\d+\.html(?:[?#]|$)/.test(hay);
+                const productish = /\/(product|products|p|ip|pd|dp|pdp)(\/|$)|\/a\/products\/|\/site\/.+\/\d+\.p|\/sku\/\d+|\/[^\/?#]+-\d+\.html(?:[?#]|$)/.test(hay);
                 const searchish = /\bsearch\b/.test(hay);
                 const y = Math.max(0, rect.top + (window.scrollY || document.documentElement.scrollTop || 0));
                 const priority =
@@ -994,11 +995,12 @@ class NativeBridgeLink:
                   };
                 });
               return {
-                text: clean(document.body && document.body.innerText || '').slice(0, 5000),
+                text: clean(document.body && document.body.innerText || '').slice(0, __ANTICIPY_TEXT_LIMIT__),
                 elements: out
               };
             })()
             """
+            snapshot_expr = snapshot_expr.replace("__ANTICIPY_TEXT_LIMIT__", str(MAX_NATIVE_TEXT_CHARS))
             snapshot_msg = await call(
                 ws,
                 "Runtime.evaluate",
@@ -1028,7 +1030,7 @@ class NativeBridgeLink:
             "url": str(eval_value(url_msg) or ""),
             "title": str(eval_value(title_msg) or ""),
             "dom": html[:200_000],
-            "text": str(snapshot.get("text") or "")[:5000],
+            "text": str(snapshot.get("text") or "")[:MAX_NATIVE_TEXT_CHARS],
             "set_of_mark": snapshot.get("elements") if isinstance(snapshot.get("elements"), list) else [],
             "screenshot_data_url": ("data:image/png;base64," + b64) if b64 else "",
             "bridge_closed": False,

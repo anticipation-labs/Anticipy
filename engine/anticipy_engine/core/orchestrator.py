@@ -498,6 +498,9 @@ class Orchestrator:
                 step.result = result
                 step.state = StepState.needs_human
                 return True  # resolved (surfaced); rerouting wouldn't help
+            if (result.output or {}).get("non_retryable_real_mutation"):
+                step.result = result
+                return False
             # failed OR success-without-proof -> retry
             step.result = result
         return False

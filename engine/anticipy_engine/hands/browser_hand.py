@@ -187,6 +187,16 @@ class BrowserHand(Worker):
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           output=result, error="browser agent exhausted its step budget")
         if not result.get("answer"):
+            mutation_attempted = bool(
+                result.get("commerce_recipe")
+                and any(
+                    ((state.get("mutation") or {}).get("changed"))
+                    for state in (result.get("page_states") or [])
+                    if isinstance(state, dict)
+                )
+            )
+            if mutation_attempted:
+                result["non_retryable_real_mutation"] = True
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           output=result, error=result.get("reason") or "browser agent did not finish")
 

@@ -90,6 +90,7 @@ COMMERCE_SEARCH_URLS = {
     "surlatable.com": "https://www.surlatable.com/search?q={q}",
     "gamestop.com": "https://www.gamestop.com/search/?q={q}",
     "ulta.com": "https://www.ulta.com/search?search={q}",
+    "wayfair.com": "https://www.wayfair.com/keyword.php?keyword={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -115,6 +116,7 @@ COMMERCE_CART_URLS = {
     "surlatable.com": "https://www.surlatable.com/shopping-bag",
     "gamestop.com": "https://www.gamestop.com/cart/",
     "ulta.com": "https://www.ulta.com/bag",
+    "wayfair.com": "https://www.wayfair.com/v/checkout/basket/show",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
@@ -134,7 +136,8 @@ CART_DURABILITY_READS = max(1, int(os.environ.get("ANTICIPY_CART_DURABILITY_READ
 CART_DURABILITY_DELAY_SECONDS = max(0.0, float(os.environ.get("ANTICIPY_CART_DURABILITY_DELAY_SECONDS", "5.0")))
 SEARCH_RESULTS_URL_RE = re.compile(
     r"/(?:search|s|beta-search)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
-    r"[?&](?:q|query|keywords|search|searchTerm|searchinfo|st)=",
+    r"/keyword\.php(?:[/?#]|$)|"
+    r"[?&](?:q|query|keyword|keywords|search|searchTerm|searchinfo|st)=",
     re.I,
 )
 CONTENT_URL_RE = re.compile(
@@ -166,6 +169,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "surlatable.com": re.compile(r"/product/[^/?#]+/\d+$", re.I),
     "gamestop.com": re.compile(r"/products/[^/?#]+/\d+\.html$", re.I),
     "ulta.com": re.compile(r"/p/[^/?#]+", re.I),
+    "wayfair.com": re.compile(r"/(?:[^/?#]+/)*pdp/[^/?#]+\.html$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -972,8 +976,9 @@ def _cart_element_item_evidence(out: dict, item: str) -> dict:
         if not token_positions or empty.start() < min(token_positions):
             return {"matched": False, "token_hits": 0, "required_hits": required, "element_index": None}
 
-    for pos, el in enumerate((out or {}).get("elements") or []):
-        if pos >= 12:
+    elements = (out or {}).get("elements") or []
+    for pos, el in enumerate(elements):
+        if pos >= 18:
             break
         name = (el.get("name") or "").strip()
         href = (el.get("href") or "").strip()
@@ -989,7 +994,11 @@ def _cart_element_item_evidence(out: dict, item: str) -> dict:
         hits = max(_token_hits(name, tokens), _token_hits(hay, tokens) - 1)
         if hits < required or not _has_distinctive_required_tokens(hay, tokens):
             continue
-        if _price_cents(name) is None and pos > 4:
+        nearby_names = " ".join(
+            (nearby.get("name") or "") for nearby in elements[max(0, pos - 8):pos + 4]
+        )
+        nearby_cart_item_structure = CART_ITEM_STRUCTURE_RE.search(nearby_names) is not None
+        if _price_cents(name) is None and pos > 4 and not nearby_cart_item_structure:
             continue
         return {
             "matched": True,

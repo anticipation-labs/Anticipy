@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T183424Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added Ulta search/product/bag URL shapes and hardened cart proof after a real Ulta failure. A read-only Ulta probe found exact product links, Add controls, and `/bag`. A first live vague-memory run resolved correctly and opened the exact product, but missed Ulta's main `Add for ship` control, clicked a lower-page recommendation `Add to bag`, and failed final cart proof. WebVoyager now recognizes `Add for ship` as a product-page add control and rejects generic Add buttons when nearby product-card context points at unrelated recommendation products. Short-window cart reads still flickered true and later false, so cart proof now requires five independent fresh reads spaced five seconds apart, and any delayed miss returns the failing observation so callers cannot complete from an earlier best state. The final fresh live `/event` run again resolved the vague task to Ulta and the target cleanser, then failed closed under final cart proof instead of claiming a transient bag state. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T190603Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added Wayfair search/product/basket URL shapes, expanded direct CDP rendered-text extraction so deep cart item text is visible, ranked `/pdp/` product links as product-like, and tightened cart element proof so a matching cart-page product link can verify only when it is near item-local controls such as `Remove` or `Quantity`. A pre-no-retry live `/event` run resolved vague memory to Wayfair plus the remembered item and got a builder-side basket read-back success after a retry, but that retry exposed duplicate-add risk and is not clean current-code proof. BrowserHand now marks failed commerce recipes with changed real mutations as `non_retryable_real_mutation`, and the orchestrator stops retrying those steps. A fresh current-code `/event` run resolved memory and clicked a real Wayfair Add to Cart control, then failed closed after known-cart proof did not verify the item; a delayed read-only cart probe still did not verify the item, and no second add occurred. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -51,6 +51,10 @@ Current M3 slice:
 - WebVoyager knows LEGO, Guitar Center, and Newegg search, product, and cart URL shapes. LEGO and Guitar Center are currently hard-site findings because live Add attempts did not survive durable cart read-back. Newegg can complete builder-side durable cart read-back for an exact memory-resolved item.
 - WebVoyager knows Harbor Freight, Sur La Table, and GameStop search, product, and cart URL shapes. Harbor Freight is a site-specific captcha wall at cart preflight. Sur La Table is a hard-site finding on the current bridge path. GameStop can complete builder-side durable cart read-back for an exact memory-resolved item.
 - WebVoyager knows Ulta search, product, and bag URL shapes. Ulta exposed a main `Add for ship` product-page control and exact product links, but the cart artifact flickered under short-window read-back and the final five-read durability run failed closed. Treat Ulta as a hard-site/non-durable-cart finding until a new concrete hypothesis proves stability.
+- WebVoyager knows Wayfair search, product, and basket URL shapes, including `keyword` search parameters, `/pdp/...html` product URLs, and `/v/checkout/basket/show`.
+- NativeBridgeLink keeps up to 25,000 characters of rendered direct-CDP proof text, ranks `/pdp/` product marks as product-like, and extracts `keyword` query tokens so deeper dynamic cart text and Wayfair search URLs are visible to the recipe.
+- WebVoyager cart element proof can accept a matching cart-page product link deeper in the first actionable marks only when nearby labels show item-local cart structure such as `Remove`, `Quantity`, `Qty`, or `Save for later`.
+- BrowserHand marks changed-but-unverified commerce mutations as `non_retryable_real_mutation`, and the orchestrator stops retrying that step so a failed proof cannot blindly duplicate an Add-to-Cart mutation inside the same goal.
 - WebVoyager cart proof requires five delayed independent fresh cart reads by default. If any delayed read misses the item, the helper returns the failing observation, not the earlier best state.
 - Generic product-page Add controls are rejected when nearby buyable product-card context points at an unrelated recommendation item.
 - Numeric item matching and ordered item scoring treat visible labels such as `128GB` as matching numeric item tokens such as `128`, so exact storage-size product titles can satisfy distinctive-token checks.
@@ -67,13 +71,14 @@ Current M3 slice:
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- Read-only Ulta probing found real search/product/bag surfaces, exact product links, and visible Add controls.
-- A first live Ulta `/event` run used context-only memory plus a vague action that did not name Ulta or the item. It resolved Ulta plus the remembered cleanser and opened the exact product, but missed the main `Add for ship` control, clicked a lower-page recommendation Add button, and failed final cart proof. This is logged as one false-action finding.
-- After recognizing `Add for ship` and rejecting unrelated recommendation Add controls, short-window cart reads could still flicker true and later false. The cart proof helper now fails closed on delayed misses.
-- The final fresh live Ulta `/event` run resolved the same vague memory task, but under five delayed independent cart reads it failed closed instead of claiming a transient bag state. Ulta is a hard-site/non-durable-cart finding, not proof.
+- Read-only Wayfair probing found real search/product/basket surfaces, product rows, a direct product page with visible identity, Add to Cart controls, and `/v/checkout/basket/show`.
+- A pre-no-retry live Wayfair `/event` run used context-only memory plus a vague action that did not name Wayfair or the item. It resolved Wayfair plus the remembered kitchen item, opened the product, clicked real Add to Cart, and got a builder-side basket read-back success after a retry. Because that retry exposed duplicate-add risk, this is not clean current-code proof.
+- After the non-retry hardening, a fresh current-code Wayfair `/event` run again resolved the vague memory task, clicked a real Wayfair Add to Cart control, then failed closed after known-cart proof did not verify the item. The new non-retry guard prevented a second add attempt in the same goal.
+- A delayed read-only cart probe after the current-code run still did not verify the item. Wayfair is supported at the URL/DOM recipe level but remains `UNPROVEN-PENDING-JUDGE` and not M3 proof.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- Wayfair exposes real search/product/Add/basket surfaces. Deep basket text and item-local cart controls required expanded direct-CDP text extraction and tighter cart-element proof. One pre-no-retry builder-side run got basket read-back success after a retry, but current code failed closed after an unverified real mutation and did not retry. Treat Wayfair as an unproven hard-site/cart-readback finding until a new persistence hypothesis or separate judge proof exists.
 - Ulta exposes real search/product/Add/bag surfaces. The main product-page add control is labeled `Add for ship`. Generic recommendation Add controls can appear below the product. Short-window cart reads flickered true then false, and the final five-read durability run failed closed. Treat Ulta as a hard-site/non-durable-cart finding until a new hypothesis proves persistence.
 - GameStop can complete a real search-product-add-cart-verify path builder-side after recognizing `/search/?q=`, `/products/.../<sku>.html`, and `/cart/`, plus settled cart read-back with quantity/cart structure.
 - Harbor Freight exposes real search/product/Add/cart surfaces, but `/checkout/cart` preflight hit a captcha wall before mutation. Treat it as a site-specific hard wall, not an all-work stop.
@@ -107,10 +112,10 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised Ulta vague-memory paths. The chain resolved memory to the correct site and item, found the exact product, found the main `Add for ship` control after hardening, and failed closed under final five-read cart proof because the bag state did not remain durable.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Ulta URL, add-label, unrelated-recommendation, and exact-card guards passed.
-- Focused five-read cart durability helper check passed.
+- Real live `/event` runs exercised Wayfair vague-memory paths. The chain resolved memory to the correct site and item, opened a real product page, clicked a real Add to Cart control, and current code failed closed when final known-cart proof could not verify the item, without retrying the mutation.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/hands/browser_hand.py` passed.
+- Focused Wayfair URL, product identity, cart element proof, and recommendation counterexample checks passed.
+- Focused non-retryable real mutation BrowserHand and orchestrator checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -136,7 +141,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, and Ulta produced hard-site findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
+- GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, and the current-code Wayfair run produced hard-site or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -149,7 +154,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/41 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/43 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Wayfair builder-side cart artifacts or read-backs exist, and Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -218,6 +223,8 @@ Dead ends not to retry blindly:
 - Do not retry Ulta blindly. It exposed exact product links and a main `Add for ship` control, but cart visibility flickered under short windows and the final five-read durability run failed closed. Retry only with a new concrete persistence hypothesis.
 - Do not treat exhausted browser retries as a human gate. If the hand did not explicitly return `needs_human`, the step should fail honestly.
 - Do not treat Staples as supported from the current bridge path. It returned no actionable product marks after settling.
+- Do not retry a commerce step after a real changed mutation that failed proof. Current code marks this as non-retryable inside the same goal so a failed Add-to-Cart proof cannot blindly duplicate the item.
+- Do not retry Wayfair blindly. It exposes product/Add/basket surfaces and one pre-no-retry builder-side basket read-back succeeded after a retry, but current code failed closed after the known cart page did not verify the item. Retry only with a new cart persistence or read-back hypothesis, never by repeating the same mutation in the same goal.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local`, env backup files, raw Chrome profiles, `.anticipy` state, or raw local data.
 - Google Sheets and Google Docs canvas synthetic input remain dead ends.
@@ -225,7 +232,7 @@ Dead ends not to retry blindly:
 - Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
 - Do not design always-on cloud transcription.
 
-- Convert the current GameStop exact-item path plus prior Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Convert the current GameStop exact-item path plus prior Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
 - Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
 
 Law digest:
