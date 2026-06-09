@@ -4,13 +4,13 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T045401Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened product-title matching in the deterministic WebVoyager commerce path. It created no new real artifact and has no separate judge proof.
+Latest builder lap: `20260609T062437Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened cart-marker verification in the deterministic WebVoyager commerce path. It created no new real artifact and has no separate judge proof.
 
 Latest offline M3 slice:
-- Product-link matching is stricter before any add attempt.
-- Two-token items now require both tokens to match the observed product title.
-- Longer item names now require a stronger token majority before the recipe opens a product.
-- Focused product-title and fake-link commerce probes passed, but this is offline chain hardening only. It is not M3 proof.
+- Non-cart URL add verification now requires requested item tokens and quantity/unit match inside the local text window around an `added to cart`, `in your cart`, or equivalent marker.
+- Recommendation, similar-item, sponsored, and related-item text after the cart marker is ignored for verification.
+- Cart-page URL verification remains broad enough to verify real cart contents after navigation to `/cart`, `/bag`, or `/basket`.
+- Focused cart-marker and fake-link commerce probes passed, but this is offline chain hardening only. It is not M3 proof.
 
 Latest real M3 attempt:
 - A builder-visible memory note was sent through the live `/event` path.
@@ -35,8 +35,8 @@ Latest product/public candidate, unchanged this lap:
 
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Focused product-title matching probe passed.
-- Focused fake-link commerce probe passed: the remembered Brita product path still completes under the stricter threshold. This is regression coverage only, not M3 proof.
+- Focused cart-marker verification probe passed.
+- Focused fake-link commerce probe passed: a correct add-modal state still verifies under the stricter marker-window rule. This is regression coverage only, not M3 proof.
 - Python compile passed for `engine/anticipy_engine/agent/webvoyager.py`.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_harmline.py` passed.
@@ -99,6 +99,7 @@ Dead ends not to retry blindly:
 - Do not let direct cart phrasing become whole-task browser search. Extract the concrete resolved item only, and reject unresolved vague placeholders before the browser recipe runs.
 - Do not click generic `Add to cart` controls on search results when no matching product has been identified. Open the matching product first, or require the add label to strongly name the requested item.
 - Do not open loosely related product titles before an add attempt. Two-token items must match both tokens, and longer item names need a stronger token majority.
+- Do not verify a product-page add from broad page text. For non-cart URLs, the requested item and quantity/unit must match near the cart marker, and recommendation/similar-item text after the marker must not count.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps. Make the browser hand cheaper, deterministic where possible, and cache page observations instead.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local` or env backup files.

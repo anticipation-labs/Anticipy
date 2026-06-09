@@ -316,17 +316,46 @@ def _pick_add_button(elements: list[dict], item: str, allow_generic: bool = True
     return None
 
 
+CART_MARKER_RE = re.compile(
+    r"added\s+to\s+(?:cart|bag|basket)|item\s+added|in\s+your\s+(?:cart|bag|basket)|"
+    r"\b\d+\s+in\s+(?:cart|basket|bag)\b|\bin\s+(?:cart|basket|bag)\b",
+    re.I,
+)
+POST_CART_NOISE_RE = re.compile(
+    r"\b(recommend(?:ed|ations?)?|you\s+may\s+also\s+like|similar\s+items?|sponsored|"
+    r"related\s+items?|more\s+to\s+consider)\b",
+    re.I,
+)
+
+
+def _cart_marker_item_match(text: str, item: str) -> bool:
+    tokens = _item_tokens(item)
+    if not tokens:
+        return False
+    for marker in CART_MARKER_RE.finditer(text or ""):
+        start = max(0, marker.start() - 360)
+        end = min(len(text or ""), marker.end() + 520)
+        window = POST_CART_NOISE_RE.split((text or "")[start:end], maxsplit=1)[0]
+        if not _numbers_match(window, item):
+            continue
+        hits = _token_hits(window, tokens)
+        if hits >= (2 if len(tokens) >= 3 else 1):
+            return True
+    return False
+
+
 def _cart_verified(out: dict, item: str) -> bool:
     text = (out or {}).get("text") or ""
     low = text.lower()
     url = ((out or {}).get("url") or "").lower()
-    added = (
-        any(k in low for k in ("added to cart", "added to bag", "added to basket", "item added", "in your cart"))
-        or re.search(r"\b\d+\s+in\s+(cart|basket|bag)\b|\bin\s+(cart|basket|bag)\b", low) is not None
-    )
+    added = CART_MARKER_RE.search(low) is not None
     cart_url = re.search(r"/(cart|basket|bag)(?:[/?#]|$)", url) is not None
     tokens = _item_tokens(item)
-    if not (added or cart_url) or not tokens or not _numbers_match(text, item):
+    if not (added or cart_url) or not tokens:
+        return False
+    if added and not cart_url:
+        return _cart_marker_item_match(text, item)
+    if not _numbers_match(text, item):
         return False
     hits = _token_hits(text, tokens)
     return hits >= (2 if len(tokens) >= 3 else 1)
