@@ -77,6 +77,7 @@ COMMERCE_SEARCH_URLS = {
     "petsmart.com": "https://www.petsmart.com/search/?q={q}",
     "containerstore.com": "https://www.containerstore.com/s?source=form&q={q}",
     "bookshop.org": "https://bookshop.org/search?keywords={q}",
+    "chewy.com": "https://www.chewy.com/s?query={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -90,6 +91,7 @@ COMMERCE_CART_URLS = {
     "petsmart.com": "https://www.petsmart.com/cart/",
     "containerstore.com": "https://www.containerstore.com/cart/list.htm",
     "bookshop.org": "https://bookshop.org/cart",
+    "chewy.com": "https://www.chewy.com/app/cart",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -125,6 +127,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "petsmart.com": re.compile(r"/(?:dog|cat|fish|bird|reptile|small-pet)/.+\.html$", re.I),
     "containerstore.com": re.compile(r"/\d+d$", re.I),
     "bookshop.org": re.compile(r"/(?:p/books|a/)", re.I),
+    "chewy.com": re.compile(r"/(?:.+/dp/|api/event/p/sar/click)", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(

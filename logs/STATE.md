@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T143142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Bookshop and hardened exact product selection on variant-heavy search pages. WebVoyager now knows Bookshop search, product, and cart URL shapes; recognizes Bookshop `beta-search` pages and `keywords` query parameters as search surfaces; checks the freshly observed state after the final bounded scroll before failing; supports generic `Add item to cart` controls only beside a strongly matched real product row; and penalizes unrequested variant words such as workbook, calendar, guide, and summary. `NativeBridgeLink` now extracts query tokens from `keywords`. A read-only Barnes & Noble probe produced a blank/no-mark hard-site finding, and a read-only Bookshop probe found real product rows and Add controls only after bounded scrolling. One live Bookshop action failed honestly before the final-scroll and variant hardening. The final fresh live `/event` run resolved a vague memory task to Bookshop plus the remembered book, opened the exact Bookshop product page, clicked a real Add to cart control, opened Bookshop `/cart`, and durable cart read-back matched the item. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T150142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Chewy. WebVoyager now knows Chewy search, product, and cart URL shapes: search uses `/s?query=`, known-cart verification uses `/app/cart`, and product matching accepts Chewy `/dp/` product URLs plus Chewy search tracking click URLs while preserving the existing visible product identity threshold before any Add click. Read-only Chewy probes found actionable product rows, real Add to Cart controls, product tracking links, and the live cart route without mutation. The final fresh live `/event` run resolved a vague memory task to Chewy plus `KONG Classic Dog Toy`, searched Chewy, opened the exact Chewy product page, clicked a real Add to Cart control, opened Chewy `/app/cart`, and durable cart read-back matched the item. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -42,17 +42,18 @@ Current M3 slice:
 - WebVoyager checks the freshly observed search state after the final bounded scroll before failing, so product rows that appear on the last allowed scroll are still considered.
 - WebVoyager can click generic `Add item to cart` controls beside href-less visible product rows only when the surrounding product identity strongly matches the remembered item.
 - WebVoyager penalizes unrequested variant words such as workbook, calendar, guide, kid, and summary when choosing between visible product candidates.
+- WebVoyager knows Chewy search, product, and cart URL shapes. Chewy product matching accepts `/dp/` product pages and Chewy search tracking click URLs, but visible product identity still must satisfy the existing threshold before Add.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- A Barnes & Noble read-only probe reached a blank/no-mark search surface and was logged as a hard-site finding, not proof.
-- A Bookshop read-only probe found real product rows and Add controls only after bounded scrolling on the live `beta-search` surface.
-- One early full Bookshop action routed to the real store but failed honestly because the product rows appeared after the final scroll and were not checked before failure.
-- The final live `/event` run used context-only memory plus a vague action that did not name the site or exact item. The hand resolved Bookshop plus the remembered book, opened the exact Bookshop product page, clicked a real Add to cart control, opened Bookshop `/cart`, and durable cart read-back matched the item. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
+- A read-only Chewy probe found actionable product rows, real Add to Cart controls, and product tracking links that redirect toward product pages.
+- A read-only Chewy cart probe verified the live cart route as `/app/cart`.
+- The final live `/event` run used context-only memory plus a vague action that did not name Chewy or the exact item. The hand resolved Chewy plus `KONG Classic Dog Toy`, searched Chewy, opened the exact Chewy product page, clicked a real Add to Cart control, opened Chewy `/app/cart`, and durable cart read-back matched the item. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- Chewy can complete a real search-product-add-cart-verify path builder-side after recognizing `/s?query=`, `/dp/`, Chewy search tracking click URLs, and `/app/cart`.
 - Bookshop can complete a real search-product-add-cart-verify path builder-side after recognizing `beta-search`, `keywords`, Bookshop product URLs, variant-heavy search results, and `Add item to cart` labels.
 - Barnes & Noble returned a blank/no-mark search surface in the dedicated bridge path. This is a hard-site finding, not proof.
 - Target can complete real search-product-add-cart-verify and duplicate-safe known-cart verification paths for vague memory-resolved tasks in the dedicated browser path.
@@ -74,10 +75,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised the Bookshop vague-memory path. One pre-fix action failed honestly before final-scroll product checks. The final post-fix run selected the exact Bookshop product, clicked a real Add to cart control, and verified durable cart read-back builder-side.
+- Real live `/event` runs exercised the Chewy vague-memory path. The final post-fix run selected the exact Chewy product, clicked a real Add to Cart control, and verified durable cart read-back builder-side.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Bookshop adjacent-add and variant-ranking check passed.
-- Focused native `keywords` query-token check passed.
+- Focused Chewy URL and adjacent Add check passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -95,7 +95,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
+- M3 is not proven. Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -103,7 +103,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding this lap. Other hard-site failures are not all-work stops.
+- Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding in the previous lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -116,7 +116,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/28 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/29 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -177,7 +177,7 @@ Dead ends not to retry blindly:
 - Do not design always-on cloud transcription.
 
 Next:
-- Convert the current Bookshop exact-item path plus prior Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Convert the current Chewy exact-item path plus prior Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
 - Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
 
 Law digest:
