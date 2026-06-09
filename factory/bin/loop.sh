@@ -9,7 +9,9 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO"
 source factory/config/factory.conf
 PY="engine/.venv/bin/python"
-JOURNAL="logs/journal.md"
+# The loop's own journal is untracked so git reset --hard on a reverted lap can't eat it.
+# (Builders append to logs/journal.md inside their commits; that rides the keep/revert.)
+JOURNAL="logs/factory/loop_journal.md"
 
 MAX_LAPS=0; UNTIL=""
 while [[ $# -gt 0 ]]; do
@@ -35,12 +37,12 @@ fi
 echo $$ > factory/.lock/pid
 trap 'rm -rf factory/.lock' EXIT
 
-# ---- crash recovery: stash any dirty tree from a dead lap ----
-if [[ -n "$(git status --porcelain | grep -vE '^\?\?' || true)" ]]; then
+# ---- crash recovery: stash any dirty PRODUCT tree from a dead lap (logs are ours) ----
+if [[ -n "$(git status --porcelain -- . ':!logs' ':!PENDING_FOR_OMAR.md' | grep -vE '^\?\?' || true)" ]]; then
   mkdir -p logs/factory/aborted
-  git diff > "logs/factory/aborted/$(date -u +%Y%m%dT%H%M%SZ).patch" || true
-  git checkout -- . 2>/dev/null || true
-  journal "loop start: recovered dirty tree to logs/factory/aborted/ and reset"
+  git diff -- . ':!logs' > "logs/factory/aborted/$(date -u +%Y%m%dT%H%M%SZ).patch" || true
+  git checkout -- . ':!logs' 2>/dev/null || true
+  journal "loop start: recovered dirty product tree to logs/factory/aborted/ and reset"
 fi
 
 LAPS=0
@@ -77,10 +79,11 @@ while true; do
   bash factory/bin/build_lap.sh "$LAP" "$TIER"
   BUILD_RC=$?
   AFTER=$(git rev-parse HEAD)
-  # builder may leave uncommitted edits on timeout/crash — preserve then drop them
-  if [[ -n "$(git status --porcelain | grep -vE '^\?\?' || true)" ]]; then
-    git diff > "$LAPDIR/uncommitted.patch" || true
-    git checkout -- . 2>/dev/null || true
+  # builder may leave uncommitted PRODUCT edits on timeout/crash — preserve then drop them
+  # (logs/ and PENDING_FOR_OMAR.md are legitimate lap outputs; they stay)
+  if [[ -n "$(git status --porcelain -- . ':!logs' ':!PENDING_FOR_OMAR.md' | grep -vE '^\?\?' || true)" ]]; then
+    git diff -- . ':!logs' ':!PENDING_FOR_OMAR.md' > "$LAPDIR/uncommitted.patch" || true
+    git checkout -- . ':!logs' ':!PENDING_FOR_OMAR.md' 2>/dev/null || true
   fi
 
   # ---- mechanical verify ----

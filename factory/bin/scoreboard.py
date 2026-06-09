@@ -86,7 +86,9 @@ def main() -> int:
     judge = load(lap_dir / "judge.json")
     target = parse_target()
     ratchet = load(RATCHET, {"best": {}, "treadmill_count": 0,
-                             "last_movement_lap": "", "spend_since_movement": 0.0})
+                             "last_movement_lap": "", "spend_since_movement": 0.0,
+                             "phases_closed": {}})
+    ratchet.setdefault("phases_closed", {})
     budget = load(REPO / "factory/config/budget.json", {"epsilon_noise": 0.02})
     eps = float(budget.get("epsilon_noise", 0.02))
 
@@ -103,10 +105,15 @@ def main() -> int:
             if d > eps:
                 moved, delta = primary, f"{(current - best):+.4f}"
 
-    gate_closed = bool(gates.get("phase_gate_passed"))
+    phase = target.get("current_phase", "")
+    gate_passed_now = bool(gates.get("phase_gate_passed"))
+    # Closing a phase counts as progress ONCE — the first lap that closes it.
+    # A gate that keeps passing on later laps is status, not movement.
+    first_closure = gate_passed_now and phase not in ratchet["phases_closed"]
+    gate_closed = first_closure
     guards_ok = (agg.get("silent_harm_count", 0) == 0) if agg else True
     kept = args.kept == "true"
-    counts = kept and guards_ok and (moved != "none" or gate_closed)
+    counts = kept and guards_ok and (moved != "none" or first_closure)
 
     new_treadmill = 0 if counts else int(ratchet.get("treadmill_count", 0)) + 1
     spend_total = float(gates.get("spend_total_usd", 0.0) or 0.0)
@@ -165,6 +172,8 @@ def main() -> int:
             b = ratchet["best"].get(k)
             if b is None or (v - b) * d > 0:
                 ratchet["best"][k] = v
+        if first_closure:
+            ratchet["phases_closed"][phase] = args.lap
     ratchet["treadmill_count"] = new_treadmill
     if counts:
         ratchet["last_movement_lap"] = args.lap

@@ -1,0 +1,6 @@
+{"kind": "profile_fact", "text": "Cofounder Raj owns engineering; Jin owns sales, fundraising, everything else.", "people": ["Raj"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Investor Priya at Foothill Ventures led the seed round; prefers Tuesday morning calls.", "people": ["Priya"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Wife Elena has a gallery opening this month; Jin promised not to miss it.", "people": ["Elena"], "importance": 0.7}
+{"kind": "open_loop", "text": "Send Priya the updated metrics deck - promised it last Thursday.", "people": ["Priya"], "fields": {"task": "send Priya updated metrics deck"}, "status": "open", "importance": 0.9}
+{"kind": "history", "text": "Was configuring a Herman Miller Sayl chair in black for the office last week, kept it in a tab.", "importance": 0.7}
+{"kind": "derived", "text": "Does deep work 6-9am; meetings stack after 10am.", "confidence": 0.7, "importance": 0.5}

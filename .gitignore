@@ -88,3 +88,4 @@ factory/.halt
 factory/config/owner_literals.local.txt
 # holdout personas are judge-only, local-only, never in git
 factory/personas/holdout/**
+logs/factory/loop_journal.md
