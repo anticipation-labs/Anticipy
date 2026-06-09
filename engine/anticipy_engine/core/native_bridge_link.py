@@ -728,12 +728,22 @@ class NativeBridgeLink:
             )
             if not name:
                 continue
+            try:
+                doc_index = int(
+                    raw.get(
+                        "docIndex",
+                        raw.get("documentIndex", raw.get("sourceIndex", raw.get("originalIndex", idx))),
+                    )
+                )
+            except Exception:
+                doc_index = idx
             selector = raw.get("selector") or raw.get("css") or raw.get("path")
             if not selector:
                 selector = f'[data-anticipy-idx="{idx}"]'
             out.append(
                 {
                     "idx": idx,
+                    "docIndex": doc_index,
                     "role": str(raw.get("role") or raw.get("tag") or ""),
                     "name": name[:MAX_NATIVE_LABEL_CHARS],
                     "type": str(raw.get("type") or ""),
@@ -987,6 +997,7 @@ class NativeBridgeLink:
                     tag: row.tag,
                     name: row.name,
                     href: row.href,
+                    docIndex: row.originalIndex,
                     type: row.type,
                     state: row.state,
                     inView: row.inView,

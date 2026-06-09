@@ -98,6 +98,7 @@ COMMERCE_SEARCH_URLS = {
     "worldmarket.com": "https://www.worldmarket.com/search?q={q}",
     "acehardware.com": "https://www.acehardware.com/search?query={q}",
     "thriftbooks.com": "https://www.thriftbooks.com/browse/?b.search={q}",
+    "vitaminshoppe.com": "https://www.vitaminshoppe.com/search?search={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -131,6 +132,7 @@ COMMERCE_CART_URLS = {
     "worldmarket.com": "https://www.worldmarket.com/cart",
     "acehardware.com": "https://www.acehardware.com/cart",
     "thriftbooks.com": "https://www.thriftbooks.com/shopping-cart/",
+    "vitaminshoppe.com": "https://www.vitaminshoppe.com/cart/shopping-cart",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
@@ -195,6 +197,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "worldmarket.com": re.compile(r"/p/[^/?#]+-\d+\.html$", re.I),
     "acehardware.com": re.compile(r"/departments/[^?#]+/\d+$", re.I),
     "thriftbooks.com": re.compile(r"/w/[^?#]+/\d+/?$", re.I),
+    "vitaminshoppe.com": re.compile(r"/p/[^?#]+/[a-z0-9-]+$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -425,13 +428,23 @@ def _product_url_near_index(
     if not tokens:
         return ""
     required = _required_product_hits(tokens)
+    target_el = None
+    for el in elements or []:
+        try:
+            if int(el.get("idx")) == target_idx:
+                target_el = el
+                break
+        except Exception:
+            continue
+    target_order = _element_order(target_el) if target_el else target_idx
     nearby = []
     for el in elements or []:
         try:
             idx = int(el.get("idx"))
         except Exception:
             continue
-        if idx > target_idx + after or target_idx - idx > before:
+        order = _element_order(el)
+        if order > target_order + after or target_order - order > before:
             continue
         name = (el.get("name") or "").strip()
         href = (el.get("href") or "").strip()
@@ -452,7 +465,7 @@ def _product_url_near_index(
             continue
         if hits < required:
             continue
-        nearby.append((idx, hits, 1 if _looks_buyable_product_url(absolute, start_url) else 0, href))
+        nearby.append((order, hits, 1 if _looks_buyable_product_url(absolute, start_url) else 0, href))
     if not nearby:
         return ""
     _, _, _, href = max(nearby, key=lambda row: (row[2], row[1], row[0]))
@@ -476,6 +489,7 @@ def _pick_adjacent_result_add(
         product_idx = int(product.get("idx"))
     except Exception:
         return None
+    product_order = _element_order(product)
     product_name = (product.get("name") or "").strip()
     product_href = _absolute_site_url(start_url, product.get("href") or "")
     if product_href and not _looks_buyable_product_url(product_href, start_url):
@@ -487,23 +501,35 @@ def _pick_adjacent_result_add(
     if _token_hits(product_identity, tokens) < required:
         return None
 
-    for el in sorted(elements or [], key=lambda row: int(row.get("idx") or 0)):
+    for el in sorted(elements or [], key=_element_order):
         try:
             idx = int(el.get("idx"))
         except Exception:
             continue
-        if idx <= product_idx:
+        order = _element_order(el)
+        if order <= product_order:
             continue
-        if idx > product_idx + 10:
+        if order > product_order + 10:
             break
         href = _absolute_site_url(start_url, el.get("href") or "")
         if href and href != product_href and _looks_buyable_product_url(href, start_url):
-            if idx > product_idx + 1 and _token_hits(el.get("name") or "", tokens) >= required:
+            if order > product_order + 1 and _token_hits(el.get("name") or "", tokens) >= required:
                 break
         add = _pick_add_button([el], item, allow_generic=True)
         if add:
             return add
     return None
+
+
+def _element_order(el: Optional[dict]) -> int:
+    if not el:
+        return 0
+    for key in ("docIndex", "documentIndex", "sourceIndex", "idx"):
+        try:
+            return int(el.get(key))
+        except Exception:
+            continue
+    return 0
 
 
 def _item_tokens(text: str) -> list[str]:
@@ -798,12 +824,22 @@ def _generic_add_points_at_unrelated_product(
     if not tokens:
         return False
     required = _required_product_hits(tokens)
-    for el in sorted(elements or [], key=lambda row: int(row.get("idx") or 0)):
+    add_el = None
+    for el in elements or []:
+        try:
+            if int(el.get("idx")) == add_idx:
+                add_el = el
+                break
+        except Exception:
+            continue
+    add_order = _element_order(add_el) if add_el else add_idx
+    for el in sorted(elements or [], key=_element_order):
         try:
             idx = int(el.get("idx"))
         except Exception:
             continue
-        if idx <= add_idx or idx > add_idx + 12:
+        order = _element_order(el)
+        if order <= add_order or order > add_order + 12:
             continue
         href = _absolute_site_url(start_url, el.get("href") or "")
         if not href or not _looks_buyable_product_url(href, start_url):
