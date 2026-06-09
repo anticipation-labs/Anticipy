@@ -63,6 +63,11 @@ _MEM_PRODUCT = re.compile(
     r"product|item|thing|cart|kitchen)\b",
     re.I,
 )
+_RESOLUTION_STOP = {
+    "the", "that", "this", "thing", "one", "item", "product", "earlier", "before",
+    "looked", "looking", "at", "for", "from", "with", "grab", "get", "add", "put",
+    "cart", "basket", "bag", "please", "later", "was", "were", "been", "had", "and",
+}
 # --- other reversible (ACT) ---
 _REVERSIBLE: List[Tuple[str, str]] = [
     ("research", r"\b(research|look up|looks up|looking up|look into|find|finds|finding|find out|"
@@ -130,7 +135,7 @@ class HarmLine:
         # 5) draft / prepare (incl. drafting a message) — reversible
         if _DRAFT_FRAME.search(t):
             return HarmVerdict(False, "draft", "reversible:draft (not send) -> act")
-        if _VAGUE_CART.search(t) and self._memory_has_cart_target(ctx):
+        if _VAGUE_CART.search(t) and self._memory_has_cart_target(ctx, t):
             return HarmVerdict(False, "cart", "reversible:memory-resolved cart target -> act")
         # 6) other reversible
         rev = _first_match(t, _REVERSIBLE)
@@ -159,7 +164,7 @@ class HarmLine:
         return any(re.search(r"\b" + re.escape(w) + r"\b", hay) for w in _CASUAL)
 
     @staticmethod
-    def _memory_has_cart_target(ctx: Optional[dict]) -> bool:
+    def _memory_has_cart_target(ctx: Optional[dict], action_text: str = "") -> bool:
         mem = (ctx or {}).get("context") if isinstance(ctx, dict) else {}
         if not isinstance(mem, dict):
             return False
@@ -170,4 +175,13 @@ class HarmLine:
                 vals.extend(line.strip() for line in value.splitlines() if line.strip())
             elif isinstance(value, list):
                 vals.extend(str(v) for v in value)
-        return any(_MEM_SITE.search(line) and _MEM_PRODUCT.search(line) for line in vals)
+        candidates = [line for line in vals if _MEM_SITE.search(line) and _MEM_PRODUCT.search(line)]
+        if not candidates:
+            return False
+        hints = {
+            t for t in re.findall(r"[a-z0-9]+", (action_text or "").lower())
+            if len(t) >= 3 and t not in _RESOLUTION_STOP
+        }
+        if hints and not any(hints & set(re.findall(r"[a-z0-9]+", line.lower())) for line in candidates):
+            return False
+        return True

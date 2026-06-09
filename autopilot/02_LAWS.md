@@ -62,4 +62,14 @@ These exist because this project failed about 500 times before you, always the s
 
 30. The only acceptable stop conditions are the named human-only gates: a sign-in you cannot complete, spending real money, a missing credential only the human can provide, or flashing the pendant. If the blocker is not one of those gates, keep moving the real task forward. If one real site is hard, try another real store or build the offline intent, matching, DOM recipe, and page-state pieces that move M3 toward a real artifact.
 
+31. Read `00_AMENDMENT_NEVER_STALL.md` before `AGENTS.md` and before any file under `autopilot/` at the start of every fresh session or lap. If this file conflicts with older control-plane text, the amendment wins unless the conflict would allow a fake win.
+
+32. Proxy substitution is the named disease. Do not swap the real M3 chain for an easy-to-score proxy: green tests, demos, a single hardcoded task, status displays, toggles, `example.com`, localhost, search-bar task dumping, or breadth of phrasing around one narrow action. If the work is easy to mark green but does not move vague-memory-to-real-action forward, it is not allowed.
+
+33. While proof or paid model credit is unavailable, every lap must climb the real M3 ladder: A memory-to-intent resolution, B real-site DOM action recipes captured against real pages, C cheaper live browser planning through caching and fewer model calls, D sideways work on another real site or shared offline pieces, or E honest failure hardening on the real chain. Outputs from this ladder are `UNPROVEN-PENDING-JUDGE` until judged.
+
+34. The only five human gates are: a sign-in or OAuth you cannot complete even with computer use; spending real money or entering payment details; a missing, unfunded, or failing API key you cannot provision yourself; flashing the physical pendant or other hardware-hand work; and a hard external block you cannot pass, such as a captcha requiring the human. Low model credit, blocked judge quota, and a hard site are not gates.
+
+35. "12 of the same action shape with different words" proves one capability across phrasing. It is not broad product progress and must not be counted as multiple milestones or as generalization.
+
 If two laws ever seem to conflict, the one that prevents a fake win wins.

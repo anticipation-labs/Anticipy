@@ -7,6 +7,8 @@ Do them roughly in order unless a later amendment narrows focus. Always: one ver
 ## Current focus amendment: M3 only
 Stop widening the perimeter. The only milestone the builder may work now is M3: the browser hand actually completing a real task end to end. No more UI/status/observability/onboarding-polish laps. The product is: hear a task, do it, prove it happened.
 
+Read `00_AMENDMENT_NEVER_STALL.md` before this file every lap. It supersedes older milestone text if there is a conflict, except where the older rule prevents a fake win.
+
 M3 work must wire the real WebVoyager/browser agent into the live task loop so a typed task such as `add the cheapest stainless water bottle on <real site> to the cart` actually drives the browser and changes the cart. This means the real planner, real browser hand, and real artifact path, not a self-test, not a mocked flow, and not another status surface.
 
 Mocked browser checks never count as M3 progress. They may only prove generic wiring did not regress. M3 advances only when a real artifact appears in the real world and the separate judge verifies it. Until the judge is available, the builder must keep building and running the real action path, but every scorecard and state update must label it UNPROVEN.
@@ -17,6 +19,8 @@ Hard target rule: `example.com`, localhost, fixture pages, and contrived no-stak
 
 The browser hand must not complete M3 by typing the task text into a search bar or address bar. A run that turns the user's instruction into search text is a failed run. The agent must plan and act on a real site or real account.
 
+Breadth of phrasing is not breadth of product. Twelve variants of the same action shape count as one capability tested across phrasing, not as twelve pieces of M3 progress.
+
 The real M3 shape is:
 1. The task is vague natural language that does not name the site or exact item, for example `grab that thing I was looking at earlier for the kitchen`.
 2. The system uses memory to resolve what the phrase means, choose the real site, and identify the real item.
@@ -26,6 +30,15 @@ The real M3 shape is:
 If the full chain is not working yet, build the missing piece and label every run `UNPROVEN-PENDING-JUDGE`. Judge quota being blocked does not justify easy side-work. Low live model credit also does not justify stopping. It means the builder must make the chain cheaper: cache page observations, cut redundant model calls, use deterministic DOM action recipes for real stores, use the smallest viable next-click model, and build offline memory-to-intent and item-matching paths.
 
 The only time M3 work can pause is a true human-only gate: a sign-in you cannot complete, spending real money, a missing credential only the human can provide, or flashing the pendant. If one real site is hard, continue against another real store or build the real offline pieces that move the chain toward a real cart artifact.
+
+When proof or paid model credit is unavailable, every lap must climb the real M3 ladder:
+- Rung A: memory-to-intent resolution from vague speech into a concrete item and real site.
+- Rung B: real-site DOM action recipes captured against the actual page state.
+- Rung C: cheaper browser planning through cached observations, fewer model calls, and smallest viable next-click decisions.
+- Rung D: sideways work on another real site or shared offline pieces when one site fights back.
+- Rung E: failure hardening on the real chain so it fails honestly and fast instead of looping or pretending.
+
+The only five human gates are sign-in/OAuth that cannot be completed with computer use, spending real money or entering payment details, a missing/unfunded/failing key that cannot be provisioned here, flashing or other physical hardware work, and a hard external block such as a captcha that needs the human. Low credit, judge quota, and a hard site are not pause reasons.
 
 The current state is in `CODEX_BRIEF.md`. Short version: the decision spine, memory, and a stranded multi-step browser agent are real; the product around them (front door, input, onboarding, the mesh beyond two apps, the proactive scheduler, distribution) is mostly absent. You are building that perimeter and wiring the real engine into a usable product.
 

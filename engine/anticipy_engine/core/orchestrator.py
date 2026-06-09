@@ -115,6 +115,11 @@ _PRODUCT_HINT_RE = re.compile(
     r"product|item|thing|cart|kitchen)\b",
     re.I,
 )
+_RESOLUTION_STOP = {
+    "the", "that", "this", "thing", "one", "item", "product", "earlier", "before",
+    "looked", "looking", "at", "for", "from", "with", "grab", "get", "add", "put",
+    "cart", "basket", "bag", "please", "later", "was", "were", "been", "had", "and",
+}
 
 
 def _parse_clock(raw: str, fallback_ampm: str | None = None) -> tuple[int, int] | None:
@@ -270,32 +275,53 @@ def _line_item(line: str) -> str:
     return ""
 
 
+def _resolution_hints(text: str) -> set[str]:
+    toks = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {t for t in toks if len(t) >= 3 and t not in _RESOLUTION_STOP}
+
+
+def _candidate_score(line: str, hints: set[str], rank: int) -> tuple[int, int]:
+    line_toks = set(re.findall(r"[a-z0-9]+", (line or "").lower()))
+    return (len(hints & line_toks), -rank)
+
+
 def _memory_resolved_browser_step(text: str, context) -> Optional[Step]:
     if not _VAGUE_BROWSER_RE.search(text or ""):
         return None
     candidates = []
-    for line in _context_lines(context):
+    hints = _resolution_hints(text)
+    for rank, line in enumerate(_context_lines(context)):
         if not _PRODUCT_HINT_RE.search(line):
             continue
         site = _line_site(line)
         item = _line_item(line)
         if site and item:
-            candidates.append({"site": site, "item": item, "source_ref": _source_ref(line)})
+            score = _candidate_score(line, hints, rank)
+            candidates.append({
+                "site": site,
+                "item": item,
+                "source_ref": _source_ref(line),
+                "matched_hints": sorted(hints & set(re.findall(r"[a-z0-9]+", line.lower()))),
+                "_score": score,
+            })
     if not candidates:
         return None
-    resolved = candidates[0]
+    if hints and not any(c["_score"][0] > 0 for c in candidates):
+        return None
+    resolved = max(candidates, key=lambda c: c["_score"])
+    resolved_public = {k: v for k, v in resolved.items() if not k.startswith("_")}
     task = (
-        f"On {resolved['site']}, find {resolved['item']} and add it to the cart. "
+        f"On {resolved_public['site']}, find {resolved_public['item']} and add it to the cart. "
         "Stop after the cart visibly contains the item. Do not checkout, pay, or place an order."
     )
     return Step(
         intent="browse_task",
         args={
             "task": task,
-            "url": resolved["site"],
+            "url": resolved_public["site"],
             "original_task": text,
             "resolved_from_memory": True,
-            "memory_resolution": resolved,
+            "memory_resolution": resolved_public,
         },
         risk=Risk.low,
     )

@@ -4,13 +4,13 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T042119Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened the memory-to-intent resolver that feeds M3 browser jobs, but created no new real artifact and has no separate judge proof.
+Latest builder lap: `20260609T043909Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It persisted the never-stall amendment on disk, updated the control-plane read order and M3 ladder rules, and hardened contextual vague memory resolution. It created no new real artifact and has no separate judge proof.
 
 Latest offline M3 slice:
-- `read_context` now includes derived memories, and the harm-line cart target gate checks derived memory too.
-- The orchestrator resolver dedupes memory lines across drawers, strips site and context text out of unquoted item extraction, and no longer treats generic context such as `for the kitchen` as an item by itself.
-- The resolver chooses the highest-ranked memory candidate instead of the last candidate.
-- Browser job args now carry a stable `source_ref` digest instead of raw memory source text in `memory_resolution`.
+- `00_AMENDMENT_NEVER_STALL.md` now exists at repo root and must be read before `AGENTS.md` every lap.
+- `AGENTS.md`, `autopilot/00_START_HERE.md`, `autopilot/02_LAWS.md`, and `autopilot/07_MILESTONES.md` now carry the first-read rule, proxy-substitution warning, M3 ladder, five human gates, and phrasing-breadth caveat.
+- The vague cart resolver now scores candidate memories by contextual request hints, such as `kitchen`, and prefers the matching remembered site/item line.
+- The harm-line uses the same hint check before allowing a vague cart goal to act. If contextual hints are present and no remembered cart target matches them, the system asks instead of acting.
 - Focused resolver probes passed, but this is offline chain hardening only. It is not M3 proof.
 
 Latest real M3 attempt:
@@ -35,15 +35,15 @@ Latest product/public candidate, unchanged this lap:
 - This is not M1, M2, M3, or M5 proof.
 
 Latest checks, candidate evidence only:
-- Mandatory compaction-proof reads were re-run for `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Focused resolver probe passed after correcting the direct-call context shape: unquoted item extraction strips site/context text, derived memory unlocks cart routing, raw source text is not stored in `memory_resolution`, and the highest-ranked candidate wins.
+- Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
+- Focused contextual vague resolver probe passed: a kitchen request chooses the kitchen memory, a mismatched memory asks instead of acting, and a plain `earlier` request can still use the top memory candidate.
 - Python compile passed for the touched engine files.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_harmline.py` passed.
 - `engine/scripts/test_handoff.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
-- Changed-path scan shows only orchestrator, memory worker, and harm-line code.
+- Changed-path scan shows amendment/control-plane files plus orchestrator and harm-line code.
 - Owner/eval literal scan and secret-value scan found no product-code matches.
 - Port 8787 has no remaining listener.
 
@@ -95,6 +95,7 @@ Dead ends not to retry blindly:
 - Do not trust loose numeric item matching on real stores. Quantity and unit details must match exact variants before opening products or clicking product-specific add controls.
 - Do not click recommendation add buttons unless their label strongly matches the requested product.
 - Do not let unquoted memory item extraction swallow site/context text into the item, and do not put raw memory source text into browser job args.
+- Do not let a vague request with contextual hints act on a remembered cart target whose memory line does not match those hints.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps. Make the browser hand cheaper, deterministic where possible, and cache page observations instead.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local` or env backup files.
@@ -117,4 +118,4 @@ Next:
 - Use the hardened resolver for the next safe real-store attempt, or continue strengthening item matching and real-store DOM recipes if another real click would risk adding wrong cart items. Every real run remains `UNPROVEN-PENDING-JUDGE` until the separate judge verifies it.
 
 Law digest:
-Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. M3 only: vague task, memory-resolved real site and item, browser hand changes a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
+Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.

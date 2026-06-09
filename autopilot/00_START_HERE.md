@@ -25,7 +25,7 @@ The audio tests only the ears-to-brain slice. It is not the priority over the fr
 - `LESSONS.md` — you write this when you repeat a mistake.
 
 ## The loop in brief
-1. Re-read `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, and `logs/STATE.md` from disk, then read the next open milestone.
+1. Re-read `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, and `logs/STATE.md` from disk, then read the next open milestone.
 2. Do the single next vertical slice toward it.
 3. Run the whole system on the current milestone input. Clean M0 uses typed, fully time-grounded input; later audio milestones use cached transcript text from real days.
 4. A separate judge session opens the real apps with computer use and rules whether the real thing actually happened. Clean M0 uses a judge-owned typed task; later audio milestones use held-out real days you have never seen.
