@@ -1,53 +1,54 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, M5, and M7-perimeter plumbing may continue as candidate work only. The latest public candidate is an M5 public onboarding mesh source-selection candidate, publicly deployed but unjudged.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, M5, and M7-perimeter plumbing may continue as candidate work only. The latest public candidate is an M5 onboarding mesh source-persistence candidate, publicly deployed but unjudged.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T020401Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked site source commit `c71d8a638e3037f7aeb5dd530dbbe3051a6256f2`. The DMG release manifest remains on source commit `6ae2e9951619875c0ecc45bbce64c0b5620a75cc`.
+Latest builder lap: `20260609T022937Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked site source commit `921f45bcc3789be479a72636b0245f7b0a1df514`. The DMG release manifest remains on source commit `6ae2e9951619875c0ecc45bbce64c0b5620a75cc`.
 
 Latest product change:
-- Public `/app` onboarding now loads `/api/coldstart/sources` for authenticated, local-engine-connected users after onboarding is complete.
-- Onboarding shows selectable mesh source rows with label, host, and normalized engine lane. A user can disable a source before `Build mesh`.
-- `Build mesh` refuses to start if source config cannot be loaded or if no startable selected source remains. When sources are selected, it posts `sources` plus legacy `walk_*` flags derived from the selected normalized lanes.
-- Settings reports mesh source config freshness and selected startable lanes.
-- The app shell uses `overflow-x-hidden` instead of full `overflow-hidden`, so taller onboarding content is vertically reachable on mobile.
-- This is candidate M5 perimeter work only. It is not proof of real onboarding mesh because the separate judge has not run the packaged app against a real local engine, real extension/native bridge, and real connected apps.
+- Public `/app` onboarding now parses the local engine's `/api/coldstart/sources` response as a real config document with `version`, `_comment`, `path`, and source rows.
+- Source rows preserve optional walker fields including `scrape_selector` and `max_pages` when the user saves source choices.
+- Toggling a source now marks the config dirty, shows `unsaved changes`, and enables a `Save sources` control.
+- `Save sources` POSTs the validated config shape back to local `/api/coldstart/sources` and clears the dirty state only after the local engine accepts the save.
+- `Build mesh` auto-saves dirty source choices before it POSTs `/api/coldstart/start`, then starts only the selected normalized lanes and legacy walk flags.
+- Settings and onboarding show source freshness and whether the local source config path loaded.
+- This is candidate M5 perimeter work only. It is not proof of real onboarding mesh because the separate judge has not run a fresh-account onboarding path against the packaged app, real local engine, real extension/native bridge, and real connected apps.
 
 Current public production candidate, pending judge:
-- Public site build commit: `c71d8a638e3037f7aeb5dd530dbbe3051a6256f2`.
+- Public site build commit: `921f45bcc3789be479a72636b0245f7b0a1df514`.
 - Public DMG source commit in manifest: `6ae2e9951619875c0ecc45bbce64c0b5620a75cc`.
 - Public DMG SHA-256: `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`.
 - Public DMG size: `178894746` bytes.
 - Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/6ae2e9951619875c0ecc45bbce64c0b5620a75cc/Anticipy_1.0.0_aarch64.dmg`.
-- `https://www.anticipy.ai/api/app/state` reports build commit `c71d8a638e3037f7aeb5dd530dbbe3051a6256f2`, release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`, and `178894746` bytes.
+- `https://www.anticipy.ai/api/app/state` reports build commit `921f45bcc3789be479a72636b0245f7b0a1df514`, release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`, and `178894746` bytes.
 - `https://www.anticipy.ai/app` returns 200 HTML.
 - `https://www.anticipy.ai/install.sh` returns 200 shell script.
 - `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 with content type `application/x-apple-diskimage`.
 
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- `npm run build` passed before and after the shell overflow fix.
-- In-app Browser loaded local `/app?view=onboarding` on clean dev ports; unauthenticated route remained on the public/account-gated surface as expected.
-- Local mocked Playwright verified desktop and 390px mobile: source config loaded, Google Drive toggled off, one `/api/coldstart/start` POST carried `sources: ["gmail","calendar"]` and `walk_drive: false`, mesh status rendered `12 rows` and `ok gmail, calendar`, Settings rendered source summary `startable gmail, calendar`, no console errors, and no horizontal overflow.
-- Local screenshots: `/tmp/anticipy-mesh-sources-clean-local-desktop-20260609-onboarding.png`, `/tmp/anticipy-mesh-sources-clean-local-desktop-20260609-settings.png`, `/tmp/anticipy-mesh-sources-clean-local-mobile-20260609-onboarding.png`, `/tmp/anticipy-mesh-sources-clean-local-mobile-20260609-settings.png`.
-- Screenshot inspection found the source rows were initially DOM-present but visually clipped by shell vertical overflow. The shell fix made the cards reachable and visible.
+- `npm run build` passed twice.
+- In-app Browser loaded local `/app?view=onboarding` on clean dev port 3424; unauthenticated route remained on the public/account-gated surface as expected.
+- Local mocked Playwright verified desktop explicit save: Drive toggled off, one `/api/coldstart/sources` POST with `google_drive.enabled=false`, optional fields preserved, then one `/api/coldstart/start` POST with `sources: ["gmail","calendar"]` and `walk_drive:false`.
+- Local mocked Playwright verified mobile auto-save-on-build: toggling Drive off then clicking `Build mesh` made one source-save POST before one mesh-start POST.
+- Local mocked checks had no console errors and no horizontal overflow.
+- Local screenshots: `/tmp/anticipy-source-save-local-desktop-20260609.png`, `/tmp/anticipy-source-save-local-mobile-delayed-20260609.png`.
 - `git diff --check` passed.
 - Forbidden path scan found no edits under `tests/`, `judge/`, `realdays/holdout/`, `scripts/realday.sh`, or product `engine/tests/`.
 - Owner/eval literal scan and obvious secret scan found no matches in the tracked product diff.
-- Product source commit `c71d8a638e3037f7aeb5dd530dbbe3051a6256f2` was committed locally for future judge diff scanning.
+- Product source commit `921f45bcc3789be479a72636b0245f7b0a1df514` was committed locally for future judge diff scanning.
 - `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` succeeded.
 - Public `/api/app/state`, `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` checks passed.
-- Deployed mocked Playwright verified desktop and 390px mobile with the same selected-source start payload, source summary, no horizontal overflow, and no real local engine or real source reads.
-- Deployed screenshots: `/tmp/anticipy-mesh-sources-deployed-desktop-20260609-onboarding.png`, `/tmp/anticipy-mesh-sources-deployed-desktop-20260609-settings.png`, `/tmp/anticipy-mesh-sources-deployed-mobile-20260609-onboarding.png`, `/tmp/anticipy-mesh-sources-deployed-mobile-20260609-settings.png`.
-- Delayed deployed mobile screenshot after fade-in confirmed source cards are visible: `/tmp/anticipy-deployed-mobile-debug-delayed-full.png`.
+- Deployed mocked Playwright verified desktop explicit save and mobile auto-save-on-build with the same source-save and mesh-start behavior, optional fields preserved, no console errors, and no horizontal overflow.
+- Deployed screenshots: `/tmp/anticipy-source-save-deployed-desktop-20260609.png`, `/tmp/anticipy-source-save-deployed-mobile-20260609.png`.
 - Product repo has no tracked dirty files after deploy; only pre-existing untracked artifacts remain.
 - No installer was executed, and no real local-engine typed run, real local-engine audio upload, real source inhale, real external artifact, UI click that reached a service, extension enablement, browser action against a real site, SMS, email, Calendar action, phone call, local engine write, account action, third-party action, or form submission was performed by the builder.
 
 Current M2/M3/M5 candidates in the production-linked source, pending judge:
 - M2 typed task and listen candidates include explicit typed Calendar routing, API-backed Google Calendar create, API read-back before success, packaged typed-task result UI, proof-bound typed background starts, typed transcript clock payload, public typed-run status fallback, public audio-upload clock payload, History rows from local listen status, Settings listen/action proof status, History/Settings input-clock observability, listen-status freshness, manual listen-status refresh, local listen-status failure visibility, and public audio-upload/listen clock grounding.
 - M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit browser form fill, multi-field no-submit form fill, no-submit overbroad fill-type repair, safe no-submit fill wording, search-bar no-submit fill wording, broader search-target repair, direct explicit Google/web lookup phrasing, visible proof rows, ask-user retry/cancel/review choices, bridge cleanup and diagnostics, generic bridge primitive dispatch, browser listen fastpath honesty, packaged typed-task honesty, public Settings browser-hands self-test visibility, and public mesh status observability.
-- M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness and status polling honesty, onboarding SMS endpoint, browser readiness requiring a real local native-bridge self-test, clean account-path forms, call/chat/audio onboarding explicit engine readiness, no model or loopback work on page load, public onboarding mesh-build status, and public onboarding mesh source selection.
+- M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness and status polling honesty, onboarding SMS endpoint, browser readiness requiring a real local native-bridge self-test, clean account-path forms, call/chat/audio onboarding explicit engine readiness, no model or loopback work on page load, public onboarding mesh-build status, public onboarding mesh source selection, and public onboarding mesh source persistence.
 - These are not proof. The separate judge has not typed or uploaded through the packaged or public app and verified a real artifact, browser action, native bridge action, record-control behavior, relative-date clock behavior, public transcript/audio clock grounding, public run-status, public Settings/History behavior against a real artifact, real browser-hands self-test behavior, or onboarding mesh.
 
 Gate status:
@@ -70,19 +71,19 @@ Not proven:
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
-- The full stranger path is not proven. Public account form, onboarding forms, installer safety, public renders, mocked public interactions, Settings/History-row mocks, audio-upload mocks, status-failure mocks, browser self-test mocks, mesh-build mocks, mesh-source-selection mocks, public app renders, and public bundle scans are not onboarding, self-connect, or stranger task completion.
+- The full stranger path is not proven. Public account form, onboarding forms, installer safety, public renders, mocked public interactions, Settings/History-row mocks, audio-upload mocks, status-failure mocks, browser self-test mocks, mesh-build mocks, mesh-source-selection mocks, mesh-source-persistence mocks, public app renders, and public bundle scans are not onboarding, self-connect, or stranger task completion.
 
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `c71d8a6` plus release `9e4e2ef...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `921f45b` plus release `9e4e2ef...` is pending judge and does not change this number.
 - M2 packaged/public typed-input/listen-control/clock-grounding/status/audio-upload/status-failure reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands/self-test reality judge pass rate: 0/0 verified; not run.
 - M5 packaged/self-onboarding reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
 - Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet.
-- Drift siren: active. Builder-owned tests remain green while M1 reality pass rate is 0 percent. Do not advance M1, M2, M3, or M5 from local app launch, local packaging, public headers/SHA, browser automation observations, owner Chrome observations, local process/window enumeration, screenshots, release metadata, installer static checks, installer preflight checks, mocked public interactions, Settings/History-row mocks, audio-upload mocks, status-failure mocks, browser self-test mocks, mesh-build mocks, mesh-source-selection mocks, public app renders, or public bundle scans without the separate judge seeing the clean production front door and real app artifact.
+- Drift siren: active. Builder-owned tests remain green while M1 reality pass rate is 0 percent. Do not advance M1, M2, M3, or M5 from local app launch, local packaging, public headers/SHA, browser automation observations, owner Chrome observations, local process/window enumeration, screenshots, release metadata, installer static checks, installer preflight checks, mocked public interactions, Settings/History-row mocks, audio-upload mocks, status-failure mocks, browser self-test mocks, mesh-build mocks, mesh-source-selection mocks, mesh-source-persistence mocks, public app renders, or public bundle scans without the separate judge seeing the clean production front door and real app artifact.
 
 Realday audio:
 - One timestamped student MP3 and a builder-visible transcript are in `realdays/raw/`.
@@ -93,7 +94,7 @@ Realday audio:
 Dead ends not to retry blindly:
 - Do not run broad searches over `.env.local` or env backup files. If a public browser storage key is needed, derive it from the hostname already visible in code or parse only the exact non-secret field without printing values.
 - Do not run a production `next build` while reusing an active Next dev server for rendered checks. Restart dev after build, or the dev server can serve missing `.next` chunks and static Download HTML.
-- Treating any production-linked source, manifest commit, public build commit, public headers, public SHA, public release metadata, public install script, successful site deploy, public account/onboarding form check, public audio-readiness check, public typed-run mocked interaction, public Settings/History-row mock, public status-failure mock, public browser self-test mock, public mesh-build mock, public mesh-source-selection mock, public audio-upload mock, public installer cleanup, public installer safe replacement, delayed installer service stops, installer preflight checks, browser-rendered public page, public bundle scan, local packaging, local launch, owner Chrome, screenshot, or process/window enumeration as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, public typed task, browser/action artifact, real browser-hands self-test, listen-control behavior, relative-date clock behavior, public transcript/audio clock grounding, public run-status, public Settings/History behavior against a real artifact, or fresh-account onboarding path.
+- Treating any production-linked source, manifest commit, public build commit, public headers, public SHA, public release metadata, public install script, successful site deploy, public account/onboarding form check, public audio-readiness check, public typed-run mocked interaction, public Settings/History-row mock, public status-failure mock, public browser self-test mock, public mesh-build mock, public mesh-source-selection mock, public mesh-source-persistence mock, public audio-upload mock, public installer cleanup, public installer safe replacement, delayed installer service stops, installer preflight checks, browser-rendered public page, public bundle scan, local packaging, local launch, owner Chrome, screenshot, or process/window enumeration as M1, M2, M3, or M5 proof before the separate judge verifies the real public front door, public DMG, app launch, packaged typed task, public typed task, browser/action artifact, real browser-hands self-test, listen-control behavior, relative-date clock behavior, public transcript/audio clock grounding, public run-status, public Settings/History behavior against a real artifact, or fresh-account onboarding path.
 - Treating no-pending `/api/listen/inject` `ACTED` or `ATTEMPTED` as typed-task completion without a matching proof-bearing `/api/listen/status.acted` success.
 - Assuming `SHIP_SKIP_DMG_BUILD=1` final convergence means release commit must equal site commit. If site-only deploy returns nonzero after public state shows the site commit, manually verify public state, public `/app`, public `/install.sh`, public `/dl`, and unchanged release SHA before deciding.
 - Assuming in-app Browser is healthy after earlier stale logs or `native pipe is closed` failures. Try it once when the browser skill requires it, record the result, then use regular Playwright fallback for candidate render sanity if no browser path is available.
@@ -116,9 +117,9 @@ Dead ends not to retry blindly:
 - Treating multi-hour sidecar/Tauri package builds as normal. If this repeats, investigate package build slowness instead of accepting it as expected loop speed.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `c71d8a638e3037f7aeb5dd530dbbe3051a6256f2` and release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`.
+- Continue unblocked M2/M3/M5 perimeter work without claiming proof while judge quota is blocked.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `921f45bcc3789be479a72636b0245f7b0a1df514` and release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`.
 - If M1 passes, run an M2/M3/M5 judge that types or uploads a safe, reversible, fully time-grounded task in the packaged or public app, verifies the real artifact or browser action, verifies real browser-hands self-test behavior, verifies packaged listen control behavior, verifies public transcript/audio clock grounding plus public run-status and Settings/History behavior, and verifies onboarding mesh on a fresh account.
-- While judge quota is blocked, keep improving unblocked perimeter work without claiming proof. Prioritize substantive M2/M3/M5 work that removes judge blockers rather than status-only polish.
 
 Law digest:
-Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, mocked public interactions, public headers, release metadata, public bundle scans, public account/onboarding checks, public audio-upload checks, public status-failure checks, public browser self-test checks, public mesh-build checks, public mesh-source-selection checks, public installer checks, owner/browser checks, process/window enumeration, screenshots, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
+Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Build/test actions must be safe, reversible, and self-owned. Guards, abstention, ask-only behavior, mocked public interactions, public headers, release metadata, public bundle scans, public account/onboarding checks, public audio-upload checks, public status-failure checks, public browser self-test checks, public mesh-build checks, public mesh-source-selection checks, public mesh-source-persistence checks, public installer checks, owner/browser checks, process/window enumeration, screenshots, and empty-plan completion are not progress. Missing context must be supplied. Raw held-out derivatives never enter git. Oversight runs every lap regardless of cost.
