@@ -478,7 +478,10 @@ class Orchestrator:
             self._log("reroute", {"goal_id": goal.id, "from": step.intent, "to": alt})
             if await self._dispatch_with_retry(goal, step, alt):
                 return
-        step.state = StepState.needs_human  # surface; never silently drop
+        # A worker that truly needs the human returns JobStatus.needs_human
+        # inside _dispatch_with_retry. Exhausted retries are ordinary failure,
+        # not a human gate.
+        step.state = StepState.failed
 
     async def _dispatch_with_retry(self, goal: Goal, step: Step, intent: str) -> bool:
         attempts = 0

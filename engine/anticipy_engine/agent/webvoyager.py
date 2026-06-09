@@ -72,6 +72,7 @@ COMMERCE_SEARCH_URLS = {
     "homedepot.com": "https://www.homedepot.com/s/{q}",
     "lowes.com": "https://www.lowes.com/search?searchTerm={q}",
     "ikea.com": "https://www.ikea.com/us/en/search/?q={q}",
+    "officedepot.com": "https://www.officedepot.com/a/search/?q={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -80,6 +81,7 @@ COMMERCE_CART_URLS = {
     "homedepot.com": "https://www.homedepot.com/mycart/home",
     "lowes.com": "https://www.lowes.com/cart",
     "ikea.com": "https://www.ikea.com/us/en/shoppingcart/",
+    "officedepot.com": "https://www.officedepot.com/cart/shoppingCart.do",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -104,6 +106,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "homedepot.com": re.compile(r"/p/", re.I),
     "lowes.com": re.compile(r"/pd/", re.I),
     "ikea.com": re.compile(r"/p/", re.I),
+    "officedepot.com": re.compile(r"/a/products/", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -345,6 +348,46 @@ def _product_url_near_index(
 
 def _product_url_near_add(elements: list[dict], item: str, add_idx: int, start_url: str) -> str:
     return _product_url_near_index(elements, item, add_idx, start_url, before=8, after=0)
+
+
+def _pick_adjacent_result_add(
+    elements: list[dict],
+    product: dict,
+    item: str,
+    start_url: str,
+) -> Optional[dict]:
+    tokens = _item_tokens(item)
+    if not tokens:
+        return None
+    try:
+        product_idx = int(product.get("idx"))
+    except Exception:
+        return None
+    product_name = (product.get("name") or "").strip()
+    product_href = _absolute_site_url(start_url, product.get("href") or "")
+    if not product_href or not _looks_buyable_product_url(product_href, start_url):
+        return None
+    required = _required_product_hits(tokens)
+    if _token_hits(f"{product_name} {product_href}", tokens) < required:
+        return None
+
+    for el in sorted(elements or [], key=lambda row: int(row.get("idx") or 0)):
+        try:
+            idx = int(el.get("idx"))
+        except Exception:
+            continue
+        if idx <= product_idx:
+            continue
+        if idx > product_idx + 10:
+            break
+        href = _absolute_site_url(start_url, el.get("href") or "")
+        if href and href != product_href and _looks_buyable_product_url(href, start_url):
+            if idx > product_idx + 1 and _token_hits(el.get("name") or "", tokens) >= required:
+                break
+        add = _pick_add_button([el], item, allow_generic=True)
+        if add:
+            return add
+    return None
 
 
 def _item_tokens(text: str) -> list[str]:
@@ -1188,6 +1231,43 @@ class WebVoyagerAgent:
                 product_url = _product_url_near_index(
                     out.get("elements") or [], item, int(product.get("idx") or -1), start_url
                 )
+                result_add = None
+                if _looks_search_results_url(out.get("url") or ""):
+                    result_add = _pick_adjacent_result_add(out.get("elements") or [], product, item, start_url)
+                if result_add:
+                    add_label = (result_add.get("name") or "")[:80]
+                    before_add = out
+                    out, shot = await self._act_add_and_observe({"action": "click", "index": result_add.get("idx")})
+                    self._cur_shot = shot
+                    mutation = _commerce_mutation(before_add, out, item)
+                    history.append(
+                        f"recipe: clicked adjacent add from results idx={result_add.get('idx')} "
+                        f"'{add_label}' changed={mutation['changed']} signal={mutation['after_cart_signal']}"
+                    )
+                    states.append(_page_state(
+                        "post_adjacent_add_from_results",
+                        out,
+                        item,
+                        history[-1],
+                        start_url=start_url,
+                        mutation=mutation,
+                    ))
+                    steps += 1
+                    wall_kind = _commerce_wall_kind(out)
+                    if wall_kind:
+                        return await self._handoff(out, steps + 1, history, wall_kind,
+                                                   "wall after adjacent search-results add")
+                    cart_out, steps = await self._verify_known_cart_url(
+                        start_url, item, history, states, steps, "known_cart_page_after_adjacent_results_add"
+                    )
+                    if cart_out and _cart_page_verified(cart_out, item):
+                        return self._done(cart_out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                          page_states=states, commerce_recipe=True)
+                    if cart_out:
+                        out = cart_out
+                    return self._done(out, steps + 1, history, answer="",
+                                      reason="adjacent search-results add did not verify the cart artifact",
+                                      page_states=states, commerce_recipe=True)
                 await self._act({"action": "click", "index": product.get("idx")})
                 out, shot = await self._observe_ready()
                 self._cur_shot = shot

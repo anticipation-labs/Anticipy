@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T114023Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It fixed item-specific Add-button matching for two-token items and produced builder-side IKEA evidence for the search-result Add path. A vague action resolved from memory to IKEA plus the remembered item, clicked a real item-specific search-result Add control, and opened the real cart. Sanitized evidence showed cart count 2 before add and 3 after add with final cart-page verification true. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T115025Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It probed Staples and Office Depot as sideways real-store M3 work, added conservative Office Depot URL and adjacent result-row Add handling, and fixed a real failure-state bug where exhausted browser retries parked a goal as `waiting`/`needs_human`. Office Depot product-page Add and adjacent result-row Add both failed final known-cart verification, but the final state-check run now ends as `goal_state=failed` and `step_state=failed`, not a fake human gate. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -22,12 +22,18 @@ Current M3 slice:
 - WebVoyager recognizes both legacy `/site/.../*.p` and current `/product/...` Best Buy product URLs as buyable product URLs.
 - WebVoyager cart proof splits item matching at order-summary, checkout, and recommendation boundaries and uses tighter local item evidence windows so recommendation products cannot satisfy final cart proof.
 - WebVoyager now accepts non-generic item-specific Add labels using the same required product-hit threshold as product-title matching, so two-token items can use real labels such as `Add "[product] Dish brush" to cart` without allowing unrelated items.
+- WebVoyager now knows Office Depot search, product, and cart URL shapes. Office Depot remains an unproven hard site because both product-page Add and adjacent result-row Add failed final cart verification.
+- WebVoyager can click a generic search-result Add only when it is adjacent to a strongly matched product row, ignores ratings/review links as product boundaries unless their visible label carries item-token evidence, requires known-cart verification, and fails instead of attempting a duplicate fallback.
+- The orchestrator now marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
 
 Latest real M3 attempt:
 - Fresh ignored data directories were used for builder-side live `/event` runs.
 - IKEA read-only probes found real search surfaces with item tokens, buyable product URLs, and item-specific Add controls. No mutation was attempted in read-only probes.
 - A live full `/event` run on `20260609T114023Z` seeded a context-only memory line, then sent a vague action that did not name the site or exact item. The browser hand opened real IKEA search, clicked an item-specific search-result Add control, opened the real cart, and sanitized evidence showed final cart verification true with cart count increasing from 2 to 3. This is builder-side only and `UNPROVEN-PENDING-JUDGE`.
 - Earlier IKEA work exposed and fixed three hard-chain failures: a vague cart action that failed with zero browser steps, a product picker that could select a shopping-list remove control, and cart preflight that could false-match recommendation products after the actual cart section.
+- Staples read-only probing produced no actionable product marks through the bridge after settling, so the lap moved sideways.
+- Office Depot read-only probing found a real search surface with actionable product marks, `/a/products/` product URLs, generic result-row Add controls, and `/cart/shoppingCart.do`.
+- Office Depot live vague-memory runs opened a matching product-page Add path and then an adjacent result-row Add path. Both failed final known-cart verification. The final state-check run confirmed this hard-site failure now ends as `failed`, not `waiting` or `needs_human`.
 - No checkout, payment, or order placement occurred. All IKEA outcomes remain `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the site/account and ruled on them. M3 is not done.
 
 Latest real bridge findings:
@@ -37,6 +43,8 @@ Latest real bridge findings:
 - Lowe's can complete real full `/event` vague-memory cart add paths and duplicate-safe known-cart read-backs.
 - IKEA can now use a search-result item-specific Add path when product pages are availability-gated, while keeping strict final cart proof.
 - Home Depot returned only a privacy surface with no product tokens or buyable links. This is a hard-site finding, not proof.
+- Office Depot exposes product and add controls, but its add paths did not verify the known cart page. This is a hard-site finding and not proof.
+- Staples search exposed no actionable product marks through the bridge after settling. This is a hard-site finding and not proof.
 
 Current constraints:
 - Current allowed work is M3 only.
@@ -45,9 +53,11 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` run completed the IKEA search-result Add path from vague memory-resolved input and final cart-page verification builder-side.
+- Real live `/event` runs completed the IKEA search-result Add path from vague memory-resolved input and final cart-page verification builder-side, then exercised Office Depot hard-site failures from vague memory-resolved input.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
 - Focused item-specific add-label threshold check passed.
+- Focused Office Depot URL-pattern and adjacent-result Add checks passed.
+- Focused orchestrator failed-worker state check passed.
 - `PYTHONPATH=engine engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/scripts/test_harmline.py` passed.
@@ -122,6 +132,9 @@ Dead ends not to retry blindly:
 - Some IKEA product pages expose only availability/ZIP checks and no Add control. Move sideways to a search-result add path or another item rather than forcing location changes.
 - Non-generic item-specific Add labels must use the product-hit threshold, not a fixed minimum of 3, so two-token items can use real Add labels without allowing unrelated items.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps.
+- Do not retry Office Depot blindly. Product-page Add and adjacent result-row Add both changed the page but did not verify the known cart artifact; retry only with a new concrete cart-readback or modal hypothesis.
+- Do not treat exhausted browser retries as a human gate. If the hand did not explicitly return `needs_human`, the step should fail honestly.
+- Do not treat Staples as supported from the current bridge path. It returned no actionable product marks after settling.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local`, env backup files, raw Chrome profiles, `.anticipy` state, or raw local data.
 - Google Sheets and Google Docs canvas synthetic input remain dead ends.
@@ -131,7 +144,7 @@ Dead ends not to retry blindly:
 
 Next:
 - Convert the current Best Buy, Walmart, Target, Lowe's, and IKEA `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
-- Until then, continue real M3 ladder work. Build more real-store DOM recipes, item matching, and failure hardening without UI/status/onboarding work.
+- Until then, continue real M3 ladder work. Build more real-store DOM recipes, item matching, and failure hardening without UI/status/onboarding work. Prefer a new store or a concrete new hypothesis over another blind Office Depot retry.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.
