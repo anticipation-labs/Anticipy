@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T095308Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened real-cart read-back by replacing broad cart-page token matching with localized, sanitized cart item evidence windows. Page-state proof now reports `cart_item_match`, `cart_item_window_count`, `cart_item_token_hits`, `cart_item_required_hits`, and `cart_item_quantity`; overlapping windows merge so one cart item does not inflate the evidence count.
+Latest builder lap: `20260609T100440Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It made no product code changes; it was a real execution lap of the existing M3 chain. A vague action request resolved from memory to Lowe's plus blue painters tape, the browser hand searched the real site, opened a product, clicked Add to Cart, opened the cart, and verified localized final cart item evidence.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -12,23 +12,22 @@ Current M3 slice:
 - WebVoyager prefers buyable product URLs and rejects known non-product hrefs before opening a candidate.
 - WebVoyager records add-click mutation evidence, but final commerce success requires cart-page verification. Product-page modals, search-result text, zero-count cart labels, transient cart badges, screenshots alone, and broad cart text are not completion proof.
 - WebVoyager preflights known cart pages before add clicks and avoids duplicate additions when the cart already contains the requested item.
-- WebVoyager now verifies cart pages through distinct item evidence windows, including token-hit counts and explicit quantity when visible, while keeping raw cart text out of durable state.
+- WebVoyager verifies cart pages through distinct item evidence windows, including token-hit counts and explicit quantity when visible, while keeping raw cart text out of durable state.
 - WebVoyager carries memory context hints into product selection and can fall back from strict token matching to first valid product URLs only on real search-result pages.
 - Memory-to-intent item cleanup strips the resolved site's host stem and dangling site prepositions, so browser search receives the concrete item rather than the item plus store words.
 
 Latest real M3 attempt:
 - A fresh ignored data directory was used for a builder-side live `/event` run.
-- A context-only memory seed was captured and triaged out, so it did not act by itself.
-- A vague request resolved from memory to site `https://lowes.com` and item `spray bottle`; the generated browser task included the matched memory context hint `garage`.
-- The browser hand opened the real Lowe's cart page as preflight and returned `already_in_cart=true`.
-- Sanitized cart state reported `cart_count=3`, `cart_item_match=true`, `cart_item_window_count=1`, `cart_item_token_hits=2`, `cart_item_required_hits=2`, `cart_item_quantity=null`, and `cart_page_verified=true`.
-- The run history contained only known-cart preflight navigation. It did not click Add, did not duplicate the cart item, did not checkout, and did not modify account data.
-- This is a real builder-side cart read-back and remains `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the site/account and ruled on it. M3 is not done.
+- A context-only memory seed for blue painters tape on Lowe's was captured and triaged out, so it did not act by itself.
+- The vague action request did not name the site or item. The resolver used memory to generate a browser task for `https://lowes.com` plus `blue painters tape`.
+- The browser hand preflighted the known cart, searched Lowe's, opened a product, scrolled to Add to Cart, clicked Add, opened View Cart, navigated the known cart URL, and verified the item in the cart.
+- Sanitized final cart state reported `cart_count=4`, `cart_item_match=true`, `cart_item_window_count=1`, `cart_item_token_hits=2`, `cart_item_required_hits=2`, `cart_item_quantity=null`, and `cart_page_verified=true`.
+- No checkout, payment, or order placement occurred. This is a real builder-side cart mutation and remains `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the site/account and ruled on it. M3 is not done.
 
 Latest real bridge findings:
 - IKEA search-results add changed a transient shopping-bag count, but the known cart page did not contain the requested item. This is a failure, not proof.
 - Home Depot returned only a privacy surface with no product tokens or buyable links. This is a hard-site finding, not proof.
-- Lowe's direct recipe opened a buyable product page, clicked Add to Cart, opened `/cart`, and matched the requested item there. Later full `/event` runs read the existing cart item by preflight and avoided another add.
+- Lowe's direct recipe opened a buyable product page, clicked Add to Cart, opened `/cart`, and matched the requested item there. Later full `/event` runs read the existing spray bottle cart item by preflight and avoided another add. A separate full `/event` run added blue painters tape and verified final cart state.
 - Lowe's search can return relevant buyable product URLs whose titles use synonyms rather than the user's query tokens, such as search text for a storage rack returning shelving unit titles. Strict token matching should fail first, then the search-result-only fallback can select a buyable product URL.
 - Earlier Best Buy, Walmart, Target, and IKEA attempts exposed static-shell observations, stale selectors, wrong product/category/editorial selection, non-mutating add clicks, and empty-cart read-backs. Do not retry those blindly.
 
@@ -39,15 +38,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Python compile passed for `webvoyager.py` and `browser_hand.py`.
-- Focused cart evidence probe passed: matching variant text verifies, wrong size does not verify, recommendation-only text does not verify, state stays sanitized, and overlapping item windows merge.
-- Real live `/event` run completed through the Lowe's known-cart preflight with the new structured cart evidence and did not duplicate the item. Builder-side only.
-- `engine/scripts/test_browser_hand.py` passed.
-- `engine/scripts/test_handoff.py` passed.
-- `engine/scripts/test_harmline.py` passed.
+- Real live `/event` run completed through the full Lowe's add-to-cart path and final cart read-back. Builder-side only.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
-- Changed product file scan found no forbidden owner/eval literals and no exact key names or secret-shaped values.
 - Ports `8787`, `7777`, and `9222` are clear.
 
 Proven:
@@ -78,7 +71,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/3 unjudged builder-side cart artifacts or read-backs verified, 0 percent. Prior Target and current Lowe's builder-side cart artifacts or read-backs exist, but no separate judge has verified them.
+- M3 real browser-hand reality judge pass rate: 0/4 unjudged builder-side cart artifacts or read-backs verified, 0 percent. Prior Target and current Lowe's builder-side cart artifacts or read-backs exist, but no separate judge has verified them.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -114,8 +107,8 @@ Dead ends not to retry blindly:
 - Do not design always-on cloud transcription.
 
 Next:
-- Convert the current Lowe's `UNPROVEN-PENDING-JUDGE` artifact, duplicate-safe cart read-back, and variant-aware path through the separate judge when quota returns.
-- Until then, continue real M3 ladder work: quantity-control read-back where exposed, broader real-store recipes, variant-safe product selection, and another real-store path that reaches a verified cart without duplicate additions.
+- Convert the current Lowe's `UNPROVEN-PENDING-JUDGE` artifacts, duplicate-safe cart read-back, and variant-aware path through the separate judge when quota returns.
+- Until then, continue real M3 ladder work: broaden beyond Lowe's, harden failure handling for stores that show transient add success but return empty carts, and improve quantity-control read-back where exposed.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.
