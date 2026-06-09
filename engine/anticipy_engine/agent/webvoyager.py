@@ -33,6 +33,7 @@ PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes
 Reply ONLY JSON: {"subgoals":["...","..."]}"""
 
 AGENT_MAX_TOKENS = 16
+ADD_CLICK_SETTLE_SECONDS = 2.0
 
 ACT_SYS = """You control a REAL browser through a numbered set-of-marks overlay (the screenshot shows numbered boxes).
 Advance the CURRENT SUBGOAL. Reply ONLY JSON:
@@ -70,6 +71,14 @@ COMMERCE_SEARCH_URLS = {
     "homedepot.com": "https://www.homedepot.com/s/{q}",
     "lowes.com": "https://www.lowes.com/search?searchTerm={q}",
     "ikea.com": "https://www.ikea.com/us/en/search/?q={q}",
+}
+COMMERCE_CART_URLS = {
+    "target.com": "https://www.target.com/cart",
+    "walmart.com": "https://www.walmart.com/cart",
+    "bestbuy.com": "https://www.bestbuy.com/cart",
+    "homedepot.com": "https://www.homedepot.com/mycart/home",
+    "lowes.com": "https://www.lowes.com/cart",
+    "ikea.com": "https://www.ikea.com/us/en/shoppingcart/",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -193,6 +202,65 @@ def _commerce_search_url(start_url: str, item: str) -> str:
         if host == domain or host.endswith("." + domain):
             return template.format(q=q)
     return ""
+
+
+def _commerce_cart_url(start_url: str) -> str:
+    host = _host(start_url)
+    for domain, url in COMMERCE_CART_URLS.items():
+        if host == domain or host.endswith("." + domain):
+            return url
+    return ""
+
+
+def _absolute_site_url(start_url: str, href: str) -> str:
+    href = (href or "").strip()
+    if not href:
+        return ""
+    if href.startswith("http://") or href.startswith("https://"):
+        return href
+    parsed = urllib.parse.urlparse(start_url or "")
+    origin = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else ""
+    return urllib.parse.urljoin(origin + "/", href.lstrip("/")) if origin else ""
+
+
+def _product_url_near_index(
+    elements: list[dict],
+    item: str,
+    target_idx: int,
+    start_url: str,
+    *,
+    before: int = 8,
+    after: int = 2,
+) -> str:
+    tokens = _item_tokens(item)
+    if not tokens:
+        return ""
+    required = _required_product_hits(tokens)
+    nearby = []
+    for el in elements or []:
+        try:
+            idx = int(el.get("idx"))
+        except Exception:
+            continue
+        if idx > target_idx + after or target_idx - idx > before:
+            continue
+        name = (el.get("name") or "").strip()
+        if not HREF_ONLY_RE.match(name):
+            continue
+        if not _numbers_match(name, item):
+            continue
+        hits = _token_hits(name, tokens)
+        if hits < required:
+            continue
+        nearby.append((idx, hits, name))
+    if not nearby:
+        return ""
+    _, _, href = max(nearby, key=lambda row: (row[1], row[0]))
+    return _absolute_site_url(start_url, href)
+
+
+def _product_url_near_add(elements: list[dict], item: str, add_idx: int, start_url: str) -> str:
+    return _product_url_near_index(elements, item, add_idx, start_url, before=8, after=0)
 
 
 def _item_tokens(text: str) -> list[str]:
@@ -501,6 +569,11 @@ class WebVoyagerAgent:
         except Exception:
             return {"status": "error"}
 
+    async def _act_add_and_observe(self, action: dict):
+        await self._act(action)
+        await asyncio.sleep(ADD_CLICK_SETTLE_SECONDS)
+        return await self._observe_ready()
+
     async def _plan(self, task: str) -> List[str]:
         if _search_text(task):
             return [
@@ -517,6 +590,26 @@ class WebVoyagerAgent:
     def _done(self, out, step, history, **extra):
         return {"steps": step, "final_url": (out or {}).get("url"), "history": history[-40:],
                 "final_shot": getattr(self, "_cur_shot", None), **extra}
+
+    async def _verify_known_cart_url(self, start_url: str, item: str, history: list[str],
+                                     states: list[dict], steps: int, stage: str) -> tuple[dict, int]:
+        cart_url = _commerce_cart_url(start_url)
+        if not cart_url:
+            return {}, steps
+        await self._act({"action": "navigate", "url": cart_url})
+        expected_path = urllib.parse.urlparse(cart_url).path.rstrip("/") or "/"
+        out: dict = {}
+        shot = None
+        for attempt in range(5):
+            await asyncio.sleep(0.6 + attempt * 0.35)
+            out, shot = await self._observe_ready()
+            current_path = urllib.parse.urlparse((out or {}).get("url") or "").path.rstrip("/") or "/"
+            if current_path == expected_path or _cart_verified(out, item):
+                break
+        self._cur_shot = shot
+        history.append(f"recipe: navigated known cart url for {_host(start_url)}")
+        states.append(_page_state(stage, out, item, history[-1]))
+        return out, steps + 1
 
     async def _notify(self, msg: str) -> None:
         if not self.notifier:
@@ -576,11 +669,12 @@ class WebVoyagerAgent:
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
+        opened_product_from_results_add = False
+        search_elements = out.get("elements") or []
         add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
         if add_from_results:
             label = (add_from_results.get("name") or "")[:80]
-            await self._act({"action": "click", "index": add_from_results.get("idx")})
-            out, shot = await self._observe_ready()
+            out, shot = await self._act_add_and_observe({"action": "click", "index": add_from_results.get("idx")})
             self._cur_shot = shot
             history.append(f"recipe: clicked item-specific add from results idx={add_from_results.get('idx')} '{label}'")
             states.append(_page_state("post_add_from_results", out, item, history[-1]))
@@ -600,34 +694,62 @@ class WebVoyagerAgent:
                 if _cart_verified(out, item):
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
-            return self._done(out, steps + 1, history, answer="",
-                              reason="item-specific search-results add did not verify the cart artifact",
-                              page_states=states, commerce_recipe=True)
+            cart_out, steps = await self._verify_known_cart_url(
+                start_url, item, history, states, steps, "known_cart_page_after_results_add"
+            )
+            if cart_out and _cart_verified(cart_out, item):
+                return self._done(cart_out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                  page_states=states, commerce_recipe=True)
+            if cart_out:
+                out = cart_out
+            product_url = _product_url_near_add(
+                search_elements, item, int(add_from_results.get("idx") or -1), start_url
+            )
+            if not product_url:
+                return self._done(out, steps + 1, history, answer="",
+                                  reason="item-specific search-results add did not verify the cart artifact",
+                                  page_states=states, commerce_recipe=True)
+            out, shot = await self._observe_ready(product_url)
+            self._cur_shot = shot
+            history.append("recipe: opened same product after unverified results add")
+            states.append(_page_state("same_product_page_after_results_add_failure", out, item, history[-1]))
+            steps += 1
+            opened_product_from_results_add = True
 
-        product = None
-        for scrolls in range(3):
-            product = _pick_product(out.get("elements") or [], item, prefer_lowest=prefer_lowest)
+        if not opened_product_from_results_add:
+            product = None
+            for scrolls in range(3):
+                product = _pick_product(out.get("elements") or [], item, prefer_lowest=prefer_lowest)
+                if product:
+                    break
+                await self._act({"action": "scroll", "dir": "down"})
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                history.append(f"recipe: scroll search results {scrolls + 1}")
+                states.append(_page_state(f"search_results_scroll_{scrolls + 1}", out, item, history[-1]))
+                steps += 1
+
             if product:
-                break
-            await self._act({"action": "scroll", "dir": "down"})
-            out, shot = await self._observe_ready()
-            self._cur_shot = shot
-            history.append(f"recipe: scroll search results {scrolls + 1}")
-            states.append(_page_state(f"search_results_scroll_{scrolls + 1}", out, item, history[-1]))
-            steps += 1
-
-        if product:
-            label = (product.get("name") or "")[:80]
-            await self._act({"action": "click", "index": product.get("idx")})
-            out, shot = await self._observe_ready()
-            self._cur_shot = shot
-            history.append(f"recipe: opened product idx={product.get('idx')} '{label}'")
-            states.append(_page_state("product_page", out, item, history[-1]))
-            steps += 1
-        else:
-            return self._done(out, steps + 1, history, answer="",
-                              reason="commerce recipe could not identify a matching product",
-                              page_states=states, commerce_recipe=True)
+                label = (product.get("name") or "")[:80]
+                product_url = _product_url_near_index(
+                    out.get("elements") or [], item, int(product.get("idx") or -1), start_url
+                )
+                await self._act({"action": "click", "index": product.get("idx")})
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                history.append(f"recipe: opened product idx={product.get('idx')} '{label}'")
+                states.append(_page_state("product_page", out, item, history[-1]))
+                steps += 1
+                if product_url and re.search(r"/(?:search|s)(?:[/?#]|$)", (out.get("url") or ""), re.I):
+                    out, shot = await self._observe_ready(product_url)
+                    self._cur_shot = shot
+                    history.append("recipe: navigated adjacent product url after product click stayed on search")
+                    states.append(_page_state("product_page_from_adjacent_url", out, item, history[-1]))
+                    steps += 1
+            else:
+                return self._done(out, steps + 1, history, answer="",
+                                  reason="commerce recipe could not identify a matching product",
+                                  page_states=states, commerce_recipe=True)
 
         if _cart_verified(out, item):
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
@@ -650,8 +772,7 @@ class WebVoyagerAgent:
                                       page_states=states, commerce_recipe=True)
                 continue
             label = (add.get("name") or "")[:80]
-            await self._act({"action": "click", "index": add.get("idx")})
-            out, shot = await self._observe_ready()
+            out, shot = await self._act_add_and_observe({"action": "click", "index": add.get("idx")})
             self._cur_shot = shot
             history.append(f"recipe: clicked add control idx={add.get('idx')} '{label}'")
             states.append(_page_state("post_add", out, item, history[-1]))
@@ -674,6 +795,15 @@ class WebVoyagerAgent:
             if _cart_verified(out, item):
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
+
+        cart_out, steps = await self._verify_known_cart_url(
+            start_url, item, history, states, steps, "known_cart_page_after_product_add"
+        )
+        if cart_out and _cart_verified(cart_out, item):
+            return self._done(cart_out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                              page_states=states, commerce_recipe=True)
+        if cart_out:
+            out = cart_out
 
         return self._done(out, steps + 1, history, answer="",
                           reason="commerce recipe did not verify the cart artifact",

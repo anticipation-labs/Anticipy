@@ -4,15 +4,17 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T072240Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It made the native bridge path actionable through CDP, improved real-store mark extraction and readiness, and hardened the commerce recipe after a failed Target add attempt. It created no judge-verified artifact and does not prove M3.
+Latest builder lap: `20260609T074704Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened real-store cart verification, direct CDP proof, trusted click transport, and same-product URL fallbacks. Real Target and Walmart attempts still did not create a judge-verified cart artifact, so M3 is not done.
 
 Latest offline M3 slice:
 - `NativeBridgeLink` can start the dedicated Chrome CDP profile on port 9222 before starting or using the native bridge.
-- Native bridge observations wait for query-matching actionable marks on search URLs instead of accepting top-navigation-only page state.
-- Native bridge DOM mark extraction keeps more real page controls and longer labels, so product-specific add labels do not lose action words.
-- WebVoyager product selection ignores href-only product anchors and prefers readable product names.
+- `NativeBridgeLink` tracks the CDP target it opened and reads proof directly from that exact target, instead of relying on broad host-prefix tab selection.
+- `NativeBridgeLink` attempts trusted CDP coordinate mouse clicks for click actions before falling back to the installed bridge's JavaScript click.
+- Native bridge DOM selector generation uses object identity for sibling position, avoiding recursion crashes on deep real-store DOMs.
+- WebVoyager product selection ignores href-only product anchors for readable product choice, but can use adjacent matching href-only URLs as a fallback when a click does not leave search.
 - The commerce recipe can click an item-specific search-results add control before opening a product page.
-- If that item-specific add does not verify the cart artifact, the recipe now stops or checks cart. It does not continue to a different product.
+- If an item-specific add does not verify the cart artifact, the recipe opens the real store cart URL and verifies item tokens in cart state.
+- If a result-page add fails, the recipe may open the adjacent matching product URL for the same item and try product-page add. It does not switch to an unrelated product.
 - Focused probes passed, but these are regression checks only. They are not M3 proof.
 
 Latest real M3 attempt:
@@ -24,11 +26,11 @@ Latest real M3 attempt:
 - This changed a real cart, but it remains `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the account and ruled on it. M3 is not done.
 
 Latest real bridge finding:
-- A real Target search page was opened through the native bridge with CDP active.
-- The bridge returned actionable product marks from the real page.
-- A real Target recipe clicked an item-specific add control, then failed to verify a cart artifact.
-- Before the final hardening, the recipe then wandered to another product. This was fixed so an unverified results-page add stops instead of opening a different product.
-- No verified artifact exists. The next M3 slice should improve post-add verification and cart-state handling on the CDP bridge path.
+- Real Target direct CDP proof can read exact Target search and product pages and returns actionable marks.
+- A real Target result-page add clicked a matching item-specific add control, then real cart verification found the cart empty.
+- A real Target same-product fallback opened the matching product page and clicked the product-page add control, then Target redirected to login and cart verification still found the cart empty.
+- A real Walmart sideways run opened a matching product URL and clicked a matching product-page add control, then Walmart cart verification still found the cart empty.
+- No verified artifact exists. The next M3 slice should harden add-click mutation handling, detect login or fulfillment walls cleanly, and continue sideways across real stores.
 
 Current constraint:
 - Current allowed work is M3 only.
@@ -46,12 +48,12 @@ Latest product/public candidate, unchanged this lap:
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
 - Python compile passed for the touched engine files.
-- Focused CDP autostart smoke passed.
-- Focused query-token readiness probe passed.
-- Focused href-only product-anchor probe passed.
-- Focused result-page add stop probe passed.
-- Real Target CDP observe returned actionable product marks.
-- Real Target recipe attempt clicked an item-specific add control but did not verify the cart artifact.
+- Focused cart URL fallback probe passed.
+- Focused stale-to-cart wait probe passed.
+- Focused same-product fallback probe passed.
+- Focused product-title adjacent URL fallback probe passed.
+- Read-only real Target search and product observations returned actionable direct-CDP marks.
+- Real Target and Walmart add-to-cart attempts clicked real add controls but did not verify cart artifacts.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_handoff.py` passed.
 - `engine/scripts/test_harmline.py` passed.
@@ -67,7 +69,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. The latest real Target add run from `20260609T034900Z` changed a real cart, but no separate judge proof exists. The newest CDP bridge Target attempt did not verify a cart artifact.
+- M3 is not proven. A prior real Target add run from `20260609T034900Z` changed a real cart, but no separate judge proof exists. The newest Target and Walmart CDP bridge attempts clicked real add controls but did not verify a cart artifact.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -75,6 +77,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
+- Target sign-in blocked that specific store path in the dedicated Chrome profile, but a hard site is not an all-work stop.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -87,7 +90,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 packaged/public typed-input/listen-control/clock-grounding/status/audio-upload/status-failure reality judge pass rate: 0/0 verified; not run.
-- M3 real browser-hand reality judge pass rate: 0/1 unjudged builder artifact verified, 0 percent. Latest real Target add-to-cart attempt changed a real cart but has no separate judge verdict.
+- M3 real browser-hand reality judge pass rate: 0/1 unjudged builder artifact verified, 0 percent. Latest real Target and Walmart attempts did not verify a cart artifact; the prior real Target add-to-cart attempt changed a real cart but has no separate judge verdict.
 - M5 packaged/self-onboarding reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -112,7 +115,11 @@ Dead ends not to retry blindly:
 - Do not let direct cart phrasing become whole-task browser search. Extract the concrete resolved item only, and reject unresolved vague placeholders before the browser recipe runs.
 - Do not click generic `Add to cart` controls on search results when no matching product has been identified. Open the matching product first, or require the add label to strongly name the requested item.
 - Do not continue from an unverified item-specific result-page add into another product. Verify the cart, open cart if a cart control exists, or stop with a real failure.
-- Do not open href-only product anchors as products. Prefer readable product names or product-specific add controls.
+- Do not switch products after an unverified add. If continuing, open only the adjacent matching product URL tied to the same add/title.
+- Do not open href-only product anchors as primary product choices. Prefer readable product names or product-specific add controls, and use adjacent hrefs only as a fallback for the same matched product.
+- Do not treat an add click as proof. Open the real cart and require the requested item tokens in cart state.
+- Do not retry Target blindly in the dedicated profile without handling its login redirect after product-page add.
+- Do not assume Walmart product-page add mutates cart just because the add control was clicked. It must verify in real cart state.
 - Do not accept top-navigation-only bridge observations for search pages. Wait for query-matching actionable marks.
 - Do not open loosely related product titles before an add attempt. Two-token items must match both tokens, and longer item names need a stronger token majority.
 - Do not verify a product-page add from broad page text. For non-cart URLs, the requested item and quantity/unit must match near the cart marker, and recommendation/similar-item text after the marker must not count.
@@ -137,7 +144,7 @@ Dead ends not to retry blindly:
 
 Next:
 - Continue immediately on the hard M3 chain despite low live credit and judge quota. Do not work UI/status/onboarding.
-- Improve post-add verification and cart-state handling on the CDP bridge path, without clicking additional unrelated products after an unverified add. Every run remains `UNPROVEN-PENDING-JUDGE` until the separate judge verifies it.
+- Harden real add-click mutation handling: detect login or fulfillment walls cleanly, try another real store or product flow, and keep verifying only through real cart state. Every run remains `UNPROVEN-PENDING-JUDGE` until the separate judge verifies it.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.

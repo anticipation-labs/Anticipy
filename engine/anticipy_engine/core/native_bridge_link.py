@@ -207,10 +207,7 @@ class _DOMMarks(HTMLParser):
                 for child in cur.parent.children
                 if isinstance(child, _Node) and child.tag == cur.tag
             ]
-            try:
-                nth = siblings.index(cur) + 1
-            except ValueError:
-                nth = 1
+            nth = next((i + 1 for i, sibling in enumerate(siblings) if sibling is cur), 1)
             parts.append(f"{cur.tag}:nth-of-type({nth})")
             cur = cur.parent
         if not parts and cur:
@@ -243,6 +240,7 @@ class NativeBridgeLink:
         self._last_cdp_start_attempt = 0.0
         self._started_process: Optional[subprocess.Popen] = None
         self._started_chrome: Optional[subprocess.Popen] = None
+        self._cdp_target_id = ""
 
     @property
     def connected(self) -> bool:
@@ -304,7 +302,9 @@ class NativeBridgeLink:
             status, data, error = self._command({"command": "navigate", "url": url, "new_tab": True})
             if error or status != 200 or data.get("ok") is not True:
                 return self._needs_human(job_id, error or str(data.get("error") or f"navigate status {status}"))
-            self._url_prefix = _origin(url) or self._url_prefix
+            nav_data = data.get("data") or {}
+            self._cdp_target_id = str(nav_data.get("targetId") or self._cdp_target_id)
+            self._url_prefix = url or _origin(url) or self._url_prefix
             time.sleep(0.5)
 
         last_reason = ""
@@ -324,7 +324,7 @@ class NativeBridgeLink:
         if not out:
             return self._needs_human(job_id, last_reason)
         if out.get("url"):
-            self._url_prefix = _origin(str(out.get("url") or "")) or self._url_prefix
+            self._url_prefix = str(out.get("url") or "") or _origin(str(out.get("url") or "")) or self._url_prefix
         return {
             "type": "result",
             "job_id": job_id,
@@ -341,7 +341,7 @@ class NativeBridgeLink:
             if not url:
                 return self._needs_human(job_id, "native bridge navigate action has no URL")
             payload = {"command": "navigate", "url": url, "new_tab": False, "prefer_in_place": True}
-            self._url_prefix = _origin(url) or self._url_prefix
+            self._url_prefix = url or _origin(url) or self._url_prefix
         elif action == "scroll":
             direction = str(args.get("dir") or "down").lower()
             dy = -700 if direction == "up" else 700
@@ -357,6 +357,10 @@ class NativeBridgeLink:
             selector = self._selectors.get(index)
             if not selector:
                 return self._needs_human(job_id, f"native bridge has no selector for element {index}")
+            if action == "click" and _bool_env("ANTICIPY_NATIVE_BRIDGE_TRUSTED_CLICK", True):
+                ok, details = self._trusted_cdp_click(selector)
+                if ok:
+                    return self._success(job_id, {"ok": True, "action": action, "data": details})
             payload = {"command": action, "selector": selector}
             if action == "type":
                 payload["text"] = str(args.get("text") or "")
@@ -367,7 +371,102 @@ class NativeBridgeLink:
         status, data, error = self._command(payload)
         if error or status != 200 or data.get("ok") is not True:
             return self._needs_human(job_id, error or str(data.get("error") or f"{action} status {status}"))
+        if action == "navigate":
+            nav_data = data.get("data") or {}
+            self._cdp_target_id = str(nav_data.get("targetId") or self._cdp_target_id)
         return self._success(job_id, {"ok": True, "action": action, "data": data.get("data") or {}})
+
+    def _trusted_cdp_click(self, selector: str) -> tuple[bool, dict[str, Any]]:
+        if not self._cdp_up():
+            return False, {"error": "cdp unavailable"}
+        ws_url = self._cdp_page_ws_url()
+        if not ws_url:
+            return False, {"error": "no matching cdp page target"}
+        try:
+            return asyncio.run(self._trusted_cdp_click_async(ws_url, selector))
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(self._trusted_cdp_click_async(ws_url, selector))
+            finally:
+                loop.close()
+        except Exception as exc:
+            return False, {"error": f"{type(exc).__name__}: {exc}"}
+
+    def _cdp_page_ws_url(self) -> str:
+        try:
+            with urllib.request.urlopen(f"http://{self.cdp_host}:{self.cdp_port}/json/list", timeout=1.5) as resp:
+                pages = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return ""
+        if not isinstance(pages, list):
+            return ""
+        page_items = [p for p in pages if isinstance(p, dict) and p.get("type") == "page"]
+        chosen = None
+        if self._cdp_target_id:
+            chosen = next((p for p in page_items if str(p.get("id") or "") == self._cdp_target_id), None)
+        if chosen is None and self._url_prefix:
+            matches = [p for p in page_items if str(p.get("url") or "").startswith(self._url_prefix)]
+            if matches:
+                chosen = matches[-1]
+        if chosen is None and page_items:
+            chosen = page_items[-1]
+        ws_url = str((chosen or {}).get("webSocketDebuggerUrl") or "")
+        return ws_url.replace("127.0.0.1", "localhost")
+
+    async def _trusted_cdp_click_async(self, ws_url: str, selector: str) -> tuple[bool, dict[str, Any]]:
+        import websockets
+
+        counter = 0
+
+        async def call(ws, method: str, params: dict[str, Any], timeout: float = 8.0) -> dict[str, Any]:
+            nonlocal counter
+            counter += 1
+            await ws.send(json.dumps({"id": counter, "method": method, "params": params}))
+            while True:
+                raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                msg = json.loads(raw)
+                if int(msg.get("id") or 0) == counter:
+                    return msg
+
+        selector_json = json.dumps(selector)
+        rect_expr = (
+            "(()=>{const el=document.querySelector(" + selector_json + ");"
+            "if(!el)return {ok:false,error:'NOTFOUND'};"
+            "el.scrollIntoView({block:'center',inline:'center'});"
+            "const r=el.getBoundingClientRect();"
+            "if(!r.width||!r.height)return {ok:false,error:'EMPTY_RECT'};"
+            "const x=Math.max(1,Math.min(window.innerWidth-2,r.left+r.width/2));"
+            "const y=Math.max(1,Math.min(window.innerHeight-2,r.top+r.height/2));"
+            "return {ok:true,x,y,tag:el.tagName,name:(el.innerText||el.getAttribute('aria-label')||'').slice(0,120)};})()"
+        )
+        async with websockets.connect(
+            ws_url,
+            max_size=16 * 1024 * 1024,
+            open_timeout=5.0,
+            ping_interval=None,
+            close_timeout=2.0,
+        ) as ws:
+            rect_msg = await call(
+                ws,
+                "Runtime.evaluate",
+                {"expression": rect_expr, "returnByValue": True, "awaitPromise": False},
+                timeout=8.0,
+            )
+            error = rect_msg.get("error")
+            if error:
+                return False, {"error": str(error)}
+            value = (((rect_msg.get("result") or {}).get("result") or {}).get("value") or {})
+            if not isinstance(value, dict) or not value.get("ok"):
+                return False, {"error": str((value or {}).get("error") or "no element rect")}
+            x = float(value.get("x"))
+            y = float(value.get("y"))
+            await call(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y, "button": "none"})
+            await call(ws, "Input.dispatchMouseEvent", {"type": "mousePressed", "x": x, "y": y,
+                                                        "button": "left", "clickCount": 1})
+            await call(ws, "Input.dispatchMouseEvent", {"type": "mouseReleased", "x": x, "y": y,
+                                                        "button": "left", "clickCount": 1})
+            return True, {"trusted_cdp_click": True, "x": x, "y": y, "name": value.get("name") or ""}
 
     def _output_from_proof(self, proof: dict[str, Any]) -> tuple[dict[str, Any], str]:
         dom = str(proof.get("dom") or "")
@@ -570,12 +669,88 @@ class NativeBridgeLink:
         return clone if clone.exists() else None
 
     def _proof(self) -> tuple[int, dict[str, Any], str]:
+        if _bool_env("ANTICIPY_NATIVE_BRIDGE_DIRECT_CDP_PROOF", True) and self._cdp_target_id:
+            status, proof, error = self._direct_cdp_proof()
+            if not error and status == 200 and proof.get("ok") is True:
+                return status, proof, error
         payload = {
             "secret": self.secret,
             "limit": 200_000,
             "url_prefix": self._url_prefix,
         }
         return self._request_json("POST", "/surface-proof", payload, timeout=self.request_timeout)
+
+    def _direct_cdp_proof(self) -> tuple[int, dict[str, Any], str]:
+        if not self._cdp_up():
+            return 0, {}, "cdp unavailable"
+        ws_url = self._cdp_page_ws_url()
+        if not ws_url:
+            return 0, {}, "no matching cdp page target"
+        try:
+            return 200, asyncio.run(self._direct_cdp_proof_async(ws_url)), ""
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                return 200, loop.run_until_complete(self._direct_cdp_proof_async(ws_url)), ""
+            finally:
+                loop.close()
+        except Exception as exc:
+            return 0, {}, f"{type(exc).__name__}: {exc}"
+
+    async def _direct_cdp_proof_async(self, ws_url: str) -> dict[str, Any]:
+        import websockets
+
+        counter = 0
+
+        async def call(ws, method: str, params: dict[str, Any], timeout: float = 10.0) -> dict[str, Any]:
+            nonlocal counter
+            counter += 1
+            await ws.send(json.dumps({"id": counter, "method": method, "params": params}))
+            while True:
+                raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                msg = json.loads(raw)
+                if int(msg.get("id") or 0) == counter:
+                    return msg
+
+        def eval_value(msg: dict[str, Any]) -> Any:
+            return (((msg.get("result") or {}).get("result") or {}).get("value"))
+
+        async with websockets.connect(
+            ws_url,
+            max_size=32 * 1024 * 1024,
+            open_timeout=5.0,
+            ping_interval=None,
+            close_timeout=2.0,
+        ) as ws:
+            url_msg = await call(ws, "Runtime.evaluate", {"expression": "location.href", "returnByValue": True})
+            title_msg = await call(ws, "Runtime.evaluate", {"expression": "document.title", "returnByValue": True})
+            html_msg = await call(
+                ws,
+                "Runtime.evaluate",
+                {"expression": "document.documentElement?document.documentElement.outerHTML:''",
+                 "returnByValue": True},
+                timeout=16.0,
+            )
+            shot_msg = await call(
+                ws,
+                "Page.captureScreenshot",
+                {"format": "png", "captureBeyondViewport": False},
+                timeout=12.0,
+            )
+        html = str(eval_value(html_msg) or "")
+        b64 = str(((shot_msg.get("result") or {}).get("data") or ""))
+        return {
+            "ok": bool(html),
+            "url": str(eval_value(url_msg) or ""),
+            "title": str(eval_value(title_msg) or ""),
+            "dom": html[:200_000],
+            "screenshot_data_url": ("data:image/png;base64," + b64) if b64 else "",
+            "bridge_closed": False,
+            "pid": os.getpid(),
+            "acquired_via": "native_bridge_direct_cdp_target",
+            "bridge_kind": "cdp_direct_target",
+            "error": "",
+        }
 
     def _command(self, payload: dict[str, Any]) -> tuple[int, dict[str, Any], str]:
         body = dict(payload)
