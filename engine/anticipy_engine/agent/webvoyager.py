@@ -96,6 +96,8 @@ COMMERCE_SEARCH_URLS = {
     "kohls.com": "https://www.kohls.com/search.jsp?search={q}",
     "qvc.com": "https://www.qvc.com/catalog/psearch.html?keyword={q}",
     "worldmarket.com": "https://www.worldmarket.com/search?q={q}",
+    "acehardware.com": "https://www.acehardware.com/search?query={q}",
+    "thriftbooks.com": "https://www.thriftbooks.com/browse/?b.search={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -127,6 +129,8 @@ COMMERCE_CART_URLS = {
     "kohls.com": "https://www.kohls.com/checkout/shopping_cart.jsp",
     "qvc.com": "https://www.qvc.com/checkout/cart.html",
     "worldmarket.com": "https://www.worldmarket.com/cart",
+    "acehardware.com": "https://www.acehardware.com/cart",
+    "thriftbooks.com": "https://www.thriftbooks.com/shopping-cart/",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
@@ -141,7 +145,7 @@ GENERIC_ADD_LABEL_RE = re.compile(
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
 CART_URL_RE = re.compile(
-    r"/(?:cart(?:\.(?:php|html))?|cartview|shoppingcart|shopping_cart\.jsp|shopping-bag|basket|bag|my/bag|"
+    r"/(?:cart(?:\.(?:php|html))?|cartview|shoppingcart|shopping-cart|shopping_cart\.jsp|shopping-bag|basket|bag|my/bag|"
     r"OrderItemDisplay)(?:[/?#]|$)",
     re.I,
 )
@@ -149,9 +153,9 @@ REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
 CART_DURABILITY_READS = max(1, int(os.environ.get("ANTICIPY_CART_DURABILITY_READS", "5")))
 CART_DURABILITY_DELAY_SECONDS = max(0.0, float(os.environ.get("ANTICIPY_CART_DURABILITY_DELAY_SECONDS", "5.0")))
 SEARCH_RESULTS_URL_RE = re.compile(
-    r"/(?:search|s|beta-search)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
+    r"/(?:search|s|beta-search|browse)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
     r"/keyword\.php(?:[/?#]|$)|/shop/featured(?:[/?#]|$)|"
-    r"[?&](?:q|query|keyword|keywords|search|searchTerm|searchinfo|st)=",
+    r"[?&](?:q|query|keyword|keywords|search|b\.search|searchTerm|searchinfo|st)=",
     re.I,
 )
 CONTENT_URL_RE = re.compile(
@@ -189,12 +193,14 @@ COMMERCE_PRODUCT_URL_RE = {
     "kohls.com": re.compile(r"/product/prd-\d+/[^/?#]+\.jsp$", re.I),
     "qvc.com": re.compile(r"/(?:qvc\.product|[^/?#]+\.product)\.[A-Z0-9]+\.html$", re.I),
     "worldmarket.com": re.compile(r"/p/[^/?#]+-\d+\.html$", re.I),
+    "acehardware.com": re.compile(r"/departments/[^?#]+/\d+$", re.I),
+    "thriftbooks.com": re.compile(r"/w/[^?#]+/\d+/?$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
     r"\b(add to|cart|basket|bag|checkout|sponsored|ad|sign in|log in|create account|"
     r"pickup|delivery|shipping|see more|show more|how-to|how to|category|"
-    r"shopping list|wish list|wishlist|favorites?|registry|save for later|remove)\b",
+    r"shopping list|wish list|wishlist|favorites?|registry|save for later|remove|unselect)\b",
     re.I,
 )
 GENERIC_PRODUCT_LABEL_RE = re.compile(
@@ -590,7 +596,7 @@ def _ordered_item_score(name: str, tokens: list[str]) -> int:
 def _unrequested_variant_penalty(name: str, tokens: list[str]) -> int:
     token_set = set(tokens)
     words = set(re.findall(r"[a-z0-9]+", (name or "").lower()))
-    return 8 * sum(1 for word in PRODUCT_VARIANT_WORDS if word in words and word not in token_set)
+    return 16 * sum(1 for word in PRODUCT_VARIANT_WORDS if word in words and word not in token_set)
 
 
 def _compact_visible_product_match(name: str, tokens: list[str]) -> bool:
@@ -695,6 +701,8 @@ def _pick_product(
             continue
         role = (el.get("role") or "").lower()
         if role not in {"a", "button"} and "link" not in role:
+            continue
+        if not href and "link" not in role and role != "a":
             continue
         if not _search_result_identity_ok(name, href, item, tokens, required):
             continue

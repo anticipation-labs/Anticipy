@@ -1,27 +1,27 @@
 # Last Lap
 
-Lap: 20260609T203819Z
-Date: 2026-06-09T20:38:19Z
-Milestone: M3 - World Market real-store cart path
+Lap: 20260609T204214Z
+Date: 2026-06-09T20:57:34Z
+Milestone: M3 - Ace and ThriftBooks hard-site work plus product-selection hardening
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- WebVoyager now knows World Market search, product, and cart URL shapes.
-- World Market search uses `/search?q=...`, cart proof uses `/cart`, and product matching accepts `/p/<slug>-<id>.html` product pages.
-- No proof rule was weakened. The same cart-page verification, item-local structure, and fresh read-back gates still apply.
+- WebVoyager now knows Ace Hardware search, product, and cart URL shapes: `/search?query=...`, `/cart`, and `/departments/.../<id>`.
+- WebVoyager now knows ThriftBooks search, product, and cart URL shapes: `/browse/?b.search=...`, `/shopping-cart/`, and `/w/<slug>/<id>/`.
+- Generic search-result detection recognizes ThriftBooks `browse` and `b.search` surfaces, and cart detection recognizes `/shopping-cart/`.
+- Product selection now rejects `Unselect ... filter` controls as non-product controls, ignores href-less non-link buttons as product-open candidates, and applies a stronger penalty to unrequested variant words such as workbook and guide.
 
 Real runs:
-- Read-only real-store probes checked Sephora, Nordstrom, L.L.Bean, Backcountry, and World Market.
-- Nordstrom search exposed exact product links and a real shopping-bag route, but its product and cart pages exposed text with no actionable marks to the bridge. This is a hard-site/no-actionable-marks finding, not proof.
-- World Market read-only probing found an exact product search result, visible product identity, a real `ADD TO CART` control, and `/cart`.
-- A fresh live `/event` run used a context-only memory line plus a vague action that named neither World Market nor the item. The task loop resolved World Market and the remembered kitchen-drawer item from memory, opened the exact product, clicked real `ADD TO CART`, opened the real cart, and durable known-cart read-back verified the item under cart structure proof.
-- A separate read-only fresh cart probe against the same fresh profile also verified the item on `https://www.worldmarket.com/cart` with cart structure and cart count 1.
+- Read-only probes checked iHerb and ThriftBooks after Ace failed. iHerb exposed many real product/Add/cart surfaces but the top results were broad substitutes for the requested brand, so it was not selected for a live action.
+- Ace Hardware live `/event` used context-only memory plus a vague action that named neither Ace nor the item. The chain resolved the remembered kitchen item, opened the exact Ace product page, clicked a real `ADD TO CART`, opened `/cart`, and then failed final durable cart proof. A separate read-only cart probe on the same fresh profile saw only the cart shell and no item evidence. Ace is a hard-site/non-durable-cart finding, not proof.
+- ThriftBooks first live `/event` used context-only memory plus a vague action that named neither ThriftBooks nor the book. It failed safely before mutation after selecting a workbook variant. This exposed the filter-control and variant-ranking selection bug.
+- After hardening, a fresh ThriftBooks live `/event` resolved the remembered book, opened the base product page, clicked a real `Add to Cart`, opened `/shopping-cart/`, and failed final durable cart proof. A separate read-only cart probe on the same fresh profile saw no cart item evidence. ThriftBooks is a hard-site/non-durable-cart finding, not proof.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
-- Focused World Market search/product/cart URL, product selection, and synthetic cart-proof checks passed.
+- Focused Ace and ThriftBooks search/product/cart URL, cart proof, filter-control rejection, and base-book-over-workbook selection checks passed.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py` passed.
 - `PYTHONPATH=engine engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/scripts/test_handoff.py` passed.
@@ -29,18 +29,17 @@ Checks:
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
 - Forbidden-path, secret-shaped diff, and product/eval literal scans passed.
-- `logs/trace/20260609T203819Z.jsonl` is ignored.
 - Ports `8787`, `7777`, and `9222` are clear.
 
 Gate:
 - No all-work human gate is active.
 - Separate judge quota blocks proof only, not building.
-- World Market is a builder-side real-store cart path with memory resolution, real Add, durable cart read-back, and an extra fresh read-only cart probe, but it is still `UNPROVEN-PENDING-JUDGE`.
+- Ace and ThriftBooks both produced real-chain hard-site/non-durable-cart findings. The selection hardening is kept because it prevents a real wrong-product mutation path.
 
 Proof status:
 - M3 is not done.
-- This lap is real-site support plus a builder-side World Market cart artifact. It is `UNPROVEN-PENDING-JUDGE`.
+- This lap is real-site support, real-chain failure hardening, and hard-site discovery. It is `UNPROVEN-PENDING-JUDGE`.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work only. Convert World Market, QVC, Macy's, and other unjudged cart artifacts through the separate judge when quota returns. Until then, keep building real memory-to-action support and avoid blind retries on hard sites.
+- Continue M3 ladder work only. Convert unjudged successful cart artifacts through the separate judge when quota returns. Until then, keep building memory-to-intent, real-site DOM recipes, cheap planning, sideways real-store paths, and failure hardening.
