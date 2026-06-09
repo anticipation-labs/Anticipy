@@ -262,6 +262,20 @@ class NativeBridgeLink:
     def last_error(self) -> str:
         return self._available_cache[2]
 
+    def fresh_probe(self) -> "NativeBridgeLink":
+        """Return an independent observer for read-back checks.
+
+        It shares the same bridge and Chrome debug endpoint, but starts with no
+        cached selectors or target id. This keeps cart proof from depending on
+        tab-local state in the agent's active bridge instance.
+        """
+        return type(self)(
+            host=self.host,
+            port=self.port,
+            secret=self.secret,
+            request_timeout=self.request_timeout,
+        )
+
     async def send_browse(self, job_id: str, intent: str, args: dict, timeout: float) -> dict:
         try:
             return await asyncio.wait_for(

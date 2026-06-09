@@ -74,6 +74,8 @@ COMMERCE_SEARCH_URLS = {
     "ikea.com": "https://www.ikea.com/us/en/search/?q={q}",
     "officedepot.com": "https://www.officedepot.com/a/search/?q={q}",
     "rei.com": "https://www.rei.com/search?q={q}",
+    "petsmart.com": "https://www.petsmart.com/search/?q={q}",
+    "containerstore.com": "https://www.containerstore.com/s?source=form&q={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -84,6 +86,8 @@ COMMERCE_CART_URLS = {
     "ikea.com": "https://www.ikea.com/us/en/shoppingcart/",
     "officedepot.com": "https://www.officedepot.com/cart/shoppingCart.do",
     "rei.com": "https://www.rei.com/ShoppingCart",
+    "petsmart.com": "https://www.petsmart.com/cart/",
+    "containerstore.com": "https://www.containerstore.com/cart/list.htm",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -115,6 +119,8 @@ COMMERCE_PRODUCT_URL_RE = {
     "ikea.com": re.compile(r"/p/", re.I),
     "officedepot.com": re.compile(r"/a/products/", re.I),
     "rei.com": re.compile(r"/product/", re.I),
+    "petsmart.com": re.compile(r"/(?:dog|cat|fish|bird|reptile|small-pet)/.+\.html$", re.I),
+    "containerstore.com": re.compile(r"/\d+d$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -288,13 +294,15 @@ def _looks_buyable_product_url(url: str, start_url: str = "") -> bool:
     absolute = _absolute_site_url(start_url, url) if start_url else (url or "")
     if not absolute or not _same_site(start_url, absolute):
         return False
-    if _looks_search_results_url(absolute) or _looks_content_url(absolute):
-        return False
     if re.search(r"/(?:cart|basket|bag|checkout|login|signin|sign-in)(?:[/?#]|$)", absolute, re.I):
         return False
     pattern = _commerce_product_pattern(start_url or absolute)
     if pattern is not None:
-        return pattern.search(urllib.parse.urlparse(absolute).path) is not None
+        if pattern.search(urllib.parse.urlparse(absolute).path) is not None:
+            return True
+        return False
+    if _looks_search_results_url(absolute) or _looks_content_url(absolute):
+        return False
     return PRODUCT_URL_RE.search(urllib.parse.urlparse(absolute).path) is not None
 
 
@@ -849,10 +857,10 @@ def _surface_kind(out: dict, start_url: str = "") -> str:
     url = (out or {}).get("url") or ""
     if CART_URL_RE.search(url):
         return "cart"
-    if _looks_search_results_url(url):
-        return "search"
     if _looks_buyable_product_url(url, start_url or url):
         return "product"
+    if _looks_search_results_url(url):
+        return "search"
     if _looks_content_url(url):
         return "content"
     return "unknown"
@@ -1001,6 +1009,23 @@ class WebVoyagerAgent:
         await asyncio.sleep(ADD_CLICK_SETTLE_SECONDS)
         return await self._observe_ready()
 
+    async def _observe_fresh_probe(self, url: str):
+        factory = getattr(self.link, "fresh_probe", None)
+        if not callable(factory):
+            return await self._observe_ready(url)
+        try:
+            probe_link = factory()
+            probe = type(self)(
+                probe_link,
+                self.gw,
+                max_steps=1,
+                per_subgoal=1,
+                notifier=self.notifier,
+            )
+            return await probe._observe_ready(url)
+        except Exception:
+            return {}, None
+
     async def _plan(self, task: str) -> List[str]:
         if _search_text(task):
             return [
@@ -1023,22 +1048,31 @@ class WebVoyagerAgent:
         cart_url = _commerce_cart_url(start_url)
         if not cart_url:
             return {}, steps
-        await self._act({"action": "navigate", "url": cart_url})
         expected_path = urllib.parse.urlparse(cart_url).path.rstrip("/") or "/"
-        out: dict = {}
-        shot = None
+        out, shot = await self._observe_ready(cart_url)
+        durable_confirmed = False
         for attempt in range(5):
-            await asyncio.sleep(0.6 + attempt * 0.35)
-            out, shot = await self._observe_ready()
+            if attempt:
+                await asyncio.sleep(0.6 + attempt * 0.35)
+                out, shot = await self._observe_ready()
             current_path = urllib.parse.urlparse((out or {}).get("url") or "").path.rstrip("/") or "/"
             if _cart_page_verified(out, item):
-                break
+                await asyncio.sleep(0.8)
+                confirm_out, confirm_shot = await self._observe_fresh_probe(cart_url)
+                if confirm_out:
+                    out = confirm_out
+                if confirm_shot:
+                    shot = confirm_shot
+                durable_confirmed = _cart_page_verified(out, item)
+                if durable_confirmed:
+                    break
             if current_path == expected_path and attempt == 4:
                 break
         self._cur_shot = shot
-        history.append(f"recipe: {stage} navigated known cart url for {_host(start_url)}")
+        durable = " durable" if durable_confirmed else ""
+        history.append(f"recipe: {stage} navigated known cart url{durable} for {_host(start_url)}")
         states.append(_page_state(stage, out, item, history[-1], start_url=start_url))
-        return out, steps + 1
+        return out, steps + 2 if durable_confirmed else steps + 1
 
     async def _notify(self, msg: str) -> None:
         if not self.notifier:
@@ -1293,7 +1327,8 @@ class WebVoyagerAgent:
                 if wall_kind:
                     return await self._handoff(out, steps + 1, history, wall_kind,
                                                "wall after opening product page")
-                if product_url and _looks_search_results_url(out.get("url") or ""):
+                if (product_url and _looks_search_results_url(out.get("url") or "")
+                        and not _looks_buyable_product_url(out.get("url") or "", start_url)):
                     out, shot = await self._observe_ready(product_url)
                     self._cur_shot = shot
                     history.append("recipe: navigated adjacent product url after product click stayed on search")
