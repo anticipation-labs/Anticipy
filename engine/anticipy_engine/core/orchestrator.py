@@ -112,13 +112,16 @@ _URL_IN_TEXT_RE = re.compile(r"https?://[^\s<>\]})\"']+", re.I)
 _DOMAIN_IN_TEXT_RE = re.compile(r"\b((?:[a-z0-9-]+\.)+[a-z]{2,})(/[^\s<>\]})\"']*)?", re.I)
 _PRODUCT_HINT_RE = re.compile(
     r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for|"
-    r"product|item|thing|cart|kitchen)\b",
+    r"compared|comparing|researched|researching|checked out|checking out|product|item|thing|cart|kitchen)\b",
     re.I,
 )
 _RESOLUTION_STOP = {
     "the", "that", "this", "thing", "one", "item", "product", "earlier", "before",
     "looked", "looking", "at", "for", "from", "with", "grab", "get", "add", "put",
     "cart", "basket", "bag", "please", "later", "was", "were", "been", "had", "and",
+}
+_ITEM_CONTEXT_PREFIXES = {
+    "kitchen", "bathroom", "bedroom", "office", "garage", "cooking",
 }
 
 
@@ -268,6 +271,9 @@ def _sanitize_item(raw: str, site: str = "") -> str:
     item = re.sub(r"\s+\b(?:on|at|from|via|using)\s*$", "", item, flags=re.I)
     item = re.sub(r"\s+", " ", item).strip(" \"'“”.,:;-")
     item = re.sub(r"^(?:a|an|the)\s+", "", item, flags=re.I)
+    words = item.split()
+    if len(words) >= 3 and words[0].lower() in _ITEM_CONTEXT_PREFIXES:
+        item = " ".join(words[1:])
     return item
 
 
@@ -278,7 +284,8 @@ def _line_item(line: str) -> str:
         item = _sanitize_item(quoted[-1], site=site)
         return item if 3 <= len(item) <= 160 else ""
     patterns = (
-        r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for)\s+(?P<item>[^.;\n]+)",
+        r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for|"
+        r"compared|comparing|researched|researching|checked out|checking out)\s+(?P<item>[^.;\n]+)",
         r"\b(?:product|item|thing)\s*[:=-]\s*(?P<item>[^.;\n]+)",
     )
     for pat in patterns:

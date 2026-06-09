@@ -108,7 +108,8 @@ COMMERCE_PRODUCT_URL_RE = {
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
     r"\b(add to|cart|basket|bag|checkout|sponsored|ad|sign in|log in|create account|"
-    r"pickup|delivery|shipping|ratings?|reviews?|see more|show more|how-to|how to|category)\b",
+    r"pickup|delivery|shipping|ratings?|reviews?|see more|show more|how-to|how to|category|"
+    r"shopping list|wish list|wishlist|favorites?|registry|save for later|remove)\b",
     re.I,
 )
 GENERIC_PRODUCT_LABEL_RE = re.compile(
@@ -585,7 +586,8 @@ CART_MARKER_RE = re.compile(
 )
 POST_CART_NOISE_RE = re.compile(
     r"\b(recommend(?:ed|ations?)?|you\s+may\s+also\s+like|similar\s+items?|sponsored|"
-    r"related\s+items?|more\s+to\s+consider)\b",
+    r"related\s+items?|more\s+to\s+consider|order\s+summary|continue\s+to\s+checkout|"
+    r"everyday\s+essentials\s+for\s+you)\b",
     re.I,
 )
 CART_COUNT_RE = re.compile(
@@ -627,15 +629,15 @@ def _cart_item_windows(text: str, item: str) -> list[dict]:
     for tok in tokens:
         pattern = re.compile(rf"(?<![a-z0-9]){re.escape(tok)}(?![a-z0-9])", re.I)
         for match in pattern.finditer(cart_text):
-            start = max(0, match.start() - 260)
-            end = min(len(cart_text), match.end() + 420)
+            start = max(0, match.start() - 120)
+            end = min(len(cart_text), match.end() + 220)
             spans.append((start, end))
     if not spans:
         return []
     spans.sort()
     merged_spans: list[tuple[int, int]] = []
     for start, end in spans:
-        if not merged_spans or start > merged_spans[-1][1] + 80:
+        if not merged_spans or start > merged_spans[-1][1] + 24:
             merged_spans.append((start, end))
         else:
             prev_start, prev_end = merged_spans[-1]

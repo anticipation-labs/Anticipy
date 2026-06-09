@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T110104Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It fixed Best Buy product discovery by recognizing the current `/product/...` product URL shape, then produced one builder-side Best Buy USB-C charging cable add-to-cart artifact with final known-cart verification.
+Latest builder lap: `20260609T111159Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened the IKEA path by fixing generic memory-to-intent parsing for shopping comparison memories, blocking shopping-list style controls as product targets, tightening cart proof against recommendation text, and cleaning leading room-context words out of resolved item names.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -16,22 +16,27 @@ Current M3 slice:
 - WebVoyager verifies cart pages through distinct item evidence windows, including token-hit counts and explicit quantity when visible, while keeping raw cart text out of durable state.
 - WebVoyager carries memory context hints into product selection and can fall back from strict token matching to first valid product URLs only on real search-result pages.
 - Memory-to-intent item cleanup strips the resolved site's host stem and dangling site prepositions, so browser search receives the concrete item rather than the item plus store words.
+- Memory-to-intent now recognizes generic shopping comparison/research memories and strips leading room-context words only when at least two product words remain, while preserving those context words as hints.
 - WebVoyager treats bare `Options` and broader option-control phrases as generic product labels, preventing option controls from becoming concrete product targets before add attempts.
+- WebVoyager rejects shopping-list, wishlist, favorite, registry, save-for-later, and remove controls as product targets.
 - WebVoyager refreshes a settled product page once before scrolling for add controls, so late-rendered real Add to Cart buttons can be found without heavy model planning.
 - WebVoyager recognizes both legacy `/site/.../*.p` and current `/product/...` Best Buy product URLs as buyable product URLs.
+- WebVoyager cart proof splits item matching at order-summary, checkout, and recommendation boundaries and uses tighter local item evidence windows so recommendation products cannot satisfy final cart proof.
 
 Latest real M3 attempt:
 - Fresh ignored data directories were used for builder-side live `/event` runs.
-- Best Buy read-only probe: a real search page for the remembered item exposed product rows and title links, but `buyable_product_links=0` because the product URL classifier did not recognize current `/product/...` URLs. No cart action or mutation was attempted in that probe.
-- Best Buy live run: a context-only memory seed for `USB-C charging cable` on `bestbuy.com` was captured and triaged out. The vague action request did not name the site or item. Memory resolved the real site and item, opened real Best Buy search, recognized current product URLs, opened a matching product, navigated the adjacent product URL after the first click stayed on search, clicked Add to Cart, opened the known Best Buy cart URL, and verified the item in the cart.
-- Sanitized final Best Buy cart state reported `cart_item_match=true`, `cart_item_window_count=1`, `cart_item_token_hits=2`, `cart_item_required_hits=2`, `cart_item_quantity=1`, `cart_verified=true`, and `cart_page_verified=true`.
-- No checkout, payment, or order placement occurred. This is a real builder-side cart mutation and remains `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the site/account and ruled on it. M3 is not done.
+- IKEA read-only probes found real search surfaces with item tokens, buyable product URLs, and item-specific Add controls. No mutation was attempted in read-only probes.
+- A pre-fix IKEA live run exposed a zero-step failure: the action was accepted as a reversible cart action, but memory parsing did not recognize a generic `comparing` shopping memory as an item memory, so the goal failed before any browser step.
+- After the parser fix, a live vague-memory IKEA run resolved and reached the browser hand. A later IKEA run clicked a real Add to bag control and verified the known cart page, but this happened before subsequent safety/cart-proof hardening and remains unjudged builder-side evidence only.
+- The same IKEA work exposed two hard-chain failures now fixed: product selection could target a shopping-list remove control, and cart preflight could false-match recommendation products after the actual cart items.
+- Final full-system sanity after all patches used a vague memory-resolved IKEA request for an actual cart item. It opened the real IKEA cart, matched the actual item with tightened cart proof, and avoided a duplicate add.
+- No checkout, payment, or order placement occurred. All IKEA outcomes remain `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the site/account and ruled on them. M3 is not done.
 
 Latest real bridge findings:
 - Target can complete a real search-product-add-cart-verify path for a vague memory-resolved task in the dedicated browser path.
 - Walmart can complete real search-product-add-cart-verify paths for vague memory-resolved tasks after generic option labels are skipped and settled product pages are refreshed before add-control scrolling.
 - Best Buy can complete a real search-product-add-cart-verify path for a vague memory-resolved task after current `/product/...` URLs are accepted.
-- IKEA search-results add changed a transient shopping-bag count, but the known cart page did not contain the requested item. This is a failure, not proof.
+- IKEA can complete or verify parts of the real vague-memory chain, but it exposed specific hard failures: some product pages are availability-gated behind ZIP/location checks, shopping-list controls must not be product targets, and recommendation text after the order summary must not count as cart proof.
 - Home Depot returned only a privacy surface with no product tokens or buyable links. This is a hard-site finding, not proof.
 - Lowe's direct recipe opened a buyable product page, clicked Add to Cart, opened `/cart`, and matched the requested item there. Later full `/event` runs read existing spray bottle cart item by preflight and avoided another add. A separate full `/event` run added blue painters tape and verified final cart state.
 - Lowe's search can return relevant buyable product URLs whose titles use synonyms rather than the user's query tokens, such as search text for a storage rack returning shelving unit titles. Strict token matching should fail first, then the search-result-only fallback can select a buyable product URL.
@@ -44,9 +49,12 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs completed one read-only Best Buy search/product URL finding and one Best Buy add-to-cart path with final known-cart verification. Builder-side only.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Best Buy product URL probe passed.
+- Real live `/event` runs completed IKEA memory-to-intent failure reproduction, one IKEA builder-side add-to-bag/cart-readback path before later hardening, one honest IKEA availability-gated failure after safety hardening, one honest IKEA recommendation-proof failure after cart proof hardening, and one final actual-cart-item sanity run after all patches. Builder-side only.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
+- Focused memory-resolution context-prefix check passed.
+- Focused product-list-control filter check passed.
+- Focused cart recommendation-boundary check passed.
+- Read-only real IKEA cart verifier check passed: actual cart items still match, recommendation-only dish-brush and dish-towel text does not.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -54,7 +62,7 @@ Latest checks:
 - `git diff --check` passed.
 - Forbidden-path scan was clean.
 - Secret-shaped diff scan was clean.
-- Product diff eval-literal scan was clean.
+- Product diff eval-literal scan was clean after narrowing out the benign `lower()` substring hit.
 - Ports `8787`, `7777`, and `9222` are clear.
 
 Proven:
@@ -85,7 +93,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/8 unjudged builder-side cart artifacts or read-backs verified, 0 percent. Prior Target, Lowe's, Walmart, and Best Buy builder-side cart artifacts or read-backs exist, but no separate judge has verified them.
+- M3 real browser-hand reality judge pass rate: 0/9 unjudged builder-side cart artifacts or read-backs verified, 0 percent. Prior Target, Lowe's, Walmart, Best Buy, and IKEA builder-side cart artifacts or read-backs exist, but no separate judge has verified them.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -111,11 +119,14 @@ Dead ends not to retry blindly:
 - Do not trust stale data-index selectors after real-store DOM re-renders. Re-resolve by expected role, name, or href at click time and verify page mutation or cart state.
 - Do not open loosely related product titles before an add attempt. Two-token items must match both tokens, and longer item names need a stronger token majority.
 - Do not treat bare `Options`, `Choose options`, `Select product options`, `View options`, or similar option-control labels as product targets. They are generic controls, not product identity.
+- Do not treat shopping-list, wishlist, favorite, registry, save-for-later, or remove controls as product targets.
+- Do not let recommendation products after an order summary, checkout block, or recommendation section satisfy cart proof.
+- Do not keep leading room-context words such as kitchen/bathroom/office inside the resolved item when at least two product words remain; keep them as context hints instead.
 - If a product page has item evidence but no Add to Cart control on the first observation, refresh the settled product page once before scrolling. Some real stores render the Add control after the product page text appears.
 - When a real search page has strong product titles but `buyable_product_links=0`, inspect sanitized href shapes and update the product URL classifier. Do not keep treating the store as linkless if the URL pattern drifted.
 - If a real store search page returns synonym titles that do not contain the original query tokens, use the cautious search-result fallback only on search-result URLs and only for buyable product URLs. Do not use it on category, editorial, recommendation, or product pages.
 - Do not treat editorial, advice, how-to, or category pages as buyable product pages for add-to-cart recipes.
-- Best Buy can expose item tokens but zero buyable product links to the dedicated path. Do not retry Best Buy blindly without a new page-state strategy.
+- Some IKEA product pages expose only availability/ZIP checks and no Add control. Move sideways to a search-result add path or another item rather than forcing location changes.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local`, env backup files, raw Chrome profiles, `.anticipy` state, or raw local data.
@@ -125,8 +136,8 @@ Dead ends not to retry blindly:
 - Do not design always-on cloud transcription.
 
 Next:
-- Convert the current Best Buy, Walmart, Target, and Lowe's `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
-- Until then, continue real M3 ladder work: harden product identity matching, current URL-shape detection, and cart verification across another real store, and do not replace the real task with an easy target.
+- Convert the current Best Buy, Walmart, Target, Lowe's, and IKEA `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Until then, continue real M3 ladder work. For IKEA, build the search-result add path for items whose product pages are availability-gated, while keeping cart proof strict against recommendation text.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.
