@@ -76,6 +76,7 @@ COMMERCE_SEARCH_URLS = {
     "rei.com": "https://www.rei.com/search?q={q}",
     "petsmart.com": "https://www.petsmart.com/search/?q={q}",
     "containerstore.com": "https://www.containerstore.com/s?source=form&q={q}",
+    "bookshop.org": "https://bookshop.org/search?keywords={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -88,13 +89,14 @@ COMMERCE_CART_URLS = {
     "rei.com": "https://www.rei.com/ShoppingCart",
     "petsmart.com": "https://www.petsmart.com/cart/",
     "containerstore.com": "https://www.containerstore.com/cart/list.htm",
+    "bookshop.org": "https://bookshop.org/cart",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
     re.I,
 )
 GENERIC_ADD_LABEL_RE = re.compile(
-    r"^\s*add\s+(?:to\s+)?(?:cart|basket|bag)\s*"
+    r"^\s*add\s+(?:(?:this\s+)?item\s+)?(?:to\s+)?(?:cart|basket|bag)\s*"
     r"(?:(?:[^a-z0-9]+|\s+)(?:usd\s*)?\$?\s*\d{1,4}(?:[.,]\d{2})?)?\s*$",
     re.I,
 )
@@ -102,7 +104,8 @@ VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\
 CART_URL_RE = re.compile(r"/(?:cart|shoppingcart|basket|bag)(?:[/?#]|$)", re.I)
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
 SEARCH_RESULTS_URL_RE = re.compile(
-    r"/(?:search|s)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|[?&](?:q|query|search|searchTerm|st)=",
+    r"/(?:search|s|beta-search)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
+    r"[?&](?:q|query|keywords|search|searchTerm|st)=",
     re.I,
 )
 CONTENT_URL_RE = re.compile(
@@ -121,6 +124,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "rei.com": re.compile(r"/product/", re.I),
     "petsmart.com": re.compile(r"/(?:dog|cat|fish|bird|reptile|small-pet)/.+\.html$", re.I),
     "containerstore.com": re.compile(r"/\d+d$", re.I),
+    "bookshop.org": re.compile(r"/(?:p/books|a/)", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -136,6 +140,15 @@ GENERIC_PRODUCT_LABEL_RE = re.compile(
     re.I,
 )
 HREF_ONLY_RE = re.compile(r"^(?:https?://\S+|/[^\s]+)$", re.I)
+PRODUCT_VARIANT_WORDS = {
+    "calendar",
+    "companion",
+    "guide",
+    "kid",
+    "kids",
+    "summary",
+    "workbook",
+}
 
 
 def _is_generic_product_label(name: str) -> bool:
@@ -383,7 +396,7 @@ def _pick_adjacent_result_add(
         return None
     product_name = (product.get("name") or "").strip()
     product_href = _absolute_site_url(start_url, product.get("href") or "")
-    if not product_href or not _looks_buyable_product_url(product_href, start_url):
+    if product_href and not _looks_buyable_product_url(product_href, start_url):
         return None
     required = _required_product_hits(tokens)
     product_identity = f"{product_name} {product_href}"
@@ -491,6 +504,12 @@ def _ordered_item_score(name: str, tokens: list[str]) -> int:
     return score
 
 
+def _unrequested_variant_penalty(name: str, tokens: list[str]) -> int:
+    token_set = set(tokens)
+    words = set(re.findall(r"[a-z0-9]+", (name or "").lower()))
+    return 8 * sum(1 for word in PRODUCT_VARIANT_WORDS if word in words and word not in token_set)
+
+
 def _required_product_hits(tokens: list[str]) -> int:
     n = len(tokens)
     if n <= 2:
@@ -578,12 +597,14 @@ def _pick_product(
             continue
         hint_hits = _token_hits(f"{name} {href}", context_hints)
         ordered_score = _ordered_item_score(name, tokens)
+        variant_penalty = _unrequested_variant_penalty(name, tokens)
         score = (
             hits * 3
             + ordered_score
             + hint_hits * 5
             + (4 if productish_url else 0)
             + (2 if el.get("inView") else 0)
+            - variant_penalty
         )
         candidates.append((_price_cents(name), hint_hits, score, el))
     if not candidates and allow_query_fallback:
@@ -610,11 +631,13 @@ def _pick_product(
             seen_hrefs.add(href)
             hint_hits = _token_hits(f"{name} {href}", context_hints)
             ordered_score = _ordered_item_score(name, tokens)
+            variant_penalty = _unrequested_variant_penalty(name, tokens)
             score = (
                 ordered_score
                 + hint_hits * 5
                 + (2 if el.get("inView") else 0)
                 - pos / 1000
+                - variant_penalty
             )
             candidates.append((_price_cents(name), hint_hits, score, el))
     if not candidates:
@@ -1437,7 +1460,7 @@ class WebVoyagerAgent:
 
         if not opened_product_from_results_add:
             product = None
-            for scrolls in range(3):
+            for scrolls in range(4):
                 product = _pick_product(
                     out.get("elements") or [],
                     item,
@@ -1447,6 +1470,8 @@ class WebVoyagerAgent:
                     allow_query_fallback=_looks_search_results_url(out.get("url") or ""),
                 )
                 if product:
+                    break
+                if scrolls >= 3:
                     break
                 await self._act({"action": "scroll", "dir": "down"})
                 out, shot = await self._observe_ready()

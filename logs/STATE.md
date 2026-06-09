@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T140258Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened exact product selection and CDP startup for fresh browser profiles. WebVoyager now scores compact ordered item-token sequences, removes long-title ranking rewards, treats URL/title-only observations with no text or actionable elements as not ready, and retries empty search surfaces before failing. `NativeBridgeLink` now creates the configured Chrome user-data directory before CDP launch, so fresh per-lap profiles can return actionable marks. Real Target work found one safe no-add failure, one broad-substitute false action before the ranking fix, and one no-marks capture-layer failure before profile-dir creation. After the fixes, a sanitized direct Target probe saw 299 actionable elements and 131 product-like links, and the final live `/event` run resolved a vague memory task to Target plus `OXO Dish Brush`, opened exact product `/p/oxo-dish-brush/-/A-80221510`, clicked a real Add to cart control, opened Target cart, and durable cart read-back matched the item. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T143142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Bookshop and hardened exact product selection on variant-heavy search pages. WebVoyager now knows Bookshop search, product, and cart URL shapes; recognizes Bookshop `beta-search` pages and `keywords` query parameters as search surfaces; checks the freshly observed state after the final bounded scroll before failing; supports generic `Add item to cart` controls only beside a strongly matched real product row; and penalizes unrequested variant words such as workbook, calendar, guide, and summary. `NativeBridgeLink` now extracts query tokens from `keywords`. A read-only Barnes & Noble probe produced a blank/no-mark hard-site finding, and a read-only Bookshop probe found real product rows and Add controls only after bounded scrolling. One live Bookshop action failed honestly before the final-scroll and variant hardening. The final fresh live `/event` run resolved a vague memory task to Bookshop plus the remembered book, opened the exact Bookshop product page, clicked a real Add to cart control, opened Bookshop `/cart`, and durable cart read-back matched the item. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -37,18 +37,24 @@ Current M3 slice:
 - WebVoyager ranks product candidates with a compact ordered item-token score and no longer rewards longer titles when token hits tie, so exact ordered product names beat broad titles with scattered requested tokens.
 - WebVoyager treats navigated URL/title-only observations with no text or actionable elements as not ready, and commerce search surfaces get bounded re-observe or scroll retries before failing as unactionable.
 - `NativeBridgeLink` creates the configured `ANTICIPY_CHROME_USER_DATA_DIR` before CDP launch, enabling fresh per-lap Chrome profiles to return real actionable marks.
+- WebVoyager knows Bookshop search, product, and cart URL shapes, including `beta-search` search surfaces and `keywords` query parameters.
+- `NativeBridgeLink` includes `keywords` among search query fields used for native bridge query-token extraction.
+- WebVoyager checks the freshly observed search state after the final bounded scroll before failing, so product rows that appear on the last allowed scroll are still considered.
+- WebVoyager can click generic `Add item to cart` controls beside href-less visible product rows only when the surrounding product identity strongly matches the remembered item.
+- WebVoyager penalizes unrequested variant words such as workbook, calendar, guide, kid, and summary when choosing between visible product candidates.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- A Target run with a remembered item that included a missing sub-brand failed safely without an Add click.
-- A pre-ranking-fix Target run resolved a vague memory task to Target plus the visible item name but selected a broader soap-dispensing palm brush product and verified broad cart text. This is counted as a broad-substitute false action, not progress.
-- A post-ranking rerun still failed safely because the fresh Chrome profile directory did not exist, CDP did not start, and the bridge saw zero actionable Target marks.
-- After profile-dir creation, a sanitized direct Target probe saw 299 actionable elements and 131 product-like links.
-- The final live `/event` run used context-only memory plus a vague action that did not name the site or exact item. The hand resolved Target plus `OXO Dish Brush`, opened exact product `/p/oxo-dish-brush/-/A-80221510`, clicked a real Add to cart control, opened Target cart, and durable cart read-back matched the item. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
+- A Barnes & Noble read-only probe reached a blank/no-mark search surface and was logged as a hard-site finding, not proof.
+- A Bookshop read-only probe found real product rows and Add controls only after bounded scrolling on the live `beta-search` surface.
+- One early full Bookshop action routed to the real store but failed honestly because the product rows appeared after the final scroll and were not checked before failure.
+- The final live `/event` run used context-only memory plus a vague action that did not name the site or exact item. The hand resolved Bookshop plus the remembered book, opened the exact Bookshop product page, clicked a real Add to cart control, opened Bookshop `/cart`, and durable cart read-back matched the item. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- Bookshop can complete a real search-product-add-cart-verify path builder-side after recognizing `beta-search`, `keywords`, Bookshop product URLs, variant-heavy search results, and `Add item to cart` labels.
+- Barnes & Noble returned a blank/no-mark search surface in the dedicated bridge path. This is a hard-site finding, not proof.
 - Target can complete real search-product-add-cart-verify and duplicate-safe known-cart verification paths for vague memory-resolved tasks in the dedicated browser path.
 - Walmart can complete real search-product-add-cart-verify paths for vague memory-resolved tasks after generic option labels are skipped and settled product pages are refreshed before add-control scrolling.
 - Best Buy can complete a real search-product-add-cart-verify path for a vague memory-resolved task after current `/product/...` URLs are accepted.
@@ -68,10 +74,10 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised the Target vague-memory path with exact-product ranking and CDP profile-dir hardening. One pre-fix broad-substitute Add was counted as a false action; the final post-fix run selected the exact Target product and verified durable cart read-back builder-side.
+- Real live `/event` runs exercised the Bookshop vague-memory path. One pre-fix action failed honestly before final-scroll product checks. The final post-fix run selected the exact Bookshop product, clicked a real Add to cart control, and verified durable cart read-back builder-side.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused ordered-product ranking check passed.
-- Focused Chrome profile directory creation check passed.
+- Focused Bookshop adjacent-add and variant-ranking check passed.
+- Focused native `keywords` query-token check passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -97,7 +103,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced one pre-fix false action this lap, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in the prior lap. Other hard-site failures are not all-work stops.
+- Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding this lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -110,7 +116,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/26 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/28 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -154,6 +160,10 @@ Dead ends not to retry blindly:
 - Do not let product URL slugs or hrefs supply missing identity tokens when the visible product title/text/labels disagree. Visible product identity must clear the item threshold before any real Add click.
 - Do not reward long product titles when token hits tie. Compact ordered item phrases should beat broad titles with scattered requested tokens.
 - Do not assume a fresh Chrome user-data directory exists. If `ANTICIPY_CHROME_USER_DATA_DIR` is configured, create it before CDP launch or the bridge may fall back to weak no-mark observations.
+- Do not retry Barnes & Noble blindly. The observed search path returned a blank/no-mark surface; retry only with a new concrete hypothesis.
+- Do not fail immediately after the final allowed scroll on a real search page. Check the freshly observed post-scroll state first.
+- Do not let unrequested variant products such as workbook, calendar, guide, or summary editions outrank the base remembered item.
+- Do not treat `Add item to cart` as item identity. It is a generic control and is safe only beside a strongly matched product row.
 - Do not retry the Lowe's token-rich gloves path blindly. It produced wrong or unverified cart additions and needs a new exact-product or cart-readback hypothesis first.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps.
 - Do not retry Office Depot blindly. Product-page Add and adjacent result-row Add both changed the page but did not verify the known cart artifact; retry only with a new concrete cart-readback or modal hypothesis.
@@ -167,8 +177,8 @@ Dead ends not to retry blindly:
 - Do not design always-on cloud transcription.
 
 Next:
-- Convert the current Target exact-item path plus prior Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
-- Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
+- Convert the current Bookshop exact-item path plus prior Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.
