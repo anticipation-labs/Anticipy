@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -36,6 +37,8 @@ ACTIONABLE_ROLES = {
     "textbox",
     "combobox",
 }
+MAX_NATIVE_MARKS = 600
+MAX_NATIVE_LABEL_CHARS = 180
 VOID_TAGS = {
     "area",
     "base",
@@ -147,7 +150,7 @@ class _DOMMarks(HTMLParser):
                 {
                     "idx": idx,
                     "role": node.attrs.get("role") or node.tag,
-                    "name": name[:110],
+                    "name": name[:MAX_NATIVE_LABEL_CHARS],
                     "type": node.attrs.get("type", ""),
                     "state": "disabled" if "disabled" in node.attrs else "",
                     "inView": True,
@@ -155,7 +158,7 @@ class _DOMMarks(HTMLParser):
                     "selector": selector,
                 }
             )
-            if len(out) >= 140:
+            if len(out) >= MAX_NATIVE_MARKS:
                 break
         return out
 
@@ -231,11 +234,15 @@ class NativeBridgeLink:
         self.base_url = f"http://{self.host}:{self.port}"
         self.secret = secret if secret is not None else os.environ.get("ANTICIPY_TRIGGER_SECRET", "local-dev")
         self.request_timeout = float(request_timeout or os.environ.get("ANTICIPY_NATIVE_BRIDGE_TIMEOUT", "8"))
+        self.cdp_host = os.environ.get("ANTICIPY_CDP_HOST", "localhost")
+        self.cdp_port = int(os.environ.get("ANTICIPY_CDP_PORT", "9222"))
         self._selectors: dict[int, str] = {}
         self._url_prefix = ""
         self._available_cache: tuple[float, bool, str] = (0.0, False, "")
         self._last_start_attempt = 0.0
+        self._last_cdp_start_attempt = 0.0
         self._started_process: Optional[subprocess.Popen] = None
+        self._started_chrome: Optional[subprocess.Popen] = None
 
     @property
     def connected(self) -> bool:
@@ -291,18 +298,31 @@ class NativeBridgeLink:
         }
 
     def _observe(self, job_id: str, args: dict) -> dict:
+        self._ensure_cdp_chrome()
         url = str(args.get("url") or "").strip()
         if url:
             status, data, error = self._command({"command": "navigate", "url": url, "new_tab": True})
             if error or status != 200 or data.get("ok") is not True:
                 return self._needs_human(job_id, error or str(data.get("error") or f"navigate status {status}"))
             self._url_prefix = _origin(url) or self._url_prefix
-            time.sleep(0.8)
+            time.sleep(0.5)
 
-        status, proof, error = self._proof()
-        if error or status != 200 or proof.get("ok") is not True:
-            return self._needs_human(job_id, error or str(proof.get("error") or f"proof status {status}"))
-        out, screenshot = self._output_from_proof(proof)
+        last_reason = ""
+        out: dict[str, Any] = {}
+        screenshot = ""
+        for attempt in range(6 if url else 1):
+            status, proof, error = self._proof()
+            if error or status != 200 or proof.get("ok") is not True:
+                last_reason = error or str(proof.get("error") or f"proof status {status}")
+            else:
+                out, screenshot = self._output_from_proof(proof)
+                if self._surface_ready(out, url):
+                    break
+                last_reason = "browser surface not ready"
+            if attempt < 5:
+                time.sleep(0.7 + attempt * 0.35)
+        if not out:
+            return self._needs_human(job_id, last_reason)
         if out.get("url"):
             self._url_prefix = _origin(str(out.get("url") or "")) or self._url_prefix
         return {
@@ -383,6 +403,32 @@ class NativeBridgeLink:
             screenshot,
         )
 
+    def _surface_ready(self, out: dict[str, Any], requested_url: str = "") -> bool:
+        elements = out.get("elements") or []
+        text = (out.get("text") or "").strip()
+        if not elements and not text:
+            return False
+        query_tokens = self._query_tokens(requested_url)
+        if not query_tokens:
+            return True
+        hay = " ".join(str(e.get("name") or "").lower() for e in elements)
+        hits = sum(1 for token in query_tokens if token in hay)
+        return hits >= min(2, len(query_tokens))
+
+    @staticmethod
+    def _query_tokens(url: str) -> list[str]:
+        try:
+            parsed = urllib.parse.urlparse(url or "")
+            params = urllib.parse.parse_qs(parsed.query)
+        except Exception:
+            return []
+        raw = " ".join(
+            " ".join(params.get(key, []))
+            for key in ("q", "query", "search", "searchTerm", "st")
+        )
+        tokens = re.findall(r"[a-z0-9]{3,}", raw.lower())
+        return [t for t in tokens if t not in {"the", "and", "for", "with"}][:6]
+
     def _elements_from_set_of_mark(self, som: list[Any]) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for pos, raw in enumerate(som):
@@ -404,7 +450,7 @@ class NativeBridgeLink:
                 {
                     "idx": idx,
                     "role": str(raw.get("role") or raw.get("tag") or ""),
-                    "name": name[:110],
+                    "name": name[:MAX_NATIVE_LABEL_CHARS],
                     "type": str(raw.get("type") or ""),
                     "state": str(raw.get("state") or ""),
                     "inView": bool(raw.get("inView", True)),
@@ -412,7 +458,7 @@ class NativeBridgeLink:
                     "selector": str(selector),
                 }
             )
-            if len(out) >= 140:
+            if len(out) >= MAX_NATIVE_MARKS:
                 break
         return out
 
@@ -436,6 +482,7 @@ class NativeBridgeLink:
         if now - self._last_start_attempt < 20:
             return
         self._last_start_attempt = now
+        self._ensure_cdp_chrome()
         script = Path(os.environ.get("ANTICIPY_NATIVE_BRIDGE_SCRIPT", "~/.anticipy/anticipy-bridge.py")).expanduser()
         if not script.exists():
             return
@@ -451,6 +498,76 @@ class NativeBridgeLink:
             )
         except Exception:
             return
+
+    def _ensure_cdp_chrome(self) -> bool:
+        if self.cdp_port <= 0:
+            return False
+        if not _bool_env("ANTICIPY_NATIVE_BRIDGE_CDP_AUTOSTART", True):
+            return self._cdp_up()
+        if self._cdp_up():
+            return True
+        now = time.monotonic()
+        if now - self._last_cdp_start_attempt < 20:
+            return False
+        self._last_cdp_start_attempt = now
+        user_data = self._chrome_user_data_dir()
+        if user_data is None:
+            return False
+        chrome = self._chrome_binary()
+        if not chrome:
+            return False
+        try:
+            self._started_chrome = subprocess.Popen(
+                [
+                    chrome,
+                    f"--remote-debugging-port={self.cdp_port}",
+                    "--remote-allow-origins=http://localhost:*",
+                    f"--user-data-dir={user_data}",
+                    "--profile-directory=Default",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-features=Translate",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            return False
+        for _ in range(36):
+            if self._cdp_up():
+                return True
+            time.sleep(0.5)
+        return False
+
+    def _cdp_up(self) -> bool:
+        try:
+            with urllib.request.urlopen(
+                f"http://{self.cdp_host}:{self.cdp_port}/json/version",
+                timeout=0.8,
+            ) as resp:
+                return int(getattr(resp, "status", 200)) == 200
+        except Exception:
+            return False
+
+    @staticmethod
+    def _chrome_binary() -> str:
+        candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            shutil.which("google-chrome") or "",
+            shutil.which("chromium") or "",
+        ]
+        return next((c for c in candidates if c and Path(c).exists()), "")
+
+    @staticmethod
+    def _chrome_user_data_dir() -> Optional[Path]:
+        configured = os.environ.get("ANTICIPY_CHROME_USER_DATA_DIR", "").strip()
+        if configured:
+            p = Path(configured).expanduser()
+            return p if p.exists() else None
+        clone = Path.home() / ".anticipy" / "chrome-real-clone"
+        return clone if clone.exists() else None
 
     def _proof(self) -> tuple[int, dict[str, Any], str]:
         payload = {

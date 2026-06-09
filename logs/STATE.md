@@ -4,29 +4,31 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T070148Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added a native bridge fallback transport for the live browser hand and added no-actionable-elements failure hardening. It created no new real artifact and has no separate judge proof.
+Latest builder lap: `20260609T072240Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It made the native bridge path actionable through CDP, improved real-store mark extraction and readiness, and hardened the commerce recipe after a failed Target add attempt. It created no judge-verified artifact and does not prove M3.
 
 Latest offline M3 slice:
-- `NativeBridgeLink` maps WebVoyager `observe` and `act` calls onto the installed native bridge endpoints `/surface-proof` and `/surface-command`.
-- `BrowserHand` now selects the WebSocket extension first and falls back to the native bridge only when the WebSocket is disconnected.
-- The fallback can convert returned DOM into numbered actionable marks and translate those indices back into CSS selectors for click and type.
-- `ControlCore` wires the fallback by default behind `ANTICIPY_NATIVE_BRIDGE_FALLBACK`.
-- WebVoyager now fails fast when a browser surface has no actionable elements or readable text, avoiding paid model calls and fake progress on screenshot-only surfaces.
-- Focused fake-bridge probes passed, but these are regression checks only. They are not M3 proof.
+- `NativeBridgeLink` can start the dedicated Chrome CDP profile on port 9222 before starting or using the native bridge.
+- Native bridge observations wait for query-matching actionable marks on search URLs instead of accepting top-navigation-only page state.
+- Native bridge DOM mark extraction keeps more real page controls and longer labels, so product-specific add labels do not lose action words.
+- WebVoyager product selection ignores href-only product anchors and prefers readable product names.
+- The commerce recipe can click an item-specific search-results add control before opening a product page.
+- If that item-specific add does not verify the cart artifact, the recipe now stops or checks cart. It does not continue to a different product.
+- Focused probes passed, but these are regression checks only. They are not M3 proof.
 
 Latest real M3 attempt:
 - A builder-visible memory note was sent through the live `/event` path.
 - A vague kitchen shopping task was then sent through `/event`.
 - The system resolved the vague request to Target and the remembered item without typing the whole instruction into search.
-- Earlier real attempts exposed false or wrong actions: a context-only seed acted before the guard fix, and wrong variant or recommendation candidates were clicked before the quantity and product-button hardening.
+- Earlier real attempts exposed false or wrong actions: a context-only seed acted before the guard fix, and wrong variant or recommendation candidates were clicked before quantity and product-button hardening.
 - After the fixes, a live Target run added the resolved Brita 6 Cup Water Filter Pitcher item through the browser hand and captured compact page-state evidence after the real add flow.
 - This changed a real cart, but it remains `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the account and ruled on it. M3 is not done.
 
 Latest real bridge finding:
-- A real Target search page was opened through the new native bridge fallback.
-- The bridge used AppleScript fallback, captured a screenshot, and returned the real Target URL/title.
-- It returned zero actionable elements, so no click, no add-to-cart, and no artifact change was attempted.
-- This finding means the fallback transport is wired but current AppleScript observation is screenshot-level only. The next M3 slice should make the real bridge expose actionable elements reliably through CDP/native-extension marks or another non-fake real surface path.
+- A real Target search page was opened through the native bridge with CDP active.
+- The bridge returned actionable product marks from the real page.
+- A real Target recipe clicked an item-specific add control, then failed to verify a cart artifact.
+- Before the final hardening, the recipe then wandered to another product. This was fixed so an unverified results-page add stops instead of opening a different product.
+- No verified artifact exists. The next M3 slice should improve post-add verification and cart-state handling on the CDP bridge path.
 
 Current constraint:
 - Current allowed work is M3 only.
@@ -43,18 +45,20 @@ Latest product/public candidate, unchanged this lap:
 
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Python compile passed for `engine/anticipy_engine/core/native_bridge_link.py`, `engine/anticipy_engine/hands/browser_hand.py`, `engine/anticipy_engine/core/control_core.py`, and `engine/anticipy_engine/agent/webvoyager.py`.
-- Focused native bridge fallback probe passed: observe DOM marks, index-to-selector type, scroll fallback, and BrowserHand fallback selection.
-- Focused unactionable real browser surface probe passed: the commerce recipe fails fast before planner/actions.
-- Real Target bridge observation returned URL/title/screenshot but zero actionable elements through AppleScript fallback. This is a finding, not proof.
-- Engine boot smoke passed on the edited tree: `/health` OK and `/ws/state` returned disconnected.
+- Python compile passed for the touched engine files.
+- Focused CDP autostart smoke passed.
+- Focused query-token readiness probe passed.
+- Focused href-only product-anchor probe passed.
+- Focused result-page add stop probe passed.
+- Real Target CDP observe returned actionable product marks.
+- Real Target recipe attempt clicked an item-specific add control but did not verify the cart artifact.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_handoff.py` passed.
 - `engine/scripts/test_harmline.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
 - Forbidden-path scan, owner/eval literal scan, and secret-value scan found no matches.
-- Ports 8787 and 7777 have no remaining listeners.
+- Ports 8787, 7777, and 9222 have no remaining listeners.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed in setup; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -63,7 +67,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. The latest real Target run changed a real cart, but no separate judge proof exists.
+- M3 is not proven. The latest real Target add run from `20260609T034900Z` changed a real cart, but no separate judge proof exists. The newest CDP bridge Target attempt did not verify a cart artifact.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -107,13 +111,16 @@ Dead ends not to retry blindly:
 - Do not let a vague request with contextual hints act on a remembered cart target whose memory line does not match those hints.
 - Do not let direct cart phrasing become whole-task browser search. Extract the concrete resolved item only, and reject unresolved vague placeholders before the browser recipe runs.
 - Do not click generic `Add to cart` controls on search results when no matching product has been identified. Open the matching product first, or require the add label to strongly name the requested item.
+- Do not continue from an unverified item-specific result-page add into another product. Verify the cart, open cart if a cart control exists, or stop with a real failure.
+- Do not open href-only product anchors as products. Prefer readable product names or product-specific add controls.
+- Do not accept top-navigation-only bridge observations for search pages. Wait for query-matching actionable marks.
 - Do not open loosely related product titles before an add attempt. Two-token items must match both tokens, and longer item names need a stronger token majority.
 - Do not verify a product-page add from broad page text. For non-cart URLs, the requested item and quantity/unit must match near the cart marker, and recommendation/similar-item text after the marker must not count.
 - Do not let price-preference words become product identity tokens. `Cheapest`, `lowest priced`, `budget`, and similar words guide candidate ranking, but the browser search and item match must use only the concrete resolved item.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps. Make the browser hand cheaper, deterministic where possible, and cache page observations instead.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not treat a screenshot-only AppleScript bridge observation as actionable. It must expose elements/selectors or the real chain must fail fast.
-- Do not run broad searches over `.env.local` or env backup files.
+- Do not run broad searches over `.env.local`, env backup files, raw Chrome profiles, or `.anticipy` state. Search only targeted code files.
 - Do not run a production `next build` while reusing an active Next dev server for rendered checks.
 - Do not treat public source, manifest commit, public headers, public SHA, release metadata, page render, local packaging, local launch, owner Chrome, screenshot, or process/window enumeration as M1, M2, M3, or M5 proof before separate judge verification.
 - Do not assume in-app Browser is healthy after stale logs or native-pipe failures. Try it once when the browser skill requires it, record the result, then use a scoped fallback only for non-proof diagnostics.
@@ -130,7 +137,7 @@ Dead ends not to retry blindly:
 
 Next:
 - Continue immediately on the hard M3 chain despite low live credit and judge quota. Do not work UI/status/onboarding.
-- Make the real browser bridge surface actionable: restore CDP/native-extension marks if possible, or build another safe real-store observation path that returns selectors the browser hand can click. Every run remains `UNPROVEN-PENDING-JUDGE` until the separate judge verifies it.
+- Improve post-add verification and cart-state handling on the CDP bridge path, without clicking additional unrelated products after an unverified add. Every run remains `UNPROVEN-PENDING-JUDGE` until the separate judge verifies it.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.

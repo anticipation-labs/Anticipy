@@ -81,6 +81,7 @@ NON_PRODUCT_RE = re.compile(
     r"pickup|delivery|shipping|ratings?|reviews?|see more|show more)\b",
     re.I,
 )
+HREF_ONLY_RE = re.compile(r"^(?:https?://\S+|/[^\s]+)$", re.I)
 
 
 def _parse_json(raw: str) -> Optional[dict]:
@@ -280,7 +281,8 @@ def _pick_product(elements: list[dict], item: str, prefer_lowest: bool = False) 
     candidates = []
     for el in elements or []:
         name = (el.get("name") or "").strip()
-        if not name or el.get("sponsored") or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item):
+        if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
+                or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item)):
             continue
         role = (el.get("role") or "").lower()
         if role not in {"a", "button"} and "link" not in role:
@@ -574,6 +576,34 @@ class WebVoyagerAgent:
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
+        add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
+        if add_from_results:
+            label = (add_from_results.get("name") or "")[:80]
+            await self._act({"action": "click", "index": add_from_results.get("idx")})
+            out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            history.append(f"recipe: clicked item-specific add from results idx={add_from_results.get('idx')} '{label}'")
+            states.append(_page_state("post_add_from_results", out, item, history[-1]))
+            steps += 1
+            if _cart_verified(out, item):
+                return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                  page_states=states, commerce_recipe=True)
+            view_cart = _pick_button(out.get("elements") or [], VIEW_CART_RE)
+            if view_cart:
+                cart_label = (view_cart.get("name") or "")[:80]
+                await self._act({"action": "click", "index": view_cart.get("idx")})
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                history.append(f"recipe: opened cart after results add idx={view_cart.get('idx')} '{cart_label}'")
+                states.append(_page_state("cart_page_after_results_add", out, item, history[-1]))
+                steps += 1
+                if _cart_verified(out, item):
+                    return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                      page_states=states, commerce_recipe=True)
+            return self._done(out, steps + 1, history, answer="",
+                              reason="item-specific search-results add did not verify the cart artifact",
+                              page_states=states, commerce_recipe=True)
+
         product = None
         for scrolls in range(3):
             product = _pick_product(out.get("elements") or [], item, prefer_lowest=prefer_lowest)
@@ -595,18 +625,9 @@ class WebVoyagerAgent:
             states.append(_page_state("product_page", out, item, history[-1]))
             steps += 1
         else:
-            add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
-            if add_from_results:
-                await self._act({"action": "click", "index": add_from_results.get("idx")})
-                out, shot = await self._observe_ready()
-                self._cur_shot = shot
-                history.append(f"recipe: clicked add control from results idx={add_from_results.get('idx')}")
-                states.append(_page_state("post_add_from_results", out, item, history[-1]))
-                steps += 1
-            else:
-                return self._done(out, steps + 1, history, answer="",
-                                  reason="commerce recipe could not identify a matching product",
-                                  page_states=states, commerce_recipe=True)
+            return self._done(out, steps + 1, history, answer="",
+                              reason="commerce recipe could not identify a matching product",
+                              page_states=states, commerce_recipe=True)
 
         if _cart_verified(out, item):
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
