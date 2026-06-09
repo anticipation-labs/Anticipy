@@ -585,6 +585,11 @@ CART_COUNT_RE = re.compile(
     r"\b(?:cart|bag|basket)\s*\((\d+)\)",
     re.I,
 )
+CART_ITEM_QUANTITY_RE = re.compile(
+    r"\b(?:qty|quantity)\s*(?:[:#-]\s*)?(?P<qty>\d{1,3})\b|"
+    r"\b(?P<qty2>\d{1,3})\s+(?:qty|quantity)\b",
+    re.I,
+)
 
 
 def _cart_count(out: dict) -> Optional[int]:
@@ -601,6 +606,70 @@ def _cart_count(out: dict) -> Optional[int]:
 
 def _primary_cart_text(text: str) -> str:
     return POST_CART_NOISE_RE.split(text or "", maxsplit=1)[0]
+
+
+def _cart_item_windows(text: str, item: str) -> list[dict]:
+    tokens = _item_tokens(item)
+    if not tokens:
+        return []
+    required = _required_product_hits(tokens)
+    cart_text = _primary_cart_text(text or "")
+    spans: list[tuple[int, int]] = []
+    for tok in tokens:
+        pattern = re.compile(rf"(?<![a-z0-9]){re.escape(tok)}(?![a-z0-9])", re.I)
+        for match in pattern.finditer(cart_text):
+            start = max(0, match.start() - 260)
+            end = min(len(cart_text), match.end() + 420)
+            spans.append((start, end))
+    if not spans:
+        return []
+    spans.sort()
+    merged_spans: list[tuple[int, int]] = []
+    for start, end in spans:
+        if not merged_spans or start > merged_spans[-1][1] + 80:
+            merged_spans.append((start, end))
+        else:
+            prev_start, prev_end = merged_spans[-1]
+            merged_spans[-1] = (prev_start, max(prev_end, end))
+
+    windows: list[dict] = []
+    for start, end in merged_spans:
+        window = cart_text[start:end]
+        if not _numbers_match(window, item):
+            continue
+        hits = _token_hits(window, tokens)
+        if hits < required:
+            continue
+        quantity = None
+        qty_match = CART_ITEM_QUANTITY_RE.search(window)
+        if qty_match:
+            raw_qty = qty_match.group("qty") or qty_match.group("qty2")
+            try:
+                quantity = int(raw_qty)
+            except (TypeError, ValueError):
+                quantity = None
+        windows.append(
+            {
+                "token_hits": hits,
+                "required_hits": required,
+                "quantity": quantity,
+            }
+        )
+    windows.sort(key=lambda row: (row["quantity"] is not None, row["token_hits"]), reverse=True)
+    return windows
+
+
+def _cart_item_evidence(out: dict, item: str) -> dict:
+    windows = _cart_item_windows((out or {}).get("text") or "", item)
+    best = windows[0] if windows else {}
+    required = _required_product_hits(_item_tokens(item)) if _item_tokens(item) else 0
+    return {
+        "matched": bool(windows),
+        "window_count": len(windows),
+        "token_hits": int(best.get("token_hits") or 0),
+        "required_hits": int(best.get("required_hits") or required),
+        "quantity": best.get("quantity") if isinstance(best.get("quantity"), int) else None,
+    }
 
 
 def _cart_marker_item_match(text: str, item: str) -> bool:
@@ -633,11 +702,7 @@ def _cart_verified(out: dict, item: str) -> bool:
         return False
     if added and not cart_url:
         return _cart_marker_item_match(text, item)
-    cart_text = _primary_cart_text(text)
-    if not _numbers_match(cart_text, item):
-        return False
-    hits = _token_hits(cart_text, tokens)
-    return hits >= (2 if len(tokens) >= 3 else 1)
+    return bool(_cart_item_evidence(out, item)["matched"])
 
 
 def _is_cart_url(out: dict) -> bool:
@@ -653,6 +718,7 @@ def _cart_signal_score(out: dict, item: str) -> int:
     url = ((out or {}).get("url") or "").lower()
     score = 0
     count = _cart_count(out)
+    item_evidence = _cart_item_evidence(out, item)
     if CART_URL_RE.search(url):
         score += 20
     if CART_MARKER_RE.search(text):
@@ -661,6 +727,8 @@ def _cart_signal_score(out: dict, item: str) -> int:
         score += 60
     if _cart_verified(out, item):
         score += 120
+    if item_evidence["matched"]:
+        score += 40 + min(20, item_evidence["token_hits"] * 5)
     if count == 0:
         score -= 25
     elif count is not None:
@@ -745,6 +813,7 @@ def _page_state(
         })
         if len(elements) >= 18:
             break
+    item_evidence = _cart_item_evidence(out, item)
     state = {
         "stage": stage,
         "action": action,
@@ -752,6 +821,11 @@ def _page_state(
         "title": (out or {}).get("title"),
         "surface_kind": _surface_kind(out, start_url),
         "item_token_hits": _token_hits((out or {}).get("text") or "", _item_tokens(item)),
+        "cart_item_match": item_evidence["matched"],
+        "cart_item_window_count": item_evidence["window_count"],
+        "cart_item_token_hits": item_evidence["token_hits"],
+        "cart_item_required_hits": item_evidence["required_hits"],
+        "cart_item_quantity": item_evidence["quantity"],
         "cart_count": _cart_count(out),
         "cart_signal": _cart_signal_score(out, item),
         "cart_verified": _cart_verified(out, item),
