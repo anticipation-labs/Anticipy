@@ -73,6 +73,7 @@ COMMERCE_SEARCH_URLS = {
     "lowes.com": "https://www.lowes.com/search?searchTerm={q}",
     "ikea.com": "https://www.ikea.com/us/en/search/?q={q}",
     "officedepot.com": "https://www.officedepot.com/a/search/?q={q}",
+    "rei.com": "https://www.rei.com/search?q={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -82,9 +83,15 @@ COMMERCE_CART_URLS = {
     "lowes.com": "https://www.lowes.com/cart",
     "ikea.com": "https://www.ikea.com/us/en/shoppingcart/",
     "officedepot.com": "https://www.officedepot.com/cart/shoppingCart.do",
+    "rei.com": "https://www.rei.com/ShoppingCart",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
+    re.I,
+)
+GENERIC_ADD_LABEL_RE = re.compile(
+    r"^\s*add\s+(?:to\s+)?(?:cart|basket|bag)\s*"
+    r"(?:(?:[^a-z0-9]+|\s+)(?:usd\s*)?\$?\s*\d{1,4}(?:[.,]\d{2})?)?\s*$",
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
@@ -107,6 +114,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "lowes.com": re.compile(r"/pd/", re.I),
     "ikea.com": re.compile(r"/p/", re.I),
     "officedepot.com": re.compile(r"/a/products/", re.I),
+    "rei.com": re.compile(r"/product/", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -605,7 +613,7 @@ def _pick_add_button(
         # match the remembered item. Generic "Add to cart" controls are allowed.
         if _number_tokens(name) and not _numbers_match(name, item):
             continue
-        generic = re.fullmatch(r"\s*add\s+(to\s+)?(cart|basket|bag)\s*", name, re.I) is not None
+        generic = GENERIC_ADD_LABEL_RE.match(name) is not None
         if generic and not allow_generic:
             continue
         if not generic:
@@ -637,6 +645,11 @@ CART_COUNT_RE = re.compile(
     r"\b(?:shopping\s+)?(?:cart|bag|basket),?\s*(?:with\s+)?(\d+)\s+items?\b|"
     r"\b(\d+)\s+(?:items?\s+)?in\s+(?:your\s+)?(?:cart|bag|basket)\b|"
     r"\b(?:cart|bag|basket)\s*\((\d+)\)",
+    re.I,
+)
+CART_STRUCTURE_RE = re.compile(
+    r"\b(checkout|order\s+summary|subtotal|estimated\s+total|cart\s+summary|"
+    r"quantity|qty|remove|save\s+for\s+later|shipping|pickup|delivery)\b",
     re.I,
 )
 CART_ITEM_QUANTITY_RE = re.compile(
@@ -753,6 +766,8 @@ def _cart_verified(out: dict, item: str) -> bool:
     if count == 0:
         return False
     if not (added or cart_url) or not tokens:
+        return False
+    if cart_url and not CART_STRUCTURE_RE.search(text):
         return False
     if added and not cart_url:
         return _cart_marker_item_match(text, item)
