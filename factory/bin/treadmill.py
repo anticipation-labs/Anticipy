@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -26,6 +27,8 @@ HALT = REPO / "factory/.halt"
 
 
 def conf(key: str, default: str) -> str:
+    if os.environ.get(key):
+        return os.environ[key]
     for line in (REPO / "factory/config/factory.conf").read_text().splitlines():
         line = line.strip()
         if line.startswith(f"{key}="):
