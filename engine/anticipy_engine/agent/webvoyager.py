@@ -243,6 +243,13 @@ def _token_hits(name: str, tokens: list[str]) -> int:
     return hits
 
 
+def _required_product_hits(tokens: list[str]) -> int:
+    n = len(tokens)
+    if n <= 2:
+        return n
+    return max(2, int(n * 0.6 + 0.999))
+
+
 def _pick_product(elements: list[dict], item: str) -> Optional[dict]:
     tokens = _item_tokens(item)
     if not tokens:
@@ -262,8 +269,7 @@ def _pick_product(elements: list[dict], item: str) -> Optional[dict]:
         score = hits * 3 + (2 if el.get("inView") else 0) + min(len(name), 120) / 120
         if score > best_score:
             best, best_score = el, score
-    min_hits = 2 if len(tokens) >= 3 else 1
-    return best if best and _token_hits(best.get("name") or "", tokens) >= min_hits else None
+    return best if best and _token_hits(best.get("name") or "", tokens) >= _required_product_hits(tokens) else None
 
 
 def _pick_button(elements: list[dict], pattern: re.Pattern) -> Optional[dict]:

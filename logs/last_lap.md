@@ -1,28 +1,28 @@
 # Last Lap
 
-Lap: 20260609T045022Z
-Date: 2026-06-09T04:52:16Z
-Milestone: M3 - search-results add-control hardening
+Lap: 20260609T045401Z
+Date: 2026-06-09T04:55:58Z
+Milestone: M3 - product-title matching hardening
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Hardened the deterministic WebVoyager commerce recipe so search-result pages do not click generic `Add to cart` controls when no matching product has been identified.
-- Generic add controls remain allowed after the recipe opens a matching product page, where the product context is established.
-- Item-specific add labels on results pages still work when the label strongly matches the requested item.
-- Explicitly out-of-view add controls are ignored.
+- Tightened deterministic WebVoyager product-link matching before any add attempt.
+- Two-token items now require both tokens to match the observed product title.
+- Longer item names now require a stronger token majority before the recipe opens a product.
+- This prevents loosely related products, such as a generic water bottle, from satisfying a more specific remembered item such as a stainless steel water bottle.
 
 Real run:
 - No new real browser action was run in this lap.
 - No new cart artifact was created.
-- This is Rung B/E hardening only: it removes a wrong-cart path before the next safe real-store attempt.
+- This is Rung B/E hardening only: it reduces wrong-product risk before the next safe real-store attempt.
 - The prior real Target cart artifact from lap `20260609T034900Z` remains `UNPROVEN-PENDING-JUDGE`; M3 is not done.
 
 Checks:
 - Reloaded `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Focused add-control specificity probe passed.
-- Focused fake-link commerce probe passed: ambiguous search results with only a generic add button now fail honestly with `commerce recipe could not identify a matching product`. This is regression coverage only, not M3 proof.
+- Focused product-title matching probe passed.
+- Focused fake-link commerce probe passed: the remembered Brita product path still completes under the stricter threshold. This is regression coverage only, not M3 proof.
 - Python compile passed for `engine/anticipy_engine/agent/webvoyager.py`.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_harmline.py` passed.
@@ -45,4 +45,4 @@ Proof status:
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work. The next useful rung is another real-store recipe or memory-to-intent slice that reduces wrong-cart risk before a live attempt, or a safe real-store run if the resolved item and site are low-risk.
+- Continue M3 ladder work. The next useful rung is a safe real-store recipe or memory-to-intent slice, or a cautious real-store run if the extension/browser path can be made available without a human gate and the action is reversible.
