@@ -1,0 +1,7 @@
+{"kind": "profile_fact", "text": "Paralegal Renee handles filings and deposition logistics.", "people": ["Renee"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Partner Whitfield runs the Hartley matter and wants updates by email, short.", "people": ["Whitfield"], "importance": 0.7}
+{"kind": "profile_fact", "text": "Daughter Maya (16) has driving practice on Sundays.", "people": ["Maya"], "importance": 0.6}
+{"kind": "open_loop", "text": "The Hartley deposition binder still needs exhibit tabs before the deposition.", "people": ["Renee"], "fields": {"task": "Hartley deposition binder exhibit tabs"}, "status": "open", "importance": 0.9}
+{"kind": "history", "text": "Was looking at the Leuchtturm1917 A4 dotted notebook for case journals last week, the black one.", "importance": 0.7}
+{"kind": "history", "text": "Court reporter for the Hartley deposition is booked through Veritext.", "importance": 0.6}
+{"kind": "derived", "text": "Blocks focus time before 9am; hates meetings before then.", "confidence": 0.7, "importance": 0.5}

@@ -1,0 +1,6 @@
+# Copy to owner_literals.local.txt (gitignored) and fill with owner-identifying literals,
+# one per line, lowercase. scan_owner_literals.sh fails any product-code diff containing them.
+# Personal data may live ONLY in memory seeds, persona files, env, and data dirs.
+# omar
+# omarkebrahim@gmail.com
+# +1555xxxxxxx

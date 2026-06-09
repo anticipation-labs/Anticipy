@@ -1,0 +1,8 @@
+{
+  "week_usd": 200,
+  "per_lap_build_usd": 5.0,
+  "per_lap_judge_usd": 2.0,
+  "engine_eval_per_lap_usd": 2.0,
+  "reserve_for_judge_pct": 25,
+  "epsilon_noise": 0.02
+}

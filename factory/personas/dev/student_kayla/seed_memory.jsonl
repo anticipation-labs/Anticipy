@@ -1,0 +1,6 @@
+{"kind": "profile_fact", "text": "Bio 301 lab with Professor Okafor; lab reports due Fridays at 5pm.", "people": ["Professor Okafor"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Works barista shifts at Grindhouse Coffee; manager is Tina; usually Tue/Thu/Sat.", "people": ["Tina"], "importance": 0.7}
+{"kind": "profile_fact", "text": "Roommate Jess; they split groceries and the electric bill.", "people": ["Jess"], "importance": 0.6}
+{"kind": "open_loop", "text": "Still owes the study group the shared notes from week 8.", "people": ["Dev"], "fields": {"task": "send week 8 shared notes to study group"}, "status": "open", "importance": 0.7}
+{"kind": "history", "text": "Was looking at the Anki Pro flashcard deck bundle for the MCAT and a blue light desk lamp on Amazon last week; liked the lamp with the clamp.", "importance": 0.7}
+{"kind": "derived", "text": "Crams the night before; reminders land better same-day evening.", "confidence": 0.6, "importance": 0.5}

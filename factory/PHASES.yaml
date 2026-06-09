@@ -1,0 +1,28 @@
+# Machine-readable phase ladder. Thresholds are evaluated by each phase's gate script
+# against logs/factory/laps/<LAP>/metrics.json. Foreman-owned; builder may never edit.
+suite: factory/personas/dev
+suite_hash_file: factory/personas/SUITE_HASH
+
+phases:
+  P0-floor:
+    gate: factory/gates/gate_P0_floor.sh
+    close_when: "gate exits 0 (harness self-test: persona runner boots, scorer selftest passes, scoreboard dry-run writes a valid row, spend parser works)"
+  P1-closed-loop:
+    gate: factory/gates/gate_P1.sh
+    close_when: "S1-S6 live scenarios pass (real calendar read-back, real trigger-fired SMS, vent silent, money ask round-trip, MP3 day clean)"
+  P2-brain:
+    gate: factory/gates/gate_P2.sh
+    close_when:
+      catch_rate_worst: ">=0.70"
+      false_action_count: "==0"
+      silent_harm_count: "==0"
+      interrupt_cost_worst: "<=3.0"
+  P3-voice:
+    gate: factory/gates/gate_P3.sh
+    close_when: "real outbound TTS call read back from Twilio (status=completed), inbound reply resolves a pending ask, trigger->call <= 60s"
+  P4-browser:
+    gate: factory/gates/gate_P4.sh
+    close_when: "12 never-touched stores no-hints: >=7 verified add-to-cart via independent fresh-probe, 0 false-success; known stores via hints: no regression; zero retailer hostnames in agent/*.py"
+  P5-owner-test:
+    gate: factory/gates/gate_P5_owner_days.sh
+    close_when: "5 consecutive real owner days: artifacts verified daily, time-triggers on time, 0 vent-actions, interrupt_cost<=3/day, persona thresholds simultaneously held, judge rules REAL"

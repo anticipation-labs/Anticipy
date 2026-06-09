@@ -75,3 +75,16 @@ DerivedData/
 
 # local engine data stores (memory drawers live here in later rooms)
 .anticipy-data/
+
+# ---- Factory (successor loop) ----
+logs/factory/laps/
+logs/factory/runs/
+logs/factory/ESCALATIONS/
+logs/factory/spend.csv
+logs/factory/launchd.*.log
+logs/factory/aborted/
+factory/.lock/
+factory/.halt
+factory/config/owner_literals.local.txt
+# holdout personas are judge-only, local-only, never in git
+factory/personas/holdout/**

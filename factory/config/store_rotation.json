@@ -1,0 +1,11 @@
+{
+  "comment": "Judge-owned pool for cart reality gates (P4). The gate picks round-robin by lap hash; the builder never edits this file. Items are cheap, safe, generic. Cart-only, never checkout.",
+  "rotation": [
+    {"store": "target.com", "item": "stainless steel water bottle 24oz"},
+    {"store": "walmart.com", "item": "AA batteries 8 pack"},
+    {"store": "bestbuy.com", "item": "USB-C charging cable 6ft"},
+    {"store": "michaels.com", "item": "sketchbook 9x12 spiral"},
+    {"store": "chewy.com", "item": "tennis ball dog toy 3 pack"},
+    {"store": "bookshop.org", "item": "The Pragmatic Programmer paperback"}
+  ]
+}

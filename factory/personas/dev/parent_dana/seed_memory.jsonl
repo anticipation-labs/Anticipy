@@ -1,0 +1,7 @@
+{"kind": "profile_fact", "text": "Daughter Maya is in 2nd grade at Lincoln Elementary; normal pickup is 3:15pm.", "people": ["Maya"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Son Jonah (4) goes to Little Sprouts daycare; Eric usually handles daycare dropoff.", "people": ["Jonah", "Eric"], "importance": 0.7}
+{"kind": "profile_fact", "text": "Pediatrician is Dr. Patel at Northside Pediatrics.", "people": ["Dr. Patel"], "importance": 0.6}
+{"kind": "profile_fact", "text": "Sitter Grace covers Tuesday evenings, usually 5 to 8pm.", "people": ["Grace"], "importance": 0.6}
+{"kind": "open_loop", "text": "Schedule Maya's dentist cleaning - overdue since May.", "people": ["Maya"], "fields": {"task": "schedule Maya's dentist cleaning"}, "status": "open", "importance": 0.7}
+{"kind": "history", "text": "Was comparing water tables for Jonah's birthday at Target last week - liked the Step2 Rain Showers water table best.", "people": ["Jonah"], "importance": 0.8}
+{"kind": "derived", "text": "Prefers appointments before 10am so they don't eat into the workday.", "confidence": 0.7, "importance": 0.5}
