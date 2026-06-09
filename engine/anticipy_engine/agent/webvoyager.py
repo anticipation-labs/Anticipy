@@ -112,7 +112,7 @@ NON_PRODUCT_RE = re.compile(
     re.I,
 )
 GENERIC_PRODUCT_LABEL_RE = re.compile(
-    r"^\s*(?:multiple\s+options\s+available|options\s+available|shop\s+now|view\s+details|product\s+image)\s*$",
+    r"^\s*(?:multiple\s+options\s+available|options\s+available|options|shop\s+now|view\s+details|product\s+image)\s*$",
     re.I,
 )
 HREF_ONLY_RE = re.compile(r"^(?:https?://\S+|/[^\s]+)$", re.I)
