@@ -60,7 +60,8 @@ BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha
                  "press & hold", "access denied", "checking your browser")
 COMMERCE_STOP = {
     "the", "and", "for", "with", "that", "this", "thing", "item", "product", "cart", "basket",
-    "bag", "add", "added", "shipping", "pickup", "delivery",
+    "bag", "add", "added", "shipping", "pickup", "delivery", "cheapest", "lowest", "least",
+    "expensive", "price", "priced", "budget", "affordable",
 }
 COMMERCE_SEARCH_URLS = {
     "target.com": "https://www.target.com/s?searchTerm={q}",
@@ -144,6 +145,12 @@ def _usable_item(raw: str) -> str:
     item = re.sub(r"\s+", " ", raw or "").strip(" \"'.,:;-")
     item = SITE_TAIL_RE.sub("", item).strip(" \"'.,:;-")
     item = re.sub(r"^(?:please\s+)?(?:a|an|the|my|your)\s+", "", item, flags=re.I).strip()
+    item = re.sub(
+        r"^(?:cheapest|lowest(?:\s+priced|\s+price)?|least\s+expensive|budget|affordable)\s+",
+        "",
+        item,
+        flags=re.I,
+    ).strip()
     if not item or VAGUE_ITEM_RE.search(item):
         return ""
     toks = _item_tokens(item)
@@ -250,12 +257,27 @@ def _required_product_hits(tokens: list[str]) -> int:
     return max(2, int(n * 0.6 + 0.999))
 
 
-def _pick_product(elements: list[dict], item: str) -> Optional[dict]:
+def _price_cents(text: str) -> Optional[int]:
+    prices = []
+    for m in re.finditer(r"(?:[$]|usd\s*)\s*(?P<dollars>\d{1,4})(?:[,.](?P<cents>\d{2}))?", text or "", re.I):
+        prior = (text or "")[max(0, m.start() - 16):m.start()].lower()
+        if re.search(r"\b(save|coupon|rebate|discount|off)\b", prior):
+            continue
+        prices.append(int(m.group("dollars")) * 100 + int(m.group("cents") or "0"))
+    return min(prices) if prices else None
+
+
+def _wants_lowest_price(text: str) -> bool:
+    return re.search(r"\b(cheapest|lowest(?:\s+priced|\s+price)?|least\s+expensive|budget|affordable)\b",
+                     text or "", re.I) is not None
+
+
+def _pick_product(elements: list[dict], item: str, prefer_lowest: bool = False) -> Optional[dict]:
     tokens = _item_tokens(item)
     if not tokens:
         return None
-    best = None
-    best_score = 0
+    required = _required_product_hits(tokens)
+    candidates = []
     for el in elements or []:
         name = (el.get("name") or "").strip()
         if not name or el.get("sponsored") or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item):
@@ -264,12 +286,17 @@ def _pick_product(elements: list[dict], item: str) -> Optional[dict]:
         if role not in {"a", "button"} and "link" not in role:
             continue
         hits = _token_hits(name, tokens)
-        if hits <= 0:
+        if hits < required:
             continue
         score = hits * 3 + (2 if el.get("inView") else 0) + min(len(name), 120) / 120
-        if score > best_score:
-            best, best_score = el, score
-    return best if best and _token_hits(best.get("name") or "", tokens) >= _required_product_hits(tokens) else None
+        candidates.append((_price_cents(name), score, el))
+    if not candidates:
+        return None
+    if prefer_lowest:
+        priced = [c for c in candidates if c[0] is not None]
+        if priced:
+            return min(priced, key=lambda c: (c[0], -c[1]))[2]
+    return max(candidates, key=lambda c: c[1])[2]
 
 
 def _pick_button(elements: list[dict], pattern: re.Pattern) -> Optional[dict]:
@@ -527,6 +554,7 @@ class WebVoyagerAgent:
                 steps += 1
 
         states.append(_page_state("search_results", out, item, history[-1]))
+        prefer_lowest = _wants_lowest_price(task)
         text = (out.get("text") or "").lower()
         if any(k in text for k in BLOCK_MARKERS):
             return await self._handoff(out, steps + 1, history, classify_wall(text),
@@ -537,7 +565,7 @@ class WebVoyagerAgent:
 
         product = None
         for scrolls in range(3):
-            product = _pick_product(out.get("elements") or [], item)
+            product = _pick_product(out.get("elements") or [], item, prefer_lowest=prefer_lowest)
             if product:
                 break
             await self._act({"action": "scroll", "dir": "down"})
