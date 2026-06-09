@@ -584,16 +584,8 @@ class NativeBridgeLink:
                     return msg
 
         dy = int(dy)
-        expr = (
-            "(()=>{"
-            "const dy=" + json.dumps(dy) + ";"
-            "const before=window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0;"
-            "window.scrollBy(0,dy);"
-            "const se=document.scrollingElement||document.documentElement||document.body;"
-            "if(se)se.scrollTop=(se.scrollTop||0)+dy;"
-            "const after=window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0;"
-            "return {ok:true,before,after,dy};"
-            "})()"
+        scroll_pos_expr = (
+            "(()=>window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0)()"
         )
         async with websockets.connect(
             ws_url,
@@ -603,6 +595,13 @@ class NativeBridgeLink:
             close_timeout=2.0,
         ) as ws:
             await call(ws, "Page.bringToFront", {}, timeout=4.0)
+            before_msg = await call(
+                ws,
+                "Runtime.evaluate",
+                {"expression": scroll_pos_expr, "returnByValue": True, "awaitPromise": False},
+                timeout=4.0,
+            )
+            before = (((before_msg.get("result") or {}).get("result") or {}).get("value") or 0)
             wheel = await call(
                 ws,
                 "Input.dispatchMouseEvent",
@@ -611,6 +610,25 @@ class NativeBridgeLink:
             )
             if wheel.get("error"):
                 return False, {"error": str(wheel.get("error"))}
+            expr = (
+                "(()=>{"
+                "const dy=" + json.dumps(dy) + ";"
+                "const before=" + json.dumps(before) + ";"
+                "const pos=()=>window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0;"
+                "let after=pos();let fallback=false;"
+                "if(Math.abs(after-before)<2){"
+                "fallback=true;"
+                "window.scrollBy(0,dy);"
+                "after=pos();"
+                "if(Math.abs(after-before)<2){"
+                "const se=document.scrollingElement||document.documentElement||document.body;"
+                "if(se)se.scrollTop=(se.scrollTop||0)+dy;"
+                "after=pos();"
+                "}"
+                "}"
+                "return {ok:true,before,after,dy,fallback};"
+                "})()"
+            )
             msg = await call(
                 ws,
                 "Runtime.evaluate",
@@ -625,6 +643,7 @@ class NativeBridgeLink:
             "dy": dy,
             "before": value.get("before"),
             "after": value.get("after"),
+            "fallback": bool(value.get("fallback")),
         }
 
     def _output_from_proof(self, proof: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -910,9 +929,8 @@ class NativeBridgeLink:
                 '[contenteditable=true]','[contenteditable=""]'
               ].join(',');
               const nodes = Array.from(document.querySelectorAll(selector));
-              const out = [];
+              const candidates = [];
               for (const el of nodes) {
-                if (out.length >= 600) break;
                 const style = window.getComputedStyle(el);
                 const rect = el.getBoundingClientRect();
                 if (style.display === 'none' || style.visibility === 'hidden') continue;
@@ -930,22 +948,51 @@ class NativeBridgeLink:
                 );
                 const href = el.href || el.getAttribute('href') || '';
                 if (!name && !href) continue;
-                const idx = out.length;
-                el.setAttribute(ATTR, String(idx));
-                out.push({
-                  idx,
+                const inView = rect.bottom >= 0 && rect.right >= 0 &&
+                  rect.top <= window.innerHeight && rect.left <= window.innerWidth;
+                const hay = (name + ' ' + href).toLowerCase();
+                const actionish = /\b(add|put)\b.{0,60}\b(cart|basket|bag)\b|\b(view|open|go to)\b.{0,30}\b(cart|basket|bag)\b/.test(hay);
+                const productish = /\/(product|products|p|ip|pd|dp)(\/|$)|\/a\/products\/|\/site\/.+\/\d+\.p|\/sku\/\d+/.test(hay);
+                const searchish = /\bsearch\b/.test(hay);
+                const y = Math.max(0, rect.top + (window.scrollY || document.documentElement.scrollTop || 0));
+                const priority =
+                  (inView ? 1000000 : 0) +
+                  (actionish ? 600000 : 0) +
+                  (productish ? 400000 : 0) +
+                  (searchish ? 50000 : 0) -
+                  Math.min(200000, y / 10);
+                candidates.push({
+                  el,
+                  priority,
+                  originalIndex: candidates.length,
                   role: el.getAttribute('role') || el.tagName.toLowerCase(),
                   tag: el.tagName.toLowerCase(),
                   name: name.slice(0, 180),
                   href: String(href || ''),
                   type: el.getAttribute('type') || '',
                   state: el.disabled ? 'disabled' : '',
-                  inView: rect.bottom >= 0 && rect.right >= 0 &&
-                    rect.top <= window.innerHeight && rect.left <= window.innerWidth,
+                  inView,
                   sponsored: /sponsored|promoted|advertisement/i.test(name),
-                  selector: '[' + ATTR + '="' + idx + '"]'
                 });
               }
+              const out = candidates
+                .sort((a,b) => (b.priority - a.priority) || (a.originalIndex - b.originalIndex))
+                .slice(0, 600)
+                .map((row, idx) => {
+                  row.el.setAttribute(ATTR, String(idx));
+                  return {
+                    idx,
+                    role: row.role,
+                    tag: row.tag,
+                    name: row.name,
+                    href: row.href,
+                    type: row.type,
+                    state: row.state,
+                    inView: row.inView,
+                    sponsored: row.sponsored,
+                    selector: '[' + ATTR + '="' + idx + '"]'
+                  };
+                });
               return {
                 text: clean(document.body && document.body.innerText || '').slice(0, 5000),
                 elements: out

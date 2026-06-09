@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T150142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Chewy. WebVoyager now knows Chewy search, product, and cart URL shapes: search uses `/s?query=`, known-cart verification uses `/app/cart`, and product matching accepts Chewy `/dp/` product URLs plus Chewy search tracking click URLs while preserving the existing visible product identity threshold before any Add click. Read-only Chewy probes found actionable product rows, real Add to Cart controls, product tracking links, and the live cart route without mutation. The final fresh live `/event` run resolved a vague memory task to Chewy plus `KONG Classic Dog Toy`, searched Chewy, opened the exact Chewy product page, clicked a real Add to Cart control, opened Chewy `/app/cart`, and durable cart read-back matched the item. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T153142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened the real browser observation path and broadened the real-store browser-hand path to Michaels. `NativeBridgeLink` now ranks direct-CDP actionable marks before the 600-element cap so product, Add, cart, and search controls survive nav-heavy commerce pages. Direct CDP scroll now uses JavaScript fallback only when the wheel event does not move the page, reducing overscroll past product Add controls. WebVoyager now knows Michaels search, product, and cart URL shapes: `/search?q=...`, `/product/...`, and `/cart`. Read-only Michaels probes found real product links, matching product identity, a real Add to Cart control after one normal scroll, and the live cart route. A first live vague-memory run resolved correctly but failed honestly before Add because of overscroll. After the scroll fix, a fresh live `/event` run resolved the same vague action to Michaels plus `Impeccable Solid Yarn by Loops & Threads`, clicked a real Add to Cart control, opened Michaels `/cart`, and durable cart read-back matched the item. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -43,16 +43,21 @@ Current M3 slice:
 - WebVoyager can click generic `Add item to cart` controls beside href-less visible product rows only when the surrounding product identity strongly matches the remembered item.
 - WebVoyager penalizes unrequested variant words such as workbook, calendar, guide, kid, and summary when choosing between visible product candidates.
 - WebVoyager knows Chewy search, product, and cart URL shapes. Chewy product matching accepts `/dp/` product pages and Chewy search tracking click URLs, but visible product identity still must satisfy the existing threshold before Add.
+- WebVoyager knows Michaels search, product, and cart URL shapes. Michaels product matching accepts `/product/` product pages while preserving visible product identity checks before Add.
+- `NativeBridgeLink` ranks direct-CDP actionable marks so visible product, Add, cart, and search controls survive the mark cap on nav-heavy commerce pages.
+- `NativeBridgeLink` direct CDP scroll no longer double-scrolls by applying wheel plus unconditional JavaScript scroll. It uses JavaScript fallback only if the wheel did not move the page.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- A read-only Chewy probe found actionable product rows, real Add to Cart controls, and product tracking links that redirect toward product pages.
-- A read-only Chewy cart probe verified the live cart route as `/app/cart`.
-- The final live `/event` run used context-only memory plus a vague action that did not name Chewy or the exact item. The hand resolved Chewy plus `KONG Classic Dog Toy`, searched Chewy, opened the exact Chewy product page, clicked a real Add to Cart control, opened Chewy `/app/cart`, and durable cart read-back matched the item. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
+- Read-only Michaels probing first exposed that the old direct-CDP mark cap could hide product rows behind nav/category marks. After mark ranking, product links surfaced at the top of the observation.
+- A read-only Michaels product-page probe verified matching visible item identity and found a real Add to Cart control after one normal scroll. It also verified the live cart route as `/cart`.
+- A first live Michaels `/event` run used context-only memory plus a vague action that did not name Michaels or the exact item. It resolved Michaels plus `Impeccable Solid Yarn by Loops & Threads`, opened the right product, but failed honestly before adding because the product-page scan overscrolled past Add and cart verification failed.
+- After direct-scroll hardening, a fresh live `/event` run used the same vague action, clicked a real Add to Cart control, opened Michaels `/cart`, and durable cart read-back matched the item. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- Michaels can complete a real search-product-add-cart-verify path builder-side after direct-CDP mark ranking, direct-scroll fallback hardening, and recognizing `/search?q=`, `/product/`, and `/cart`.
 - Chewy can complete a real search-product-add-cart-verify path builder-side after recognizing `/s?query=`, `/dp/`, Chewy search tracking click URLs, and `/app/cart`.
 - Bookshop can complete a real search-product-add-cart-verify path builder-side after recognizing `beta-search`, `keywords`, Bookshop product URLs, variant-heavy search results, and `Add item to cart` labels.
 - Barnes & Noble returned a blank/no-mark search surface in the dedicated bridge path. This is a hard-site finding, not proof.
@@ -75,9 +80,10 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised the Chewy vague-memory path. The final post-fix run selected the exact Chewy product, clicked a real Add to Cart control, and verified durable cart read-back builder-side.
+- Real live `/event` runs exercised the Michaels vague-memory path. The final post-fix run selected the exact Michaels product, clicked a real Add to Cart control, and verified durable cart read-back builder-side.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Chewy URL and adjacent Add check passed.
+- Focused Michaels URL/product/add classifier check passed.
+- Read-only Michaels scroll check showed one downward scroll exposes a visible Add to Cart control.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -95,7 +101,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
+- M3 is not proven. Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -103,7 +109,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding in the previous lap. Other hard-site failures are not all-work stops.
+- Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -116,7 +122,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/29 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/30 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -160,6 +166,8 @@ Dead ends not to retry blindly:
 - Do not let product URL slugs or hrefs supply missing identity tokens when the visible product title/text/labels disagree. Visible product identity must clear the item threshold before any real Add click.
 - Do not reward long product titles when token hits tie. Compact ordered item phrases should beat broad titles with scattered requested tokens.
 - Do not assume a fresh Chrome user-data directory exists. If `ANTICIPY_CHROME_USER_DATA_DIR` is configured, create it before CDP launch or the bridge may fall back to weak no-mark observations.
+- Do not let native direct CDP scroll double-apply wheel plus JavaScript scroll. Product-page scans can overshoot Add controls and then fail without mutation.
+- On nav-heavy commerce pages, do not trust document-order mark caps. Product/Add/cart/search controls must survive observation ranking before the cap.
 - Do not retry Barnes & Noble blindly. The observed search path returned a blank/no-mark surface; retry only with a new concrete hypothesis.
 - Do not fail immediately after the final allowed scroll on a real search page. Check the freshly observed post-scroll state first.
 - Do not let unrequested variant products such as workbook, calendar, guide, or summary editions outrank the base remembered item.
@@ -176,8 +184,7 @@ Dead ends not to retry blindly:
 - Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
 - Do not design always-on cloud transcription.
 
-Next:
-- Convert the current Chewy exact-item path plus prior Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Convert the current Michaels exact-item path plus prior Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
 - Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
 
 Law digest:
