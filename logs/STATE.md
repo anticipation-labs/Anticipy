@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T221217Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added Five Below and Blick search/product/cart URL shapes and rejected `#q-&-a` product-page fragments as non-product links. Read-only probes checked several real stores and selected Five Below and Blick because each exposed exact product rows plus real Add/cart surfaces. A fresh Five Below live `/event` run used context-only memory plus a vague action that named neither Five Below nor the item, resolved the remembered item and site from memory, clicked a real adjacent `Add to Cart`, then failed closed because `/cart` did not expose durable item evidence. A fresh Blick live `/event` run used context-only memory plus a vague action that named neither Blick nor the item, resolved the remembered sketchbook item and site from memory, clicked a real adjacent `Add To Cart`, opened `/cart/`, and builder-side durable known-cart read-back verified the item under cart structure proof. A separate read-only native-bridge probe against the same fresh Blick profile verified the cart on five delayed reads with item-local cart structure. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T224609Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened the BrowserHand boundary so URL-less action-shaped browse tasks, including vague `that thing` and add-to-cart requests, no longer fall back to DuckDuckGo with the whole instruction. Those tasks now fail with `browser action task has no resolved real site` unless the planner or memory layer supplies a real site. Read/info browse tasks still keep the search fallback. No real cart artifact was attempted in this lap, so it does not advance M3. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -86,6 +86,7 @@ Current M3 slice:
 - `NativeBridgeLink` direct CDP scroll no longer double-scrolls by applying wheel plus unconditional JavaScript scroll. It uses JavaScript fallback only if the wheel did not move the page.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
 - If a site search URL redirects directly to a buyable product URL and the visible product identity matches the remembered item, WebVoyager can skip product-link selection and proceed to the product add loop.
+- BrowserHand refuses search fallback for URL-less action-shaped browse tasks. Vague add-to-cart work must arrive with a memory-resolved real site instead of dumping the whole task into search.
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
@@ -94,6 +95,9 @@ Latest real M3 attempt:
 - Blick exposed exact product rows, adjacent Add controls, product-page Add controls, and `/cart/`. A fresh live `/event` run used context-only memory plus a vague action that named neither Blick nor the item, clicked a real adjacent `Add To Cart`, opened `/cart/`, and builder-side durable cart proof verified the item under cart structure proof.
 - A separate read-only native-bridge probe against the same fresh Blick profile verified the cart on five delayed reads with item-local cart structure.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+
+Latest failure-hardening lap:
+- `20260609T224609Z` blocked the lower BrowserHand search fallback for unresolved action-shaped browse tasks. This directly addresses the observed failure where action tasks were typed into a search bar instead of being resolved to a real site and acted on. It is not M3 proof and attempted no real artifact.
 
 Latest real bridge findings:
 - Blick exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered art-supply item, with durable known-cart read-back and five delayed independent read-only cart reads. No separate judge has verified it.
@@ -144,21 +148,16 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Read-only real-store probes selected Five Below and Blick as viable M3 slices after other stores exposed shells or incomplete Add hypotheses.
-- A real Five Below live `/event` run exercised a vague-memory path, clicked real adjacent Add, and failed closed because the real cart did not verify the item.
-- A real Blick live `/event` run exercised a vague-memory path. It reached the real site from memory, clicked real adjacent Add, opened the real cart, and builder-side durable proof verified the item. A separate read-only native-bridge probe verified the same cart state on five delayed reads.
-- Focused Five Below and Blick URL-shape, product URL, adjacent Add, cart-route, and `q-&-a` fragment checks passed.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py` passed.
+- BrowserHand was updated to refuse unresolved action-task search fallback while preserving read/info search fallback.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/hands/browser_hand.py engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
 - Forbidden-path scan was clean.
 - Credential-shaped diff scan was clean.
 - Product diff eval-literal scan was clean.
-- `logs/trace/20260609T221217Z.jsonl` is ignored.
-- Ports `8787`, `7777`, and `9222` are clear.
+- Held-out/raw tracked-file check was clean.
+- `logs/trace/20260609T224609Z.jsonl` is ignored.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed in setup; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -167,7 +166,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. Blick, Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Five Below, Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Ulta, and other sites have hard-site/non-durable-cart findings, but no separate judge proof exists.
+- M3 is not proven. Blick, Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Five Below, Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Ulta, and other sites have hard-site/non-durable-cart findings. The latest no-search-dump BrowserHand change is failure hardening only. No separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -205,6 +204,7 @@ Dead ends not to retry blindly:
 - Do not work on UI/status/onboarding/perimeter polish while the hard M3-only amendment is active.
 - Do not use `example.com`, localhost, fixture pages, or contrived no-stakes pages as M3 targets or evidence.
 - Do not type the whole task into browser search or the address bar for action tasks.
+- Do not re-enable BrowserHand search fallback for URL-less action-shaped browse tasks. If a browse action has no real site, fix memory-to-intent or planning so it supplies one.
 - Do not treat context-only memory observations as tasks. A separate action-shaped request must arrive before acting.
 - Do not click generic `Add to cart` controls on search results when no matching product has been identified. Open the matching product first, or require adjacency to a strongly matched product row.
 - Do not treat an add click as proof. Open the real cart and require the requested item tokens in localized cart item evidence with real cart item structure.

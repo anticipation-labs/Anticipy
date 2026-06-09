@@ -37,6 +37,14 @@ _BARE_DOMAIN_RE = re.compile(
 # the already-loaded extension is unchanged; it just receives a url and navigates + screenshots.
 # DuckDuckGo over Google: it rarely throws the consent/captcha walls that would force a hand-off.
 _SEARCH = "https://duckduckgo.com/?q={q}"
+_ACTION_TASK_NEEDS_SITE_RE = re.compile(
+    r"\b(?:add|put|get|grab|snag|order|buy|book|reserve|submit|fill|send|post|message|email|cancel|delete|update)\b"
+    r"[\w' ,.-]{0,140}\b(?:cart|basket|bag|checkout|form|account|reservation|appointment|message|email|order)\b|"
+    r"\b(?:cart|basket|bag|checkout)\b|"
+    r"\b(?:that|the)\s+(?:thing|one|item|product)\b|"
+    r"\b(?:earlier|last time|before|was looking at|looked at)\b",
+    re.I,
+)
 
 
 def _clean_url(raw: str) -> str:
@@ -61,13 +69,23 @@ def _start_url(args: dict, *, allow_search: bool = True) -> str:
     return ""
 
 
-def _with_target(args: dict) -> dict:
-    """Ensure a browse job has a navigable target. No url + a non-empty task with no inline URL
-    -> search for the task. Leaves an explicit url / inline-URL task / empty args untouched."""
+def _action_task_needs_site(task: str) -> bool:
+    return _ACTION_TASK_NEEDS_SITE_RE.search(task or "") is not None
+
+
+def _with_target(args: dict, *, allow_search: bool = True) -> dict:
+    """Ensure a read-style browse job has a navigable target.
+
+    URL-less action tasks must arrive with a resolved real site from the
+    planner/memory layer. Sending the whole instruction to search is the exact
+    failure mode the M3 loop is trying to eliminate.
+    """
     if not isinstance(args, dict) or args.get("url"):
         return args
     task = str(args.get("task") or "").strip()
     if not task or _URL_RE.search(task):
+        return args
+    if not allow_search or _action_task_needs_site(task):
         return args
     out = dict(args)
     out["url"] = _start_url(out)
@@ -121,8 +139,20 @@ class BrowserHand(Worker):
 
     async def _handle_once(self, job: Job, link=None) -> Result:
         link = link or self.link
+        args = job.args if isinstance(job.args, dict) else {}
+        task = str(args.get("task") or "").strip()
+        target_args = _with_target(args, allow_search=job.intent == "read_page" or not _action_task_needs_site(task))
+        if job.intent == "browse_task" and task and not _start_url(target_args, allow_search=False):
+            if _action_task_needs_site(task):
+                return Result(
+                    job_id=job.id,
+                    status=JobStatus.failed,
+                    proof=None,
+                    output={"reason": "browser action task has no resolved real site; refusing search fallback"},
+                    error="browser action task has no resolved real site",
+                )
         try:
-            resp = await link.send_browse(job.id, job.intent, _with_target(job.args), timeout=self.timeout)
+            resp = await link.send_browse(job.id, job.intent, target_args, timeout=self.timeout)
         except asyncio.TimeoutError:
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           error="browser timed out")
@@ -153,7 +183,7 @@ class BrowserHand(Worker):
             task = f"Complete the browser task at {start}" if start else "Complete the browser task."
         if not start:
             return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
-                          output={"reason": "browser task has no start URL or searchable task"})
+                          output={"reason": "browser task has no resolved real site; refusing search fallback"})
 
         agent = self.agent_factory(
             link,

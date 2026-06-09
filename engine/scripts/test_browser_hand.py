@@ -53,12 +53,20 @@ async def main():
     r = await BrowserHand(FakeLink(behavior="no_proof")).handle(Job(intent="browse_task"))
     assert r.status == JobStatus.failed  # success without a screenshot is NOT done
 
-    # search-fallback: a URL-less task becomes a real search navigation (the killer of every
-    # open-ended browse journey: the extension needs a URL, the model gives a goal).
+    # search-fallback: URL-less read/info tasks may become real search navigation.
     link = FakeLink(behavior="success")
     await BrowserHand(link).handle(Job(intent="browse_task", args={"task": "current USD to EUR exchange rate"}))
     assert link.last_args.get("url", "").startswith("https://duckduckgo.com/?q="), link.last_args
     assert "exchange" in link.last_args["url"]
+    # action-shaped tasks must not dump the whole instruction into search. The
+    # planner/memory layer must resolve a real site first.
+    link_action = FakeLink(behavior="success")
+    r = await BrowserHand(link_action).handle(Job(
+        intent="browse_task",
+        args={"task": "grab that thing I looked at earlier and add it to the cart"},
+    ))
+    assert r.status == JobStatus.failed and "resolved real site" in r.error, r
+    assert link_action.last_args is None, link_action.last_args
     # an explicit URL is left untouched (no clobber)
     link2 = FakeLink(behavior="success")
     await BrowserHand(link2).handle(Job(intent="browse_task", args={"url": "https://example.com", "task": "read it"}))
@@ -69,7 +77,7 @@ async def main():
     assert "url" not in link3.last_args, link3.last_args
 
     print("PASS piece 3 (unit): browser hand — success/proof, not-connected, timeout, disconnect, "
-          "login-wall, no-proof, search-fallback (url-less task -> search; explicit url preserved)")
+          "login-wall, no-proof, search-fallback for info, no search-dump for actions, explicit url preserved")
 
 
 if __name__ == "__main__":
