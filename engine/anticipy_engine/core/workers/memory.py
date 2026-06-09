@@ -40,6 +40,7 @@ class MemoryWorker(Worker):
                 "open_loops": [i.text for i in inj["open_loops"]],
                 "profile": [i.text for i in inj["profile"]],
                 "history": [i.text for i in inj["history"]],
+                "derived": [i.text for i in inj["derived"]],
             }
             return Result(job_id=job.id, status=JobStatus.success,
                           output={"context": ctx,

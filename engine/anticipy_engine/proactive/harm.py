@@ -164,7 +164,7 @@ class HarmLine:
         if not isinstance(mem, dict):
             return False
         vals = []
-        for key in ("notes", "open_loops", "history", "profile"):
+        for key in ("notes", "open_loops", "history", "profile", "derived"):
             value = mem.get(key)
             if isinstance(value, str):
                 vals.extend(line.strip() for line in value.splitlines() if line.strip())

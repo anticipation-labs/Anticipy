@@ -9,6 +9,7 @@ without proof for every step; never silently drops a step.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import re
 from typing import Dict, Optional
@@ -202,12 +203,20 @@ def _context_lines(context) -> list[str]:
     if not isinstance(context, dict):
         return []
     lines: list[str] = []
-    for key in ("notes", "open_loops", "history", "profile"):
+    seen: set[str] = set()
+    for key in ("notes", "open_loops", "history", "profile", "derived"):
         val = context.get(key)
         if isinstance(val, str):
-            lines.extend([line.strip() for line in val.splitlines() if line.strip()])
+            raw_lines = [line.strip() for line in val.splitlines() if line.strip()]
         elif isinstance(val, list):
-            lines.extend(str(line).strip() for line in val if str(line).strip())
+            raw_lines = [str(line).strip() for line in val if str(line).strip()]
+        else:
+            raw_lines = []
+        for line in raw_lines:
+            key_line = re.sub(r"\s+", " ", line).strip().lower()
+            if key_line and key_line not in seen:
+                seen.add(key_line)
+                lines.append(line)
     return lines
 
 
@@ -224,19 +233,38 @@ def _line_site(line: str) -> str:
     return ""
 
 
+def _source_ref(line: str) -> str:
+    digest = hashlib.sha1((line or "").encode("utf-8", "ignore")).hexdigest()[:12]
+    return f"memory:{digest}"
+
+
+def _sanitize_item(raw: str) -> str:
+    item = re.split(
+        r"\s+\b(?:on|at|from|via|using)\s+(?:https?://)?(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?",
+        raw or "",
+        maxsplit=1,
+        flags=re.I,
+    )[0]
+    item = _URL_IN_TEXT_RE.sub(" ", item)
+    item = re.sub(r"\b(?:product|item|thing)\s*[:=-]\s*", " ", item, flags=re.I)
+    item = re.sub(r"\s+", " ", item).strip(" \"'“”.,:;-")
+    item = re.sub(r"^(?:a|an|the)\s+", "", item, flags=re.I)
+    return item
+
+
 def _line_item(line: str) -> str:
     quoted = re.findall(r"['\"“”]([^'\"“”]{3,140})['\"“”]", line)
     if quoted:
-        return re.sub(r"\s+", " ", quoted[-1]).strip()
+        item = _sanitize_item(quoted[-1])
+        return item if 3 <= len(item) <= 160 else ""
     patterns = (
         r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for)\s+(?P<item>[^.;\n]+)",
         r"\b(?:product|item|thing)\s*[:=-]\s*(?P<item>[^.;\n]+)",
-        r"\bfor the\s+(?P<item>[^.;\n]+)",
     )
     for pat in patterns:
         m = re.search(pat, line, re.I)
         if m:
-            item = re.sub(r"\s+", " ", m.group("item")).strip(" .,:;-")
+            item = _sanitize_item(m.group("item"))
             if 3 <= len(item) <= 160:
                 return item
     return ""
@@ -252,10 +280,10 @@ def _memory_resolved_browser_step(text: str, context) -> Optional[Step]:
         site = _line_site(line)
         item = _line_item(line)
         if site and item:
-            candidates.append({"site": site, "item": item, "source": line[:240]})
+            candidates.append({"site": site, "item": item, "source_ref": _source_ref(line)})
     if not candidates:
         return None
-    resolved = candidates[-1]
+    resolved = candidates[0]
     task = (
         f"On {resolved['site']}, find {resolved['item']} and add it to the cart. "
         "Stop after the cart visibly contains the item. Do not checkout, pay, or place an order."
