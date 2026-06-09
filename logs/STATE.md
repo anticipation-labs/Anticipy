@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T200714Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added Dick's Sporting Goods, Kohl's, and QVC search/product/cart URL shapes; recognized `OrderItemDisplay`, `shopping_cart.jsp`, and `cart.html` as cart routes; accepted QVC `.product.<id>.html` product pages; and ranked those QVC product links as product-like in direct-CDP marks. Product selection no longer rejects an otherwise exact product-card link merely because the card text contains rating or review wording, while rating-only links still fail item identity. Read-only probes found Dick's, Kohl's, and QVC product/Add/cart surfaces. Dick's and Kohl's live vague-memory `/event` runs resolved the remembered site and item and clicked real Add controls, but both failed durable cart read-back and are hard-site/non-durable-cart findings. A pre-fix QVC run resolved memory but failed before mutation because the exact product row contained `Reviews`. After the fix, a fresh current-code QVC `/event` run used context-only memory plus a vague action that named neither QVC nor the item, resolved the remembered QVC kitchen-prep item from memory, opened the exact product, clicked real `Add To Cart`, opened the real cart, and a fresh cart probe verified the item under cart structure proof. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T203819Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added World Market search/product/cart URL shapes: `/search?q=...`, `/cart`, and `/p/<slug>-<id>.html`. Read-only probes checked Sephora, Nordstrom, L.L.Bean, Backcountry, and World Market. Nordstrom exposed exact product links and a shopping-bag route, but product and cart pages returned no actionable bridge marks, so it is a hard-site/no-actionable-marks finding. World Market exposed an exact product search result, visible product identity, a real `ADD TO CART` control, and `/cart`. A fresh live `/event` run used context-only memory plus a vague action that named neither World Market nor the item, resolved the remembered kitchen-drawer item from memory, opened the exact product, clicked real `ADD TO CART`, opened the real cart, and durable known-cart read-back verified the item under cart structure proof. A separate read-only fresh cart probe also verified the item on the World Market cart with item-local cart structure and cart count 1. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -60,6 +60,7 @@ Current M3 slice:
 - WebVoyager knows Dick's Sporting Goods, Kohl's, and QVC search/product/cart URL shapes, including Dick's `OrderItemDisplay`, Kohl's `shopping_cart.jsp`, QVC `cart.html`, and QVC `.product.<id>.html` product URLs.
 - NativeBridgeLink ranks QVC `.product.<id>.html` links as product-like so they survive direct-CDP mark caps on nav-heavy pages.
 - WebVoyager permits review- or rating-bearing product-card labels when the item identity passes, while rating-only or review-only links still fail item identity.
+- WebVoyager knows World Market search/product/cart URL shapes, including `/search?q=...`, `/cart`, and `/p/<slug>-<id>.html`.
 - WebVoyager cart proof requires five delayed independent fresh cart reads by default. If any delayed read misses the item, the helper returns the failing observation, not the earlier best state.
 - Generic product-page Add controls are rejected when nearby buyable product-card context points at an unrelated recommendation item.
 - Numeric item matching and ordered item scoring treat visible labels such as `128GB` as matching numeric item tokens such as `128`, so exact storage-size product titles can satisfy distinctive-token checks.
@@ -76,14 +77,16 @@ Current M3 slice:
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- Read-only Dick's, Kohl's, and QVC probes found real search/product/cart surfaces, exact or usable product rows, product-page Add controls, and real cart URLs.
-- Dick's live `/event` resolved a vague memory task to the remembered Dick's item and clicked a real `Add To Cart`, but `OrderItemDisplay` did not durably verify the item under cart structure proof. This is a hard-site/non-durable-cart finding.
-- Kohl's live `/event` resolved a vague memory task to the remembered Kohl's item and clicked a real `Add To Cart`, but `shopping_cart.jsp` did not durably verify the item under cart structure proof. This is a hard-site/non-durable-cart finding.
-- A pre-fix QVC live `/event` resolved QVC and the remembered item but failed before mutation because the exact product row contained `Reviews` and was filtered out as non-product.
-- After review-label hardening, a fresh current-code QVC `/event` run resolved the remembered item, opened the exact QVC product, clicked real `Add To Cart`, opened the real cart, and a fresh cart probe verified the item under cart structure proof.
+- Read-only probes checked Sephora, Nordstrom, L.L.Bean, Backcountry, and World Market for real product/Add/cart surfaces.
+- Nordstrom search exposed exact product links and a shopping-bag route, but product and cart pages returned no actionable marks through the bridge. This is a hard-site/no-actionable-marks finding.
+- World Market read-only probing found an exact product search result, visible product identity, a real `ADD TO CART` control, and `/cart`.
+- A fresh current-code World Market `/event` run resolved the remembered item, opened the exact World Market product, clicked real `ADD TO CART`, opened the real cart, and durable known-cart read-back verified the item under cart structure proof.
+- A separate read-only fresh cart probe against the same fresh profile also verified the item on the World Market cart with item-local cart structure and cart count 1.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- World Market exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered World Market item, with durable known-cart read-back and a separate read-only fresh cart probe. No separate judge has verified it.
+- Nordstrom exposes exact product links and a real shopping-bag route on search, but its product and cart pages returned no actionable marks through the bridge. Treat it as a hard-site/no-actionable-marks finding until a new concrete capture hypothesis exists.
 - QVC exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered QVC item whose product-card label includes review text, with fresh cart read-back under cart structure proof. No separate judge has verified it.
 - Dick's Sporting Goods exposes real search/product/Add/cart surfaces, but the observed Add path did not verify a durable cart artifact. Treat it as a hard-site/non-durable-cart finding.
 - Kohl's exposes real search/product/Add/cart surfaces, but the observed Add path did not verify a durable cart artifact. Treat it as a hard-site/non-durable-cart finding.
@@ -122,10 +125,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised Dick's, Kohl's, and QVC vague-memory paths. Dick's and Kohl's resolved memory and clicked real Add controls but failed durable cart read-back. The current-code QVC chain resolved memory to the exact site and item, opened a real product page, clicked a real `Add To Cart` control, opened the real cart, and fresh cart read-back verified the item builder-side.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py` passed.
-- Focused Dick's, Kohl's, and QVC URL/product/cart checks passed.
-- Focused QVC review-bearing product-label selection passed, and a rating-only link still failed identity.
+- Real live `/event` runs exercised a World Market vague-memory path. The chain resolved memory to the exact site and item, opened a real product page, clicked a real `ADD TO CART` control, opened the real cart, durable known-cart read-back verified the item builder-side, and a separate read-only fresh cart probe verified the same cart.
+- Focused World Market search/product/cart URL, product selection, and synthetic cart-proof checks passed.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -134,7 +136,7 @@ Latest checks:
 - Forbidden-path scan was clean.
 - Secret-shaped diff scan was clean.
 - Product diff eval-literal scan was clean.
-- `logs/trace/20260609T200714Z.jsonl` is ignored.
+- `logs/trace/20260609T203819Z.jsonl` is ignored.
 - Ports `8787`, `7777`, and `9222` are clear.
 
 Proven:
@@ -144,7 +146,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Dick's, Kohl's, Ulta, and other sites have hard-site/non-durable-cart findings, but no separate judge proof exists.
+- M3 is not proven. World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Nordstrom, Dick's, Kohl's, Ulta, and other sites have hard-site/non-durable-cart findings, but no separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -152,7 +154,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, Macy's, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, and the current-code Wayfair run produced hard-site or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
+- World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, Macy's, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, and the current-code Wayfair run produced hard-site, no-actionable-marks, or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -165,7 +167,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/50 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, Wayfair, and Macy's builder-side cart artifacts or read-backs exist, and Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/54 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, Wayfair, and Macy's builder-side cart artifacts or read-backs exist, and Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -239,6 +241,7 @@ Dead ends not to retry blindly:
 - Do not let decimal product names be treated as sentence endings during memory-to-intent extraction. If a remembered item includes `4.0`, `2.5`, storage sizes, or other numeric variants, preserve the full item before product matching.
 - Do not treat review or rating wording inside a product-card label as automatically non-product if the same label carries exact item identity. Rating-only and review-only links must still fail identity.
 - Do not retry Dick's or Kohl's blindly. Both resolved memory and reached real Add controls, but their cart pages did not durably verify the item under current proof.
+- Do not retry Nordstrom blindly. Search exposed exact product links and a shopping-bag route, but product and cart pages returned no actionable marks through the current bridge path.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local`, env backup files, raw Chrome profiles, `.anticipy` state, or raw local data.
 - Google Sheets and Google Docs canvas synthetic input remain dead ends.
@@ -246,8 +249,8 @@ Dead ends not to retry blindly:
 - Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
 - Do not design always-on cloud transcription.
 
-- Convert the current QVC path plus prior GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, Macy's, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
-- Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, Dick's, Kohl's, or Lowe's token-rich gloves.
+- Convert the current World Market path plus prior QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, Macy's, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, Nordstrom, Dick's, Kohl's, or Lowe's token-rich gloves.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.

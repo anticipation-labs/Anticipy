@@ -95,6 +95,7 @@ COMMERCE_SEARCH_URLS = {
     "dickssportinggoods.com": "https://www.dickssportinggoods.com/search/SearchDisplay?searchTerm={q}",
     "kohls.com": "https://www.kohls.com/search.jsp?search={q}",
     "qvc.com": "https://www.qvc.com/catalog/psearch.html?keyword={q}",
+    "worldmarket.com": "https://www.worldmarket.com/search?q={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -125,6 +126,7 @@ COMMERCE_CART_URLS = {
     "dickssportinggoods.com": "https://www.dickssportinggoods.com/OrderItemDisplay",
     "kohls.com": "https://www.kohls.com/checkout/shopping_cart.jsp",
     "qvc.com": "https://www.qvc.com/checkout/cart.html",
+    "worldmarket.com": "https://www.worldmarket.com/cart",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
@@ -186,6 +188,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "dickssportinggoods.com": re.compile(r"/p/[^/?#]+/[^/?#]+", re.I),
     "kohls.com": re.compile(r"/product/prd-\d+/[^/?#]+\.jsp$", re.I),
     "qvc.com": re.compile(r"/(?:qvc\.product|[^/?#]+\.product)\.[A-Z0-9]+\.html$", re.I),
+    "worldmarket.com": re.compile(r"/p/[^/?#]+-\d+\.html$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
