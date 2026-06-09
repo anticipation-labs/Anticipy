@@ -1,27 +1,28 @@
 # Last Lap
 
-Lap: 20260609T044617Z
-Date: 2026-06-09T04:48:32Z
-Milestone: M3 - model-light cart item extraction
+Lap: 20260609T045022Z
+Date: 2026-06-09T04:52:16Z
+Milestone: M3 - search-results add-control hardening
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Hardened the deterministic WebVoyager commerce path so it can extract concrete item text from common cart phrasing such as `add X to cart`, `put X in bag`, and `grab X and add it`.
-- Added unresolved-vague protection in that extraction path. Phrases such as `that thing I was looking at earlier`, `add the item to the cart`, and other generic placeholders do not become browser search text.
-- Added site-tail cleanup so concrete item text does not swallow trailing real-site context or URLs.
+- Hardened the deterministic WebVoyager commerce recipe so search-result pages do not click generic `Add to cart` controls when no matching product has been identified.
+- Generic add controls remain allowed after the recipe opens a matching product page, where the product context is established.
+- Item-specific add labels on results pages still work when the label strongly matches the requested item.
+- Explicitly out-of-view add controls are ignored.
 
 Real run:
 - No new real browser action was run in this lap.
 - No new cart artifact was created.
-- This is Rung B/C hardening only: it lowers live-planner dependence and wrong-search risk before the next safe real-site attempt.
+- This is Rung B/E hardening only: it removes a wrong-cart path before the next safe real-store attempt.
 - The prior real Target cart artifact from lap `20260609T034900Z` remains `UNPROVEN-PENDING-JUDGE`; M3 is not done.
 
 Checks:
 - Reloaded `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Focused parser probe passed: concrete cart phrasings return item-only text, while unresolved vague placeholders return no search text.
-- Focused fake-link commerce probe passed: the deterministic recipe used an item-only Target search URL and completed the cart verification path without a model call. This is regression coverage only, not M3 proof.
+- Focused add-control specificity probe passed.
+- Focused fake-link commerce probe passed: ambiguous search results with only a generic add button now fail honestly with `commerce recipe could not identify a matching product`. This is regression coverage only, not M3 proof.
 - Python compile passed for `engine/anticipy_engine/agent/webvoyager.py`.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_harmline.py` passed.
@@ -29,7 +30,7 @@ Checks:
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only, not M3 proof.
 - `git diff --check` passed.
 - Changed-path scan shows only `engine/anticipy_engine/agent/webvoyager.py` in the product diff.
-- Owner/eval literal scan and secret-value scan found no matches.
+- Forbidden-path scan, owner/eval literal scan, and secret-value scan found no matches.
 - No engine process remained listening on port 8787.
 
 Gate:
@@ -44,4 +45,4 @@ Proof status:
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work. The next useful rung is a safe real-store recipe hardening or memory-to-intent slice that improves the vague-memory-to-real-cart chain without UI or status drift.
+- Continue M3 ladder work. The next useful rung is another real-store recipe or memory-to-intent slice that reduces wrong-cart risk before a live attempt, or a safe real-store run if the resolved item and site are low-risk.

@@ -279,11 +279,13 @@ def _pick_button(elements: list[dict], pattern: re.Pattern) -> Optional[dict]:
     return None
 
 
-def _pick_add_button(elements: list[dict], item: str) -> Optional[dict]:
+def _pick_add_button(elements: list[dict], item: str, allow_generic: bool = True) -> Optional[dict]:
     item_tokens = _item_tokens(item)
     for el in elements or []:
         name = (el.get("name") or "").strip()
         if not name or el.get("sponsored") or PURCHASE_GUARD.search(name):
+            continue
+        if el.get("inView") is False:
             continue
         if re.search(r"\b(add to list|registry|wish list|favorite)\b", name, re.I):
             continue
@@ -294,6 +296,8 @@ def _pick_add_button(elements: list[dict], item: str) -> Optional[dict]:
         if _number_tokens(name) and not _numbers_match(name, item):
             continue
         generic = re.fullmatch(r"\s*add\s+(to\s+)?(cart|basket|bag)\s*", name, re.I) is not None
+        if generic and not allow_generic:
+            continue
         if not generic:
             hits = _token_hits(name, item_tokens)
             required = max(3, int(len(item_tokens) * 0.7 + 0.999))
@@ -517,7 +521,7 @@ class WebVoyagerAgent:
             states.append(_page_state("product_page", out, item, history[-1]))
             steps += 1
         else:
-            add_from_results = _pick_add_button(out.get("elements") or [], item)
+            add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
             if add_from_results:
                 await self._act({"action": "click", "index": add_from_results.get("idx")})
                 out, shot = await self._observe_ready()
