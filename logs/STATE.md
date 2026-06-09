@@ -4,13 +4,15 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T065413Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened lowest-price product selection in the deterministic WebVoyager commerce path. It created no new real artifact and has no separate judge proof.
+Latest builder lap: `20260609T070148Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added a native bridge fallback transport for the live browser hand and added no-actionable-elements failure hardening. It created no new real artifact and has no separate judge proof.
 
 Latest offline M3 slice:
-- Direct cart phrasing now strips price-preference words such as `cheapest`, `lowest priced`, `budget`, and `affordable` from the concrete item query before any real-store search.
-- Product candidate selection can prefer the lowest valid non-sponsored matching product when the task asks for the cheapest or budget option.
-- Price parsing requires explicit `$` or `USD` markers, ignores nearby save/coupon/rebate/discount/off amounts, and uses the lowest actual product price found in a candidate label.
-- Focused lowest-price selection and deterministic commerce recipe probes passed, but this is offline chain hardening only. It is not M3 proof.
+- `NativeBridgeLink` maps WebVoyager `observe` and `act` calls onto the installed native bridge endpoints `/surface-proof` and `/surface-command`.
+- `BrowserHand` now selects the WebSocket extension first and falls back to the native bridge only when the WebSocket is disconnected.
+- The fallback can convert returned DOM into numbered actionable marks and translate those indices back into CSS selectors for click and type.
+- `ControlCore` wires the fallback by default behind `ANTICIPY_NATIVE_BRIDGE_FALLBACK`.
+- WebVoyager now fails fast when a browser surface has no actionable elements or readable text, avoiding paid model calls and fake progress on screenshot-only surfaces.
+- Focused fake-bridge probes passed, but these are regression checks only. They are not M3 proof.
 
 Latest real M3 attempt:
 - A builder-visible memory note was sent through the live `/event` path.
@@ -20,9 +22,15 @@ Latest real M3 attempt:
 - After the fixes, a live Target run added the resolved Brita 6 Cup Water Filter Pitcher item through the browser hand and captured compact page-state evidence after the real add flow.
 - This changed a real cart, but it remains `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the account and ruled on it. M3 is not done.
 
+Latest real bridge finding:
+- A real Target search page was opened through the new native bridge fallback.
+- The bridge used AppleScript fallback, captured a screenshot, and returned the real Target URL/title.
+- It returned zero actionable elements, so no click, no add-to-cart, and no artifact change was attempted.
+- This finding means the fallback transport is wired but current AppleScript observation is screenshot-level only. The next M3 slice should make the real bridge expose actionable elements reliably through CDP/native-extension marks or another non-fake real surface path.
+
 Current constraint:
 - Current allowed work is M3 only.
-- Low OpenRouter credit blocks the old heavy WebVoyager planning loop, not building. Continue with cached observations, deterministic real-store DOM recipes, item matching, compact page-state capture, and tiny-model decisions where needed.
+- Low OpenRouter credit blocks the old heavy WebVoyager planning loop, not building. Continue with cached observations, deterministic real-store DOM recipes, item matching, compact page-state capture, native bridge transport work, and tiny-model decisions where needed.
 - Judge quota blocks proof only. Spending money is a hard human gate and was not taken.
 
 Latest product/public candidate, unchanged this lap:
@@ -35,17 +43,18 @@ Latest product/public candidate, unchanged this lap:
 
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Focused lowest-price product selection probe passed.
-- Focused deterministic commerce recipe probe passed: the recipe searched for the resolved item only, did not search for `cheapest`, clicked the lowest valid matching product, then clicked add and verified the local add marker. This is regression coverage only, not M3 proof.
-- Python compile passed for `engine/anticipy_engine/agent/webvoyager.py`.
+- Python compile passed for `engine/anticipy_engine/core/native_bridge_link.py`, `engine/anticipy_engine/hands/browser_hand.py`, `engine/anticipy_engine/core/control_core.py`, and `engine/anticipy_engine/agent/webvoyager.py`.
+- Focused native bridge fallback probe passed: observe DOM marks, index-to-selector type, scroll fallback, and BrowserHand fallback selection.
+- Focused unactionable real browser surface probe passed: the commerce recipe fails fast before planner/actions.
+- Real Target bridge observation returned URL/title/screenshot but zero actionable elements through AppleScript fallback. This is a finding, not proof.
+- Engine boot smoke passed on the edited tree: `/health` OK and `/ws/state` returned disconnected.
 - `engine/scripts/test_browser_hand.py` passed.
-- `engine/scripts/test_harmline.py` passed.
 - `engine/scripts/test_handoff.py` passed.
+- `engine/scripts/test_harmline.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
-- Changed-path scan shows only `engine/anticipy_engine/agent/webvoyager.py` in the product diff.
-- Owner/eval literal scan and secret-value scan found no product-code matches.
-- Port 8787 has no remaining listener.
+- Forbidden-path scan, owner/eval literal scan, and secret-value scan found no matches.
+- Ports 8787 and 7777 have no remaining listeners.
 
 Proven:
 - Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed in setup; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
@@ -74,7 +83,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 packaged/public typed-input/listen-control/clock-grounding/status/audio-upload/status-failure reality judge pass rate: 0/0 verified; not run.
-- M3 real browser-hand reality judge pass rate: 0/1 unjudged builder artifact verified, 0 percent. Latest real attempt changed a real cart but has no separate judge verdict.
+- M3 real browser-hand reality judge pass rate: 0/1 unjudged builder artifact verified, 0 percent. Latest real Target add-to-cart attempt changed a real cart but has no separate judge verdict.
 - M5 packaged/self-onboarding reality judge pass rate: 0/0 verified; not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -103,6 +112,7 @@ Dead ends not to retry blindly:
 - Do not let price-preference words become product identity tokens. `Cheapest`, `lowest priced`, `budget`, and similar words guide candidate ranking, but the browser search and item match must use only the concrete resolved item.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps. Make the browser hand cheaper, deterministic where possible, and cache page observations instead.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
+- Do not treat a screenshot-only AppleScript bridge observation as actionable. It must expose elements/selectors or the real chain must fail fast.
 - Do not run broad searches over `.env.local` or env backup files.
 - Do not run a production `next build` while reusing an active Next dev server for rendered checks.
 - Do not treat public source, manifest commit, public headers, public SHA, release metadata, page render, local packaging, local launch, owner Chrome, screenshot, or process/window enumeration as M1, M2, M3, or M5 proof before separate judge verification.
@@ -120,7 +130,7 @@ Dead ends not to retry blindly:
 
 Next:
 - Continue immediately on the hard M3 chain despite low live credit and judge quota. Do not work UI/status/onboarding.
-- Use the hardened resolver for the next safe real-store attempt, or continue strengthening item matching and real-store DOM recipes if another real click would risk adding wrong cart items. Every real run remains `UNPROVEN-PENDING-JUDGE` until the separate judge verifies it.
+- Make the real browser bridge surface actionable: restore CDP/native-extension marks if possible, or build another safe real-store observation path that returns selectors the browser hand can click. Every run remains `UNPROVEN-PENDING-JUDGE` until the separate judge verifies it.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.

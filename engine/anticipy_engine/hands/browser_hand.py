@@ -84,8 +84,10 @@ class BrowserHand(Worker):
         agent_timeout: Optional[float] = None,
         notifier=None,
         agent_factory=WebVoyagerAgent,
+        fallback_link: Optional[Any] = None,
     ) -> None:
         self.link = link
+        self.fallback_link = fallback_link
         self.timeout = timeout
         self.gateway = gateway
         self.max_steps = max_steps or int(os.environ.get("ANTICIPY_AGENT_MAX_STEPS", "18"))
@@ -96,17 +98,31 @@ class BrowserHand(Worker):
     def handles(self) -> List[str]:
         return ["browse_task", "read_page"]
 
-    async def handle(self, job: Job) -> Result:
-        if not self.link.connected:
-            return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
-                          output={"reason": "the browser helper isn't connected"})
-        if job.intent == "browse_task" and self.gateway is not None:
-            return await self._handle_agent(job)
-        return await self._handle_once(job)
+    def _active_link(self):
+        if getattr(self.link, "connected", False):
+            return self.link
+        if self.fallback_link is not None and getattr(self.fallback_link, "connected", False):
+            return self.fallback_link
+        return None
 
-    async def _handle_once(self, job: Job) -> Result:
+    async def handle(self, job: Job) -> Result:
+        link = self._active_link()
+        if link is None:
+            reason = "the browser helper isn't connected"
+            if self.fallback_link is not None:
+                err = getattr(self.fallback_link, "last_error", lambda: "")()
+                if err:
+                    reason = f"{reason}; native bridge unavailable: {err}"
+            return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
+                          output={"reason": reason})
+        if job.intent == "browse_task" and self.gateway is not None:
+            return await self._handle_agent(job, link)
+        return await self._handle_once(job, link)
+
+    async def _handle_once(self, job: Job, link=None) -> Result:
+        link = link or self.link
         try:
-            resp = await self.link.send_browse(job.id, job.intent, _with_target(job.args), timeout=self.timeout)
+            resp = await link.send_browse(job.id, job.intent, _with_target(job.args), timeout=self.timeout)
         except asyncio.TimeoutError:
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           error="browser timed out")
@@ -128,7 +144,8 @@ class BrowserHand(Worker):
         return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                       error=(resp.get("output", {}) or {}).get("reason", "browser failed"))
 
-    async def _handle_agent(self, job: Job) -> Result:
+    async def _handle_agent(self, job: Job, link=None) -> Result:
+        link = link or self.link
         args = job.args if isinstance(job.args, dict) else {}
         task = str(args.get("task") or args.get("query") or job.intent).strip()
         start = _start_url(args, allow_search=False)
@@ -139,7 +156,7 @@ class BrowserHand(Worker):
                           output={"reason": "browser task has no start URL or searchable task"})
 
         agent = self.agent_factory(
-            self.link,
+            link,
             self.gateway,
             max_steps=self.max_steps,
             notifier=self.notifier,

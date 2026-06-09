@@ -1,42 +1,46 @@
 # Last Lap
 
-Lap: 20260609T065413Z
-Date: 2026-06-09T06:59:11Z
-Milestone: M3 - lowest-price product selection
+Lap: 20260609T070148Z
+Date: 2026-06-09T07:19:15Z
+Milestone: M3 - native bridge fallback and no-element hardening
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Hardened deterministic WebVoyager product selection for budget or lowest-price shopping intents.
-- Direct cart phrasing now strips preference words such as `cheapest`, `lowest priced`, `budget`, and `affordable` out of the item query so the site search receives only the concrete resolved item.
-- Product candidate selection can prefer the lowest valid non-sponsored matching product when the task asks for the cheapest or budget option.
-- Price parsing requires explicit `$` or `USD` price markers, ignores nearby save/coupon/rebate/discount/off amounts, and uses the lowest actual product price found in a candidate label.
+- Added `NativeBridgeLink`, a BrowserLink-compatible fallback that speaks the installed local native bridge on `127.0.0.1:7777`.
+- The fallback maps WebVoyager `observe` and `act` primitives to `/surface-proof` and `/surface-command`.
+- Bridge observations can turn real DOM into numbered clickable/typeable marks, then translate indices back to CSS selectors for click and type.
+- `BrowserHand` now uses the WebSocket extension first and the native bridge fallback second.
+- `ControlCore` wires the fallback by default behind `ANTICIPY_NATIVE_BRIDGE_FALLBACK`.
+- WebVoyager now fails fast when a real browser surface returns no actionable elements or readable text, so it does not spend model calls pretending a screenshot-only surface can be clicked.
 
 Real run:
-- No new real browser action was run in this lap.
-- No new cart artifact was created.
-- This is Rung B/C hardening only: it makes the real-store recipe cheaper and safer for the next real M3 attempt.
-- The prior real Target cart artifact from lap `20260609T034900Z` remains `UNPROVEN-PENDING-JUDGE`; M3 is not done.
+- A real Target search page was opened through the native bridge fallback.
+- The bridge used AppleScript fallback, captured a screenshot, and returned the real Target URL/title.
+- It returned zero actionable DOM elements, so no click, no add-to-cart, and no real artifact change was attempted.
+- This is real M3 chain hardening only. It remains `UNPROVEN-PENDING-JUDGE`.
 
 Checks:
 - Reloaded `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Focused lowest-price product selection probe passed.
-- Focused deterministic commerce recipe probe passed: the recipe searched for the resolved item only, did not search for `cheapest`, clicked the lowest valid matching product, then clicked add and verified the local add marker. This is regression coverage only, not M3 proof.
-- Python compile passed for `engine/anticipy_engine/agent/webvoyager.py`.
+- Python compile passed for the touched engine files.
+- Focused native bridge fallback probe passed: observe DOM marks, index-to-selector type, scroll fallback, and BrowserHand fallback selection.
+- Focused unactionable real browser surface probe passed: the commerce recipe fails fast before planner/actions.
+- Real Target bridge observation returned URL/title/screenshot but zero actionable elements through AppleScript fallback.
+- Engine boot smoke passed on the edited tree: `/health` OK and `/ws/state` returned disconnected.
 - `engine/scripts/test_browser_hand.py` passed.
-- `engine/scripts/test_harmline.py` passed.
 - `engine/scripts/test_handoff.py` passed.
+- `engine/scripts/test_harmline.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
-- Changed-path scan shows only `engine/anticipy_engine/agent/webvoyager.py` in the product diff.
 - Forbidden-path scan, owner/eval literal scan, and secret-value scan found no matches.
-- No engine process remained listening on port 8787.
+- Ports 8787 and 7777 were stopped after the lap.
 
 Gate:
 - No all-work human gate is active.
 - Low OpenRouter credit blocks heavy live planning, not building.
 - Separate judge quota blocks proof only. Spending money remains a hard human gate and was not taken.
+- The extension WebSocket is disconnected. The native bridge fallback can start and open a real store, but current AppleScript fallback returned no actionable elements. This is a build finding, not a stop.
 
 Proof status:
 - No new real artifact was created or verified in this lap.
@@ -45,4 +49,4 @@ Proof status:
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work. The next useful rung is another safe real-store recipe slice or a cautious real-store run once the current deterministic path is strong enough to avoid wrong cart items.
+- Continue M3 ladder work. The next useful slice is to make the real bridge surface expose actionable elements reliably, either by restoring CDP/native-extension marks or by improving the real bridge observation path without touching Chrome extension settings through a blocked browser page.

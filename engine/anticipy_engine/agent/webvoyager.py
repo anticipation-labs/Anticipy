@@ -469,6 +469,11 @@ class WebVoyagerAgent:
         o = out or {}
         return not (o.get("elements") or []) and not o.get("url") and not (o.get("text") or "")
 
+    @staticmethod
+    def _unactionable_obs(out) -> bool:
+        o = out or {}
+        return not (o.get("elements") or []) and not (o.get("text") or "").strip()
+
     async def _observe_ready(self, url: Optional[str] = None, tries: int = 4):
         # GENERAL fix (no site logic): never decide on a not-ready page, and never
         # let a slow/hung observe crash the run. If the observation is empty (or the
@@ -552,6 +557,12 @@ class WebVoyagerAgent:
                 self._cur_shot = shot
                 history.append(f"recipe: typed item into site search idx={search_box.get('idx')}")
                 steps += 1
+
+        if self._unactionable_obs(out):
+            states.append(_page_state("unactionable_search_surface", out, item, history[-1]))
+            return self._done(out, steps + 1, history, answer="",
+                              reason="commerce recipe found no actionable browser elements",
+                              page_states=states, commerce_recipe=True)
 
         states.append(_page_state("search_results", out, item, history[-1]))
         prefer_lowest = _wants_lowest_price(task)
@@ -665,6 +676,9 @@ class WebVoyagerAgent:
 
         out, shot = await self._observe_ready(start_url)
         self._cur_shot = shot
+        if self._unactionable_obs(out):
+            return self._done(out, 1, history, answer="",
+                              reason="browser surface returned no actionable elements or readable text")
         prev_sig = _sig(out.get("url"), out.get("title"), out.get("elements") or [])
         visited[prev_sig] = 1
         progress = "START"

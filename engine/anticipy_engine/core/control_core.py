@@ -15,6 +15,7 @@ from .env import load_local_env
 from .envelopes import Event, EventSource
 from .gateway import ModelGateway, PROVIDER_OPENROUTER
 from .glassbox import GlassBox
+from .native_bridge_link import NativeBridgeLink
 from .orchestrator import Approver, Orchestrator
 from .proactive import ProactiveEngine
 from .scorecard import Scorecard
@@ -65,6 +66,10 @@ class ControlCore:
         user_id = os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
         self.api_hand = ApiHand(user_id=user_id, mode=hands_mode)
         agent_gateway = self.gateway if self.gateway.provider == PROVIDER_OPENROUTER else None
+        native_bridge = None
+        if (os.environ.get("ANTICIPY_NATIVE_BRIDGE_FALLBACK", "1") or "").strip().lower() not in {"0", "false", "no", "off"}:
+            native_bridge = NativeBridgeLink()
+        self.native_bridge_link = native_bridge
         self.browser_hand = BrowserHand(
             self.browser_link,
             timeout=float(os.environ.get("ANTICIPY_BROWSE_TIMEOUT", "30")),
@@ -72,6 +77,7 @@ class ControlCore:
             max_steps=int(os.environ.get("ANTICIPY_AGENT_MAX_STEPS", "18")),
             agent_timeout=float(os.environ.get("ANTICIPY_AGENT_TIMEOUT", "240")),
             notifier=self.notify_user,
+            fallback_link=native_bridge,
         )
         self.channel = ChannelStub()  # reaching the user (text/call); delivery stubbed for now
         # Real workers register LAST so they own any intent a stub also claims; the real
