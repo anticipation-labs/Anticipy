@@ -79,6 +79,7 @@ COMMERCE_SEARCH_URLS = {
     "bookshop.org": "https://bookshop.org/search?keywords={q}",
     "chewy.com": "https://www.chewy.com/s?query={q}",
     "michaels.com": "https://www.michaels.com/search?q={q}",
+    "bhphotovideo.com": "https://www.bhphotovideo.com/c/search?Ntt={q}&N=0&InitialSearch=yes",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -94,6 +95,7 @@ COMMERCE_CART_URLS = {
     "bookshop.org": "https://bookshop.org/cart",
     "chewy.com": "https://www.chewy.com/app/cart",
     "michaels.com": "https://www.michaels.com/cart",
+    "bhphotovideo.com": "https://www.bhphotovideo.com/find/cart.jsp",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -131,6 +133,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "bookshop.org": re.compile(r"/(?:p/books|a/)", re.I),
     "chewy.com": re.compile(r"/(?:.+/dp/|api/event/p/sar/click)", re.I),
     "michaels.com": re.compile(r"/product/", re.I),
+    "bhphotovideo.com": re.compile(r"/c/product/[^?#]+\.html$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -147,11 +150,20 @@ GENERIC_PRODUCT_LABEL_RE = re.compile(
 )
 HREF_ONLY_RE = re.compile(r"^(?:https?://\S+|/[^\s]+)$", re.I)
 PRODUCT_VARIANT_WORDS = {
+    "bundle",
     "calendar",
+    "cfexpress",
+    "compactflash",
     "companion",
+    "edition",
     "guide",
     "kid",
     "kids",
+    "kit",
+    "micro",
+    "microsd",
+    "microsdxc",
+    "pack",
     "summary",
     "workbook",
 }
@@ -477,11 +489,17 @@ def _numbers_match(candidate: str, item: str) -> bool:
     return all(re.search(rf"(?<!\d){re.escape(num)}(?!\d)", hay) for num in nums)
 
 
+def _word_matches_token(word: str, tok: str) -> bool:
+    if re.fullmatch(r"\d+(?:\.\d+)?", tok):
+        return re.match(rf"{re.escape(tok)}(?!\d)", word or "") is not None
+    return word == tok or (len(tok) >= 5 and tok in (word or ""))
+
+
 def _token_hits(name: str, tokens: list[str]) -> int:
-    hay = " " + re.sub(r"[^a-z0-9]+", " ", (name or "").lower()) + " "
+    words = re.findall(r"[a-z0-9.]+", (name or "").lower())
     hits = 0
     for tok in tokens:
-        if f" {tok} " in hay or (len(tok) >= 5 and tok in hay):
+        if any(_word_matches_token(word, tok) for word in words):
             hits += 1
     return hits
 
@@ -489,14 +507,13 @@ def _token_hits(name: str, tokens: list[str]) -> int:
 def _ordered_item_score(name: str, tokens: list[str]) -> int:
     if not name or len(tokens) < 2:
         return 0
-    words = re.findall(r"[a-z0-9]+", (name or "").lower())
+    words = re.findall(r"[a-z0-9.]+", (name or "").lower())
     positions = []
     start_at = 0
     for tok in tokens:
         found = None
         for idx in range(start_at, len(words)):
-            word = words[idx]
-            if word == tok or (len(tok) >= 5 and tok in word):
+            if _word_matches_token(words[idx], tok):
                 found = idx
                 break
         if found is None:
@@ -648,13 +665,12 @@ def _pick_product(
             candidates.append((_price_cents(name), hint_hits, score, el))
     if not candidates:
         return None
-    hinted = [c for c in candidates if c[1] > 0]
-    pool = hinted or candidates
+    pool = candidates
     if prefer_lowest:
         priced = [c for c in pool if c[0] is not None]
         if priced:
-            return min(priced, key=lambda c: (c[0], -c[1], -c[2]))[3]
-    return max(pool, key=lambda c: (c[1], c[2]))[3]
+            return min(priced, key=lambda c: (c[0], -c[2], -c[1]))[3]
+    return max(pool, key=lambda c: (c[2], c[1]))[3]
 
 
 def _pick_button(elements: list[dict], pattern: re.Pattern) -> Optional[dict]:
