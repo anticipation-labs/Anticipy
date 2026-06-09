@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T103741Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened Walmart product selection by treating bare `Options` labels as generic controls, recorded one pre-fix false-action finding, then produced one builder-side Walmart add-to-cart artifact with final known-cart verification.
+Latest builder lap: `20260609T105004Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened generic option-control rejection, skipped generic labels during nearby product URL recovery, refreshed settled product pages once before scrolling for add controls, and produced one builder-side Walmart paper-towels add-to-cart artifact with final known-cart verification.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -16,18 +16,19 @@ Current M3 slice:
 - WebVoyager verifies cart pages through distinct item evidence windows, including token-hit counts and explicit quantity when visible, while keeping raw cart text out of durable state.
 - WebVoyager carries memory context hints into product selection and can fall back from strict token matching to first valid product URLs only on real search-result pages.
 - Memory-to-intent item cleanup strips the resolved site's host stem and dangling site prepositions, so browser search receives the concrete item rather than the item plus store words.
-- WebVoyager treats bare `Options` as a generic product label, preventing Walmart option controls from becoming concrete product targets before add attempts.
+- WebVoyager treats bare `Options` and broader option-control phrases as generic product labels, preventing option controls from becoming concrete product targets before add attempts.
+- WebVoyager refreshes a settled product page once before scrolling for add controls, so late-rendered real Add to Cart buttons can be found without heavy model planning.
 
 Latest real M3 attempt:
 - Fresh ignored data directories were used for builder-side live `/event` runs.
-- Walmart pre-fix failure: a context-only memory seed for `dish sponge` on `walmart.com` was captured and triaged out. The vague action request did not name the site or item. Memory resolved the real site and item, but the browser hand opened a generic `Options` control, clicked Add to Cart, and final known-cart verification did not contain the requested item. This was logged as a false-action finding and not proof.
-- Walmart rerun after the generic-label hardening: the same vague-memory chain resolved to Walmart plus dish sponge, skipped generic `Options`, opened a matching product page, scrolled to Add to Cart, clicked Add to Cart, opened the known Walmart cart URL, and verified the item in the cart.
+- Walmart pre-refresh failure: a context-only memory seed for `paper towels` on `walmart.com` was captured and triaged out. The vague action request did not name the site or item. Memory resolved the real site and item, but the browser hand opened a matching product page, did not find a valid Add to Cart control before scrolling, and final known-cart verification did not contain the requested item. This was a failure, not proof.
+- Walmart rerun after the product-page refresh hardening: the same vague-memory chain resolved to Walmart plus paper towels, opened a matching product page, refreshed the settled product page, found Add to Cart, clicked Add to Cart, opened the known Walmart cart URL, and verified the item in the cart.
 - Sanitized final Walmart cart state reported `cart_item_match=true`, `cart_item_window_count=1`, `cart_item_token_hits=2`, `cart_item_required_hits=2`, `cart_verified=true`, and `cart_page_verified=true`.
 - No checkout, payment, or order placement occurred. This is a real builder-side cart mutation and remains `UNPROVEN-PENDING-JUDGE`. No separate judge has opened the site/account and ruled on it. M3 is not done.
 
 Latest real bridge findings:
 - Target can complete a real search-product-add-cart-verify path for a vague memory-resolved task in the dedicated browser path.
-- Walmart can complete a real search-product-add-cart-verify path for a vague memory-resolved task after generic `Options` labels are skipped.
+- Walmart can complete real search-product-add-cart-verify paths for vague memory-resolved tasks after generic option labels are skipped and settled product pages are refreshed before add-control scrolling.
 - Best Buy can expose item tokens in a search page while providing zero buyable product links to the dedicated path. Direct CDP scrolling did not fix that store. Treat this as a hard-site finding unless a new page-state strategy is being tested.
 - IKEA search-results add changed a transient shopping-bag count, but the known cart page did not contain the requested item. This is a failure, not proof.
 - Home Depot returned only a privacy surface with no product tokens or buyable links. This is a hard-site finding, not proof.
@@ -42,9 +43,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs completed one pre-fix Walmart false-action finding and one post-fix Walmart add-to-cart path with final known-cart verification. Builder-side only.
+- Real live `/event` runs completed one pre-refresh Walmart honest failure and one post-fix Walmart add-to-cart path with final known-cart verification. Builder-side only.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused generic `Options` product-selection probe passed.
+- Focused broadened generic-option product-selection probe passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -52,6 +53,7 @@ Latest checks:
 - `git diff --check` passed.
 - Forbidden-path scan was clean.
 - Secret-shaped diff scan was clean.
+- Product diff eval-literal scan was clean.
 - Ports `8787`, `7777`, and `9222` are clear.
 
 Proven:
@@ -82,7 +84,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/6 unjudged builder-side cart artifacts or read-backs verified, 0 percent. Prior Target, Lowe's, and Walmart builder-side cart artifacts or read-backs exist, but no separate judge has verified them.
+- M3 real browser-hand reality judge pass rate: 0/7 unjudged builder-side cart artifacts or read-backs verified, 0 percent. Prior Target, Lowe's, and Walmart builder-side cart artifacts or read-backs exist, but no separate judge has verified them.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -107,7 +109,8 @@ Dead ends not to retry blindly:
 - Do not let memory item extraction keep the store name or a dangling `on/from/at` site phrase inside the item.
 - Do not trust stale data-index selectors after real-store DOM re-renders. Re-resolve by expected role, name, or href at click time and verify page mutation or cart state.
 - Do not open loosely related product titles before an add attempt. Two-token items must match both tokens, and longer item names need a stronger token majority.
-- Do not treat bare `Options` links or buttons as product targets. They are generic controls, not product identity.
+- Do not treat bare `Options`, `Choose options`, `Select product options`, `View options`, or similar option-control labels as product targets. They are generic controls, not product identity.
+- If a product page has item evidence but no Add to Cart control on the first observation, refresh the settled product page once before scrolling. Some real stores render the Add control after the product page text appears.
 - If a real store search page returns synonym titles that do not contain the original query tokens, use the cautious search-result fallback only on search-result URLs and only for buyable product URLs. Do not use it on category, editorial, recommendation, or product pages.
 - Do not treat editorial, advice, how-to, or category pages as buyable product pages for add-to-cart recipes.
 - Best Buy can expose item tokens but zero buyable product links to the dedicated path. Do not retry Best Buy blindly without a new page-state strategy.
@@ -121,7 +124,7 @@ Dead ends not to retry blindly:
 
 Next:
 - Convert the current Walmart, Target, and Lowe's `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
-- Until then, continue real M3 ladder work: harden generic-control rejection and product identity matching across real stores, improve hard-site page-state strategies, and do not replace the real task with an easy target.
+- Until then, continue real M3 ladder work: harden product identity matching and add-control discovery across another real store, improve hard-site page-state strategies, and do not replace the real task with an easy target.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.

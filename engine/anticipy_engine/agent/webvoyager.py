@@ -112,10 +112,17 @@ NON_PRODUCT_RE = re.compile(
     re.I,
 )
 GENERIC_PRODUCT_LABEL_RE = re.compile(
-    r"^\s*(?:multiple\s+options\s+available|options\s+available|options|shop\s+now|view\s+details|product\s+image)\s*$",
+    r"^\s*(?:(?:multiple\s+)?(?:product\s+)?options(?:\s+available)?|"
+    r"(?:choose|select|see|show|view|more)\s+(?:product\s+)?options|"
+    r"shop\s+now|view\s+details|product\s+image)\s*$",
     re.I,
 )
 HREF_ONLY_RE = re.compile(r"^(?:https?://\S+|/[^\s]+)$", re.I)
+
+
+def _is_generic_product_label(name: str) -> bool:
+    normalized = re.sub(r"\s+", " ", name or "").strip()
+    return GENERIC_PRODUCT_LABEL_RE.match(normalized) is not None
 
 
 def _parse_json(raw: str) -> Optional[dict]:
@@ -317,6 +324,8 @@ def _product_url_near_index(
             href = name
         if not href:
             continue
+        if _is_generic_product_label(name):
+            continue
         absolute = _absolute_site_url(start_url, href)
         if not _looks_buyable_product_url(absolute, start_url):
             continue
@@ -448,7 +457,7 @@ def _pick_product(
     for el in elements or []:
         name = (el.get("name") or "").strip()
         if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
-                or GENERIC_PRODUCT_LABEL_RE.match(name)
+                or _is_generic_product_label(name)
                 or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item)):
             continue
         href = (el.get("href") or "").strip()
@@ -476,7 +485,7 @@ def _pick_product(
             name = (el.get("name") or "").strip()
             href = (el.get("href") or "").strip()
             if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
-                    or GENERIC_PRODUCT_LABEL_RE.match(name) or NON_PRODUCT_RE.search(name)
+                    or _is_generic_product_label(name) or NON_PRODUCT_RE.search(name)
                     or not _numbers_match(name, item)):
                 continue
             productish_url = bool(href and _looks_buyable_product_url(href, start_url or href))
@@ -1213,11 +1222,29 @@ class WebVoyagerAgent:
                               page_states=states, commerce_recipe=True)
 
         tried_add_names: set[str] = set()
+        refreshed_product_add_controls = False
         for attempt in range(5):
             if _cart_page_verified(out, item):
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
             add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
+            if not add and not refreshed_product_add_controls:
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                refreshed_product_add_controls = True
+                history.append("recipe: refreshed product page for add controls")
+                states.append(_page_state(
+                    "product_add_refresh",
+                    out,
+                    item,
+                    history[-1],
+                    start_url=start_url,
+                ))
+                steps += 1
+                if _cart_page_verified(out, item):
+                    return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                      page_states=states, commerce_recipe=True)
+                add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
             if not add:
                 await self._act({"action": "scroll", "dir": "down"})
                 out, shot = await self._observe_ready()
