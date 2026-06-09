@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T124624Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added PetSmart and Container Store real-store URL support, checked narrow domain-specific product URL patterns before broad search/content rejection, and hardened native-bridge known-cart proof with a separate `fresh_probe()` observer. Real read-only probes found PetSmart and Container Store search/product/cart surfaces. A PetSmart vague-memory run opened the exact product and clicked a real Add to Cart control, then failed final cart verification. Container Store exposed a false proof shape: the active bridge instance reported durable known-cart preflight, but an independent fresh read-back failed. After separate-probe hardening, focused checks rejected active/fresh disagreement, and the live Container Store rerun no longer falsely completed but hit a captcha-class wall. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T131645Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened active-page cart completions so they require independent `fresh_probe` confirmation, made known-cart and fresh-probe cart observations scroll cart pages before deciding, and tightened product matching for token-rich remembered items. Live Lowe's vague-memory runs clicked real Add to Cart controls but failed final proof because visible cart evidence did not match the full remembered item. Broad gloves additions from these runs are false actions, not progress. A read-only Lowe's cart probe scrolled 12 observations and still found no exact item window. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -29,22 +29,25 @@ Current M3 slice:
 - WebVoyager knows PetSmart and Container Store search, product, and cart URL shapes. PetSmart and Container Store are unproven hard-site candidates, not judge proof.
 - WebVoyager classifies narrow domain-specific product URL matches before broad search/content rejection and runs product-surface detection before search-surface detection for those matches.
 - NativeBridgeLink exposes `fresh_probe()`, and WebVoyager native-bridge known-cart preflight must survive that independent observer before it can complete. Same-bridge cart state is not durable proof.
+- WebVoyager active-page cart completions after search-result add, product-page add, refresh, scroll, or View Cart must also survive independent `fresh_probe` confirmation before they can complete.
+- WebVoyager scrolls cart pages during known-cart and fresh-probe read-back, keeping the highest-signal cart observation instead of trusting a header-only cart count.
+- WebVoyager requires leading distinctive tokens for token-rich remembered items and raises the product-hit threshold to roughly 80 percent for item names with five or more tokens.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
 
 Latest real M3 attempt:
 - Fresh ignored data directories were used for builder-side live `/event` runs.
-- Read-only probes found Container Store search surfaces, `/s/.../12d` product URLs, search-result Add controls after scroll, and `/cart/list.htm`.
-- Read-only probes found PetSmart search surfaces, pet-category `.html` product URLs, product-page Add controls, and `/cart/`.
-- A PetSmart vague-memory run seeded context-only memory, then sent a vague action that did not name the site or exact item. The hand resolved memory to PetSmart plus the remembered dog item, opened the exact product, clicked a real Add to Cart control, and failed final cart verification.
-- A Container Store vague-memory run seeded context-only memory, then sent the same vague action shape for storage. The active bridge reported durable known-cart preflight, but an independent fresh read-back did not verify the item. This was treated as a false proof-shape finding, not progress.
-- After separate-probe hardening, the focused check rejected active-bridge/fresh-probe disagreement. A post-hardening live Container Store rerun no longer falsely completed, but produced a captcha-class wall during preflight. That is a site-specific human gate for that path, not an all-work stop.
-- No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+- A Lowe's vague-memory run seeded context-only memory, then sent a vague action that did not name the site or exact item. The hand resolved memory to Lowe's plus a token-rich gloves item, clicked a real Add to Cart control, opened cart, and failed final cart verification.
+- A rerun after distinctive-token hardening reached a brand-bearing product URL, clicked Add to Cart, opened cart, and failed because cart read-back produced no exact item evidence.
+- After cart-scroll proof hardening, another rerun selected a broad brand/category product, clicked Add to Cart, and was rejected by strict cart proof.
+- After stricter token-rich matching, the final rerun still clicked a real Add to Cart control and was rejected by final cart proof because the visible cart evidence did not match the full remembered item.
+- A read-only cart probe scrolled the real Lowe's cart through 12 observations; cart count stayed nonzero, global item-token hits were partial, and cart item windows stayed at zero.
+- These runs include false actions against the real cart. They are failures, not progress proof. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
 - Target can complete real search-product-add-cart-verify and duplicate-safe known-cart verification paths for vague memory-resolved tasks in the dedicated browser path.
 - Walmart can complete real search-product-add-cart-verify paths for vague memory-resolved tasks after generic option labels are skipped and settled product pages are refreshed before add-control scrolling.
 - Best Buy can complete a real search-product-add-cart-verify path for a vague memory-resolved task after current `/product/...` URLs are accepted.
-- Lowe's can complete real full `/event` vague-memory cart add paths and duplicate-safe known-cart read-backs.
+- Lowe's can complete some real full `/event` vague-memory cart add paths and duplicate-safe known-cart read-backs, but token-rich exact-item paths can still add broad substitutes. Treat the latest gloves path as a false-action hard finding.
 - IKEA can use a search-result item-specific Add path when product pages are availability-gated, while keeping strict final cart proof.
 - REI can expose product links and cart structure through the bridge, and builder-side read-back can verify an exact remembered cart item under strict proof.
 - PetSmart exposes product pages and Add controls through the bridge, but the observed Add path did not verify a durable cart artifact.
@@ -60,11 +63,12 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised PetSmart and Container Store vague-memory paths.
-- An independent builder-side Container Store cart read-back rejected active-bridge cart preflight as non-durable.
+- Real live `/event` runs exercised the Lowe's vague-memory path with active-cart proof hardening, cart scrolling, and stricter product matching.
+- A read-only real Lowe's cart probe scrolled through 12 observations and did not find an exact cart item window for the token-rich item.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused PetSmart and Container Store URL checks passed.
-- Focused separate-probe known-cart checks passed.
+- Focused active-page fresh-probe cart completion checks passed.
+- Focused cart-scroll proof checks passed.
+- Focused token-rich product matching checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -90,7 +94,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side. PetSmart and Container Store produced hard-site findings this lap. Other hard-site failures are not all-work stops.
+- Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced false actions this lap. PetSmart and Container Store produced hard-site findings in the prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -103,7 +107,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/15 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and PetSmart and Container Store hard-site findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/19 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and PetSmart, Container Store, and the latest Lowe's exactness findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -142,6 +146,9 @@ Dead ends not to retry blindly:
 - Price-suffixed generic Add labels are product-page controls only unless the surrounding search-result adjacency rules identify the exact product row.
 - Native-bridge known-cart proof must survive an independent `fresh_probe()` observer. If the active bridge sees a cart item but fresh_probe does not, reject the proof and continue or fail honestly.
 - Container Store hit a captcha-class wall after separate-probe hardening. Treat that path as a site-specific gate, not an all-work stop, and move sideways unless there is a new non-gated hypothesis.
+- Active-page cart proof also needs independent fresh-probe confirmation. Do not complete after a product-page add modal, View Cart click, or scrolled cart page unless fresh_probe verifies the same item.
+- For long, token-rich remembered items, do not add a product that keeps only brand plus category or category plus material. Important modifiers must remain present, or the correct action is failure.
+- Do not retry the Lowe's token-rich gloves path blindly. It produced wrong or unverified cart additions and needs a new exact-product or cart-readback hypothesis first.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps.
 - Do not retry Office Depot blindly. Product-page Add and adjacent result-row Add both changed the page but did not verify the known cart artifact; retry only with a new concrete cart-readback or modal hypothesis.
 - Do not treat exhausted browser retries as a human gate. If the hand did not explicitly return `needs_human`, the step should fail honestly.
@@ -155,7 +162,7 @@ Dead ends not to retry blindly:
 
 Next:
 - Convert the current Best Buy, Walmart, Target, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
-- Until then, continue real M3 ladder work. Build more real-store DOM recipes, item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new store or a concrete new hypothesis over another blind Office Depot, PetSmart, or Container Store retry.
+- Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new store or a concrete new hypothesis over another blind Office Depot, PetSmart, Container Store, or Lowe's token-rich gloves retry.
 
 Law digest:
 Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.

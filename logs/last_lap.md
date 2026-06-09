@@ -1,33 +1,32 @@
 # Last Lap
 
-Lap: 20260609T124624Z
-Date: 2026-06-09T13:11:16Z
-Milestone: M3 - PetSmart and Container Store real-store URL support plus separate-probe cart proof
+Lap: 20260609T131645Z
+Date: 2026-06-09T13:39:42Z
+Milestone: M3 - active-page cart proof and exact token-rich product matching
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- WebVoyager now knows PetSmart and Container Store search, product, and cart URL shapes observed from real pages.
-- Domain-specific product URL patterns are checked before broad search/content rejection, so Container Store `/s/.../12d` product pages can be treated as products instead of search pages.
-- Product surface detection now runs before search detection for narrow domain-specific product URLs.
-- NativeBridgeLink now exposes `fresh_probe()`, an independent observer with no cached selectors or active target id.
-- Known-cart verification now requires the fresh-probe observer to verify the requested cart item before native-bridge preflight can complete.
-- Added a lesson that same-bridge fresh-open cart proof can still be false if it depends on active target cache.
+- Active-page cart completions now require independent `fresh_probe` confirmation before WebVoyager can mark commerce success. This applies after search-result add, product-page add, refresh, scroll, and View Cart flows.
+- Known-cart and fresh-probe cart observations now scroll cart pages and keep the highest-signal cart state before deciding whether item evidence is present.
+- Product matching for token-rich remembered items now keeps leading distinctive tokens and requires roughly 80 percent token overlap for item names with five or more tokens.
+- Query fallback for token-rich items now uses the full required token threshold instead of accepting broad product rows.
+- Added a lesson that brand plus category is not enough when a remembered item includes material or feature modifiers.
 
 Real runs:
-- Read-only probes found Container Store real search results, `/s/.../12d` product URLs, search-result Add controls after scroll, and `/cart/list.htm`.
-- Read-only probes found PetSmart real search results, pet-category `.html` product URLs, product-page Add controls, and `/cart/`.
-- A live PetSmart vague-memory `/event` run resolved memory to PetSmart plus the remembered dog item, opened the exact product, clicked a real Add to Cart control, then failed final cart verification. This is a hard-site finding, not proof.
-- A live Container Store vague-memory run initially reported durable known-cart preflight inside the active bridge instance, but a separate independent read-back immediately failed to verify the cart item. This exposed a false proof shape and was not accepted.
-- After separate-probe hardening, the focused check rejected active-bridge/fresh-probe disagreement and accepted active/fresh agreement.
-- A post-hardening live Container Store rerun no longer falsely completed. It stopped at a captcha-class wall during known-cart preflight, which is a site-specific human gate for that path and not an all-work stop.
-- No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+- A live Lowe's vague-memory run resolved a yard request from memory to Lowe's plus a token-rich gloves item, clicked a real Add to Cart control, opened the cart, and failed final cart verification because the cart evidence did not match the remembered item.
+- A rerun after distinctive-token hardening selected the exact brand-bearing product URL, clicked Add to Cart, opened the cart, and still failed final proof because cart read-back saw only count/header structure with no exact item evidence.
+- After cart-scroll proof hardening, another rerun selected a broader brand/category product, clicked Add to Cart, and was rejected by strict cart evidence.
+- After stricter token-rich matching, the final rerun still reached a brand-bearing product URL and clicked Add to Cart, but final cart proof rejected the item because the visible cart evidence did not match the full remembered item.
+- A read-only cart probe scrolled the real Lowe's cart through 12 observations; cart count stayed nonzero, global token hits stayed partial, and cart item windows stayed at zero.
+- These live runs are failures and include wrong or unverified cart additions. They are not progress proof. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused PetSmart and Container Store URL checks passed.
-- Focused separate-probe known-cart checks passed.
+- Focused active-page fresh-probe cart completion checks passed.
+- Focused cart-scroll proof checks passed.
+- Focused token-rich product matching checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -40,13 +39,13 @@ Checks:
 
 Gate:
 - No all-work human gate is active.
-- Container Store produced a captcha-class wall on the post-hardening path, but other M3 rungs and stores remain available.
+- The Lowe's token-rich gloves path is a hard-site or exactness finding, not a stop. Other M3 stores and rungs remain available.
 - Separate judge quota still blocks proof only, not building. Spending money remains a human gate and was not taken.
 
 Proof status:
-- PetSmart and Container Store are `UNPROVEN-PENDING-JUDGE`. The separate judge has not opened the real sites/accounts and ruled on any artifact.
+- This lap is `UNPROVEN-PENDING-JUDGE`. The separate judge has not verified any M3 artifact.
 - M3 is not done.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work on real stores only. Prefer stores and proof paths that survive independent fresh-probe read-back; do not count same-bridge cart state as durable.
+- Continue M3 ladder work on real stores only. Prefer exact item matching and independent read-back proof. Do not retry the Lowe's token-rich gloves path blindly without a new exact-product or cart-readback hypothesis.

@@ -466,7 +466,22 @@ def _required_product_hits(tokens: list[str]) -> int:
     n = len(tokens)
     if n <= 2:
         return n
+    if n >= 5:
+        return max(4, int(n * 0.8 + 0.999))
     return max(2, int(n * 0.6 + 0.999))
+
+
+def _distinctive_required_tokens(tokens: list[str]) -> list[str]:
+    if len(tokens) < 4:
+        return []
+    return tokens[:2]
+
+
+def _has_distinctive_required_tokens(text: str, tokens: list[str]) -> bool:
+    required = _distinctive_required_tokens(tokens)
+    if not required:
+        return True
+    return _token_hits(text, required) == len(required)
 
 
 def _price_cents(text: str) -> Optional[int]:
@@ -527,6 +542,8 @@ def _pick_product(
         role = (el.get("role") or "").lower()
         if role not in {"a", "button"} and "link" not in role:
             continue
+        if not _has_distinctive_required_tokens(f"{name} {href}", tokens):
+            continue
         hits = _token_hits(name, tokens)
         if hits < required:
             continue
@@ -553,6 +570,12 @@ def _pick_product(
                 continue
             role = (el.get("role") or "").lower()
             if role not in {"a", "button"} and "link" not in role:
+                continue
+            hay = f"{name} {href}"
+            hits = _token_hits(hay, tokens)
+            if not _has_distinctive_required_tokens(hay, tokens):
+                continue
+            if len(tokens) >= 4 and hits < required:
                 continue
             seen_hrefs.add(href)
             hint_hits = _token_hits(f"{name} {href}", context_hints)
@@ -1009,22 +1032,43 @@ class WebVoyagerAgent:
         await asyncio.sleep(ADD_CLICK_SETTLE_SECONDS)
         return await self._observe_ready()
 
-    async def _observe_fresh_probe(self, url: str):
+    def _fresh_probe_agent(self) -> Optional["WebVoyagerAgent"]:
         factory = getattr(self.link, "fresh_probe", None)
         if not callable(factory):
-            return await self._observe_ready(url)
+            return None
         try:
-            probe_link = factory()
-            probe = type(self)(
-                probe_link,
+            return type(self)(
+                factory(),
                 self.gw,
                 max_steps=1,
                 per_subgoal=1,
                 notifier=self.notifier,
             )
-            return await probe._observe_ready(url)
         except Exception:
-            return {}, None
+            return None
+
+    async def _observe_fresh_probe(self, url: str):
+        probe = self._fresh_probe_agent()
+        if probe is None:
+            return await self._observe_ready(url)
+        return await probe._observe_ready(url)
+
+    async def _observe_cart_ready(self, url: str, item: str, *, fresh_probe: bool = False):
+        agent = self._fresh_probe_agent() if fresh_probe else self
+        if agent is None:
+            agent = self
+        out, shot = await agent._observe_ready(url)
+        best_out, best_shot = out, shot
+        for _ in range(4):
+            if _cart_page_verified(best_out, item):
+                break
+            if not _is_cart_url(out):
+                break
+            await agent._act({"action": "scroll", "dir": "down"})
+            out, shot = await agent._observe_ready()
+            if _cart_signal_score(out, item) >= _cart_signal_score(best_out, item):
+                best_out, best_shot = out, shot
+        return best_out, best_shot
 
     async def _plan(self, task: str) -> List[str]:
         if _search_text(task):
@@ -1049,7 +1093,7 @@ class WebVoyagerAgent:
         if not cart_url:
             return {}, steps
         expected_path = urllib.parse.urlparse(cart_url).path.rstrip("/") or "/"
-        out, shot = await self._observe_ready(cart_url)
+        out, shot = await self._observe_cart_ready(cart_url, item)
         durable_confirmed = False
         for attempt in range(5):
             if attempt:
@@ -1058,7 +1102,7 @@ class WebVoyagerAgent:
             current_path = urllib.parse.urlparse((out or {}).get("url") or "").path.rstrip("/") or "/"
             if _cart_page_verified(out, item):
                 await asyncio.sleep(0.8)
-                confirm_out, confirm_shot = await self._observe_fresh_probe(cart_url)
+                confirm_out, confirm_shot = await self._observe_cart_ready(cart_url, item, fresh_probe=True)
                 if confirm_out:
                     out = confirm_out
                 if confirm_shot:
@@ -1073,6 +1117,25 @@ class WebVoyagerAgent:
         history.append(f"recipe: {stage} navigated known cart url{durable} for {_host(start_url)}")
         states.append(_page_state(stage, out, item, history[-1], start_url=start_url))
         return out, steps + 2 if durable_confirmed else steps + 1
+
+    async def _confirm_current_cart_page(self, out: dict, start_url: str, item: str,
+                                         history: list[str], states: list[dict],
+                                         steps: int, stage: str) -> tuple[dict, int, bool]:
+        if not _cart_page_verified(out, item):
+            return out, steps, False
+        cart_url = _commerce_cart_url(start_url) or ((out or {}).get("url") or "")
+        if not cart_url:
+            return out, steps, False
+        await asyncio.sleep(0.5)
+        confirm_out, confirm_shot = await self._observe_cart_ready(cart_url, item, fresh_probe=True)
+        if confirm_shot:
+            self._cur_shot = confirm_shot
+        durable_confirmed = _cart_page_verified(confirm_out, item)
+        checked = confirm_out if confirm_out else out
+        status = "verified" if durable_confirmed else "rejected"
+        history.append(f"recipe: {stage} fresh_probe {status} cart page for {_host(start_url)}")
+        states.append(_page_state(stage, checked, item, history[-1], start_url=start_url))
+        return checked, steps + 1, durable_confirmed
 
     async def _notify(self, msg: str) -> None:
         if not self.notifier:
@@ -1148,7 +1211,10 @@ class WebVoyagerAgent:
         if wall_kind:
             return await self._handoff(out, steps + 1, history, wall_kind,
                                        "wall during commerce recipe")
-        if _cart_page_verified(out, item):
+        out, steps, durable_cart = await self._confirm_current_cart_page(
+            out, start_url, item, history, states, steps, "fresh_cart_after_search_results"
+        )
+        if durable_cart:
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
@@ -1166,7 +1232,10 @@ class WebVoyagerAgent:
                 if wall_kind:
                     return await self._handoff(out, steps + 1, history, wall_kind,
                                                "wall after store region selection")
-                if _cart_page_verified(out, item):
+                out, steps, durable_cart = await self._confirm_current_cart_page(
+                    out, start_url, item, history, states, steps, "fresh_cart_after_region_selection"
+                )
+                if durable_cart:
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
                 if search_url and _token_hits(out.get("text") or "", _item_tokens(item)) == 0:
@@ -1202,7 +1271,10 @@ class WebVoyagerAgent:
             if wall_kind:
                 return await self._handoff(out, steps + 1, history, wall_kind,
                                            "wall after item-specific search-results add")
-            if _cart_page_verified(out, item):
+            out, steps, durable_cart = await self._confirm_current_cart_page(
+                out, start_url, item, history, states, steps, "fresh_cart_after_results_add"
+            )
+            if durable_cart:
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
             view_cart = _pick_button(out.get("elements") or [], VIEW_CART_RE)
@@ -1214,7 +1286,10 @@ class WebVoyagerAgent:
                 history.append(f"recipe: opened cart after results add idx={view_cart.get('idx')} '{cart_label}'")
                 states.append(_page_state("cart_page_after_results_add", out, item, history[-1], start_url=start_url))
                 steps += 1
-                if _cart_page_verified(out, item):
+                out, steps, durable_cart = await self._confirm_current_cart_page(
+                    out, start_url, item, history, states, steps, "fresh_cart_after_results_view_cart"
+                )
+                if durable_cart:
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
             cart_out, steps = await self._verify_known_cart_url(
@@ -1349,14 +1424,20 @@ class WebVoyagerAgent:
                                   reason="commerce recipe could not identify a matching product",
                                   page_states=states, commerce_recipe=True)
 
-        if _cart_page_verified(out, item):
+        out, steps, durable_cart = await self._confirm_current_cart_page(
+            out, start_url, item, history, states, steps, "fresh_cart_before_product_add"
+        )
+        if durable_cart:
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
         tried_add_names: set[str] = set()
         refreshed_product_add_controls = False
         for attempt in range(5):
-            if _cart_page_verified(out, item):
+            out, steps, durable_cart = await self._confirm_current_cart_page(
+                out, start_url, item, history, states, steps, "fresh_cart_product_loop_start"
+            )
+            if durable_cart:
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
             add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
@@ -1373,7 +1454,10 @@ class WebVoyagerAgent:
                     start_url=start_url,
                 ))
                 steps += 1
-                if _cart_page_verified(out, item):
+                out, steps, durable_cart = await self._confirm_current_cart_page(
+                    out, start_url, item, history, states, steps, "fresh_cart_after_product_refresh"
+                )
+                if durable_cart:
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
                 add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
@@ -1390,7 +1474,10 @@ class WebVoyagerAgent:
                     start_url=start_url,
                 ))
                 steps += 1
-                if _cart_page_verified(out, item):
+                out, steps, durable_cart = await self._confirm_current_cart_page(
+                    out, start_url, item, history, states, steps, "fresh_cart_after_product_scroll"
+                )
+                if durable_cart:
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
                 continue
@@ -1416,7 +1503,10 @@ class WebVoyagerAgent:
             if wall_kind:
                 return await self._handoff(out, steps + 1, history, wall_kind,
                                            "wall after product-page add")
-            if _cart_page_verified(out, item):
+            out, steps, durable_cart = await self._confirm_current_cart_page(
+                out, start_url, item, history, states, steps, "fresh_cart_after_product_add"
+            )
+            if durable_cart:
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
             if not mutation["changed"]:
@@ -1424,7 +1514,10 @@ class WebVoyagerAgent:
                 continue
             break
 
-        if _cart_page_verified(out, item):
+        out, steps, durable_cart = await self._confirm_current_cart_page(
+            out, start_url, item, history, states, steps, "fresh_cart_after_add_loop"
+        )
+        if durable_cart:
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
@@ -1437,7 +1530,10 @@ class WebVoyagerAgent:
             history.append(f"recipe: opened cart idx={view_cart.get('idx')} '{label}'")
             states.append(_page_state("cart_page", out, item, history[-1], start_url=start_url))
             steps += 1
-            if _cart_page_verified(out, item):
+            out, steps, durable_cart = await self._confirm_current_cart_page(
+                out, start_url, item, history, states, steps, "fresh_cart_after_view_cart"
+            )
+            if durable_cart:
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
 
