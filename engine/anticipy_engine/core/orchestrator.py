@@ -285,8 +285,9 @@ def _line_item(line: str) -> str:
         return item if 3 <= len(item) <= 160 else ""
     patterns = (
         r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for|"
-        r"compared|comparing|researched|researching|checked out|checking out)\s+(?P<item>[^.;\n]+)",
-        r"\b(?:product|item|thing)\s*[:=-]\s*(?P<item>[^.;\n]+)",
+        r"compared|comparing|researched|researching|checked out|checking out)\s+"
+        r"(?P<item>.+?)(?:\.(?!\d)|;|\n|$)",
+        r"\b(?:product|item|thing)\s*[:=-]\s*(?P<item>.+?)(?:\.(?!\d)|;|\n|$)",
     )
     for pat in patterns:
         m = re.search(pat, line, re.I)

@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T190603Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added Wayfair search/product/basket URL shapes, expanded direct CDP rendered-text extraction so deep cart item text is visible, ranked `/pdp/` product links as product-like, and tightened cart element proof so a matching cart-page product link can verify only when it is near item-local controls such as `Remove` or `Quantity`. A pre-no-retry live `/event` run resolved vague memory to Wayfair plus the remembered item and got a builder-side basket read-back success after a retry, but that retry exposed duplicate-add risk and is not clean current-code proof. BrowserHand now marks failed commerce recipes with changed real mutations as `non_retryable_real_mutation`, and the orchestrator stops retrying those steps. A fresh current-code `/event` run resolved memory and clicked a real Wayfair Add to Cart control, then failed closed after known-cart proof did not verify the item; a delayed read-only cart probe still did not verify the item, and no second add occurred. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T193714Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added Macy's search/product/shopping-bag URL shapes, recognized `/my/bag` as a cart URL, accepted `/shop/product/...` product URLs while rejecting Macy's review links, and fixed memory-to-intent extraction so decimal product names such as `4.0` do not truncate before modifiers. Read-only probes found Macy's exact product rows, a product page with `Add To Bag`, and a real shopping-bag URL. A pre-fix Macy's live `/event` run completed builder-side bag proof with a truncated item and was treated as a finding. After the fix, a fresh current-code live `/event` run used context-only memory plus a vague action that named neither Macy's nor the item, resolved `OXO Good Grips Salad Spinner & Colander 4.0 with Non-Skid Base` from memory, opened the exact product, clicked real `Add To Bag`, opened the real bag, and durable known-bag read-back verified the item under cart structure proof. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -55,6 +55,8 @@ Current M3 slice:
 - NativeBridgeLink keeps up to 25,000 characters of rendered direct-CDP proof text, ranks `/pdp/` product marks as product-like, and extracts `keyword` query tokens so deeper dynamic cart text and Wayfair search URLs are visible to the recipe.
 - WebVoyager cart element proof can accept a matching cart-page product link deeper in the first actionable marks only when nearby labels show item-local cart structure such as `Remove`, `Quantity`, `Qty`, or `Save for later`.
 - BrowserHand marks changed-but-unverified commerce mutations as `non_retryable_real_mutation`, and the orchestrator stops retrying that step so a failed proof cannot blindly duplicate an Add-to-Cart mutation inside the same goal.
+- WebVoyager knows Macy's search, product, and shopping-bag URL shapes, including `/shop/featured/...`, `/shop/product/...`, and `/my/bag`, while rejecting Macy's review links as non-product.
+- Memory-to-intent extraction preserves decimal product names such as `4.0` before sentence trimming, so remembered exact variant and modifier tokens survive into product selection.
 - WebVoyager cart proof requires five delayed independent fresh cart reads by default. If any delayed read misses the item, the helper returns the failing observation, not the earlier best state.
 - Generic product-page Add controls are rejected when nearby buyable product-card context points at an unrelated recommendation item.
 - Numeric item matching and ordered item scoring treat visible labels such as `128GB` as matching numeric item tokens such as `128`, so exact storage-size product titles can satisfy distinctive-token checks.
@@ -71,13 +73,13 @@ Current M3 slice:
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- Read-only Wayfair probing found real search/product/basket surfaces, product rows, a direct product page with visible identity, Add to Cart controls, and `/v/checkout/basket/show`.
-- A pre-no-retry live Wayfair `/event` run used context-only memory plus a vague action that did not name Wayfair or the item. It resolved Wayfair plus the remembered kitchen item, opened the product, clicked real Add to Cart, and got a builder-side basket read-back success after a retry. Because that retry exposed duplicate-add risk, this is not clean current-code proof.
-- After the non-retry hardening, a fresh current-code Wayfair `/event` run again resolved the vague memory task, clicked a real Wayfair Add to Cart control, then failed closed after known-cart proof did not verify the item. The new non-retry guard prevented a second add attempt in the same goal.
-- A delayed read-only cart probe after the current-code run still did not verify the item. Wayfair is supported at the URL/DOM recipe level but remains `UNPROVEN-PENDING-JUDGE` and not M3 proof.
+- Read-only Macy's probing found real search/product/shopping-bag surfaces, exact product rows, a direct product page with visible identity, `Add To Bag`, and `/my/bag`.
+- A pre-fix live Macy's `/event` run used context-only memory plus a vague action that did not name Macy's or the item. It resolved Macy's and completed builder-side bag proof, but the memory item was truncated at `4`, so the result was treated as a finding rather than clean current-code proof.
+- After decimal memory hardening, a fresh current-code Macy's `/event` run resolved the exact remembered item, opened the exact Macy's product, clicked real `Add To Bag`, opened the real shopping bag, and durable known-bag read-back verified the item under cart structure proof.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- Macy's exposes real search/product/Add/shopping-bag surfaces. Current code can complete a vague-memory real-store cart path builder-side for an exact decimal-bearing remembered item, with durable known-bag read-back. No separate judge has verified it.
 - Wayfair exposes real search/product/Add/basket surfaces. Deep basket text and item-local cart controls required expanded direct-CDP text extraction and tighter cart-element proof. One pre-no-retry builder-side run got basket read-back success after a retry, but current code failed closed after an unverified real mutation and did not retry. Treat Wayfair as an unproven hard-site/cart-readback finding until a new persistence hypothesis or separate judge proof exists.
 - Ulta exposes real search/product/Add/bag surfaces. The main product-page add control is labeled `Add for ship`. Generic recommendation Add controls can appear below the product. Short-window cart reads flickered true then false, and the final five-read durability run failed closed. Treat Ulta as a hard-site/non-durable-cart finding until a new hypothesis proves persistence.
 - GameStop can complete a real search-product-add-cart-verify path builder-side after recognizing `/search/?q=`, `/products/.../<sku>.html`, and `/cart/`, plus settled cart read-back with quantity/cart structure.
@@ -112,10 +114,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised Wayfair vague-memory paths. The chain resolved memory to the correct site and item, opened a real product page, clicked a real Add to Cart control, and current code failed closed when final known-cart proof could not verify the item, without retrying the mutation.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Wayfair URL, product identity, cart element proof, and recommendation counterexample checks passed.
-- Focused non-retryable real mutation BrowserHand and orchestrator checks passed.
+- Real live `/event` runs exercised Macy's vague-memory paths. The current-code chain resolved memory to the exact site and item, opened a real product page, clicked a real `Add To Bag` control, opened the real bag, and durable known-bag read-back verified the item builder-side.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py` passed.
+- Focused Macy's URL, product, cart, review-link rejection, product selection, and decimal memory-resolution checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -133,7 +134,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Ulta has a current failed-closed hard-site/non-durable-cart finding, but no separate judge proof exists.
+- M3 is not proven. GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Ulta has a current failed-closed hard-site/non-durable-cart finding, but no separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -141,7 +142,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, and the current-code Wayfair run produced hard-site or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
+- GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, Macy's, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, and the current-code Wayfair run produced hard-site or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -154,7 +155,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/43 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Wayfair builder-side cart artifacts or read-backs exist, and Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/45 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, Wayfair, and Macy's builder-side cart artifacts or read-backs exist, and Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -225,6 +226,7 @@ Dead ends not to retry blindly:
 - Do not treat Staples as supported from the current bridge path. It returned no actionable product marks after settling.
 - Do not retry a commerce step after a real changed mutation that failed proof. Current code marks this as non-retryable inside the same goal so a failed Add-to-Cart proof cannot blindly duplicate the item.
 - Do not retry Wayfair blindly. It exposes product/Add/basket surfaces and one pre-no-retry builder-side basket read-back succeeded after a retry, but current code failed closed after the known cart page did not verify the item. Retry only with a new cart persistence or read-back hypothesis, never by repeating the same mutation in the same goal.
+- Do not let decimal product names be treated as sentence endings during memory-to-intent extraction. If a remembered item includes `4.0`, `2.5`, storage sizes, or other numeric variants, preserve the full item before product matching.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local`, env backup files, raw Chrome profiles, `.anticipy` state, or raw local data.
 - Google Sheets and Google Docs canvas synthetic input remain dead ends.
@@ -232,7 +234,7 @@ Dead ends not to retry blindly:
 - Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
 - Do not design always-on cloud transcription.
 
-- Convert the current GameStop exact-item path plus prior Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Convert the current GameStop exact-item path plus prior Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, Macy's, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
 - Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
 
 Law digest:
