@@ -467,6 +467,30 @@ def _token_hits(name: str, tokens: list[str]) -> int:
     return hits
 
 
+def _ordered_item_score(name: str, tokens: list[str]) -> int:
+    if not name or len(tokens) < 2:
+        return 0
+    words = re.findall(r"[a-z0-9]+", (name or "").lower())
+    positions = []
+    start_at = 0
+    for tok in tokens:
+        found = None
+        for idx in range(start_at, len(words)):
+            word = words[idx]
+            if word == tok or (len(tok) >= 5 and tok in word):
+                found = idx
+                break
+        if found is None:
+            return 0
+        positions.append(found)
+        start_at = found + 1
+    span = positions[-1] - positions[0] + 1
+    score = len(tokens) * 2 + max(0, len(tokens) * 3 - span)
+    if span == len(tokens):
+        score += 8
+    return score
+
+
 def _required_product_hits(tokens: list[str]) -> int:
     n = len(tokens)
     if n <= 2:
@@ -553,12 +577,13 @@ def _pick_product(
         if hits < required:
             continue
         hint_hits = _token_hits(f"{name} {href}", context_hints)
+        ordered_score = _ordered_item_score(name, tokens)
         score = (
             hits * 3
+            + ordered_score
             + hint_hits * 5
             + (4 if productish_url else 0)
             + (2 if el.get("inView") else 0)
-            + min(len(name), 120) / 120
         )
         candidates.append((_price_cents(name), hint_hits, score, el))
     if not candidates and allow_query_fallback:
@@ -584,10 +609,11 @@ def _pick_product(
                 continue
             seen_hrefs.add(href)
             hint_hits = _token_hits(f"{name} {href}", context_hints)
+            ordered_score = _ordered_item_score(name, tokens)
             score = (
-                hint_hits * 5
+                ordered_score
+                + hint_hits * 5
                 + (2 if el.get("inView") else 0)
-                + min(len(name), 120) / 120
                 - pos / 1000
             )
             candidates.append((_price_cents(name), hint_hits, score, el))
@@ -1078,7 +1104,7 @@ class WebVoyagerAgent:
                 return {}, None  # timeout / transport hiccup -> treat as not-ready
         out, shot = await _try(url)
         n = 0
-        while self._empty_obs(out) and n < tries:
+        while (self._empty_obs(out) or (url is not None and self._unactionable_obs(out))) and n < tries:
             await asyncio.sleep(1.2 + 0.6 * n)
             out, shot = await _try()
             n += 1
@@ -1264,6 +1290,26 @@ class WebVoyagerAgent:
                 history.append(f"recipe: typed item into site search idx={search_box.get('idx')}")
                 steps += 1
 
+        if self._unactionable_obs(out):
+            for attempt in range(3):
+                await asyncio.sleep(0.8 + attempt * 0.4)
+                if _looks_search_results_url((out or {}).get("url") or ""):
+                    await self._act({"action": "scroll", "dir": "down"})
+                    history.append(f"recipe: scroll unactionable search surface {attempt + 1}")
+                else:
+                    history.append(f"recipe: re-observe unactionable search surface {attempt + 1}")
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                states.append(_page_state(
+                    f"search_unactionable_retry_{attempt + 1}",
+                    out,
+                    item,
+                    history[-1],
+                    start_url=start_url,
+                ))
+                steps += 1
+                if not self._unactionable_obs(out):
+                    break
         if self._unactionable_obs(out):
             states.append(_page_state("unactionable_search_surface", out, item, history[-1], start_url=start_url))
             return self._done(out, steps + 1, history, answer="",

@@ -1,26 +1,30 @@
 # Last Lap
 
-Lap: 20260609T134541Z
-Date: 2026-06-09T13:56:49Z
-Milestone: M3 - visible product identity before Add
+Lap: 20260609T140258Z
+Date: 2026-06-09T14:25:29Z
+Milestone: M3 - exact Target product selection and CDP profile-dir hardening
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- WebVoyager now requires distinctive-token agreement when selecting nearby product URLs and adjacent search-result Add controls.
-- Product-page Add attempts now check visible product identity before any real Add click. The visible title, primary text, and visible non-control labels must satisfy the remembered item's token threshold and leading distinctive tokens. URL tokens are recorded only as supportive metadata and cannot rescue a contradictory visible page.
-- Page-state traces now include sanitized product identity evidence fields: `product_item_match`, visible token hits, total token hits, required hits, distinctive-token agreement, and number agreement.
-- Added a lesson: a URL slug can contradict the visible product page and must not be treated as product identity.
+- WebVoyager now scores compact ordered item-token sequences, so an exact product title such as `OXO Dish Brush` outranks broader titles where the requested tokens are scattered.
+- Product selection no longer rewards longer titles when token hits tie.
+- Navigated observations with URL/title but no text or actionable elements are treated as not ready, and empty search surfaces are re-observed or scrolled before the commerce recipe fails.
+- `NativeBridgeLink` now creates the configured Chrome user-data directory before CDP launch, so fresh per-lap profiles can actually start Chrome and return actionable marks.
 
 Real runs:
-- A pre-tightening live Lowe's run resolved the vague yard request from memory to Lowe's plus a token-rich gloves item, opened a contradictory product page, still clicked a real Add control, and failed final cart proof. This was a false action, not progress.
-- After the visible-identity fix loaded in a fresh engine and fresh Chrome profile, the same vague memory-resolved run opened the same contradictory product URL, refreshed and scrolled for stronger identity evidence, then rejected before any Add click with visible hits 4/5 and distinctive=false.
+- A Target run with a missing sub-brand in the remembered item failed safely without an Add click.
+- A pre-fix Target run selected a broader soap-dispensing palm brush product and verified broad cart text. This is counted as a false action, not progress.
+- A post-ranking rerun still failed safely because CDP Chrome did not start when the fresh profile directory did not exist, leaving the bridge with zero actionable Target marks.
+- After profile-dir creation, a sanitized direct Target probe saw 299 actionable elements and 131 product-like Target links.
+- The final live `/event` run seeded context-only memory, then sent a vague action that did not name the site or exact item. The hand resolved Target plus `OXO Dish Brush`, opened the exact `/p/oxo-dish-brush/-/A-80221510` product, clicked a real Add to cart control, opened Target cart, and durable cart read-back matched the item.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused product identity samples passed.
+- Focused ordered-product ranking check passed.
+- Focused Chrome profile directory creation check passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -33,12 +37,12 @@ Checks:
 
 Gate:
 - No all-work human gate is active.
-- The separate judge still blocks proof only, not building.
-- The latest work is failure hardening on a real M3 chain and remains `UNPROVEN-PENDING-JUDGE`.
+- Separate judge quota blocks proof only, not building.
+- Latest work remains `UNPROVEN-PENDING-JUDGE`.
 
 Proof status:
 - M3 is not done.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work on real stores only. The next lap should push positive real-cart capability or a new exact-product hypothesis, not another blind Lowe's gloves retry.
+- Continue M3 ladder work on real stores only. Convert the unjudged Target exact-item cart path through the separate judge when quota returns, and otherwise keep building exact item matching, durable read-back, and cheap real-site action recipes.

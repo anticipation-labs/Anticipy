@@ -831,7 +831,11 @@ class NativeBridgeLink:
         configured = os.environ.get("ANTICIPY_CHROME_USER_DATA_DIR", "").strip()
         if configured:
             p = Path(configured).expanduser()
-            return p if p.exists() else None
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                return None
+            return p
         clone = Path.home() / ".anticipy" / "chrome-real-clone"
         return clone if clone.exists() else None
 
