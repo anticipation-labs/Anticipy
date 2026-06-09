@@ -708,7 +708,7 @@ class NativeBridgeLink:
             return []
         raw = " ".join(
             " ".join(params.get(key, []))
-            for key in ("q", "query", "keywords", "search", "searchTerm", "st")
+            for key in ("q", "query", "keywords", "search", "searchTerm", "searchinfo", "st")
         )
         tokens = re.findall(r"[a-z0-9]{3,}", raw.lower())
         return [t for t in tokens if t not in {"the", "and", "for", "with"}][:6]

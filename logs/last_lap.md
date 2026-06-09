@@ -1,27 +1,28 @@
 # Last Lap
 
-Lap: 20260609T160142Z
-Date: 2026-06-09T16:16:28Z
-Milestone: M3 - B&H real-store cart path and exact variant ranking
+Lap: 20260609T163143Z
+Date: 2026-06-09T16:45:26Z
+Milestone: M3 - Adorama real-store cart path and cart-proof hardening
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- WebVoyager now knows B&H Photo Video search, product, and cart URL shapes: `/c/search?Ntt=...&N=0&InitialSearch=yes`, `/c/product/.../<slug>.html`, and `/find/cart.jsp`.
-- Numeric item matching now treats a numeric token such as `128` as matching alphanumeric visible labels such as `128GB`, including ordered item scoring.
-- Product ranking now treats memory context hints as scoring signals rather than exclusive filters, and ranks total product score before hint count so context words such as `kit` cannot override an exact item match.
-- Product variant penalties now include unrequested bundle, kit, pack, edition, CompactFlash, CFexpress, microSD, and microSDXC words so broader variants do not outrank the remembered item.
+- WebVoyager now knows Adorama search, product, and cart URL shapes: `/l/?searchinfo=...`, `/p/<slug>`, and `/cartview`.
+- NativeBridgeLink now treats Adorama `searchinfo` query parameters as search query tokens for bridge readiness.
+- Product URL classification now rejects review and Q&A URL fragments before treating a URL as buyable.
+- Item token matching now handles cautious compound boundary matches, so a visible title such as `SlideLITE` can match both `slide` and `lite` without arbitrary short substring matching.
+- Cart proof now recognizes `/cartview` as a cart URL but requires item-local cart structure such as quantity or remove before cart-page item tokens count as proof. Recommendation product cards on cart pages cannot complete the task.
 
 Real runs:
-- Read-only B&H probing found real search results, B&H product URLs, Add to Cart controls, the live cart route, and a product page with a real Add to Cart control after settle/refresh/scroll.
-- The first full live `/event` run seeded context-only memory, then sent a vague action that did not name B&H or the item. It resolved to B&H and the remembered item, but selected a broader CompactFlash plus SDXC kit because the context hint `kit` filtered out exact non-hint matches. It failed final cart verification with no proof keys.
-- After ranking hardening, a fresh full live `/event` run used the same vague action, opened the exact B&H product `SanDisk 128GB Extreme PRO UHS-II SDXC Memory Card`, clicked a real Add to Cart control, opened B&H `/a/cart`, and durable known-cart read-back matched the requested item.
+- Read-only Adorama probing found real product links, visible `ADD TO CART` controls, and the live cart route without mutation.
+- The first full live `/event` run seeded context-only memory, then sent a vague action that did not name Adorama or the item. It resolved to Adorama plus the remembered Peak Design camera strap, opened the real product page, clicked a real `ADD TO CART` control, and opened `/cartview`, but failed final proof because the cart route did not expose item-local cart structure.
+- After cart URL and proof hardening, a fresh full live `/event` run used the same vague action, opened the real Adorama product, clicked a real `ADD TO CART` control, opened `/cartview`, and completed only after durable cart-page read-back had item-local cart structure.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused B&H context classifier check passed.
+- Focused Adorama cart guard, URL, compound-match, and `searchinfo` checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -42,4 +43,4 @@ Proof status:
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work on real stores only. Convert the unjudged B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and other builder-side artifacts through the separate judge when quota returns, and otherwise keep building exact item matching, durable read-back, and cheap real-site action recipes.
+- Continue M3 ladder work on real stores only. Convert the unjudged Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and other builder-side artifacts through the separate judge when quota returns, and otherwise keep building exact item matching, durable read-back, and cheap real-site action recipes.

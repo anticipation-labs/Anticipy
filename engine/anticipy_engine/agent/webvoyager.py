@@ -80,6 +80,7 @@ COMMERCE_SEARCH_URLS = {
     "chewy.com": "https://www.chewy.com/s?query={q}",
     "michaels.com": "https://www.michaels.com/search?q={q}",
     "bhphotovideo.com": "https://www.bhphotovideo.com/c/search?Ntt={q}&N=0&InitialSearch=yes",
+    "adorama.com": "https://www.adorama.com/l/?searchinfo={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -96,6 +97,7 @@ COMMERCE_CART_URLS = {
     "chewy.com": "https://www.chewy.com/app/cart",
     "michaels.com": "https://www.michaels.com/cart",
     "bhphotovideo.com": "https://www.bhphotovideo.com/find/cart.jsp",
+    "adorama.com": "https://www.adorama.com/cartview",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -107,11 +109,11 @@ GENERIC_ADD_LABEL_RE = re.compile(
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
-CART_URL_RE = re.compile(r"/(?:cart|shoppingcart|basket|bag)(?:[/?#]|$)", re.I)
+CART_URL_RE = re.compile(r"/(?:cart|cartview|shoppingcart|basket|bag)(?:[/?#]|$)", re.I)
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
 SEARCH_RESULTS_URL_RE = re.compile(
     r"/(?:search|s|beta-search)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
-    r"[?&](?:q|query|keywords|search|searchTerm|st)=",
+    r"[?&](?:q|query|keywords|search|searchTerm|searchinfo|st)=",
     re.I,
 )
 CONTENT_URL_RE = re.compile(
@@ -134,6 +136,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "chewy.com": re.compile(r"/(?:.+/dp/|api/event/p/sar/click)", re.I),
     "michaels.com": re.compile(r"/product/", re.I),
     "bhphotovideo.com": re.compile(r"/c/product/[^?#]+\.html$", re.I),
+    "adorama.com": re.compile(r"/p/[^/?#]+$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -325,16 +328,19 @@ def _looks_buyable_product_url(url: str, start_url: str = "") -> bool:
     absolute = _absolute_site_url(start_url, url) if start_url else (url or "")
     if not absolute or not _same_site(start_url, absolute):
         return False
+    parsed = urllib.parse.urlparse(absolute)
+    if re.search(r"\b(review|reviews|qa|q-and-a|ask-question)\b", parsed.fragment or "", re.I):
+        return False
     if re.search(r"/(?:cart|basket|bag|checkout|login|signin|sign-in)(?:[/?#]|$)", absolute, re.I):
         return False
     pattern = _commerce_product_pattern(start_url or absolute)
     if pattern is not None:
-        if pattern.search(urllib.parse.urlparse(absolute).path) is not None:
+        if pattern.search(parsed.path) is not None:
             return True
         return False
     if _looks_search_results_url(absolute) or _looks_content_url(absolute):
         return False
-    return PRODUCT_URL_RE.search(urllib.parse.urlparse(absolute).path) is not None
+    return PRODUCT_URL_RE.search(parsed.path) is not None
 
 
 def _absolute_site_url(start_url: str, href: str) -> str:
@@ -492,7 +498,9 @@ def _numbers_match(candidate: str, item: str) -> bool:
 def _word_matches_token(word: str, tok: str) -> bool:
     if re.fullmatch(r"\d+(?:\.\d+)?", tok):
         return re.match(rf"{re.escape(tok)}(?!\d)", word or "") is not None
-    return word == tok or (len(tok) >= 5 and tok in (word or ""))
+    if word == tok or (len(tok) >= 5 and tok in (word or "")):
+        return True
+    return len(tok) >= 4 and ((word or "").startswith(tok) or (word or "").endswith(tok))
 
 
 def _token_hits(name: str, tokens: list[str]) -> int:
@@ -765,6 +773,7 @@ CART_STRUCTURE_RE = re.compile(
     r"quantity|qty|remove|save\s+for\s+later|shipping|pickup|delivery)\b",
     re.I,
 )
+CART_ITEM_STRUCTURE_RE = re.compile(r"\b(quantity|qty|remove|save\s+for\s+later)\b", re.I)
 CART_ITEM_QUANTITY_RE = re.compile(
     r"\b(?:qty|quantity)\s*(?:[:#-]\s*)?(?P<qty>\d{1,3})\b|"
     r"\b(?P<qty2>\d{1,3})\s+(?:qty|quantity)\b",
@@ -828,14 +837,19 @@ def _cart_item_windows(text: str, item: str) -> list[dict]:
                 quantity = int(raw_qty)
             except (TypeError, ValueError):
                 quantity = None
+        local_structure = CART_ITEM_STRUCTURE_RE.search(window) is not None
         windows.append(
             {
                 "token_hits": hits,
                 "required_hits": required,
                 "quantity": quantity,
+                "local_structure": local_structure,
             }
         )
-    windows.sort(key=lambda row: (row["quantity"] is not None, row["token_hits"]), reverse=True)
+    windows.sort(
+        key=lambda row: (row["local_structure"], row["quantity"] is not None, row["token_hits"]),
+        reverse=True,
+    )
     return windows
 
 
@@ -849,6 +863,7 @@ def _cart_item_evidence(out: dict, item: str) -> dict:
         "token_hits": int(best.get("token_hits") or 0),
         "required_hits": int(best.get("required_hits") or required),
         "quantity": best.get("quantity") if isinstance(best.get("quantity"), int) else None,
+        "local_structure": bool(best.get("local_structure")),
     }
 
 
@@ -884,7 +899,10 @@ def _cart_verified(out: dict, item: str) -> bool:
         return False
     if added and not cart_url:
         return _cart_marker_item_match(text, item)
-    return bool(_cart_item_evidence(out, item)["matched"])
+    evidence = _cart_item_evidence(out, item)
+    if cart_url:
+        return bool(evidence["matched"] and evidence["local_structure"])
+    return bool(evidence["matched"])
 
 
 def _is_cart_url(out: dict) -> bool:
@@ -909,7 +927,7 @@ def _cart_signal_score(out: dict, item: str) -> int:
         score += 60
     if _cart_verified(out, item):
         score += 120
-    if item_evidence["matched"]:
+    if item_evidence["matched"] and (not CART_URL_RE.search(url) or item_evidence["local_structure"]):
         score += 40 + min(20, item_evidence["token_hits"] * 5)
     if count == 0:
         score -= 25
@@ -1056,6 +1074,7 @@ def _page_state(
         "cart_item_token_hits": item_evidence["token_hits"],
         "cart_item_required_hits": item_evidence["required_hits"],
         "cart_item_quantity": item_evidence["quantity"],
+        "cart_item_local_structure": item_evidence["local_structure"],
         "cart_count": _cart_count(out),
         "cart_signal": _cart_signal_score(out, item),
         "cart_verified": _cart_verified(out, item),
