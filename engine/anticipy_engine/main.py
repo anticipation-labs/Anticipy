@@ -171,15 +171,18 @@ async def ws_reload() -> dict:
 class BrowseIn(BaseModel):
     intent: str = "browse_task"
     args: dict = {}
+    agent: bool = False
 
 
 @app.post("/ws/browse")
 async def ws_browse(body: BrowseIn) -> dict:
-    # dev/test: drive the real BrowserHand over the live extension link
-    from .hands.browser_hand import BrowserHand
+    if body.agent:
+        res = await core.browser_hand.handle(Job(intent=body.intent, args=body.args))
+    else:
+        # Transport diagnostic only. M3 evidence must use /event and real sites.
+        from .hands.browser_hand import BrowserHand
 
-    hand = BrowserHand(core.browser_link, timeout=30.0)
-    res = await hand.handle(Job(intent=body.intent, args=body.args))
+        res = await BrowserHand(core.browser_link, timeout=30.0).handle(Job(intent=body.intent, args=body.args))
     return res.model_dump(mode="json")
 
 

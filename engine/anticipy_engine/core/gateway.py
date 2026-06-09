@@ -40,13 +40,14 @@ class ModelGateway:
         self._key = os.environ.get("OPENROUTER_API_KEY")
 
     async def think(self, task: str, tier: str, caller: str, image: Optional[str] = None,
-                    json_mode: bool = False, temperature: Optional[float] = None) -> str:
+                    json_mode: bool = False, temperature: Optional[float] = None,
+                    max_tokens: Optional[int] = None) -> str:
         if tier == SMART and caller not in self.SMART_CALLERS:
             raise PermissionError(f"smart tier not allowed from caller '{caller}'")
         self.calls.append({"tier": tier, "caller": caller, "cost": COST.get(tier, 0.0)})
 
         if self.provider == PROVIDER_OPENROUTER:
-            return await self._openrouter(task, tier, image, json_mode, temperature)
+            return await self._openrouter(task, tier, image, json_mode, temperature, max_tokens)
         if self.endpoint:
             return await self._custom_endpoint(task, tier)
         return self._stub(task, tier, caller)
@@ -60,7 +61,7 @@ class ModelGateway:
 
     # ---- real provider: OpenRouter (OpenAI-compatible, vision-capable) ----
     async def _openrouter(self, task: str, tier: str, image: Optional[str], json_mode: bool = False,
-                          temperature: Optional[float] = None) -> str:
+                          temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> str:
         if not self._key:
             raise RuntimeError("OPENROUTER_API_KEY NOT SET / NOT FUNDED")
         import httpx
@@ -81,6 +82,9 @@ class ModelGateway:
             body["response_format"] = {"type": "json_object"}  # force a parseable JSON object
         if temperature is not None:
             body["temperature"] = temperature  # low temp for stable, run-to-run decisions
+        token_cap = max_tokens or os.environ.get("ANTICIPY_MODEL_MAX_TOKENS")
+        if token_cap:
+            body["max_tokens"] = int(token_cap)
 
         # Retry transient empties / 429 / 5xx — the provider intermittently returns
         # empty content under load, which would otherwise read as a spurious failure.

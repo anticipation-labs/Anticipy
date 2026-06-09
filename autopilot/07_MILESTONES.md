@@ -2,7 +2,28 @@
 
 Each milestone's "done" is a real-world check by the judge (`05_JUDGE.md`), never a green unit test. A milestone is done only when the reality judge confirms it on the required real surface. For broad reality milestones, require at least 5 different held-out real days spanning different situations, not 5 variations of one. Score by the worst case, never the average. One pass means nothing.
 
-Do them roughly in order. Always: one vertical slice per lap, the whole system on a real day every lap, never shrink the goal, money is the only stop. Until real diverse users exist, label generalization as UNPROVEN in every scorecard and never claim the product works for everyone.
+Do them roughly in order unless a later amendment narrows focus. Always: one vertical slice per lap, the whole system on a real day every lap, never shrink the goal, money is the only stop. Until real diverse users exist, label generalization as UNPROVEN in every scorecard and never claim the product works for everyone.
+
+## Current focus amendment: M3 only
+Stop widening the perimeter. The only milestone the builder may work now is M3: the browser hand actually completing a real task end to end. No more UI/status/observability/onboarding-polish laps. The product is: hear a task, do it, prove it happened.
+
+M3 work must wire the real WebVoyager/browser agent into the live task loop so a typed task such as `add the cheapest stainless water bottle on <real site> to the cart` actually drives the browser and changes the cart. This means the real planner, real browser hand, and real artifact path, not a self-test, not a mocked flow, and not another status surface.
+
+Mocked browser checks never count as M3 progress. They may only prove generic wiring did not regress. M3 advances only when a real artifact appears in the real world and the separate judge verifies it. Until the judge is available, the builder may build the real action path, but every scorecard and state update must label it UNPROVEN.
+
+If the real action path needs the separate judge to confirm it and the judge is quota-blocked, the builder is BLOCKED on M3 for proof. Write that plainly in `PENDING_FOR_OMAR.md` and stop inventing easy side-work.
+
+Hard target rule: `example.com`, localhost, fixture pages, and contrived no-stakes pages are banned as M3 task targets and banned as M3 evidence. They are diagnostics only, never progress.
+
+The browser hand must not complete M3 by typing the task text into a search bar or address bar. A run that turns the user's instruction into search text is a failed run. The agent must plan and act on a real site or real account.
+
+The real M3 shape is:
+1. The task is vague natural language that does not name the site or exact item, for example `grab that thing I was looking at earlier for the kitchen`.
+2. The system uses memory to resolve what the phrase means, choose the real site, and identify the real item.
+3. The browser hand acts on that real site and creates a real reversible artifact, such as the item actually being in the real cart.
+4. Proof exists only when the separate judge opens the real site/account and sees the real change. No mocks, no example pages, no localhost pages, and no screenshot-only proof.
+
+If the full chain is not working yet, build the missing piece and label every run `UNPROVEN-PENDING-JUDGE`. Judge quota being blocked does not justify easy side-work. If building the chain itself is blocked, record the exact blocker in `PENDING_FOR_OMAR.md`.
 
 The current state is in `CODEX_BRIEF.md`. Short version: the decision spine, memory, and a stranded multi-step browser agent are real; the product around them (front door, input, onboarding, the mesh beyond two apps, the proactive scheduler, distribution) is mostly absent. You are building that perimeter and wiring the real engine into a usable product.
 

@@ -95,6 +95,25 @@ _TIME_RANGE_RE = re.compile(
 )
 _CLOCK_RE = re.compile(r"^\s*(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm)?\s*$", re.I)
 _TZ_RE = re.compile(r"\b(?P<tz>[A-Z][A-Za-z_]+/[A-Z][A-Za-z_]+)\b")
+_BROWSER_ACTION_RE = re.compile(
+    r"https?://"
+    r"|\b(?:on|at|from|using|via)\s+(?:[a-z0-9-]+\.)+[a-z]{2,}\b"
+    r"|\b(?:add|put)\b[\w' ,.-]{0,120}\b(?:cart|basket|bag)\b"
+    r"|\b(?:get|grab)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:thing|one|item|product)\b",
+    re.I,
+)
+_VAGUE_BROWSER_RE = re.compile(
+    r"\b(that|the)\s+(thing|one|item|product)\b"
+    r"|\b(earlier|last time|before|was looking at|looked at)\b",
+    re.I,
+)
+_URL_IN_TEXT_RE = re.compile(r"https?://[^\s<>\]})\"']+", re.I)
+_DOMAIN_IN_TEXT_RE = re.compile(r"\b((?:[a-z0-9-]+\.)+[a-z]{2,})(/[^\s<>\]})\"']*)?", re.I)
+_PRODUCT_HINT_RE = re.compile(
+    r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for|"
+    r"product|item|thing|cart|kitchen)\b",
+    re.I,
+)
 
 
 def _parse_clock(raw: str, fallback_ampm: str | None = None) -> tuple[int, int] | None:
@@ -175,6 +194,98 @@ def _calendar_event_step(text: str) -> Optional[Step]:
     )
 
 
+def _clean_link(raw: str) -> str:
+    return (raw or "").strip().rstrip(".,;:!?)\"]}'")
+
+
+def _context_lines(context) -> list[str]:
+    if not isinstance(context, dict):
+        return []
+    lines: list[str] = []
+    for key in ("notes", "open_loops", "history", "profile"):
+        val = context.get(key)
+        if isinstance(val, str):
+            lines.extend([line.strip() for line in val.splitlines() if line.strip()])
+        elif isinstance(val, list):
+            lines.extend(str(line).strip() for line in val if str(line).strip())
+    return lines
+
+
+def _line_site(line: str) -> str:
+    url_m = _URL_IN_TEXT_RE.search(line)
+    if url_m:
+        return _clean_link(url_m.group(0))
+    for m in _DOMAIN_IN_TEXT_RE.finditer(line):
+        domain = (m.group(1) or "").lower()
+        if m.start(1) > 0 and line[m.start(1) - 1] == "@":
+            continue
+        if domain and domain not in {"example.com", "localhost"} and "." in domain:
+            return "https://" + _clean_link((m.group(1) or "") + (m.group(2) or ""))
+    return ""
+
+
+def _line_item(line: str) -> str:
+    quoted = re.findall(r"['\"“”]([^'\"“”]{3,140})['\"“”]", line)
+    if quoted:
+        return re.sub(r"\s+", " ", quoted[-1]).strip()
+    patterns = (
+        r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for)\s+(?P<item>[^.;\n]+)",
+        r"\b(?:product|item|thing)\s*[:=-]\s*(?P<item>[^.;\n]+)",
+        r"\bfor the\s+(?P<item>[^.;\n]+)",
+    )
+    for pat in patterns:
+        m = re.search(pat, line, re.I)
+        if m:
+            item = re.sub(r"\s+", " ", m.group("item")).strip(" .,:;-")
+            if 3 <= len(item) <= 160:
+                return item
+    return ""
+
+
+def _memory_resolved_browser_step(text: str, context) -> Optional[Step]:
+    if not _VAGUE_BROWSER_RE.search(text or ""):
+        return None
+    candidates = []
+    for line in _context_lines(context):
+        if not _PRODUCT_HINT_RE.search(line):
+            continue
+        site = _line_site(line)
+        item = _line_item(line)
+        if site and item:
+            candidates.append({"site": site, "item": item, "source": line[:240]})
+    if not candidates:
+        return None
+    resolved = candidates[-1]
+    task = (
+        f"On {resolved['site']}, find {resolved['item']} and add it to the cart. "
+        "Stop after the cart visibly contains the item. Do not checkout, pay, or place an order."
+    )
+    return Step(
+        intent="browse_task",
+        args={
+            "task": task,
+            "url": resolved["site"],
+            "original_task": text,
+            "resolved_from_memory": True,
+            "memory_resolution": resolved,
+        },
+        risk=Risk.low,
+    )
+
+
+def _browser_action_step(text: str, context=None) -> Optional[Step]:
+    """Route web-action goals; vague target resolution must come from memory."""
+    clean = (text or "").strip()
+    if not clean or not _BROWSER_ACTION_RE.search(clean):
+        return None
+    resolved = _memory_resolved_browser_step(clean, context)
+    if resolved is not None:
+        return resolved
+    if _VAGUE_BROWSER_RE.search(clean):
+        return None
+    return Step(intent="browse_task", args={"task": clean}, risk=Risk.low)
+
+
 class Orchestrator:
     def __init__(
         self,
@@ -210,7 +321,7 @@ class Orchestrator:
         self._log("goal_planning", {"goal_id": goal.id})
 
         context = self.memory_context(goal.description or goal.intent) if self.memory_context else {}
-        goal.steps = self._deterministic_plan(goal)
+        goal.steps = self._deterministic_plan(goal, context)
         plan_source = "deterministic" if goal.steps else "model"
         if not goal.steps:
             plan_raw = await self.gateway.think(self._plan_prompt(goal, context), tier=SMART, caller="plan", json_mode=True)
@@ -297,9 +408,11 @@ class Orchestrator:
                 step.state = StepState.done
                 return True
             if result.status == JobStatus.needs_human:
+                step.result = result
                 step.state = StepState.needs_human
                 return True  # resolved (surfaced); rerouting wouldn't help
             # failed OR success-without-proof -> retry
+            step.result = result
         return False
 
     @staticmethod
@@ -309,10 +422,13 @@ class Orchestrator:
 
     # ---- helpers ----
     @staticmethod
-    def _deterministic_plan(goal: Goal) -> list:
+    def _deterministic_plan(goal: Goal, context=None) -> list:
         text = goal.description or goal.intent
         calendar = _calendar_event_step(text)
-        return [calendar] if calendar is not None else []
+        if calendar is not None:
+            return [calendar]
+        browser = _browser_action_step(text, context)
+        return [browser] if browser is not None else []
 
     def _plan_prompt(self, goal: Goal, context=None) -> str:
         base = ('Plan the goal into ordered steps. Respond with ONLY a JSON object '
@@ -329,7 +445,9 @@ class Orchestrator:
                      'send_text{"recipient","body"}, '
                      'create_event{"summary","start_datetime","end_datetime"}, create_doc{"title","body"}, '
                      'write_memory{"text"}. For any web search / lookup / shopping / browsing step, use '
-                     'browse_task with a "task" string. For Calendar writes, only use create_event when '
+                     'browse_task with a "task" string. For vague web tasks such as "that thing" or "earlier", '
+                     'use browse_task only if RELEVANT MEMORY identifies a real site and item; otherwise ask. '
+                     'Never plan by typing the whole instruction into search. For Calendar writes, only use create_event when '
                      'the user supplied a concrete date and clock time, or a relative day plus clock time '
                      'that can be grounded from CURRENT_LOCAL_TIME. Never use capture time as the event time '
                      'unless the user explicitly asked for now.')

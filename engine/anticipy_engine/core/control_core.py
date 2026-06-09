@@ -13,7 +13,7 @@ from .browser_link import BrowserLink
 from .bus import Bus
 from .env import load_local_env
 from .envelopes import Event, EventSource
-from .gateway import ModelGateway
+from .gateway import ModelGateway, PROVIDER_OPENROUTER
 from .glassbox import GlassBox
 from .orchestrator import Approver, Orchestrator
 from .proactive import ProactiveEngine
@@ -64,8 +64,14 @@ class ControlCore:
         # Arcade user_id must match the signed-in Arcade.dev account ("users only" mode)
         user_id = os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
         self.api_hand = ApiHand(user_id=user_id, mode=hands_mode)
+        agent_gateway = self.gateway if self.gateway.provider == PROVIDER_OPENROUTER else None
         self.browser_hand = BrowserHand(
-            self.browser_link, timeout=float(os.environ.get("ANTICIPY_BROWSE_TIMEOUT", "30"))
+            self.browser_link,
+            timeout=float(os.environ.get("ANTICIPY_BROWSE_TIMEOUT", "30")),
+            gateway=agent_gateway,
+            max_steps=int(os.environ.get("ANTICIPY_AGENT_MAX_STEPS", "18")),
+            agent_timeout=float(os.environ.get("ANTICIPY_AGENT_TIMEOUT", "240")),
+            notifier=self.notify_user,
         )
         self.channel = ChannelStub()  # reaching the user (text/call); delivery stubbed for now
         # Real workers register LAST so they own any intent a stub also claims; the real
@@ -94,7 +100,13 @@ class ControlCore:
     def _mem_ctx(self, about: str) -> dict:
         """INJECT seam for the orchestrator's plan: relevant memory for `about`."""
         inj = self.live_memory.inject(about)
-        return {"notes": inj["text"], "open_loops": [i.text for i in inj["open_loops"]]}
+        return {
+            "notes": inj["text"],
+            "open_loops": [i.text for i in inj["open_loops"]],
+            "profile": [i.text for i in inj["profile"]],
+            "history": [i.text for i in inj["history"]],
+            "derived": [i.text for i in inj["derived"]],
+        }
 
     async def feed(self, source: str, text: str, meta: dict | None = None) -> dict:
         self.live_memory.capturer.capture(text, source=source)  # CAPTURE before anything acts

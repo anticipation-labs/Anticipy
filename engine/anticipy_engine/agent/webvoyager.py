@@ -31,10 +31,14 @@ PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes
 (e.g., reach the target page; find the target item; select it; perform the action; verify/stop).
 Reply ONLY JSON: {"subgoals":["...","..."]}"""
 
+AGENT_MAX_TOKENS = 16
+
 ACT_SYS = """You control a REAL browser through a numbered set-of-marks overlay (the screenshot shows numbered boxes).
 Advance the CURRENT SUBGOAL. Reply ONLY JSON:
 {"thought":"one line","action":"click|type|scroll|navigate|answer","index":<int>,"text":"<for type>","enter":<true to submit>,"dir":"down|up","url":"<for navigate>","subgoal_done":<true if the current subgoal is now achieved>,"answer":"<final result, only with action=answer>"}
 Rules:
+- Use the shortest valid JSON. Omit unused keys and omit "thought" if space is tight.
+- If SEARCH_TEXT is provided and you need to type it, use "text":"$ITEM" exactly.
 - Pick a NUMBER shown on the screenshot; never invent one.
 - To search: action=type on the search box's index, with text and enter=true.
 - AVOID elements marked [AD] (sponsored) — prefer organic results.
@@ -80,12 +84,39 @@ def _parse_json(raw: str) -> Optional[dict]:
     return None
 
 
-def _clean_action(a: dict) -> dict:
+async def _think(gw: ModelGateway, task: str, tier: str, caller: str, image: Optional[str] = None,
+                 json_mode: bool = False, temperature: Optional[float] = None,
+                 max_tokens: Optional[int] = None) -> str:
+    try:
+        return await gw.think(task, tier=tier, caller=caller, image=image, json_mode=json_mode,
+                              temperature=temperature, max_tokens=max_tokens)
+    except TypeError as exc:
+        if "max_tokens" not in str(exc):
+            raise
+        return await gw.think(task, tier=tier, caller=caller, image=image, json_mode=json_mode,
+                              temperature=temperature)
+
+
+def _clean_action(a: dict, item_text: str = "") -> dict:
     out = {"action": a.get("action")}
     for k in ("index", "text", "url", "dir", "enter"):
         if k in a and a[k] is not None:
-            out[k] = a[k]
+            out[k] = item_text if k == "text" and str(a[k]).strip() in {"$ITEM", "<ITEM>"} else a[k]
     return out
+
+
+def _search_text(task: str) -> str:
+    patterns = (
+        r"\bfind\s+(?P<item>.+?)\s+and\s+add\b",
+        r"\bsearch\s+for\s+(?P<item>.+?)\b(?:and|then|$)",
+    )
+    for pat in patterns:
+        m = re.search(pat, task or "", re.I)
+        if m:
+            item = re.sub(r"\s+", " ", m.group("item")).strip(" .,:;-")
+            if 3 <= len(item) <= 180:
+                return item
+    return ""
 
 
 def _sig(url, title, els) -> str:
@@ -169,8 +200,15 @@ class WebVoyagerAgent:
             return {"status": "error"}
 
     async def _plan(self, task: str) -> List[str]:
-        raw = await self.gw.think(PLAN_SYS + f"\n\nTASK: {task}", tier=SMART, caller="agent",
-                                  json_mode=True, temperature=0.2)
+        if _search_text(task):
+            return [
+                "search for the remembered item on the site",
+                "open the matching non-sponsored product",
+                "add the item to the cart",
+                "verify the cart contains the item",
+            ]
+        raw = await _think(self.gw, PLAN_SYS + f"\n\nTASK: {task}", tier=SMART, caller="agent",
+                           json_mode=True, temperature=0.2, max_tokens=AGENT_MAX_TOKENS)
         subs = (_parse_json(raw) or {}).get("subgoals") or [task]
         return [str(s) for s in subs][:6]
 
@@ -204,6 +242,7 @@ class WebVoyagerAgent:
         reflection = ""
         last_thought = ""  # carry the model's own reasoning forward one step (scratchpad)
         forbid = None  # (action, index) forbidden this step after a STUCK
+        item_text = _search_text(task)
 
         out, shot = await self._observe_ready(start_url)
         self._cur_shot = shot
@@ -236,6 +275,7 @@ class WebVoyagerAgent:
                 ACT_SYS
                 + f"\n\nTASK: {task}\nPLAN:\n{state.render()}\nCURRENT SUBGOAL: {subgoal_text}\n"
                 + f"URL: {out.get('url')}\nTITLE: {out.get('title')}\nLAST STEP: {progress}\n"
+                + (f"SEARCH_TEXT: {item_text}\n" if item_text else "")
                 + (f"COMMITTED TARGET (act on this; don't re-pick): {committed}\n" if committed else "")
                 + (f"REFLECTION: {reflection}\n" if reflection else "")
                 + (f"YOUR LAST THOUGHT: {last_thought}\n" if last_thought else "")
@@ -247,14 +287,37 @@ class WebVoyagerAgent:
             # (no progress last step, or an action was forbidden by the anti-loop guard)
             escalate = (sub_stuck >= 1) or (forbid is not None)
             tier = SMART if escalate else CHEAP
-            raw1 = await self.gw.think(prompt, tier=tier, caller="agent", image=shot,
-                                       json_mode=True, temperature=0.1)
+            raw1 = await _think(self.gw, prompt, tier=tier, caller="agent", image=shot,
+                                json_mode=True, temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
+            if not (raw1 or "").strip() and shot:
+                # Some model/provider paths return empty content for image+JSON.
+                # The prompt already carries the set-of-marks element list, so a
+                # text-only retry keeps the same planner in the loop without faking.
+                raw1 = await _think(self.gw, prompt, tier=tier, caller="agent", image=None,
+                                    json_mode=True, temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
+            if not (raw1 or "").strip():
+                raw1 = await _think(self.gw, prompt, tier=tier, caller="agent", image=None,
+                                    json_mode=False, temperature=0.1, max_tokens=AGENT_MAX_TOKENS)
             action = _parse_json(raw1)
             raw2 = ""
             if not action or not action.get("action"):
-                raw2 = await self.gw.think(  # a non-answer always escalates to smart
+                raw2 = await _think(  # a non-answer always escalates to smart
+                    self.gw,
                     prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
-                    tier=SMART, caller="agent", image=shot, json_mode=True, temperature=0.1)
+                    tier=SMART, caller="agent", image=shot, json_mode=True, temperature=0.1,
+                    max_tokens=AGENT_MAX_TOKENS)
+                if not (raw2 or "").strip() and shot:
+                    raw2 = await _think(
+                        self.gw,
+                        prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
+                        tier=SMART, caller="agent", image=None, json_mode=True, temperature=0.1,
+                        max_tokens=AGENT_MAX_TOKENS)
+                if not (raw2 or "").strip():
+                    raw2 = await _think(
+                        self.gw,
+                        prompt + "\n\nReturn ONE JSON action now with an \"action\" field.",
+                        tier=SMART, caller="agent", image=None, json_mode=False, temperature=0.1,
+                        max_tokens=AGENT_MAX_TOKENS)
                 action = _parse_json(raw2)
             if not action or not action.get("action"):
                 return self._done(out, step + 1, history, answer="", reason="no parseable action after retry",
@@ -283,7 +346,7 @@ class WebVoyagerAgent:
 
             prev_url = out.get("url")
             label = next((e.get("name", "") for e in els if e.get("idx") == action.get("index")), action.get("text", ""))
-            await self._act(_clean_action(action))
+            await self._act(_clean_action(action, item_text))
             out, shot = await self._observe_ready()
             self._cur_shot = shot
             sub_steps += 1
@@ -329,10 +392,11 @@ class WebVoyagerAgent:
         return self._done(out, self.max_steps, history, answer="", exhausted=True)
 
     async def _reflect(self, task: str, subgoal: str, history: List[str]) -> str:
-        raw = await self.gw.think(
+        raw = await _think(
+            self.gw,
             f"Web agent on subgoal '{subgoal}' for task '{task}'. Last actions:\n" + "\n".join(history[-4:])
             + "\nThe last action did not progress. In ONE sentence: what likely went wrong and what DIFFERENT thing to try.",
-            tier=SMART, caller="agent", temperature=0.3)
+            tier=SMART, caller="agent", temperature=0.3, max_tokens=AGENT_MAX_TOKENS)
         return (raw or "").strip()[:200]
 
 
@@ -347,6 +411,7 @@ async def judge(gw: ModelGateway, task: str, result: dict, image: Optional[str] 
     )
     # temperature=0 so identical (answer, screenshot) gets an identical verdict —
     # the general judge must be deterministic, not flip on a re-grade.
-    raw = await gw.think(prompt, tier=SMART, caller="agent", image=image, json_mode=True, temperature=0)
+    raw = await _think(gw, prompt, tier=SMART, caller="agent", image=image, json_mode=True, temperature=0,
+                       max_tokens=AGENT_MAX_TOKENS)
     j = _parse_json(raw) or {}
     return {"success": bool(j.get("success")), "reason": j.get("reason", "")}

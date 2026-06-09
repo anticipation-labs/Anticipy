@@ -44,4 +44,18 @@ These exist because this project failed about 500 times before you, always the s
 
 21. Abstaining is not milestone progress. A guard that prevents a fake is necessary, but it does not advance M0 or any product milestone by itself. "Honest and does nothing" is still a failed lap toward a milestone. The next lap must make the system complete a real task correctly while preserving every anti-fake law.
 
+22. As of the M3 focus amendment, the only milestone the builder may work is M3: the browser hand actually completing a real task end to end. Do not spend laps on UI polish, status displays, toggles, refresh buttons, onboarding polish, or other perimeter widening. A lap that does not move the real browser hand closer to completing a real task must not be run.
+
+23. M3 progress is positive real action capability only. A self-test, mocked browser flow, status display, public render, or wiring-only check never counts as M3 progress. Mocked checks may be used only to avoid breaking generic wiring. M3 advances only when the real planner drives a real action path that can change a real artifact, and M3 is done only when the separate judge verifies that the artifact changed in the real world.
+
+24. Until the separate judge is available, browser-hand work is UNPROVEN. If the real action path requires the separate judge to confirm it and the judge is quota-blocked, write that plainly in `PENDING_FOR_OMAR.md` and stop inventing easy side-work. Honest blockage is acceptable. Drifting to easy work is not.
+
+25. M3 task targets must be real. `example.com`, localhost, fixture pages, and contrived no-stakes pages are banned as M3 task targets and banned as M3 evidence. They prove only that the system is on. They may be used only as low-level wiring diagnostics if explicitly labeled as not progress and not evidence.
+
+26. The browser hand is never driven by typing the whole task or instruction into a search bar or address bar. If the system turns a task into "type the instruction into search," that is a failed run. Real browser tasks require memory-to-intent resolution, choosing a real site or account from that resolution, and planning actions on that site.
+
+27. The required M3 shape is vague natural language, memory resolution, real browser action, and real-world proof. The task must not name the site or exact item. The system must use memory to resolve references such as "that thing" and "earlier," choose the right real site and real item, then use the browser hand to put the item in the real cart or otherwise create the real site artifact. Only the separate judge opening the real site/account and seeing the real change can prove M3.
+
+28. Judge quota being blocked blocks proof only, not building. While judge proof is quota-blocked, continue building and running the real M3 chain on real sites where the action is safe, reversible, and does not spend money. Record what happened as `UNPROVEN-PENDING-JUDGE`. Do not substitute easy targets, status displays, self-tests, or mocks. If building the real chain itself is blocked, write the exact blocker in `PENDING_FOR_OMAR.md`.
+
 If two laws ever seem to conflict, the one that prevents a fake win wins.

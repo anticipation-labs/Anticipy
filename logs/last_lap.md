@@ -1,48 +1,53 @@
 # Last Lap
 
-Lap: 20260609T022937Z
-Date: 2026-06-09T02:45:50Z
-Milestone: M5 - public onboarding mesh source persistence candidate
+Lap: 20260609T025147Z
+Date: 2026-06-09T03:33:21Z
+Milestone: M3 - memory-resolved real browser hand
 ALL_MILESTONES_DONE: false
 
-Judge verdict: PENDING_JUDGE, Tamper: NOT_RUN
+Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` now has tracked site source commit `921f45bcc3789be479a72636b0245f7b0a1df514` on branch `rebuild/spine-clean`.
-- Public `/app` onboarding now parses the local engine's `/api/coldstart/sources` document as a real config document, preserving `version`, `_comment`, source priority, `scrape_selector`, and `max_pages`.
-- Mesh source toggles now mark the source config dirty, show `unsaved changes`, and expose a `Save sources` control that POSTs the validated config shape back to the local engine's `/api/coldstart/sources`.
-- `Build mesh` now auto-saves dirty source choices before POSTing `/api/coldstart/start`, then starts only the selected normalized lanes. This prevents a one-run-only UI state from diverging from the persisted mesh config.
-- Settings and onboarding now show source freshness plus whether a local config file was loaded. Save and refresh controls are disabled while source persistence is in flight.
-- This is candidate M5 perimeter work only. It is not proof of real onboarding mesh because the separate judge has not run a fresh-account onboarding path against the packaged app, real local engine, real extension/native bridge, and real connected apps.
+- Wrote the M3-only hard amendments into `autopilot/02_LAWS.md` and `autopilot/07_MILESTONES.md`. The builder may work only the real browser-hand chain. `example.com`, localhost, fixture pages, contrived no-stakes pages, and typing the whole instruction into search or the address bar are banned as M3 targets or evidence.
+- `BrowserHand` now routes live `browse_task` jobs through the existing WebVoyager browser agent when a live gateway is available. The old one-shot read behavior remains for diagnostics and read-only paths.
+- The live browser path no longer falls back to searching the whole task when no URL is resolved. Action-shaped tasks require memory or explicit site context.
+- The orchestrator now has a narrow memory-to-browser resolution path for vague cart tasks. It can resolve a vague task from memory into a real site, real item, and a safe add-to-cart browser job.
+- Memory context passed into the live core now includes profile, history, and derived drawers, not just notes and open loops, so recent relevant history can be used by the resolver.
+- The harm-line now allows vague cart action only when memory has same-line real site and product context. Without that context, the task stays ask or wait.
+- OpenRouter gateway calls support explicit `max_tokens`, and WebVoyager has compact JSON and text fallback paths to reduce planner-token pressure.
+
+Real run:
+- A builder-visible memory note was injected through the live `/event` path, then a vague kitchen shopping task was sent through `/event`.
+- The system resolved the vague task to a real Target browser job and did not search the task text.
+- The live browser-agent attempt reached Target but did not add anything to the cart. The observed page remained Target home with no cart artifact.
+- The run is `UNPROVEN-PENDING-JUDGE` and also a failed M3 attempt. M3 is not done.
 
 Checks:
 - Mandatory compaction-proof reads were re-run for `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- `npm run build` passed after the implementation and again after the small dead-helper cleanup.
-- In-app Browser loaded local `http://127.0.0.1:3424/app?view=onboarding`; unauthenticated/account-gated route behavior remained expected.
-- Local mocked Playwright verified desktop explicit save: Drive was toggled off, `Save sources` made exactly one `/api/coldstart/sources` POST with `google_drive.enabled=false`, preserved `scrape_selector` and `max_pages`, then `Build mesh` made exactly one `/api/coldstart/start` POST with `sources: ["gmail","calendar"]`, `walk_drive:false`, and no second save.
-- Local mocked Playwright verified mobile auto-save: Drive was toggled off, clicking `Build mesh` without manual save first made exactly one source-save POST before exactly one mesh-start POST, with the same selected source payload.
-- Local mocked checks had no console errors and no horizontal overflow. Screenshots: `/tmp/anticipy-source-save-local-desktop-20260609.png`, `/tmp/anticipy-source-save-local-mobile-delayed-20260609.png`.
-- Visual screenshot inspection confirmed desktop and mobile source rows, disabled save state after persistence, selected sources, and final mesh status are visible.
+- Python compile passed for the touched engine files.
+- Focused memory-resolution probes passed: memory-backed vague cart tasks resolve to a real `browse_task`, and missing-memory vague tasks do not search the instruction.
+- `/event` probe with no browser helper passed: the system produced a resolved `browse_task`, avoided search fallback, and preserved the missing-helper failure.
+- `engine/scripts/test_harmline.py` passed.
+- `engine/scripts/test_handoff.py` passed.
+- `engine/scripts/test_browser_hand.py` passed.
+- `engine/scripts/test_browser_hand.sh` passed.
+- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only, not M3 proof.
 - `git diff --check` passed.
-- Forbidden path scan found no edits under `tests/`, `judge/`, `realdays/holdout/`, `scripts/realday.sh`, or product `engine/tests/`.
-- Owner/eval literal scan and obvious secret scan found no matches in the tracked product diff.
-- Product source commit `921f45bcc3789be479a72636b0245f7b0a1df514` was committed locally for future judge diff scanning.
-- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` succeeded.
-- Public `https://www.anticipy.ai/api/app/state` reports build `921f45bcc3789be479a72636b0245f7b0a1df514`, release manifest commit `6ae2e9951619875c0ecc45bbce64c0b5620a75cc`, SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`, and `178894746` bytes.
-- Public `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` returned `200`; the DMG content type remains `application/x-apple-diskimage`.
-- Deployed mocked Playwright verified desktop explicit save and mobile auto-save-on-build with one source-save POST, one mesh-start POST, optional fields preserved, no console errors, and no horizontal overflow.
-- Deployed screenshots: `/tmp/anticipy-source-save-deployed-desktop-20260609.png`, `/tmp/anticipy-source-save-deployed-mobile-20260609.png`.
-- Product repo has no tracked dirty files after deploy; only pre-existing untracked artifacts remain.
+- Forbidden-path scan found no edits under `tests/`, `judge/`, `realdays/holdout/`, `scripts/realday.sh`, or product test paths.
+- Owner/eval literal scan and obvious secret scan found no matches in product code diffs.
+- No engine process remained listening on port 8787 after the failed live attempts.
 
 Gate:
-- This is not M1 proof. The separate clean-profile judge has not downloaded, installed, and launched the public app from this candidate.
-- This is not M2 proof. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- This is not M3 proof. The separate judge has not verified the real packaged app calling the real local engine and real extension/native bridge.
-- This is not M5 proof. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh in real apps.
-- No installer was executed, and no real local-engine typed run, real local-engine audio upload, real source inhale, real external artifact, UI click that reached a service, extension enablement, browser action against a real site, SMS, email, Calendar action, phone call, local engine write, account action, third-party action, or form submission was performed by the builder.
-- Separate Codex CLI builder/judge runner is blocked by usage quota until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. Spending money is a human gate and was not taken.
+- Current allowed work is M3 only.
+- M3 build attempts are now blocked by OpenRouter credit. Direct OpenRouter calls returned HTTP 402 with only roughly 24, then 22, output tokens affordable. Tiny capped calls can return small JSON, but that is not enough for reliable WebVoyager planning on a real site.
+- Spending money is a hard human gate and was not taken. Another working live planner key/model would also unblock this.
+- Separate judge quota is still blocked until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent.
+
+Proof status:
+- No real cart artifact was created.
+- No M3 proof exists.
+- No M3 completion is claimed.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue unblocked M2/M3/M5 perimeter work without claiming proof while judge quota is blocked.
-- When judge quota returns, run the separate M1 judge against public production site commit `921f45bcc3789be479a72636b0245f7b0a1df514` and release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`.
+- Resume only after OpenRouter is funded, another live planner key/model is available, or the separate judge quota/funding path is unblocked. The next allowed lap is the same M3 hard chain: vague task, memory resolution, real site, real browser action, real cart artifact, then separate judge proof.

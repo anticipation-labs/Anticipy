@@ -53,6 +53,17 @@ _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t f
                        r"|\badd .* to (my |the )?calendar\b|\bblock (off |out )?(time|my calendar|an hour|the morning|the afternoon)\b")
 _DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafting|prepare|prepares|preparing|compose|composes|composing|"
                           r"write up|writes up|outline|outlines|put together)\b")
+_VAGUE_CART = re.compile(
+    r"\b(?:get|grab|add|put)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:thing|one|item|product)\b"
+    r"|(?:earlier|was looking at|looked at)",
+    re.I,
+)
+_MEM_SITE = re.compile(r"https?://|(?:[a-z0-9-]+\.)+[a-z]{2,}", re.I)
+_MEM_PRODUCT = re.compile(
+    r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for|"
+    r"product|item|thing|cart|kitchen)\b",
+    re.I,
+)
 # --- other reversible (ACT) ---
 _REVERSIBLE: List[Tuple[str, str]] = [
     ("research", r"\b(research|look up|looks up|looking up|look into|find|finds|finding|find out|"
@@ -120,6 +131,8 @@ class HarmLine:
         # 5) draft / prepare (incl. drafting a message) — reversible
         if _DRAFT_FRAME.search(t):
             return HarmVerdict(False, "draft", "reversible:draft (not send) -> act")
+        if _VAGUE_CART.search(t) and self._memory_has_cart_target(ctx):
+            return HarmVerdict(False, "cart", "reversible:memory-resolved cart target -> act")
         # 6) other reversible
         rev = _first_match(t, _REVERSIBLE)
         if rev is not None:
@@ -145,3 +158,17 @@ class HarmLine:
         if ctx and isinstance(ctx.get("context"), dict):
             hay += " " + " ".join(str(v) for v in ctx["context"].values())
         return any(re.search(r"\b" + re.escape(w) + r"\b", hay) for w in _CASUAL)
+
+    @staticmethod
+    def _memory_has_cart_target(ctx: Optional[dict]) -> bool:
+        mem = (ctx or {}).get("context") if isinstance(ctx, dict) else {}
+        if not isinstance(mem, dict):
+            return False
+        vals = []
+        for key in ("notes", "open_loops", "history", "profile"):
+            value = mem.get(key)
+            if isinstance(value, str):
+                vals.extend(line.strip() for line in value.splitlines() if line.strip())
+            elif isinstance(value, list):
+                vals.extend(str(v) for v in value)
+        return any(_MEM_SITE.search(line) and _MEM_PRODUCT.search(line) for line in vals)
