@@ -527,6 +527,28 @@ POST_CART_NOISE_RE = re.compile(
     r"related\s+items?|more\s+to\s+consider)\b",
     re.I,
 )
+CART_COUNT_RE = re.compile(
+    r"\b(?:shopping\s+)?(?:cart|bag|basket),?\s*(?:with\s+)?(\d+)\s+items?\b|"
+    r"\b(\d+)\s+(?:items?\s+)?in\s+(?:your\s+)?(?:cart|bag|basket)\b|"
+    r"\b(?:cart|bag|basket)\s*\((\d+)\)",
+    re.I,
+)
+
+
+def _cart_count(out: dict) -> Optional[int]:
+    text = (out or {}).get("text") or ""
+    for marker in CART_COUNT_RE.finditer(text):
+        for value in marker.groups():
+            if value is not None:
+                try:
+                    return int(value)
+                except ValueError:
+                    return None
+    return None
+
+
+def _primary_cart_text(text: str) -> str:
+    return POST_CART_NOISE_RE.split(text or "", maxsplit=1)[0]
 
 
 def _cart_marker_item_match(text: str, item: str) -> bool:
@@ -551,14 +573,18 @@ def _cart_verified(out: dict, item: str) -> bool:
     url = ((out or {}).get("url") or "").lower()
     added = CART_MARKER_RE.search(low) is not None
     cart_url = CART_URL_RE.search(url) is not None
+    count = _cart_count(out)
     tokens = _item_tokens(item)
+    if count == 0:
+        return False
     if not (added or cart_url) or not tokens:
         return False
     if added and not cart_url:
         return _cart_marker_item_match(text, item)
-    if not _numbers_match(text, item):
+    cart_text = _primary_cart_text(text)
+    if not _numbers_match(cart_text, item):
         return False
-    hits = _token_hits(text, tokens)
+    hits = _token_hits(cart_text, tokens)
     return hits >= (2 if len(tokens) >= 3 else 1)
 
 
@@ -574,6 +600,7 @@ def _cart_signal_score(out: dict, item: str) -> int:
     text = (out or {}).get("text") or ""
     url = ((out or {}).get("url") or "").lower()
     score = 0
+    count = _cart_count(out)
     if CART_URL_RE.search(url):
         score += 20
     if CART_MARKER_RE.search(text):
@@ -582,6 +609,10 @@ def _cart_signal_score(out: dict, item: str) -> int:
         score += 60
     if _cart_verified(out, item):
         score += 120
+    if count == 0:
+        score -= 25
+    elif count is not None:
+        score += min(15, count)
     score += min(10, _token_hits(text, _item_tokens(item)))
     return score
 
@@ -669,6 +700,7 @@ def _page_state(
         "title": (out or {}).get("title"),
         "surface_kind": _surface_kind(out, start_url),
         "item_token_hits": _token_hits((out or {}).get("text") or "", _item_tokens(item)),
+        "cart_count": _cart_count(out),
         "cart_signal": _cart_signal_score(out, item),
         "cart_verified": _cart_verified(out, item),
         "cart_page_verified": _cart_page_verified(out, item),
@@ -809,7 +841,7 @@ class WebVoyagerAgent:
             if current_path == expected_path and attempt == 4:
                 break
         self._cur_shot = shot
-        history.append(f"recipe: navigated known cart url for {_host(start_url)}")
+        history.append(f"recipe: {stage} navigated known cart url for {_host(start_url)}")
         states.append(_page_state(stage, out, item, history[-1], start_url=start_url))
         return out, steps + 1
 
@@ -837,6 +869,25 @@ class WebVoyagerAgent:
         history: List[str] = []
         states: list[dict] = []
         steps = 0
+
+        preflight_out, steps = await self._verify_known_cart_url(
+            start_url, item, history, states, steps, "known_cart_preflight"
+        )
+        if preflight_out:
+            wall_kind = _commerce_wall_kind(preflight_out)
+            if wall_kind:
+                return await self._handoff(preflight_out, steps, history, wall_kind,
+                                           "wall during known-cart preflight")
+            if _cart_page_verified(preflight_out, item):
+                return self._done(
+                    preflight_out,
+                    steps,
+                    history,
+                    answer=f"Verified cart already contains {item}; no duplicate add needed.",
+                    page_states=states,
+                    commerce_recipe=True,
+                    already_in_cart=True,
+                )
 
         search_url = _commerce_search_url(start_url, item)
         if search_url:
