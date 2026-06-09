@@ -4,14 +4,13 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T043909Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It persisted the never-stall amendment on disk, updated the control-plane read order and M3 ladder rules, and hardened contextual vague memory resolution. It created no new real artifact and has no separate judge proof.
+Latest builder lap: `20260609T044617Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened model-light real-store cart item extraction in the deterministic WebVoyager commerce path. It created no new real artifact and has no separate judge proof.
 
 Latest offline M3 slice:
-- `00_AMENDMENT_NEVER_STALL.md` now exists at repo root and must be read before `AGENTS.md` every lap.
-- `AGENTS.md`, `autopilot/00_START_HERE.md`, `autopilot/02_LAWS.md`, and `autopilot/07_MILESTONES.md` now carry the first-read rule, proxy-substitution warning, M3 ladder, five human gates, and phrasing-breadth caveat.
-- The vague cart resolver now scores candidate memories by contextual request hints, such as `kitchen`, and prefers the matching remembered site/item line.
-- The harm-line uses the same hint check before allowing a vague cart goal to act. If contextual hints are present and no remembered cart target matches them, the system asks instead of acting.
-- Focused resolver probes passed, but this is offline chain hardening only. It is not M3 proof.
+- The deterministic WebVoyager commerce path now extracts concrete item text from common cart phrasing such as `add X to cart`, `put X in bag`, and `grab X and add it`.
+- It rejects unresolved vague placeholders such as `that thing I was looking at earlier` and `the item` so the browser hand does not search the task text or act before memory resolution.
+- It strips trailing real-site or URL context from the item text before forming a site search URL.
+- Focused parser and fake-link commerce probes passed, but this is offline chain hardening only. It is not M3 proof.
 
 Latest real M3 attempt:
 - A builder-visible memory note was sent through the live `/event` path.
@@ -36,14 +35,15 @@ Latest product/public candidate, unchanged this lap:
 
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Focused contextual vague resolver probe passed: a kitchen request chooses the kitchen memory, a mismatched memory asks instead of acting, and a plain `earlier` request can still use the top memory candidate.
-- Python compile passed for the touched engine files.
+- Focused parser probe passed: concrete cart phrasings return item-only text, while unresolved vague placeholders return no search text.
+- Focused fake-link commerce probe passed: the deterministic recipe used an item-only Target search URL and completed the cart verification path without a model call. This is regression coverage only, not M3 proof.
+- Python compile passed for `engine/anticipy_engine/agent/webvoyager.py`.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_harmline.py` passed.
 - `engine/scripts/test_handoff.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
-- Changed-path scan shows amendment/control-plane files plus orchestrator and harm-line code.
+- Changed-path scan shows only `engine/anticipy_engine/agent/webvoyager.py` in the product diff.
 - Owner/eval literal scan and secret-value scan found no product-code matches.
 - Port 8787 has no remaining listener.
 
@@ -96,6 +96,7 @@ Dead ends not to retry blindly:
 - Do not click recommendation add buttons unless their label strongly matches the requested product.
 - Do not let unquoted memory item extraction swallow site/context text into the item, and do not put raw memory source text into browser job args.
 - Do not let a vague request with contextual hints act on a remembered cart target whose memory line does not match those hints.
+- Do not let direct cart phrasing become whole-task browser search. Extract the concrete resolved item only, and reject unresolved vague placeholders before the browser recipe runs.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps. Make the browser hand cheaper, deterministic where possible, and cache page observations instead.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
 - Do not run broad searches over `.env.local` or env backup files.

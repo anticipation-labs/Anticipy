@@ -128,16 +128,44 @@ def _clean_action(a: dict, item_text: str = "") -> dict:
     return out
 
 
+VAGUE_ITEM_RE = re.compile(
+    r"\b(earlier|looked at|looking at|that\s+(thing|one|item|product)|"
+    r"this\s+(thing|one|item|product)|the\s+(thing|one|item|product)|"
+    r"the\s+one|that\s+one|the\s+item|the\s+product)\b",
+    re.I,
+)
+SITE_TAIL_RE = re.compile(
+    r"\s+\b(?:on|from|at)\s+(?:https?://\S+|www\.\S+|[a-z0-9.-]+\.[a-z]{2,})(?:\s.*)?$",
+    re.I,
+)
+
+
+def _usable_item(raw: str) -> str:
+    item = re.sub(r"\s+", " ", raw or "").strip(" \"'.,:;-")
+    item = SITE_TAIL_RE.sub("", item).strip(" \"'.,:;-")
+    item = re.sub(r"^(?:please\s+)?(?:a|an|the|my|your)\s+", "", item, flags=re.I).strip()
+    if not item or VAGUE_ITEM_RE.search(item):
+        return ""
+    toks = _item_tokens(item)
+    if len(toks) < 1 or all(tok in COMMERCE_STOP for tok in toks):
+        return ""
+    if len(toks) == 1 and toks[0] in {"one", "thing", "item", "product", "stuff"}:
+        return ""
+    return item if 3 <= len(item) <= 180 else ""
+
+
 def _search_text(task: str) -> str:
     patterns = (
         r"\bfind\s+(?P<item>.+?)\s+and\s+add\b",
         r"\bsearch\s+for\s+(?P<item>.+?)\b(?:and|then|$)",
+        r"\b(?:add|put)\s+(?P<item>.+?)\s+(?:to|in)\s+(?:my\s+|your\s+|the\s+)?(?:cart|basket|bag)\b",
+        r"\b(?:grab|get|snag)\s+(?P<item>.+?)\s+and\s+(?:add|put)\b",
     )
     for pat in patterns:
         m = re.search(pat, task or "", re.I)
         if m:
-            item = re.sub(r"\s+", " ", m.group("item")).strip(" .,:;-")
-            if 3 <= len(item) <= 180:
+            item = _usable_item(m.group("item"))
+            if item:
                 return item
     return ""
 
