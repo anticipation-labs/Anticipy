@@ -47,6 +47,11 @@ _FILLER = {
     "yep", "nope", "no", "cool", "nice", "lol", "hmm", "right", "sure", "yo", "sup",
     "mm", "mhm", "ok thanks", "okay thanks", "thanks!", "got it", "sounds good",
 }
+_CONTEXT_ONLY = re.compile(
+    r"\b(i|we)\s+(?:was|were|am|are|have been|had been)\s+"
+    r"(?:looking at|looking for|browsing|viewing|checking out|considering|shopping for)\b",
+    re.I,
+)
 
 
 @dataclass
@@ -79,6 +84,8 @@ class Triage:
             return False
         if self._positive(t):
             return True
+        if _CONTEXT_ONLY.search(t):
+            return False
         # ambiguous: no positive signal, not obvious filler. Stub -> drop (deterministic, free).
         # Live -> a cheap-model tiebreak MAY rescue it (bias: pass when in doubt). Never in CI.
         if self.mode == "live" and self.gateway is not None:

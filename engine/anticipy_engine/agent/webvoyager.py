@@ -20,6 +20,7 @@ import asyncio
 import hashlib
 import json
 import re
+import urllib.parse
 from typing import List, Optional
 
 from ..core.browser_link import BrowserLink
@@ -57,6 +58,28 @@ PURCHASE_GUARD = re.compile(
 BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha",
                  "are you a robot", "are you a human", "unusual traffic", "verify you are human",
                  "press & hold", "access denied", "checking your browser")
+COMMERCE_STOP = {
+    "the", "and", "for", "with", "that", "this", "thing", "item", "product", "cart", "basket",
+    "bag", "add", "added", "shipping", "pickup", "delivery",
+}
+COMMERCE_SEARCH_URLS = {
+    "target.com": "https://www.target.com/s?searchTerm={q}",
+    "walmart.com": "https://www.walmart.com/search?q={q}",
+    "bestbuy.com": "https://www.bestbuy.com/site/searchpage.jsp?st={q}",
+    "homedepot.com": "https://www.homedepot.com/s/{q}",
+    "lowes.com": "https://www.lowes.com/search?searchTerm={q}",
+    "ikea.com": "https://www.ikea.com/us/en/search/?q={q}",
+}
+ADD_TO_CART_RE = re.compile(
+    r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
+    re.I,
+)
+VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
+NON_PRODUCT_RE = re.compile(
+    r"\b(add to|cart|basket|bag|checkout|sponsored|ad|sign in|log in|create account|"
+    r"pickup|delivery|shipping|ratings?|reviews?|see more|show more)\b",
+    re.I,
+)
 
 
 def _parse_json(raw: str) -> Optional[dict]:
@@ -117,6 +140,184 @@ def _search_text(task: str) -> str:
             if 3 <= len(item) <= 180:
                 return item
     return ""
+
+
+def _host(url: str) -> str:
+    try:
+        host = urllib.parse.urlparse(url or "").netloc.lower()
+    except Exception:
+        return ""
+    return host[4:] if host.startswith("www.") else host
+
+
+def _commerce_search_url(start_url: str, item: str) -> str:
+    host = _host(start_url)
+    q = urllib.parse.quote_plus(item)
+    for domain, template in COMMERCE_SEARCH_URLS.items():
+        if host == domain or host.endswith("." + domain):
+            return template.format(q=q)
+    return ""
+
+
+def _item_tokens(text: str) -> list[str]:
+    toks = re.findall(r"\d+(?:\.\d+)?|[a-z0-9]+", (text or "").lower())
+    keep = []
+    for tok in toks:
+        if tok in COMMERCE_STOP:
+            continue
+        if re.fullmatch(r"\d+(?:\.\d+)?", tok) or len(tok) >= 3 or tok in {"oz", "ml", "qt", "lb"}:
+            keep.append(tok)
+    return keep
+
+
+def _number_tokens(text: str) -> list[str]:
+    return re.findall(r"\d+(?:\.\d+)?", (text or "").lower())
+
+
+def _quantity_pairs(text: str) -> list[tuple[str, str]]:
+    units = {
+        "ounce": "oz", "ounces": "oz", "oz": "oz",
+        "cup": "cup", "cups": "cup",
+        "count": "ct", "counts": "ct", "ct": "ct",
+        "quart": "qt", "quarts": "qt", "qt": "qt",
+        "milliliter": "ml", "milliliters": "ml", "ml": "ml",
+        "pound": "lb", "pounds": "lb", "lb": "lb",
+        "gallon": "gal", "gallons": "gal", "gal": "gal",
+    }
+    out = []
+    for m in re.finditer(
+        r"(?P<num>\d+(?:\.\d+)?)[\s-]*(?:fl[\s-]*)?"
+        r"(?P<unit>ounces?|oz|cups?|counts?|ct|quarts?|qt|milliliters?|ml|pounds?|lb|gallons?|gal)\b",
+        (text or "").lower(),
+    ):
+        out.append((m.group("num"), units.get(m.group("unit"), m.group("unit"))))
+    return out
+
+
+def _numbers_match(candidate: str, item: str) -> bool:
+    nums = _number_tokens(item)
+    if not nums:
+        return True
+    item_pairs = _quantity_pairs(item)
+    if item_pairs:
+        candidate_pairs = set(_quantity_pairs(candidate))
+        return all(pair in candidate_pairs for pair in item_pairs)
+    hay = " " + re.sub(r"[^a-z0-9.]+", " ", (candidate or "").lower()) + " "
+    return all(re.search(rf"(?<!\d){re.escape(num)}(?!\d)", hay) for num in nums)
+
+
+def _token_hits(name: str, tokens: list[str]) -> int:
+    hay = " " + re.sub(r"[^a-z0-9]+", " ", (name or "").lower()) + " "
+    hits = 0
+    for tok in tokens:
+        if f" {tok} " in hay or (len(tok) >= 5 and tok in hay):
+            hits += 1
+    return hits
+
+
+def _pick_product(elements: list[dict], item: str) -> Optional[dict]:
+    tokens = _item_tokens(item)
+    if not tokens:
+        return None
+    best = None
+    best_score = 0
+    for el in elements or []:
+        name = (el.get("name") or "").strip()
+        if not name or el.get("sponsored") or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item):
+            continue
+        role = (el.get("role") or "").lower()
+        if role not in {"a", "button"} and "link" not in role:
+            continue
+        hits = _token_hits(name, tokens)
+        if hits <= 0:
+            continue
+        score = hits * 3 + (2 if el.get("inView") else 0) + min(len(name), 120) / 120
+        if score > best_score:
+            best, best_score = el, score
+    min_hits = 2 if len(tokens) >= 3 else 1
+    return best if best and _token_hits(best.get("name") or "", tokens) >= min_hits else None
+
+
+def _pick_button(elements: list[dict], pattern: re.Pattern) -> Optional[dict]:
+    for el in elements or []:
+        name = (el.get("name") or "").strip()
+        if not name or el.get("sponsored") or PURCHASE_GUARD.search(name):
+            continue
+        role = (el.get("role") or "").lower()
+        if role not in {"button", "a", "input"} and "button" not in role and "link" not in role and "search" not in role:
+            continue
+        if pattern.search(name):
+            return el
+    return None
+
+
+def _pick_add_button(elements: list[dict], item: str) -> Optional[dict]:
+    item_tokens = _item_tokens(item)
+    for el in elements or []:
+        name = (el.get("name") or "").strip()
+        if not name or el.get("sponsored") or PURCHASE_GUARD.search(name):
+            continue
+        if re.search(r"\b(add to list|registry|wish list|favorite)\b", name, re.I):
+            continue
+        if not ADD_TO_CART_RE.search(name):
+            continue
+        # If the real site exposes a variant number in the add control, it must
+        # match the remembered item. Generic "Add to cart" controls are allowed.
+        if _number_tokens(name) and not _numbers_match(name, item):
+            continue
+        generic = re.fullmatch(r"\s*add\s+(to\s+)?(cart|basket|bag)\s*", name, re.I) is not None
+        if not generic:
+            hits = _token_hits(name, item_tokens)
+            required = max(3, int(len(item_tokens) * 0.7 + 0.999))
+            if hits < required:
+                continue
+        role = (el.get("role") or "").lower()
+        if role not in {"button", "a", "input"} and "button" not in role and "link" not in role:
+            continue
+        return el
+    return None
+
+
+def _cart_verified(out: dict, item: str) -> bool:
+    text = (out or {}).get("text") or ""
+    low = text.lower()
+    url = ((out or {}).get("url") or "").lower()
+    added = (
+        any(k in low for k in ("added to cart", "added to bag", "added to basket", "item added", "in your cart"))
+        or re.search(r"\b\d+\s+in\s+(cart|basket|bag)\b|\bin\s+(cart|basket|bag)\b", low) is not None
+    )
+    cart_url = re.search(r"/(cart|basket|bag)(?:[/?#]|$)", url) is not None
+    tokens = _item_tokens(item)
+    if not (added or cart_url) or not tokens or not _numbers_match(text, item):
+        return False
+    hits = _token_hits(text, tokens)
+    return hits >= (2 if len(tokens) >= 3 else 1)
+
+
+def _page_state(stage: str, out: dict, item: str, action: str = "") -> dict:
+    elements = []
+    for el in (out or {}).get("elements") or []:
+        name = (el.get("name") or "").strip()
+        if not name:
+            continue
+        elements.append({
+            "idx": el.get("idx"),
+            "role": el.get("role"),
+            "name": name[:90],
+            "inView": bool(el.get("inView")),
+            "sponsored": bool(el.get("sponsored")),
+        })
+        if len(elements) >= 18:
+            break
+    return {
+        "stage": stage,
+        "action": action,
+        "url": (out or {}).get("url"),
+        "title": (out or {}).get("title"),
+        "item_token_hits": _token_hits((out or {}).get("text") or "", _item_tokens(item)),
+        "cartish": any(k in ((out or {}).get("text") or "").lower() for k in ("added to cart", "cart", "basket", "bag")),
+        "elements": elements,
+    }
 
 
 def _sig(url, title, els) -> str:
@@ -232,7 +433,130 @@ class WebVoyagerAgent:
         return self._done(out, step, history, answer="", needs_human=True, paused=True,
                           wall_kind=wall_kind, ask=ask, resume_token=new_id(), reason=detail)
 
+    async def _try_commerce_recipe(self, task: str, start_url: str) -> Optional[dict]:
+        item = _search_text(task)
+        if not item or not re.search(r"\b(cart|basket|bag)\b", task or "", re.I):
+            return None
+
+        history: List[str] = []
+        states: list[dict] = []
+        steps = 0
+
+        search_url = _commerce_search_url(start_url, item)
+        if search_url:
+            out, shot = await self._observe_ready(search_url)
+            self._cur_shot = shot
+            history.append(f"recipe: navigate search url for item on {_host(start_url)}")
+        else:
+            out, shot = await self._observe_ready(start_url)
+            self._cur_shot = shot
+            history.append("recipe: observe start page")
+            search_box = _pick_button(out.get("elements") or [], re.compile(r"\bsearch\b", re.I))
+            if search_box:
+                await self._act({"action": "type", "index": search_box.get("idx"), "text": item, "enter": True})
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                history.append(f"recipe: typed item into site search idx={search_box.get('idx')}")
+                steps += 1
+
+        states.append(_page_state("search_results", out, item, history[-1]))
+        text = (out.get("text") or "").lower()
+        if any(k in text for k in BLOCK_MARKERS):
+            return await self._handoff(out, steps + 1, history, classify_wall(text),
+                                       "captcha / anti-bot wall during commerce recipe")
+        if _cart_verified(out, item):
+            return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                              page_states=states, commerce_recipe=True)
+
+        product = None
+        for scrolls in range(3):
+            product = _pick_product(out.get("elements") or [], item)
+            if product:
+                break
+            await self._act({"action": "scroll", "dir": "down"})
+            out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            history.append(f"recipe: scroll search results {scrolls + 1}")
+            states.append(_page_state(f"search_results_scroll_{scrolls + 1}", out, item, history[-1]))
+            steps += 1
+
+        if product:
+            label = (product.get("name") or "")[:80]
+            await self._act({"action": "click", "index": product.get("idx")})
+            out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            history.append(f"recipe: opened product idx={product.get('idx')} '{label}'")
+            states.append(_page_state("product_page", out, item, history[-1]))
+            steps += 1
+        else:
+            add_from_results = _pick_add_button(out.get("elements") or [], item)
+            if add_from_results:
+                await self._act({"action": "click", "index": add_from_results.get("idx")})
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                history.append(f"recipe: clicked add control from results idx={add_from_results.get('idx')}")
+                states.append(_page_state("post_add_from_results", out, item, history[-1]))
+                steps += 1
+            else:
+                return self._done(out, steps + 1, history, answer="",
+                                  reason="commerce recipe could not identify a matching product",
+                                  page_states=states, commerce_recipe=True)
+
+        if _cart_verified(out, item):
+            return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                              page_states=states, commerce_recipe=True)
+
+        for attempt in range(5):
+            if _cart_verified(out, item):
+                return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                  page_states=states, commerce_recipe=True)
+            add = _pick_add_button(out.get("elements") or [], item)
+            if not add:
+                await self._act({"action": "scroll", "dir": "down"})
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                history.append(f"recipe: scroll product for add control {attempt + 1}")
+                states.append(_page_state(f"product_scroll_{attempt + 1}", out, item, history[-1]))
+                steps += 1
+                if _cart_verified(out, item):
+                    return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                      page_states=states, commerce_recipe=True)
+                continue
+            label = (add.get("name") or "")[:80]
+            await self._act({"action": "click", "index": add.get("idx")})
+            out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            history.append(f"recipe: clicked add control idx={add.get('idx')} '{label}'")
+            states.append(_page_state("post_add", out, item, history[-1]))
+            steps += 1
+            break
+
+        if _cart_verified(out, item):
+            return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                              page_states=states, commerce_recipe=True)
+
+        view_cart = _pick_button(out.get("elements") or [], VIEW_CART_RE)
+        if view_cart:
+            label = (view_cart.get("name") or "")[:80]
+            await self._act({"action": "click", "index": view_cart.get("idx")})
+            out, shot = await self._observe_ready()
+            self._cur_shot = shot
+            history.append(f"recipe: opened cart idx={view_cart.get('idx')} '{label}'")
+            states.append(_page_state("cart_page", out, item, history[-1]))
+            steps += 1
+            if _cart_verified(out, item):
+                return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                  page_states=states, commerce_recipe=True)
+
+        return self._done(out, steps + 1, history, answer="",
+                          reason="commerce recipe did not verify the cart artifact",
+                          page_states=states, commerce_recipe=True)
+
     async def run(self, task: str, start_url: str) -> dict:
+        recipe_result = await self._try_commerce_recipe(task, start_url)
+        if recipe_result is not None:
+            return recipe_result
+
         state = TaskState(await self._plan(task))
         history: List[str] = []
         visited: dict = {}

@@ -9,9 +9,9 @@ Stop widening the perimeter. The only milestone the builder may work now is M3: 
 
 M3 work must wire the real WebVoyager/browser agent into the live task loop so a typed task such as `add the cheapest stainless water bottle on <real site> to the cart` actually drives the browser and changes the cart. This means the real planner, real browser hand, and real artifact path, not a self-test, not a mocked flow, and not another status surface.
 
-Mocked browser checks never count as M3 progress. They may only prove generic wiring did not regress. M3 advances only when a real artifact appears in the real world and the separate judge verifies it. Until the judge is available, the builder may build the real action path, but every scorecard and state update must label it UNPROVEN.
+Mocked browser checks never count as M3 progress. They may only prove generic wiring did not regress. M3 advances only when a real artifact appears in the real world and the separate judge verifies it. Until the judge is available, the builder must keep building and running the real action path, but every scorecard and state update must label it UNPROVEN.
 
-If the real action path needs the separate judge to confirm it and the judge is quota-blocked, the builder is BLOCKED on M3 for proof. Write that plainly in `PENDING_FOR_OMAR.md` and stop inventing easy side-work.
+If the real action path needs the separate judge to confirm it and the judge is quota-blocked, proof is blocked, not building. Do not stop. Keep moving M3 forward with real-site, non-fake work and label every run `UNPROVEN-PENDING-JUDGE`.
 
 Hard target rule: `example.com`, localhost, fixture pages, and contrived no-stakes pages are banned as M3 task targets and banned as M3 evidence. They are diagnostics only, never progress.
 
@@ -23,7 +23,9 @@ The real M3 shape is:
 3. The browser hand acts on that real site and creates a real reversible artifact, such as the item actually being in the real cart.
 4. Proof exists only when the separate judge opens the real site/account and sees the real change. No mocks, no example pages, no localhost pages, and no screenshot-only proof.
 
-If the full chain is not working yet, build the missing piece and label every run `UNPROVEN-PENDING-JUDGE`. Judge quota being blocked does not justify easy side-work. If building the chain itself is blocked, record the exact blocker in `PENDING_FOR_OMAR.md`.
+If the full chain is not working yet, build the missing piece and label every run `UNPROVEN-PENDING-JUDGE`. Judge quota being blocked does not justify easy side-work. Low live model credit also does not justify stopping. It means the builder must make the chain cheaper: cache page observations, cut redundant model calls, use deterministic DOM action recipes for real stores, use the smallest viable next-click model, and build offline memory-to-intent and item-matching paths.
+
+The only time M3 work can pause is a true human-only gate: a sign-in you cannot complete, spending real money, a missing credential only the human can provide, or flashing the pendant. If one real site is hard, continue against another real store or build the real offline pieces that move the chain toward a real cart artifact.
 
 The current state is in `CODEX_BRIEF.md`. Short version: the decision spine, memory, and a stranded multi-step browser agent are real; the product around them (front door, input, onboarding, the mesh beyond two apps, the proactive scheduler, distribution) is mostly absent. You are building that perimeter and wiring the real engine into a usable product.
 

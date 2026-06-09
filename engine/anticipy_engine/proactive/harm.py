@@ -54,8 +54,7 @@ _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t f
 _DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafting|prepare|prepares|preparing|compose|composes|composing|"
                           r"write up|writes up|outline|outlines|put together)\b")
 _VAGUE_CART = re.compile(
-    r"\b(?:get|grab|add|put)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:thing|one|item|product)\b"
-    r"|(?:earlier|was looking at|looked at)",
+    r"\b(?:get|grab|add|put)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:thing|one|item|product)\b",
     re.I,
 )
 _MEM_SITE = re.compile(r"https?://|(?:[a-z0-9-]+\.)+[a-z]{2,}", re.I)

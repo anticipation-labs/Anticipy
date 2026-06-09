@@ -179,6 +179,8 @@ class BrowserHand(Worker):
             "screenshot": shot,
             "steps": result.get("steps"),
             "history": (result.get("history") or [])[-10:],
+            "page_states": (result.get("page_states") or [])[-8:],
+            "commerce_recipe": bool(result.get("commerce_recipe")),
         }
         if not (proof.get("screenshot") or proof.get("url")):
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,

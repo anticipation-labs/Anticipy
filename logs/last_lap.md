@@ -1,53 +1,52 @@
 # Last Lap
 
-Lap: 20260609T025147Z
-Date: 2026-06-09T03:33:21Z
+Lap: 20260609T034900Z
+Date: 2026-06-09T04:13:29Z
 Milestone: M3 - memory-resolved real browser hand
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- Wrote the M3-only hard amendments into `autopilot/02_LAWS.md` and `autopilot/07_MILESTONES.md`. The builder may work only the real browser-hand chain. `example.com`, localhost, fixture pages, contrived no-stakes pages, and typing the whole instruction into search or the address bar are banned as M3 targets or evidence.
-- `BrowserHand` now routes live `browse_task` jobs through the existing WebVoyager browser agent when a live gateway is available. The old one-shot read behavior remains for diagnostics and read-only paths.
-- The live browser path no longer falls back to searching the whole task when no URL is resolved. Action-shaped tasks require memory or explicit site context.
-- The orchestrator now has a narrow memory-to-browser resolution path for vague cart tasks. It can resolve a vague task from memory into a real site, real item, and a safe add-to-cart browser job.
-- Memory context passed into the live core now includes profile, history, and derived drawers, not just notes and open loops, so recent relevant history can be used by the resolver.
-- The harm-line now allows vague cart action only when memory has same-line real site and product context. Without that context, the task stays ask or wait.
-- OpenRouter gateway calls support explicit `max_tokens`, and WebVoyager has compact JSON and text fallback paths to reduce planner-token pressure.
+- Wrote the latest no-parking amendment into `autopilot/02_LAWS.md` and `autopilot/07_MILESTONES.md`. Low live model credit and judge quota are not all-work stop conditions. The builder must keep doing hard M3 work unless a named human-only gate appears.
+- Removed the stale all-work gate from `PENDING_FOR_OMAR.md`. The pending file now records low credit and judge quota as constraints, not reasons to stop.
+- Added a model-light commerce recipe inside WebVoyager for real stores. It uses memory-resolved site and item context, builds a real store search URL, opens the best product candidate, chooses add controls with product-token and quantity-unit matching, and captures compact page states after each step.
+- `BrowserHand` now preserves `page_states` and a `commerce_recipe` marker in proof output for the live browser hand path.
+- Fixed a false-action bug where a context-only memory statement like an earlier browsing observation could itself trigger an action. Context-only shopping observations are now ignored unless a separate action-shaped request is present.
+- Hardened real-store item matching after failures on variants and recommendations. Numeric details such as `24 oz`, `3.2 cup`, and `6 cup` must match the right unit, and product-specific add buttons must match the requested item strongly enough before clicking.
 
 Real run:
-- A builder-visible memory note was injected through the live `/event` path, then a vague kitchen shopping task was sent through `/event`.
-- The system resolved the vague task to a real Target browser job and did not search the task text.
-- The live browser-agent attempt reached Target but did not add anything to the cart. The observed page remained Target home with no cart artifact.
-- The run is `UNPROVEN-PENDING-JUDGE` and also a failed M3 attempt. M3 is not done.
+- A builder-visible memory note was injected through the live `/event` path.
+- A vague kitchen shopping task was then sent through `/event`.
+- The system resolved the vague task to Target and the remembered item without typing the whole instruction into search.
+- Earlier real attempts exposed false or wrong actions: a context-only seed acted before the guard fix, and wrong variant/recommendation candidates were clicked before the quantity and product-button hardening.
+- After the fixes, a live Target run added the resolved Brita 6 Cup Water Filter Pitcher item through the browser hand. The run captured page-state evidence showing the Target product page and cart-like post-add state.
+- This is `UNPROVEN-PENDING-JUDGE`. It changed a real cart, but no separate judge has verified it, so M3 is not done and no M3 proof is claimed.
 
 Checks:
 - Mandatory compaction-proof reads were re-run for `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
 - Python compile passed for the touched engine files.
-- Focused memory-resolution probes passed: memory-backed vague cart tasks resolve to a real `browse_task`, and missing-memory vague tasks do not search the instruction.
-- `/event` probe with no browser helper passed: the system produced a resolved `browse_task`, avoided search fallback, and preserved the missing-helper failure.
+- Focused fake-link commerce recipe probe passed for the model-free add-to-cart path and page-state proof through `BrowserHand`.
+- Focused quantity and add-control probes passed for numeric matching, cart in-page verification, quantity-aware matching, and Target product-specific add detection.
+- `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_harmline.py` passed.
 - `engine/scripts/test_handoff.py` passed.
-- `engine/scripts/test_browser_hand.py` passed.
-- `engine/scripts/test_browser_hand.sh` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only, not M3 proof.
 - `git diff --check` passed.
 - Forbidden-path scan found no edits under `tests/`, `judge/`, `realdays/holdout/`, `scripts/realday.sh`, or product test paths.
 - Owner/eval literal scan and obvious secret scan found no matches in product code diffs.
-- No engine process remained listening on port 8787 after the failed live attempts.
+- No engine process remained listening on port 8787.
 
 Gate:
-- Current allowed work is M3 only.
-- M3 build attempts are now blocked by OpenRouter credit. Direct OpenRouter calls returned HTTP 402 with only roughly 24, then 22, output tokens affordable. Tiny capped calls can return small JSON, but that is not enough for reliable WebVoyager planning on a real site.
-- Spending money is a hard human gate and was not taken. Another working live planner key/model would also unblock this.
-- Separate judge quota is still blocked until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent.
+- No all-work human gate is active.
+- Low OpenRouter credit blocks heavy live planning, not building. The code path now reduces planner cost with deterministic real-store recipes and compact page-state capture.
+- Separate judge quota blocks proof only. Spending money remains a hard human gate and was not taken.
 
 Proof status:
-- No real cart artifact was created.
+- A real Target cart artifact was created by the builder run, but it is unjudged.
 - No M3 proof exists.
 - No M3 completion is claimed.
 - Generalization remains UNPROVEN.
 
 Next:
-- Resume only after OpenRouter is funded, another live planner key/model is available, or the separate judge quota/funding path is unblocked. The next allowed lap is the same M3 hard chain: vague task, memory resolution, real site, real browser action, real cart artifact, then separate judge proof.
+- Continue M3 only: strengthen memory-to-intent resolution, site selection, item matching, and real-store DOM action recipes, then run more real safe cart attempts as `UNPROVEN-PENDING-JUDGE` until separate judge proof is available.
