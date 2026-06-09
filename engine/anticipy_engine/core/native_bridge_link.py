@@ -952,7 +952,7 @@ class NativeBridgeLink:
                   rect.top <= window.innerHeight && rect.left <= window.innerWidth;
                 const hay = (name + ' ' + href).toLowerCase();
                 const actionish = /\b(add|put)\b.{0,60}\b(cart|basket|bag)\b|\b(view|open|go to)\b.{0,30}\b(cart|basket|bag)\b/.test(hay);
-                const productish = /\/(product|products|p|ip|pd|dp)(\/|$)|\/a\/products\/|\/site\/.+\/\d+\.p|\/sku\/\d+/.test(hay);
+                const productish = /\/(product|products|p|ip|pd|dp)(\/|$)|\/a\/products\/|\/site\/.+\/\d+\.p|\/sku\/\d+|\/[^\/?#]+-\d+\.html(?:[?#]|$)/.test(hay);
                 const searchish = /\bsearch\b/.test(hay);
                 const y = Math.max(0, rect.top + (window.scrollY || document.documentElement.scrollTop || 0));
                 const priority =

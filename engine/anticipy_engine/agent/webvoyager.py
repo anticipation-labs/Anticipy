@@ -85,6 +85,9 @@ COMMERCE_SEARCH_URLS = {
     "lego.com": "https://www.lego.com/en-us/search?q={q}",
     "guitarcenter.com": "https://www.guitarcenter.com/search?Ntt={q}",
     "newegg.com": "https://www.newegg.com/p/pl?d={q}",
+    "harborfreight.com": "https://www.harborfreight.com/search?q={q}",
+    "surlatable.com": "https://www.surlatable.com/search?q={q}",
+    "gamestop.com": "https://www.gamestop.com/search/?q={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -106,6 +109,9 @@ COMMERCE_CART_URLS = {
     "lego.com": "https://www.lego.com/en-us/cart",
     "guitarcenter.com": "https://www.guitarcenter.com/cart",
     "newegg.com": "https://secure.newegg.com/shop/cart",
+    "harborfreight.com": "https://www.harborfreight.com/checkout/cart",
+    "surlatable.com": "https://www.surlatable.com/shopping-bag",
+    "gamestop.com": "https://www.gamestop.com/cart/",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -117,7 +123,7 @@ GENERIC_ADD_LABEL_RE = re.compile(
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
-CART_URL_RE = re.compile(r"/(?:cart(?:\.php)?|cartview|shoppingcart|basket|bag)(?:[/?#]|$)", re.I)
+CART_URL_RE = re.compile(r"/(?:cart(?:\.php)?|cartview|shoppingcart|shopping-bag|basket|bag)(?:[/?#]|$)", re.I)
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
 SEARCH_RESULTS_URL_RE = re.compile(
     r"/(?:search|s|beta-search)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
@@ -149,6 +155,9 @@ COMMERCE_PRODUCT_URL_RE = {
     "lego.com": re.compile(r"/[a-z]{2}-[a-z]{2}/product/[^/?#]+$", re.I),
     "guitarcenter.com": re.compile(r"/[^/?#]+/[^/?#]*\d[^/?#]*\.gc$", re.I),
     "newegg.com": re.compile(r"/p/N[0-9A-Z]+$", re.I),
+    "harborfreight.com": re.compile(r"/[^/?#]+-\d+\.html$", re.I),
+    "surlatable.com": re.compile(r"/product/[^/?#]+/\d+$", re.I),
+    "gamestop.com": re.compile(r"/products/[^/?#]+/\d+\.html$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -901,6 +910,52 @@ def _cart_item_evidence(out: dict, item: str) -> dict:
     }
 
 
+def _cart_element_item_evidence(out: dict, item: str) -> dict:
+    tokens = _item_tokens(item)
+    required = _required_product_hits(tokens) if tokens else 0
+    url = (out or {}).get("url") or ""
+    if not tokens or CART_URL_RE.search(url) is None:
+        return {"matched": False, "token_hits": 0, "required_hits": required, "element_index": None}
+
+    text = (out or {}).get("text") or ""
+    empty = re.search(r"\b(?:cart|bag|basket)\s+is\s+empty\b|\byour\s+(?:cart|bag|basket)\s+is\s+empty\b", text, re.I)
+    if empty:
+        token_positions = [
+            match.start()
+            for tok in tokens
+            for match in re.finditer(rf"(?<![a-z0-9]){re.escape(tok)}(?![a-z0-9])", text, re.I)
+        ]
+        if not token_positions or empty.start() < min(token_positions):
+            return {"matched": False, "token_hits": 0, "required_hits": required, "element_index": None}
+
+    for pos, el in enumerate((out or {}).get("elements") or []):
+        if pos >= 12:
+            break
+        name = (el.get("name") or "").strip()
+        href = (el.get("href") or "").strip()
+        if not name or not href:
+            continue
+        if _is_generic_product_label(name) or NON_PRODUCT_RE.search(name):
+            continue
+        if not _looks_buyable_product_url(href, url):
+            continue
+        hay = f"{name} {href}"
+        if not _numbers_match(hay, item):
+            continue
+        hits = max(_token_hits(name, tokens), _token_hits(hay, tokens) - 1)
+        if hits < required or not _has_distinctive_required_tokens(hay, tokens):
+            continue
+        if _price_cents(name) is None and pos > 4:
+            continue
+        return {
+            "matched": True,
+            "token_hits": hits,
+            "required_hits": required,
+            "element_index": pos,
+        }
+    return {"matched": False, "token_hits": 0, "required_hits": required, "element_index": None}
+
+
 def _cart_marker_item_match(text: str, item: str) -> bool:
     tokens = _item_tokens(item)
     if not tokens:
@@ -929,6 +984,9 @@ def _cart_verified(out: dict, item: str) -> bool:
         return False
     if not (added or cart_url) or not tokens:
         return False
+    element_evidence = _cart_element_item_evidence(out, item)
+    if cart_url and element_evidence["matched"]:
+        return True
     if cart_url and not CART_STRUCTURE_RE.search(text):
         return False
     if added and not cart_url:
@@ -953,6 +1011,7 @@ def _cart_signal_score(out: dict, item: str) -> int:
     score = 0
     count = _cart_count(out)
     item_evidence = _cart_item_evidence(out, item)
+    element_evidence = _cart_element_item_evidence(out, item)
     if CART_URL_RE.search(url):
         score += 20
     if CART_MARKER_RE.search(text):
@@ -963,6 +1022,8 @@ def _cart_signal_score(out: dict, item: str) -> int:
         score += 120
     if item_evidence["matched"] and (not CART_URL_RE.search(url) or item_evidence["local_structure"]):
         score += 40 + min(20, item_evidence["token_hits"] * 5)
+    if element_evidence["matched"]:
+        score += 55 + min(20, element_evidence["token_hits"] * 5)
     if count == 0:
         score -= 25
     elif count is not None:
@@ -1095,6 +1156,7 @@ def _page_state(
         if len(elements) >= 18:
             break
     item_evidence = _cart_item_evidence(out, item)
+    element_evidence = _cart_element_item_evidence(out, item)
     product_evidence = _product_item_evidence(out, item, start_url)
     state = {
         "stage": stage,
@@ -1109,6 +1171,10 @@ def _page_state(
         "cart_item_required_hits": item_evidence["required_hits"],
         "cart_item_quantity": item_evidence["quantity"],
         "cart_item_local_structure": item_evidence["local_structure"],
+        "cart_element_match": element_evidence["matched"],
+        "cart_element_token_hits": element_evidence["token_hits"],
+        "cart_element_required_hits": element_evidence["required_hits"],
+        "cart_element_index": element_evidence["element_index"],
         "cart_count": _cart_count(out),
         "cart_signal": _cart_signal_score(out, item),
         "cart_verified": _cart_verified(out, item),
