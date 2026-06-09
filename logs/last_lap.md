@@ -1,50 +1,45 @@
 # Last Lap
 
-Lap: 20260609T083504Z
-Date: 2026-06-09T09:25:00Z
-Milestone: M3 - rendered DOM snapshots, stale-click recovery, and real-store product filtering
+Lap: 20260609T091008Z
+Date: 2026-06-09T09:24:25Z
+Milestone: M3 - memory-resolved real-store cart action
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- `NativeBridgeLink` now captures rendered page text and visible actionable selectors from the live CDP target, so hydrated real-store pages such as Best Buy expose clickable links and buttons instead of only static shell HTML.
-- `NativeBridgeLink` stores click metadata and re-resolves stale selectors by expected name, role, or href at click time, because real-store DOMs often re-render between observe and act.
-- `NativeBridgeLink` now brings the target page forward, sends CDP mouse events with proper button state, and then applies a resolved-element JS click fallback when local CDP mouse events report success without firing handlers.
-- WebVoyager now uses rendered element `href` fields for adjacent product URL recovery, recognizes real search-result URLs such as Best Buy `searchpage.jsp`, and filters editorial, advice, and category pages out of product selection.
-- WebVoyager detects login/captcha commerce walls after each major observe point and hands off instead of continuing to fake cart verification.
-- WebVoyager can select a visible United States region choice on country interstitials and reload the intended search.
+- WebVoyager now classifies known commerce product URLs separately from search, category, editorial, login, checkout, and cart URLs. Known stores use product-path patterns such as product, item, or product-detail paths; unknown stores still fall back to generic product URL hints.
+- Product picking now prefers buyable product hrefs and rejects known non-product hrefs before opening a candidate.
+- Add-to-cart clicks now record mutation evidence: URL change, title change, page digest change, cart-signal change, and whether the observed state is cart-verified.
+- Final commerce completion now requires cart-page verification. Product-page add modals, nav badges, search-result text, screenshots, or zero-count cart labels cannot complete a cart task.
+- The memory-to-intent item sanitizer now strips the resolved site's host stem and dangling site prepositions from remembered item text, so a memory line like a product on a store resolves to the product, not the product plus store name.
 
 Real runs:
-- Best Buy initially returned only a static shell. After rendered CDP snapshots, the hand saw the real search page with 125 actionable elements.
-- Real Best Buy then navigated from search to a matching product URL and clicked a real product-page Add to cart control, but the real cart still verified empty.
-- Real Walmart navigated from search to a matching product URL and clicked a product-page Add to cart control, but the real cart still verified empty. The same failure happened with the CDP trusted-click path disabled, so it was not only a trusted-click issue.
-- Real Target opened the exact Brita product page and clicked Add to cart before and after stale-click recovery, but the known cart URL still did not verify the artifact.
-- Real IKEA first misclassified an editorial how-to page, then a category page. After filtering both, it failed honestly by not identifying a buyable matching product within the recipe budget.
-- No separate judge ran. No M3 proof exists.
+- IKEA search-results add changed a transient shopping-bag count, but the known cart page did not contain the item. This was treated as a failure, not proof.
+- Home Depot returned only a privacy surface with no product tokens or buyable links. This was treated as a hard-site failure, not proof.
+- Direct Lowe's recipe opened a real product page, clicked a real Add to Cart control, opened the real `/cart` page, and cart-page verification matched the item. Builder-side only.
+- Full `/event` run with a fresh ignored data directory: the context-only memory seed was captured and triaged out, the vague garage request resolved from memory to Lowe's and the spray bottle, the browser hand opened a real product page, clicked Add to Cart, opened real `/cart`, and the goal finished `done` from cart-page verification. This remains `UNPROVEN-PENDING-JUDGE`; no separate judge verified it.
 
 Checks:
-- Reloaded `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
+- Mandatory control-plane reload completed from disk.
 - Python compile passed for touched engine files.
-- Focused probes passed for commerce wall handling, region selection, rendered Best Buy snapshot, product href recovery, search-results URL detection, stale selector re-resolution, content URL filtering, and category URL filtering.
+- Focused probes passed for product URL classification, cart badge mutation scoring, zero-count cart false-positive rejection, strict cart-page completion, and memory item sanitization.
 - `engine/scripts/test_browser_hand.py` passed.
 - `engine/scripts/test_handoff.py` passed.
 - `engine/scripts/test_harmline.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
-- Forbidden-path scan, owner/eval literal scan, and secret-value scan found no matches.
-- Ports 8787, 7777, and 9222 were stopped after the lap.
+- Changed product file scan found no forbidden paths, no owner/eval literals, and no obvious secret-shaped values.
 
 Gate:
 - No all-work human gate is active.
-- Store-specific add/cart failures are hard-site findings, not pause conditions.
-- Low OpenRouter credit blocks heavy live planning, not building.
-- Separate judge quota blocks proof only. Spending money remains a hard human gate and was not taken.
+- Separate judge quota still blocks proof only, not building. Spending money remains a human gate and was not taken.
+- Low model credit did not block the lap because the real path used deterministic memory resolution and deterministic store DOM recipes.
 
 Proof status:
-- No new verified real artifact was created in this lap.
-- No M3 completion is claimed.
+- A real Lowe's cart artifact was created and read back by the builder-side live engine path.
+- M3 is not done because the separate judge has not opened the real account/site and verified the artifact.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work. The next useful slice is buyable-product extraction on real rendered store pages and post-click mutation detection: distinguish product/category/editorial surfaces, capture add-click return state, and keep verifying only through real cart state.
+- Continue M3 ladder work. Convert this `UNPROVEN-PENDING-JUDGE` cart artifact through the separate judge when quota returns. Until then, keep hardening the real chain: reduce duplicate cart additions, improve cleanup/quantity awareness, broaden real-store product recipes, and keep final success tied to cart-page read-back.

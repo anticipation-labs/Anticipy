@@ -243,24 +243,39 @@ def _source_ref(line: str) -> str:
     return f"memory:{digest}"
 
 
-def _sanitize_item(raw: str) -> str:
+def _sanitize_item(raw: str, site: str = "") -> str:
     item = re.split(
         r"\s+\b(?:on|at|from|via|using)\s+(?:https?://)?(?:www\.)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s]*)?",
         raw or "",
         maxsplit=1,
         flags=re.I,
     )[0]
+    host = ""
+    try:
+        host = re.sub(r"^www\.", "", _DOMAIN_IN_TEXT_RE.search(site or "").group(1).lower()) if site else ""
+    except Exception:
+        host = ""
+    host_stem = host.split(".")[0] if host else ""
+    for marker in {host, host_stem} - {""}:
+        item = re.split(
+            rf"\s+\b(?:on|at|from|via|using)\s+(?:the\s+)?{re.escape(marker)}\b.*$",
+            item,
+            maxsplit=1,
+            flags=re.I,
+        )[0]
     item = _URL_IN_TEXT_RE.sub(" ", item)
     item = re.sub(r"\b(?:product|item|thing)\s*[:=-]\s*", " ", item, flags=re.I)
+    item = re.sub(r"\s+\b(?:on|at|from|via|using)\s*$", "", item, flags=re.I)
     item = re.sub(r"\s+", " ", item).strip(" \"'“”.,:;-")
     item = re.sub(r"^(?:a|an|the)\s+", "", item, flags=re.I)
     return item
 
 
 def _line_item(line: str) -> str:
+    site = _line_site(line)
     quoted = re.findall(r"['\"“”]([^'\"“”]{3,140})['\"“”]", line)
     if quoted:
-        item = _sanitize_item(quoted[-1])
+        item = _sanitize_item(quoted[-1], site=site)
         return item if 3 <= len(item) <= 160 else ""
     patterns = (
         r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for)\s+(?P<item>[^.;\n]+)",
@@ -269,7 +284,7 @@ def _line_item(line: str) -> str:
     for pat in patterns:
         m = re.search(pat, line, re.I)
         if m:
-            item = _sanitize_item(m.group("item"))
+            item = _sanitize_item(m.group("item"), site=site)
             if 3 <= len(item) <= 160:
                 return item
     return ""

@@ -86,6 +86,7 @@ ADD_TO_CART_RE = re.compile(
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
+CART_URL_RE = re.compile(r"/(?:cart|shoppingcart|basket|bag)(?:[/?#]|$)", re.I)
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
 SEARCH_RESULTS_URL_RE = re.compile(
     r"/(?:search|s)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|[?&](?:q|query|search|searchTerm|st)=",
@@ -96,6 +97,15 @@ CONTENT_URL_RE = re.compile(
     r"/(?:rooms|ideas|how-to|inspiration|services|help|blog|article|articles|cat)/",
     re.I,
 )
+COMMERCE_PRODUCT_URL_RE = {
+    "target.com": re.compile(r"/(?:p/|-/A-)", re.I),
+    "walmart.com": re.compile(r"/ip/", re.I),
+    "bestbuy.com": re.compile(r"/site/.+/\d+\.p(?:[?#]|$)", re.I),
+    "homedepot.com": re.compile(r"/p/", re.I),
+    "lowes.com": re.compile(r"/pd/", re.I),
+    "ikea.com": re.compile(r"/p/", re.I),
+}
+PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
     r"\b(add to|cart|basket|bag|checkout|sponsored|ad|sign in|log in|create account|"
     r"pickup|delivery|shipping|ratings?|reviews?|see more|show more|how-to|how to|category)\b",
@@ -231,6 +241,40 @@ def _looks_content_url(url: str) -> bool:
     return CONTENT_URL_RE.search(url or "") is not None
 
 
+def _same_site(start_url: str, candidate_url: str) -> bool:
+    start_host = _host(start_url)
+    candidate_host = _host(candidate_url)
+    if not start_host or not candidate_host:
+        return True
+    return (
+        start_host == candidate_host
+        or start_host.endswith("." + candidate_host)
+        or candidate_host.endswith("." + start_host)
+    )
+
+
+def _commerce_product_pattern(start_url: str) -> Optional[re.Pattern]:
+    start_host = _host(start_url)
+    for domain, pattern in COMMERCE_PRODUCT_URL_RE.items():
+        if start_host == domain or start_host.endswith("." + domain):
+            return pattern
+    return None
+
+
+def _looks_buyable_product_url(url: str, start_url: str = "") -> bool:
+    absolute = _absolute_site_url(start_url, url) if start_url else (url or "")
+    if not absolute or not _same_site(start_url, absolute):
+        return False
+    if _looks_search_results_url(absolute) or _looks_content_url(absolute):
+        return False
+    if re.search(r"/(?:cart|basket|bag|checkout|login|signin|sign-in)(?:[/?#]|$)", absolute, re.I):
+        return False
+    pattern = _commerce_product_pattern(start_url or absolute)
+    if pattern is not None:
+        return pattern.search(urllib.parse.urlparse(absolute).path) is not None
+    return PRODUCT_URL_RE.search(urllib.parse.urlparse(absolute).path) is not None
+
+
 def _absolute_site_url(start_url: str, href: str) -> str:
     href = (href or "").strip()
     if not href:
@@ -269,7 +313,8 @@ def _product_url_near_index(
             href = name
         if not href:
             continue
-        if _looks_content_url(href):
+        absolute = _absolute_site_url(start_url, href)
+        if not _looks_buyable_product_url(absolute, start_url):
             continue
         hay = f"{name} {href}"
         if not _numbers_match(hay, item):
@@ -277,10 +322,10 @@ def _product_url_near_index(
         hits = _token_hits(hay, tokens)
         if hits < required:
             continue
-        nearby.append((idx, hits, href))
+        nearby.append((idx, hits, 1 if _looks_buyable_product_url(absolute, start_url) else 0, href))
     if not nearby:
         return ""
-    _, _, href = max(nearby, key=lambda row: (row[1], row[0]))
+    _, _, _, href = max(nearby, key=lambda row: (row[2], row[1], row[0]))
     return _absolute_site_url(start_url, href)
 
 
@@ -366,7 +411,12 @@ def _wants_lowest_price(text: str) -> bool:
                      text or "", re.I) is not None
 
 
-def _pick_product(elements: list[dict], item: str, prefer_lowest: bool = False) -> Optional[dict]:
+def _pick_product(
+    elements: list[dict],
+    item: str,
+    prefer_lowest: bool = False,
+    start_url: str = "",
+) -> Optional[dict]:
     tokens = _item_tokens(item)
     if not tokens:
         return None
@@ -377,7 +427,9 @@ def _pick_product(elements: list[dict], item: str, prefer_lowest: bool = False) 
         if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
                 or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item)):
             continue
-        if _looks_content_url(el.get("href") or name):
+        href = (el.get("href") or "").strip()
+        productish_url = bool(href and _looks_buyable_product_url(href, start_url or href))
+        if href and not productish_url:
             continue
         role = (el.get("role") or "").lower()
         if role not in {"a", "button"} and "link" not in role:
@@ -385,7 +437,12 @@ def _pick_product(elements: list[dict], item: str, prefer_lowest: bool = False) 
         hits = _token_hits(name, tokens)
         if hits < required:
             continue
-        score = hits * 3 + (2 if el.get("inView") else 0) + min(len(name), 120) / 120
+        score = (
+            hits * 3
+            + (4 if productish_url else 0)
+            + (2 if el.get("inView") else 0)
+            + min(len(name), 120) / 120
+        )
         candidates.append((_price_cents(name), score, el))
     if not candidates:
         return None
@@ -419,11 +476,19 @@ def _pick_region_button(elements: list[dict]) -> Optional[dict]:
     return _pick_button(elements, REGION_US_RE)
 
 
-def _pick_add_button(elements: list[dict], item: str, allow_generic: bool = True) -> Optional[dict]:
+def _pick_add_button(
+    elements: list[dict],
+    item: str,
+    allow_generic: bool = True,
+    skip_names: Optional[set[str]] = None,
+) -> Optional[dict]:
     item_tokens = _item_tokens(item)
+    skip_names = skip_names or set()
     for el in elements or []:
         name = (el.get("name") or "").strip()
         if not name or el.get("sponsored") or PURCHASE_GUARD.search(name):
+            continue
+        if name.lower() in skip_names:
             continue
         if el.get("inView") is False:
             continue
@@ -452,7 +517,9 @@ def _pick_add_button(elements: list[dict], item: str, allow_generic: bool = True
 
 CART_MARKER_RE = re.compile(
     r"added\s+to\s+(?:cart|bag|basket)|item\s+added|in\s+your\s+(?:cart|bag|basket)|"
-    r"\b\d+\s+in\s+(?:cart|basket|bag)\b|\bin\s+(?:cart|basket|bag)\b",
+    r"\b[1-9]\d*\s+in\s+(?:cart|basket|bag)\b|"
+    r"\b(?:shopping\s+)?(?:cart|bag|basket),?\s*[1-9]\d*\s+items?\b|"
+    r"\b(?:cart|bag|basket)\s+with\s+[1-9]\d*\s+items?\b",
     re.I,
 )
 POST_CART_NOISE_RE = re.compile(
@@ -483,7 +550,7 @@ def _cart_verified(out: dict, item: str) -> bool:
     low = text.lower()
     url = ((out or {}).get("url") or "").lower()
     added = CART_MARKER_RE.search(low) is not None
-    cart_url = re.search(r"/(cart|basket|bag)(?:[/?#]|$)", url) is not None
+    cart_url = CART_URL_RE.search(url) is not None
     tokens = _item_tokens(item)
     if not (added or cart_url) or not tokens:
         return False
@@ -493,6 +560,59 @@ def _cart_verified(out: dict, item: str) -> bool:
         return False
     hits = _token_hits(text, tokens)
     return hits >= (2 if len(tokens) >= 3 else 1)
+
+
+def _is_cart_url(out: dict) -> bool:
+    return CART_URL_RE.search(((out or {}).get("url") or "").lower()) is not None
+
+
+def _cart_page_verified(out: dict, item: str) -> bool:
+    return _is_cart_url(out) and _cart_verified(out, item)
+
+
+def _cart_signal_score(out: dict, item: str) -> int:
+    text = (out or {}).get("text") or ""
+    url = ((out or {}).get("url") or "").lower()
+    score = 0
+    if CART_URL_RE.search(url):
+        score += 20
+    if CART_MARKER_RE.search(text):
+        score += 30
+    if _cart_marker_item_match(text, item):
+        score += 60
+    if _cart_verified(out, item):
+        score += 120
+    score += min(10, _token_hits(text, _item_tokens(item)))
+    return score
+
+
+def _state_digest(out: dict) -> str:
+    o = out or {}
+    text = re.sub(r"\s+", " ", (o.get("text") or "").lower())[:3000]
+    names = "\n".join(
+        re.sub(r"\s+", " ", (el.get("name") or "").lower())[:120]
+        for el in (o.get("elements") or [])[:80]
+    )
+    return hashlib.sha1(f"{text}\n{names}".encode()).hexdigest()[:12]
+
+
+def _commerce_mutation(before: dict, after: dict, item: str) -> dict:
+    before_signal = _cart_signal_score(before, item)
+    after_signal = _cart_signal_score(after, item)
+    url_changed = ((before or {}).get("url") or "") != ((after or {}).get("url") or "")
+    title_changed = ((before or {}).get("title") or "") != ((after or {}).get("title") or "")
+    digest_changed = _state_digest(before) != _state_digest(after)
+    signal_improved = after_signal > before_signal
+    return {
+        "changed": bool(url_changed or title_changed or digest_changed or signal_improved),
+        "url_changed": url_changed,
+        "title_changed": title_changed,
+        "digest_changed": digest_changed,
+        "signal_improved": signal_improved,
+        "before_cart_signal": before_signal,
+        "after_cart_signal": after_signal,
+        "cart_verified": _cart_verified(after, item),
+    }
 
 
 def _commerce_wall_kind(out: dict) -> str:
@@ -505,7 +625,28 @@ def _commerce_wall_kind(out: dict) -> str:
     return ""
 
 
-def _page_state(stage: str, out: dict, item: str, action: str = "") -> dict:
+def _surface_kind(out: dict, start_url: str = "") -> str:
+    url = (out or {}).get("url") or ""
+    if CART_URL_RE.search(url):
+        return "cart"
+    if _looks_search_results_url(url):
+        return "search"
+    if _looks_buyable_product_url(url, start_url or url):
+        return "product"
+    if _looks_content_url(url):
+        return "content"
+    return "unknown"
+
+
+def _page_state(
+    stage: str,
+    out: dict,
+    item: str,
+    action: str = "",
+    *,
+    start_url: str = "",
+    mutation: Optional[dict] = None,
+) -> dict:
     elements = []
     for el in (out or {}).get("elements") or []:
         name = (el.get("name") or "").strip()
@@ -515,20 +656,32 @@ def _page_state(stage: str, out: dict, item: str, action: str = "") -> dict:
             "idx": el.get("idx"),
             "role": el.get("role"),
             "name": name[:90],
+            "href": (el.get("href") or "")[:140],
             "inView": bool(el.get("inView")),
             "sponsored": bool(el.get("sponsored")),
         })
         if len(elements) >= 18:
             break
-    return {
+    state = {
         "stage": stage,
         "action": action,
         "url": (out or {}).get("url"),
         "title": (out or {}).get("title"),
+        "surface_kind": _surface_kind(out, start_url),
         "item_token_hits": _token_hits((out or {}).get("text") or "", _item_tokens(item)),
+        "cart_signal": _cart_signal_score(out, item),
+        "cart_verified": _cart_verified(out, item),
+        "cart_page_verified": _cart_page_verified(out, item),
         "cartish": any(k in ((out or {}).get("text") or "").lower() for k in ("added to cart", "cart", "basket", "bag")),
+        "buyable_product_links": sum(
+            1 for el in (out or {}).get("elements") or []
+            if _looks_buyable_product_url(el.get("href") or "", start_url or (out or {}).get("url") or "")
+        ),
         "elements": elements,
     }
+    if mutation is not None:
+        state["mutation"] = mutation
+    return state
 
 
 def _sig(url, title, els) -> str:
@@ -651,11 +804,13 @@ class WebVoyagerAgent:
             await asyncio.sleep(0.6 + attempt * 0.35)
             out, shot = await self._observe_ready()
             current_path = urllib.parse.urlparse((out or {}).get("url") or "").path.rstrip("/") or "/"
-            if current_path == expected_path or _cart_verified(out, item):
+            if _cart_page_verified(out, item):
+                break
+            if current_path == expected_path and attempt == 4:
                 break
         self._cur_shot = shot
         history.append(f"recipe: navigated known cart url for {_host(start_url)}")
-        states.append(_page_state(stage, out, item, history[-1]))
+        states.append(_page_state(stage, out, item, history[-1], start_url=start_url))
         return out, steps + 1
 
     async def _notify(self, msg: str) -> None:
@@ -701,18 +856,18 @@ class WebVoyagerAgent:
                 steps += 1
 
         if self._unactionable_obs(out):
-            states.append(_page_state("unactionable_search_surface", out, item, history[-1]))
+            states.append(_page_state("unactionable_search_surface", out, item, history[-1], start_url=start_url))
             return self._done(out, steps + 1, history, answer="",
                               reason="commerce recipe found no actionable browser elements",
                               page_states=states, commerce_recipe=True)
 
-        states.append(_page_state("search_results", out, item, history[-1]))
+        states.append(_page_state("search_results", out, item, history[-1], start_url=start_url))
         prefer_lowest = _wants_lowest_price(task)
         wall_kind = _commerce_wall_kind(out)
         if wall_kind:
             return await self._handoff(out, steps + 1, history, wall_kind,
                                        "wall during commerce recipe")
-        if _cart_verified(out, item):
+        if _cart_page_verified(out, item):
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
@@ -724,20 +879,20 @@ class WebVoyagerAgent:
                 out, shot = await self._observe_ready()
                 self._cur_shot = shot
                 history.append(f"recipe: selected store region idx={region_button.get('idx')} '{label}'")
-                states.append(_page_state("after_region_selection", out, item, history[-1]))
+                states.append(_page_state("after_region_selection", out, item, history[-1], start_url=start_url))
                 steps += 1
                 wall_kind = _commerce_wall_kind(out)
                 if wall_kind:
                     return await self._handoff(out, steps + 1, history, wall_kind,
                                                "wall after store region selection")
-                if _cart_verified(out, item):
+                if _cart_page_verified(out, item):
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
                 if search_url and _token_hits(out.get("text") or "", _item_tokens(item)) == 0:
                     out, shot = await self._observe_ready(search_url)
                     self._cur_shot = shot
                     history.append("recipe: reloaded search after store region selection")
-                    states.append(_page_state("search_after_region_selection", out, item, history[-1]))
+                    states.append(_page_state("search_after_region_selection", out, item, history[-1], start_url=start_url))
                     steps += 1
 
         opened_product_from_results_add = False
@@ -745,16 +900,28 @@ class WebVoyagerAgent:
         add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
         if add_from_results:
             label = (add_from_results.get("name") or "")[:80]
+            before_add = out
             out, shot = await self._act_add_and_observe({"action": "click", "index": add_from_results.get("idx")})
             self._cur_shot = shot
-            history.append(f"recipe: clicked item-specific add from results idx={add_from_results.get('idx')} '{label}'")
-            states.append(_page_state("post_add_from_results", out, item, history[-1]))
+            mutation = _commerce_mutation(before_add, out, item)
+            history.append(
+                f"recipe: clicked item-specific add from results idx={add_from_results.get('idx')} "
+                f"'{label}' changed={mutation['changed']} signal={mutation['after_cart_signal']}"
+            )
+            states.append(_page_state(
+                "post_add_from_results",
+                out,
+                item,
+                history[-1],
+                start_url=start_url,
+                mutation=mutation,
+            ))
             steps += 1
             wall_kind = _commerce_wall_kind(out)
             if wall_kind:
                 return await self._handoff(out, steps + 1, history, wall_kind,
                                            "wall after item-specific search-results add")
-            if _cart_verified(out, item):
+            if _cart_page_verified(out, item):
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
             view_cart = _pick_button(out.get("elements") or [], VIEW_CART_RE)
@@ -764,15 +931,15 @@ class WebVoyagerAgent:
                 out, shot = await self._observe_ready()
                 self._cur_shot = shot
                 history.append(f"recipe: opened cart after results add idx={view_cart.get('idx')} '{cart_label}'")
-                states.append(_page_state("cart_page_after_results_add", out, item, history[-1]))
+                states.append(_page_state("cart_page_after_results_add", out, item, history[-1], start_url=start_url))
                 steps += 1
-                if _cart_verified(out, item):
+                if _cart_page_verified(out, item):
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
             cart_out, steps = await self._verify_known_cart_url(
                 start_url, item, history, states, steps, "known_cart_page_after_results_add"
             )
-            if cart_out and _cart_verified(cart_out, item):
+            if cart_out and _cart_page_verified(cart_out, item):
                 return self._done(cart_out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
             if cart_out:
@@ -787,7 +954,13 @@ class WebVoyagerAgent:
             out, shot = await self._observe_ready(product_url)
             self._cur_shot = shot
             history.append("recipe: opened same product after unverified results add")
-            states.append(_page_state("same_product_page_after_results_add_failure", out, item, history[-1]))
+            states.append(_page_state(
+                "same_product_page_after_results_add_failure",
+                out,
+                item,
+                history[-1],
+                start_url=start_url,
+            ))
             steps += 1
             wall_kind = _commerce_wall_kind(out)
             if wall_kind:
@@ -798,14 +971,25 @@ class WebVoyagerAgent:
         if not opened_product_from_results_add:
             product = None
             for scrolls in range(3):
-                product = _pick_product(out.get("elements") or [], item, prefer_lowest=prefer_lowest)
+                product = _pick_product(
+                    out.get("elements") or [],
+                    item,
+                    prefer_lowest=prefer_lowest,
+                    start_url=start_url,
+                )
                 if product:
                     break
                 await self._act({"action": "scroll", "dir": "down"})
                 out, shot = await self._observe_ready()
                 self._cur_shot = shot
                 history.append(f"recipe: scroll search results {scrolls + 1}")
-                states.append(_page_state(f"search_results_scroll_{scrolls + 1}", out, item, history[-1]))
+                states.append(_page_state(
+                    f"search_results_scroll_{scrolls + 1}",
+                    out,
+                    item,
+                    history[-1],
+                    start_url=start_url,
+                ))
                 steps += 1
 
             if product:
@@ -817,7 +1001,7 @@ class WebVoyagerAgent:
                 out, shot = await self._observe_ready()
                 self._cur_shot = shot
                 history.append(f"recipe: opened product idx={product.get('idx')} '{label}'")
-                states.append(_page_state("product_page", out, item, history[-1]))
+                states.append(_page_state("product_page", out, item, history[-1], start_url=start_url))
                 steps += 1
                 wall_kind = _commerce_wall_kind(out)
                 if wall_kind:
@@ -827,7 +1011,13 @@ class WebVoyagerAgent:
                     out, shot = await self._observe_ready(product_url)
                     self._cur_shot = shot
                     history.append("recipe: navigated adjacent product url after product click stayed on search")
-                    states.append(_page_state("product_page_from_adjacent_url", out, item, history[-1]))
+                    states.append(_page_state(
+                        "product_page_from_adjacent_url",
+                        out,
+                        item,
+                        history[-1],
+                        start_url=start_url,
+                    ))
                     steps += 1
                     wall_kind = _commerce_wall_kind(out)
                     if wall_kind:
@@ -838,39 +1028,64 @@ class WebVoyagerAgent:
                                   reason="commerce recipe could not identify a matching product",
                                   page_states=states, commerce_recipe=True)
 
-        if _cart_verified(out, item):
+        if _cart_page_verified(out, item):
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
+        tried_add_names: set[str] = set()
         for attempt in range(5):
-            if _cart_verified(out, item):
+            if _cart_page_verified(out, item):
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
-            add = _pick_add_button(out.get("elements") or [], item)
+            add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
             if not add:
                 await self._act({"action": "scroll", "dir": "down"})
                 out, shot = await self._observe_ready()
                 self._cur_shot = shot
                 history.append(f"recipe: scroll product for add control {attempt + 1}")
-                states.append(_page_state(f"product_scroll_{attempt + 1}", out, item, history[-1]))
+                states.append(_page_state(
+                    f"product_scroll_{attempt + 1}",
+                    out,
+                    item,
+                    history[-1],
+                    start_url=start_url,
+                ))
                 steps += 1
-                if _cart_verified(out, item):
+                if _cart_page_verified(out, item):
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
                 continue
             label = (add.get("name") or "")[:80]
+            before_add = out
             out, shot = await self._act_add_and_observe({"action": "click", "index": add.get("idx")})
             self._cur_shot = shot
-            history.append(f"recipe: clicked add control idx={add.get('idx')} '{label}'")
-            states.append(_page_state("post_add", out, item, history[-1]))
+            mutation = _commerce_mutation(before_add, out, item)
+            history.append(
+                f"recipe: clicked add control idx={add.get('idx')} '{label}' "
+                f"changed={mutation['changed']} signal={mutation['after_cart_signal']}"
+            )
+            states.append(_page_state(
+                "post_add",
+                out,
+                item,
+                history[-1],
+                start_url=start_url,
+                mutation=mutation,
+            ))
             steps += 1
             wall_kind = _commerce_wall_kind(out)
             if wall_kind:
                 return await self._handoff(out, steps + 1, history, wall_kind,
                                            "wall after product-page add")
+            if _cart_page_verified(out, item):
+                return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                  page_states=states, commerce_recipe=True)
+            if not mutation["changed"]:
+                tried_add_names.add(label.lower())
+                continue
             break
 
-        if _cart_verified(out, item):
+        if _cart_page_verified(out, item):
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
 
@@ -881,16 +1096,16 @@ class WebVoyagerAgent:
             out, shot = await self._observe_ready()
             self._cur_shot = shot
             history.append(f"recipe: opened cart idx={view_cart.get('idx')} '{label}'")
-            states.append(_page_state("cart_page", out, item, history[-1]))
+            states.append(_page_state("cart_page", out, item, history[-1], start_url=start_url))
             steps += 1
-            if _cart_verified(out, item):
+            if _cart_page_verified(out, item):
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
 
         cart_out, steps = await self._verify_known_cart_url(
             start_url, item, history, states, steps, "known_cart_page_after_product_add"
         )
-        if cart_out and _cart_verified(cart_out, item):
+        if cart_out and _cart_page_verified(cart_out, item):
             return self._done(cart_out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
         if cart_out:
