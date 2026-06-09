@@ -1,28 +1,28 @@
 # Last Lap
 
-Lap: 20260609T163143Z
-Date: 2026-06-09T16:45:26Z
-Milestone: M3 - Adorama real-store cart path and cart-proof hardening
+Lap: 20260609T170142Z
+Date: 2026-06-09T17:13:06Z
+Milestone: M3 - Sweetwater real-store cart path and search-redirect handling
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- WebVoyager now knows Adorama search, product, and cart URL shapes: `/l/?searchinfo=...`, `/p/<slug>`, and `/cartview`.
-- NativeBridgeLink now treats Adorama `searchinfo` query parameters as search query tokens for bridge readiness.
-- Product URL classification now rejects review and Q&A URL fragments before treating a URL as buyable.
-- Item token matching now handles cautious compound boundary matches, so a visible title such as `SlideLITE` can match both `slide` and `lite` without arbitrary short substring matching.
-- Cart proof now recognizes `/cartview` as a cart URL but requires item-local cart structure such as quantity or remove before cart-page item tokens count as proof. Recommendation product cards on cart pages cannot complete the task.
+- WebVoyager now knows Sweetwater search, product, and cart URL shapes: `/store/search?s=...`, `/store/detail/<slug>`, and `/store/cart.php`.
+- NativeBridgeLink now treats the Sweetwater `s` query parameter as a search query-token field for bridge readiness.
+- The commerce recipe now handles real search URLs that redirect straight to a matching buyable product page. If visible product identity matches the remembered item, it proceeds to the product add loop instead of looking for another product link.
+- Generic cart URL detection now recognizes `/cart.php` while preserving item-local cart-structure proof requirements.
 
 Real runs:
-- Read-only Adorama probing found real product links, visible `ADD TO CART` controls, and the live cart route without mutation.
-- The first full live `/event` run seeded context-only memory, then sent a vague action that did not name Adorama or the item. It resolved to Adorama plus the remembered Peak Design camera strap, opened the real product page, clicked a real `ADD TO CART` control, and opened `/cartview`, but failed final proof because the cart route did not expose item-local cart structure.
-- After cart URL and proof hardening, a fresh full live `/event` run used the same vague action, opened the real Adorama product, clicked a real `ADD TO CART` control, opened `/cartview`, and completed only after durable cart-page read-back had item-local cart structure.
+- Read-only Sweetwater probing found that broad apostrophe-free search did not expose usable product candidates, but precise searches found real `/store/detail/...` product links for D'Addario EJ16 string pack variants and the live `/store/cart.php` cart route without mutation.
+- The first live `/event` run seeded context-only memory, then sent a vague action that did not name Sweetwater or the item. It resolved to Sweetwater plus the remembered 4-pack string set and search landed on the exact product page, but the recipe still treated it as search results and failed before mutation.
+- After search-redirect handling, a fresh live run clicked a real `Add to Cart` control and changed the cart count, but failed final proof because `/store/cart.php` was not recognized as a cart route.
+- After `/cart.php` recognition, a fresh full live `/event` run used the same vague action, opened the matching Sweetwater product page, clicked a real `Add to Cart` control, opened `/store/cart.php`, and fresh-probe cart read-back verified the item under item-local cart-structure proof.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Adorama cart guard, URL, compound-match, and `searchinfo` checks passed.
+- Focused Sweetwater search URL, product URL, exact variant, search-redirect, `/cart.php`, and cart guard checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -43,4 +43,4 @@ Proof status:
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work on real stores only. Convert the unjudged Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and other builder-side artifacts through the separate judge when quota returns, and otherwise keep building exact item matching, durable read-back, and cheap real-site action recipes.
+- Continue M3 ladder work on real stores only. Convert the unjudged Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and other builder-side artifacts through the separate judge when quota returns, and otherwise keep building exact item matching, durable read-back, and cheap real-site action recipes.

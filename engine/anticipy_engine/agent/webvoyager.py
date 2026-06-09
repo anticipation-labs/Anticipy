@@ -81,6 +81,7 @@ COMMERCE_SEARCH_URLS = {
     "michaels.com": "https://www.michaels.com/search?q={q}",
     "bhphotovideo.com": "https://www.bhphotovideo.com/c/search?Ntt={q}&N=0&InitialSearch=yes",
     "adorama.com": "https://www.adorama.com/l/?searchinfo={q}",
+    "sweetwater.com": "https://www.sweetwater.com/store/search?s={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -98,6 +99,7 @@ COMMERCE_CART_URLS = {
     "michaels.com": "https://www.michaels.com/cart",
     "bhphotovideo.com": "https://www.bhphotovideo.com/find/cart.jsp",
     "adorama.com": "https://www.adorama.com/cartview",
+    "sweetwater.com": "https://www.sweetwater.com/store/cart.php",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -109,7 +111,7 @@ GENERIC_ADD_LABEL_RE = re.compile(
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
-CART_URL_RE = re.compile(r"/(?:cart|cartview|shoppingcart|basket|bag)(?:[/?#]|$)", re.I)
+CART_URL_RE = re.compile(r"/(?:cart(?:\.php)?|cartview|shoppingcart|basket|bag)(?:[/?#]|$)", re.I)
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
 SEARCH_RESULTS_URL_RE = re.compile(
     r"/(?:search|s|beta-search)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
@@ -137,6 +139,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "michaels.com": re.compile(r"/product/", re.I),
     "bhphotovideo.com": re.compile(r"/c/product/[^?#]+\.html$", re.I),
     "adorama.com": re.compile(r"/p/[^/?#]+$", re.I),
+    "sweetwater.com": re.compile(r"/store/detail/[^/?#]+$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -1421,8 +1424,21 @@ class WebVoyagerAgent:
                     steps += 1
 
         opened_product_from_results_add = False
+        if (_looks_buyable_product_url(out.get("url") or "", start_url)
+                and _product_item_evidence(out, item, start_url)["matched"]):
+            opened_product_from_results_add = True
+            history.append("recipe: search landed on matching product page")
+            states.append(_page_state(
+                "product_page_from_search_redirect",
+                out,
+                item,
+                history[-1],
+                start_url=start_url,
+            ))
         search_elements = out.get("elements") or []
-        add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
+        add_from_results = None
+        if not opened_product_from_results_add:
+            add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
         if add_from_results:
             label = (add_from_results.get("name") or "")[:80]
             before_add = out

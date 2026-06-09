@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T163143Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Adorama and hardened cart proof against recommendation leakage. WebVoyager now knows Adorama search, product, and cart URL shapes: `/l/?searchinfo=...`, `/p/<slug>`, and `/cartview`. NativeBridgeLink treats `searchinfo` as a search query-token field. Product URL classification rejects review and Q&A fragments before accepting buyable product URLs. Compound boundary token matching handles visible titles such as `SlideLITE` without arbitrary short substring matching. Cart proof now recognizes `/cartview` as a cart route, but cart-page item tokens count only when their local evidence window includes cart-item structure such as quantity or remove. Read-only Adorama probes found real product links, visible `ADD TO CART` controls, and the live cart route. A first full live vague-memory run resolved correctly, opened the real Adorama product, clicked a real `ADD TO CART` control, and opened `/cartview`, but failed final proof because the cart route did not expose item-local cart structure. After cart-proof hardening, a fresh live `/event` run used the same vague action, opened the real Adorama product, clicked real `ADD TO CART`, opened `/cartview`, and durable cart-page read-back matched the requested item with item-local cart structure. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T170142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Sweetwater and hardened search-redirect handling. WebVoyager now knows Sweetwater search, product, and cart URL shapes: `/store/search?s=...`, `/store/detail/<slug>`, and `/store/cart.php`. NativeBridgeLink treats the Sweetwater `s` query parameter as a search query-token field. If a commerce search URL lands directly on a buyable product URL and visible product identity matches the remembered item, the recipe now proceeds into the product add loop instead of searching for another product link. Generic cart URL detection now recognizes `/cart.php` while preserving item-local cart-structure proof. Read-only Sweetwater probes found real product links for D'Addario EJ16 string pack variants and the live cart route. A first full live vague-memory run resolved correctly but failed before mutation because the search redirect was treated as search results. After redirect handling, a fresh run clicked real `Add to Cart` and changed cart count, but failed proof because `/store/cart.php` was not recognized as a cart route. After `/cart.php` recognition, a fresh live `/event` run used the same vague action, opened the matching Sweetwater product, clicked real `Add to Cart`, opened `/store/cart.php`, and fresh-probe cart read-back matched the requested item with item-local cart structure. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -47,6 +47,7 @@ Current M3 slice:
 - WebVoyager knows Michaels search, product, and cart URL shapes. Michaels product matching accepts `/product/` product pages while preserving visible product identity checks before Add.
 - WebVoyager knows B&H Photo Video search, product, and cart URL shapes. B&H product matching accepts `/c/product/.../<slug>.html` product pages while rejecting review URLs.
 - WebVoyager knows Adorama search, product, and cart URL shapes. Adorama product matching accepts `/p/<slug>` product pages while rejecting review and Q&A URL fragments.
+- WebVoyager knows Sweetwater search, product, and cart URL shapes. Sweetwater product matching accepts `/store/detail/<slug>` product pages while rejecting review subpaths.
 - Numeric item matching and ordered item scoring treat visible labels such as `128GB` as matching numeric item tokens such as `128`, so exact storage-size product titles can satisfy distinctive-token checks.
 - Memory context hints bias product ranking but no longer filter out exact non-hint product matches. Total product score outranks context-hint count.
 - WebVoyager penalizes unrequested bundle, kit, pack, edition, CompactFlash, CFexpress, microSD, and microSDXC variants when choosing between visible product candidates.
@@ -54,15 +55,18 @@ Current M3 slice:
 - `NativeBridgeLink` ranks direct-CDP actionable marks so visible product, Add, cart, and search controls survive the mark cap on nav-heavy commerce pages.
 - `NativeBridgeLink` direct CDP scroll no longer double-scrolls by applying wheel plus unconditional JavaScript scroll. It uses JavaScript fallback only if the wheel did not move the page.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
+- If a site search URL redirects directly to a buyable product URL and the visible product identity matches the remembered item, WebVoyager can skip product-link selection and proceed to the product add loop.
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- Read-only Adorama probing found real search-result product rows, Adorama product URL shapes, visible `ADD TO CART` controls, and the live cart route without mutation.
-- A first full live Adorama `/event` run used context-only memory plus a vague action that did not name Adorama or the exact item. It resolved Adorama plus the remembered Peak Design camera strap, opened the real product page, clicked a real `ADD TO CART` control, and opened `/cartview`, but failed final cart verification because the cart route did not expose item-local cart structure.
-- After cart URL and cart-proof hardening, a fresh full live `/event` run used the same vague action, opened the real Adorama product, clicked real `ADD TO CART`, opened `/cartview`, and durable known-cart read-back matched the requested item with item-local cart structure. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
+- Read-only Sweetwater probing found real search-result product rows, Sweetwater product URL shapes, visible `Add to Cart` controls, and the live cart route without mutation.
+- A first full live Sweetwater `/event` run used context-only memory plus a vague action that did not name Sweetwater or the exact item. It resolved Sweetwater plus the remembered 4-pack string set, and search landed on the exact product page, but it failed before mutation because the redirect was still handled as search results.
+- After search-redirect handling, a fresh run clicked a real `Add to Cart` control and changed cart count, but failed final proof because `/store/cart.php` was not recognized as a cart URL.
+- After `/cart.php` recognition, a fresh full live `/event` run used the same vague action, opened the matching Sweetwater product, clicked real `Add to Cart`, opened `/store/cart.php`, and fresh-probe cart read-back matched the requested item with item-local cart structure. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- Sweetwater can complete a real search-product-add-cart-verify path builder-side after recognizing `/store/search?s=`, `/store/detail/<slug>`, and `/store/cart.php`, handling search redirects directly to a matching product page, and treating `/cart.php` as a cart route under item-local cart-structure proof.
 - Adorama can complete a real search-product-add-cart-verify path builder-side after recognizing `/l/?searchinfo=`, `/p/<slug>`, and `/cartview`, after handling compound title tokens such as `SlideLITE`, and after requiring item-local cart structure so recommendation cards do not count as cart proof.
 - B&H Photo Video can complete a real search-product-add-cart-verify path builder-side after recognizing `/c/search?Ntt=`, `/c/product/.../<slug>.html`, and `/find/cart.jsp`, and after changing context hints to ranking signals instead of exclusive filters.
 - Michaels can complete a real search-product-add-cart-verify path builder-side after direct-CDP mark ranking, direct-scroll fallback hardening, and recognizing `/search?q=`, `/product/`, and `/cart`.
@@ -88,9 +92,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised the Adorama vague-memory path. The first run clicked a real Add to Cart control and failed cart verification honestly because item-local cart structure was absent. The final post-fix run clicked a real Add to Cart control and verified durable known-cart read-back with item-local cart structure builder-side.
+- Real live `/event` runs exercised the Sweetwater vague-memory path. The first run failed before mutation because search redirect handling was missing. The second run clicked a real Add to Cart control and failed proof because `/cart.php` was not recognized. The final post-fix run clicked a real Add to Cart control and verified fresh-probe cart read-back with item-local cart structure builder-side.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Adorama cart guard, URL, compound-match, and `searchinfo` checks passed.
+- Focused Sweetwater search URL, product URL, exact variant, search-redirect, `/cart.php`, and cart guard checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -108,7 +112,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
+- M3 is not proven. Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -116,7 +120,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
+- Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -129,7 +133,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/33 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/36 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -177,6 +181,8 @@ Dead ends not to retry blindly:
 - Do not let unrequested bundle, kit, pack, edition, CompactFlash, CFexpress, microSD, or microSDXC variants outrank the remembered base item unless the user's memory requested that variant.
 - Do not accept cart-page item tokens from recommendation cards. On cart routes such as Adorama `/cartview`, item evidence must have local cart-item structure such as quantity or remove before it can prove the cart artifact.
 - Do not let product-title compounds such as `SlideLITE` lose separate remembered tokens, but keep compound matching cautious and boundary-based. Do not add arbitrary short substring matching.
+- Do not treat a search redirect to a matching product page as a failed search surface. If the current URL is buyable and visible identity matches, proceed to product add.
+- Do not forget `.php` cart routes. A mapped known-cart URL such as Sweetwater `/store/cart.php` must also satisfy the generic cart URL classifier before proof can pass.
 - Do not assume a fresh Chrome user-data directory exists. If `ANTICIPY_CHROME_USER_DATA_DIR` is configured, create it before CDP launch or the bridge may fall back to weak no-mark observations.
 - Do not let native direct CDP scroll double-apply wheel plus JavaScript scroll. Product-page scans can overshoot Add controls and then fail without mutation.
 - On nav-heavy commerce pages, do not trust document-order mark caps. Product/Add/cart/search controls must survive observation ranking before the cap.
@@ -196,7 +202,7 @@ Dead ends not to retry blindly:
 - Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
 - Do not design always-on cloud transcription.
 
-- Convert the current Adorama exact-item path plus prior B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Convert the current Sweetwater exact-item path plus prior Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
 - Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
 
 Law digest:
