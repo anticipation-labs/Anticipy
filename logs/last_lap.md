@@ -1,47 +1,48 @@
 # Last Lap
 
-Lap: 20260609T180355Z
-Date: 2026-06-09T18:22:32Z
-Milestone: M3 - GameStop real-store cart path plus hard-site findings
+Lap: 20260609T183424Z
+Date: 2026-06-09T18:58:37Z
+Milestone: M3 - Ulta real-store recipe and cart durability hardening
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- WebVoyager now knows Harbor Freight, Sur La Table, and GameStop search, product, and cart URL shapes.
-- Cart URL recognition now includes `/shopping-bag`.
-- Cart verification can use a guarded leading product-link proof on a cart page when the item link matches the remembered item and the page is not an empty-cart recommendation surface.
-- NativeBridgeLink direct-CDP mark ranking now treats numeric `.html` product pages as product-like so real product links survive nav-heavy page caps.
+- WebVoyager now knows Ulta search, product, and bag URL shapes.
+- Product-page add matching now recognizes real shipment labels such as `Add for ship`.
+- Generic `Add to bag` buttons are rejected when nearby product-card context points at an unrelated recommendation product.
+- Cart proof now requires five independent fresh cart reads spaced five seconds apart. If any delayed read misses the item, the helper returns that failing observation so callers cannot complete from an earlier best state.
 
 Real runs:
-- Harbor Freight read-only probing found real search results, product pages, Add controls, and `/checkout/cart`. A full vague-memory `/event` run resolved correctly but hit a captcha wall on cart preflight before any Add click. This is a site-specific hard wall, not proof and not an all-work stop.
-- Sur La Table read-only probing found product and cart URL shapes. Live diagnostics showed the shopping-bag product text was from an empty-cart recommendation/recent-product surface, not proof, and product pages did not expose enough visible product identity through the bridge to click Add safely. This is a hard-site finding, not proof.
-- GameStop read-only probing found exact product pages with visible Add to Cart. A fresh full live `/event` run used context-only memory plus a vague action that did not name GameStop or the item. It resolved GameStop plus `Nintendo Switch Joy-Con Charging Grip`, clicked a real `Add to Cart`, opened `https://www.gamestop.com/cart/`, and the settled native cart observer verified the requested item with quantity/cart structure.
-- A shallow one-shot cart read-back briefly returned false before the cart settled. A direct WebVoyager native run on the same profile then used known-cart preflight plus fresh-probe durability and verified the item in the real GameStop cart. Treat shallow one-shot cart reads as diagnostics only.
+- Read-only Ulta probing found a real search page with exact product links, `Add to bag` controls, and `/bag`.
+- A first live vague-memory run resolved the site and item correctly, opened the exact Ulta product page, missed the main `Add for ship` control, clicked a lower-page recommendation `Add to bag`, and correctly failed final cart proof.
+- After add-control hardening, short-window cart reads could still flicker true and later false. Those runs are not proof.
+- After five-read durability hardening, the final fresh live `/event` run again resolved the vague task to Ulta and the target cleanser, but failed closed under final cart proof instead of claiming a transient bag state.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Harbor Freight, Sur La Table, GameStop URL and cart-proof guards passed.
+- Focused Ulta URL, add-label, unrelated-recommendation, and exact-card guards passed.
+- Focused cart durability helper check passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
 - Forbidden-path scan was clean.
-- Broad secret scan produced only code variable-name hits such as `tokens`; no credential-shaped diff was present.
-- Product/eval literal scan found only the newly supported store domains.
-- Ports `8787`, `7777`, and `9222` were cleared after live runs.
+- Secret-shaped diff scan was clean.
+- Product/eval literal scan was clean.
+- Ports `8787`, `7777`, and `9222` were clear after live runs.
 
 Gate:
 - No all-work human gate is active.
 - Separate judge quota blocks proof only, not building.
-- Harbor Freight captcha is site-specific and not an all-work gate.
+- Ulta is a current hard-site finding until a future hypothesis produces a cart artifact that remains durable past the stricter proof window.
 
 Proof status:
 - M3 is not done.
-- The GameStop result is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
+- This lap is failure hardening and real-site support only. It is `UNPROVEN-PENDING-JUDGE`.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work on real stores only. Convert GameStop plus prior unjudged cart artifacts through the separate judge when quota returns. Until then, keep building exact item matching, durable settled cart read-back, and hard-site failure handling without UI/status/onboarding work.
+- Continue M3 ladder work only. Prefer another real store or a concrete Ulta durability hypothesis over blind Ulta retries. Convert prior unjudged cart artifacts through the separate judge when quota returns.

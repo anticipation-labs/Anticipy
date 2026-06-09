@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import re
 import urllib.parse
 from typing import List, Optional
@@ -88,6 +89,7 @@ COMMERCE_SEARCH_URLS = {
     "harborfreight.com": "https://www.harborfreight.com/search?q={q}",
     "surlatable.com": "https://www.surlatable.com/search?q={q}",
     "gamestop.com": "https://www.gamestop.com/search/?q={q}",
+    "ulta.com": "https://www.ulta.com/search?search={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -112,19 +114,24 @@ COMMERCE_CART_URLS = {
     "harborfreight.com": "https://www.harborfreight.com/checkout/cart",
     "surlatable.com": "https://www.surlatable.com/shopping-bag",
     "gamestop.com": "https://www.gamestop.com/cart/",
+    "ulta.com": "https://www.ulta.com/bag",
 }
 ADD_TO_CART_RE = re.compile(
-    r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
+    r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
+    r"\badd\b.{0,30}\b(ship|shipping|pickup|delivery)\b|^\s*add\s+",
     re.I,
 )
 GENERIC_ADD_LABEL_RE = re.compile(
     r"^\s*add\s+(?:(?:this\s+)?item\s+)?(?:to\s+)?(?:cart|basket|bag)\s*"
-    r"(?:(?:[^a-z0-9]+|\s+)(?:usd\s*)?\$?\s*\d{1,4}(?:[.,]\d{2})?)?\s*$",
+    r"(?:(?:[^a-z0-9]+|\s+)(?:usd\s*)?\$?\s*\d{1,4}(?:[.,]\d{2})?)?\s*$|"
+    r"^\s*add\s+for\s+(?:ship|shipping|pickup|delivery)\s*$",
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
 CART_URL_RE = re.compile(r"/(?:cart(?:\.php)?|cartview|shoppingcart|shopping-bag|basket|bag)(?:[/?#]|$)", re.I)
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
+CART_DURABILITY_READS = max(1, int(os.environ.get("ANTICIPY_CART_DURABILITY_READS", "5")))
+CART_DURABILITY_DELAY_SECONDS = max(0.0, float(os.environ.get("ANTICIPY_CART_DURABILITY_DELAY_SECONDS", "5.0")))
 SEARCH_RESULTS_URL_RE = re.compile(
     r"/(?:search|s|beta-search)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|"
     r"[?&](?:q|query|keywords|search|searchTerm|searchinfo|st)=",
@@ -158,6 +165,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "harborfreight.com": re.compile(r"/[^/?#]+-\d+\.html$", re.I),
     "surlatable.com": re.compile(r"/product/[^/?#]+/\d+$", re.I),
     "gamestop.com": re.compile(r"/products/[^/?#]+/\d+\.html$", re.I),
+    "ulta.com": re.compile(r"/p/[^/?#]+", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -747,11 +755,41 @@ def _pick_region_button(elements: list[dict]) -> Optional[dict]:
     return _pick_button(elements, REGION_US_RE)
 
 
+def _generic_add_points_at_unrelated_product(
+    elements: list[dict],
+    add_idx: int,
+    item: str,
+    start_url: str,
+) -> bool:
+    if not start_url:
+        return False
+    tokens = _item_tokens(item)
+    if not tokens:
+        return False
+    required = _required_product_hits(tokens)
+    for el in sorted(elements or [], key=lambda row: int(row.get("idx") or 0)):
+        try:
+            idx = int(el.get("idx"))
+        except Exception:
+            continue
+        if idx <= add_idx or idx > add_idx + 12:
+            continue
+        href = _absolute_site_url(start_url, el.get("href") or "")
+        if not href or not _looks_buyable_product_url(href, start_url):
+            continue
+        identity = f"{el.get('name') or ''} {href}"
+        if _token_hits(identity, tokens) >= required and _has_distinctive_required_tokens(identity, tokens):
+            return False
+        return True
+    return False
+
+
 def _pick_add_button(
     elements: list[dict],
     item: str,
     allow_generic: bool = True,
     skip_names: Optional[set[str]] = None,
+    start_url: str = "",
 ) -> Optional[dict]:
     item_tokens = _item_tokens(item)
     skip_names = skip_names or set()
@@ -773,6 +811,12 @@ def _pick_add_button(
             continue
         generic = GENERIC_ADD_LABEL_RE.match(name) is not None
         if generic and not allow_generic:
+            continue
+        try:
+            idx = int(el.get("idx"))
+        except Exception:
+            idx = -1
+        if generic and idx >= 0 and _generic_add_points_at_unrelated_product(elements, idx, item, start_url):
             continue
         if not generic:
             hits = _token_hits(name, item_tokens)
@@ -1325,6 +1369,20 @@ class WebVoyagerAgent:
                 best_out, best_shot = out, shot
         return best_out, best_shot
 
+    async def _observe_durable_cart_confirmation(self, url: str, item: str):
+        best_out: dict = {}
+        best_shot = None
+        for read_idx in range(CART_DURABILITY_READS):
+            if read_idx:
+                await asyncio.sleep(CART_DURABILITY_DELAY_SECONDS)
+            out, shot = await self._observe_cart_ready(url, item, fresh_probe=True)
+            if out and (not best_out or _cart_signal_score(out, item) >= _cart_signal_score(best_out, item)):
+                best_out = out
+                best_shot = shot or best_shot
+            if not _cart_page_verified(out, item):
+                return out, shot, False
+        return best_out, best_shot, True
+
     async def _plan(self, task: str) -> List[str]:
         if _search_text(task):
             return [
@@ -1357,12 +1415,13 @@ class WebVoyagerAgent:
             current_path = urllib.parse.urlparse((out or {}).get("url") or "").path.rstrip("/") or "/"
             if _cart_page_verified(out, item):
                 await asyncio.sleep(0.8)
-                confirm_out, confirm_shot = await self._observe_cart_ready(cart_url, item, fresh_probe=True)
+                confirm_out, confirm_shot, durable_confirmed = await self._observe_durable_cart_confirmation(
+                    cart_url, item
+                )
                 if confirm_out:
                     out = confirm_out
                 if confirm_shot:
                     shot = confirm_shot
-                durable_confirmed = _cart_page_verified(out, item)
                 if durable_confirmed:
                     break
             if current_path == expected_path and attempt == 4:
@@ -1382,10 +1441,9 @@ class WebVoyagerAgent:
         if not cart_url:
             return out, steps, False
         await asyncio.sleep(0.5)
-        confirm_out, confirm_shot = await self._observe_cart_ready(cart_url, item, fresh_probe=True)
+        confirm_out, confirm_shot, durable_confirmed = await self._observe_durable_cart_confirmation(cart_url, item)
         if confirm_shot:
             self._cur_shot = confirm_shot
-        durable_confirmed = _cart_page_verified(confirm_out, item)
         checked = confirm_out if confirm_out else out
         status = "verified" if durable_confirmed else "rejected"
         history.append(f"recipe: {stage} fresh_probe {status} cart page for {_host(start_url)}")
@@ -1535,7 +1593,9 @@ class WebVoyagerAgent:
         search_elements = out.get("elements") or []
         add_from_results = None
         if not opened_product_from_results_add:
-            add_from_results = _pick_add_button(out.get("elements") or [], item, allow_generic=False)
+            add_from_results = _pick_add_button(
+                out.get("elements") or [], item, allow_generic=False, start_url=start_url
+            )
         if add_from_results:
             label = (add_from_results.get("name") or "")[:80]
             before_add = out
@@ -1778,7 +1838,9 @@ class WebVoyagerAgent:
                 return self._done(out, steps + 1, history, answer="",
                                   reason="product page identity did not match the remembered item strongly enough to add safely",
                                   page_states=states, commerce_recipe=True)
-            add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
+            add = _pick_add_button(
+                out.get("elements") or [], item, skip_names=tried_add_names, start_url=start_url
+            )
             if not add and not refreshed_product_add_controls:
                 out, shot = await self._observe_ready()
                 self._cur_shot = shot
@@ -1798,7 +1860,9 @@ class WebVoyagerAgent:
                 if durable_cart:
                     return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                       page_states=states, commerce_recipe=True)
-                add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
+                add = _pick_add_button(
+                    out.get("elements") or [], item, skip_names=tried_add_names, start_url=start_url
+                )
             if not add:
                 await self._act({"action": "scroll", "dir": "down"})
                 out, shot = await self._observe_ready()
