@@ -567,7 +567,7 @@ def _pick_add_button(
             continue
         if not generic:
             hits = _token_hits(name, item_tokens)
-            required = max(3, int(len(item_tokens) * 0.7 + 0.999))
+            required = _required_product_hits(item_tokens)
             if hits < required:
                 continue
         role = (el.get("role") or "").lower()
