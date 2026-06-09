@@ -353,6 +353,8 @@ def _product_url_near_index(
         if not _numbers_match(hay, item):
             continue
         hits = _token_hits(hay, tokens)
+        if not _has_distinctive_required_tokens(hay, tokens):
+            continue
         if hits < required:
             continue
         nearby.append((idx, hits, 1 if _looks_buyable_product_url(absolute, start_url) else 0, href))
@@ -384,7 +386,10 @@ def _pick_adjacent_result_add(
     if not product_href or not _looks_buyable_product_url(product_href, start_url):
         return None
     required = _required_product_hits(tokens)
-    if _token_hits(f"{product_name} {product_href}", tokens) < required:
+    product_identity = f"{product_name} {product_href}"
+    if not _has_distinctive_required_tokens(product_identity, tokens):
+        return None
+    if _token_hits(product_identity, tokens) < required:
         return None
 
     for el in sorted(elements or [], key=lambda row: int(row.get("idx") or 0)):
@@ -672,6 +677,12 @@ POST_CART_NOISE_RE = re.compile(
     r"everyday\s+essentials\s+for\s+you)\b",
     re.I,
 )
+PRODUCT_IDENTITY_NOISE_RE = re.compile(
+    r"\b(recommend(?:ed|ations?)?|you\s+may\s+also\s+like|similar\s+items?|sponsored|"
+    r"related\s+items?|more\s+to\s+consider|customers?\s+also|frequently\s+bought|"
+    r"review(?:s|ed)?|ratings?|questions?\s+and\s+answers?)\b",
+    re.I,
+)
 CART_COUNT_RE = re.compile(
     r"\b(?:shopping\s+)?(?:cart|bag|basket),?\s*(?:with\s+)?(\d+)\s+items?\b|"
     r"\b(\d+)\s+(?:items?\s+)?in\s+(?:your\s+)?(?:cart|bag|basket)\b|"
@@ -837,6 +848,53 @@ def _cart_signal_score(out: dict, item: str) -> int:
     return score
 
 
+def _product_identity_segments(out: dict) -> tuple[str, str]:
+    text = (out or {}).get("text") or ""
+    primary_text = PRODUCT_IDENTITY_NOISE_RE.split(text, maxsplit=1)[0][:2200]
+    element_names = []
+    for el in (out or {}).get("elements") or []:
+        name = (el.get("name") or "").strip()
+        if not name or ADD_TO_CART_RE.search(name) or VIEW_CART_RE.search(name) or NON_PRODUCT_RE.search(name):
+            continue
+        element_names.append(name[:120])
+        if len(element_names) >= 12:
+            break
+    visible = " ".join([
+        (out or {}).get("title") or "",
+        primary_text,
+        " ".join(element_names),
+    ])
+    total = " ".join([visible, (out or {}).get("url") or ""])
+    return visible, total
+
+
+def _product_item_evidence(out: dict, item: str, start_url: str = "") -> dict:
+    tokens = _item_tokens(item)
+    required = _required_product_hits(tokens) if tokens else 0
+    visible_identity, total_identity = _product_identity_segments(out)
+    visible_hits = _token_hits(visible_identity, tokens)
+    total_hits = _token_hits(total_identity, tokens)
+    distinctive = _has_distinctive_required_tokens(visible_identity, tokens) if tokens else False
+    numbers = _numbers_match(total_identity, item)
+    surface = _surface_kind(out, start_url)
+    matched = bool(
+        tokens
+        and surface == "product"
+        and numbers
+        and distinctive
+        and visible_hits >= required
+    )
+    return {
+        "matched": matched,
+        "token_hits": visible_hits,
+        "total_token_hits": total_hits,
+        "required_hits": required,
+        "distinctive_matched": bool(distinctive),
+        "numbers_matched": bool(numbers),
+        "surface_kind": surface,
+    }
+
+
 def _state_digest(out: dict) -> str:
     o = out or {}
     text = re.sub(r"\s+", " ", (o.get("text") or "").lower())[:3000]
@@ -914,6 +972,7 @@ def _page_state(
         if len(elements) >= 18:
             break
     item_evidence = _cart_item_evidence(out, item)
+    product_evidence = _product_item_evidence(out, item, start_url)
     state = {
         "stage": stage,
         "action": action,
@@ -930,6 +989,12 @@ def _page_state(
         "cart_signal": _cart_signal_score(out, item),
         "cart_verified": _cart_verified(out, item),
         "cart_page_verified": _cart_page_verified(out, item),
+        "product_item_match": product_evidence["matched"],
+        "product_item_token_hits": product_evidence["token_hits"],
+        "product_item_total_token_hits": product_evidence["total_token_hits"],
+        "product_item_required_hits": product_evidence["required_hits"],
+        "product_item_distinctive": product_evidence["distinctive_matched"],
+        "product_item_numbers": product_evidence["numbers_matched"],
         "cartish": any(k in ((out or {}).get("text") or "").lower() for k in ("added to cart", "cart", "basket", "bag")),
         "buyable_product_links": sum(
             1 for el in (out or {}).get("elements") or []
@@ -1432,6 +1497,7 @@ class WebVoyagerAgent:
                               page_states=states, commerce_recipe=True)
 
         tried_add_names: set[str] = set()
+        refreshed_product_identity = False
         refreshed_product_add_controls = False
         for attempt in range(5):
             out, steps, durable_cart = await self._confirm_current_cart_page(
@@ -1439,6 +1505,53 @@ class WebVoyagerAgent:
             )
             if durable_cart:
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                  page_states=states, commerce_recipe=True)
+            product_evidence = _product_item_evidence(out, item, start_url)
+            if not product_evidence["matched"]:
+                if not refreshed_product_identity:
+                    out, shot = await self._observe_ready()
+                    self._cur_shot = shot
+                    refreshed_product_identity = True
+                    history.append("recipe: refreshed product page for item identity")
+                    states.append(_page_state(
+                        "product_identity_refresh",
+                        out,
+                        item,
+                        history[-1],
+                        start_url=start_url,
+                    ))
+                    steps += 1
+                    continue
+                if attempt < 4:
+                    await self._act({"action": "scroll", "dir": "down"})
+                    out, shot = await self._observe_ready()
+                    self._cur_shot = shot
+                    history.append(f"recipe: scroll product for item identity {attempt + 1}")
+                    states.append(_page_state(
+                        f"product_identity_scroll_{attempt + 1}",
+                        out,
+                        item,
+                        history[-1],
+                        start_url=start_url,
+                    ))
+                    steps += 1
+                    continue
+                history.append(
+                    "recipe: rejected product page before add "
+                    f"hits={product_evidence['token_hits']}/{product_evidence['required_hits']} "
+                    f"distinctive={product_evidence['distinctive_matched']} "
+                    f"numbers={product_evidence['numbers_matched']} "
+                    f"surface={product_evidence['surface_kind']}"
+                )
+                states.append(_page_state(
+                    "product_identity_rejected_before_add",
+                    out,
+                    item,
+                    history[-1],
+                    start_url=start_url,
+                ))
+                return self._done(out, steps + 1, history, answer="",
+                                  reason="product page identity did not match the remembered item strongly enough to add safely",
                                   page_states=states, commerce_recipe=True)
             add = _pick_add_button(out.get("elements") or [], item, skip_names=tried_add_names)
             if not add and not refreshed_product_add_controls:

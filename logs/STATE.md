@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T131645Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened active-page cart completions so they require independent `fresh_probe` confirmation, made known-cart and fresh-probe cart observations scroll cart pages before deciding, and tightened product matching for token-rich remembered items. Live Lowe's vague-memory runs clicked real Add to Cart controls but failed final proof because visible cart evidence did not match the full remembered item. Broad gloves additions from these runs are false actions, not progress. A read-only Lowe's cart probe scrolled 12 observations and still found no exact item window. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T134541Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened visible product-page identity before real Add clicks. Nearby product URL selection and adjacent result-row Add controls now require distinctive-token agreement, and product-page Add attempts now require the visible title/text/labels to match the remembered item before any real cart mutation. URL tokens can no longer rescue a contradictory visible product page. A pre-tightening Lowe's live run still clicked a real Add control and failed final cart proof, counted as a false action. The fresh post-fix live run resolved the same vague memory task, opened the same contradictory product URL, refreshed and scrolled for identity evidence, then rejected before Add with visible hits 4/5 and distinctive=false. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -32,22 +32,21 @@ Current M3 slice:
 - WebVoyager active-page cart completions after search-result add, product-page add, refresh, scroll, or View Cart must also survive independent `fresh_probe` confirmation before they can complete.
 - WebVoyager scrolls cart pages during known-cart and fresh-probe read-back, keeping the highest-signal cart observation instead of trusting a header-only cart count.
 - WebVoyager requires leading distinctive tokens for token-rich remembered items and raises the product-hit threshold to roughly 80 percent for item names with five or more tokens.
+- WebVoyager requires distinctive-token agreement when selecting nearby product URLs and adjacent search-result Add controls.
+- WebVoyager checks visible product-page identity before product-page Add attempts. Visible title/text/labels must satisfy the token threshold and leading distinctive tokens by themselves; URL tokens are supportive metadata only and cannot rescue a contradictory visible page.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
 
 Latest real M3 attempt:
-- Fresh ignored data directories were used for builder-side live `/event` runs.
-- A Lowe's vague-memory run seeded context-only memory, then sent a vague action that did not name the site or exact item. The hand resolved memory to Lowe's plus a token-rich gloves item, clicked a real Add to Cart control, opened cart, and failed final cart verification.
-- A rerun after distinctive-token hardening reached a brand-bearing product URL, clicked Add to Cart, opened cart, and failed because cart read-back produced no exact item evidence.
-- After cart-scroll proof hardening, another rerun selected a broad brand/category product, clicked Add to Cart, and was rejected by strict cart proof.
-- After stricter token-rich matching, the final rerun still clicked a real Add to Cart control and was rejected by final cart proof because the visible cart evidence did not match the full remembered item.
-- A read-only cart probe scrolled the real Lowe's cart through 12 observations; cart count stayed nonzero, global item-token hits were partial, and cart item windows stayed at zero.
-- These runs include false actions against the real cart. They are failures, not progress proof. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+- Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
+- A pre-tightening Lowe's vague-memory run seeded context-only memory, then sent a vague action that did not name the site or exact item. The hand resolved memory to Lowe's plus a token-rich gloves item, opened a contradictory product page whose URL slug still carried some requested tokens, clicked a real Add to Cart control, opened cart, and failed final cart verification. This is counted as a false action, not progress.
+- After visible product identity hardening, a fresh live run used the same vague memory-resolved task. The hand opened the same contradictory product URL, refreshed and scrolled for identity evidence, then rejected before any Add click with visible hits 4/5, total hits 5/5, and distinctive=false. URL evidence alone no longer allowed a real cart mutation.
+- No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
 - Target can complete real search-product-add-cart-verify and duplicate-safe known-cart verification paths for vague memory-resolved tasks in the dedicated browser path.
 - Walmart can complete real search-product-add-cart-verify paths for vague memory-resolved tasks after generic option labels are skipped and settled product pages are refreshed before add-control scrolling.
 - Best Buy can complete a real search-product-add-cart-verify path for a vague memory-resolved task after current `/product/...` URLs are accepted.
-- Lowe's can complete some real full `/event` vague-memory cart add paths and duplicate-safe known-cart read-backs, but token-rich exact-item paths can still add broad substitutes. Treat the latest gloves path as a false-action hard finding.
+- Lowe's can complete some real full `/event` vague-memory cart add paths and duplicate-safe known-cart read-backs, but token-rich exact-item paths exposed broad substitute and contradictory-page failures. The latest visible-identity guard blocks the observed contradictory-page Add before mutation, but the gloves path remains a false-action hard finding until a new exact-product hypothesis is proven.
 - IKEA can use a search-result item-specific Add path when product pages are availability-gated, while keeping strict final cart proof.
 - REI can expose product links and cart structure through the bridge, and builder-side read-back can verify an exact remembered cart item under strict proof.
 - PetSmart exposes product pages and Add controls through the bridge, but the observed Add path did not verify a durable cart artifact.
@@ -63,12 +62,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised the Lowe's vague-memory path with active-cart proof hardening, cart scrolling, and stricter product matching.
-- A read-only real Lowe's cart probe scrolled through 12 observations and did not find an exact cart item window for the token-rich item.
+- Real live `/event` runs exercised the Lowe's vague-memory path with visible product identity hardening. The pre-tightening run repeated one false Add mutation and failed final cart proof; the fresh post-fix run rejected the contradictory product page before any Add click.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused active-page fresh-probe cart completion checks passed.
-- Focused cart-scroll proof checks passed.
-- Focused token-rich product matching checks passed.
+- Focused product identity samples passed, including the stale-URL-slug contradictory-title case.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -94,7 +90,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced false actions this lap. PetSmart and Container Store produced hard-site findings in the prior lap. Other hard-site failures are not all-work stops.
+- Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced one pre-fix false action this lap, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in the prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -107,7 +103,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/19 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and PetSmart, Container Store, and the latest Lowe's exactness findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/21 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and PetSmart, Container Store, and the latest Lowe's visible-identity findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -148,6 +144,7 @@ Dead ends not to retry blindly:
 - Container Store hit a captcha-class wall after separate-probe hardening. Treat that path as a site-specific gate, not an all-work stop, and move sideways unless there is a new non-gated hypothesis.
 - Active-page cart proof also needs independent fresh-probe confirmation. Do not complete after a product-page add modal, View Cart click, or scrolled cart page unless fresh_probe verifies the same item.
 - For long, token-rich remembered items, do not add a product that keeps only brand plus category or category plus material. Important modifiers must remain present, or the correct action is failure.
+- Do not let product URL slugs or hrefs supply missing identity tokens when the visible product title/text/labels disagree. Visible product identity must clear the item threshold before any real Add click.
 - Do not retry the Lowe's token-rich gloves path blindly. It produced wrong or unverified cart additions and needs a new exact-product or cart-readback hypothesis first.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps.
 - Do not retry Office Depot blindly. Product-page Add and adjacent result-row Add both changed the page but did not verify the known cart artifact; retry only with a new concrete cart-readback or modal hypothesis.
