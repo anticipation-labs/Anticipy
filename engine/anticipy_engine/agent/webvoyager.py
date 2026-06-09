@@ -92,6 +92,9 @@ COMMERCE_SEARCH_URLS = {
     "ulta.com": "https://www.ulta.com/search?search={q}",
     "wayfair.com": "https://www.wayfair.com/keyword.php?keyword={q}",
     "macys.com": "https://www.macys.com/shop/featured/{q}",
+    "dickssportinggoods.com": "https://www.dickssportinggoods.com/search/SearchDisplay?searchTerm={q}",
+    "kohls.com": "https://www.kohls.com/search.jsp?search={q}",
+    "qvc.com": "https://www.qvc.com/catalog/psearch.html?keyword={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -119,6 +122,9 @@ COMMERCE_CART_URLS = {
     "ulta.com": "https://www.ulta.com/bag",
     "wayfair.com": "https://www.wayfair.com/v/checkout/basket/show",
     "macys.com": "https://www.macys.com/my/bag",
+    "dickssportinggoods.com": "https://www.dickssportinggoods.com/OrderItemDisplay",
+    "kohls.com": "https://www.kohls.com/checkout/shopping_cart.jsp",
+    "qvc.com": "https://www.qvc.com/checkout/cart.html",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
@@ -132,7 +138,11 @@ GENERIC_ADD_LABEL_RE = re.compile(
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
-CART_URL_RE = re.compile(r"/(?:cart(?:\.php)?|cartview|shoppingcart|shopping-bag|basket|bag|my/bag)(?:[/?#]|$)", re.I)
+CART_URL_RE = re.compile(
+    r"/(?:cart(?:\.(?:php|html))?|cartview|shoppingcart|shopping_cart\.jsp|shopping-bag|basket|bag|my/bag|"
+    r"OrderItemDisplay)(?:[/?#]|$)",
+    re.I,
+)
 REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
 CART_DURABILITY_READS = max(1, int(os.environ.get("ANTICIPY_CART_DURABILITY_READS", "5")))
 CART_DURABILITY_DELAY_SECONDS = max(0.0, float(os.environ.get("ANTICIPY_CART_DURABILITY_DELAY_SECONDS", "5.0")))
@@ -173,11 +183,14 @@ COMMERCE_PRODUCT_URL_RE = {
     "ulta.com": re.compile(r"/p/[^/?#]+", re.I),
     "wayfair.com": re.compile(r"/(?:[^/?#]+/)*pdp/[^/?#]+\.html$", re.I),
     "macys.com": re.compile(r"/shop/product/(?!review/)[^/?#]+", re.I),
+    "dickssportinggoods.com": re.compile(r"/p/[^/?#]+/[^/?#]+", re.I),
+    "kohls.com": re.compile(r"/product/prd-\d+/[^/?#]+\.jsp$", re.I),
+    "qvc.com": re.compile(r"/(?:qvc\.product|[^/?#]+\.product)\.[A-Z0-9]+\.html$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
     r"\b(add to|cart|basket|bag|checkout|sponsored|ad|sign in|log in|create account|"
-    r"pickup|delivery|shipping|ratings?|reviews?|see more|show more|how-to|how to|category|"
+    r"pickup|delivery|shipping|see more|show more|how-to|how to|category|"
     r"shopping list|wish list|wishlist|favorites?|registry|save for later|remove)\b",
     re.I,
 )
