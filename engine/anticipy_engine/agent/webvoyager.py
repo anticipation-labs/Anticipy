@@ -59,6 +59,7 @@ PURCHASE_GUARD = re.compile(
 BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha",
                  "are you a robot", "are you a human", "unusual traffic", "verify you are human",
                  "press & hold", "access denied", "checking your browser")
+LOGIN_URL_RE = re.compile(r"/(?:login|signin|sign-in)(?:[/?#]|$)|[?&](?:login|signin|sign_in)\b", re.I)
 COMMERCE_STOP = {
     "the", "and", "for", "with", "that", "this", "thing", "item", "product", "cart", "basket",
     "bag", "add", "added", "shipping", "pickup", "delivery", "cheapest", "lowest", "least",
@@ -85,9 +86,19 @@ ADD_TO_CART_RE = re.compile(
     re.I,
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
+REGION_US_RE = re.compile(r"^\s*(united\s+states|u\.?s\.?a?\.?)\s*$", re.I)
+SEARCH_RESULTS_URL_RE = re.compile(
+    r"/(?:search|s)(?:[/?#]|$)|/site/searchpage\.jsp(?:[/?#]|$)|[?&](?:q|query|search|searchTerm|st)=",
+    re.I,
+)
+CONTENT_URL_RE = re.compile(
+    r"/(?:rooms|ideas|how-to|inspiration|services|help|blog|article|articles|cat)(?:[/?#]|$)|"
+    r"/(?:rooms|ideas|how-to|inspiration|services|help|blog|article|articles|cat)/",
+    re.I,
+)
 NON_PRODUCT_RE = re.compile(
     r"\b(add to|cart|basket|bag|checkout|sponsored|ad|sign in|log in|create account|"
-    r"pickup|delivery|shipping|ratings?|reviews?|see more|show more)\b",
+    r"pickup|delivery|shipping|ratings?|reviews?|see more|show more|how-to|how to|category)\b",
     re.I,
 )
 HREF_ONLY_RE = re.compile(r"^(?:https?://\S+|/[^\s]+)$", re.I)
@@ -212,6 +223,14 @@ def _commerce_cart_url(start_url: str) -> str:
     return ""
 
 
+def _looks_search_results_url(url: str) -> bool:
+    return SEARCH_RESULTS_URL_RE.search(url or "") is not None
+
+
+def _looks_content_url(url: str) -> bool:
+    return CONTENT_URL_RE.search(url or "") is not None
+
+
 def _absolute_site_url(start_url: str, href: str) -> str:
     href = (href or "").strip()
     if not href:
@@ -245,14 +264,20 @@ def _product_url_near_index(
         if idx > target_idx + after or target_idx - idx > before:
             continue
         name = (el.get("name") or "").strip()
-        if not HREF_ONLY_RE.match(name):
+        href = (el.get("href") or "").strip()
+        if not href and HREF_ONLY_RE.match(name):
+            href = name
+        if not href:
             continue
-        if not _numbers_match(name, item):
+        if _looks_content_url(href):
             continue
-        hits = _token_hits(name, tokens)
+        hay = f"{name} {href}"
+        if not _numbers_match(hay, item):
+            continue
+        hits = _token_hits(hay, tokens)
         if hits < required:
             continue
-        nearby.append((idx, hits, name))
+        nearby.append((idx, hits, href))
     if not nearby:
         return ""
     _, _, href = max(nearby, key=lambda row: (row[1], row[0]))
@@ -352,6 +377,8 @@ def _pick_product(elements: list[dict], item: str, prefer_lowest: bool = False) 
         if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
                 or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item)):
             continue
+        if _looks_content_url(el.get("href") or name):
+            continue
         role = (el.get("role") or "").lower()
         if role not in {"a", "button"} and "link" not in role:
             continue
@@ -380,6 +407,16 @@ def _pick_button(elements: list[dict], pattern: re.Pattern) -> Optional[dict]:
         if pattern.search(name):
             return el
     return None
+
+
+def _pick_region_button(elements: list[dict]) -> Optional[dict]:
+    has_country_choices = any(
+        re.fullmatch(r"\s*(canada|united\s+states|u\.?s\.?a?\.?)\s*", (el.get("name") or ""), re.I)
+        for el in elements or []
+    )
+    if not has_country_choices:
+        return None
+    return _pick_button(elements, REGION_US_RE)
 
 
 def _pick_add_button(elements: list[dict], item: str, allow_generic: bool = True) -> Optional[dict]:
@@ -456,6 +493,16 @@ def _cart_verified(out: dict, item: str) -> bool:
         return False
     hits = _token_hits(text, tokens)
     return hits >= (2 if len(tokens) >= 3 else 1)
+
+
+def _commerce_wall_kind(out: dict) -> str:
+    url = (out or {}).get("url") or ""
+    if LOGIN_URL_RE.search(url):
+        return "login"
+    text = ((out or {}).get("text") or "").lower()
+    if any(k in text for k in BLOCK_MARKERS):
+        return classify_wall(text)
+    return ""
 
 
 def _page_state(stage: str, out: dict, item: str, action: str = "") -> dict:
@@ -661,13 +708,37 @@ class WebVoyagerAgent:
 
         states.append(_page_state("search_results", out, item, history[-1]))
         prefer_lowest = _wants_lowest_price(task)
-        text = (out.get("text") or "").lower()
-        if any(k in text for k in BLOCK_MARKERS):
-            return await self._handoff(out, steps + 1, history, classify_wall(text),
-                                       "captcha / anti-bot wall during commerce recipe")
+        wall_kind = _commerce_wall_kind(out)
+        if wall_kind:
+            return await self._handoff(out, steps + 1, history, wall_kind,
+                                       "wall during commerce recipe")
         if _cart_verified(out, item):
             return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                               page_states=states, commerce_recipe=True)
+
+        if _token_hits(out.get("text") or "", _item_tokens(item)) == 0:
+            region_button = _pick_region_button(out.get("elements") or [])
+            if region_button:
+                label = (region_button.get("name") or "")[:80]
+                await self._act({"action": "click", "index": region_button.get("idx")})
+                out, shot = await self._observe_ready()
+                self._cur_shot = shot
+                history.append(f"recipe: selected store region idx={region_button.get('idx')} '{label}'")
+                states.append(_page_state("after_region_selection", out, item, history[-1]))
+                steps += 1
+                wall_kind = _commerce_wall_kind(out)
+                if wall_kind:
+                    return await self._handoff(out, steps + 1, history, wall_kind,
+                                               "wall after store region selection")
+                if _cart_verified(out, item):
+                    return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
+                                      page_states=states, commerce_recipe=True)
+                if search_url and _token_hits(out.get("text") or "", _item_tokens(item)) == 0:
+                    out, shot = await self._observe_ready(search_url)
+                    self._cur_shot = shot
+                    history.append("recipe: reloaded search after store region selection")
+                    states.append(_page_state("search_after_region_selection", out, item, history[-1]))
+                    steps += 1
 
         opened_product_from_results_add = False
         search_elements = out.get("elements") or []
@@ -679,6 +750,10 @@ class WebVoyagerAgent:
             history.append(f"recipe: clicked item-specific add from results idx={add_from_results.get('idx')} '{label}'")
             states.append(_page_state("post_add_from_results", out, item, history[-1]))
             steps += 1
+            wall_kind = _commerce_wall_kind(out)
+            if wall_kind:
+                return await self._handoff(out, steps + 1, history, wall_kind,
+                                           "wall after item-specific search-results add")
             if _cart_verified(out, item):
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
@@ -714,6 +789,10 @@ class WebVoyagerAgent:
             history.append("recipe: opened same product after unverified results add")
             states.append(_page_state("same_product_page_after_results_add_failure", out, item, history[-1]))
             steps += 1
+            wall_kind = _commerce_wall_kind(out)
+            if wall_kind:
+                return await self._handoff(out, steps + 1, history, wall_kind,
+                                           "wall while opening same product after results add")
             opened_product_from_results_add = True
 
         if not opened_product_from_results_add:
@@ -740,12 +819,20 @@ class WebVoyagerAgent:
                 history.append(f"recipe: opened product idx={product.get('idx')} '{label}'")
                 states.append(_page_state("product_page", out, item, history[-1]))
                 steps += 1
-                if product_url and re.search(r"/(?:search|s)(?:[/?#]|$)", (out.get("url") or ""), re.I):
+                wall_kind = _commerce_wall_kind(out)
+                if wall_kind:
+                    return await self._handoff(out, steps + 1, history, wall_kind,
+                                               "wall after opening product page")
+                if product_url and _looks_search_results_url(out.get("url") or ""):
                     out, shot = await self._observe_ready(product_url)
                     self._cur_shot = shot
                     history.append("recipe: navigated adjacent product url after product click stayed on search")
                     states.append(_page_state("product_page_from_adjacent_url", out, item, history[-1]))
                     steps += 1
+                    wall_kind = _commerce_wall_kind(out)
+                    if wall_kind:
+                        return await self._handoff(out, steps + 1, history, wall_kind,
+                                                   "wall after adjacent product URL navigation")
             else:
                 return self._done(out, steps + 1, history, answer="",
                                   reason="commerce recipe could not identify a matching product",
@@ -777,6 +864,10 @@ class WebVoyagerAgent:
             history.append(f"recipe: clicked add control idx={add.get('idx')} '{label}'")
             states.append(_page_state("post_add", out, item, history[-1]))
             steps += 1
+            wall_kind = _commerce_wall_kind(out)
+            if wall_kind:
+                return await self._handoff(out, steps + 1, history, wall_kind,
+                                           "wall after product-page add")
             break
 
         if _cart_verified(out, item):

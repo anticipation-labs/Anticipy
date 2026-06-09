@@ -234,6 +234,7 @@ class NativeBridgeLink:
         self.cdp_host = os.environ.get("ANTICIPY_CDP_HOST", "localhost")
         self.cdp_port = int(os.environ.get("ANTICIPY_CDP_PORT", "9222"))
         self._selectors: dict[int, str] = {}
+        self._selector_meta: dict[int, dict[str, Any]] = {}
         self._url_prefix = ""
         self._available_cache: tuple[float, bool, str] = (0.0, False, "")
         self._last_start_attempt = 0.0
@@ -357,8 +358,9 @@ class NativeBridgeLink:
             selector = self._selectors.get(index)
             if not selector:
                 return self._needs_human(job_id, f"native bridge has no selector for element {index}")
+            meta = self._selector_meta.get(index) or {}
             if action == "click" and _bool_env("ANTICIPY_NATIVE_BRIDGE_TRUSTED_CLICK", True):
-                ok, details = self._trusted_cdp_click(selector)
+                ok, details = self._trusted_cdp_click(selector, meta)
                 if ok:
                     return self._success(job_id, {"ok": True, "action": action, "data": details})
             payload = {"command": action, "selector": selector}
@@ -376,18 +378,18 @@ class NativeBridgeLink:
             self._cdp_target_id = str(nav_data.get("targetId") or self._cdp_target_id)
         return self._success(job_id, {"ok": True, "action": action, "data": data.get("data") or {}})
 
-    def _trusted_cdp_click(self, selector: str) -> tuple[bool, dict[str, Any]]:
+    def _trusted_cdp_click(self, selector: str, meta: Optional[dict[str, Any]] = None) -> tuple[bool, dict[str, Any]]:
         if not self._cdp_up():
             return False, {"error": "cdp unavailable"}
         ws_url = self._cdp_page_ws_url()
         if not ws_url:
             return False, {"error": "no matching cdp page target"}
         try:
-            return asyncio.run(self._trusted_cdp_click_async(ws_url, selector))
+            return asyncio.run(self._trusted_cdp_click_async(ws_url, selector, meta or {}))
         except RuntimeError:
             loop = asyncio.new_event_loop()
             try:
-                return loop.run_until_complete(self._trusted_cdp_click_async(ws_url, selector))
+                return loop.run_until_complete(self._trusted_cdp_click_async(ws_url, selector, meta or {}))
             finally:
                 loop.close()
         except Exception as exc:
@@ -414,7 +416,12 @@ class NativeBridgeLink:
         ws_url = str((chosen or {}).get("webSocketDebuggerUrl") or "")
         return ws_url.replace("127.0.0.1", "localhost")
 
-    async def _trusted_cdp_click_async(self, ws_url: str, selector: str) -> tuple[bool, dict[str, Any]]:
+    async def _trusted_cdp_click_async(
+        self,
+        ws_url: str,
+        selector: str,
+        meta: dict[str, Any],
+    ) -> tuple[bool, dict[str, Any]]:
         import websockets
 
         counter = 0
@@ -430,15 +437,50 @@ class NativeBridgeLink:
                     return msg
 
         selector_json = json.dumps(selector)
+        name_json = json.dumps(str(meta.get("name") or "")[:180])
+        role_json = json.dumps(str(meta.get("role") or "").lower())
+        href_json = json.dumps(str(meta.get("href") or ""))
+        click_token = f"click-{time.time_ns()}"
+        click_token_json = json.dumps(click_token)
         rect_expr = (
-            "(()=>{const el=document.querySelector(" + selector_json + ");"
-            "if(!el)return {ok:false,error:'NOTFOUND'};"
+            "(()=>{const selector=" + selector_json + ";"
+            "const expectedName=" + name_json + ";"
+            "const expectedRole=" + role_json + ";"
+            "const expectedHref=" + href_json + ";"
+            "const clickToken=" + click_token_json + ";"
+            "const clean=v=>String(v||'').replace(/\\s+/g,' ').trim();"
+            "const norm=v=>clean(v).toLowerCase();"
+            "const label=el=>clean(el.innerText||el.getAttribute('aria-label')||"
+            "el.getAttribute('placeholder')||el.getAttribute('title')||el.value||"
+            "el.getAttribute('alt')||el.getAttribute('name')||el.getAttribute('href')||'');"
+            "const role=el=>String(el.getAttribute('role')||el.tagName||'').toLowerCase();"
+            "const visible=el=>{const s=getComputedStyle(el);const r=el.getBoundingClientRect();"
+            "return s.display!=='none'&&s.visibility!=='hidden'&&!!r.width&&!!r.height;};"
+            "const roleOk=el=>!expectedRole||role(el)===expectedRole||"
+            "(expectedRole==='a'&&role(el)==='link')||"
+            "(expectedRole==='button'&&role(el).includes('button'));"
+            "const nameOk=el=>{if(!expectedName)return true;"
+            "const a=norm(label(el));const b=norm(expectedName);"
+            "return a===b||a.includes(b)||b.includes(a);};"
+            "const good=el=>{if(!el||!visible(el)||!roleOk(el))return false;"
+            "if(expectedHref&&String(el.href||el.getAttribute('href')||'')===expectedHref)return true;"
+            "return nameOk(el);};"
+            "let el=document.querySelector(selector);"
+            "if(!good(el)){"
+            "const candidates=Array.from(document.querySelectorAll("
+            "'a,button,input,textarea,select,[role=button],[role=link],[onclick],"
+            "[contenteditable=true],[contenteditable=\"\"]'));"
+            "el=candidates.find(good)||null;"
+            "}"
+            "if(!el)return {ok:false,error:'NOTFOUND_OR_CHANGED'};"
             "el.scrollIntoView({block:'center',inline:'center'});"
             "const r=el.getBoundingClientRect();"
             "if(!r.width||!r.height)return {ok:false,error:'EMPTY_RECT'};"
+            "el.setAttribute('data-anticipy-click-token',clickToken);"
             "const x=Math.max(1,Math.min(window.innerWidth-2,r.left+r.width/2));"
             "const y=Math.max(1,Math.min(window.innerHeight-2,r.top+r.height/2));"
-            "return {ok:true,x,y,tag:el.tagName,name:(el.innerText||el.getAttribute('aria-label')||'').slice(0,120)};})()"
+            "return {ok:true,x,y,tag:el.tagName,name:label(el).slice(0,120),"
+            "href:String(el.href||el.getAttribute('href')||''),role:role(el)};})()"
         )
         async with websockets.connect(
             ws_url,
@@ -461,18 +503,42 @@ class NativeBridgeLink:
                 return False, {"error": str((value or {}).get("error") or "no element rect")}
             x = float(value.get("x"))
             y = float(value.get("y"))
-            await call(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y, "button": "none"})
+            await call(ws, "Page.bringToFront", {}, timeout=4.0)
+            await call(ws, "Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y,
+                                                        "button": "none", "buttons": 0})
             await call(ws, "Input.dispatchMouseEvent", {"type": "mousePressed", "x": x, "y": y,
-                                                        "button": "left", "clickCount": 1})
+                                                        "button": "left", "buttons": 1, "clickCount": 1})
             await call(ws, "Input.dispatchMouseEvent", {"type": "mouseReleased", "x": x, "y": y,
-                                                        "button": "left", "clickCount": 1})
-            return True, {"trusted_cdp_click": True, "x": x, "y": y, "name": value.get("name") or ""}
+                                                        "button": "left", "buttons": 0, "clickCount": 1})
+            js_fallback = False
+            if _bool_env("ANTICIPY_NATIVE_BRIDGE_CLICK_JS_FALLBACK_AFTER_CDP", True):
+                token_json = json.dumps(click_token)
+                js_msg = await call(
+                    ws,
+                    "Runtime.evaluate",
+                    {
+                        "expression": (
+                            "(()=>{const el=document.querySelector('[data-anticipy-click-token=' + "
+                            + token_json
+                            + " + ']');if(!el)return {ok:false,error:'MISSING_CLICK_TARGET'};"
+                            "el.click();return {ok:true,name:(el.innerText||el.getAttribute('aria-label')||'').slice(0,120)};})()"
+                        ),
+                        "returnByValue": True,
+                        "awaitPromise": False,
+                    },
+                    timeout=4.0,
+                )
+                js_value = (((js_msg.get("result") or {}).get("result") or {}).get("value") or {})
+                js_fallback = bool(isinstance(js_value, dict) and js_value.get("ok"))
+            return True, {"trusted_cdp_click": True, "js_fallback_click": js_fallback,
+                          "x": x, "y": y, "name": value.get("name") or ""}
 
     def _output_from_proof(self, proof: dict[str, Any]) -> tuple[dict[str, Any], str]:
         dom = str(proof.get("dom") or "")
         screenshot = str(proof.get("screenshot_data_url") or "")
         elements: list[dict[str, Any]] = []
         self._selectors = {}
+        self._selector_meta = {}
         som = proof.get("set_of_mark")
         if isinstance(som, list):
             elements = self._elements_from_set_of_mark(som)
@@ -485,8 +551,14 @@ class NativeBridgeLink:
             selector = el.pop("selector", None)
             if isinstance(idx, int) and selector:
                 self._selectors[idx] = str(selector)
-        text = ""
-        if dom:
+                self._selector_meta[idx] = {
+                    "name": str(el.get("name") or ""),
+                    "role": str(el.get("role") or ""),
+                    "href": str(el.get("href") or ""),
+                    "type": str(el.get("type") or ""),
+                }
+        text = str(proof.get("text") or "")
+        if not text and dom:
             parser = _DOMMarks()
             parser.feed(dom)
             text = parser.text(limit=2500)
@@ -554,6 +626,7 @@ class NativeBridgeLink:
                     "state": str(raw.get("state") or ""),
                     "inView": bool(raw.get("inView", True)),
                     "sponsored": bool(raw.get("sponsored", False)),
+                    "href": str(raw.get("href") or ""),
                     "selector": str(selector),
                 }
             )
@@ -724,6 +797,69 @@ class NativeBridgeLink:
         ) as ws:
             url_msg = await call(ws, "Runtime.evaluate", {"expression": "location.href", "returnByValue": True})
             title_msg = await call(ws, "Runtime.evaluate", {"expression": "document.title", "returnByValue": True})
+            snapshot_expr = r"""
+            (()=>{
+              const ATTR='data-anticipy-native-idx';
+              try {
+                document.querySelectorAll('['+ATTR+']').forEach(el=>el.removeAttribute(ATTR));
+              } catch (_) {}
+              const clean = v => String(v || '').replace(/\s+/g,' ').trim();
+              const selector = [
+                'a','button','input','textarea','select',
+                '[role=button]','[role=link]','[role=tab]','[role=menuitem]',
+                '[role=checkbox]','[role=option]','[role=searchbox]',
+                '[role=textbox]','[role=combobox]','[onclick]',
+                '[contenteditable=true]','[contenteditable=""]'
+              ].join(',');
+              const nodes = Array.from(document.querySelectorAll(selector));
+              const out = [];
+              for (const el of nodes) {
+                if (out.length >= 600) break;
+                const style = window.getComputedStyle(el);
+                const rect = el.getBoundingClientRect();
+                if (style.display === 'none' || style.visibility === 'hidden') continue;
+                if (!rect.width || !rect.height) continue;
+                const name = clean(
+                  el.innerText ||
+                  el.getAttribute('aria-label') ||
+                  el.getAttribute('placeholder') ||
+                  el.getAttribute('title') ||
+                  el.value ||
+                  el.getAttribute('alt') ||
+                  el.getAttribute('name') ||
+                  el.getAttribute('href') ||
+                  ''
+                );
+                const href = el.href || el.getAttribute('href') || '';
+                if (!name && !href) continue;
+                const idx = out.length;
+                el.setAttribute(ATTR, String(idx));
+                out.push({
+                  idx,
+                  role: el.getAttribute('role') || el.tagName.toLowerCase(),
+                  tag: el.tagName.toLowerCase(),
+                  name: name.slice(0, 180),
+                  href: String(href || ''),
+                  type: el.getAttribute('type') || '',
+                  state: el.disabled ? 'disabled' : '',
+                  inView: rect.bottom >= 0 && rect.right >= 0 &&
+                    rect.top <= window.innerHeight && rect.left <= window.innerWidth,
+                  sponsored: /sponsored|promoted|advertisement/i.test(name),
+                  selector: '[' + ATTR + '="' + idx + '"]'
+                });
+              }
+              return {
+                text: clean(document.body && document.body.innerText || '').slice(0, 5000),
+                elements: out
+              };
+            })()
+            """
+            snapshot_msg = await call(
+                ws,
+                "Runtime.evaluate",
+                {"expression": snapshot_expr, "returnByValue": True, "awaitPromise": True},
+                timeout=16.0,
+            )
             html_msg = await call(
                 ws,
                 "Runtime.evaluate",
@@ -738,12 +874,17 @@ class NativeBridgeLink:
                 timeout=12.0,
             )
         html = str(eval_value(html_msg) or "")
+        snapshot = eval_value(snapshot_msg)
+        if not isinstance(snapshot, dict):
+            snapshot = {}
         b64 = str(((shot_msg.get("result") or {}).get("data") or ""))
         return {
-            "ok": bool(html),
+            "ok": bool(html or snapshot.get("text") or snapshot.get("elements")),
             "url": str(eval_value(url_msg) or ""),
             "title": str(eval_value(title_msg) or ""),
             "dom": html[:200_000],
+            "text": str(snapshot.get("text") or "")[:5000],
+            "set_of_mark": snapshot.get("elements") if isinstance(snapshot.get("elements"), list) else [],
             "screenshot_data_url": ("data:image/png;base64," + b64) if b64 else "",
             "bridge_closed": False,
             "pid": os.getpid(),
