@@ -82,6 +82,9 @@ COMMERCE_SEARCH_URLS = {
     "bhphotovideo.com": "https://www.bhphotovideo.com/c/search?Ntt={q}&N=0&InitialSearch=yes",
     "adorama.com": "https://www.adorama.com/l/?searchinfo={q}",
     "sweetwater.com": "https://www.sweetwater.com/store/search?s={q}",
+    "lego.com": "https://www.lego.com/en-us/search?q={q}",
+    "guitarcenter.com": "https://www.guitarcenter.com/search?Ntt={q}",
+    "newegg.com": "https://www.newegg.com/p/pl?d={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -100,6 +103,9 @@ COMMERCE_CART_URLS = {
     "bhphotovideo.com": "https://www.bhphotovideo.com/find/cart.jsp",
     "adorama.com": "https://www.adorama.com/cartview",
     "sweetwater.com": "https://www.sweetwater.com/store/cart.php",
+    "lego.com": "https://www.lego.com/en-us/cart",
+    "guitarcenter.com": "https://www.guitarcenter.com/cart",
+    "newegg.com": "https://secure.newegg.com/shop/cart",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|\badd\b.{0,30}\b(shipping|pickup|delivery)\b|^\s*add\s+",
@@ -140,6 +146,9 @@ COMMERCE_PRODUCT_URL_RE = {
     "bhphotovideo.com": re.compile(r"/c/product/[^?#]+\.html$", re.I),
     "adorama.com": re.compile(r"/p/[^/?#]+$", re.I),
     "sweetwater.com": re.compile(r"/store/detail/[^/?#]+$", re.I),
+    "lego.com": re.compile(r"/[a-z]{2}-[a-z]{2}/product/[^/?#]+$", re.I),
+    "guitarcenter.com": re.compile(r"/[^/?#]+/[^/?#]*\d[^/?#]*\.gc$", re.I),
+    "newegg.com": re.compile(r"/p/N[0-9A-Z]+$", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
@@ -544,6 +553,29 @@ def _unrequested_variant_penalty(name: str, tokens: list[str]) -> int:
     return 8 * sum(1 for word in PRODUCT_VARIANT_WORDS if word in words and word not in token_set)
 
 
+def _compact_visible_product_match(name: str, tokens: list[str]) -> bool:
+    if not name or len(tokens) < 3:
+        return False
+    visible_hits = [tok for tok in tokens if _token_hits(name, [tok])]
+    if len(visible_hits) < 2:
+        return False
+    return _ordered_item_score(name, visible_hits) > 0
+
+
+def _search_result_identity_ok(name: str, href: str, item: str, tokens: list[str], required: int) -> bool:
+    hay = f"{name} {href}"
+    if not _numbers_match(hay, item):
+        return False
+    name_hits = _token_hits(name, tokens)
+    if _has_distinctive_required_tokens(hay, tokens) and name_hits >= required:
+        return True
+    if not href or not _compact_visible_product_match(name, tokens):
+        return False
+    if _number_tokens(item) and name_hits >= 2:
+        return True
+    return _token_hits(hay, tokens) >= required
+
+
 def _required_product_hits(tokens: list[str]) -> int:
     n = len(tokens)
     if n <= 2:
@@ -613,22 +645,20 @@ def _pick_product(
     candidates = []
     for el in elements or []:
         name = (el.get("name") or "").strip()
+        href = (el.get("href") or "").strip()
         if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
                 or _is_generic_product_label(name)
-                or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item)):
+                or NON_PRODUCT_RE.search(name)):
             continue
-        href = (el.get("href") or "").strip()
         productish_url = bool(href and _looks_buyable_product_url(href, start_url or href))
         if href and not productish_url:
             continue
         role = (el.get("role") or "").lower()
         if role not in {"a", "button"} and "link" not in role:
             continue
-        if not _has_distinctive_required_tokens(f"{name} {href}", tokens):
+        if not _search_result_identity_ok(name, href, item, tokens, required):
             continue
-        hits = _token_hits(name, tokens)
-        if hits < required:
-            continue
+        hits = max(_token_hits(name, tokens), _token_hits(f"{name} {href}", tokens) - 1)
         hint_hits = _token_hits(f"{name} {href}", context_hints)
         ordered_score = _ordered_item_score(name, tokens)
         variant_penalty = _unrequested_variant_penalty(name, tokens)
@@ -648,7 +678,7 @@ def _pick_product(
             href = (el.get("href") or "").strip()
             if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
                     or _is_generic_product_label(name) or NON_PRODUCT_RE.search(name)
-                    or not _numbers_match(name, item)):
+                    or not _numbers_match(f"{name} {href}", item)):
                 continue
             productish_url = bool(href and _looks_buyable_product_url(href, start_url or href))
             if not productish_url or href in seen_hrefs:
@@ -658,7 +688,8 @@ def _pick_product(
                 continue
             hay = f"{name} {href}"
             hits = _token_hits(hay, tokens)
-            if not _has_distinctive_required_tokens(hay, tokens):
+            if (not _has_distinctive_required_tokens(hay, tokens)
+                    and not _compact_visible_product_match(name, tokens)):
                 continue
             if len(tokens) >= 4 and hits < required:
                 continue

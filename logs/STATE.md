@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T170142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Sweetwater and hardened search-redirect handling. WebVoyager now knows Sweetwater search, product, and cart URL shapes: `/store/search?s=...`, `/store/detail/<slug>`, and `/store/cart.php`. NativeBridgeLink treats the Sweetwater `s` query parameter as a search query-token field. If a commerce search URL lands directly on a buyable product URL and visible product identity matches the remembered item, the recipe now proceeds into the product add loop instead of searching for another product link. Generic cart URL detection now recognizes `/cart.php` while preserving item-local cart-structure proof. Read-only Sweetwater probes found real product links for D'Addario EJ16 string pack variants and the live cart route. A first full live vague-memory run resolved correctly but failed before mutation because the search redirect was treated as search results. After redirect handling, a fresh run clicked real `Add to Cart` and changed cart count, but failed proof because `/store/cart.php` was not recognized as a cart route. After `/cart.php` recognition, a fresh live `/event` run used the same vague action, opened the matching Sweetwater product, clicked real `Add to Cart`, opened `/store/cart.php`, and fresh-probe cart read-back matched the requested item with item-local cart structure. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T173142Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It broadened the real-store browser-hand path to Newegg and added compact SKU/model search-result selection. WebVoyager now knows LEGO, Guitar Center, and Newegg search, product, and cart URL shapes. NativeBridgeLink treats Guitar Center `Ntt` and Newegg `d` query parameters as search query-token fields. Search-result product selection can open a compact visible product label when a buyable href supplies SKU/model-number evidence, but rendered product-page identity still gates every real Add click. LEGO and Guitar Center were tested as real hard-site candidates: both reached real Add-click attempts and then failed durable cart read-back, so they are hard-site/non-durable-cart findings, not proof. A final fresh live `/event` run used context-only memory plus a vague action that did not name Newegg or the item. It resolved Newegg plus `Logitech M720 Triathlon Wireless Multi-Device Mouse`, opened the exact product page, refreshed for add controls, clicked real `Add to cart`, opened `secure.newegg.com/shop/cart`, and durable known-cart read-back matched the requested item. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -48,10 +48,13 @@ Current M3 slice:
 - WebVoyager knows B&H Photo Video search, product, and cart URL shapes. B&H product matching accepts `/c/product/.../<slug>.html` product pages while rejecting review URLs.
 - WebVoyager knows Adorama search, product, and cart URL shapes. Adorama product matching accepts `/p/<slug>` product pages while rejecting review and Q&A URL fragments.
 - WebVoyager knows Sweetwater search, product, and cart URL shapes. Sweetwater product matching accepts `/store/detail/<slug>` product pages while rejecting review subpaths.
+- WebVoyager knows LEGO, Guitar Center, and Newegg search, product, and cart URL shapes. LEGO and Guitar Center are currently hard-site findings because live Add attempts did not survive durable cart read-back. Newegg can complete builder-side durable cart read-back for an exact memory-resolved item.
 - Numeric item matching and ordered item scoring treat visible labels such as `128GB` as matching numeric item tokens such as `128`, so exact storage-size product titles can satisfy distinctive-token checks.
 - Memory context hints bias product ranking but no longer filter out exact non-hint product matches. Total product score outranks context-hint count.
 - WebVoyager penalizes unrequested bundle, kit, pack, edition, CompactFlash, CFexpress, microSD, and microSDXC variants when choosing between visible product candidates.
 - Compound boundary token matching handles visible title compounds such as `SlideLITE`, so exact compound product names can satisfy separate remembered tokens without enabling arbitrary short substring matches.
+- Search-result product selection can use href-carried SKU/model-number evidence only to open a compact visible product label. It cannot justify Add by itself; product-page rendered identity must still match before mutation.
+- NativeBridgeLink extracts `Ntt` and `d` query parameters for real-store search readiness.
 - `NativeBridgeLink` ranks direct-CDP actionable marks so visible product, Add, cart, and search controls survive the mark cap on nav-heavy commerce pages.
 - `NativeBridgeLink` direct CDP scroll no longer double-scrolls by applying wheel plus unconditional JavaScript scroll. It uses JavaScript fallback only if the wheel did not move the page.
 - The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
@@ -59,13 +62,16 @@ Current M3 slice:
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- Read-only Sweetwater probing found real search-result product rows, Sweetwater product URL shapes, visible `Add to Cart` controls, and the live cart route without mutation.
-- A first full live Sweetwater `/event` run used context-only memory plus a vague action that did not name Sweetwater or the exact item. It resolved Sweetwater plus the remembered 4-pack string set, and search landed on the exact product page, but it failed before mutation because the redirect was still handled as search results.
-- After search-redirect handling, a fresh run clicked a real `Add to Cart` control and changed cart count, but failed final proof because `/store/cart.php` was not recognized as a cart URL.
-- After `/cart.php` recognition, a fresh full live `/event` run used the same vague action, opened the matching Sweetwater product, clicked real `Add to Cart`, opened `/store/cart.php`, and fresh-probe cart read-back matched the requested item with item-local cart structure. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
+- Read-only LEGO probing found real search, product, Add, and cart surfaces. A live LEGO run resolved memory correctly and clicked a real `Add to Bag`, but delayed independent cart read-back stayed empty. LEGO is a hard-site/non-durable-cart finding.
+- Read-only Guitar Center probing found real product rows, product URLs, Add controls, and a cart route. A live Guitar Center run resolved memory correctly, opened the exact product page, and clicked a real `Add to Cart`, but durable cart read-back did not expose the item. Guitar Center is a hard-site/non-durable-cart finding.
+- Read-only Newegg probing found real `/p/pl?d=...` search, `/p/N...` product URLs, visible `ADD TO CART` controls, and `secure.newegg.com/shop/cart`.
+- A fresh full live Newegg `/event` run used context-only memory plus a vague action that did not name Newegg or the exact item. It resolved Newegg plus the remembered Logitech mouse, opened the exact product page, refreshed for add controls, clicked real `Add to cart`, opened the secure cart, and durable known-cart read-back matched the requested item. This is builder-side only and remains `UNPROVEN-PENDING-JUDGE`.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
+- Newegg can complete a real search-product-add-cart-verify path builder-side after recognizing `/p/pl?d=`, `/p/N...`, and `secure.newegg.com/shop/cart`, plus `d` query-token readiness.
+- LEGO exposes real search/product/Add/cart surfaces, but the observed Add to Bag did not persist into an independent cart read-back. Treat it as a hard-site/non-durable-cart finding.
+- Guitar Center exposes real search/product/Add/cart surfaces, but the observed Add to Cart did not persist into durable cart read-back. Treat it as a hard-site/non-durable-cart finding.
 - Sweetwater can complete a real search-product-add-cart-verify path builder-side after recognizing `/store/search?s=`, `/store/detail/<slug>`, and `/store/cart.php`, handling search redirects directly to a matching product page, and treating `/cart.php` as a cart route under item-local cart-structure proof.
 - Adorama can complete a real search-product-add-cart-verify path builder-side after recognizing `/l/?searchinfo=`, `/p/<slug>`, and `/cartview`, after handling compound title tokens such as `SlideLITE`, and after requiring item-local cart structure so recommendation cards do not count as cart proof.
 - B&H Photo Video can complete a real search-product-add-cart-verify path builder-side after recognizing `/c/search?Ntt=`, `/c/product/.../<slug>.html`, and `/find/cart.jsp`, and after changing context hints to ranking signals instead of exclusive filters.
@@ -92,9 +98,9 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Real live `/event` runs exercised the Sweetwater vague-memory path. The first run failed before mutation because search redirect handling was missing. The second run clicked a real Add to Cart control and failed proof because `/cart.php` was not recognized. The final post-fix run clicked a real Add to Cart control and verified fresh-probe cart read-back with item-local cart structure builder-side.
+- Real live `/event` runs exercised LEGO, Guitar Center, and Newegg vague-memory paths. LEGO and Guitar Center clicked real Add controls but failed durable cart read-back, so they are hard-site findings. Newegg clicked real Add to cart and verified durable secure-cart read-back builder-side.
 - `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Sweetwater search URL, product URL, exact variant, search-redirect, `/cart.php`, and cart guard checks passed.
+- Focused LEGO compact-label, Guitar Center exact-variant, Newegg URL/product/cart guard, and native query-token checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -112,7 +118,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
+- M3 is not proven. Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, but no separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -120,7 +126,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. PetSmart and Container Store produced hard-site findings in prior laps. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
+- Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, and REI can create or verify safe cart artifacts builder-side on some item shapes. LEGO, Guitar Center, PetSmart, and Container Store produced hard-site findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -133,7 +139,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/36 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/37 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, and REI builder-side cart artifacts or read-backs exist, and LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, and Lowe's visible-identity findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -193,6 +199,8 @@ Dead ends not to retry blindly:
 - Do not retry the Lowe's token-rich gloves path blindly. It produced wrong or unverified cart additions and needs a new exact-product or cart-readback hypothesis first.
 - Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps.
 - Do not retry Office Depot blindly. Product-page Add and adjacent result-row Add both changed the page but did not verify the known cart artifact; retry only with a new concrete cart-readback or modal hypothesis.
+- Do not retry LEGO blindly. A real Add to Bag attempt exposed cart-like overlay evidence, but delayed independent cart read-back was empty.
+- Do not retry Guitar Center blindly. A real Add to Cart attempt reached `/cart`, but durable cart read-back did not expose the requested item.
 - Do not treat exhausted browser retries as a human gate. If the hand did not explicitly return `needs_human`, the step should fail honestly.
 - Do not treat Staples as supported from the current bridge path. It returned no actionable product marks after settling.
 - Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
@@ -202,7 +210,7 @@ Dead ends not to retry blindly:
 - Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
 - Do not design always-on cloud transcription.
 
-- Convert the current Sweetwater exact-item path plus prior Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Convert the current Newegg exact-item path plus prior Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
 - Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, or Lowe's token-rich gloves.
 
 Law digest:

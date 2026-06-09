@@ -1,28 +1,27 @@
 # Last Lap
 
-Lap: 20260609T170142Z
-Date: 2026-06-09T17:13:06Z
-Milestone: M3 - Sweetwater real-store cart path and search-redirect handling
+Lap: 20260609T173142Z
+Date: 2026-06-09T18:16:39Z
+Milestone: M3 - Newegg real-store cart path and compact SKU selection
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- WebVoyager now knows Sweetwater search, product, and cart URL shapes: `/store/search?s=...`, `/store/detail/<slug>`, and `/store/cart.php`.
-- NativeBridgeLink now treats the Sweetwater `s` query parameter as a search query-token field for bridge readiness.
-- The commerce recipe now handles real search URLs that redirect straight to a matching buyable product page. If visible product identity matches the remembered item, it proceeds to the product add loop instead of looking for another product link.
-- Generic cart URL detection now recognizes `/cart.php` while preserving item-local cart-structure proof requirements.
+- WebVoyager now knows LEGO, Guitar Center, and Newegg search, product, and cart URL shapes.
+- NativeBridgeLink now treats Guitar Center `Ntt` and Newegg `d` as query-token fields for search-readiness checks.
+- Search-result product selection now supports compact visible labels when the buyable href supplies SKU/model-number evidence, but product-page identity still gates every real Add click.
 
 Real runs:
-- Read-only Sweetwater probing found that broad apostrophe-free search did not expose usable product candidates, but precise searches found real `/store/detail/...` product links for D'Addario EJ16 string pack variants and the live `/store/cart.php` cart route without mutation.
-- The first live `/event` run seeded context-only memory, then sent a vague action that did not name Sweetwater or the item. It resolved to Sweetwater plus the remembered 4-pack string set and search landed on the exact product page, but the recipe still treated it as search results and failed before mutation.
-- After search-redirect handling, a fresh live run clicked a real `Add to Cart` control and changed the cart count, but failed final proof because `/store/cart.php` was not recognized as a cart route.
-- After `/cart.php` recognition, a fresh full live `/event` run used the same vague action, opened the matching Sweetwater product page, clicked a real `Add to Cart` control, opened `/store/cart.php`, and fresh-probe cart read-back verified the item under item-local cart-structure proof.
+- Read-only LEGO probing found live search/product/cart surfaces. A live vague-memory run selected the right product and clicked a real `Add to Bag`, but the item did not persist to the independent cart page. LEGO is a hard-site/non-durable-cart finding, not proof.
+- Read-only Guitar Center probing found real product rows and cart route. A live vague-memory run opened the exact product and clicked a real `Add to Cart`, but the cart read-back did not expose the requested item. Guitar Center is a hard-site/non-durable-cart finding, not proof.
+- Read-only Newegg probing found live `/p/pl?d=...` search, `/p/N...` product URLs, visible `ADD TO CART` controls, and `secure.newegg.com/shop/cart`.
+- The final fresh live `/event` run used context-only memory plus a vague action that did not name Newegg or the item. It resolved to Newegg plus `Logitech M720 Triathlon Wireless Multi-Device Mouse`, opened the exact product page, refreshed for add controls, clicked real `Add to cart`, opened the secure cart, and durable cart read-back verified the requested item.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/hands/browser_hand.py` passed.
-- Focused Sweetwater search URL, product URL, exact variant, search-redirect, `/cart.php`, and cart guard checks passed.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py engine/anticipy_engine/core/orchestrator.py engine/anticipy_engine/hands/browser_hand.py` passed.
+- Focused LEGO compact-label, Guitar Center exact-variant, Newegg URL/product/cart guard, and native query-token checks passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -43,4 +42,4 @@ Proof status:
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work on real stores only. Convert the unjudged Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and other builder-side artifacts through the separate judge when quota returns, and otherwise keep building exact item matching, durable read-back, and cheap real-site action recipes.
+- Continue M3 ladder work on real stores only. Convert the unjudged Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, and other builder-side artifacts through the separate judge when quota returns, and otherwise keep building exact item matching, durable read-back, and cheap real-site action recipes.
