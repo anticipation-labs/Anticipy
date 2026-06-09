@@ -325,9 +325,17 @@ def _memory_resolved_browser_step(text: str, context) -> Optional[Step]:
         return None
     resolved = max(candidates, key=lambda c: c["_score"])
     resolved_public = {k: v for k, v in resolved.items() if not k.startswith("_")}
+    context_hint_text = ""
+    if resolved_public.get("matched_hints"):
+        context_hint_text = (
+            " Prefer products matching memory context hints: "
+            + ", ".join(resolved_public["matched_hints"])
+            + "."
+        )
     task = (
         f"On {resolved_public['site']}, find {resolved_public['item']} and add it to the cart. "
         "Stop after the cart visibly contains the item. Do not checkout, pay, or place an order."
+        + context_hint_text
     )
     return Step(
         intent="browse_task",

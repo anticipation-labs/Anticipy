@@ -111,6 +111,10 @@ NON_PRODUCT_RE = re.compile(
     r"pickup|delivery|shipping|ratings?|reviews?|see more|show more|how-to|how to|category)\b",
     re.I,
 )
+GENERIC_PRODUCT_LABEL_RE = re.compile(
+    r"^\s*(?:multiple\s+options\s+available|options\s+available|shop\s+now|view\s+details|product\s+image)\s*$",
+    re.I,
+)
 HREF_ONLY_RE = re.compile(r"^(?:https?://\S+|/[^\s]+)$", re.I)
 
 
@@ -411,20 +415,40 @@ def _wants_lowest_price(text: str) -> bool:
                      text or "", re.I) is not None
 
 
+CONTEXT_HINTS_RE = re.compile(r"\b(?:memory\s+)?context\s+hints?\s*:\s*(?P<hints>[^.]+)", re.I)
+
+
+def _context_hint_tokens(task: str, item: str = "") -> list[str]:
+    m = CONTEXT_HINTS_RE.search(task or "")
+    if not m:
+        return []
+    item_tokens = set(_item_tokens(item))
+    hints = []
+    for tok in _item_tokens(m.group("hints") or ""):
+        if tok in item_tokens or tok in hints:
+            continue
+        hints.append(tok)
+    return hints[:6]
+
+
 def _pick_product(
     elements: list[dict],
     item: str,
     prefer_lowest: bool = False,
     start_url: str = "",
+    context_hints: Optional[list[str]] = None,
+    allow_query_fallback: bool = False,
 ) -> Optional[dict]:
     tokens = _item_tokens(item)
     if not tokens:
         return None
     required = _required_product_hits(tokens)
+    context_hints = context_hints or []
     candidates = []
     for el in elements or []:
         name = (el.get("name") or "").strip()
         if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
+                or GENERIC_PRODUCT_LABEL_RE.match(name)
                 or NON_PRODUCT_RE.search(name) or not _numbers_match(name, item)):
             continue
         href = (el.get("href") or "").strip()
@@ -437,20 +461,48 @@ def _pick_product(
         hits = _token_hits(name, tokens)
         if hits < required:
             continue
+        hint_hits = _token_hits(f"{name} {href}", context_hints)
         score = (
             hits * 3
+            + hint_hits * 5
             + (4 if productish_url else 0)
             + (2 if el.get("inView") else 0)
             + min(len(name), 120) / 120
         )
-        candidates.append((_price_cents(name), score, el))
+        candidates.append((_price_cents(name), hint_hits, score, el))
+    if not candidates and allow_query_fallback:
+        seen_hrefs: set[str] = set()
+        for pos, el in enumerate(elements or []):
+            name = (el.get("name") or "").strip()
+            href = (el.get("href") or "").strip()
+            if (not name or el.get("sponsored") or HREF_ONLY_RE.match(name)
+                    or GENERIC_PRODUCT_LABEL_RE.match(name) or NON_PRODUCT_RE.search(name)
+                    or not _numbers_match(name, item)):
+                continue
+            productish_url = bool(href and _looks_buyable_product_url(href, start_url or href))
+            if not productish_url or href in seen_hrefs:
+                continue
+            role = (el.get("role") or "").lower()
+            if role not in {"a", "button"} and "link" not in role:
+                continue
+            seen_hrefs.add(href)
+            hint_hits = _token_hits(f"{name} {href}", context_hints)
+            score = (
+                hint_hits * 5
+                + (2 if el.get("inView") else 0)
+                + min(len(name), 120) / 120
+                - pos / 1000
+            )
+            candidates.append((_price_cents(name), hint_hits, score, el))
     if not candidates:
         return None
+    hinted = [c for c in candidates if c[1] > 0]
+    pool = hinted or candidates
     if prefer_lowest:
-        priced = [c for c in candidates if c[0] is not None]
+        priced = [c for c in pool if c[0] is not None]
         if priced:
-            return min(priced, key=lambda c: (c[0], -c[1]))[2]
-    return max(candidates, key=lambda c: c[1])[2]
+            return min(priced, key=lambda c: (c[0], -c[1], -c[2]))[3]
+    return max(pool, key=lambda c: (c[1], c[2]))[3]
 
 
 def _pick_button(elements: list[dict], pattern: re.Pattern) -> Optional[dict]:
@@ -869,6 +921,7 @@ class WebVoyagerAgent:
         history: List[str] = []
         states: list[dict] = []
         steps = 0
+        context_hints = _context_hint_tokens(task, item)
 
         preflight_out, steps = await self._verify_known_cart_url(
             start_url, item, history, states, steps, "known_cart_preflight"
@@ -1027,6 +1080,8 @@ class WebVoyagerAgent:
                     item,
                     prefer_lowest=prefer_lowest,
                     start_url=start_url,
+                    context_hints=context_hints,
+                    allow_query_fallback=_looks_search_results_url(out.get("url") or ""),
                 )
                 if product:
                     break
