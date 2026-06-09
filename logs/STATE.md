@@ -4,7 +4,7 @@ Current milestone: M3 only. UI, status, onboarding, observability, localhost, `e
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T211215Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It preserved direct-CDP document order as `docIndex` through `NativeBridgeLink` normalization and changed WebVoyager's nearby-product lookup, adjacent search-result Add selection, and generic Add unrelated-product guard to use document order instead of ranked `idx` order. It also added Vitamin Shoppe search/product/cart URL shapes. Read-only Vitamin Shoppe probing confirmed the real failure mode: useful mark ranking placed a real `Add to Cart` button before the matching product by ranked `idx`, while `docIndex` showed the Add button was adjacent after the product in page order. A fresh live `/event` run used context-only memory plus a vague action that named neither Vitamin Shoppe nor the item, resolved the remembered supplement item and site from memory, opened the real search page, clicked the real adjacent `Add to Cart` button, then failed closed because `/cart/shopping-cart` exposed no durable item evidence. Direct read-only native-bridge read-back after the run also saw no item evidence or cart controls. Vitamin Shoppe is a hard-site/non-durable-cart finding, not proof. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+Latest builder lap: `20260609T214217Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It added Crate & Barrel search/product/cart URL shapes and taught the generic cart classifier to recognize `/checkout/cart`. Read-only probes checked several real stores and selected Crate & Barrel because it exposed the strongest product/Add/cart surface. A fresh live `/event` run used context-only memory plus a vague action that named neither Crate & Barrel nor the item, resolved the remembered pantry item and site from memory, opened Crate search, opened the exact product, clicked a real `Add to Cart`, clicked `View Cart & Checkout`, opened `/checkout/cart`, and builder-side durable known-cart read-back verified the item under cart structure proof. A separate read-only native-bridge probe against the same fresh profile verified the cart on three delayed reads with item link plus quantity/remove controls and cart count text. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Current M3 slice:
 - `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
@@ -68,6 +68,8 @@ Current M3 slice:
 - WebVoyager knows Vitamin Shoppe search/product/cart URL shapes, including `/search?search=...`, `/p/<slug>/<sku>`, and `/cart/shopping-cart`.
 - NativeBridgeLink preserves direct-CDP document order as `docIndex` through normalized elements, so WebVoyager can use real page adjacency even when useful mark ranking changes `idx` order.
 - WebVoyager uses document order for nearby product lookup, adjacent search-result Add selection, and generic Add unrelated-product guards.
+- WebVoyager knows Crate & Barrel search/product/cart URL shapes, including `/search?query=...`, `/checkout/cart`, and product pages ending in `/s<id>`.
+- The generic cart URL classifier recognizes `/checkout/cart` while preserving cart-structure proof requirements.
 - WebVoyager cart proof requires five delayed independent fresh cart reads by default. If any delayed read misses the item, the helper returns the failing observation, not the earlier best state.
 - Generic product-page Add controls are rejected when nearby buyable product-card context points at an unrelated recommendation item.
 - Numeric item matching and ordered item scoring treat visible labels such as `128GB` as matching numeric item tokens such as `128`, so exact storage-size product titles can satisfy distinctive-token checks.
@@ -84,14 +86,15 @@ Current M3 slice:
 
 Latest real M3 attempt:
 - Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- Read-only probes checked Vitamin Shoppe query shapes for real product/Add/cart surfaces.
-- Vitamin Shoppe exposed real `/p/...` product links, real `Add to Cart` controls, `docIndex` on normalized direct-CDP elements, and `/cart/shopping-cart`.
-- A fresh live `/event` run used context-only memory plus a vague action that named neither Vitamin Shoppe nor the item. The chain resolved the remembered supplement item and site from memory, opened the real Vitamin Shoppe search page, clicked the real adjacent `Add to Cart` button, then failed final cart proof because `/cart/shopping-cart` exposed no durable item evidence.
-- Direct read-only native-bridge read-back after the live run saw no item evidence or cart controls on the active page or mapped cart route. Vitamin Shoppe is a hard-site/non-durable-cart finding, not proof.
+- Read-only probes checked Sephora, Bath & Body Works, Crate & Barrel, L.L.Bean, and Backcountry for real product/Add/cart surfaces.
+- Crate & Barrel exposed real product links, visible exact product identity, a real product-level `Add to Cart`, recommendation Add controls below the product, and `/checkout/cart`.
+- A fresh live `/event` run used context-only memory plus a vague action that named neither Crate & Barrel nor the item. The chain resolved the remembered pantry item and site from memory, opened the exact product, clicked real `Add to Cart`, clicked `View Cart & Checkout`, opened `/checkout/cart`, and builder-side durable cart proof verified the item under cart structure proof.
+- A separate read-only native-bridge probe against the same fresh profile verified the cart on three delayed reads with item link plus quantity/remove controls and cart count text.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Latest real bridge findings:
 - World Market exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered World Market item, with durable known-cart read-back and a separate read-only fresh cart probe. No separate judge has verified it.
+- Crate & Barrel exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered Crate & Barrel pantry item, with durable known-cart read-back and three delayed independent read-only cart reads. No separate judge has verified it.
 - Vitamin Shoppe exposes real search/product/Add/cart surfaces. The current code can select the real adjacent search-result Add button by document order, but the observed Add path did not survive durable cart read-back and direct read-only cart probes saw no item evidence. Treat it as a hard-site/non-durable-cart finding until a new concrete cart-readback or mini-cart hypothesis exists.
 - Ace Hardware exposes exact search-redirect product/Add/cart surfaces, but the observed Add path did not survive durable cart read-back. Treat it as a hard-site/non-durable-cart finding until a new concrete hypothesis proves stability.
 - ThriftBooks exposes product/Add/cart surfaces. The current code avoids a workbook-variant false mutation, but the observed base-book Add path did not survive durable cart read-back. Treat it as a hard-site/non-durable-cart finding until a new concrete hypothesis proves stability.
@@ -135,10 +138,10 @@ Current constraints:
 
 Latest checks:
 - Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- Read-only Vitamin Shoppe probes confirmed `docIndex` preservation on real product/Add controls and exposed the ranked-index adjacency bug.
-- A real live `/event` run exercised the Vitamin Shoppe vague-memory path. It reached the real site from memory, clicked a real adjacent Add button, and failed closed when durable cart proof and direct read-back saw no item evidence.
-- Focused Vitamin Shoppe search/product/cart URL and document-order adjacent-Add checks passed.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py` passed.
+- Read-only real-store probes selected Crate & Barrel as the viable new M3 slice after other stores exposed shells or incomplete Add hypotheses.
+- A real live `/event` run exercised the Crate & Barrel vague-memory path. It reached the real site from memory, clicked real product-level Add, opened the real cart, and builder-side durable proof verified the item. A separate read-only native-bridge probe verified the same cart state on three delayed reads.
+- Focused Crate & Barrel URL-shape, `/checkout/cart` classifier, product URL, and cart-proof checks passed.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_harmline.py` passed.
@@ -147,7 +150,7 @@ Latest checks:
 - Forbidden-path scan was clean.
 - Credential-shaped diff scan was clean.
 - Product diff eval-literal scan was clean.
-- `logs/trace/20260609T211215Z.jsonl` is ignored.
+- `logs/trace/20260609T214217Z.jsonl` is ignored.
 - Ports `8787`, `7777`, and `9222` are clear.
 
 Proven:
@@ -157,7 +160,7 @@ Proven:
 Not proven:
 - M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
 - M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Ulta, and other sites have hard-site/non-durable-cart findings, but no separate judge proof exists.
+- M3 is not proven. Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Ulta, and other sites have hard-site/non-durable-cart findings, but no separate judge proof exists.
 - M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
 - Generalization is UNPROVEN.
 - Raw audio inference is not proven and is not the daily gate.
@@ -165,7 +168,7 @@ Not proven:
 
 Gate status:
 - No all-work human gate is active.
-- World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, Macy's, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, and the current-code Wayfair run produced hard-site, no-actionable-marks, or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
+- Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, Macy's, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, and the current-code Wayfair run produced hard-site, no-actionable-marks, or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
 - Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
 - Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
 - Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
@@ -178,7 +181,7 @@ Drift numbers:
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
 - M1 reality judge pass rate: 0/5 verified, 0 percent.
 - M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/61 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, Wayfair, and Macy's builder-side cart artifacts or read-backs exist, and Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
+- M3 real browser-hand reality judge pass rate: 0/62 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, Wayfair, and Macy's builder-side cart artifacts or read-backs exist, and Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
 - M5 reality judge pass rate: 0/0 verified, not run.
 - Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
 - Generalization: UNPROVEN. Real diverse users do not exist yet.
@@ -264,7 +267,7 @@ Dead ends not to retry blindly:
 - Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
 - Do not design always-on cloud transcription.
 
-- Convert the current World Market path plus prior QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, Macy's, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
+- Convert the current Crate & Barrel path plus prior World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, Macy's, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
 - Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, Nordstrom, Dick's, Kohl's, or Lowe's token-rich gloves.
 
 Law digest:

@@ -99,6 +99,7 @@ COMMERCE_SEARCH_URLS = {
     "acehardware.com": "https://www.acehardware.com/search?query={q}",
     "thriftbooks.com": "https://www.thriftbooks.com/browse/?b.search={q}",
     "vitaminshoppe.com": "https://www.vitaminshoppe.com/search?search={q}",
+    "crateandbarrel.com": "https://www.crateandbarrel.com/search?query={q}",
 }
 COMMERCE_CART_URLS = {
     "target.com": "https://www.target.com/cart",
@@ -133,6 +134,7 @@ COMMERCE_CART_URLS = {
     "acehardware.com": "https://www.acehardware.com/cart",
     "thriftbooks.com": "https://www.thriftbooks.com/shopping-cart/",
     "vitaminshoppe.com": "https://www.vitaminshoppe.com/cart/shopping-cart",
+    "crateandbarrel.com": "https://www.crateandbarrel.com/checkout/cart",
 }
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
@@ -147,7 +149,7 @@ GENERIC_ADD_LABEL_RE = re.compile(
 )
 VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
 CART_URL_RE = re.compile(
-    r"/(?:cart(?:\.(?:php|html))?|cartview|shoppingcart|shopping-cart|shopping_cart\.jsp|shopping-bag|basket|bag|my/bag|"
+    r"/(?:(?:checkout/)?cart(?:\.(?:php|html))?|cartview|shoppingcart|shopping-cart|shopping_cart\.jsp|shopping-bag|basket|bag|my/bag|"
     r"OrderItemDisplay)(?:[/?#]|$)",
     re.I,
 )
@@ -198,6 +200,7 @@ COMMERCE_PRODUCT_URL_RE = {
     "acehardware.com": re.compile(r"/departments/[^?#]+/\d+$", re.I),
     "thriftbooks.com": re.compile(r"/w/[^?#]+/\d+/?$", re.I),
     "vitaminshoppe.com": re.compile(r"/p/[^?#]+/[a-z0-9-]+$", re.I),
+    "crateandbarrel.com": re.compile(r"/[^/?#]+/s\d+(?:[/?#]|$)", re.I),
 }
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(

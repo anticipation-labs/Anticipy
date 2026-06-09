@@ -1,46 +1,44 @@
 # Last Lap
 
-Lap: 20260609T211215Z
-Date: 2026-06-09T21:26:21Z
-Milestone: M3 - Vitamin Shoppe DOM-order adjacent Add hardening
+Lap: 20260609T214217Z
+Date: 2026-06-09T21:49:37Z
+Milestone: M3 - Crate & Barrel real-store cart path
 ALL_MILESTONES_DONE: false
 
 Judge verdict: UNPROVEN-PENDING-JUDGE, Tamper: NOT_RUN
 
 What changed:
-- `NativeBridgeLink` now preserves direct-CDP document order as `docIndex` when normalizing set-of-mark elements.
-- Direct-CDP capture now emits `docIndex` alongside ranked `idx`, so useful product/Add controls can stay priority-ranked without losing true page order.
-- WebVoyager now knows Vitamin Shoppe search, product, and cart URL shapes: `/search?search=...`, `/p/<slug>/<sku>`, and `/cart/shopping-cart`.
-- Search-result adjacent Add selection, nearby-product lookup, and generic Add unrelated-product guards now use document order when available, instead of ranked `idx` order.
+- WebVoyager now knows Crate & Barrel search, product, and cart URL shapes: `/search?query=...`, `/checkout/cart`, and product pages ending in `/s<id>`.
+- Generic cart URL detection now recognizes `/checkout/cart`, so known-cart proof can classify Crate & Barrel's cart route as a cart page.
 
 Real runs:
-- A read-only Vitamin Shoppe probe with an over-exact apostrophe query returned a near-empty search shell, so the lap moved to the viable real query shape instead of forcing a dead surface.
-- A read-only Vitamin Shoppe probe for a vitamin-D item exposed 475 actionable elements, `docIndex` on normalized elements, buyable `/p/...` product links, real `Add to Cart` buttons, and the mapped cart route. The matched product had ranked `idx=4` and document order `docIndex=81`; the adjacent Add button had ranked `idx=0` and document order `docIndex=87`, confirming the ranked-index bug.
-- A fresh live `/event` run used context-only memory plus a vague action that named neither Vitamin Shoppe nor the item. The chain resolved the remembered supplement item and site from memory, opened the real Vitamin Shoppe search page, clicked the real adjacent `Add to Cart` button, and then failed closed because the mapped cart route exposed no durable item evidence.
-- Direct read-only native-bridge read-back after the live run saw the active page and cart route at `/cart/shopping-cart`, but both exposed no item evidence or actionable cart controls. Vitamin Shoppe is a hard-site/non-durable-cart finding, not proof.
+- Read-only probes checked Sephora, Bath & Body Works, Crate & Barrel, L.L.Bean, and Backcountry. Sephora returned a near-empty shell, Bath & Body Works exposed little product structure, L.L.Bean and Backcountry exposed product links without a full Add hypothesis, and Crate & Barrel exposed the strongest real search/product/Add/cart path.
+- A read-only Crate & Barrel product-page probe for the pantry item exposed strong visible product identity, the real product-level `Add to Cart` control, recommendation Add controls below it, and `/checkout/cart`.
+- A fresh live `/event` run used context-only memory plus a vague action that named neither Crate & Barrel nor the item. The chain resolved the remembered pantry item and site from memory, opened Crate & Barrel search, opened the exact product, refreshed and scrolled to a real product-level Add control, clicked `Add to Cart`, clicked `View Cart & Checkout`, opened `/checkout/cart`, and builder-side durable known-cart read-back verified the item under cart structure proof.
+- A separate read-only native-bridge probe against the same fresh profile verified the cart on three delayed reads. Each read saw the item link plus quantity/remove controls and `Cart contains 1 items`.
 - No checkout, payment, order placement, email, calendar change, or third-party message occurred.
 
 Checks:
-- Focused Vitamin Shoppe URL-shape and document-order adjacent-Add checks passed.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py engine/anticipy_engine/core/native_bridge_link.py` passed.
+- Focused Crate & Barrel URL-shape, `/checkout/cart` classifier, product URL, and cart-proof checks passed.
+- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/agent/webvoyager.py` passed.
 - `PYTHONPATH=engine engine/scripts/test_browser_hand.py` passed.
 - `PYTHONPATH=engine engine/scripts/test_handoff.py` passed.
 - `PYTHONPATH=engine engine/scripts/test_harmline.py` passed.
 - `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
 - `git diff --check` passed.
 - Forbidden-path, credential-shaped diff, and product/eval literal scans passed.
-- `logs/trace/20260609T211215Z.jsonl` is ignored.
+- `logs/trace/20260609T214217Z.jsonl` is ignored.
 - Ports `8787`, `7777`, and `9222` are clear.
 
 Gate:
 - No all-work human gate is active.
 - Separate judge quota blocks proof only, not building.
-- Vitamin Shoppe produced a real Add-click mutation path but no durable cart artifact under read-back. The document-order hardening is kept because it prevents adjacent Add controls from being missed or mis-paired when observation ranking changes `idx` order.
+- The Crate & Barrel cart artifact is builder-side and `UNPROVEN-PENDING-JUDGE`. It must be converted through the separate judge when quota returns.
 
 Proof status:
 - M3 is not done.
-- This lap is real-site DOM recipe hardening and hard-site discovery. It is `UNPROVEN-PENDING-JUDGE`.
+- This lap is a real-store DOM recipe and builder-side cart artifact. It is `UNPROVEN-PENDING-JUDGE`.
 - Generalization remains UNPROVEN.
 
 Next:
-- Continue M3 ladder work only. Convert unjudged successful cart artifacts through the separate judge when quota returns. Until then, keep building memory-to-intent, real-site DOM recipes, cheap planning, sideways real-store paths, and failure hardening.
+- Continue M3 ladder work only. Convert Crate & Barrel and other unjudged cart artifacts through the separate judge when quota returns. Until then, keep building memory-to-intent, real-site DOM recipes, cheap planning, sideways real-store paths, and failure hardening.
