@@ -1,49 +1,47 @@
 # STATE
 
-Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, M5, and M7-perimeter plumbing may continue as candidate work only. The latest public candidate is an M2/M7 public audio-upload clock-grounding candidate, publicly deployed but unjudged.
+Current milestone: M1 remains the active judged milestone because the public front door has not passed the separate clean-profile judge. While separate judge quota is blocked, unblocked M2, M3, M5, and M7-perimeter plumbing may continue as candidate work only. The latest public candidate is an M2/M7 public listen-clock observability candidate, publicly deployed but unjudged.
 
 Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed the planted-fake self-check, computer-use self-test, diff scan, and different-family cross-check. It opened the clean public front door, downloaded the then-public DMG, mounted it, and launched the public app. The public app failed because strict codesign and `spctl --assess` failed with a resource-signature error, and launch produced an invisible app process with zero windows. Proof: `logs/verdicts/20260607T114534Z.md`.
 
-Latest builder lap: `20260609T000503Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked engine/site source commit `6ae2e9951619875c0ecc45bbce64c0b5620a75cc` and manifest/site commit `c8c901484f2458bb197d807abd672e437225b5ea`.
+Latest builder lap: `20260609T002317Z` is `PENDING_JUDGE`, not proof. Production-linked repo `/Users/omarebrahim/Developer/Anticipy-DEV-FINAL` branch `rebuild/spine-clean` now has tracked site source commit `9a24e3815774b08288a27981bba0486763732efc`. The DMG release manifest remains on source commit `6ae2e9951619875c0ecc45bbce64c0b5620a75cc`.
 
 Latest product change:
-- Public `/app` audio upload now sends the same client clock context as typed transcripts: `client_now`, `client_timezone`, and `client_offset_minutes`, encoded as `X-Anticipy-*` headers.
-- The packaged local engine parses those upload headers into the audio-upload capture record, carries them into `_process_utterance`, and returns the resulting `clock` in the upload response.
-- This supplies the missing wall-clock context for uploaded audio input. It is candidate plumbing only, not audio-inference proof and not a milestone pass.
+- Public `/app` History rows now render clock metadata returned by the local engine listen status, including localized time, timezone, and client offset when present.
+- Public `/app` Settings now shows the latest input clock reported by the local engine, or a clear empty-state if no clock has been reported.
+- This makes clock grounding visible to a future judge without reading raw local logs. It is candidate observability only, not proof of typed-task completion, audio inference, or a milestone pass.
 
 Current public production candidate, pending judge:
-- Public site build commit: `c8c901484f2458bb197d807abd672e437225b5ea`.
+- Public site build commit: `9a24e3815774b08288a27981bba0486763732efc`.
 - Public DMG source commit in manifest: `6ae2e9951619875c0ecc45bbce64c0b5620a75cc`.
 - Public DMG SHA-256: `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`.
 - Public DMG size: `178894746` bytes.
 - Public R2 URL: `https://pub-e97c6305fe2949d8a5d17885f7be2a0e.r2.dev/builds/6ae2e9951619875c0ecc45bbce64c0b5620a75cc/Anticipy_1.0.0_aarch64.dmg`.
-- `https://www.anticipy.ai/api/app/state` reports build commit `c8c901484f2458bb197d807abd672e437225b5ea`, release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`, and `178894746` bytes.
+- `https://www.anticipy.ai/api/app/state` reports build commit `9a24e3815774b08288a27981bba0486763732efc`, release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`, and `178894746` bytes.
 - `https://www.anticipy.ai/app` returns 200 HTML.
 - `https://www.anticipy.ai/install.sh` returns 200 shell script.
 - `https://www.anticipy.ai/dl/Anticipy_1.0.0_aarch64.dmg` returns 200 with content type `application/x-apple-diskimage`.
 
 Latest checks, candidate evidence only:
 - Mandatory compaction-proof reads were re-run for `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, and `autopilot/07_MILESTONES.md`.
-- `python3 -m py_compile engine/app/product/server.py` passed.
-- Targeted source assertions verified the frontend upload clock header helper, audio-upload header spread, engine upload capture helper, upload worker capture wiring, and upload response `clock`.
 - `git diff --check` passed.
+- Targeted source assertions verified the listen clock type, recent/status clock field, History row clock field, formatter, History metadata rendering, and Settings latest-input-clock row.
 - `npm run build` passed.
-- In-app Browser loaded the local Listen route but showed the account/download gate and stale prior-port dev logs, so clean Playwright contexts are the interaction evidence.
-- Local mocked Playwright at `http://127.0.0.1:3407/app?view=listen` seeded a fake session, intercepted Supabase and localhost engine requests, selected a synthetic audio file, and verified the outgoing `/api/listen/upload` request carried parseable clock headers with zero relevant console warnings/errors.
-- Throwaway-port helper probe verified `_audio_upload_capture` parses text, integer, and float headers, and `_clock_date` resolves the uploaded client clock to the expected Vancouver local date.
+- In-app Browser loaded local `http://127.0.0.1:3408/app?view=history` and the deployed `https://www.anticipy.ai/app?view=history` app shell. Local in-app browser dev logs still contained stale prior-port messages, so clean Playwright contexts are the console-health evidence.
+- Local mocked Playwright at `http://127.0.0.1:3408/app?view=history` and `?view=settings` seeded a fake session, intercepted Supabase and localhost engine requests, and verified History plus Settings render the clock timezone and client offset with zero relevant console warnings/errors.
 - Forbidden path scan found no edits under `tests/`, `judge/`, `realdays/holdout/`, `scripts/realday.sh`, or product `engine/tests/`.
 - Owner/eval literal scan and obvious secret scan found no matches in the touched product diff.
-- Product source commit `6ae2e9951619875c0ecc45bbce64c0b5620a75cc` and manifest/site commit `c8c901484f2458bb197d807abd672e437225b5ea` were committed locally for future judge diff scanning.
-- `scripts/ship_candidate.sh` built and uploaded the new package; `SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed production and verified the public DMG SHA.
+- Product source commit `9a24e3815774b08288a27981bba0486763732efc` was committed locally for future judge diff scanning.
+- `SHIP_SKIP_DMG_BUILD=1 SHIP_DEPLOY=1 scripts/ship_candidate.sh` deployed the site-only candidate and verified the unchanged public DMG SHA.
 - Public `/api/app/state`, `/app`, `/install.sh`, and `/dl/Anticipy_1.0.0_aarch64.dmg` checks passed.
-- Deployed mocked Playwright at `https://www.anticipy.ai/app?view=listen` verified the production bundle sends the same clock headers for a synthetic audio upload with zero relevant console warnings/errors.
-- Deployed JS bundle `/_next/static/chunks/app/app/page-38185ec1474058fa.js` contains the upload-clock path.
-- Screenshots: `/tmp/anticipy-upload-clock-local-20260609.png`, `/tmp/anticipy-upload-clock-deployed-20260609.png`.
+- Deployed mocked Playwright at `https://www.anticipy.ai/app?view=history` and `?view=settings` verified the production bundle renders the clock timezone and client offset with zero relevant console warnings/errors.
+- Deployed JS bundle `/_next/static/chunks/app/app/page-a9e73ed5197e967a.js` contains the latest-input-clock and clock-formatting path.
+- Screenshots: `/tmp/anticipy-clock-history-local-20260609.png`, `/tmp/anticipy-clock-settings-local-20260609.png`, `/tmp/anticipy-clock-history-deployed-20260609.png`, `/tmp/anticipy-clock-settings-deployed-20260609.png`.
 - Product repo has no tracked dirty files after deploy; only pre-existing untracked artifacts remain.
-- No installer was executed, and no real local-engine audio upload, real external artifact, UI click that reached a service, extension enablement, browser action, SMS, email, Calendar action, phone call, local engine write, source scrape, account action, third-party action, or form submission was performed by the builder.
+- No installer was executed, and no real local-engine typed run, real local-engine audio upload, real external artifact, UI click that reached a service, extension enablement, browser action, SMS, email, Calendar action, phone call, local engine write, source scrape, account action, third-party action, or form submission was performed by the builder.
 
 Current M2/M3/M5 candidates in the production-linked source, pending judge:
-- M2 typed task and Calendar candidates include explicit typed Calendar routing, API-backed Google Calendar create, API read-back before success, packaged typed-task result UI, proof-bound typed background starts, public typed transcript clock payload, public typed-run status fallback, public History rows from local listen status, public Settings listen/action proof status, public audio-upload clock payload, structured browser proof rows, ask-user choice buttons, persistent listening start/stop control, typed client clock grounding, and account form submit behavior.
+- M2 typed task and Calendar candidates include explicit typed Calendar routing, API-backed Google Calendar create, API read-back before success, packaged typed-task result UI, proof-bound typed background starts, public typed transcript clock payload, public typed-run status fallback, public History rows from local listen status, public Settings listen/action proof status, public History/Settings input-clock observability, public audio-upload clock payload, structured browser proof rows, ask-user choice buttons, persistent listening start/stop control, typed client clock grounding, and account form submit behavior.
 - M3 browser-hands candidates include explicit-site routing, read-only browser answers, no-submit browser form fill, multi-field no-submit form fill, no-submit overbroad fill-type repair, broader safe no-submit fill wording for input/box/textarea/text area plus set/put verbs, search-bar no-submit fill wording, broader search-target type repair, direct explicit Google search phrasing, direct explicit web lookup phrasing, visible proof rows, ask-user retry/cancel/review choices, native bridge stale-loopback cleanup, Desktop extension refresh, packaged browser bridge status and diagnostics, native bridge self-test, native action-search guard, broader action-search boundary, generic bridge primitive dispatch for click/type/key/read/extract/DOM snapshot, search-box type repair, broader site-search phrasing repair, early SMS pre-confirm for internal action-engine callers, direct browser primitive bridge preference when CDP is unavailable, browser listen fastpath honesty that marks background open/search as `started` and `ATTEMPTED` until completion proof exists, and packaged typed-task honesty that does not promote no-pending background starts to `Done` without matching proof.
 - M5 onboarding candidates include profile/SMS persistence honesty, cold-start readiness honesty, cold-start status polling honesty, onboarding SMS endpoint, browser readiness requiring a real local native-bridge self-test before Step 2 advances, clean account-path form plus no pre-session localhost probe, call-onboarding form plus no submit before explicit engine readiness, chat-onboarding explicit start with no model or loopback work on page load, and audio-onboarding explicit engine readiness before file selection or upload.
 - These are not proof. The separate judge has not typed or uploaded through the packaged or public app and verified a real artifact, browser action, native bridge action, record-control behavior, relative-date clock behavior, public transcript/audio clock grounding, public run-status, public Settings/History behavior against a real artifact, or onboarding mesh.
@@ -73,7 +71,7 @@ Not proven:
 Drift numbers:
 - Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
 - Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `c8c90148` plus release `9e4e2ef...` is pending judge and does not change this number.
+- M1 reality judge pass rate: 0/5 verified, 0 percent. The public candidate `9a24e38` plus release `9e4e2ef...` is pending judge and does not change this number.
 - M2 packaged/public typed-input/listen-control/clock-grounding/status/audio-upload reality judge pass rate: 0/0 verified; not run.
 - M3 packaged/browser-hands reality judge pass rate: 0/0 verified; not run.
 - M5 packaged/self-onboarding reality judge pass rate: 0/0 verified; not run.
@@ -114,7 +112,7 @@ Dead ends not to retry blindly:
 - Treating multi-hour sidecar/Tauri package builds as normal. If this repeats, investigate package build slowness instead of accepting it as expected loop speed.
 
 Next:
-- When separate judge quota is available, run the separate M1 judge against public production site commit `c8c901484f2458bb197d807abd672e437225b5ea` and release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`.
+- When separate judge quota is available, run the separate M1 judge against public production site commit `9a24e3815774b08288a27981bba0486763732efc` and release SHA `9e4e2ef71b8dcfbbc4cd6b6f390f2fbf835c3e4a85ab6e0d75f04fa286c5e03d`.
 - If M1 passes, run an M2/M3/M5 judge that types or uploads a safe, reversible, fully time-grounded task in the packaged or public app, verifies the real artifact or browser action, verifies packaged listen control behavior, verifies public transcript/audio clock grounding plus public run-status and Settings/History behavior, and verifies onboarding mesh on a fresh account.
 - While judge quota is blocked, keep improving unblocked perimeter work without claiming proof.
 
