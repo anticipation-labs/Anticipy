@@ -346,6 +346,10 @@ class NativeBridgeLink:
         elif action == "scroll":
             direction = str(args.get("dir") or "down").lower()
             dy = -700 if direction == "up" else 700
+            if _bool_env("ANTICIPY_NATIVE_BRIDGE_DIRECT_CDP_SCROLL", True):
+                ok, details = self._direct_cdp_scroll(dy)
+                if ok:
+                    return self._success(job_id, {"ok": True, "action": action, "data": details})
             status, data, error = self._command({"command": "scroll", "dy": dy})
             if status == 200 and data.get("ok") is True and not error:
                 return self._success(job_id, {"ok": True, "action": action})
@@ -532,6 +536,82 @@ class NativeBridgeLink:
                 js_fallback = bool(isinstance(js_value, dict) and js_value.get("ok"))
             return True, {"trusted_cdp_click": True, "js_fallback_click": js_fallback,
                           "x": x, "y": y, "name": value.get("name") or ""}
+
+    def _direct_cdp_scroll(self, dy: int) -> tuple[bool, dict[str, Any]]:
+        if not self._cdp_up():
+            return False, {"error": "cdp unavailable"}
+        ws_url = self._cdp_page_ws_url()
+        if not ws_url:
+            return False, {"error": "no matching cdp page target"}
+        try:
+            return asyncio.run(self._direct_cdp_scroll_async(ws_url, dy))
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(self._direct_cdp_scroll_async(ws_url, dy))
+            finally:
+                loop.close()
+        except Exception as exc:
+            return False, {"error": f"{type(exc).__name__}: {exc}"}
+
+    async def _direct_cdp_scroll_async(self, ws_url: str, dy: int) -> tuple[bool, dict[str, Any]]:
+        import websockets
+
+        counter = 0
+
+        async def call(ws, method: str, params: dict[str, Any], timeout: float = 8.0) -> dict[str, Any]:
+            nonlocal counter
+            counter += 1
+            await ws.send(json.dumps({"id": counter, "method": method, "params": params}))
+            while True:
+                raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                msg = json.loads(raw)
+                if int(msg.get("id") or 0) == counter:
+                    return msg
+
+        dy = int(dy)
+        expr = (
+            "(()=>{"
+            "const dy=" + json.dumps(dy) + ";"
+            "const before=window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0;"
+            "window.scrollBy(0,dy);"
+            "const se=document.scrollingElement||document.documentElement||document.body;"
+            "if(se)se.scrollTop=(se.scrollTop||0)+dy;"
+            "const after=window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0;"
+            "return {ok:true,before,after,dy};"
+            "})()"
+        )
+        async with websockets.connect(
+            ws_url,
+            max_size=16 * 1024 * 1024,
+            open_timeout=5.0,
+            ping_interval=None,
+            close_timeout=2.0,
+        ) as ws:
+            await call(ws, "Page.bringToFront", {}, timeout=4.0)
+            wheel = await call(
+                ws,
+                "Input.dispatchMouseEvent",
+                {"type": "mouseWheel", "x": 500, "y": 500, "deltaX": 0, "deltaY": dy},
+                timeout=4.0,
+            )
+            if wheel.get("error"):
+                return False, {"error": str(wheel.get("error"))}
+            msg = await call(
+                ws,
+                "Runtime.evaluate",
+                {"expression": expr, "returnByValue": True, "awaitPromise": False},
+                timeout=4.0,
+            )
+        value = (((msg.get("result") or {}).get("result") or {}).get("value") or {})
+        if not isinstance(value, dict) or not value.get("ok"):
+            return False, {"error": "scroll did not return a valid CDP result"}
+        return True, {
+            "direct_cdp_scroll": True,
+            "dy": dy,
+            "before": value.get("before"),
+            "after": value.get("after"),
+        }
 
     def _output_from_proof(self, proof: dict[str, Any]) -> tuple[dict[str, Any], str]:
         dom = str(proof.get("dom") or "")
