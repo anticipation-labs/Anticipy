@@ -51,3 +51,9 @@ is the cardinal sin.
   `factory/bin/persona_run.py` + `persona_score.py` (see factory/personas/README.md).
 - At session end (foreman): update `logs/factory/FOREMAN_STATE.md` so the next session
   (or post-compaction you) can resume without re-deriving anything.
+
+## Concurrency rule (learned the hard way)
+While `factory/.lock` exists, a lap is running: the FOREMAN MUST NOT COMMIT to this repo.
+The lap's gate diffs base..HEAD and its revert is `git reset --hard <base>` — an interleaved
+foreman commit would be falsely scanned and could be destroyed on revert. Check before any
+commit: `ls factory/.lock` (exists = wait or stop the lap first).
