@@ -252,3 +252,18 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   THAT against the casual list (or hand the gray middle to the P2 decider, which may only
   move decisions toward SILENT/ASK). Regression check when fixed: a battery case where the
   casual word is in memory context but the recipient is professional must ASK.
+
+## Class F addendum (builder lap 20260610T070648Z)
+- F4 The Track-B seed decider's tolerant parse (overnight/track_b/decider.py) tests
+  `tok in raw` over a Python SET of {ACT, ASK, SILENT}: (a) it matches inside words —
+  "multitasking" parses as ASK, so any model preamble containing such a word flips the
+  verdict; (b) when a rambling reply names two verdicts ("I would ASK, not ACT"), set
+  iteration order makes the result nondeterministic run-to-run. Harmless in Track B's
+  offline scoring, but shipping it into the live pipeline would have made the safety
+  filter itself flaky. PREVENTED (2026-06-10, this lap): the product decider
+  (engine/anticipy_engine/proactive/decider.py) parses with a word-boundary regex and,
+  when multiple verdicts are mentioned, deterministically picks the SAFEST
+  (SILENT > ASK > ACT); no-match and every exception path return SILENT. Regression
+  check: engine/scripts/test_decider.py pins "Multitasking is fun" -> SILENT,
+  "I would ASK here, not ACT." -> ASK, "ACT or SILENT?" -> SILENT, raising/keyless
+  gateways -> SILENT. The seed file is left as-is (overnight/ is read-only history).

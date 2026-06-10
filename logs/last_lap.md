@@ -1,63 +1,59 @@
 # Last Lap
 
-Lap: 20260610T062952Z
+Lap: 20260610T070648Z
 Date: 2026-06-10
 Phase: P1 closed -> operating as P2-brain STAGE 2 per TARGET v3 (registered phase_gate still gate_P1)
-Slice: deterministic triage/harm speech-act fix aimed at catch_rate_worst (TARGET STAGE-2 item 3)
+Slice: GROUNDWORK — the P2 decider (TARGET STAGE-2 items 1-2), live-only, zero paid calls
 
 What changed (product):
-- engine/anticipy_engine/proactive/triage.py — REWRITTEN from bag-of-words anywhere-matching
-  to speech-act shape detection. Positives: clause-initial imperatives (strong vs noun-prone
-  verbs with object check), calendar-put/block-time-range/cart/causative-get/delegation
-  idioms, fixed by-day boundary ("by month end" no longer matches via "mon"), "let's
-  see/hope/..." musing exemption, "deadline" needs first-person skin. Confident negatives
-  checked BEFORE positives: retraction/countermand ("hold it... don't send", clause-initial
-  "forget it"), conditional vents ("If X I'll...", "I'd...", "oh sure", "I should just"),
-  deferrals ("I'll deal with it later", "check with her mom"), already-handled ("she handled
-  ours", "one less thing"), trailing hedges ("...Probably."), vocative asides to a present
-  third party ("<Name> can you pull...").
-- engine/anticipy_engine/proactive/harm.py — _REMINDER now covers spoken calendar-puts
-  ("that goes on the calendar", "fix/update ... on my calendar", "block 9 to noon") -> act
-  as calendar_hold; NEW _DELEGATED_SEND ("have someone...", "someone should...", "get X over
-  to Y") -> ALWAYS binding ask (the casual-recipient memory downgrade was clearing delegated
-  work to act — ledger F3); tell/ping added to soft-send; "check with <person>" excluded from
-  research.
-- engine/scripts/test_triage.py / test_harmline.py — additive pinned cases for every new
-  shape (generic phrasings, not bank lines). Suite is now 31/31 with these included.
+- engine/anticipy_engine/proactive/decider.py — NEW. The Track-B-proven ACT/ASK/SILENT
+  commitment prompt (overnight/track_b/decider.py seed, no eval lines) at temperature 0
+  through the existing ModelGateway (cheap tier, caller "decider"). Hardened parse vs the
+  seed: word-boundary regex only, safest-mentioned verdict wins on rambles, and EVERY
+  failure path (no key, transport error, empty, unparseable) returns SILENT (ledger F4).
+  Glass-box logs "decider" / "decider_error" entries for inspectability.
+- engine/anticipy_engine/core/proactive.py — decider wired in as Room 1.5, between triage
+  and the memory read. Construction is LIVE-ONLY: a Decider exists iff
+  gateway.provider == openrouter (ANTICIPY_MODEL_PROVIDER; the suite forces stub, so CI
+  and stub-tier persona evals never construct one); tests inject a stubbed decider via the
+  new constructor param. One-way merge rule: decider SILENT -> event dropped (no memory
+  read, no goal, no ask); decider ASK + harm-safe -> forced ask (goal paused waiting,
+  pending ask registered, reason says "decider:"); decider ACT -> harm-line decides as
+  before; harm-line detrimental ASK is FINAL and can never be overridden to act.
+  on_event result now carries a "decider" key (None in stub).
+- engine/scripts/test_decider.py — NEW, 9 pinned checks, zero model calls: parse
+  boundaries/safety order, temp-0 cheap-tier call shape, raising + keyless gateways fail
+  SILENT, live-only construction, SILENT-drop / forced-ask / act-defers / money-line-FINAL
+  pipeline rules, triage-runs-first, stub-mode-unchanged.
+- scripts/run_suite.sh — added decider to the unit list (suite 31 -> 32).
 
-Eval numbers I saw (builder-side, stub tier, runs 20260610T062952Z-pre and -pre2;
-verify_gate recomputes everything):
-- BEFORE (baseline, unchanged since C3-corrected scorer): catch 0.6667 / worst 0.50,
-  false_action 19, silent_harm 0, interrupt 5.4375 / 10.5 worst, recall_worst 0.3333.
-- AFTER (-pre2, final): catch 1.0 / worst 1.0, false_action 0, silent_harm 0, interrupt
-  1.0625 / 1.5 worst, correct_action 0.6788, e2e 0.3427, recall_worst 1.0. All four gate_P2
-  thresholds met on the DEV bank builder-side (worst>=0.70, false==0, harm==0, interrupt<=3).
-- Honest caveats: (1) dev-bank 1.0 is partly bank-fit — patterns are general English speech
-  shapes, but they were derived from dev-run evidence; expect holdout (judge-only) to be
-  lower. (2) The 17 remaining unnecessary asks are dominated by money commands the product
-  is REQUIRED to ask on (the bank keys them silence because the speaker retracts on the NEXT
-  line; a causal line-by-line engine cannot see that at ask time). Squeezing them out
-  deterministically would be overfit; the P2 decider + ask-debounce is the right owner.
-- No real-world side effects: stub tier, mock hands, no gate run, zero paid model calls.
+Eval numbers I saw (builder-side, stub tier, run 20260610T070648Z-pre; verify_gate
+recomputes everything):
+- catch 1.0 / worst 1.0, false_action 0, silent_harm 0, interrupt 1.0625 / 1.5 worst,
+  correct_action 0.6788, e2e 0.3427, recall_worst 1.0, worst_persona contractor_luis —
+  BIT-IDENTICAL to the ratchet best, which is the hypothesis: the decider must be
+  invisible in stub mode. Suite 32/32 green.
 
 Process notes:
-- attempt_gate_close=false on purpose: the registered phase_gate is gate_P1.sh (first-closed
-  at lap 20260610T060701Z; re-passing is status, not movement, and a re-run strands real
-  calendar events per B7). gate_P2.sh is not flipped in by the foreman yet. This lap's keep
-  rides on primary-metric movement: catch_rate_worst 0.50 -> (verify_gate's recompute).
-- This commit also carries the PRIOR judge's uncommitted ledger appends (B9, C12 in
-  FAILURE_MODES.md) — preserving them from a future revert, exactly the risk C12 describes.
-  Those two entries are the judge's words, not this lap's. RATCHET.json /
-  product_scoreboard.csv / factory/.lap_in_progress were loop-modified and are NOT in this
-  commit (loop-owned).
+- lap_type=groundwork; enables the P2 gate-close lap once the foreman flips
+  current_phase/phase_gate to P2/gate_P2.sh. This lap cannot COUNT mechanically:
+  catch_rate_worst is at the ratchet ceiling (1.0) on the dev bank, gate_P1 already
+  first-closed, and the decider is live-only by design. Keep rides on scans+suite+
+  personas green; the treadmill increment is expected and stated in the manifest.
+- attempt_gate_close=false (gate_P1 re-run is status, not movement, and strands real
+  calendar events per ledger B7).
+- NEW ledger F4: the Track-B seed's tolerant parse was substring-over-set — word-interior
+  matches ("multitasking" -> ASK) and nondeterministic on multi-verdict rambles. Fixed in
+  the product decider; regression pinned in test_decider.py; seed left as read-only history.
+- Zero real-world side effects: no gate run, no live model call, stub tier throughout.
 
 Next:
-- The P2 decider (TARGET STAGE-2 items 1-2): cheap-model ACT/ASK/SILENT, live-only, fail-
-  SILENT, harm-line FINAL — now sits on an honest deterministic floor. It owns the residual
-  gray (money-retraction pairs need an ask-debounce/settle-window; F3 recipient extraction).
-- F3 OPEN: first-person casual-send downgrade still keys off any casual token anywhere in
-  memory context, not the recipient.
-- Foreman: flip current_phase/phase_gate to P2/gate_P2.sh; gate_P2 thresholds already pass
+- Foreman: flip current_phase/phase_gate to P2/gate_P2.sh; thresholds already pass
   builder-side on the dev bank, so a gate-close attempt lap is cheap once flipped.
+- Live-tier validation of the decider (TIER=FULL lap with ANTICIPY_MODEL_PROVIDER=
+  openrouter / Gemini free tier, ledger D18): measure false-ask reduction on the residual
+  gray — money-retraction pairs and F3 first-person casual sends are its targets. The
+  decider's live behavior is UNPROVEN until then.
+- F3 still OPEN for first-person sends (recipient extraction or decider-gray routing).
 - Still-open product gaps unchanged: B5/B6 (capture-time act artifact, quoted-title drop),
   B7/B8 (gate env), D16 (restart double-fire).

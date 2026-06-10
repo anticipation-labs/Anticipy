@@ -2,6 +2,9 @@
 
 Loop over Events:
   1. triage (Room 1; cheap, local, NO smart model): drop the ~99% that isn't actionable.
+  1.5 the DECIDER (Room 1.5; cheap model, LIVE ONLY — None in stub): did the person
+     actually COMMIT? SILENT drops the event; ASK forces the ask path; ACT defers to
+     the harm-line. One-way: it can never turn the harm-line's ASK into an ACT.
   2. read memory context (cheap worker) for the harm-line's gray middle.
   3. the HARM-LINE (Room 2): is this detrimental? confident-no -> ACT (hand a Goal to the
      orchestrator and DO IT); yes or UNSURE -> ASK (pause; never execute until approved).
@@ -18,12 +21,13 @@ from typing import Optional, Tuple
 
 from ..channels.text import TextChannel
 from ..proactive.budget import AnnoyanceBudget
+from ..proactive.decider import ASK as DECIDER_ASK, Decider, SILENT as DECIDER_SILENT
 from ..proactive.harm import HarmLine
 from ..proactive.triage import Triage
 from ..proactive.trigger import TriggerWatcher
 from .bus import Bus
 from .envelopes import Event, EventSource, Goal, GoalState, Job, now_ts
-from .gateway import ModelGateway
+from .gateway import PROVIDER_OPENROUTER, ModelGateway
 from .orchestrator import Orchestrator
 
 
@@ -52,6 +56,7 @@ class ProactiveEngine:
         config: Optional[GateConfig] = None,
         channel=None,
         user_contact: str = "+10000000000",
+        decider=None,
     ) -> None:
         self.bus = bus
         self.gateway = gateway
@@ -60,6 +65,12 @@ class ProactiveEngine:
         self.scorecard = scorecard
         self.config = config or GateConfig()
         self.triage = Triage(gateway=gateway)   # Room 1: the bouncer (cheap, first, free in stub)
+        # Room 1.5: cheap-model commitment judgment — LIVE ONLY. Stub mode gets no
+        # decider so the suite and stub-tier evals stay deterministic. One-way safe:
+        # it may move a decision toward SILENT/ASK, never an ASK into ACT (see on_event).
+        self.decider = decider if decider is not None else (
+            Decider(gateway, glassbox=glassbox)
+            if gateway.provider == PROVIDER_OPENROUTER else None)
         self.harm = HarmLine()                  # Room 2: act-first, ask-only-before-harm
         self.trigger = TriggerWatcher()         # Room 3: time + open-loop watcher (fire-once)
         self.channel = channel or TextChannel() # Room 4: where the ask goes out (Twilio live/mock)
@@ -75,6 +86,18 @@ class ProactiveEngine:
             self._record(event, "ignore", "triaged out (not actionable)")
             return {"decision": "ignore", "triaged": True, "goal_id": None}
 
+        # 1.5) the decider (Room 1.5; LIVE ONLY, None in stub) — did the person actually
+        #      COMMIT? SILENT kills the event here (no memory read, no goal, no ask).
+        #      ASK forces the ask path below even when the harm-line reads safe. ACT
+        #      defers to the harm-line — the decider never overrides an ASK into ACT.
+        decider_word = None
+        if self.decider is not None:
+            decider_word = await self.decider.decide(event.text)
+            if decider_word == DECIDER_SILENT:
+                self._record(event, "ignore", "decider: not a real commitment -> silent")
+                return {"decision": "ignore", "triaged": True, "decider": decider_word,
+                        "goal_id": None}
+
         # 2) read memory context (the harm-line uses it for the gray middle; cheap worker, no smart)
         ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": event.text}))
         mem = ctx.output or {}
@@ -85,7 +108,11 @@ class ProactiveEngine:
         # 4) act (JUST DO IT) / ask (PAUSE before harm, send the ask; Room 4 round-trip)
         goal_id = ask_id = None
         description = self._goal_description(event)
-        if not verdict.detrimental:
+        # one-way merge: ACT requires BOTH the harm-line safe AND (no decider or decider ACT)
+        forced_ask = decider_word == DECIDER_ASK and not verdict.detrimental
+        reason = ("decider: binding or half-formed -> confirm before acting"
+                  if forced_ask else verdict.reason)
+        if not verdict.detrimental and not forced_ask:
             goal = await self.orchestrator.start_goal(Goal(intent=event.text, description=description))
             goal_id = goal.id
             decision = "act"
@@ -104,17 +131,17 @@ class ProactiveEngine:
                                                      "reason": suppress, "action": event.text})
             else:
                 decision = "ask"
-                ask_id = self._send_ask(goal, event.text, verdict.reason, verdict.category)
-                self._raise_to_human(event, verdict.reason)
+                ask_id = self._send_ask(goal, event.text, reason, verdict.category)
+                self._raise_to_human(event, reason)
                 if proactive:
                     self.budget.record_interruption(now)
-            # HARD SUB-GATE: a detrimental goal is WAITING — no step executed until approved (no silent harm).
-            assert self.orchestrator.store.load(goal_id).state == GoalState.waiting, "detrimental action must be paused"
-        self._record(event, decision, verdict.reason, category=verdict.category,
+            # HARD SUB-GATE: a paused goal is WAITING — no step executed until approved (no silent harm).
+            assert self.orchestrator.store.load(goal_id).state == GoalState.waiting, "paused action must not execute"
+        self._record(event, decision, reason, category=verdict.category,
                      memory_forced=verdict.memory_forced)
-        return {"decision": decision, "category": verdict.category, "reason": verdict.reason,
+        return {"decision": decision, "category": verdict.category, "reason": reason,
                 "detrimental": verdict.detrimental, "memory_forced": verdict.memory_forced,
-                "goal_id": goal_id, "ask_id": ask_id}
+                "decider": decider_word, "goal_id": goal_id, "ask_id": ask_id}
 
     def _send_ask(self, goal: Goal, action: str, reason: str, category: str = "") -> str:
         """Send the ask over the channel and register it pending a reply."""

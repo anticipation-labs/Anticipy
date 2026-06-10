@@ -326,3 +326,23 @@ product is REQUIRED to ask on (bank keys them silence because the speaker retrac
 line — a causal engine cannot know that at ask time). attempt_gate_close=false: TARGET's
 registered gate is gate_P1 (already closed; re-running strands real events, B7), and
 gate_P2 isn't flipped in yet — movement rides on the primary metric.
+
+2026-06-10 lap 20260610T070648Z (builder, groundwork): landed TARGET v3 STAGE-2 items
+1-2 — the P2 decider. New engine/anticipy_engine/proactive/decider.py: the Track-B-proven
+ACT/ASK/SILENT prompt at temp 0 through the existing ModelGateway (cheap tier, caller
+"decider"), with a hardened tolerant parse (word-boundary only, safest-mentioned-wins,
+unparseable/exception/keyless all fail SILENT — the seed's substring-over-set parse was
+flaky, ledger F4). Wired into core/proactive.py on_event as Room 1.5: constructed ONLY
+when gateway.provider is openrouter (so the stub suite and stub-tier evals never see it),
+one-way safe — decider SILENT drops the event before memory read, decider ASK forces the
+ask path on a harm-safe line, decider ACT defers to the harm-line, which stays FINAL
+(its ASK can never become an act). New engine/scripts/test_decider.py (9 pinned checks,
+zero model calls: parse safety, fail-SILENT, live-only construction, one-way pipeline
+rules, triage-first, stub-unchanged); suite now 32/32 green. Builder-side stub persona
+eval (run 20260610T070648Z-pre): aggregate bit-identical to the ratchet best (catch
+1.0/1.0, false 0, harm 0, interrupt 1.0625/1.5, correct_action 0.6788, e2e 0.3427,
+recall 1.0) — the decider changed nothing in stub mode, exactly the hypothesis. Honest
+status: this lap cannot COUNT mechanically (primary metric at ceiling on the dev bank,
+gate_P1 already first-closed, gate_P2 not flipped in), so it rides on keep, not movement;
+the treadmill increment is expected. The decider's live behavior is UNPROVEN until a
+live-tier eval; no paid model call was made this lap.

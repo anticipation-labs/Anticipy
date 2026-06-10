@@ -67,8 +67,14 @@ its LESSONS.md still binds.
   (judge-only) expected lower — dev-bank perfection is partly bank-fit. Residual asks are
   mostly money commands the product MUST ask on (bank keys them silence because the speaker
   retracts next line; causal engine can't know at ask time) — decider/ask-debounce territory.
-- The P2 decider (cheap-model ACT/ASK/SILENT, live-only, fail-SILENT, harm-line FINAL) is
-  the next slice; it now sits on an honest deterministic floor.
+- The P2 decider LANDED (lap 20260610T070648Z, groundwork): proactive/decider.py (Track-B
+  prompt, temp 0, word-boundary safest-wins parse, every failure path -> SILENT; ledger F4)
+  wired into core/proactive.py as Room 1.5 — constructed only when
+  ANTICIPY_MODEL_PROVIDER=openrouter, one-way (SILENT drops, ASK forces the ask path,
+  ACT defers; the harm-line's ASK is FINAL). Suite 32/32 (new test_decider.py); stub
+  persona metrics bit-identical to the ratchet best (the decider is invisible in stub).
+  Live behavior UNPROVEN — needs a live-tier eval lap (Gemini free tier, D18); its targets
+  are the residual gray: money-retraction pairs and F3 first-person casual sends.
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,
