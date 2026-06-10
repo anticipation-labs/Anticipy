@@ -115,7 +115,7 @@ class ControlCore:
         }
 
     async def feed(self, source: str, text: str, meta: dict | None = None) -> dict:
-        self.live_memory.capturer.capture(text, source=source)  # CAPTURE before anything acts
+        self.live_memory.capturer.capture(text, source=source, meta=meta)  # CAPTURE before anything acts
         ev = Event(source=EventSource(source), text=text, meta=meta or {})
         await self.bus.publish(ev)                 # log the event to the glass-box
         return await self.proactive.on_event(ev)   # triage -> gate -> act/ask (gate reads memory)

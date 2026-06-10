@@ -11,7 +11,9 @@ The engine is local-first: it binds to 127.0.0.1 only.
 """
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+import os
+from contextlib import asynccontextmanager, suppress
 from typing import Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -37,12 +39,30 @@ gateway_agent = ModelGateway(
 )
 
 
+async def _trigger_scheduler(interval_s: float) -> None:
+    """The clock that makes the engine anticipatory: tick the trigger watcher forever.
+    A tick failure is logged and the next tick still happens — the clock never dies."""
+    while True:
+        await asyncio.sleep(interval_s)
+        try:
+            await core.proactive.trigger_tick()
+        except Exception as e:  # noqa: BLE001 — the scheduler must outlive any one tick
+            core.glassbox.log("trigger_tick_error", {"error": f"{type(e).__name__}: {e}"})
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await core.start()
+    # ANTICIPY_TICK_SECONDS=0 disables the scheduler (deterministic tests use POST /trigger/tick)
+    interval_s = float(os.environ.get("ANTICIPY_TICK_SECONDS", "30") or 0)
+    tick_task = asyncio.create_task(_trigger_scheduler(interval_s)) if interval_s > 0 else None
     try:
         yield
     finally:
+        if tick_task is not None:
+            tick_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await tick_task
         await core.stop()
 
 
@@ -103,6 +123,13 @@ def extension_hello(body: ExtensionHello) -> dict:
 @app.post("/event")
 async def event(body: EventIn) -> dict:
     return await core.feed(body.source, body.text, body.meta)
+
+
+@app.post("/trigger/tick")
+async def trigger_tick() -> dict:
+    """Deterministic tick (tests/gates): one watcher pass, same path as the scheduler."""
+    fired = await core.proactive.trigger_tick()
+    return {"fired": fired}
 
 
 @app.get("/glassbox")

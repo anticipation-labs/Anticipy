@@ -22,17 +22,29 @@ class MemoryWorker(Worker):
         self.lm = live_memory
 
     def handles(self) -> List[str]:
-        return ["read_context", "write_memory", "list_open_loops"]
+        return ["read_context", "write_memory", "list_open_loops", "mark_loop"]
 
     async def handle(self, job: Job) -> Result:
         if job.intent == "list_open_loops":
             # the trigger watcher's condition source (Room 3): the commitment ledger, structured.
             loops = [l for l in self.lm.memory.open_loops.all() if l.status in ("open", "waiting")]
             out = [{"id": l.id, "task": l.fields.get("task", l.text), "due": l.fields.get("due", ""),
-                    "due_ts": l.fields.get("due_ts"), "created_ts": l.timestamp, "text": l.text}
+                    "due_ts": l.fields.get("due_ts"), "remind_ts": l.fields.get("remind_ts"),
+                    "created_ts": l.timestamp, "text": l.text}
                    for l in loops]
             return Result(job_id=job.id, status=JobStatus.success, output={"loops": out},
                           proof={"loops": len(out)}, cost=0.0)
+        if job.intent == "mark_loop":
+            # ledger state change (e.g. a fired reminder -> waiting on the user)
+            item = self.lm.memory.open_loops.get(str(job.args.get("id") or ""))
+            if item is None:
+                return Result(job_id=job.id, status=JobStatus.failed,
+                              error="unknown open loop", proof=None)
+            item.status = str(job.args.get("status") or "waiting")
+            self.lm.memory.open_loops.update(item)
+            return Result(job_id=job.id, status=JobStatus.success,
+                          output={"id": item.id, "status": item.status},
+                          proof={"id": item.id}, cost=0.0)
         if job.intent == "read_context":
             inj = self.lm.inject(job.args.get("about", ""))
             ctx = {

@@ -27,12 +27,13 @@ class TriggerWatcher:
     def _due(self, loop: dict, now: float) -> bool:
         if loop.get("id") in self._fired:
             return False
-        dts = loop.get("due_ts")
-        if dts is not None:                                  # TIME: an explicit due-time has arrived
-            try:
-                return float(dts) <= now
-            except (TypeError, ValueError):
-                return False
+        for key in ("remind_ts", "due_ts"):                  # TIME: remind lead (due-15m) beats due
+            ts = loop.get(key)
+            if ts is not None:
+                try:
+                    return float(ts) <= now
+                except (TypeError, ValueError):
+                    return False
         created = loop.get("created_ts")                     # ELAPSED: open too long, no due-time
         return created is not None and (now - float(created)) >= self.cfg.stale_after_s
 

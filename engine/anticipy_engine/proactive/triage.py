@@ -47,6 +47,19 @@ _FILLER = {
     "yep", "nope", "no", "cool", "nice", "lol", "hmm", "right", "sure", "yo", "sup",
     "mm", "mhm", "ok thanks", "okay thanks", "thanks!", "got it", "sounds good",
 }
+# Hedge-NONSPECIFIC lines ("someday", "at some point") are vents/non-commitments, not tasks —
+# the one place this gate is confidently negative despite positive cues ("I should ... someday").
+# Acting (or asking) on a vent is the product's cardinal sin; capture still remembers the line,
+# so dropping it here loses nothing durable. A concrete time anchor cancels the hedge:
+# "eventually we need to confirm the venue by Friday" stays actionable.
+_HEDGE = re.compile(
+    r"\b(?:someday|some day|eventually|at some point|one of these days|sooner or later|"
+    r"when i get (?:a chance|around to it))\b", re.I)
+_TIME_ANCHOR = re.compile(
+    r"\b(?:today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+    r"next week|this week|this weekend|by \w+|at \d{1,2}(?::\d\d)?\s*(?:am|pm)?|"
+    r"in an? (?:hour|day|week)|in \d+ (?:minutes?|hours?|days?|weeks?)|"
+    r"end of (?:the )?day|eod|noon)\b", re.I)
 _CONTEXT_ONLY = re.compile(
     r"\b(i|we)\s+(?:was|were|am|are|have been|had been)\s+"
     r"(?:looking at|looking for|browsing|viewing|checking out|considering|shopping for)\b",
@@ -82,6 +95,8 @@ class Triage:
             return False
         if len(re.findall(r"[a-z0-9']+", t)) < self.cfg.min_tokens:
             return False
+        if _HEDGE.search(t) and not _TIME_ANCHOR.search(t):
+            return False   # hedged non-commitment (a vent shape) — confident drop, checked BEFORE positive cues
         if self._positive(t):
             return True
         if _CONTEXT_ONLY.search(t):

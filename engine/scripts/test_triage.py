@@ -34,6 +34,7 @@ STREAM = [
     ("The rent is due by the first.", True),                # deadline-only -> a task
     ("We need to confirm the venue.", True),                # commitment
     ("Order a new charger.", True),                         # bare imperative verb
+    ("Eventually we need to confirm the venue by Friday.", True),  # hedge CANCELLED by a time anchor
     # --- ambient noise (SHOULD drop: filler / greeting / bare observation) ---
     ("um", False), ("ok thanks", False), ("hey", False), ("yeah", False), ("hmm", False),
     ("Cool, sounds good.", False),
@@ -55,6 +56,13 @@ STREAM = [
     ("The meeting was productive.", False),   # "meeting" != \bmeet\b
     ("I already sent it earlier.", False),    # past-tense, done; "sent" != \bsend\b
     ("The buyer seemed happy.", False),       # "buyer" != \bbuy\b
+    # --- vents: hedge-NONSPECIFIC commitments (positive cues present, no time anchor) must drop.
+    #     Asking on these is the gate-S3 failure; acting on them is the cardinal sin. ---
+    ("Ugh, I should really call the plumber someday.", False),
+    ("I'll deal with the gutters eventually.", False),
+    ("Should probably get that espresso machine at some point.", False),
+    ("I need to sort out my closet one of these days.", False),
+    ("I'll renew my passport when I get a chance.", False),
 ]
 
 

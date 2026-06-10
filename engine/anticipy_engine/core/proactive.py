@@ -150,7 +150,9 @@ class ProactiveEngine:
 
     async def trigger_tick(self, now: Optional[float] = None) -> list:
         """Room 3: watch the commitment ledger against the clock. Each due/elapsed loop fires a
-        proactive follow-up through the SAME harm-line path (NO new input event), exactly once."""
+        proactive follow-up through the SAME harm-line path (NO new input event), exactly once.
+        A TIME-GROUNDED reminder (remind_ts set at capture) is a NOTIFY — tell the user, don't
+        open a goal or a YES/NO ask — unless its text is detrimental, which keeps the ask path."""
         now = now if now is not None else now_ts()
         res = await self.bus.submit_job(Job(intent="list_open_loops", args={}))
         loops = (res.output or {}).get("loops", [])
@@ -158,13 +160,48 @@ class ProactiveEngine:
         out = []
         for loop in fired:
             task = loop.get("task") or loop.get("text") or "your commitment"
-            ev = Event(source=EventSource.system, text=f"Follow up on your commitment: {task}")
-            decision = await self.on_event(ev, now=now)   # SAME triage -> harm-line -> act/ask; budget applies
+            if loop.get("remind_ts") is not None:
+                decision = await self._fire_reminder(loop, task, now)
+            else:
+                ev = Event(source=EventSource.system, text=f"Follow up on your commitment: {task}")
+                decision = await self.on_event(ev, now=now)   # SAME triage -> harm-line -> act/ask; budget applies
             if self.glassbox is not None:
                 self.glassbox.log("trigger_fired", {"loop_id": loop.get("id"), "task": task,
                                                      "decision": decision["decision"]})
             out.append({"loop_id": loop.get("id"), "task": task, **decision})
         return out
+
+    async def _fire_reminder(self, loop: dict, task: str, now: float) -> dict:
+        """A due reminder fires as a NOTIFY: re-gate the loop text on the harm-line; only a
+        safe/reversible reminder goes straight out over the channel (budget-capped, counted
+        as an interruption) and the loop is marked waiting. Detrimental text falls back to
+        the ask round-trip — money/sends never fire silently."""
+        ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": task}))
+        verdict = self.harm.assess(task, ctx.output or {})
+        if verdict.detrimental:
+            ev = Event(source=EventSource.system, text=f"Follow up on your commitment: {task}")
+            return await self.on_event(ev, now=now)
+        suppress = self.budget.suppressed(task, verdict.category, now)
+        if suppress:
+            if self.glassbox is not None:
+                self.glassbox.log("suppressed", {"loop_id": loop.get("id"), "category": verdict.category,
+                                                 "reason": suppress, "action": task})
+            return {"decision": "suppressed", "category": verdict.category, "reason": suppress,
+                    "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None}
+        sent = self.channel.send(self.user_contact, f"Reminder: {task}")
+        self.budget.record_interruption(now)
+        await self.bus.submit_job(Job(intent="mark_loop",
+                                      args={"id": loop.get("id"), "status": "waiting"}))
+        if self.glassbox is not None:
+            self.glassbox.log("notify", {"loop_id": loop.get("id"), "task": task,
+                                         "channel": self.channel.name, "to": self.user_contact,
+                                         "sent": bool(sent.get("sent"))})
+        if self.scorecard is not None:
+            self.scorecard.record_decision("notify", loop.get("id") or "",
+                                           "time-grounded reminder fired -> notify")
+        return {"decision": "notify", "category": verdict.category,
+                "reason": "time-grounded reminder fired -> notify (no ask)",
+                "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None}
 
     # ---- steps ----
     def _goal_description(self, event: Event) -> str:

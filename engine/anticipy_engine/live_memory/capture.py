@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..memory.store import Memory
 from ..shared.schema import MemoryItem
+from .duetime import REMIND_LEAD_S, anchor_from_meta, parse_due
 
 _FILLER = {"um", "uh", "ok", "okay", "yeah", "yep", "yup", "nope", "no", "yes", "thanks",
            "thank", "hi", "hey", "hello", "bye", "cool", "nice", "sure", "right", "mhm",
@@ -91,15 +92,23 @@ class Capturer:
         n = _norm(text)
         return next((it for it in self.memory.drawer(kind).all() if _norm(it.text) == n), None)
 
-    def capture(self, text: str, source: str = "", force: bool = False) -> Dict[str, object]:
+    def capture(self, text: str, source: str = "", force: bool = False,
+                meta: Optional[Dict[str, object]] = None) -> Dict[str, object]:
         """keep/drop -> classify -> dedupe -> write. Returns what happened + smart_calls.
-        force=True skips the gate (explicit write_memory writes are always kept)."""
+        force=True skips the gate (explicit write_memory writes are always kept).
+        meta carries the utterance clock (observed_at/timezone) for due-time grounding."""
         if self.mode == "live":
             # TODO(live): cheap-model gate+extraction via self.gateway; never hit in tests.
             pass
         if not force and not should_keep(text):
             return {"kept": False, "reason": "noise", "smart_calls": 0}
         kind, fields = classify(text)
+        if kind == "open_loop":
+            # ground the spoken due-time to the utterance's own clock, never engine time
+            due_dt = parse_due(text, anchor_from_meta(meta))
+            if due_dt is not None:
+                fields["due_ts"] = due_dt.timestamp()
+                fields["remind_ts"] = due_dt.timestamp() - REMIND_LEAD_S
         dup = self._dup(text, kind)
         if dup is not None:
             return {"kept": False, "reason": "dup", "item": dup, "kind": kind, "smart_calls": 0}
