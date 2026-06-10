@@ -108,11 +108,16 @@ async def main():
 
     # ---- 1.5) prompt pins the HANDOFF framing (ledger F5: the first live run showed the
     #      cheap model false-acting on narration; the lap-20260610T072358Z revision draws
-    #      the delegated-task vs self-narration boundary — these clauses are load-bearing) ----
+    #      the delegated-task vs self-narration boundary; lap 20260610T083047Z added the
+    #      live-interrupt clauses — speech to a present person, reported third-party
+    #      demands, own-hands chores, celebration fragments, money-always-ASK — from the
+    #      first post-debounce full-bank live read. These clauses are load-bearing) ----
     for clause in ("HANDED OFF", "someone should", "past tense", "their own social act",
-                   '"-ing" openings', "{line}"):
-        assert clause in _PROMPT, f"decider prompt lost its F5 clause: {clause!r}"
-    print("PASS prompt: F5 handoff/narration clauses present")
+                   '"-ing" descriptions', "spoken TO a person", "someone ELSE said",
+                   "their own hands", "bare noun phrases naming their own work",
+                   "celebration, triumph, pep-talk", "money is always ASK", "{line}"):
+        assert clause in _PROMPT, f"decider prompt lost a load-bearing clause: {clause!r}"
+    print("PASS prompt: F5 handoff/narration + live-interrupt clauses present")
 
     # ---- 2) Decider unit: canned reply parsed; failures and keyless live fail SILENT ----
     glass = FakeGlass()

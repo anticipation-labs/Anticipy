@@ -421,3 +421,25 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   Lesson: the journal being untracked was the design choice that made truth recoverable.
   Note: builder lap 091120Z independently DETECTED the accounting loss and re-closed
   gate_P1 to repair phase state — the self-correction layer worked.
+
+## Class D addendum (builder lap 20260610T094944Z)
+- D22 OPEN The foreman's reconstruction commit (7bdc554) ANNOUNCES "TARGET v4: P2 closure
+  then P3 plumbing" in its message — and RATCHET.json's foreman_note cites "(TARGET v4)"
+  as the documented re-aim — but the commit's diff never touched factory/TARGET.md: the
+  file on disk is still v3 with current_phase=P1-closed-loop and phase_gate=gate_P1.sh.
+  Consequence: the control plane is stale in a way that makes EVERY builder lap
+  mechanically uncountable — scoreboard.py counts only primary-metric movement (impossible:
+  catch_rate_worst ratchet best is 1.0, the ceiling) or a FIRST gate closure (impossible:
+  P1-closed-loop is already in RATCHET.phases_closed) — so honest work burns treadmill
+  budget toward a false escalation. The announced strategy exists only in prose; the
+  machine reads the file. This lap stated the dead-count up front in its manifest and
+  spent the tick on recovering the revert-destroyed decider v10 (real product value the
+  stub scoreboard cannot see).
+  Fix (foreman, one edit): actually write TARGET v4 — current_phase: P2-brain,
+  phase_gate: factory/gates/gate_P2.sh (gate_P2 thresholds already hold at stub on HEAD,
+  so the first post-flip lap with attempt_gate_close=true closes P2 mechanically).
+  Regression check: at lap start, if TARGET.md current_phase is already in
+  RATCHET.phases_closed AND the ratchet best for primary_metric sits at its theoretical
+  ceiling, the lap is dead a priori — any future lap finding that state should cite D22
+  instead of re-deriving it, and the foreman checklist should include "commit-message
+  claims about control-plane files must match the diff".
