@@ -29,11 +29,10 @@ HALT = REPO / "factory/.halt"
 def conf(key: str, default: str) -> str:
     if os.environ.get(key):
         return os.environ[key]
-    for line in (REPO / "factory/config/factory.conf").read_text().splitlines():
-        line = line.strip()
-        if line.startswith(f"{key}="):
-            return line.split("=", 1)[1]
-    return default
+    import re as _re
+    text = (REPO / "factory/config/factory.conf").read_text()
+    m = _re.search(r"\$\{" + key + r":=([^}]*)\}", text)
+    return m.group(1) if m else default
 
 
 def main() -> int:
