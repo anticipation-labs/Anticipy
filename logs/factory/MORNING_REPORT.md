@@ -48,3 +48,23 @@ work item). Full ledger: `logs/factory/FAILURE_MODES.md`.
 - Optional: approve auto-push of factory/build to your private GitHub origin for off-site
   backup (local bundles to ~/Anticipy-backups are already running).
 - Note: open new Claude sessions in `~/Anticipy` (the Desktop name is now a symlink).
+
+## Overnight lap tally (written at 07:06 after window close)
+- **20 autonomous laps under launchd, 16 kept, 4 honestly reverted; 22 commits.**
+- **P1 formally CLOSED** — judge verdict REAL with independent recomputation, holdout run,
+  zero holdout contact (lap 060701Z; re-verified 091120Z after the books incident).
+- **The brain leap:** speech-act triage rewrite took the dev bank from catch-worst 0.50 →
+  1.00, false actions 19 → 0, interrupts 10.5 → 1.5/day; the Track-B decider landed and
+  validated against live Gemini including 429 pressure.
+- **Three honest VETOes:** P2 closure was attempted and BLOCKED each time because the
+  holdout bank (personas the builder has never seen) stays at 0.33 catch-worst — the
+  judge refused the hollow close and returned surgical per-family miss counts. Safety
+  invariants held on holdout throughout: 0 false actions, 0 money violations.
+- **Two self-halts, both auto-resolved by the foreman loop:** (1) measurement-rollback
+  bug C14 — found live, fixed structurally, books reconstructed from the untracked
+  journal; (2) Claude session limit D11 — predicted in the ledger, diagnosed from
+  build.json, resumed at the 05:40 reset.
+- **The grind is now precisely aimed:** the final laps falsified "more pattern families"
+  as the lever and identified confident-negative firing as the structural cause of
+  holdout misses — that's the morning's first hypothesis, plus bank v2 authoring
+  (foreman/owner) so dev saturation stops masking progress.
