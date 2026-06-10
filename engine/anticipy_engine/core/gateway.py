@@ -37,7 +37,12 @@ class ModelGateway:
         self.smart_model = smart_model or os.environ.get("ANTICIPY_MODEL_SMART", "openai/gpt-4o")
         self.calls: List[dict] = []
         self._stub = stub or default_stub
-        self._key = os.environ.get("OPENROUTER_API_KEY")
+        # The "openrouter" path speaks plain OpenAI chat-completions. Any compatible
+        # provider (Gemini, Groq, Cerebras, ...) can serve it via these overrides —
+        # this is how the engine survives an unfunded OpenRouter account.
+        self._url = os.environ.get("ANTICIPY_OPENAI_BASE_URL", OPENROUTER_URL)
+        self._key = (os.environ.get("ANTICIPY_MODEL_API_KEY")
+                     or os.environ.get("OPENROUTER_API_KEY"))
 
     async def think(self, task: str, tier: str, caller: str, image: Optional[str] = None,
                     json_mode: bool = False, temperature: Optional[float] = None,
@@ -63,7 +68,7 @@ class ModelGateway:
     async def _openrouter(self, task: str, tier: str, image: Optional[str], json_mode: bool = False,
                           temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> str:
         if not self._key:
-            raise RuntimeError("OPENROUTER_API_KEY NOT SET / NOT FUNDED")
+            raise RuntimeError("no model API key: set ANTICIPY_MODEL_API_KEY (or OPENROUTER_API_KEY)")
         import httpx
 
         model = self.smart_model if tier == SMART else self.cheap_model
@@ -92,7 +97,7 @@ class ModelGateway:
         for attempt in range(4):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    resp = await client.post(OPENROUTER_URL, headers=headers, json=body)
+                    resp = await client.post(self._url, headers=headers, json=body)
                 if resp.status_code in (429, 500, 502, 503, 504):
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue

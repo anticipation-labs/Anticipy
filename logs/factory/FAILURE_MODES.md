@@ -31,6 +31,21 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   mock, bridge off) override .env.local because the engine's dotenv never overrides existing env.
 - B3 Builder laps causing third-party effects. PREVENTED by prompt contract + the engine's own
   money/ask gates + judge review; test artifacts must be `[Anticipy test]`-labeled and reversible.
+- B4 gate_P1's S1 cleanup NEVER fires: it reads `proof.id`/`proof.event.id`, but the orchestrator
+  writes step-keyed proofs (`proof["0:create_event"].id`) — so B1's "deletes its test event" has
+  never been true on a live run; every live gate run stranded a real calendar event. CONTAINED
+  (2026-06-10, lap 20260610T052102Z): builder enumerated goal proofs across all gatep1-* run dirs,
+  deleted 4 stray events via Arcade, verified gone by ListEvents read-back. OPEN for the real fix
+  (foreman-only: gate_P1.sh must extract ids from step-keyed proof values). Regression check:
+  after any live gate run, ListEvents over the window must show no gate-created ids.
+- B5 the live S2 leg ("remind me to ... at <time>") ALSO creates a real calendar event through the
+  harm-line calendar_hold ACT path — a second per-run artifact the gate never attempts to clean.
+  CONTAINED with B4 (deleted + read-back). OPEN: gate cleanup must cover S2's goal proof too.
+- B6 the deterministic calendar planner DROPS the quoted event title: the S1 artifact lands in the
+  real calendar as generic "Calendar event", not "[Anticipy test] gate-P1 <lap>" — a semantically
+  wrong real artifact that also breaks the B3 label convention, and it makes B4's strays unlabeled
+  and hard to attribute. OPEN: next P1 slice — quoted-title extraction in the orchestrator's
+  calendar pre-plan + a test pinning the summary.
 
 ## Class C — measurement lies
 - C1 Seeds embedded with stub embedder while engine runs live embedder → memory retrieval scores
@@ -129,6 +144,14 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
 - E3 The plan living only in conversation. PREVENTED: approved plan at
   ~/.claude/plans/oh-my-god-everybody-iterative-puffin.md; phases mirrored in factory/PHASES.yaml.
 
+## Class F — product decision failures (the gate caught these; they are why the gate exists)
+- F1 Hedge-nonspecific vent lines ("ugh, I should really call my landlord someday") survived triage
+  (positive "i should"/"call" cues) and the harm-line's unclassified branch fail-safed them to ASK —
+  an interruption on a vent (gate_P1 S3 red; also feeds interrupt_cost). PREVENTED (2026-06-10, lap
+  20260610T052102Z): triage drops hedge words (someday/eventually/at some point/one of these days/
+  when-I-get-a-chance) when no concrete time anchor cancels the hedge; capture still remembers the
+  line. Regression checks: vent cases in engine/scripts/test_triage.py + gate_P1 S3.
+
 ## Standing rules that keep this list honest
 1. Every new failure found → entry here (builders and judges are instructed to append; this file
    lives under logs/ so lap roles may edit it).
@@ -136,3 +159,16 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
    no fix without a tripwire that notices its return.
 3. REFUTED entries stay listed so the same false alarm isn't re-investigated.
 4. The foreman re-runs an adversarial audit pass at every phase boundary.
+
+## Class D addendum (night of 2026-06-09/10)
+- D18 OpenRouter unfunded blocked all live engine model calls (the old loop's killer).
+  PREVENTED (2026-06-10): the gateway's OpenAI-compatible path is now URL/key-configurable
+  (ANTICIPY_OPENAI_BASE_URL / ANTICIPY_MODEL_API_KEY); .env.local points it at Gemini's
+  free-tier OpenAI endpoint using the GEMINI_API_KEY that already existed. Verified live
+  through the engine gateway (cheap + smart both answered); suite green. Groq also verified
+  as a fallback provider; Cerebras 404'd on the tested model name.
+- D19 Foreman killed a mid-build lap (20260610T055231Z) to supersede it; its uncommitted
+  WIP was saved to the lap dir (killed_wip.patch) and the tree restored — but its UNTRACKED
+  new files survived the checkout and blocked the patch apply until removed. CONTAINED:
+  documented here; loop's own cleanup never hits this (builders commit); foreman kills must
+  also `git clean` check untracked product files.
