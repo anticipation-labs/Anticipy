@@ -21,6 +21,7 @@ from typing import Optional, Tuple
 
 from ..channels.text import TextChannel
 from ..proactive.budget import AnnoyanceBudget
+from ..proactive.debounce import AskDebounce
 from ..proactive.decider import ASK as DECIDER_ASK, Decider, SILENT as DECIDER_SILENT
 from ..proactive.harm import HarmLine
 from ..proactive.triage import Triage
@@ -77,10 +78,36 @@ class ProactiveEngine:
         self.user_contact = user_contact        # the user's number/handle for asks (set in prod)
         self.pending = {}                       # ask_id -> {goal_id, action, reason, category} (awaiting reply)
         self.budget = AnnoyanceBudget()         # Room 5: cap proactive interruptions; learn from declines
+        self.debounce = AskDebounce()           # Room 2.6: ambient money-transfer asks wait out the retraction
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
 
     async def on_event(self, event: Event, now: Optional[float] = None) -> dict:
         now = now if now is not None else now_ts()
+        # 0) Room 2.6 — while a money-transfer ask is held, the very next utterances can
+        #    take it back ("scratch that", "don't send him anything"): the retraction
+        #    consumes this event and the held ask dies silently (on money the engine
+        #    fails toward silence, never act). Surviving holds tick down; an exhausted
+        #    window flushes the SAME ask, late.
+        if self.debounce.has_held():
+            cancelled = self.debounce.cancel_on_retraction(event.text, now)
+            if cancelled:
+                for h in cancelled:
+                    goal = self.orchestrator.store.load(h["goal_id"])
+                    goal.state = GoalState.failed
+                    self.orchestrator.store.save(goal)
+                    if self.glassbox is not None:
+                        self.glassbox.log("ask_retracted", {"goal_id": h["goal_id"],
+                                                            "action": h["action"],
+                                                            "retraction": event.text})
+                    await self.bus.submit_job(Job(intent="write_memory",
+                                                  args={"text": f"User retracted: {h['action']}",
+                                                        "kind": "history"}))
+                self._record(event, "ignore", "retraction of a just-held money ask -> silent")
+                return {"decision": "ignore", "triaged": False, "goal_id": None,
+                        "retracted_goal_ids": [h["goal_id"] for h in cancelled]}
+            for h in self.debounce.event_passed(now):
+                self._flush_held(h)
+
         # 1) triage — cheap, local, no smart model; most events die here (Room 1)
         if not self._triage(event):
             self._record(event, "ignore", "triaged out (not actionable)")
@@ -129,6 +156,15 @@ class ProactiveEngine:
                 if self.glassbox is not None:
                     self.glassbox.log("suppressed", {"goal_id": goal_id, "category": verdict.category,
                                                      "reason": suppress, "action": event.text})
+            elif self.debounce.should_hold(event.text, verdict.category, event.meta):
+                # Room 2.6: a money TRANSFER command heard in ambient speech waits one
+                # breath — people retract these seconds later. Goal stays paused; the
+                # ask is sent only if no retraction arrives within the window.
+                decision = "held"
+                self.debounce.hold(goal_id, event.text, reason, verdict.category, now)
+                if self.glassbox is not None:
+                    self.glassbox.log("ask_held", {"goal_id": goal_id, "category": verdict.category,
+                                                   "action": event.text})
             else:
                 decision = "ask"
                 ask_id = self._send_ask(goal, event.text, reason, verdict.category)
@@ -142,6 +178,14 @@ class ProactiveEngine:
         return {"decision": decision, "category": verdict.category, "reason": reason,
                 "detrimental": verdict.detrimental, "memory_forced": verdict.memory_forced,
                 "decider": decider_word, "goal_id": goal_id, "ask_id": ask_id}
+
+    def _flush_held(self, h: dict) -> None:
+        """A held money ask survived its retraction window — send the SAME ask, late."""
+        goal = self.orchestrator.store.load(h["goal_id"])
+        ask_id = self._send_ask(goal, h["action"], h["reason"], h["category"])
+        if self.glassbox is not None:
+            self.glassbox.log("ask_flushed", {"ask_id": ask_id, "goal_id": h["goal_id"],
+                                              "action": h["action"]})
 
     def _send_ask(self, goal: Goal, action: str, reason: str, category: str = "") -> str:
         """Send the ask over the channel and register it pending a reply."""
@@ -181,6 +225,10 @@ class ProactiveEngine:
         A TIME-GROUNDED reminder (remind_ts set at capture) is a NOTIFY — tell the user, don't
         open a goal or a YES/NO ask — unless its text is detrimental, which keeps the ask path."""
         now = now if now is not None else now_ts()
+        # Room 2.6 time flush: the stream went quiet, so a held money ask that outlived
+        # its retraction window goes out now instead of waiting for more speech.
+        for h in self.debounce.due(now):
+            self._flush_held(h)
         res = await self.bus.submit_job(Job(intent="list_open_loops", args={}))
         loops = (res.output or {}).get("loops", [])
         fired = self.trigger.tick(loops, now)
