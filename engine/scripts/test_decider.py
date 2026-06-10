@@ -2,7 +2,14 @@
 
 Pins the safety contract (zero model calls; the decider is faked or keyless):
   - parse: word-boundary only, safest verdict wins on rambles, unparseable -> SILENT.
-  - fail-SILENT: a raising gateway and a keyless live gateway both return SILENT.
+  - never-act-unread (ledger F7): a raising gateway, a keyless live gateway, and an
+    EMPTY gateway reply (quota exhaustion) all return UNAVAILABLE — not SILENT —
+    so the pipeline can tell deafness from judgment; a READ reply with no verdict
+    word still parses to SILENT (F4).
+  - outage round-trip: UNAVAILABLE defers the event (no goal, no ask), a later
+    trigger_tick retries it through the FULL pipeline, exhausted retries drop it
+    with an honest reason, and a deferred money line still ends at the harm-line's
+    ASK — no failure path ever acts.
   - live-only: stub gateway -> engine has NO decider; openrouter gateway -> it has one.
   - pipeline one-way: SILENT drops a triage-surviving event (no goal, no ask);
     ASK forces the ask path on a harm-safe line (goal paused, ask pending);
@@ -33,7 +40,10 @@ from anticipy_engine.core.workers import BrowserStub, ChannelStub, ConnectorStub
 from anticipy_engine.core.workers.memory import MemoryWorker
 from anticipy_engine.live_memory.brain import LiveMemoryBrain
 from anticipy_engine.memory import Memory
-from anticipy_engine.proactive.decider import ACT, ASK, SILENT, Decider, _PROMPT, parse_verdict
+from anticipy_engine.core.proactive import DECIDER_RETRY_SECONDS
+from anticipy_engine.proactive.decider import (
+    ACT, ASK, SILENT, UNAVAILABLE, Decider, _PROMPT, parse_verdict,
+)
 
 
 class FakeGlass:
@@ -51,6 +61,15 @@ class FakeDecider:
     """Scripted decider — pipeline tests never touch a model."""
     def __init__(self, word): self.word = word; self.lines = []
     async def decide(self, line): self.lines.append(line); return self.word
+
+
+class SequenceDecider:
+    """Scripted decider that walks a verdict sequence (last word repeats) —
+    models an outage that ends (UNAVAILABLE, then a real verdict) or doesn't."""
+    def __init__(self, words): self.words = list(words); self.lines = []
+    async def decide(self, line):
+        self.lines.append(line)
+        return self.words.pop(0) if len(self.words) > 1 else self.words[0]
 
 
 class RaisingGateway:
@@ -119,7 +138,7 @@ async def main():
         assert clause in _PROMPT, f"decider prompt lost a load-bearing clause: {clause!r}"
     print("PASS prompt: F5 handoff/narration + live-interrupt clauses present")
 
-    # ---- 2) Decider unit: canned reply parsed; failures and keyless live fail SILENT ----
+    # ---- 2) Decider unit: canned reply parsed; non-reads are UNAVAILABLE, not SILENT ----
     glass = FakeGlass()
     canned = CannedGateway("  ask\n")
     d = Decider(canned, glassbox=glass)
@@ -130,12 +149,22 @@ async def main():
 
     glass = FakeGlass()
     d = Decider(RaisingGateway(), glassbox=glass)
-    assert await d.decide(SAFE_LINE) == SILENT                        # provider error -> SILENT
+    assert await d.decide(SAFE_LINE) == UNAVAILABLE                   # provider error -> no read
     assert "decider_error" in glass.kinds()
 
     d = Decider(ModelGateway(provider="openrouter"))                  # live provider, NO key
-    assert await d.decide(SAFE_LINE) == SILENT                        # keyless -> SILENT, no raise
-    print("PASS decider unit: temp-0 cheap call, error and keyless both fail SILENT")
+    assert await d.decide(SAFE_LINE) == UNAVAILABLE                   # keyless -> no read, no raise
+
+    # the gateway returns "" only after exhausting its 429/5xx retries — quota
+    # exhaustion is a non-read (F7), distinct from a READ reply with no verdict (F4)
+    glass = FakeGlass()
+    d = Decider(CannedGateway("   \n"), glassbox=glass)
+    assert await d.decide(SAFE_LINE) == UNAVAILABLE
+    assert "decider_unavailable" in glass.kinds()
+    d = Decider(CannedGateway("the model rambled with no verdict"))
+    assert await d.decide(SAFE_LINE) == SILENT                        # read but verdictless -> F4
+    print("PASS decider unit: temp-0 cheap call; error/keyless/empty -> UNAVAILABLE; "
+          "verdictless read -> SILENT")
 
     # ---- 3) live-only construction: stub gateway -> no decider; openrouter -> decider ----
     pro, _, _ = await fresh_engine()
@@ -191,7 +220,58 @@ async def main():
     pro, _, _ = await fresh_engine()
     res = await pro.on_event(ev(SAFE_LINE))
     assert res["decision"] == "act" and res["decider"] is None
+    assert pro.decider_deferred == [], "stub mode must never populate the outage queue"
     print("PASS pipeline: stub mode unchanged (act path, no decider)")
+
+    # ---- 10) outage round-trip (F7): UNAVAILABLE defers, a due tick retries, acts ----
+    t0 = 1_000_000.0
+    fake = SequenceDecider([UNAVAILABLE, ACT])
+    pro, store, glass = await fresh_engine(decider=fake)
+    res = await pro.on_event(ev(SAFE_LINE), now=t0)
+    assert res["decision"] == "deferred" and res["decider"] == UNAVAILABLE
+    assert res["goal_id"] is None and not pro.pending
+    assert res["retry_at"] == t0 + DECIDER_RETRY_SECONDS
+    assert not store.all(), "a deferred line must not create or pause any goal"
+    assert "decider_deferred" in glass.kinds()
+    reasons = [d.get("reason", "") for k, d in glass.entries if k == "decision"]
+    assert any("unavailable" in r for r in reasons), \
+        "outage must be recorded as unavailability, never as a judged silence"
+    await pro.trigger_tick(now=t0 + 10)                       # window not elapsed
+    assert len(fake.lines) == 1 and pro.decider_deferred
+    await pro.trigger_tick(now=t0 + DECIDER_RETRY_SECONDS + 5)  # window elapsed -> retry
+    assert len(fake.lines) == 2 and not pro.decider_deferred
+    assert "decider_retry" in glass.kinds()
+    goals = store.all()
+    assert len(goals) == 1, "the recovered verdict must run the normal act path"
+    assert not pro._decider_attempts, "retry accounting must clear on a real verdict"
+    print("PASS outage: deferred -> tick retry -> late catch (act), honest reasons")
+
+    # ---- 11) outage that never ends: retries exhaust -> honest silence, zero goals ----
+    fake = SequenceDecider([UNAVAILABLE])                     # UNAVAILABLE forever
+    pro, store, glass = await fresh_engine(decider=fake)
+    res = await pro.on_event(ev(SAFE_LINE), now=t0)
+    assert res["decision"] == "deferred"
+    await pro.trigger_tick(now=t0 + DECIDER_RETRY_SECONDS + 5)    # retry 1 -> defers again
+    assert pro.decider_deferred, "first retry under outage must defer again"
+    await pro.trigger_tick(now=t0 + 2 * DECIDER_RETRY_SECONDS + 10)  # retry 2 -> exhausted
+    assert not pro.decider_deferred and not pro._decider_attempts
+    assert not store.all() and not pro.pending, "an unread line must never act or ask"
+    reasons = [d.get("reason", "") for k, d in glass.entries if k == "decision"]
+    assert any("after retries" in r for r in reasons), "exhaustion must be stated honestly"
+    print("PASS outage: sustained UNAVAILABLE -> bounded retries -> honest fail-silent")
+
+    # ---- 12) a deferred money line still ends at the harm-line's ASK, never an act ----
+    fake = SequenceDecider([UNAVAILABLE, ACT])
+    pro, store, glass = await fresh_engine(decider=fake)
+    res = await pro.on_event(ev(MONEY_LINE), now=t0)
+    assert res["decision"] == "deferred" and not store.all()
+    await pro.trigger_tick(now=t0 + DECIDER_RETRY_SECONDS + 5)
+    asks = [d for k, d in glass.entries if k == "decision" and d.get("decision") == "ask"]
+    assert asks, "the retried money line must reach the ask path"
+    goals = store.all()
+    assert len(goals) == 1 and goals[0].state == GoalState.waiting, \
+        "deferral must not weaken the harm-line: money waits for a YES"
+    print("PASS outage: deferred money line -> harm-line ASK is still FINAL")
 
     for b in _BUSES:
         await b.stop()

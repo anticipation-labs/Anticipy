@@ -5,6 +5,9 @@ Loop over Events:
   1.5 the DECIDER (Room 1.5; cheap model, LIVE ONLY — None in stub): did the person
      actually COMMIT? SILENT drops the event; ASK forces the ask path; ACT defers to
      the harm-line. One-way: it can never turn the harm-line's ASK into an ACT.
+     UNAVAILABLE (no model read — quota/transport outage, ledger F7) defers the event
+     past the quota window for a bounded trigger_tick retry; exhausted retries drop
+     it with an honest reason. An unread line never acts.
   2. read memory context (cheap worker) for the harm-line's gray middle.
   3. the HARM-LINE (Room 2): is this detrimental? confident-no -> ACT (hand a Goal to the
      orchestrator and DO IT); yes or UNSURE -> ASK (pause; never execute until approved).
@@ -22,7 +25,12 @@ from typing import Optional, Tuple
 from ..channels.text import TextChannel
 from ..proactive.budget import AnnoyanceBudget
 from ..proactive.debounce import AskDebounce
-from ..proactive.decider import ASK as DECIDER_ASK, Decider, SILENT as DECIDER_SILENT
+from ..proactive.decider import (
+    ASK as DECIDER_ASK,
+    Decider,
+    SILENT as DECIDER_SILENT,
+    UNAVAILABLE as DECIDER_UNAVAILABLE,
+)
 from ..proactive.harm import HarmLine
 from ..proactive.triage import Triage
 from ..proactive.trigger import TriggerWatcher
@@ -30,6 +38,13 @@ from .bus import Bus
 from .envelopes import Event, EventSource, Goal, GoalState, Job, now_ts
 from .gateway import PROVIDER_OPENROUTER, ModelGateway
 from .orchestrator import Orchestrator
+
+# Room 1.5 outage handling (ledger F7): a per-minute quota window (the live brain is
+# Gemini free tier) resets within 60s, so one deferral must outlast it; the second
+# retry covers a burst where the retry tick itself re-exhausts the window. Beyond
+# that the engine fails toward silence, honestly labeled — never act on an unread line.
+DECIDER_RETRY_SECONDS = 75.0
+DECIDER_MAX_RETRIES = 2
 
 
 @dataclass
@@ -80,6 +95,8 @@ class ProactiveEngine:
         self.budget = AnnoyanceBudget()         # Room 5: cap proactive interruptions; learn from declines
         self.debounce = AskDebounce()           # Room 2.6: ambient money-transfer asks wait out the retraction
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
+        self.decider_deferred = []              # Room 1.5 outage queue: [{event, due}] awaiting a retry tick
+        self._decider_attempts = {}             # event.id -> deferrals so far (capped at DECIDER_MAX_RETRIES)
 
     async def on_event(self, event: Event, now: Optional[float] = None) -> dict:
         now = now if now is not None else now_ts()
@@ -120,6 +137,31 @@ class ProactiveEngine:
         decider_word = None
         if self.decider is not None:
             decider_word = await self.decider.decide(event.text)
+            if decider_word == DECIDER_UNAVAILABLE:
+                # No model read happened (quota/transport outage, ledger F7). Deafness
+                # must not masquerade as judgment: defer the event past the quota
+                # window for a bounded retry; when retries exhaust, drop it with an
+                # honest reason. Either way, an unread line NEVER acts.
+                attempt = self._decider_attempts.get(event.id, 0)
+                if attempt < DECIDER_MAX_RETRIES:
+                    self._decider_attempts[event.id] = attempt + 1
+                    retry_at = now + DECIDER_RETRY_SECONDS
+                    self.decider_deferred.append({"event": event, "due": retry_at})
+                    if self.glassbox is not None:
+                        self.glassbox.log("decider_deferred",
+                                          {"event_id": event.id, "text": event.text,
+                                           "attempt": attempt + 1, "retry_at": retry_at})
+                    self._record(event, "deferred",
+                                 "decider unavailable (no model read) -> deferred for retry")
+                    return {"decision": "deferred", "triaged": True, "decider": decider_word,
+                            "goal_id": None, "retry_at": retry_at}
+                self._decider_attempts.pop(event.id, None)
+                self._record(event, "ignore",
+                             "decider unavailable after retries -> fail silent "
+                             "(never act on an unread line)")
+                return {"decision": "ignore", "triaged": True, "decider": decider_word,
+                        "goal_id": None}
+            self._decider_attempts.pop(event.id, None)   # a real verdict arrived
             if decider_word == DECIDER_SILENT:
                 self._record(event, "ignore", "decider: not a real commitment -> silent")
                 return {"decision": "ignore", "triaged": True, "decider": decider_word,
@@ -229,6 +271,18 @@ class ProactiveEngine:
         # its retraction window goes out now instead of waiting for more speech.
         for h in self.debounce.due(now):
             self._flush_held(h)
+        # Room 1.5 outage retries (ledger F7): events deferred because the decider had
+        # no model read re-enter the FULL pipeline once their window elapses (capture
+        # already holds the line; only the decision was deferred). A retry may defer
+        # again — the attempt cap in on_event bounds it.
+        due_deferred = [d for d in self.decider_deferred if d["due"] <= now]
+        if due_deferred:
+            self.decider_deferred = [d for d in self.decider_deferred if d["due"] > now]
+            for d in due_deferred:
+                redo = await self.on_event(d["event"], now=now)
+                if self.glassbox is not None:
+                    self.glassbox.log("decider_retry", {"event_id": d["event"].id,
+                                                        "decision": redo.get("decision")})
         res = await self.bus.submit_job(Job(intent="list_open_loops", args={}))
         loops = (res.output or {}).get("loops", [])
         fired = self.trigger.tick(loops, now)

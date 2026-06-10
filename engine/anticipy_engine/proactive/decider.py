@@ -34,8 +34,12 @@ Safety contract (enforced by the caller, core/proactive.py):
     so the suite and stub-tier persona evals stay deterministic and free.
   - ONE-WAY: the decider may move a decision toward SILENT or ASK; it can never turn
     the harm-line's ASK into an ACT. The harm-line is FINAL on binding/detrimental.
-  - FAIL-SILENT: any model failure (no key, network error, empty or unparseable
-    reply) returns SILENT — never invent an action from a broken read.
+  - NEVER-ACT-UNREAD (ledger F7): a transport-level non-read — exception (no key,
+    network error) or an EMPTY reply (the gateway returns "" only after exhausting
+    its own 429/5xx retries) — returns UNAVAILABLE: no judgment happened, and the
+    caller may defer the event for a bounded retry instead of mistaking quota
+    exhaustion for a judged silence. A reply that was READ but names no verdict
+    still parses to SILENT (F4 fail-safe). No failure path can ever produce an act.
 """
 from __future__ import annotations
 
@@ -46,6 +50,10 @@ from ..core.gateway import CHEAP, ModelGateway
 ACT = "ACT"
 ASK = "ASK"
 SILENT = "SILENT"
+# Not a verdict: the model was never read (transport failure or empty reply after the
+# gateway's own retries). The pipeline defers these for a bounded retry — a quota
+# outage must not masquerade as judged silence (ledger F7).
+UNAVAILABLE = "UNAVAILABLE"
 
 # Tolerant parse: word-boundary only ("multitasking" must not read as ASK), and when
 # the model rambles and names more than one verdict, take the SAFEST one mentioned.
@@ -142,11 +150,17 @@ class Decider:
             raw = await self.gateway.think(
                 _PROMPT.format(line=line), tier=CHEAP, caller="decider", temperature=0
             )
-        except Exception as e:  # no key / transport / provider error -> fail SILENT
+        except Exception as e:  # no key / transport / provider error -> no read happened
             if self.glassbox is not None:
                 self.glassbox.log("decider_error", {"line": line, "error": str(e)})
-            return SILENT
-        word = parse_verdict(raw or "")
+            return UNAVAILABLE
+        if not (raw or "").strip():
+            # the gateway returns "" only after exhausting its own 429/5xx/transport
+            # retries — quota exhaustion, not a judgment; never log it as one
+            if self.glassbox is not None:
+                self.glassbox.log("decider_unavailable", {"line": line})
+            return UNAVAILABLE
+        word = parse_verdict(raw)
         if self.glassbox is not None:
-            self.glassbox.log("decider", {"line": line, "raw": (raw or "")[:200], "verdict": word})
+            self.glassbox.log("decider", {"line": line, "raw": raw[:200], "verdict": word})
         return word
