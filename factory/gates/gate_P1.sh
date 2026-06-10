@@ -22,10 +22,14 @@ rm -rf "$WORK"; mkdir -p "$WORK"
 exec 3>&1
 say() { echo "[gate_P1] $*" >&3; }
 
+# sweep any stale engine holding the gate port (ledger D4)
+STALE=$(lsof -ti tcp:"$PORT" 2>/dev/null || true)
+[[ -n "$STALE" ]] && echo "$STALE" | xargs kill 2>/dev/null && sleep 1
+
 ANTICIPY_DATA_DIR="$WORK/data" "$PY" -m uvicorn --app-dir engine anticipy_engine.main:app \
   --port "$PORT" --log-level warning > "$WORK/engine.log" 2>&1 &
 ENG=$!
-trap 'kill $ENG 2>/dev/null' EXIT
+trap '[[ -n "$ENG" ]] && { pkill -P "$ENG" 2>/dev/null; kill "$ENG" 2>/dev/null; }; lsof -ti tcp:"$PORT" 2>/dev/null | xargs kill 2>/dev/null || true' EXIT
 for i in $(seq 1 45); do
   curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && break
   sleep 1
@@ -65,15 +69,31 @@ s1_text = (f"create calendar event \"[Anticipy test] gate-P1 {lap}\" on {tomorro
 out = http("POST", "/event", {"text": s1_text, "source": "app", "meta": {}})
 goal_id = out.get("goal_id")
 s1 = {"decision": out.get("decision"), "goal_id": goal_id}
+event_id = None
 if out.get("decision") == "act" and goal_id:
     g = http("GET", f"/goals/{goal_id}", timeout=30)
     s1["state"] = g.get("state")
     s1["has_proof"] = bool(g.get("proof"))
     s1["pass"] = g.get("state") == "done" and bool(g.get("proof"))
     s1["live"] = live_hands
+    proof = g.get("proof") or {}
+    event_id = proof.get("id") or (proof.get("event") or {}).get("id")
 else:
     s1["pass"] = False
 results["S1_typed_calendar"] = s1
+
+# cleanup the real test artifact immediately (ledger B1): delete the created event
+if event_id and live_hands:
+    try:
+        from arcadepy import Arcade  # engine venv dependency; direct delete is simplest
+        client = Arcade(api_key=os.environ.get("ARCADE_API_KEY", ""))
+        client.tools.execute(tool_name="GoogleCalendar.DeleteEvent",
+                             input={"event_id": event_id},
+                             user_id=os.environ.get("ARCADE_USER_ID", ""))
+        results["S1_cleanup"] = {"deleted": event_id}
+    except Exception as e:
+        results["S1_cleanup"] = {"deleted": False, "error": str(e)[:200],
+                                 "note": "MANUAL CLEANUP NEEDED: " + str(event_id)}
 
 # ---- S3: vent stays silent ----
 out = http("POST", "/event", {"text": "ugh, I should really call my landlord someday",
@@ -102,7 +122,7 @@ s2_text = f"remind me to [Anticipy test] stretch at {due.strftime('%-I:%M%p').lo
 http("POST", "/event", {"text": s2_text, "source": "app",
                         "meta": {"observed_at": dt.datetime.now().astimezone().isoformat()}})
 fired = False
-deadline = time.time() + 240
+deadline = time.time() + 150
 while time.time() < deadline and not fired:
     time.sleep(10)
     try:

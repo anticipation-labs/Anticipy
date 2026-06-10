@@ -115,9 +115,13 @@ def run_persona(persona_dir: Path, lap: str, port: int, out_root: Path, tier: st
     data_dir = run_dir / "data"
     run_dir.mkdir(parents=True)
 
+    # seeds MUST be embedded with the same embedder the engine will query with,
+    # or cosine similarity is garbage in live tier (ledger C1)
+    seed_env = dict(os.environ)
+    seed_env["ANTICIPY_MEMORY_MODE"] = "live" if tier == "live" else "stub"
     seed = subprocess.run([str(PY), str(REPO / "factory/bin/seed_memory.py"),
                            "--persona", str(persona_dir), "--data", str(data_dir)],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=seed_env)
     (run_dir / "seed.out").write_text(seed.stdout + seed.stderr, encoding="utf-8")
     if seed.returncode != 0:
         return {"persona": pid, "error": f"seed failed: {seed.stderr[:300]}"}
@@ -167,7 +171,13 @@ def run_persona(persona_dir: Path, lap: str, port: int, out_root: Path, tier: st
     goals = collect_goals(data_dir)
     (run_dir / "goals.json").write_text(json.dumps(goals, indent=2, sort_keys=True),
                                         encoding="utf-8")
+    # a failed day must fail the persona loudly — silently dropping a day from scoring
+    # makes the lap look better than reality (ledger C4)
+    day_errors = [d for d in days_out if d.get("error")]
     result = {"persona": pid, "days": days_out, "goals": len(goals), "port": port, "tier": tier}
+    if day_errors:
+        result["error"] = f"{len(day_errors)} day(s) failed: " + "; ".join(
+            str(d.get("error"))[:80] for d in day_errors)
     (run_dir / "run.json").write_text(json.dumps(result, indent=2, sort_keys=True),
                                       encoding="utf-8")
     return result

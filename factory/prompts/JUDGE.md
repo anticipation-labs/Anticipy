@@ -26,6 +26,11 @@ The env header gives you LAP and LAPDIR (`logs/factory/laps/$LAP`).
    read them back yourself via the gate scripts' read-back paths and judge semantic
    correctness (right time window, right item, right recipient), not just existence.
 
+## The failure ledger
+If your investigation reveals a new failure mode (scoring softness, a gamed check, an ops
+hazard), append it to `logs/factory/FAILURE_MODES.md` — judges finding measurement holes
+is exactly how the ledger stays honest.
+
 ## Verdict
 Write `$LAPDIR/verdict.md`:
 ```

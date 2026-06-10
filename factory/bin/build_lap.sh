@@ -33,21 +33,23 @@ fi
 
 MODEL_ARGS=()
 [[ -n "${BUILD_MODEL:-}" ]] && MODEL_ARGS+=(--model "$BUILD_MODEL")
+CLAUDE="${CLAUDE_BIN:-claude}"
 
-# wall-clock watchdog
-(
-  sleep "${BUILD_WALL_CAP_SECONDS:-2400}"
-  pkill -P $$ -f "claude" 2>/dev/null
-) & WATCHDOG=$!
-
-command claude -p "$PROMPT" \
+# run claude in background so the watchdog can kill the exact PID + its subtree (ledger D3)
+"$CLAUDE" -p "$PROMPT" \
   --dangerously-skip-permissions \
   --output-format stream-json --verbose \
   ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
-  > "$STREAM" 2> "$LAPDIR/build.err"
-rc=$?
+  > "$STREAM" 2> "$LAPDIR/build.err" &
+CPID=$!
+(
+  sleep "${BUILD_WALL_CAP_SECONDS:-2400}"
+  pkill -P "$CPID" 2>/dev/null; kill "$CPID" 2>/dev/null
+) & WATCHDOG=$!
+wait "$CPID"; rc=$?
 kill "$WATCHDOG" 2>/dev/null
 wait "$WATCHDOG" 2>/dev/null
+pkill -P "$CPID" 2>/dev/null || true
 
 # extract the final result envelope for spend tracking
 engine/.venv/bin/python - "$STREAM" "$LAPDIR/build.json" <<'PY'

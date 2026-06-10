@@ -79,6 +79,11 @@ def main() -> int:
     args = ap.parse_args()
 
     lap_dir = REPO / "logs/factory/laps" / args.lap
+    if not (lap_dir / "metrics.json").exists():
+        # missing measurement must never score as a vacuous pass (ledger C5)
+        print(f"SCOREBOARD ERROR: {lap_dir}/metrics.json missing — measurement broke",
+              file=sys.stderr)
+        return 2
     metrics_all = load(lap_dir / "metrics.json")
     agg = metrics_all.get("aggregate", {}) if metrics_all else {}
     gates = load(lap_dir / "gate_results.json")
@@ -103,7 +108,8 @@ def main() -> int:
         else:
             d = (current - best) * direction
             if d > eps:
-                moved, delta = primary, f"{(current - best):+.4f}"
+                # direction-adjusted: positive delta always means improvement (ledger C9)
+                moved, delta = primary, f"{d:+.4f}"
 
     phase = target.get("current_phase", "")
     gate_passed_now = bool(gates.get("phase_gate_passed"))

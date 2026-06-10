@@ -37,18 +37,20 @@ fi
 
 MODEL_ARGS=()
 [[ -n "${JUDGE_MODEL:-}" ]] && MODEL_ARGS+=(--model "$JUDGE_MODEL")
+CLAUDE="${CLAUDE_BIN:-claude}"
 
-(
-  sleep "${JUDGE_WALL_CAP_SECONDS:-1200}"
-  pkill -P $$ -f "claude" 2>/dev/null
-) & WATCHDOG=$!
-
-command claude -p "$PROMPT" \
+"$CLAUDE" -p "$PROMPT" \
   --dangerously-skip-permissions \
   --output-format stream-json --verbose \
   ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
-  > "$STREAM" 2> "$LAPDIR/judge.err"
-rc=$?
+  > "$STREAM" 2> "$LAPDIR/judge.err" &
+CPID=$!
+(
+  sleep "${JUDGE_WALL_CAP_SECONDS:-1200}"
+  pkill -P "$CPID" 2>/dev/null; kill "$CPID" 2>/dev/null
+) & WATCHDOG=$!
+wait "$CPID"; rc=$?
 kill "$WATCHDOG" 2>/dev/null
 wait "$WATCHDOG" 2>/dev/null
+pkill -P "$CPID" 2>/dev/null || true
 exit $rc

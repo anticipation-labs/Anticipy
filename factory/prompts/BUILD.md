@@ -59,6 +59,11 @@ must name the build lap it enables.
 - Never fake, hardcode, or special-case to pass an eval. The persona bank is frozen;
   gaming the matcher is detected by the judge recomputing scores from raw runs.
 
+## The failure ledger
+If you discover ANY new failure mode (in the product, the Factory, the evals, or the ops),
+append an entry to `logs/factory/FAILURE_MODES.md` with a status and, if you fixed it, the
+regression check that would notice its return. Finding failure modes counts as real work.
+
 ## Logging (a lap that left no trace is void)
 - Append one honest paragraph to `logs/journal.md` (what you tried, what happened).
 - Rewrite `logs/last_lap.md` (what changed, eval numbers you saw, what's next).

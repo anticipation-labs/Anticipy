@@ -23,13 +23,24 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown arg $1"; exit 2 ;;
   esac
 done
+[[ "$MAX_LAPS" =~ ^[0-9]+$ ]] || { echo "--max-laps must be a non-negative integer"; exit 2; }
 
 journal() { printf '\n- %s %s\n' "$(date -u +%FT%TZ)" "$1" >> "$JOURNAL"; }
+notify() { osascript -e "display notification \"$1\" with title \"Anticipy Factory\"" >/dev/null 2>&1 || true; }
 
-# ---- lock ----
+# resolve the claude binary once so launchd/cron contexts can't lose it (ledger D1)
+CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || true)}"
+[[ -x "$CLAUDE_BIN" ]] || CLAUDE_BIN="$HOME/.local/bin/claude"
+if [[ ! -x "$CLAUDE_BIN" && -z "${FACTORY_BUILD_CMD:-}" ]]; then
+  journal "loop abort: claude binary not found (CLAUDE_BIN)"; notify "Factory: claude binary not found"; exit 1
+fi
+export CLAUDE_BIN
+
+# ---- lock (stale if PID dead OR lock older than 24h — PID reuse guard, ledger D8) ----
 if ! mkdir factory/.lock 2>/dev/null; then
   PID=$(cat factory/.lock/pid 2>/dev/null || echo "")
-  if [[ -n "$PID" ]] && kill -0 "$PID" 2>/dev/null; then
+  LOCK_AGE=$(( $(date +%s) - $(stat -f %m factory/.lock 2>/dev/null || echo 0) ))
+  if [[ -n "$PID" ]] && kill -0 "$PID" 2>/dev/null && [[ "$LOCK_AGE" -lt 86400 ]]; then
     echo "loop already running (pid $PID)"; exit 1
   fi
   rm -rf factory/.lock; mkdir factory/.lock
@@ -37,13 +48,36 @@ fi
 echo $$ > factory/.lock/pid
 trap 'rm -rf factory/.lock' EXIT
 
-# ---- crash recovery: stash any dirty PRODUCT tree from a dead lap (logs are ours) ----
-if [[ -n "$(git status --porcelain -- . ':!logs' ':!PENDING_FOR_OMAR.md' | grep -vE '^\?\?' || true)" ]]; then
-  mkdir -p logs/factory/aborted
-  git diff -- . ':!logs' > "logs/factory/aborted/$(date -u +%Y%m%dT%H%M%SZ).patch" || true
-  git checkout -- . ':!logs' 2>/dev/null || true
-  journal "loop start: recovered dirty product tree to logs/factory/aborted/ and reset"
+# ---- crash/orphan recovery (ledger A3): a marker means a lap died mid-flight ----
+if [[ -f factory/.lap_in_progress ]]; then
+  ORPHAN=$(cat factory/.lap_in_progress)
+  ORPHAN_BASE=$(cat "logs/factory/laps/$ORPHAN/base" 2>/dev/null || echo "")
+  if [[ -n "$ORPHAN_BASE" && ! -f "logs/factory/laps/$ORPHAN/gate_results.json" ]]; then
+    if [[ "$(git rev-parse HEAD)" != "$ORPHAN_BASE" ]]; then
+      git diff "$ORPHAN_BASE" HEAD > "logs/factory/laps/$ORPHAN/orphaned.patch" 2>/dev/null || true
+      git reset --hard "$ORPHAN_BASE" >/dev/null 2>&1 || true
+      journal "loop start: rolled back ORPHANED unverified lap $ORPHAN to ${ORPHAN_BASE:0:8} (patch kept)"
+    fi
+    mkdir -p logs/factory/aborted
+    git diff -- . ':!logs' > "logs/factory/aborted/$(date -u +%Y%m%dT%H%M%SZ)-$ORPHAN.patch" 2>/dev/null || true
+    git checkout -- . ':!logs' 2>/dev/null || true
+  fi
+  rm -f factory/.lap_in_progress
 fi
+
+# ---- dirty PRODUCT tree with NO crashed lap = foreman WIP: refuse, never destroy (ledger A1) ----
+if [[ -n "$(git status --porcelain -- . ':!logs' ':!PENDING_FOR_OMAR.md' | grep -vE '^\?\?' || true)" ]]; then
+  journal "loop abort: uncommitted product changes present (foreman WIP?) — refusing to run"
+  notify "Factory: refused to start over uncommitted changes"
+  exit 1
+fi
+
+# ---- hygiene: prune old persona runs (7d), sweep stale eval/gate engines (ledger D4, D10) ----
+find logs/factory/runs -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+for P in $(seq 8801 8816) 8899; do
+  PIDS=$(lsof -ti tcp:$P 2>/dev/null || true)
+  [[ -n "$PIDS" ]] && { echo "$PIDS" | xargs kill 2>/dev/null || true; journal "loop start: killed stale engine on :$P"; }
+done
 
 LAPS=0
 while true; do
@@ -65,6 +99,8 @@ while true; do
   LAPDIR="logs/factory/laps/$LAP"
   mkdir -p "$LAPDIR"
   BEFORE=$(git rev-parse HEAD)
+  echo "$BEFORE" > "$LAPDIR/base"            # orphan-recovery anchor (ledger A3)
+  echo "$LAP" > factory/.lap_in_progress
 
   # ---- budget tier ----
   if "$PY" factory/bin/spend.py check --kind build >/dev/null 2>&1; then
@@ -86,8 +122,16 @@ while true; do
     git checkout -- . ':!logs' ':!PENDING_FOR_OMAR.md' 2>/dev/null || true
   fi
 
-  # ---- mechanical verify ----
-  if bash factory/bin/verify_gate.sh "$LAP" "$BEFORE"; then GATE=PASS; else GATE=FAIL; fi
+  # ---- mechanical verify (wall-capped; a hung gate must not strand the lap, ledger D6) ----
+  GATE=FAIL
+  ( sleep 3600; pkill -P $$ -f verify_gate 2>/dev/null ) & VG_WATCHDOG=$!
+  if bash factory/bin/verify_gate.sh "$LAP" "$BEFORE"; then GATE=PASS; fi
+  kill "$VG_WATCHDOG" 2>/dev/null; wait "$VG_WATCHDOG" 2>/dev/null
+  # a failed build that still committed must never be kept (ledger D5)
+  if [[ "${BUILD_RC:-127}" -ne 0 && "$AFTER" != "$BEFORE" ]]; then
+    GATE=FAIL
+    journal "lap $LAP: build rc=$BUILD_RC with commits — forcing revert"
+  fi
 
   # ---- judge (selfcheck weekly; full judge on phase-close candidates, budget allowing) ----
   JUDGE_RAN=false
@@ -97,7 +141,7 @@ while true; do
     AGE_DAYS=$(( ( $(date +%s) - $(stat -f %m "$LAST_SC") ) / 86400 ))
     [[ "$AGE_DAYS" -lt "${JUDGE_SELFCHECK_EVERY_DAYS:-7}" ]] && SC_DUE=false
   fi
-  PHASE_CLOSED=$("$PY" -c "import json;print(json.load(open('$LAPDIR/gate_results.json')).get('phase_gate_passed', False))" 2>/dev/null || echo False)
+  PHASE_CLOSED=$("$PY" -c "import json;print(json.dumps(json.load(open('$LAPDIR/gate_results.json')).get('phase_gate_passed', False)))" 2>/dev/null || echo false)
   if [[ "$TIER" == "FULL" ]]; then
     if [[ "$SC_DUE" == "true" ]]; then
       bash factory/bin/judge_lap.sh "$LAP" --self-check || journal "lap $LAP: judge selfcheck errored"
@@ -106,7 +150,7 @@ while true; do
         journal "lap $LAP: JUDGE_BROKEN — selfcheck failed to catch the planted fake"
       fi
     fi
-    if [[ "$PHASE_CLOSED" == "True" ]] && "$PY" factory/bin/spend.py check --kind judge >/dev/null 2>&1; then
+    if [[ "$PHASE_CLOSED" == "true" ]] && "$PY" factory/bin/spend.py check --kind judge >/dev/null 2>&1; then
       bash factory/bin/judge_lap.sh "$LAP" || journal "lap $LAP: judge errored"
       JUDGE_RAN=true
     fi
@@ -127,12 +171,19 @@ while true; do
     fi
   fi
 
-  # ---- scoreboard + treadmill + spend ----
-  "$PY" factory/bin/scoreboard.py --lap "$LAP" --kept "$KEPT" > "$LAPDIR/scoreboard.out" 2>&1 || true
+  # ---- scoreboard (its failure = measurement broke = stop the line, ledger D9/C5) ----
+  if ! "$PY" factory/bin/scoreboard.py --lap "$LAP" --kept "$KEPT" > "$LAPDIR/scoreboard.out" 2>&1; then
+    journal "lap $LAP: SCOREBOARD FAILED — halting the line (measurement integrity)"
+    notify "Factory halted: scoreboard failure on lap $LAP"
+    touch factory/.halt
+    rm -f factory/.lap_in_progress
+    break
+  fi
   "$PY" factory/bin/spend.py record --lap "$LAP" \
       --build-json "$LAPDIR/build.json" \
       $([[ "$JUDGE_RAN" == "true" ]] && echo --judge-json "$LAPDIR/judge.stream.jsonl") \
-      >/dev/null 2>&1 || true
+      >/dev/null 2>&1 || journal "lap $LAP: spend record FAILED (non-fatal)"
+  rm -f factory/.lap_in_progress
   journal "lap $LAP done: build_rc=$BUILD_RC gate=$GATE kept=$KEPT $(grep -o '"metric_moved": "[^"]*"' "$LAPDIR/scoreboard.out" | head -1 || true)"
 
   if ! "$PY" factory/bin/treadmill.py; then
@@ -142,4 +193,9 @@ while true; do
 
   LAPS=$((LAPS + 1))
 done
+
+# ---- off-Mac-disaster insurance: bundle backup, keep last 7 (ledger A4) ----
+mkdir -p "$HOME/Anticipy-backups"
+git bundle create "$HOME/Anticipy-backups/factory-build-$(date -u +%Y%m%dT%H%M%SZ).bundle" factory/build >/dev/null 2>&1 \
+  && ls -1t "$HOME/Anticipy-backups"/factory-build-*.bundle 2>/dev/null | tail -n +8 | xargs rm -f 2>/dev/null || true
 journal "loop exited after $LAPS lap(s)"

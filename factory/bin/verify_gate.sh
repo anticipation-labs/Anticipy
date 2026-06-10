@@ -50,12 +50,17 @@ if [[ -f "$LAPDIR/metrics.json" ]]; then
   if [[ "$HARM" != "0" ]]; then GUARDS="FAIL: silent_harm_count=$HARM"; fail=1; fi
 fi
 
-# ---- 5. phase gate (closure check; failing to CLOSE is not failing the lap) ----
+# ---- 5. phase gate — ONLY when the builder requests a closure attempt (manifest
+#         attempt_gate_close=true) or the foreman forces it. Live-side-effect gates
+#         (real calendar/SMS) must not run on every lap (ledger B1). ----
 PHASE_GATE_PASSED=false
-if [[ -n "$PHASE_GATE" && -x "$PHASE_GATE" ]]; then
-  if "$PHASE_GATE" "$LAP" > "$LAPDIR/phase_gate.out" 2>&1; then PHASE_GATE_PASSED=true; fi
-elif [[ -n "$PHASE_GATE" && -f "$PHASE_GATE" ]]; then
-  if bash "$PHASE_GATE" "$LAP" > "$LAPDIR/phase_gate.out" 2>&1; then PHASE_GATE_PASSED=true; fi
+ATTEMPT=$("$PY" -c "import json;print(json.dumps(json.load(open('$LAPDIR/manifest.json')).get('attempt_gate_close', False)))" 2>/dev/null || echo false)
+if [[ "$ATTEMPT" == "true" || "${FACTORY_FORCE_GATE:-0}" == "1" ]]; then
+  if [[ -n "$PHASE_GATE" && -f "$PHASE_GATE" ]]; then
+    if bash "$PHASE_GATE" "$LAP" > "$LAPDIR/phase_gate.out" 2>&1; then PHASE_GATE_PASSED=true; fi
+  fi
+else
+  echo "phase gate not attempted (manifest attempt_gate_close not set)" > "$LAPDIR/phase_gate.out"
 fi
 
 WALL=$(( $(date +%s) - START ))

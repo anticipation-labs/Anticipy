@@ -50,18 +50,15 @@ else
   note secrets PASS
 fi
 
-# ---- 4. holdout reads in the builder session stream ----
+# ---- 4. holdout ACCESS in the builder session stream (tool_use inputs only;
+#         mentions in CLAUDE.md/STATE.md are legal — see FAILURE_MODES.md) ----
 STREAM="$LAPDIR/build.stream.jsonl"
-if [[ -f "$STREAM" ]]; then
-  holdout=$(grep -E '(personas/holdout|realdays/holdout)' "$STREAM" || true)
-  if [[ -n "$holdout" ]]; then
-    note holdout_read "FAIL: builder touched holdout paths"
-    fail=1
-  else
-    note holdout_read PASS
-  fi
+HOLDOUT_RESULT=$("$REPO/engine/.venv/bin/python" factory/bin/scan_holdout.py "$STREAM" 2>/dev/null || echo "FAIL: scan error")
+if [[ "$HOLDOUT_RESULT" == PASS || "$HOLDOUT_RESULT" == SKIPPED* ]]; then
+  note holdout_read "$HOLDOUT_RESULT"
 else
-  note holdout_read "SKIPPED_NO_STREAM"
+  note holdout_read "$HOLDOUT_RESULT"
+  fail=1
 fi
 
 # ---- 5. per-store recipe cap: no new retailer hostnames in agent code ----
