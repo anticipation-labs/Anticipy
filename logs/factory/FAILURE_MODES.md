@@ -460,3 +460,30 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   single-persona live check; leave full-bank live baselines to verify_gate/foreman runs.
   Foreman fix options unchanged from D20 (auto-WIP-commit at session end, or verify_gate
   FAIL on product files in uncommitted.patch — second firing argues for the FAIL).
+
+## Class F addendum (builder lap 20260610T101115Z)
+- F7 FIXED Sustained 429/quota pressure turned the live decider into a silent task-eater:
+  gateway._openrouter returns "" after exhausting its 4 transport retries (429/5xx/
+  TransportError, ~9s of backoff), Decider.decide parsed "" -> SILENT, and on_event
+  recorded the FALSE reason "decider: not a real commitment -> silent" — so during any
+  quota window every triage-passed line was dropped with a trace indistinguishable from
+  judged silence. The live brain is Gemini FREE TIER (per-minute quotas), so this was a
+  when-not-if; STATE carried it as the unproven "429-pressure behavior" risk. Fail-SILENT
+  was the F4 design choice — correct for harm, deaf for catch, and dishonest in the logs.
+  FIXED (this lap, commit 81eb8ea): transport-level non-reads (exception or empty reply)
+  now return UNAVAILABLE — distinct from a READ-but-verdictless reply, which stays SILENT
+  per F4 — and on_event defers UNAVAILABLE events 75s (past a per-minute quota window)
+  for at most 2 retries through trigger_tick's existing pass, re-entering the FULL
+  pipeline; exhausted retries drop with the honest reason "decider unavailable after
+  retries -> fail silent". No failure path can act: deferral creates no goal/ask, the
+  retried verdict still crosses the harm-line (a deferred money line ends at ASK), the
+  one-way rule is untouched, and stub tier is bit-identical (stub constructs no decider).
+  Residuals: the deferred queue is in-memory (an engine restart loses pending retries —
+  same class as self.pending asks, D16 family); the gateway still ignores Retry-After
+  headers (follow-up candidate); real-429 behavior remains live-unobserved (deliberately:
+  inducing a genuine quota exhaustion would poison the night's shared free-tier quota
+  for verify_gate's own live runs — the deterministic pins stand in).
+  Regression check: engine/scripts/test_decider.py sections 2/10/11/12 (error/keyless/
+  empty -> UNAVAILABLE while a verdictless READ stays SILENT; defer -> tick retry ->
+  late act with honest reasons; sustained outage -> bounded retries -> honest silence
+  with zero goals; deferred money line -> harm-line ASK is still FINAL).

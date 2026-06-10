@@ -405,3 +405,27 @@ still v3 on disk); the value is the live false-action fix surviving git gc and t
 builder deaths. Foreman items unchanged: flip TARGET to P2/gate_P2 (D22), pick a D20
 structural fix (second firing argues verify_gate should FAIL on product files in
 uncommitted.patch).
+
+## Lap 20260610T101115Z (builder, FULL)
+Picked the one named-unproven risk that fits a builder session: 429-pressure behavior
+(STATE carried it since the decider landed; D20 forbids the full-bank live run that
+would be the other candidate). Read the actual code paths before theorizing: under
+sustained quota pressure the gateway exhausts its 4 transport retries and returns ""
+(not an exception), Decider.decide parsed "" -> SILENT, and on_event recorded "decider:
+not a real commitment -> silent" — a FALSE reason; on the Gemini free tier every
+triage-passed line during a quota window was silently eaten with no trace separating
+deafness from judgment. Fixed as ledger F7: transport non-reads (exception or empty
+reply) now return UNAVAILABLE, on_event defers those events 75s for at most 2 retries
+through trigger_tick's existing pass (re-entering the FULL pipeline, so a recovered
+verdict still crosses the harm-line), and exhaustion drops with an honest reason. A
+verdictless-but-read reply stays SILENT (F4 unchanged); no failure path can act.
+Committed the product code FIRST (81eb8ea, per the D20 binding rule), then verified:
+suite 33/33; stub 8-persona bank bit-identical to the ratchet bests (catch 1.0/1.0,
+false 0, harm 0, interrupt 0.625/1.0 — expected invariance, stub has no decider); new
+deterministic pins for defer->retry->act, exhausted->honest-silence, and deferred-money
+->ASK-FINAL; targeted live healthy-path check 5/5 on invented lines (real Gemini replies
+still parse; no UNAVAILABLE misfires). Mechanically dead lap as pre-registered (D22:
+stub primary at ratchet ceiling, gate_P1 closed, TARGET still v3 on disk) — treadmill
+2->3 expected; the value is that a quota outage now degrades to late catches and honest
+logs instead of silent deafness. Deliberately NOT live-observed: forcing a real 429
+would poison tonight's shared free-tier quota for verify_gate's own live runs.

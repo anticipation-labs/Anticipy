@@ -112,7 +112,19 @@ its LESSONS.md still binds.
   assessment contains). Targeted live re-run of lawyer_marcus (the v8 false-action
   persona) CONFIRMS the fix: false_action 0 (was 1), catch 1.0 (8/8), harm 0,
   interrupt 1.0, recall 1.0 — all four gate_P2 guard dimensions held live on it.
-  Still unproven: full 8-persona live bank post-v10, 429-pressure behavior.
+  Still unproven: full 8-persona live bank post-v10 (a foreman/verify_gate run, not a
+  builder session — D20); real-429 behavior observed live (see the F7 bullet below).
+- 429/quota outage behavior is now DESIGNED AND PINNED (lap 20260610T101115Z, commit
+  81eb8ea, ledger F7): previously the gateway's exhausted retries returned "" which the
+  decider read as SILENT — under sustained quota pressure every triage-passed line was
+  silently dropped with the false reason "not a real commitment" (free-tier Gemini makes
+  this a when-not-if). Now transport non-reads return UNAVAILABLE, on_event defers them
+  75s x<=2 retries through trigger_tick (full pipeline re-entry; a recovered verdict
+  still crosses the harm-line; deferral never creates a goal/ask), and exhaustion drops
+  with an honest reason. Deterministic pins in test_decider.py; live healthy path 5/5
+  post-change. Residuals: in-memory deferred queue (restart loses it, D16 family),
+  gateway ignores Retry-After, real-429 storm not live-observed (would poison the
+  night's shared quota for verify_gate's live runs).
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,
