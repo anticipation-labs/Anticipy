@@ -288,3 +288,20 @@
   "Calendar event" (B6, OPEN, next-slice candidate). 5 older [Anticipy test] fixture events
   (Doctor's checkup/Errands/Focus time/1:1 with Alex/Reading time) remain June 10-11 — not
   mine, not touched, surfaced here.
+
+## 2026-06-10 — lap 20260610T060701Z (build: gate_P1 first-close verification)
+TARGET v3 STAGE 1 lap: the P1 slice was already on HEAD (foreman re-land 363cf78), so this lap
+changed no product code — it verified and requested mechanical closure. Suite 31/31 green. Stub
+persona pass (20260610T060701Z-pre): catch 0.6667 / worst 0.50 (doctor_amara), false_action 19,
+silent_harm 0, interrupt 5.4375/10.5 — identical to baseline, as a no-change lap should be.
+Gate precheck (gatep1-20260610T060701Z-pre, live hands): verdict_pass=TRUE rc=0, S1-S4 all green,
+S5 leg has no pass key. First live confirmation that the a6ce4a3 cleanup fix works: S1_cleanup
+.deleted=inkiukb899odvrethklgs5n5hc. S2's capture-time act path still strands a real event (B5,
+known): found id a54lrmeifr4t0khj9rma8p5h7c in the run's goal proof, deleted via Arcade, ListEvents
+read-back over today+2d shows zero Anticipy-labeled leftovers. Two NEW failure modes ledgered:
+B7 (production verify_gate runs have no ARCADE_API_KEY in the gate shell — launchd sets only PATH —
+so tonight's mechanical gate run WILL strand S1+S2 events; ids will be in
+logs/factory/runs/gatep1-20260610T060701Z/gate_p1_results.json and that run dir's goals/*.json
+proofs; morning foreman should delete both) and B8 (S5's twilio_live reads gate-shell env, not
+engine reality; channel stub logged sent:true to placeholder +10000000000). Manifest sets
+attempt_gate_close=true; verify_gate rules.

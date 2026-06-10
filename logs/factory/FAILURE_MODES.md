@@ -172,3 +172,24 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   new files survived the checkout and blocked the patch apply until removed. CONTAINED:
   documented here; loop's own cleanup never hits this (builders commit); foreman kills must
   also `git clean` check untracked product files.
+
+## Class B addendum (lap 20260610T060701Z)
+- B7 gate_P1's S1 cleanup (fixed for id-extraction in a6ce4a3) reads ARCADE_API_KEY/ARCADE_USER_ID
+  from the GATE SHELL env, but the production chain (launchd -> loop.sh -> verify_gate.sh ->
+  gate_P1.sh) exports only PATH + factory.conf caps and nothing sources .env.local — so on every
+  mechanical verify_gate run the cleanup raises and S1's real event strands with
+  "MANUAL CLEANUP NEEDED: <id>" in S1_cleanup. Builder-side proof both ways (2026-06-10, lap
+  20260610T060701Z): with .env.local exported the cleanup deleted its event (S1_cleanup.deleted=
+  inkiukb899odvrethklgs5n5hc, ListEvents read-back clean); launchd plist confirmed to set only PATH.
+  OPEN (foreman-only fix: gate_P1.sh or verify_gate.sh must export .env.local before the heredoc).
+  Regression check: any verify_gate-run gatep1-*/gate_p1_results.json must show S1_cleanup.deleted
+  as an event id; an S1_cleanup.error / "MANUAL CLEANUP NEEDED" note is the tripwire.
+- B8 gate_P1's S5 leg derives twilio_live from the GATE SHELL env, not engine reality: with
+  .env.local exported it reports skipped:false (TWILIO_MOCK=false in env) even though the engine's
+  channel path sent ask+notify to placeholder +10000000000 (real ChannelWorker/OWNER_PHONE wiring is
+  TARGET item 4, unbuilt) and the leg implements no actual SMS-SID check (its note is aspirational)
+  and writes no pass key. Harmless to the verdict today (ok_core is S1-S4), but when Twilio goes
+  live this leg would claim live coverage without checking anything. OPEN (foreman-only): S5 must
+  read the engine's channel audit + Twilio REST, keyed off the ENGINE's effective config. Related:
+  the channel stub logs {"sent": true, "to": "+10000000000"} — an audit line that could be mistaken
+  for a real send; the real ChannelWorker should mark mock sends as mock.

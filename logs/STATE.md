@@ -69,6 +69,13 @@ honestly until OWNER_PHONE is confirmed and OpenRouter is topped up).
   (proof-shape mismatch) and live S2 strands a second calendar event — 4 stray real events
   deleted via Arcade with read-back. B6 OPEN: calendar planner drops quoted titles, so real
   artifacts land unlabeled as "Calendar event" (next-slice candidate).
+- Lap 20260610T060701Z (verification, no code changes) independently re-confirmed gate_P1
+  on HEAD: suite 31/31, personas at baseline, gate precheck verdict_pass=TRUE rc=0 with
+  S1 auto-cleanup proven live (a6ce4a3 fix works WHEN env present) and S2's stray deleted
+  + read back. NEW ledger B7: the production verify_gate chain (launchd sets only PATH)
+  never gives the gate shell ARCADE_API_KEY, so mechanical gate runs strand S1+S2 events
+  until the foreman exports .env.local in the gate path. NEW B8: gate S5 reads gate-shell
+  env, not engine reality (engine channel sends go to placeholder +10000000000).
 
 ## Durable dead ends (do not blindly retry; full history in autopilot/LESSONS.md and git)
 - example.com / localhost / fixture pages as task targets or evidence.
