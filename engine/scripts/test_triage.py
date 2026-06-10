@@ -35,6 +35,14 @@ STREAM = [
     ("We need to confirm the venue.", True),                # commitment
     ("Order a new charger.", True),                         # bare imperative verb
     ("Eventually we need to confirm the venue by Friday.", True),  # hedge CANCELLED by a time anchor
+    # --- spoken command shapes (lap 20260610T062952Z: every dev-bank miss was one of these) ---
+    ("Put the vendor walkthrough Wednesday 9am on my calendar.", True),   # calendar-put idiom
+    ("Block 10 to noon for the deposition prep.", True),                  # block <time> to <time>
+    ("That goes on the calendar now.", True),                            # calendar-put, 3rd person
+    ("Update my calendar so I don't double-book.", True),                # repair-verb imperative
+    ("Someone needs to chase the unpaid invoice.", True),                # delegation
+    ("Get the signed forms over to the front office today.", True),      # causative hand-off
+    ("Those wide trail shoes I picked out - put them in the cart.", True),  # cart idiom
     # --- ambient noise (SHOULD drop: filler / greeting / bare observation) ---
     ("um", False), ("ok thanks", False), ("hey", False), ("yeah", False), ("hmm", False),
     ("Cool, sounds good.", False),
@@ -56,6 +64,15 @@ STREAM = [
     ("The meeting was productive.", False),   # "meeting" != \bmeet\b
     ("I already sent it earlier.", False),    # past-tense, done; "sent" != \bsend\b
     ("The buyer seemed happy.", False),       # "buyer" != \bbuy\b
+    # --- noun-position action words: status narration, not commands (the dominant
+    #     false-action source before lap 20260610T062952Z) ---
+    ("Quarterly review. Two real deals, three zombies.", False),   # noun-phrase status header
+    ("Lab report draft is at 60%.", False),                        # progress narration
+    ("Tomorrow: inspection prep, estimate review, then sleep.", False),  # recap list
+    # --- retractions / conditional vents / trailing hedges: explicitly nothing to do ---
+    ("Hold it - that goes through the job account, don't send anything.", False),
+    ("If this settles before the 19th I'll do a backflip.", False),
+    ("I'll read it on the bike. Probably.", False),
     # --- vents: hedge-NONSPECIFIC commitments (positive cues present, no time anchor) must drop.
     #     Asking on these is the gate-S3 failure; acting on them is the cardinal sin. ---
     ("Ugh, I should really call the plumber someday.", False),

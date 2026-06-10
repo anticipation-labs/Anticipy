@@ -48,9 +48,26 @@ _HARD = [
 _HARD_SEND = re.compile(r"\b(send|sends|sending|forward|forwards|forwarding|dm|dms|reach out|"
                         r"invite|invites|inviting)\b")
 _SOFT_SEND = re.compile(r"\b(email|emails|emailing|message|messages|messaging|text|texts|texting|"
-                        r"reply|replies|replying|respond|responds|responding)\b")
+                        r"reply|replies|replying|respond|responds|responding|tell|tells|telling|"
+                        r"ping|pings|pinging)\b")
+# delegation ("have someone look into X", "someone should chase Y") and the spoken
+# hand-off idiom ("get those answers over to Sam") are messages/requests TO a person —
+# binding direction, so they route through the send assessment (memory-gray -> ask).
+_DELEGATED_SEND = re.compile(r"\b(?:have|get|ask|tell)\s+someone\b"
+                             r"|\bsomeone\s+(?:should|needs?\s+to|has\s+to)\b"
+                             r"|\b(?:get|gets|shoot|fire)\b[^.;!?]{0,50}\bover to\b")
 _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t forget|pencil in)\b"
-                       r"|\badd .* to (my |the )?calendar\b|\bblock (off |out )?(time|my calendar|an hour|the morning|the afternoon)\b")
+                       r"|\badd .* to (my |the )?calendar\b|\bblock (off |out )?(time|my calendar|an hour|the morning|the afternoon)\b"
+                       # spoken calendar-put: "put that on my calendar", "that goes on the
+                       # calendar now", "I need that on my calendar", "block it on the calendar"
+                       r"|\b(?:put|puts|putting|get|gets|getting|go|goes|going|add|adds|adding|"
+                       r"make|makes|stick|sticks|throw|throws|block|blocks|blocking|need|needs|"
+                       r"needed|drop|drops|fix|fixes|update|updates|change|changes|correct|"
+                       r"corrects|move|moves)\b[^.;!?]{0,60}\b(?:on|in|into|onto|to)\s+(?:my|the|his|her|our)\s+calendar\b"
+                       r"|\b(?:update|fix)\s+(?:my|the)\s+calendar\b"
+                       # "block 9 to noon", "block Monday 8 to 9" — a hold phrased as a time range
+                       r"|\bblock\b[^.;!?]{0,40}?\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|midnight)\s*"
+                       r"(?:to|until|till|through|-|–)\s*(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|midnight)\b")
 _DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafting|prepare|prepares|preparing|compose|composes|composing|"
                           r"write up|writes up|outline|outlines|put together)\b")
 _VAGUE_CART = re.compile(
@@ -70,8 +87,9 @@ _RESOLUTION_STOP = {
 }
 # --- other reversible (ACT) ---
 _REVERSIBLE: List[Tuple[str, str]] = [
+    # "check with <person>" is consulting a human, not research — falls through to ask
     ("research", r"\b(research|look up|looks up|looking up|look into|find|finds|finding|find out|"
-                 r"check|checks|checking|read up|search|searches|searching|browse|browses|"
+                 r"check(?:s|ing)?(?!\s+with\b)\b|read up|search|searches|searching|browse|browses|"
                  r"compare|compares|summari[sz]e|review|reviews|gather)\b"),
     ("cart", r"\badd\b.*\bcart\b|\bput\b.*\bcart\b"),   # add/put <item> to/in (amazon) cart -> reversible
     # natural phrasing: allow filler between the verb and the noun ("book us a table", "set up a
@@ -126,6 +144,13 @@ class HarmLine:
         # 2) hard send (send/forward/dm) — binding, gray via memory
         if _HARD_SEND.search(t):
             return self._assess_send(t, ctx)
+        # 2b) delegation / hand-off to a person ("have someone look into X", "get those
+        #     answers over to Sam") — work direction aimed at a human is ALWAYS binding;
+        #     the casual-recipient memory downgrade is for first-person social messages
+        #     ("text mom I'll be late"), never for delegated work
+        if _DELEGATED_SEND.search(t):
+            return HarmVerdict(True, "binding_send",
+                               "delegated request aimed at a person -> ask before sending")
         # 3) reminder / calendar hold — reversible (the future action is re-gated when it fires)
         if _REMINDER.search(t):
             return HarmVerdict(False, "calendar_hold", "reversible:reminder/hold -> act (re-gated on fire)")

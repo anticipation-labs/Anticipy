@@ -193,3 +193,62 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   read the engine's channel audit + Twilio REST, keyed off the ENGINE's effective config. Related:
   the channel stub logs {"sent": true, "to": "+10000000000"} — an audit line that could be mistaken
   for a real send; the real ChannelWorker should mark mock sends as mock.
+
+## Class B/C addendum (judge, lap 20260610T060701Z)
+- B9 gate_P1.sh's verdict_pass contradicts the gate's own stated contract. The header (lines
+  11-12) says "the gate cannot CLOSE with skipped live legs unless FACTORY_P1_ALLOW_MOCK=1",
+  but the code computes verdict_pass = ok_core(S1-S4) and (live_hands or allow_mock) — S5
+  skipped:true and S6 pass:null never block, and allow_mock is consulted only for live_hands,
+  never for skips. PHASES.yaml's P1 close_when ("S1-S6 live ... real trigger-fired SMS ...
+  MP3 day clean") is therefore broader than anything the gate enforces. Tonight's mechanical
+  P1 close (lap 20260610T060701Z) proves S1-S4 live + the real scheduler — it does NOT prove
+  live SMS (S5, owner-blocked: no OWNER_PHONE/Twilio) or the MP3/fixture day (S6, deferred;
+  its substance is partially covered by the 16-day 8-persona evals each lap). TARGET v3
+  STAGE 1 explicitly pre-authorized closure at this scope, so this is a foreman documentation/
+  enforcement inconsistency, not builder gaming — but as written the ladder text and the gate
+  disagree about what "P1 closed" means. OPEN (foreman-only): either amend PHASES.yaml P1
+  close_when to the proven scope (SMS reality gates at P3, full-day reality at P5) or reopen
+  P1 when Twilio creds land. Regression check: every phase close_when must list exactly the
+  legs its gate hard-fails on; a gate header promising a rule its exit code doesn't implement
+  is the tripwire.
+- C12 scans.sh tree_clean WARNs on the loop's own marker file: the porcelain filter excludes
+  `?? logs/`, `?? factory/.lock`, `?? .anticipy` but not `?? factory/.lap_in_progress`, which
+  exists during every verify_gate run — so every nightly lap reports
+  "WARN: uncommitted tracked changes" (a mislabel: it is an untracked loop-control file, not a
+  tracked change). Confirmed on lap 20260610T060701Z: the WARN's only cause was
+  .lap_in_progress; `git status --porcelain` minus the marker was clean. A permanent WARN is
+  noise that trains everyone to ignore the one scan that would catch a genuinely dirty tree
+  (e.g. a judge's uncommitted ledger append being measured into the next lap, or eaten by its
+  revert). OPEN (foreman-only): add `factory/\.lap_in_progress` to the exclusion and rename
+  the message to say what was actually found.
+
+## Class F addendum (builder lap 20260610T062952Z)
+- F2 Triage classified by bag-of-words ANYWHERE-matching and inverted on speech-act shape:
+  base-form word-boundary verbs missed explicit imperative commands phrased with inflections
+  or idioms ("put that on my calendar", "Block Wednesday 5 to 6:30", "get those answers over
+  to <colleague>", "someone needs to chase..."), while the SAME words in noun position passed
+  triage as narration ("Pipeline review.", "Forecast draft:", "Lab report draft is at 60%")
+  and the harm-line then ACTed on them via the draft/research reversible categories. Evidence:
+  in run 20260610T060701Z-pre, 16/16 misses were decision=ignore on explicit commands and
+  17/19 false actions were noun-position status narration. PREVENTED (2026-06-10, lap
+  20260610T062952Z): triage rewritten to command-shape detection (clause-initial imperatives,
+  calendar-put/block-time/cart/causative-get/delegation idioms) plus confident negatives
+  (retraction/countermand, conditional vents, trailing hedges, already-handled, vocative
+  asides); harm-line routes spoken calendar-puts to calendar_hold and delegated hand-offs to
+  binding ask. Regression checks: pinned shape cases added to engine/scripts/test_triage.py
+  (recall hard bar 1.000 now includes 7 command shapes; noise-drop includes status/retraction/
+  conditional/trailing-hedge shapes) and test_harmline.py (delegated sends must ask, spoken
+  calendar-puts must act); the 8-persona stub eval recomputes the full surface every lap.
+- F3 The harm-line's casual-send downgrade (_recipient_casual) scans the WHOLE memory-context
+  haystack for any casual token ("daughter", "friend", ...) instead of testing the actual
+  RECIPIENT, so any send assessed with non-abstaining high-relevance memory that happens to
+  contain a casual word anywhere downgrades to ACT. Observed live in this lap's first eval
+  pass: 3 delegated work sends ("someone should ping the <vendor> folks", "get that letter
+  drafted and over to <colleague>") cleared to act with category casual_send = 3 act-on-ask
+  false actions. CONTAINED for delegation (this lap): _DELEGATED_SEND now returns binding-ask
+  BEFORE the casual path can run (pinned in test_harmline.py). OPEN for first-person sends:
+  "text <person> I'm running late" plus an unrelated casual token in recalled memory still
+  downgrades to act on weak evidence. Fix candidate: extract the recipient phrase and test
+  THAT against the casual list (or hand the gray middle to the P2 decider, which may only
+  move decisions toward SILENT/ASK). Regression check when fixed: a battery case where the
+  casual word is in memory context but the recipient is professional must ASK.

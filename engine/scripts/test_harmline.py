@@ -43,6 +43,10 @@ BATTERY = [
     ("Create a calendar event and invite the client.", True),
     ("Email the recruiter back with my decision.", True),
     ("Reply to the board about the budget.", True),
+    # ---- DETRIMENTAL: delegated work / hand-off to a person (never a casual send) ----
+    ("Have someone look into the hosting spike this week.", True),
+    ("Someone should ping the customer success team about a reference.", True),
+    ("Get the security questionnaire answers over to the procurement contact.", True),
     # ---- DETRIMENTAL: sign-up / paid ----
     ("Sign up for the premium plan.", True),
     ("Subscribe to the data service.", True),
@@ -78,6 +82,9 @@ BATTERY = [
     ("Block off an hour tomorrow morning to focus.", False),
     ("Create a calendar event titled Dentist on June 18 from 9:40 AM to 10:10 AM.", False),
     ("Make an event on my calendar for the dentist on June 18 from 9:40 AM to 10:10 AM.", False),
+    ("Put the inspection Wednesday 9am on my calendar.", False),    # spoken calendar-put
+    ("Block 9 to noon for the deposition.", False),                 # hold as a time range
+    ("Update my calendar with the new board call time.", False),    # repair-verb hold
     # ---- SAFE: prepare a document ----
     ("Prepare a brief for the board meeting.", False),
     ("Put together a summary of the user interviews.", False),

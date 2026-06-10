@@ -305,3 +305,24 @@ logs/factory/runs/gatep1-20260610T060701Z/gate_p1_results.json and that run dir'
 proofs; morning foreman should delete both) and B8 (S5's twilio_live reads gate-shell env, not
 engine reality; channel stub logged sent:true to placeholder +10000000000). Manifest sets
 attempt_gate_close=true; verify_gate rules.
+
+2026-06-10 lap 20260610T062952Z (builder, P2/STAGE-2 per TARGET v3): evidence-first
+deterministic slice at catch_rate_worst. Read every raw miss/false-action in run
+20260610T060701Z-pre before theorizing: ALL 16 misses were triage `ignore` on explicit
+imperative commands ("put that on my calendar", "block 9 to noon", "get X over to Y",
+"someone needs to..."), and 17/19 false actions were noun-position action words in status
+narration ("Pipeline review.", "Lab report draft is at 60%") that the harm-line ACTed on —
+one inversion, both metrics. Rewrote triage from bag-of-words to speech-act shapes
+(clause-initial imperatives, calendar/cart/causative/delegation idioms, plus confident
+negatives: retractions, conditional vents, trailing hedges, already-handled, vocative
+asides) and extended harm routing (spoken calendar-puts -> calendar_hold act; delegated
+hand-offs -> always binding ask — first eval pass exposed the casual-send-downgrade
+clearing 3 delegated sends to act, ledgered F3). Builder-side stub eval went catch
+0.6667/worst 0.50 -> 1.0/1.0, false_action 19 -> 0, interrupt 5.44/10.5 -> 1.06/1.5,
+harm 0; suite 31/31 with new pinned shape cases. Honest caveats: dev-bank perfection is
+partly bank-fit — the shapes are general English but were derived from dev evidence, so
+holdout (judge-only) should degrade; the 17 remaining asks are mostly money commands the
+product is REQUIRED to ask on (bank keys them silence because the speaker retracts next
+line — a causal engine cannot know that at ask time). attempt_gate_close=false: TARGET's
+registered gate is gate_P1 (already closed; re-running strands real events, B7), and
+gate_P2 isn't flipped in yet — movement rides on the primary metric.

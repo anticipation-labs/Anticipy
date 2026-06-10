@@ -1,56 +1,63 @@
 # Last Lap
 
-Lap: 20260610T060701Z
+Lap: 20260610T062952Z
 Date: 2026-06-10
-Phase: P1-closed-loop (Factory)
-Slice: gate_P1 first-close — verification lap per TARGET v3 STAGE 1 (no product code changes)
+Phase: P1 closed -> operating as P2-brain STAGE 2 per TARGET v3 (registered phase_gate still gate_P1)
+Slice: deterministic triage/harm speech-act fix aimed at catch_rate_worst (TARGET STAGE-2 item 3)
 
-What changed:
-- NOTHING in product code. The P1 slice (duetime grounding, tick scheduler, notify routing,
-  S3 hedge drop) was already on HEAD via foreman re-land 363cf78; TARGET v3 STAGE 1 says
-  verify + set attempt_gate_close, do NOT rebuild. This lap wrote only: its manifest
-  (attempt_gate_close=true), this file, journal, STATE note, FAILURE_MODES B7/B8.
+What changed (product):
+- engine/anticipy_engine/proactive/triage.py — REWRITTEN from bag-of-words anywhere-matching
+  to speech-act shape detection. Positives: clause-initial imperatives (strong vs noun-prone
+  verbs with object check), calendar-put/block-time-range/cart/causative-get/delegation
+  idioms, fixed by-day boundary ("by month end" no longer matches via "mon"), "let's
+  see/hope/..." musing exemption, "deadline" needs first-person skin. Confident negatives
+  checked BEFORE positives: retraction/countermand ("hold it... don't send", clause-initial
+  "forget it"), conditional vents ("If X I'll...", "I'd...", "oh sure", "I should just"),
+  deferrals ("I'll deal with it later", "check with her mom"), already-handled ("she handled
+  ours", "one less thing"), trailing hedges ("...Probably."), vocative asides to a present
+  third party ("<Name> can you pull...").
+- engine/anticipy_engine/proactive/harm.py — _REMINDER now covers spoken calendar-puts
+  ("that goes on the calendar", "fix/update ... on my calendar", "block 9 to noon") -> act
+  as calendar_hold; NEW _DELEGATED_SEND ("have someone...", "someone should...", "get X over
+  to Y") -> ALWAYS binding ask (the casual-recipient memory downgrade was clearing delegated
+  work to act — ledger F3); tell/ping added to soft-send; "check with <person>" excluded from
+  research.
+- engine/scripts/test_triage.py / test_harmline.py — additive pinned cases for every new
+  shape (generic phrasings, not bank lines). Suite is now 31/31 with these included.
 
-Eval numbers I saw (builder-side; verify_gate recomputes everything):
-- Suite: 31/31 PASS.
-- 8-persona stub eval (20260610T060701Z-pre): catch 0.6667 / worst 0.50 (doctor_amara),
-  correct 0.5062, false_action 19, silent_harm 0, interrupt 5.4375 / 10.5, e2e 0.2604,
-  recall_worst 0.3333 — identical to baseline/last lap (expected: no code changes).
-- gate_P1 precheck (gatep1-20260610T060701Z-pre, live hands, .env.local exported into the
-  gate shell): verdict_pass=TRUE, rc=0. S1 act+done+proof live, S2 trigger_fired via the
-  real scheduler (decision=notify), S3 ignore, S4 ask->pending->deny. S5 writes no pass key
-  (see B8). S1_cleanup.deleted=inkiukb899odvrethklgs5n5hc — first live proof the a6ce4a3
-  cleanup fix works when the env is present.
+Eval numbers I saw (builder-side, stub tier, runs 20260610T062952Z-pre and -pre2;
+verify_gate recomputes everything):
+- BEFORE (baseline, unchanged since C3-corrected scorer): catch 0.6667 / worst 0.50,
+  false_action 19, silent_harm 0, interrupt 5.4375 / 10.5 worst, recall_worst 0.3333.
+- AFTER (-pre2, final): catch 1.0 / worst 1.0, false_action 0, silent_harm 0, interrupt
+  1.0625 / 1.5 worst, correct_action 0.6788, e2e 0.3427, recall_worst 1.0. All four gate_P2
+  thresholds met on the DEV bank builder-side (worst>=0.70, false==0, harm==0, interrupt<=3).
+- Honest caveats: (1) dev-bank 1.0 is partly bank-fit — patterns are general English speech
+  shapes, but they were derived from dev-run evidence; expect holdout (judge-only) to be
+  lower. (2) The 17 remaining unnecessary asks are dominated by money commands the product
+  is REQUIRED to ask on (the bank keys them silence because the speaker retracts on the NEXT
+  line; a causal line-by-line engine cannot see that at ask time). Squeezing them out
+  deterministically would be overfit; the P2 decider + ask-debounce is the right owner.
+- No real-world side effects: stub tier, mock hands, no gate run, zero paid model calls.
 
-Real-world side effects this lap (all self-owned, labeled, cleaned):
-- Gate precheck created 2 real calendar events. S1's was auto-deleted by the gate's own
-  cleanup. S2's capture-time act artifact (B5, known OPEN) id a54lrmeifr4t0khj9rma8p5h7c
-  was found in the run's goal proof, deleted via Arcade GoogleCalendar.DeleteEvent
-  (status success), ListEvents read-back over today+2d: zero Anticipy-labeled leftovers.
-- Channel sends (S4 ask, S2 notify) went to placeholder +10000000000 — no real SMS;
-  ChannelWorker/OWNER_PHONE wiring is TARGET item 4, unbuilt.
-
-FOR THE MORNING FOREMAN (predictable strays from tonight's mechanical gate run):
-- verify_gate will re-run gate_P1 for this lap (manifest attempt_gate_close=true). That
-  production run has NO ARCADE_API_KEY in its shell (B7: launchd sets only PATH), so its
-  S1 cleanup will fail loudly and S2 is never cleaned. Delete both: S1's id from
-  logs/factory/runs/gatep1-20260610T060701Z/gate_p1_results.json (S1_cleanup note) and
-  S2's id from that run dir's data/goals/*.json proof. Then fix B7 (export .env.local in
-  the gate or verify_gate) so this stops recurring.
-
-Honest findings (NOT fixed; ledgered):
-- B7 (NEW, OPEN): gate cleanup depends on gate-shell env that the production chain never
-  provides — works builder-side only. Foreman-only fix.
-- B8 (NEW, OPEN): S5's twilio_live reads the gate shell env, not engine reality, and
-  implements no actual SMS check; channel stub logs sent:true to a placeholder.
-- B5 (known, OPEN): S2 capture-time act path strands one real event per gate run.
-- B6 (known, OPEN): calendar planner drops quoted titles — S1 artifacts land as generic
-  "Calendar event"; next product-slice candidate.
+Process notes:
+- attempt_gate_close=false on purpose: the registered phase_gate is gate_P1.sh (first-closed
+  at lap 20260610T060701Z; re-passing is status, not movement, and a re-run strands real
+  calendar events per B7). gate_P2.sh is not flipped in by the foreman yet. This lap's keep
+  rides on primary-metric movement: catch_rate_worst 0.50 -> (verify_gate's recompute).
+- This commit also carries the PRIOR judge's uncommitted ledger appends (B9, C12 in
+  FAILURE_MODES.md) — preserving them from a future revert, exactly the risk C12 describes.
+  Those two entries are the judge's words, not this lap's. RATCHET.json /
+  product_scoreboard.csv / factory/.lap_in_progress were loop-modified and are NOT in this
+  commit (loop-owned).
 
 Next:
-- If gate_P1 first-closes mechanically: P2 per TARGET v3 STAGE 2 — decider.py
-  (cheap-model ACT/ASK/SILENT, fail-SILENT, harm-line FINAL), wire behind live checks,
-  attack false_action_count 19 -> 0 and interrupt_cost_worst 10.5 -> <=3 from the raw
-  run evidence.
-- B6 quoted-title fix (small, testable product slice).
-- TARGET item 4: ChannelWorker + TWILIO_FROM normalization + OWNER_PHONE routing.
+- The P2 decider (TARGET STAGE-2 items 1-2): cheap-model ACT/ASK/SILENT, live-only, fail-
+  SILENT, harm-line FINAL — now sits on an honest deterministic floor. It owns the residual
+  gray (money-retraction pairs need an ask-debounce/settle-window; F3 recipient extraction).
+- F3 OPEN: first-person casual-send downgrade still keys off any casual token anywhere in
+  memory context, not the recipient.
+- Foreman: flip current_phase/phase_gate to P2/gate_P2.sh; gate_P2 thresholds already pass
+  builder-side on the dev bank, so a gate-close attempt lap is cheap once flipped.
+- Still-open product gaps unchanged: B5/B6 (capture-time act artifact, quoted-title drop),
+  B7/B8 (gate env), D16 (restart double-fire).

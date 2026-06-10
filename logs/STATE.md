@@ -54,7 +54,23 @@ its LESSONS.md still binds.
 - Possible stray artifact: `[Anticipy test] M2 typed smoke 20260607-continue` calendar
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
-## Current phase: P1-closed-loop (see factory/TARGET.md v2 for the work list)
+## Current phase: P1 CLOSED (lap 20260610T060701Z) -> P2-brain (TARGET v3 STAGE 2)
+- P1-closed-loop first-closed mechanically at lap 20260610T060701Z (RATCHET phases_closed).
+  Scope honesty: S1-S4 proven live; S5 (real SMS) owner-blocked, S6 (MP3 day) deferred —
+  see ledger B9 for the gate-vs-PHASES.yaml scope mismatch (foreman item).
+- Lap 20260610T062952Z (builder, deterministic): triage rewritten from bag-of-words to
+  speech-act shapes + harm-line calendar-put/delegated-send routing (ledger F2 PREVENTED,
+  F3 CONTAINED-for-delegation/OPEN-for-first-person). Builder-side stub eval on the dev
+  bank: catch 1.0 / worst 1.0 (was 0.6667/0.50), false_action 0 (was 19), interrupt
+  1.06 avg / 1.5 worst (was 5.44/10.5), silent_harm 0, recall_worst 1.0 (was 0.33);
+  suite 31/31. All four gate_P2 thresholds met on the DEV bank builder-side; holdout
+  (judge-only) expected lower — dev-bank perfection is partly bank-fit. Residual asks are
+  mostly money commands the product MUST ask on (bank keys them silence because the speaker
+  retracts next line; causal engine can't know at ask time) — decider/ask-debounce territory.
+- The P2 decider (cheap-model ACT/ASK/SILENT, live-only, fail-SILENT, harm-line FINAL) is
+  the next slice; it now sits on an honest deterministic floor.
+
+## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,
 not YES/NO ask); real ChannelWorker + Twilio env normalization + owner-literal removal;
 MainView SideDoor as a real TextField. Gate: factory/gates/gate_P1.sh (live legs SKIP
@@ -88,9 +104,11 @@ honestly until OWNER_PHONE is confirmed and OpenRouter is topped up).
   Vitamin Shoppe, Five Below, PetSmart, Wayfair retry-after-mutation, Lowe's token-rich.
 - Google Sheets/Docs canvas synthetic input; Amazon.ca Playwright automation.
 - Always-on cloud transcription (sidecar cache is the pattern).
-- The proactive engine's known weakness is OVER-ASKING (measured: interrupt_cost 5.4/day)
-  and acting on third-party-send lines the bank keys as ask-first (false_action_count 19).
-  That is P2 decider territory; overnight/track_b/decider.py is the proven seed.
+- The proactive engine's OVER-ASKING and act-on-narration weakness (interrupt 5.4/day,
+  false_action 19 at baseline) was mostly a triage bag-of-words inversion — fixed
+  deterministically at lap 20260610T062952Z (ledger F2; now 1.06/day, 0 false on dev bank).
+  The residual gray (money-retraction pairs, first-person casual sends, F3) is P2 decider
+  territory; overnight/track_b/decider.py is the proven seed.
 
 ## Law digest (unchanged where it was right)
 Never act on a vent (silent_harm guard is absolute and voids laps). Money/payment is the
