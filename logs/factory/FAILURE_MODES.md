@@ -535,3 +535,26 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   deferred_persistence) — restart recovery, cross-restart retry bound, money-ASK
   finality after restore, stub no-touch, corrupt set-aside, no-path no-IO,
   crash-loses-not-replays ordering.
+
+## Class C addendum (judge, lap 20260610T110142Z)
+- C15 OPEN The P2 phase-close decision is judged on a STUB-tier holdout slice
+  (judge procedure + persona_run.py: stub tier sets ANTICIPY_MODEL_PROVIDER=stub,
+  and stub constructs no decider — the engine's own logs state the live seam never
+  engages). So the close structurally CANNOT see live-decider improvements (v8/v10):
+  the 0.70 worst-persona catch floor must be cleared by the deterministic triage
+  path alone. Evidence: tonight's holdout aggregate is BIT-IDENTICAL to the judge
+  091120Z holdout on all six dims (catch 0.625 / worst 0.3333, false 0, harm 0,
+  interrupt worst 3.0, recall worst 0.3333) despite three kept product laps in
+  between — all live-only changes, invisible at stub, exactly as those laps
+  pre-registered. Consequence: any builder hypothesis of the form "decider
+  generalization" can never close P2 as currently measured. Foreman must pick one:
+  (a) accept that the stub-visible triage path alone must clear the floor (then aim
+  builders there), or (b) define a live-tier holdout protocol for phase closes
+  (quota/cost implications; the shared free-tier window is load-bearing at night).
+- C16 OPEN Holdout granularity is coarse: 4 personas x 1 day; the worst persona has
+  only 3 expected items, so the 0.70 floor degenerates to requiring 3/3 there, and
+  one swing item moves worst-catch by 0.3333. interrupt_cost_worst passed the P2
+  ceiling EXACTLY at the boundary (3.0 <= 3.0, two personas sitting on it) — a
+  knife-edge pass with no margin signal. Partially known (foreman backlog already
+  carries "holdout red-pen; bank v2"); ledgered so the bank-v2 work treats
+  denominator size and threshold margins as requirements, not nice-to-haves.

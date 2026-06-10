@@ -10,7 +10,7 @@
     "memory_recall_worst": 1.0,
     "silent_harm_count": 0
   },
-  "foreman_note": "Escalation 20260610T1059 resolved: TARGET v4 (P2-brain). Treadmill reset per documented re-aim.",
+  "foreman_note": "D11 limit halt resolved 05:47 PDT; treadmill reset; TARGET v4 unchanged.",
   "last_movement_lap": "20260610T062952Z",
   "phases_closed": {
     "P0-floor": "bootstrap-20260609",
