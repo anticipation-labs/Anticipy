@@ -19,7 +19,10 @@ only when a decision is genuinely hard. Triage cues live in proactive/triage.py.
 """
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Tuple
 
 from ..channels.text import TextChannel
@@ -73,6 +76,7 @@ class ProactiveEngine:
         channel=None,
         user_contact: str = "+10000000000",
         decider=None,
+        deferred_path=None,
     ) -> None:
         self.bus = bus
         self.gateway = gateway
@@ -97,6 +101,14 @@ class ProactiveEngine:
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
         self.decider_deferred = []              # Room 1.5 outage queue: [{event, due}] awaiting a retry tick
         self._decider_attempts = {}             # event.id -> deferrals so far (capped at DECIDER_MAX_RETRIES)
+        # Outage-queue persistence (ledger F7 residual / D16 family): an engine restart
+        # during a quota window must not eat the lines the decider never read. LIVE-ONLY
+        # on both ends — a stub engine has no decider, and an unread line must never
+        # re-enter the pipeline without one, so stub boots neither restore nor touch the
+        # file (it waits for the next live boot). No path (the default) = no IO at all.
+        self._deferred_path = Path(deferred_path) if deferred_path else None
+        if self._deferred_path is not None and self.decider is not None:
+            self._restore_deferred()
 
     async def on_event(self, event: Event, now: Optional[float] = None) -> dict:
         now = now if now is not None else now_ts()
@@ -147,6 +159,7 @@ class ProactiveEngine:
                     self._decider_attempts[event.id] = attempt + 1
                     retry_at = now + DECIDER_RETRY_SECONDS
                     self.decider_deferred.append({"event": event, "due": retry_at})
+                    self._persist_deferred()
                     if self.glassbox is not None:
                         self.glassbox.log("decider_deferred",
                                           {"event_id": event.id, "text": event.text,
@@ -221,6 +234,57 @@ class ProactiveEngine:
                 "detrimental": verdict.detrimental, "memory_forced": verdict.memory_forced,
                 "decider": decider_word, "goal_id": goal_id, "ask_id": ask_id}
 
+    def _restore_deferred(self) -> None:
+        """Reload the outage queue written by a previous live engine (F7/D16): each
+        entry re-enters the FULL pipeline at its due tick exactly as if the process
+        had never died — the attempt count rides along so the DECIDER_MAX_RETRIES
+        bound holds ACROSS restarts. Any failure here fails toward silence: boot
+        with an empty queue, log honestly, set the unreadable file aside."""
+        p = self._deferred_path
+        if not p.exists():
+            return
+        try:
+            restored, attempts = [], {}
+            for e in json.loads(p.read_text()):
+                event = Event.model_validate(e["event"])
+                restored.append({"event": event, "due": float(e["due"])})
+                attempts[event.id] = int(e["attempt"])
+            self.decider_deferred = restored
+            self._decider_attempts.update(attempts)
+            if self.glassbox is not None:
+                self.glassbox.log("decider_deferred_restored",
+                                  {"count": len(restored), "path": str(p)})
+        except Exception as exc:
+            self.decider_deferred = []
+            self._decider_attempts = {}
+            try:
+                p.rename(p.with_suffix(p.suffix + ".corrupt"))
+            except OSError:
+                pass
+            if self.glassbox is not None:
+                self.glassbox.log("decider_deferred_restore_failed",
+                                  {"path": str(p), "error": str(exc)})
+
+    def _persist_deferred(self) -> None:
+        """Atomically snapshot the outage queue on every mutation. A disk failure
+        must never break the live decision path — log it and carry on in memory."""
+        if self._deferred_path is None or self.decider is None:
+            return
+        p = self._deferred_path
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(
+                [{"event": d["event"].model_dump(mode="json"), "due": d["due"],
+                  "attempt": self._decider_attempts.get(d["event"].id, 0)}
+                 for d in self.decider_deferred], indent=2)
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            tmp.write_text(payload)
+            os.replace(tmp, p)
+        except OSError as exc:
+            if self.glassbox is not None:
+                self.glassbox.log("decider_deferred_persist_failed",
+                                  {"path": str(p), "error": str(exc)})
+
     def _flush_held(self, h: dict) -> None:
         """A held money ask survived its retraction window — send the SAME ask, late."""
         goal = self.orchestrator.store.load(h["goal_id"])
@@ -278,6 +342,9 @@ class ProactiveEngine:
         due_deferred = [d for d in self.decider_deferred if d["due"] <= now]
         if due_deferred:
             self.decider_deferred = [d for d in self.decider_deferred if d["due"] > now]
+            # persist BEFORE re-entry: a crash mid-retry can only LOSE these events
+            # (fail toward silence), never restore-and-replay one that already acted
+            self._persist_deferred()
             for d in due_deferred:
                 redo = await self.on_event(d["event"], now=now)
                 if self.glassbox is not None:

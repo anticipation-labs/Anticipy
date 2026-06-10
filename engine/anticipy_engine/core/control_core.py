@@ -94,7 +94,8 @@ class ControlCore:
             alternates=alternates, approver=GatedApprover(True), memory_context=self._mem_ctx,
         )
         self.proactive = ProactiveEngine(
-            self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard
+            self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard,
+            deferred_path=base / "decider_deferred.json",
         )
 
     async def start(self) -> None:
