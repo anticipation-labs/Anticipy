@@ -22,6 +22,18 @@ Write `logs/factory/laps/$LAP/manifest.json`:
 Laps whose results don't match their manifest get judged harshly. A `groundwork` lap
 must name the build lap it enables.
 
+## Research is a primary method — not a last resort
+- Before editing any config, API call, library usage, or format you are not 100% sure of:
+  search the web / fetch the official docs FIRST. Guessing formats has cost this project
+  tens of hours (it's in LESSONS.md). You have WebSearch and WebFetch — use them.
+- The working loop is: form a falsifiable hypothesis (write it in your manifest) →
+  research how others solved it / what the docs actually say → implement → test →
+  if it fails, research the failure mode before retrying → re-test. Two honest failed
+  tries on one hypothesis = stop, write what you learned in logs/last_lap.md, pick a
+  different hypothesis or a different slice.
+- When a persona metric resists you, read the actual raw run dirs
+  (logs/factory/runs/<lap>/<persona>/) line by line before theorizing. Evidence first.
+
 ## Contract
 - ONE slice aimed at `primary_metric` or `phase_gate`. Smallest real step. No five-thing laps.
 - Run the evals yourself before committing:

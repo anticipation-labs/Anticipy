@@ -90,6 +90,14 @@ bottleneck_hypothesis: (foreman fills in)
 options: (foreman fills in)
 """, encoding="utf-8")
     HALT.touch()
+    try:  # surface the halt on the Mac so the owner sees it without opening the repo
+        import subprocess
+        subprocess.run(["osascript", "-e",
+                        'display notification "Factory halted: strategy change needed. '
+                        'See factory/ESCALATION.md" with title "Anticipy Factory"'],
+                       timeout=10, capture_output=True)
+    except Exception:
+        pass
     print(json.dumps({"treadmill": "HALT", "trigger": trigger, "escalation": str(ESC)}))
     return 2
 
