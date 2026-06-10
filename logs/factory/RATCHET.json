@@ -5,12 +5,12 @@
     "correct_action_rate": 0.6788,
     "e2e_completion_rate": 0.3427,
     "false_action_count": 0,
-    "interrupt_cost": 1.0625,
-    "interrupt_cost_worst": 1.5,
+    "interrupt_cost": 0.625,
+    "interrupt_cost_worst": 1.0,
     "memory_recall_worst": 1.0,
     "silent_harm_count": 0
   },
-  "foreman_note": "Reconstructed 2026-06-10 after C14 (revert rolled back tracked measurement files). True treadmill at halt was >=5 on a SATURATED dev bank; foreman strategy change to P2-brain (TARGET v4) resets it per the documented re-aim path.",
+  "foreman_note": "Escalation 20260610T1059 resolved: TARGET v4 (P2-brain). Treadmill reset per documented re-aim.",
   "last_movement_lap": "20260610T062952Z",
   "phases_closed": {
     "P0-floor": "bootstrap-20260609",
