@@ -1,0 +1,1 @@
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/MacOS/Anticipy: Mach-O 64-bit executable arm64

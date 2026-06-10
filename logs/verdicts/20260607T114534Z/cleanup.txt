@@ -1,0 +1,7 @@
+cleanup_start_utc=2026-06-07T12:37:30Z
+killed_ant_app_pid=24088
+"disk5" ejected.
+detached_volume=/Volumes/Anticipy
+removed_tmp_download=/Users/omarebrahim/Desktop/Anticipy-executor-working/.anticipy-data/judge_20260607T114534Z_public_download
+removed_tmp_profiles=yes
+cleanup_end_utc=2026-06-07T12:37:35Z

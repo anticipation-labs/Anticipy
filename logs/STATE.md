@@ -59,6 +59,16 @@ Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (n
 not YES/NO ask); real ChannelWorker + Twilio env normalization + owner-literal removal;
 MainView SideDoor as a real TextField. Gate: factory/gates/gate_P1.sh (live legs SKIP
 honestly until OWNER_PHONE is confirmed and OpenRouter is topped up).
+- Lap 20260610T052102Z re-landed the falsely-reverted (ledger C11) due-time chain from lap
+  20260610T045550Z (duetime.py grounding, remind_ts firing, notify routing, lifespan
+  scheduler ANTICIPY_TICK_SECONDS default 30 + POST /trigger/tick) and fixed gate S3:
+  triage now drops hedge-nonspecific vent lines (someday/eventually/at some point/...)
+  unless a concrete time anchor cancels the hedge. Builder-side: suite 31/31, persona
+  metrics unmoved, gate_P1 verdict_pass=TRUE (S1-S4 green live, S5 honest skip).
+- Live-gate side-effect leaks found + contained (ledger B4/B5): gate S1 cleanup never fired
+  (proof-shape mismatch) and live S2 strands a second calendar event — 4 stray real events
+  deleted via Arcade with read-back. B6 OPEN: calendar planner drops quoted titles, so real
+  artifacts land unlabeled as "Calendar event" (next-slice candidate).
 
 ## Durable dead ends (do not blindly retry; full history in autopilot/LESSONS.md and git)
 - example.com / localhost / fixture pages as task targets or evidence.

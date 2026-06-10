@@ -1,0 +1,6 @@
+/Volumes/Anticipy
+/Volumes/Anticipy/Anticipy.app
+/Volumes/Anticipy/Anticipy.app/Contents
+/Volumes/Anticipy/Anticipy.app/Contents/MacOS
+/Volumes/Anticipy/Anticipy.app/Contents/Resources
+/Volumes/Anticipy/Anticipy.app/Contents/Info.plist

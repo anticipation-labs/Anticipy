@@ -1,0 +1,2 @@
+348: 4995   ??  S      0:00.54 /private/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/MacOS/Anticipy
+370: 5117   ??  S      0:00.44 /Applications/Anticipy.app/Contents/MacOS/Anticipy

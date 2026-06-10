@@ -1,0 +1,6 @@
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/MacOS
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/Resources
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/Info.plist

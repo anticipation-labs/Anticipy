@@ -1,0 +1,34 @@
+{
+  "CFBundleDevelopmentRegion" => "English"
+  "CFBundleDisplayName" => "Anticipy"
+  "CFBundleExecutable" => "Anticipy"
+  "CFBundleIconFile" => "icon.icns"
+  "CFBundleIdentifier" => "ai.anticipy.app"
+  "CFBundleInfoDictionaryVersion" => "6.0"
+  "CFBundleName" => "Anticipy"
+  "CFBundlePackageType" => "APPL"
+  "CFBundleShortVersionString" => "1.0.0"
+  "CFBundleURLTypes" => [
+    0 => {
+      "CFBundleTypeRole" => "Viewer"
+      "CFBundleURLName" => "ai.anticipy.app.session"
+      "CFBundleURLSchemes" => [
+        0 => "anticipy"
+      ]
+    }
+  ]
+  "CFBundleVersion" => "1.0.0"
+  "CSResourcesFileMapped" => true
+  "LSMinimumSystemVersion" => "11.0"
+  "LSRequiresCarbon" => true
+  "LSUIElement" => true
+  "NSAppleEventsUsageDescription" => "Anticipy uses AppleScript to drive Mail, Calendar, and Messages on your behalf when you confirm an action."
+  "NSCalendarsUsageDescription" => "Anticipy reads your calendar to answer questions and create events when you approve them."
+  "NSContactsUsageDescription" => "Anticipy reads your contacts to resolve names when you ask it to message or call someone."
+  "NSHighResolutionCapable" => true
+  "NSInputMonitoringUsageDescription" => "Anticipy listens for the hotkey to open the popover. No keystrokes are recorded or sent off device."
+  "NSMicrophoneUsageDescription" => "Anticipy listens for ambient conversational intent. Microphone access is required for the product to work."
+  "NSRemindersUsageDescription" => "Anticipy creates reminders when you ask it to follow up later."
+  "NSScreenCaptureUsageDescription" => "Anticipy reads on-screen text when you ask it to act on what you are looking at. Screen access stays local to your Mac."
+  "NSSupportsAutomaticGraphicsSwitching" => true
+}

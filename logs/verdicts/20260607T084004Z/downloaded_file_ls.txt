@@ -1,0 +1,1 @@
+-rw-r--r--@ 1 omarebrahim  wheel   2.3G Jun  7 04:30 Anticipy_1.0.0_aarch64.dmg

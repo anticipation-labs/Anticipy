@@ -1,0 +1,2 @@
+/Volumes/Anticipy/Anticipy.app: code has no resources but signature indicates they must be present
+exit_code=1

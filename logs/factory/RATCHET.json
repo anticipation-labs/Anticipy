@@ -1,0 +1,17 @@
+{
+  "best": {
+    "catch_rate": 0.6667,
+    "catch_rate_worst": 0.5,
+    "correct_action_rate": 0.5062,
+    "e2e_completion_rate": 0.2354,
+    "false_action_count": 19,
+    "interrupt_cost": 5.4375,
+    "interrupt_cost_worst": 10.5,
+    "memory_recall_worst": 0.3333,
+    "silent_harm_count": 0
+  },
+  "last_movement_lap": "20260610T051949Z",
+  "phases_closed": {},
+  "spend_since_movement": 0.0,
+  "treadmill_count": 1
+}

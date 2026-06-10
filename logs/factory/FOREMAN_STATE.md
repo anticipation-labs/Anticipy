@@ -38,3 +38,13 @@ Last updated: 2026-06-10 (session: Factory bootstrap + P0 completion)
   conf set-if-unset) → full bank authored → baseline measured → launchd installed →
   real test lap launched → compaction-proofing (CLAUDE.md, this file, memory dir,
   autoCompactEnabled=true) → research mandate added to BUILD.md.
+
+## Night session addendum (2026-06-10, owner asleep)
+- P1 slice LANDED (363cf78) from lap 052102Z's gate-passing patch; suite 31/31.
+- Engine brain rerouted to Gemini free tier (9c84fe5); OpenRouter irrelevant (D18).
+- REPO MOVED to ~/Anticipy (D17 resolved, kickstart-proven); Desktop path is a symlink;
+  claude project memory migrated to the new key. Open sessions in ~/Anticipy now.
+- Calendar purged of 6 test artifacts with read-back (B4/B5); planner title bug = B6 (open).
+- TARGET v3 chains the night: stage 1 close P1 (attempt_gate_close), stage 2 P2 decider.
+- gate_P2.sh exists. Scorer accounting fixed (C3) — catch numbers not comparable to pre-fix rows.
+- Morning artifacts: logs/factory/MORNING_REPORT.md + scoreboard rows from the night.

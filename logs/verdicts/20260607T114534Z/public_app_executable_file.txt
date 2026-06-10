@@ -1,0 +1,2 @@
+/Volumes/Anticipy/Anticipy.app/Contents/MacOS/Anticipy:        Mach-O 64-bit executable arm64
+/Volumes/Anticipy/Anticipy.app/Contents/MacOS/anticipy-engine: Mach-O 64-bit executable arm64

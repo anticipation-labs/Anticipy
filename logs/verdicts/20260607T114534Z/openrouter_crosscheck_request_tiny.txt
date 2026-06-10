@@ -1,0 +1,1 @@
+M1 needs public Mac app download that launches visible live surface. Proposed FAKE. Evidence: self/tamper ok; /app account form; DMG mounted; codesign+spctl fail; launched app invisible 0 windows. Reply exactly AGREE_FAKE_UNPROVEN or DISAGREE.

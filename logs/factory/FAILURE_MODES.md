@@ -99,7 +99,7 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
 - D17 macOS TCC blocked the 22:30 launchd run outright ("Operation not permitted"): the repo
   lives on ~/Desktop, a privacy-protected folder background jobs cannot read. Found live at
   first nightly fire 2026-06-09 22:30 PDT. CONTAINED tonight: loop started manually from the
-  TCC-blessed interactive context (caffeinate+nohup). PERMANENT FIX pending Omar's pick:
+  TCC-blessed interactive context (caffeinate+nohup). RESOLVED 2026-06-10 ~23:10 PDT: repo moved to ~/Anticipy (option b), proven by launchctl kickstart writing the journal with an empty error log. Original options were:
   (a) 30-sec System Settings grant — Privacy & Security → Full Disk Access → add
   /usr/bin/caffeinate (the LaunchAgent's responsible binary), or (b) move the repo out of
   ~/Desktop (structural, ~15 min, requires path updates + session restart). Verify either by

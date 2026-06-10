@@ -1,0 +1,1 @@
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/downloads/Anticipy_1.0.0_aarch64.dmg: zlib compressed data

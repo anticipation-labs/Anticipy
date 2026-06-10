@@ -1,0 +1,13 @@
+Anticipy App
+Anticipy
+Listen
+History
+Settings
+Create account
+Create your Anticipy account.
+Email
+Password
+Get Anticipy
+Already have an account? Log in
+Real account, real Supabase. We never use your Google or personal credentials and never auto-create third-party accounts.
+Mac install note: Gatekeeper may show an unverified developer warning because this build is not Apple-notarized yet. The download step explains the one-time Open Anyway path.

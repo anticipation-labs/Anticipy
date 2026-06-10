@@ -1,0 +1,2 @@
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app: code has no resources but signature indicates they must be present
+exit=1

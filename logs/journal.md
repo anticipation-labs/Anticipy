@@ -267,3 +267,24 @@
 - 2026-06-09T23:54:29Z lap 20260609T235402Z done: build_rc=0 gate=PASS kept=true "metric_moved": "none"
 
 - 2026-06-09T23:54:29Z loop exited after 3 lap(s)
+
+- 2026-06-10 lap 20260610T052102Z (builder, P1): aimed at the gate_P1 first-close (S1-S4).
+  Re-landed lap 20260610T045550Z's builder-verified due-time chain verbatim from its
+  reverted.patch (it was FALSELY reverted by the old holdout string-scan — see ledger C11):
+  duetime.py grounding anchored to meta observed_at, capture stamps due_ts +
+  remind_ts=due-15min, TriggerWatcher fires on remind_ts, fired grounded reminders NOTIFY
+  (budget-capped, loop marked waiting; detrimental text still asks), lifespan scheduler
+  (ANTICIPY_TICK_SECONDS default 30, 0=off) + POST /trigger/tick, 2 suite tests. NEW work:
+  the S3 vent fix — triage now drops hedge-nonspecific lines (someday/eventually/at some
+  point/...) unless a concrete time anchor cancels the hedge; checked the dev bank first
+  (the only hedge-keyed item is keyed silence). Verified builder-side: suite 31/31, 8-persona
+  stub metrics identical to the last no-change lap (catch 0.6667/0.50 worst, false 19,
+  silent 0, interrupt 5.4375/10.5), and gate_P1 verdict_pass=TRUE rc=0 (S1 act+proof live,
+  S2 fired via the real scheduler, S3 ignore, S4 ask-deny round-trip; S5 honest skip, no
+  live Twilio). Found + contained two real side-effect leaks while verifying: the gate's S1
+  cleanup never fires (proof-shape mismatch) and live S2 creates a second calendar event the
+  gate never cleans — deleted all 4 stray real events via Arcade with ListEvents read-back
+  (ledger B4/B5); also found the planner drops quoted titles so artifacts land unlabeled as
+  "Calendar event" (B6, OPEN, next-slice candidate). 5 older [Anticipy test] fixture events
+  (Doctor's checkup/Errands/Focus time/1:1 with Alex/Reading time) remain June 10-11 — not
+  mine, not touched, surfaced here.

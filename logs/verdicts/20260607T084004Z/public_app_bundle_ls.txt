@@ -1,0 +1,30 @@
+total 8
+-rw-r--r--@ 1 omarebrahim  staff  2431 May 30 10:32 Info.plist
+drwxr-xr-x@ 4 omarebrahim  staff   128 May 30 10:32 MacOS
+drwxr-xr-x@ 7 omarebrahim  staff   224 May 30 10:32 Resources
+
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/MacOS:
+total 359704
+-rwxr-xr-x@ 1 omarebrahim  staff   11910688 May 30 10:32 Anticipy
+-rwxr-xr-x@ 1 omarebrahim  staff  172256320 May 30 10:31 anticipy-engine
+
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/Resources:
+total 1480
+-rw-r--r--@ 1 omarebrahim  staff   50626 May 30 09:28 anticipy-bridge.py
+-rw-r--r--@ 1 omarebrahim  staff  601763 May 30 09:28 anticipy-extension.zip
+-rw-r--r--@ 1 omarebrahim  staff   98451 May 26 21:19 icon.icns
+drwxr-xr-x@ 4 omarebrahim  staff     128 May 30 10:32 icons
+drwxr-xr-x@ 7 omarebrahim  staff     224 May 30 10:32 parakeet-tdt-0.6b-v3
+
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/Resources/icons:
+total 16
+-rw-r--r--@ 1 omarebrahim  staff  153 May 30 08:27 tray.png
+-rw-r--r--@ 1 omarebrahim  staff  232 May 30 08:27 tray@2x.png
+
+/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/Resources/parakeet-tdt-0.6b-v3:
+total 4900496
+-rw-r--r--@ 1 omarebrahim  staff      244093 May 28 19:21 config.json
+-rw-r--r--@ 1 omarebrahim  staff  2508288736 May 28 19:21 model.safetensors
+-rw-r--r--@ 1 omarebrahim  staff      360916 May 29 00:24 tokenizer.model
+-rw-r--r--@ 1 omarebrahim  staff      101024 May 29 00:24 tokenizer.vocab
+-rw-r--r--@ 1 omarebrahim  staff       46772 May 29 00:24 vocab.txt

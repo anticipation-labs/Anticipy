@@ -1,0 +1,2 @@
+  PID  PPID STAT STARTED                      COMMAND
+ 4995     1 S    Sun Jun  7 04:32:21 2026     /private/tmp/anticipy-m1-judge-20260607T084004Z.iwKpYL/mount/Anticipy.app/Contents/MacOS/Anticipy
