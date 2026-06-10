@@ -487,3 +487,27 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   empty -> UNAVAILABLE while a verdictless READ stays SILENT; defer -> tick retry ->
   late act with honest reasons; sustained outage -> bounded retries -> honest silence
   with zero goals; deferred money line -> harm-line ASK is still FINAL).
+
+## Class F addendum (builder lap 20260610T102837Z)
+- F7 residual "gateway ignores Retry-After" CLOSED (commit 6efcad7): on 429 the
+  gateway now reads the server's stated wait — Retry-After header (delta-seconds) >
+  google.rpc.RetryInfo retryDelay in the error body (string Duration; the Gemini
+  OpenAI-compat endpoint we actually call sometimes wraps the error in a one-element
+  array) > "retry in Ns" in error.message. Short hints (<=8s) sleep inline (+0.25s
+  margin) within the existing 4-attempt bound; long hints return "" after ONE request
+  so the UNAVAILABLE -> 75s-defer path owns the wait instead of 3 more blind retries
+  burning the same per-minute quota that caused the outage. No-hint 429s and all 5xx
+  are byte-identical to the old blind backoff. Remaining F7 residuals: in-memory
+  deferred queue (D16 family), real-429 storm still not live-observed.
+  Regression check: engine/scripts/test_gateway_retry.py (suite entry gateway_retry)
+  — parse ladder, inline recovery, single-request fast-fail, bounded loop, 5xx
+  hint-blindness, and the e2e long-hint-storm -> Decider UNAVAILABLE pin.
+- NEW (research finding, CONTAINED at birth): Gemini per-DAY quota exhaustion can
+  return a misleadingly tiny retryDelay ("1s" observed in the wild on a daily limit) —
+  a naive hint-honoring client would hammer a window that will not reopen for hours.
+  Contained here by construction: short hints stay inside the 4-attempt bound (worst
+  case ~3 extra spaced requests), then "" -> bounded defer -> honest fail-silent; a
+  lying hint can never unbound the loop or produce an act. Regression check:
+  test_gateway_retry.py pins gemini_429("1s") parsing AND the sustained-short-hint
+  bounded-loop case (4 requests max). If hint trust is ever extended (e.g. gating on
+  quotaId PerMinute vs PerDay like gemini-cli), revisit this entry.

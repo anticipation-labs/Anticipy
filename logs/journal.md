@@ -429,3 +429,31 @@ stub primary at ratchet ceiling, gate_P1 closed, TARGET still v3 on disk) — tr
 2->3 expected; the value is that a quota outage now degrades to late catches and honest
 logs instead of silent deafness. Deliberately NOT live-observed: forcing a real 429
 would poison tonight's shared free-tier quota for verify_gate's own live runs.
+
+## Lap 20260610T102837Z (builder, FULL) — gateway honors 429 retry hints (F7 residual #1)
+Picked the smallest named live-catch residual from last lap: the gateway's 429 handling
+was 4 blind backoff retries (~15s) that ignore the server's own stated wait — and on the
+free-tier per-minute quotas the live brain runs on, each blind retry is itself a
+quota-counting request that deepens the very window causing the outage. Researched the
+real shapes first (per contract): Gemini has NO reliable Retry-After header — the signal
+is google.rpc.RetryInfo retryDelay in the body (proto3 Duration string, "21s" /
+"15.002899939s"), the OpenAI-compat endpoint we actually call sometimes wraps the error
+in a one-element ARRAY and sometimes the only surviving hint is "Please retry in Ns"
+inside error.message; a detail-less 429 variant exists; per-day exhaustion can return a
+misleading "1s"; OpenRouter (default-URL fallback) documents Retry-After delta-seconds.
+Implemented exactly that ladder in gateway._openrouter: header > RetryInfo (string or
+{seconds,nanos}) > message phrase; hint <= 8s sleeps inline (+0.25s margin, still inside
+the 4-attempt bound — short hints cannot unbound the loop); hint > 8s returns "" after
+ONE request so the decider's UNAVAILABLE -> 75s-defer path owns the wait; no-hint 429s
+and all 5xx keep the byte-identical blind backoff; hints are recorded on the call log
+for postmortems. New test_gateway_retry.py (MockTransport + recorded sleep, zero
+network, zero real waiting) pins all of it including the F7 end-to-end: a long-hint 429
+storm reaches the Decider as UNAVAILABLE after a single request. Committed code FIRST
+(6efcad7, D20 rule), then verified: suite 34/34; stub 8-persona bank bit-identical to
+the ratchet bests (expected invariance — the change only engages on live 429s);
+targeted live healthy-path probe 5/5 on invented lines with hints_seen=[] (real Gemini
+replies untouched). Mechanically dead lap as pre-registered (D22: stub primary at the
+ratchet ceiling 1.0, gate_P1 already first-closed, TARGET.md still v3 on disk) —
+treadmill 3->4 expected, one tick from the designed escalation that wakes the foreman.
+Deliberately NOT live-observed (same reason as last lap): inducing a real 429 would
+poison tonight's shared free-tier quota for verify_gate's own live runs.

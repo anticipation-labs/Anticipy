@@ -123,8 +123,19 @@ its LESSONS.md still binds.
   still crosses the harm-line; deferral never creates a goal/ask), and exhaustion drops
   with an honest reason. Deterministic pins in test_decider.py; live healthy path 5/5
   post-change. Residuals: in-memory deferred queue (restart loses it, D16 family),
-  gateway ignores Retry-After, real-429 storm not live-observed (would poison the
-  night's shared quota for verify_gate's live runs).
+  real-429 storm not live-observed (would poison the night's shared quota for
+  verify_gate's live runs).
+- The gateway now HONORS 429 retry hints (lap 20260610T102837Z, commit 6efcad7 —
+  closes F7 residual "gateway ignores Retry-After"): research-verified shapes
+  (Gemini has no reliable Retry-After header; the signal is RetryInfo retryDelay in
+  the body — sometimes array-wrapped on the OpenAI-compat endpoint we call, sometimes
+  only a "retry in Ns" message phrase; OpenRouter documents Retry-After delta-seconds).
+  Hint <= 8s sleeps inline (+0.25s margin, 4-attempt bound holds); hint > 8s
+  fast-fails after ONE request into the UNAVAILABLE -> 75s defer path instead of
+  burning 3 more quota-counting blind retries against a closed window; no-hint 429s
+  and 5xx keep byte-identical blind backoff. Pins: test_gateway_retry.py (suite
+  33->34, MockTransport, zero network/waiting). Live healthy path 5/5, hint path
+  provably dormant on healthy replies (hints_seen=[]).
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,
