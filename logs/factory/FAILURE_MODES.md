@@ -443,3 +443,20 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   ceiling, the lap is dead a priori — any future lap finding that state should cite D22
   instead of re-deriving it, and the foreman checklist should include "commit-message
   claims about control-plane files must match the diff".
+
+## Class D addendum (builder lap 20260610T100043Z)
+- D20 RECURRENCE #2 (lap 20260610T094944Z): a second builder died at its session bound
+  (num_turns=52, end_turn while "3/8 — founder_jin in flight" on a full-bank live
+  re-baseline) with the decider v8+v10 re-landing applied-and-probe-verified (62/63)
+  but UNCOMMITTED — exactly the D20 shape, against the SAME patch D20 first destroyed.
+  The work survived only in its lap dir's uncommitted.patch; the dangling commit ebb0789
+  remained one `git gc` away from permanent loss. CONTAINED (this lap): patch re-applied
+  byte-exact (blob b7a0f15), independently re-verified (suite 33/33, stub bank
+  bit-identical to ratchet bests, live probe 62/63 with the one known harm-line-contained
+  relay residual), and committed BEFORE any live persona run was attempted (d788778).
+  Root cause both times: commit-last ordering + a full-bank live run (~10+ min) inside a
+  bounded session. Binding builder rule restated harder: the full-bank LIVE re-baseline
+  does not fit a builder session reliably — commit first, then run AT MOST a targeted
+  single-persona live check; leave full-bank live baselines to verify_gate/foreman runs.
+  Foreman fix options unchanged from D20 (auto-WIP-commit at session end, or verify_gate
+  FAIL on product files in uncommitted.patch — second firing argues for the FAIL).

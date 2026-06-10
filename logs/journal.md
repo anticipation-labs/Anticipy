@@ -384,3 +384,24 @@ and the work being IN A COMMIT this time.
   verify_gate/scoreboard.py re-record the P1 close through the sole-writer path — the only
   honest repair a builder is allowed. No product code changed; any catch_rate_worst "+0.5"
   this lap shows is an artifact of the regressed ratchet, stated in the manifest.
+
+## Lap 20260610T100043Z (builder, FULL)
+Third lap in the decider v8+v10 saga, and the one that finally made it durable. The
+prompt extensions (present-person speech, reported third-party demands, own-hands
+chores, celebration/noun-fragment labels, money-always-ASK) were authored at lap
+083047Z, destroyed by its D5 revert, re-applied and re-verified by lap 094944Z, then
+lost AGAIN when that builder died at its session bound mid-full-bank-live-baseline
+(D20 recurrence #2, ledgered). I recovered the byte-exact patch from 094944Z's
+uncommitted.patch (blob b7a0f15; = dangling ebb0789 + C13 docstring scrub), verified
+independently — suite 33/33, stub 8-persona bank bit-identical to the ratchet bests
+(catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0; decider is live-only so this is
+expected invariance, not progress), live probe 62/63 with the one known
+harm-line-contained relay residual — and committed BEFORE attempting any live persona
+run (d788778), inverting the ordering that killed both predecessors. Then ran the
+targeted single-persona live check on lawyer_marcus (the persona whose day02
+deliverable-name fragment produced the v8 live false action). Mechanically dead lap as
+pre-registered (D22: stub primary at ratchet ceiling, gate_P1 already closed, TARGET
+still v3 on disk); the value is the live false-action fix surviving git gc and two
+builder deaths. Foreman items unchanged: flip TARGET to P2/gate_P2 (D22), pick a D20
+structural fix (second firing argues verify_gate should FAIL on product files in
+uncommitted.patch).

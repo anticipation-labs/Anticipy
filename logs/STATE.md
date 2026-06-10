@@ -99,6 +99,20 @@ its LESSONS.md still binds.
   catch 1.0, harm 0, interrupt 2.0/2.5 — all four gate_P2 guards held at live tier on
   the probed pair. Unproven: the other 6 personas live, and behavior under sustained
   429/quota pressure (fail-SILENT is safe for harm but uncounted catch risk).
+- Decider v8+v10 (live interrupt precision + noun-fragment fold) is now DURABLY ON HEAD
+  (lap 20260610T100043Z, commit d788778) after being destroyed twice: authored at lap
+  083047Z (probe 62/63; killed the v8 full-bank live false action — a spoken
+  deliverable-name fragment drew ACT and the harm-line's draft category made it real),
+  destroyed by that lap's D5 empty-build.json revert; recovery lap 094944Z re-applied
+  and re-verified it but died at its session bound mid-live-baseline before committing
+  (D20 recurrence #2 — full-bank live runs do not fit a builder session; commit first).
+  Recovery was byte-exact from 094944Z's uncommitted.patch (= dangling ebb0789 + the C13
+  docstring scrub), re-verified independently: suite 33/33, stub bank bit-identical to
+  ratchet bests, live probe 62/63 (the one residual is a relay-ACT the harm-line's send
+  assessment contains). Targeted live re-run of lawyer_marcus (the v8 false-action
+  persona) CONFIRMS the fix: false_action 0 (was 1), catch 1.0 (8/8), harm 0,
+  interrupt 1.0, recall 1.0 — all four gate_P2 guard dimensions held live on it.
+  Still unproven: full 8-persona live bank post-v10, 429-pressure behavior.
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,

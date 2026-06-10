@@ -1,60 +1,57 @@
 # Last Lap
 
-Lap: 20260610T091120Z
+Lap: 20260610T100043Z
 Date: 2026-06-10
-Phase: registered P1-closed-loop (gate_P1) — re-closing it after the factory accounting
-was destroyed; product itself is in P2-brain territory per TARGET v3 STAGE 2
-Slice: BUILD — verify HEAD + attempt_gate_close=true to re-record the P1 close;
-ledger the destruction (D21)
-
-What this lap found (read this first):
-- Lap 083047Z's kept=False revert (`git reset --hard`, forced by its builder dying at the
-  session bound — empty build.json, D5 rule) rolled the TRACKED-but-never-lap-committed
-  product_scoreboard.csv and RATCHET.json back to foreman snapshot ea08490. Erased: the
-  P1 first-close record (lap 060701Z) from phases_closed, six scoreboard rows
-  (060701Z, 062952Z, 070648Z, 072358Z, 074854Z, 080849Z), ratchet bests (catch_worst
-  1.0 / false 0 / interrupt_worst 1.0 regressed to 0.5 / 19 / 10.5), and the treadmill
-  count 4 — one dead lap from the designed ESCALATION; its defeat is why the loop kept
-  running and launched this lap instead of waking the foreman. Ledgered as D21 (with
-  foreman fix options for loop.sh); B5 recurrence (S2 strays a calendar event) also
-  ledgered. ALL lost evidence survives in the untracked lap dirs
-  (logs/factory/laps/<lap>/{metrics.json,gate_results.json,scoreboard.out}).
+Phase: registered P1-closed-loop (gate_P1, already closed) — product work is P2-brain
+per TARGET v3 STAGE 2; lap is mechanically dead by D22 (stated in manifest up front)
+Slice: BUILD — complete the decider v8+v10 recovery that killed two builders
 
 What changed:
-- NO product code. Changes are: this lap's manifest (attempt_gate_close=true),
-  FAILURE_MODES.md (D21 + B5 recurrence), journal, this file, STATE.md.
-- Real-world side effects, all contained: gate_P1 precheck created the S1 calendar event
-  (auto-deleted by the gate's own cleanup, proof in S1_cleanup.deleted) and an S2-planner
-  event 92vi6retu383hf8m72lu09l27o (deleted via Arcade GoogleCalendar.DeleteEvent,
-  ListEvents read-back: 0 [Anticipy test] events left in the -1/+2-day window). Channel
-  sends went only to the B8 placeholder +10000000000 — no real SMS to anyone.
+- engine/anticipy_engine/proactive/decider.py + engine/scripts/test_decider.py:
+  re-landed the destroyed v8+v10 prompt byte-exact from lap 094944Z's uncommitted.patch
+  (blob b7a0f15 = dangling commit ebb0789's content + the C13 docstring scrub). New
+  SILENT clauses: speech to a physically present person, reported third-party
+  demands/news, own-hands chores, celebration/pep-talk/debrief fragments, bare
+  noun-fragment work labels; imperative-vs-"-ing" relay split; money-always-ASK
+  hardening. Committed at d788778 BEFORE any live run — the ordering inversion that
+  laps 083047Z (D5 revert) and 094944Z (D20 recurrence #2, died mid-live-baseline)
+  both failed to do.
+- Ledger: lap 094944Z's surviving uncommitted D22 entry committed; D20 recurrence #2
+  appended with the binding rule (full-bank live re-baselines do NOT fit a builder
+  session; commit first, then at most a targeted single-persona live check).
+- Real-world side effects: NONE (no calendar/SMS/browser; live runs hit only the
+  Gemini free-tier model API; persona engines isolated on local ports).
 
 Eval numbers I saw (verify_gate recomputes everything):
 - Suite: 33/33 green.
-- Stub tier, full 8-persona dev bank (run 20260610T091120Z-pre): catch 1.0 / worst 1.0,
-  false_action 0, silent_harm 0, interrupt 0.625 avg / 1.0 worst, recall_worst 1.0,
-  correct_action 0.6788, e2e 0.3427, worst persona contractor_luis — bit-identical to
-  the pre-destruction ratchet bests; HEAD is healthy, nothing was lost from the PRODUCT.
-- gate_P1 live precheck (run gatep1-20260610T091120Z-precheck): verdict_pass=TRUE rc=0.
-  S1 act+done+proof live, S2 trigger fired, S3 vent silent, S4 money ask->pending->deny.
-  The decider (live, Gemini) and the ask-debounce did not break any leg — the debounce
-  exempts non-ambient events by design (meta.observed_at required; S4 posts meta={}).
+- Stub tier, full 8-persona dev bank (run 20260610T100043Z-pre): bit-identical to the
+  ratchet bests — catch 1.0 / worst 1.0, false 0, harm 0, interrupt 0.625 avg / 1.0
+  worst, recall_worst 1.0, correct_action 0.6788, e2e 0.3427, worst contractor_luis.
+  Expected invariance (decider is live-only), not claimed as movement.
+- Live probe, 63 self-authored lines (probe_relanded.out): 62/63 — identical to the
+  destroyed laps' verification; the one residual is a relay line judged ACT that the
+  harm-line's send assessment contains (it can only move ACT->ASK/SILENT, never the
+  reverse).
+- Live targeted re-run, lawyer_marcus both days (live_lm_score.out): false_action 0
+  (the v8 live2 run had 1 — the day02 deliverable-name fragment that drew decider ACT
+  -> harm-line draft -> real act), catch 1.0 (8/8), harm 0, interrupt 1.0, recall 1.0.
+  The specific regression this slice exists to kill is dead, live.
 
-Honesty notes for the judge:
-- Any catch_rate_worst "+0.5000" movement this lap shows is an ARTIFACT of the regressed
-  ratchet best (0.5), not product progress — HEAD's stub metrics have been at these
-  values since lap 062952Z. The lap's real claim is the gate_P1 re-close only, which is
-  "first" only because the record of lap 060701Z's close was destroyed.
-- verify_gate's own mechanical gate run (after this session) will strand a fresh S1+S2
-  event pair (B7: launchd gives the gate shell no ARCADE_API_KEY). The ids will be in
-  logs/factory/runs/gatep1-20260610T091120Z/gate_p1_results.json — morning cleanup.
+Honest counting:
+- Mechanically dead lap as pre-registered: stub primary catch_rate_worst sits at the
+  ratchet ceiling 1.0, gate_P1 already first-closed, TARGET.md on disk still v3 (D22).
+  Treadmill burns one tick toward the designed foreman escalation. The product value
+  (live false-action fix durable on HEAD, no longer one `git gc` from oblivion) is
+  invisible to the stub scoreboard by design.
 
 Next:
-- Foreman, priority: fix D21 in loop.sh (commit accounting after every scoreboard.py
-  write, surgical revert, or untrack the accounting files); reconstruct the six lost
-  scoreboard rows from the surviving lap dirs if wanted; then flip TARGET to
-  P2/gate_P2.sh — all four gate_P2 thresholds hold on the dev bank at stub AND on the
-  two live-probed personas (074854Z evidence).
-- Unchanged open items: full 8-persona LIVE run (quota-pressure behavior untested),
-  F6 (triage live tiebreak fails open, deliberate), B6 (quoted-title drop), B7/B8 (gate
-  env), D16 (restart double-fire), ask-dedupe for restated reminders.
+- Foreman, priority 1 (D22): actually write TARGET v4 — current_phase: P2-brain,
+  phase_gate: factory/gates/gate_P2.sh. gate_P2 thresholds hold at stub on HEAD, so
+  the first post-flip lap with attempt_gate_close=true should close P2 mechanically.
+- Foreman, priority 2 (D20 x2): make verify_gate FAIL (not WARN) when uncommitted.patch
+  touches product files, or auto-WIP-commit at session end — two firings now.
+- Next builder/foreman: full 8-persona LIVE bank post-v10 (only lawyer_marcus +
+  the older contractor_luis/doctor_amara probes are live-proven); 429-pressure
+  behavior; F6 (triage live tiebreak fails open, deliberate defer); B6 (quoted-title
+  drop); B7/B8 (gate env); D16 (restart double-fire); ask-dedupe for restated
+  reminders.
