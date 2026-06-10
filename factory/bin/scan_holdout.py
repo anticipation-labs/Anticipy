@@ -16,8 +16,18 @@ import re
 import sys
 from pathlib import Path
 
-# a path that goes INTO a holdout dir (a child segment after holdout/)
-ACCESS_RE = re.compile(r"(factory/personas/holdout|realdays/holdout)/[A-Za-z0-9_.\-]")
+# a path that goes INTO a holdout dir (a real child segment after holdout/)
+ACCESS_RE = re.compile(r"(factory/personas/holdout|realdays/holdout)/[A-Za-z0-9_\-]")
+
+# only OPERATIONAL fields of file/exec tools count as access. Free-text fields
+# (Agent/Workflow/Task prompts and scripts) MENTION paths legitimately — e.g. the
+# prohibition itself — and tripped a false revert on lap 20260610T052102Z (ledger C12).
+FIELD_MAP = {
+    "Read": ["file_path"], "Write": ["file_path"], "Edit": ["file_path"],
+    "NotebookEdit": ["notebook_path"],
+    "Glob": ["path", "pattern"], "Grep": ["path", "pattern", "glob"],
+    "Bash": ["command"], "BashOutput": [], "LSP": ["file_path"],
+}
 
 
 def tool_use_inputs(obj) -> list:
@@ -27,7 +37,15 @@ def tool_use_inputs(obj) -> list:
     if isinstance(content, list):
         for block in content:
             if isinstance(block, dict) and block.get("type") == "tool_use":
-                out.append(json.dumps(block.get("input", {})))
+                name = block.get("name", "")
+                inp = block.get("input", {}) or {}
+                fields = FIELD_MAP.get(name)
+                if fields is None:
+                    continue  # free-text tools (Agent, Workflow, Task...): mentions allowed
+                for f in fields:
+                    v = inp.get(f)
+                    if isinstance(v, str):
+                        out.append(v)
     return out
 
 
@@ -48,7 +66,7 @@ def main() -> int:
             for inp in tool_use_inputs(obj):
                 m = ACCESS_RE.search(inp)
                 if m:
-                    hits.append(m.group(0))
+                    hits.append(m.group(0) + "...")
     if hits:
         print(f"FAIL: tool access into holdout: {sorted(set(hits))[:3]}")
         return 1

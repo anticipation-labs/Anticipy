@@ -76,11 +76,24 @@ if out.get("decision") == "act" and goal_id:
     s1["has_proof"] = bool(g.get("proof"))
     s1["pass"] = g.get("state") == "done" and bool(g.get("proof"))
     s1["live"] = live_hands
-    proof = g.get("proof") or {}
-    event_id = proof.get("id") or (proof.get("event") or {}).get("id")
+    # proof nests step results as {"N:intent": {"id": ...}} — walk it recursively
+    def find_event_id(node):
+        if isinstance(node, dict):
+            if "id" in node and isinstance(node["id"], str) and node.get("kind", "calendar#event") == "calendar#event":
+                return node["id"]
+            for v in node.values():
+                found = find_event_id(v)
+                if found:
+                    return found
+        return None
+    event_id = find_event_id(g.get("proof") or {})
 else:
     s1["pass"] = False
 results["S1_typed_calendar"] = s1
+if "S1_cleanup" not in results:
+    results["S1_cleanup"] = {"deleted": False,
+                             "note": ("no event created" if not event_id
+                                      else "pending delete below")}
 
 # cleanup the real test artifact immediately (ledger B1): delete the created event
 if event_id and live_hands:

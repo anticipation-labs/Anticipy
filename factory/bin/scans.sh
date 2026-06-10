@@ -53,13 +53,11 @@ fi
 # ---- 4. holdout ACCESS in the builder session stream (tool_use inputs only;
 #         mentions in CLAUDE.md/STATE.md are legal — see FAILURE_MODES.md) ----
 STREAM="$LAPDIR/build.stream.jsonl"
-HOLDOUT_RESULT=$("$REPO/engine/.venv/bin/python" factory/bin/scan_holdout.py "$STREAM" 2>/dev/null || echo "FAIL: scan error")
-if [[ "$HOLDOUT_RESULT" == PASS || "$HOLDOUT_RESULT" == SKIPPED* ]]; then
-  note holdout_read "$HOLDOUT_RESULT"
-else
-  note holdout_read "$HOLDOUT_RESULT"
-  fail=1
-fi
+HOLDOUT_RESULT=$("$REPO/engine/.venv/bin/python" factory/bin/scan_holdout.py "$STREAM" 2>/dev/null | head -1 | tr -d '"\n')
+HOLDOUT_RC=${PIPESTATUS[0]:-1}
+[[ -z "$HOLDOUT_RESULT" ]] && HOLDOUT_RESULT="FAIL: scan produced no output"
+note holdout_read "$HOLDOUT_RESULT"
+[[ "$HOLDOUT_RC" -ne 0 ]] && fail=1
 
 # ---- 5. per-store recipe cap: no new retailer hostnames in agent code ----
 recipe=$(git diff "$BASE"..HEAD -- engine/anticipy_engine/agent/ 2>/dev/null \

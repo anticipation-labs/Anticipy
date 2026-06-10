@@ -60,8 +60,35 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   paths reaching INTO holdout dirs; regression-verified both directions (old stream now PASS,
   synthetic real read FAIL). The reverted work is preserved in the lap's reverted.patch.
   Lesson: the fail-closed design worked — wrong verdict, zero data loss, full forensics.
+- C12 Holdout scan v2 still false-positived on FREE-TEXT tool inputs: the builder's Workflow
+  script PROHIBITING holdout access mentioned the path and reverted lap 20260610T052102Z —
+  a lap whose P1 slice had legitimately PASSED gate_P1 (S1-S4) live. PREVENTED (2026-06-10):
+  scan v3 inspects only operational fields of file/exec tools (Read/Write/Edit paths,
+  Glob/Grep path+pattern, Bash command); free-text prompt/script fields are exempt.
+  Regression: both real lap streams PASS, synthetic Read and Bash violations FAIL.
+  Residual (ACCEPTED + documented): a builder could delegate holdout reads to a subagent
+  whose tool calls don't appear in the parent stream — mitigated by prompt prohibition,
+  judge metric recomputation from raw runs, and holdout being judge-run data anyway.
+- C13 scans.sh `|| echo` wiring appended a second line to the scan value, producing invalid
+  scans.json → gate_results.json never written (cascading instrument failure). PREVENTED
+  (2026-06-10): rc captured via PIPESTATUS, value sanitized to one line.
+
+## Class B addendum
+- B4 gate_P1's S1 created a real calendar event whose id the cleanup failed to extract
+  (proof nests step results as {"0:create_event": {id}}); cleanup silently skipped and a
+  stray event reached the owner's real calendar. CONTAINED: event found and deleted with
+  read-back confirmation same night. PREVENTED going forward: recursive proof-walk
+  extraction + S1_cleanup is ALWAYS written (silent-skip impossible).
 
 ## Class D — process/ops failures
+- D17 macOS TCC blocked the 22:30 launchd run outright ("Operation not permitted"): the repo
+  lives on ~/Desktop, a privacy-protected folder background jobs cannot read. Found live at
+  first nightly fire 2026-06-09 22:30 PDT. CONTAINED tonight: loop started manually from the
+  TCC-blessed interactive context (caffeinate+nohup). PERMANENT FIX pending Omar's pick:
+  (a) 30-sec System Settings grant — Privacy & Security → Full Disk Access → add
+  /usr/bin/caffeinate (the LaunchAgent's responsible binary), or (b) move the repo out of
+  ~/Desktop (structural, ~15 min, requires path updates + session restart). Verify either by
+  `launchctl kickstart gui/$UID/com.anticipy.factory` and reading logs/factory/launchd.err.log.
 - D1 launchd PATH could not find `claude` (lives in ~/.local/bin) — nightly would fail 100%.
   PREVENTED (2026-06-10): plist PATH fixed + verified; CLAUDE_BIN resolved in factory.conf.
 - D2 Mac asleep at 22:30. CONTAINED: launchd runs missed StartCalendarInterval jobs on wake;
