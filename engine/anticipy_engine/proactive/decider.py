@@ -5,9 +5,18 @@ FINAL). Triage answers "could this be actionable?"; the decider answers "did the
 actually decide to do a concrete thing?" — the judgment a word-shape rule cannot make
 (vents that look like commands, musing that names real actions, retractions).
 
-The prompt is the Track-B-proven seed (overnight/track_b/decider.py): principled,
-abstract, contains no eval line, biased to SILENT because acting on a non-commitment
-is the cardinal sin.
+The prompt grew from the Track-B seed (overnight/track_b/decider.py) and was revised
+at lap 20260610T072358Z after the first live-tier run showed the cheap model reading
+NARRATION as commitment (false-acting on "telling Beto to try him" / "tomorrow:
+inspection prep" lines; probe evidence in that lap's probe_decider.py — 14/24 -> 24/24).
+The revision centers the HANDOFF test: narration of one's own past/plans/social acts is
+never a task; a task exists only when the line delegates one (instruction, request,
+ownerless "someone should..." voicing, or unmistakable self-task). Lap 20260610T074854Z
+re-landed it (the authoring session ended at its turn bound before committing) and added
+the present-progressive clause ("setting up the..." openings are self-activity, not
+instructions — probe 26/27 -> 27/27, no true-positive regressions). Principled, abstract,
+contains no eval line, biased to SILENT because acting on a non-commitment is the
+cardinal sin.
 
 Safety contract (enforced by the caller, core/proactive.py):
   - LIVE-ONLY: the pipeline constructs a Decider only when the model gateway has a
@@ -35,22 +44,43 @@ _SAFETY_ORDER = (SILENT, ASK, ACT)
 
 _PROMPT = """You are the judgment gate of a proactive assistant that quietly overhears what a person says.
 For the ONE line below, decide exactly one of: ACT, ASK, SILENT.
-What matters is COMMITMENT, not topic — did the person actually decide to do a concrete thing?
+The person is NOT talking to you. They are living their day out loud. Most lines are
+narration — describing what they did, are doing, or will do themselves — and narration is
+never a task. A line only matters when a task is actually HANDED OFF. A task is handed
+off when the line is an instruction or request about a concrete doable thing ("remind
+me...", "put X on the calendar", "draft...", "book...", "get X to Y", "add X to the
+list"), or when it voices a needed task with no owner ("someone should chase X",
+"someone needs to fix Y" — voicing it IS the handoff), or an unmistakable self-task they
+clearly want captured.
 
-ACT — the person clearly committed to, or directly asked for, a concrete action that is SAFE and
-REVERSIBLE to do for them: a self-task, a reminder, adding to a list, drafting something, or
-checking on a live loop they care about. There is real first-person intent about a doable thing.
+ACT — a handed-off task that is safe and reversible to just do: a reminder, a calendar
+entry for themselves, adding to a list or cart, drafting something for their own later
+review. An instruction about a doable thing, not a description of their own activity.
 
-ASK — there IS a real action, but the binding step commits them to a person or a thing: booking,
-canceling on someone, sending/emailing/forwarding to a real person, RSVPing, or paying — OR the
-request is half-formed / has options they have not chosen. Do the safe prep, but a human must
-confirm the binding step. (If in doubt between ACT and ASK on something binding, choose ASK.)
+ASK — a handed-off task whose binding step commits them to another person or to money:
+contacting/sending/giving something to a real person, booking, canceling on someone,
+RSVPing, chasing a person down, or paying anything at all. Do the safe prep, but a human
+must confirm the binding step. (If in doubt between ACT and ASK on something binding,
+choose ASK. "Someone should..." tasks about a person are ASK.)
 
-SILENT — there is NO decision to act on: a vent or complaint, a wish or someday-maybe, a joke or
-hyperbole, an opinion or reaction, or a remark ABOUT a person rather than a thing they will DO.
-Tentative words like "maybe", "might", "should... someday", "keep meaning to", "I really need to"
-(with no explicit request) are NOT commitments. When you are not sure it is a real commitment,
-choose SILENT — acting on a non-commitment is the worst possible error.
+SILENT — no task was handed off, which is MOST lines:
+- reports of what already happened (past tense = SILENT, no exceptions)
+- the person narrating their own plan, schedule, or routine ("early start tomorrow",
+  "tomorrow: X then Y") — they are doing it themselves; nothing was delegated
+- "-ing" openings describing their own activity in progress ("setting up the...",
+  "packing the...", "heading out to...") — they are doing it themselves right now, even
+  when a purpose tail explains why ("so the morning isn't chaos", "so I actually go");
+  a real instruction is imperative ("set up X", "remind me to X"), not a description
+- self-talk and self-personification ("future me", "tomorrow-me will thank me",
+  scolding or bribing themselves into habits) — managing their own behavior out loud
+  is still narration; nothing was handed to anyone
+- things THEY will personally tell, show, or mention to someone in conversation
+  ("telling Sam to come by", "showing Ana the photos") — their own social act, not a
+  message for you to send
+- jokes, hyperbole, idioms, predictions, banter, opinions, vents, complaints
+- wishes and someday-maybes ("should really...", "would be nice...", "one of these days")
+When you are not sure a task was actually handed off, choose SILENT — acting on a
+non-task is the worst possible error.
 
 Reply with ONLY one word: ACT, ASK, or SILENT.
 Line: "{line}"

@@ -267,3 +267,69 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   check: engine/scripts/test_decider.py pins "Multitasking is fun" -> SILENT,
   "I would ASK here, not ACT." -> ASK, "ACT or SILENT?" -> SILENT, raising/keyless
   gateways -> SILENT. The seed file is left as-is (overnight/ is read-only history).
+
+## Class F addendum (builder lap 20260610T072358Z — first live-tier run)
+- F5 The live decider (gemini-2.5-flash-lite, original Track-B prompt) read NARRATION as
+  commitment: in the first live-tier dev-bank run (contractor_luis,
+  logs/factory/runs/20260610T072358Z-live-smoke/), it returned ACT on banter/idiom lines
+  ("Lunch truck burrito... Don't talk to me for eleven minutes", "Game's on. Suns by six.
+  I'm calling it now"), future-schedule self-narration ("Early night. Texture crew at six",
+  "Tomorrow: inspection prep..."), past-tense reports ("Swung by the Ramos lot..."), routine
+  description ("Crew count, sweep, photos to Mrs. Chen"), and the F3 first-person casual
+  send ("Telling Beto to try him") — producing 2 FALSE ACTIONS and interrupt 3.5/day at
+  live tier vs 0 / 1.0 at stub (the lines reach the decider because live triage fails open,
+  see F6). FIXED (this lap): the prompt was rewritten around the HANDOFF test — narration of
+  one's own past/plans/social acts is never a task; a task exists only when the line
+  delegates one (instruction/request, ownerless "someone should..." voicing, or unmistakable
+  self-task). Self-authored 24-line probe (logs/factory/laps/20260610T072358Z/
+  probe_decider.py, no bank content): 14/24 -> 24/24; live re-run on the same persona:
+  false_action 2 -> 0, interrupt 3.5 -> 2.0, catch held 1.0. Regression checks:
+  test_decider.py pins the prompt's F5 clauses; the probe script re-runs against any future
+  cheap model; live-vs-stub persona compare is the standing method.
+- F6 Triage's live-mode cheap-model tiebreak (proactive/triage.py _tiebreak) calls
+  asyncio.get_event_loop().run_until_complete() INSIDE the engine's already-running event
+  loop, which always raises (and leaves an un-awaited coroutine), so the except path fails
+  OPEN — the model is NEVER consulted (verified: counting gateway shows 0 calls) and every
+  ambiguous line passes triage at live tier. Net effect today: recall is preserved and the
+  decider (Room 1.5) carries the precision burden alone, at one cheap call per ambiguous
+  line. OPEN (deliberate defer: the fail direction is safe; fixing means making the triage
+  path async — its own slice). Regression check when fixed: call actionable() under a
+  running loop with a counting gateway and assert the tiebreak call actually happens and
+  no RuntimeWarning is emitted.
+
+## Class D addendum (builder lap 20260610T074854Z)
+- D20 A bounded builder session that commits LAST can lose its whole lap: lap
+  20260610T072358Z found F5/F6, fixed F5, and verified the fix live, but hit its session
+  bound (num_turns=101, stop_reason=tool_use) before `git commit` — verify_gate captured
+  the work to uncommitted.patch, warned tree_clean, recorded builder_commit=BASE, and the
+  tree was reset; the fix was GONE from HEAD while the scoreboard row read kept=True.
+  Only that lap's FAILURE_MODES entries (in the captured-but-unreset log files) flagged
+  the loss. CONTAINED (this lap): the patch was recovered from the lap dir, independently
+  re-verified (suite, live probe, live persona re-runs), and committed. Builder lesson
+  (binding): commit the slice AS SOON AS it verifies, then keep polishing — never park
+  verified product changes uncommitted. OPEN for the foreman: build_lap.sh could auto-WIP-
+  commit at session end, or verify_gate could FAIL (not WARN) when uncommitted.patch
+  touches engine/app/extension/macapp/shared. Regression check: any lap whose
+  gate_results.json shows tree_clean WARN with product files in uncommitted.patch is this
+  failure repeating.
+
+## Class F addendum (builder lap 20260610T074854Z — F5 re-landed and extended)
+- F5 (continued) The lost F5 fix was re-landed from lap 20260610T072358Z's
+  uncommitted.patch, upgraded to that lap's authored-but-never-tested v4 variant (adds the
+  "-ing"-openings-are-self-activity clause; probe 26/27 -> 27/27, the one v3 miss being
+  present-progressive self-narration). Live re-verification then exposed ONE remaining
+  live-tier false action, pre-existing under v3 (identical decision in the dead lap's
+  unanalyzed live-full run): doctor_amara day02 self-personification self-talk
+  ("...so morning-me has no excuses") — deterministic triage drops it in stub, but the
+  F6 fail-open routes it to the decider at live tier, and the decider read the purpose-
+  tail self-talk as a task. FIXED: two surgical prompt clauses (purpose tails don't make
+  "-ing" self-activity an instruction; self-personification/self-talk is narration),
+  verified on generic self-authored probes ("tomorrow-me"/"gym-me"/"future me" — no bank
+  phrasing) with a same-domain imperative guard ("Remind me tonight to set out my running
+  clothes..." must stay ACT): probe 31/31; live bank check contractor_luis + doctor_amara
+  both false_action 0, catch 1.0, harm 0, interrupt 2.0/2.5 (<= 3.0). Residual (accepted,
+  not a false action): "Reminder-me must exist" still draws decider ACT -> ask — it
+  restates the prior line's already-captured reminder, so the cost is one redundant ask;
+  that is ask-debounce/goal-dedupe territory, a different mechanism than the prompt.
+  Regression checks: test_decider.py pins the '"-ing" openings' clause; the lap-dir probe
+  re-runs all 31 lines against any future cheap model.

@@ -73,8 +73,22 @@ its LESSONS.md still binds.
   ANTICIPY_MODEL_PROVIDER=openrouter, one-way (SILENT drops, ASK forces the ask path,
   ACT defers; the harm-line's ASK is FINAL). Suite 32/32 (new test_decider.py); stub
   persona metrics bit-identical to the ratchet best (the decider is invisible in stub).
-  Live behavior UNPROVEN — needs a live-tier eval lap (Gemini free tier, D18); its targets
-  are the residual gray: money-retraction pairs and F3 first-person casual sends.
+- The decider's LIVE behavior is now PROBED AND HOLDING (laps 20260610T072358Z +
+  20260610T074854Z, Gemini free tier): the first live run exposed F5 (the cheap model
+  read narration — past-tense reports, future-schedule self-plans, banter, first-person
+  casual sends — as commitment: 2 false actions on contractor_luis) and F6 (triage's
+  live tiebreak calls run_until_complete inside the running loop, always raises, fails
+  OPEN — the decider carries live precision alone; deliberate defer). The prompt was
+  rewritten around the HANDOFF test (narration of one's own past/plans/social acts is
+  never a task; a task exists only when the line delegates one) and extended for
+  present-progressive self-activity and self-personification self-talk ("tomorrow-me")
+  after live doctor_amara evidence. Lap 072358Z died at its session bound BEFORE
+  committing (the fix survived only in its lap dir's uncommitted.patch — ledger D20);
+  lap 074854Z recovered, independently re-verified, and committed it. Live evidence:
+  31/31 on the self-authored probe; contractor_luis + doctor_amara live false_action 0,
+  catch 1.0, harm 0, interrupt 2.0/2.5 — all four gate_P2 guards held at live tier on
+  the probed pair. Unproven: the other 6 personas live, and behavior under sustained
+  429/quota pressure (fail-SILENT is safe for harm but uncounted catch risk).
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,

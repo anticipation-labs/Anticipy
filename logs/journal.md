@@ -346,3 +346,24 @@ status: this lap cannot COUNT mechanically (primary metric at ceiling on the dev
 gate_P1 already first-closed, gate_P2 not flipped in), so it rides on keep, not movement;
 the treadmill increment is expected. The decider's live behavior is UNPROVEN until a
 live-tier eval; no paid model call was made this lap.
+
+2026-06-10 lap 20260610T074854Z (builder, P2/STAGE-2): recovery + extension of the lost
+F5 fix. Found that lap 20260610T072358Z (the live-tier validation lap) had died at its
+session bound (101 turns) BEFORE committing: its verified decider-prompt rewrite (HANDOFF
+framing, live false_action 2->0 on contractor_luis) existed only in the lap dir's
+uncommitted.patch while HEAD still served the old narration-blind prompt (ledgered D20).
+Re-applied the patch, then upgraded to the dead lap's authored-but-never-probed v4
+variant ("-ing" openings are self-activity) after the probe showed v3 at 26/27 vs v4 at
+27/27. Independent live re-verification on two personas then surfaced the one remaining
+live false action — doctor_amara day02's "Setting out tomorrow's run clothes so
+morning-me has no excuses" (pre-existing under v3; triage stub-drops it but the F6
+fail-open hands it to the decider live) — fixed with two surgical prompt clauses
+(purpose tails don't convert "-ing" self-activity into instructions; self-personification
+self-talk is narration), probed on generic self-authored lines (31/31, same-domain
+imperative guard held ACT). Final evidence: suite 32/32; live tier contractor_luis +
+doctor_amara false_action 0, catch 1.0, harm 0, interrupt 2.0/2.5; stub full bank at
+ratchet best on all gated metrics (e2e 0.3249 vs best 0.3427 — stub timing noise, decider
+is provably unconstructed in stub). Honest mechanics: stub scoreboard can't count this
+lap (primary metric at ceiling, gate_P1 closed, decider live-only) — treadmill 2->3
+expected; the movement is live-tier gate_P2 guards now holding on real model behavior,
+and the work being IN A COMMIT this time.

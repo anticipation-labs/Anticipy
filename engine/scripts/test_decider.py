@@ -33,7 +33,7 @@ from anticipy_engine.core.workers import BrowserStub, ChannelStub, ConnectorStub
 from anticipy_engine.core.workers.memory import MemoryWorker
 from anticipy_engine.live_memory.brain import LiveMemoryBrain
 from anticipy_engine.memory import Memory
-from anticipy_engine.proactive.decider import ACT, ASK, SILENT, Decider, parse_verdict
+from anticipy_engine.proactive.decider import ACT, ASK, SILENT, Decider, _PROMPT, parse_verdict
 
 
 class FakeGlass:
@@ -105,6 +105,14 @@ async def main():
     assert parse_verdict("") == SILENT
     assert parse_verdict("the model rambled with no verdict") == SILENT
     print("PASS parse_verdict: boundaries, safety order, unparseable -> SILENT")
+
+    # ---- 1.5) prompt pins the HANDOFF framing (ledger F5: the first live run showed the
+    #      cheap model false-acting on narration; the lap-20260610T072358Z revision draws
+    #      the delegated-task vs self-narration boundary — these clauses are load-bearing) ----
+    for clause in ("HANDED OFF", "someone should", "past tense", "their own social act",
+                   '"-ing" openings', "{line}"):
+        assert clause in _PROMPT, f"decider prompt lost its F5 clause: {clause!r}"
+    print("PASS prompt: F5 handoff/narration clauses present")
 
     # ---- 2) Decider unit: canned reply parsed; failures and keyless live fail SILENT ----
     glass = FakeGlass()
