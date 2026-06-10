@@ -55,7 +55,17 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P1 CLOSED (lap 20260610T060701Z) -> P2-brain (TARGET v3 STAGE 2)
-- P1-closed-loop first-closed mechanically at lap 20260610T060701Z (RATCHET phases_closed).
+- ACCOUNTING DESTRUCTION (2026-06-10, ledger D21): lap 083047Z's kept=False revert
+  (`git reset --hard`) rolled the tracked-but-never-lap-committed scoreboard/RATCHET back
+  to foreman snapshot ea08490 — erasing the P1 first-close record, six scoreboard rows
+  (060701Z..080849Z), the ratchet bests, and a treadmill count of 4 (one dead lap from
+  the designed escalation, which was thereby silently defeated). Lap 20260610T091120Z
+  re-verified HEAD (suite 33/33; stub bank identical to the lost bests; gate_P1 live
+  precheck verdict_pass=TRUE) and set attempt_gate_close=true so the sole writers
+  re-record the P1 close. The PRODUCT lost nothing — all kept commits are on HEAD; the
+  lost rows' evidence survives in logs/factory/laps/<lap>/. Foreman: fix loop.sh per D21.
+- P1-closed-loop first-closed mechanically at lap 20260610T060701Z (RATCHET phases_closed;
+  record destroyed by D21, re-closed at lap 20260610T091120Z).
   Scope honesty: S1-S4 proven live; S5 (real SMS) owner-blocked, S6 (MP3 day) deferred —
   see ledger B9 for the gate-vs-PHASES.yaml scope mismatch (foreman item).
 - Lap 20260610T062952Z (builder, deterministic): triage rewritten from bag-of-words to

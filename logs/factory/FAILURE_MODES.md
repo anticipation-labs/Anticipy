@@ -333,3 +333,49 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   that is ask-debounce/goal-dedupe territory, a different mechanism than the prompt.
   Regression checks: test_decider.py pins the '"-ing" openings' clause; the lap-dir probe
   re-runs all 31 lines against any future cheap model.
+
+## Class D addendum (builder lap 20260610T091120Z)
+- D21 A kept=False revert DESTROYS the uncommitted factory accounting of every PRIOR kept
+  lap since the last foreman snapshot: loop.sh's revert is `git reset --hard $BEFORE`, and
+  product_scoreboard.csv / RATCHET.json are TRACKED files that no lap ever commits (last
+  snapshot: foreman commit ea08490). Lap 20260610T083047Z died at its session bound
+  (empty build.json -> D5 forced revert despite green gates) and the reset rolled both
+  files back to ea08490's snapshot: the P1 first-close record (lap 060701Z) vanished from
+  phases_closed, the ratchet bests regressed from catch_worst 1.0 / false 0 /
+  interrupt_worst 1.0 to the 051949Z snapshot (0.5 / 19 / 10.5), treadmill regressed
+  4 -> 1, and the six scoreboard rows for laps 060701Z / 062952Z / 070648Z / 072358Z /
+  074854Z / 080849Z were erased. scoreboard.py then wrote 083047Z's row AGAINST the
+  regressed ratchet (that row's "+0.5000" delta and treadmill_count=2 are artifacts).
+  Two compounding consequences: (1) the treadmill escalation that should have fired at 5
+  on lap 083047Z was silently DEFEATED (counter reset under it), so the loop kept running
+  without waking the foreman — the state loss disabled the very mechanism designed to
+  catch nights going wrong; (2) every future kept=False lap repeats the destruction for
+  rows written since, because the accounting stays uncommitted between foreman snapshots
+  (loop.sh:12's comment shows the hazard was understood for loop_journal.md — made
+  untracked — but the fix never reached the tracked accounting files).
+  CONTAINED (this lap, builder-side): RATCHET's stage check honestly reads "P1 not
+  closed", so per TARGET v3 STAGE 1 this lap re-verified HEAD (suite 33/33; stub bank
+  catch 1.0/1.0 false 0 harm 0 interrupt 0.625/1.0 — identical to the lost bests) and
+  re-ran gate_P1 live (precheck verdict_pass=TRUE rc=0, S1 cleanup proven, S2 stray
+  cleaned with read-back), then set attempt_gate_close=true so verify_gate/scoreboard.py
+  — the sole writers — re-record the P1 close mechanically. The six lost rows are NOT
+  builder-reconstructable (forbidden files); every lost lap's metrics.json /
+  gate_results.json / scoreboard.out SURVIVES under logs/factory/laps/<lap>/ (untracked
+  files survive reset --hard) for foreman reconstruction.
+  OPEN for the foreman (loop.sh is control plane; pick one): commit scoreboard/RATCHET
+  immediately after every scoreboard.py write; or make the revert surgical
+  (`git checkout $BEFORE -- engine/ app/ extension/ macapp/ shared/ scripts/ ...` instead
+  of reset --hard); or untrack the accounting files the way loop_journal.md already is.
+  Regression check: after any kept=False lap, RATCHET.phases_closed must remain a
+  superset of the phases STATE.md records as closed, and the scoreboard must still
+  contain every row that has a matching laps/<lap>/scoreboard.out — any mismatch is this
+  failure repeating.
+- B5 (recurred, contained) The live S2 reminder leg again created a second real calendar
+  event (the planner books a calendar event for the reminder; the gate's built-in cleanup
+  covers only S1). This lap's precheck stray (92vi6retu383hf8m72lu09l27o) was deleted via
+  Arcade GoogleCalendar.DeleteEvent with ListEvents read-back (0 [Anticipy test] events
+  remain in the -1/+2-day window). NOTE: verify_gate's mechanical gate run after this
+  session will strand a fresh S1+S2 pair (B7: the launchd chain gives the gate shell no
+  ARCADE_API_KEY, so even S1's built-in cleanup fails there) — morning foreman cleanup
+  required until B7 is fixed; the stranded ids will be in
+  logs/factory/runs/gatep1-20260610T091120Z/gate_p1_results.json.

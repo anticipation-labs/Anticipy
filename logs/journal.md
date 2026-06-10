@@ -367,3 +367,20 @@ is provably unconstructed in stub). Honest mechanics: stub scoreboard can't coun
 lap (primary metric at ceiling, gate_P1 closed, decider live-only) — treadmill 2->3
 expected; the movement is live-tier gate_P2 guards now holding on real model behavior,
 and the work being IN A COMMIT this time.
+
+- 2026-06-10 lap 20260610T091120Z (build): Found the factory's accounting destroyed before
+  touching anything: RATCHET.json said P1 never closed, bests back at the 051949Z snapshot,
+  treadmill 2 — contradicting STATE.md. Traced it with git: scoreboard/RATCHET are tracked
+  but never committed by laps (last snapshot ea08490), and lap 083047Z's kept=False revert
+  (`git reset --hard`) rolled them back, erasing the P1 first-close record, six scoreboard
+  rows (060701Z..080849Z), and the treadmill count that was one lap from escalating —
+  ledgered as D21 with the foreman fix options; all lost evidence survives in the untracked
+  lap dirs. Per TARGET v3's stage check (RATCHET-literal: STAGE 1), this lap verified HEAD
+  and re-attempted the gate: suite 33/33, stub bank catch 1.0/1.0 false 0 harm 0 interrupt
+  0.625/1.0 (identical to the lost bests), gate_P1 live precheck verdict_pass=TRUE rc=0 with
+  S1 cleanup proven (S1_cleanup.deleted) and the S2 stray event deleted via Arcade with
+  ListEvents read-back (B5 recurrence, contained; channel sends confirmed to hit only the
+  B8 placeholder number, nothing real). Manifest sets attempt_gate_close=true so
+  verify_gate/scoreboard.py re-record the P1 close through the sole-writer path — the only
+  honest repair a builder is allowed. No product code changed; any catch_rate_worst "+0.5"
+  this lap shows is an artifact of the regressed ratchet, stated in the manifest.
