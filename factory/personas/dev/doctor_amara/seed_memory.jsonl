@@ -1,0 +1,6 @@
+{"kind": "profile_fact", "text": "Daughter Zoe (9) has ballet on Wednesdays at 5pm; Marcus usually drives her.", "people": ["Zoe", "Marcus"], "importance": 0.7}
+{"kind": "profile_fact", "text": "Scheduler Dee handles shift swaps; needs requests by Thursday for the next week.", "people": ["Dee"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Charting backlog is the recurring nemesis; aims to close charts within 48 hours.", "importance": 0.6}
+{"kind": "open_loop", "text": "Register for the Mountain West Emergency Medicine conference in Denver before the early-bird deadline.", "fields": {"task": "register for Mountain West EM conference"}, "status": "open", "importance": 0.8}
+{"kind": "history", "text": "Was looking at Hoka Bondi 9 shoes in size 8 for long shifts last week, the wide fit.", "importance": 0.7}
+{"kind": "derived", "text": "Post-shift mornings are sacred sleep; never schedule anything before noon after a night shift.", "confidence": 0.8, "importance": 0.7}

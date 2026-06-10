@@ -1,0 +1,6 @@
+{"kind": "profile_fact", "text": "Current main job: Mrs. Chen's kitchen remodel on Verde Lane; cabinets arrive in stages.", "people": ["Mrs. Chen"], "importance": 0.9}
+{"kind": "profile_fact", "text": "Foreman Beto opens the site at 6am; crew of five.", "people": ["Beto"], "importance": 0.7}
+{"kind": "profile_fact", "text": "Supplier rep Danny at BuildRight handles lumber and hardware orders.", "people": ["Danny"], "importance": 0.7}
+{"kind": "open_loop", "text": "Schedule the rough electrical inspection with Hal for the Chen job - framing passed already.", "people": ["Hal"], "fields": {"task": "schedule rough electrical inspection Chen job"}, "status": "open", "importance": 0.9}
+{"kind": "history", "text": "Was looking at the DeWalt 20V impact driver kit with two batteries last week to replace the one that fell off the roof.", "importance": 0.7}
+{"kind": "derived", "text": "Quotes jobs Sunday evenings; hates paperwork during crew hours.", "confidence": 0.7, "importance": 0.5}

@@ -1,0 +1,6 @@
+{"kind": "profile_fact", "text": "Pipeline review with manager Doug every Friday at 9am; forecast due Thursday night.", "people": ["Doug"], "importance": 0.8}
+{"kind": "profile_fact", "text": "SE partner Wes does the technical demos; needs 48 hours notice to prep an environment.", "people": ["Wes"], "importance": 0.7}
+{"kind": "open_loop", "text": "Send Lena at Halverson the security questionnaire answers - legal cleared them Tuesday.", "people": ["Lena"], "fields": {"task": "send Lena security questionnaire answers"}, "status": "open", "importance": 0.9}
+{"kind": "history", "text": "Was comparing noise-canceling headsets last week for back-to-back calls; picked the Jabra Evolve2 65 as the one.", "importance": 0.7}
+{"kind": "history", "text": "Quentin at Meridian went quiet after the pricing call two weeks ago; deal is at stage 4.", "people": ["Quentin"], "importance": 0.8}
+{"kind": "derived", "text": "Books prospect calls in the 10am-noon window when connect rates are best.", "confidence": 0.6, "importance": 0.5}

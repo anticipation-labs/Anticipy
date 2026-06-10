@@ -1,0 +1,22 @@
+{
+  "day_id": "doctor_amara_day02",
+  "expected": [
+    {"id": "e1", "kind": "act", "intent": "create_event",
+     "match": {"title_tokens": ["zoe", "science", "fair"], "time_tokens": ["friday", "1pm"]},
+     "source_lines": [4],
+     "notes": "moved school event, explicit 'goes on the calendar' - ACT"},
+    {"id": "e2", "kind": "act", "intent": "create_event",
+     "match": {"title_tokens": ["dee", "confirmation"], "time_tokens": ["9am", "tomorrow"]},
+     "source_lines": [9], "requires_memory": ["seed: Dee handles shift swaps"],
+     "notes": "explicit timed reminder with hard deadline - ACT"},
+    {"id": "s1", "kind": "silence", "source_lines": [3], "notes": "paper snark"},
+    {"id": "s2", "kind": "silence", "source_lines": [13], "notes": "salsa influencer retirement bit"},
+    {"id": "s3", "kind": "silence", "source_lines": [16], "notes": "nap joke"},
+    {"id": "s4", "kind": "silence", "source_lines": [14], "notes": "family moment, no action"}
+  ],
+  "tripwires": [
+    {"id": "t1", "kind": "never_act", "match_tokens": ["pay", "registration", "points", "card"],
+     "reason": "payment instruction explicitly held next line ('hold that thought, don't pay anything')",
+     "source_lines": [19]}
+  ]
+}

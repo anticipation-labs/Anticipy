@@ -1,281 +1,83 @@
 # STATE
 
-Current milestone: M3 only. UI, status, onboarding, observability, localhost, `example.com`, fixture, and no-stakes target laps are banned while this focus is active. Allowed work is the hard browser-hand chain: vague natural-language task, memory resolves the real site and real item, the browser hand acts on that real site, a real reversible artifact changes or is safely verified, and the separate judge later verifies the change.
+REGIME CHANGE 2026-06-10: the autopilot/ loop (Codex-driven, milestone M-ladder) is RETIRED.
+The successor is the FACTORY (factory/), built and smoke-proven this session. The owner
+approved the plan at ~/.claude/plans/oh-my-god-everybody-iterative-puffin.md: finish line for
+this phase of work = THE OWNER TEST (5 consecutive real owner days through the live system,
+zero vent-actions, persona-bank thresholds held simultaneously). Strangers/onboarding/front
+door are the NEXT plan; pendant and iPhone after that. autopilot/ remains read-only history;
+its LESSONS.md still binds.
 
-Latest judged lap: `20260607T114534Z` was `FAKE` with `Tamper: NO`. The separate M1 judge passed self-checks and opened the public front door, but the public app failed strict signing/launch verification. Proof: `logs/verdicts/20260607T114534Z.md`.
+## The Factory (how work happens now)
+- Steering: `factory/TARGET.md` (foreman-owned, currently v2 / phase P1-closed-loop).
+- Phases and gates: `factory/PHASES.yaml`, gates in `factory/gates/`.
+- Nightly: launchd `com.anticipy.factory` starts `factory/bin/loop.sh --nightly` at 22:30,
+  stops by 07:00. Manual: `factory/bin/loop.sh --once|--max-laps N`.
+- Each lap: fresh `claude -p` builder session (bounded, pre-registers a manifest) ->
+  mechanical verify (scans + 29-test suite + 8-persona eval -> metrics.json) -> optional
+  judge session -> scoreboard row -> keep or git-revert -> treadmill check.
+- Scoreboard: `logs/factory/product_scoreboard.csv` (sole writer: scoreboard.py).
+  A lap counts ONLY if the primary metric moves or a phase gate first-closes.
+- Treadmill: K=5 dead laps -> ESCALATION.md + halt; foreman (interactive session with the
+  owner) re-aims by editing TARGET.md. The loop refuses to run while an escalation is OPEN.
+- Persona bank: 8 dev personas x 2 messy days with ground-truth keys (frozen,
+  SUITE_HASH e0db2ed3d218) + 4 holdout personas (judge-only, gitignored, builder must
+  NEVER read). Worst-persona scoring. Owner red-pen of holdout keys is pending.
+- Spend: `factory/config/budget.json` ($200/wk envelope, per-lap caps, 25% judge reserve);
+  `spend.py` records per lap; FREE mode (deterministic work only) when exhausted.
 
-Latest builder lap: `20260609T224609Z` is `UNPROVEN-PENDING-JUDGE`, not proof. It hardened the BrowserHand boundary so URL-less action-shaped browse tasks, including vague `that thing` and add-to-cart requests, no longer fall back to DuckDuckGo with the whole instruction. Those tasks now fail with `browser action task has no resolved real site` unless the planner or memory layer supplies a real site. Read/info browse tasks still keep the search fallback. No real cart artifact was attempted in this lap, so it does not advance M3. No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+## Proven (Factory bootstrap, this session)
+- Scorer selftest catches planted caught/missed/false/silent-harm cases (every invocation).
+- gate_P0_floor green: isolated-engine persona runs, scoring, scoreboard dry-run, spend parse.
+- Smoke loop: 3 no-op laps -> first-measurement counted, dead laps incremented, K=2 halt
+  fired, ESCALATION written, restart refused while OPEN, foreman resolve flow worked.
+- Judge selfcheck (real fresh `claude -p` session) correctly ruled the planted fake FAKE
+  with evidence-based reasoning: `logs/factory/laps/selfcheck-*/selfcheck.md`.
+- BASELINE (8 dev personas, stub tier, lap baseline0): catch_rate 0.6984,
+  catch_rate_worst 0.50 (doctor_amara), correct_action_rate 0.48, false_action_count 19,
+  silent_harm_count 0, interrupt_cost 5.44 avg / 10.5 worst, e2e_completion 0.23,
+  memory_recall_worst 0.33. These are the numbers laps must move.
 
-Current M3 slice:
-- `NativeBridgeLink` can capture rendered text and visible actionable selectors from the exact live CDP target, preserving hrefs and re-resolving stale selectors by role, name, or href.
-- `NativeBridgeLink` scrolls the active CDP page target before falling back to the native bridge scroll command, keeping scroll actions aligned with later proof reads.
-- WebVoyager distinguishes search, product, content/category/editorial, cart, login, and checkout surfaces on known commerce hosts.
-- WebVoyager prefers buyable product URLs and rejects known non-product hrefs before opening a candidate.
-- WebVoyager records add-click mutation evidence, but final commerce success requires cart-page verification. Product-page modals, search-result text, zero-count cart labels, transient cart badges, screenshots alone, and broad cart text are not completion proof.
-- WebVoyager requires cart URL item evidence to appear with cart item structure such as checkout, subtotal, quantity, remove, shipping, pickup, or delivery. Navigation-only category text on a cart shell cannot prove completion.
-- WebVoyager preflights known cart pages before add clicks and avoids duplicate additions when the cart already contains the requested item.
-- WebVoyager verifies cart pages through distinct item evidence windows, including token-hit counts and explicit quantity when visible, while keeping raw cart text out of durable state.
-- WebVoyager recognizes `/cartview` cart routes and requires item-local cart structure such as quantity or remove before cart-page item tokens can prove an item is in cart, so recommendation product cards cannot complete M3.
-- WebVoyager carries memory context hints into product selection and can fall back from strict token matching to first valid product URLs only on real search-result pages.
-- Memory-to-intent item cleanup strips the resolved site's host stem and dangling site prepositions, recognizes generic shopping comparison/research memories, and strips leading room-context words only when at least two product words remain while preserving context hints.
-- WebVoyager treats bare `Options` and broader option-control phrases as generic product labels, preventing option controls from becoming concrete product targets before add attempts.
-- WebVoyager rejects shopping-list, wishlist, favorite, registry, save-for-later, and remove controls as product targets.
-- WebVoyager refreshes a settled product page once before scrolling for add controls, so late-rendered real Add to Cart buttons can be found without heavy model planning.
-- WebVoyager recognizes both legacy `/site/.../*.p` and current `/product/...` Best Buy product URLs as buyable product URLs.
-- WebVoyager cart proof splits item matching at order-summary, checkout, and recommendation boundaries and uses tighter local item evidence windows so recommendation products cannot satisfy final cart proof.
-- WebVoyager accepts non-generic item-specific Add labels using the same required product-hit threshold as product-title matching, so two-token items can use real labels without allowing unrelated items.
-- WebVoyager knows Office Depot search, product, and cart URL shapes. Office Depot remains an unproven hard site because both product-page Add and adjacent result-row Add failed final cart verification.
-- WebVoyager can click a generic search-result Add only when it is adjacent to a strongly matched product row, ignores ratings/review links as product boundaries unless their visible label carries item-token evidence, requires known-cart verification, and fails instead of attempting a duplicate fallback.
-- WebVoyager knows REI search, product, and cart URL shapes. REI builder-side cart read-back works for an exact remembered item under strict cart-structure proof, but no separate judge has verified it.
-- WebVoyager knows PetSmart and Container Store search, product, and cart URL shapes. PetSmart and Container Store are unproven hard-site candidates, not judge proof.
-- WebVoyager classifies narrow domain-specific product URL matches before broad search/content rejection and runs product-surface detection before search-surface detection for those matches.
-- NativeBridgeLink exposes `fresh_probe()`, and WebVoyager native-bridge known-cart preflight must survive that independent observer before it can complete. Same-bridge cart state is not durable proof.
-- WebVoyager active-page cart completions after search-result add, product-page add, refresh, scroll, or View Cart must also survive independent `fresh_probe` confirmation before they can complete.
-- WebVoyager scrolls cart pages during known-cart and fresh-probe read-back, keeping the highest-signal cart observation instead of trusting a header-only cart count.
-- WebVoyager requires leading distinctive tokens for token-rich remembered items and raises the product-hit threshold to roughly 80 percent for item names with five or more tokens.
-- WebVoyager requires distinctive-token agreement when selecting nearby product URLs and adjacent search-result Add controls.
-- WebVoyager checks visible product-page identity before product-page Add attempts. Visible title/text/labels must satisfy the token threshold and leading distinctive tokens by themselves; URL tokens are supportive metadata only and cannot rescue a contradictory visible page.
-- WebVoyager ranks product candidates with a compact ordered item-token score and no longer rewards longer titles when token hits tie, so exact ordered product names beat broad titles with scattered requested tokens.
-- WebVoyager treats navigated URL/title-only observations with no text or actionable elements as not ready, and commerce search surfaces get bounded re-observe or scroll retries before failing as unactionable.
-- `NativeBridgeLink` creates the configured `ANTICIPY_CHROME_USER_DATA_DIR` before CDP launch, enabling fresh per-lap Chrome profiles to return real actionable marks.
-- WebVoyager knows Bookshop search, product, and cart URL shapes, including `beta-search` search surfaces and `keywords` query parameters.
-- `NativeBridgeLink` includes `keywords` among search query fields used for native bridge query-token extraction.
-- WebVoyager checks the freshly observed search state after the final bounded scroll before failing, so product rows that appear on the last allowed scroll are still considered.
-- WebVoyager can click generic `Add item to cart` controls beside href-less visible product rows only when the surrounding product identity strongly matches the remembered item.
-- WebVoyager penalizes unrequested variant words such as workbook, calendar, guide, kid, and summary when choosing between visible product candidates.
-- WebVoyager knows Chewy search, product, and cart URL shapes. Chewy product matching accepts `/dp/` product pages and Chewy search tracking click URLs, but visible product identity still must satisfy the existing threshold before Add.
-- WebVoyager knows Michaels search, product, and cart URL shapes. Michaels product matching accepts `/product/` product pages while preserving visible product identity checks before Add.
-- WebVoyager knows B&H Photo Video search, product, and cart URL shapes. B&H product matching accepts `/c/product/.../<slug>.html` product pages while rejecting review URLs.
-- WebVoyager knows Adorama search, product, and cart URL shapes. Adorama product matching accepts `/p/<slug>` product pages while rejecting review and Q&A URL fragments.
-- WebVoyager knows Sweetwater search, product, and cart URL shapes. Sweetwater product matching accepts `/store/detail/<slug>` product pages while rejecting review subpaths.
-- WebVoyager knows LEGO, Guitar Center, and Newegg search, product, and cart URL shapes. LEGO and Guitar Center are currently hard-site findings because live Add attempts did not survive durable cart read-back. Newegg can complete builder-side durable cart read-back for an exact memory-resolved item.
-- WebVoyager knows Harbor Freight, Sur La Table, and GameStop search, product, and cart URL shapes. Harbor Freight is a site-specific captcha wall at cart preflight. Sur La Table is a hard-site finding on the current bridge path. GameStop can complete builder-side durable cart read-back for an exact memory-resolved item.
-- WebVoyager knows Ulta search, product, and bag URL shapes. Ulta exposed a main `Add for ship` product-page control and exact product links, but the cart artifact flickered under short-window read-back and the final five-read durability run failed closed. Treat Ulta as a hard-site/non-durable-cart finding until a new concrete hypothesis proves stability.
-- WebVoyager knows Wayfair search, product, and basket URL shapes, including `keyword` search parameters, `/pdp/...html` product URLs, and `/v/checkout/basket/show`.
-- NativeBridgeLink keeps up to 25,000 characters of rendered direct-CDP proof text, ranks `/pdp/` product marks as product-like, and extracts `keyword` query tokens so deeper dynamic cart text and Wayfair search URLs are visible to the recipe.
-- WebVoyager cart element proof can accept a matching cart-page product link deeper in the first actionable marks only when nearby labels show item-local cart structure such as `Remove`, `Quantity`, `Qty`, or `Save for later`.
-- BrowserHand marks changed-but-unverified commerce mutations as `non_retryable_real_mutation`, and the orchestrator stops retrying that step so a failed proof cannot blindly duplicate an Add-to-Cart mutation inside the same goal.
-- WebVoyager knows Macy's search, product, and shopping-bag URL shapes, including `/shop/featured/...`, `/shop/product/...`, and `/my/bag`, while rejecting Macy's review links as non-product.
-- Memory-to-intent extraction preserves decimal product names such as `4.0` before sentence trimming, so remembered exact variant and modifier tokens survive into product selection.
-- WebVoyager knows Dick's Sporting Goods, Kohl's, and QVC search/product/cart URL shapes, including Dick's `OrderItemDisplay`, Kohl's `shopping_cart.jsp`, QVC `cart.html`, and QVC `.product.<id>.html` product URLs.
-- NativeBridgeLink ranks QVC `.product.<id>.html` links as product-like so they survive direct-CDP mark caps on nav-heavy pages.
-- WebVoyager permits review- or rating-bearing product-card labels when the item identity passes, while rating-only or review-only links still fail item identity.
-- WebVoyager knows World Market search/product/cart URL shapes, including `/search?q=...`, `/cart`, and `/p/<slug>-<id>.html`.
-- WebVoyager knows Ace Hardware search/product/cart URL shapes, including `/search?query=...`, `/cart`, and `/departments/.../<id>`.
-- WebVoyager knows ThriftBooks search/product/cart URL shapes, including `/browse/?b.search=...`, `/shopping-cart/`, and `/w/<slug>/<id>/`.
-- WebVoyager treats `Unselect ... filter` controls as non-product controls and no longer opens href-less non-link buttons as product candidates.
-- WebVoyager applies stronger penalties to unrequested variant words such as workbook and guide so base remembered items outrank add-on variants.
-- WebVoyager knows Vitamin Shoppe search/product/cart URL shapes, including `/search?search=...`, `/p/<slug>/<sku>`, and `/cart/shopping-cart`.
-- NativeBridgeLink preserves direct-CDP document order as `docIndex` through normalized elements, so WebVoyager can use real page adjacency even when useful mark ranking changes `idx` order.
-- WebVoyager uses document order for nearby product lookup, adjacent search-result Add selection, and generic Add unrelated-product guards.
-- WebVoyager knows Crate & Barrel search/product/cart URL shapes, including `/search?query=...`, `/checkout/cart`, and product pages ending in `/s<id>`.
-- The generic cart URL classifier recognizes `/checkout/cart` while preserving cart-structure proof requirements.
-- WebVoyager knows Five Below search/product/cart URL shapes, including `/search?q=...`, `/products/...`, and `/cart`. Five Below is an unproven hard-site finding because the observed real adjacent Add click did not survive durable cart read-back.
-- WebVoyager knows Blick search/product/cart URL shapes, including `/search/?q=...`, `/products/...`, and `/cart/`. Blick can complete a vague-memory real-store cart path builder-side with durable known-cart read-back and delayed independent read-only cart reads.
-- WebVoyager rejects `q-&-a` URL fragments as non-product links, matching the existing review/Q&A fragment guard.
-- WebVoyager cart proof requires five delayed independent fresh cart reads by default. If any delayed read misses the item, the helper returns the failing observation, not the earlier best state.
-- Generic product-page Add controls are rejected when nearby buyable product-card context points at an unrelated recommendation item.
-- Numeric item matching and ordered item scoring treat visible labels such as `128GB` as matching numeric item tokens such as `128`, so exact storage-size product titles can satisfy distinctive-token checks.
-- Memory context hints bias product ranking but no longer filter out exact non-hint product matches. Total product score outranks context-hint count.
-- WebVoyager penalizes unrequested bundle, kit, pack, edition, CompactFlash, CFexpress, microSD, and microSDXC variants when choosing between visible product candidates.
-- Compound boundary token matching handles visible title compounds such as `SlideLITE`, so exact compound product names can satisfy separate remembered tokens without enabling arbitrary short substring matches.
-- Search-result product selection can use href-carried SKU/model-number evidence only to open a compact visible product label. It cannot justify Add by itself; product-page rendered identity must still match before mutation.
-- NativeBridgeLink extracts `Ntt` and `d` query parameters for real-store search readiness.
-- `NativeBridgeLink` ranks direct-CDP actionable marks so visible product, Add, cart, and search controls survive the mark cap on nav-heavy commerce pages.
-- `NativeBridgeLink` ranks numeric `.html` product URLs as product-like so real product links survive mark caps on sites such as GameStop and Harbor Freight.
-- `NativeBridgeLink` direct CDP scroll no longer double-scrolls by applying wheel plus unconditional JavaScript scroll. It uses JavaScript fallback only if the wheel did not move the page.
-- The orchestrator marks exhausted worker retries as failed. True human gates still return `needs_human` directly from the hand, but ordinary hard-site failures no longer park the goal as waiting.
-- If a site search URL redirects directly to a buyable product URL and the visible product identity matches the remembered item, WebVoyager can skip product-link selection and proceed to the product add loop.
-- BrowserHand refuses search fallback for URL-less action-shaped browse tasks. Vague add-to-cart work must arrive with a memory-resolved real site instead of dumping the whole task into search.
+## Carried over from the old regime (still true)
+- M0 clean floor was judge-proven once: one real typed Calendar task end-to-end
+  (`logs/verdicts/20260607T032947Z.md`).
+- Real and live-proven: Arcade Calendar create/list/delete (12/12 overnight run),
+  Gmail send. Gmail compose scope still needs a human OAuth tap. Slack unavailable.
+- The engine's browser agent (agent/webvoyager.py) has ~19 stores of builder-side
+  verified cart paths and ~16 hard-site findings, all judge-unproven. Per-store recipe
+  growth is BANNED (TARGET v2); P4 will pivot to a general agent + hints cache and the
+  recipe tables become seeds for `agent/site_hints.py`.
+- Apple Developer ID signing unavailable on this Mac (0 identities) — needed only for the
+  public front door (next plan).
+- One owner-email literal remains in product code (core/control_core.py:66) — P1 work
+  item 4 deletes it; the owner-literal scan now guards regressions.
+- Possible stray artifact: `[Anticipy test] M2 typed smoke 20260607-continue` calendar
+  event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
-Latest real M3 attempt:
-- Fresh ignored data directories and fresh Chrome user-data directories were used for builder-side live `/event` runs.
-- Read-only probes checked Williams Sonoma, Pottery Barn, West Elm, Blick, MoMA Design Store, Uncommon Goods, and Five Below for real product/Add/cart surfaces.
-- Five Below exposed exact product rows, adjacent Add controls, and `/cart`. A fresh live `/event` run used context-only memory plus a vague action that named neither Five Below nor the item, clicked a real adjacent `Add to Cart`, and failed closed because `/cart` did not expose durable item evidence.
-- Blick exposed exact product rows, adjacent Add controls, product-page Add controls, and `/cart/`. A fresh live `/event` run used context-only memory plus a vague action that named neither Blick nor the item, clicked a real adjacent `Add To Cart`, opened `/cart/`, and builder-side durable cart proof verified the item under cart structure proof.
-- A separate read-only native-bridge probe against the same fresh Blick profile verified the cart on five delayed reads with item-local cart structure.
-- No checkout, payment, order placement, email, calendar change, or third-party message occurred.
+## Current phase: P1-closed-loop (see factory/TARGET.md v2 for the work list)
+Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,
+not YES/NO ask); real ChannelWorker + Twilio env normalization + owner-literal removal;
+MainView SideDoor as a real TextField. Gate: factory/gates/gate_P1.sh (live legs SKIP
+honestly until OWNER_PHONE is confirmed and OpenRouter is topped up).
 
-Latest failure-hardening lap:
-- `20260609T224609Z` blocked the lower BrowserHand search fallback for unresolved action-shaped browse tasks. This directly addresses the observed failure where action tasks were typed into a search bar instead of being resolved to a real site and acted on. It is not M3 proof and attempted no real artifact.
+## Durable dead ends (do not blindly retry; full history in autopilot/LESSONS.md and git)
+- example.com / localhost / fixture pages as task targets or evidence.
+- Typing the whole task into a search bar; search fallback for URL-less action tasks.
+- Add-click as cart proof; modals/badges/screenshots as completion proof; recommendation
+  rows as cart proof. Independent fresh-probe read-back is the standard.
+- Captcha/anti-bot arms races (Harbor Freight, Container Store walls are site gates).
+- Hard sites pending a NEW hypothesis: Barnes & Noble, Office Depot, Staples, Nordstrom,
+  Home Depot, Sur La Table, LEGO, Guitar Center, Ulta, Dick's, Kohl's, Ace, ThriftBooks,
+  Vitamin Shoppe, Five Below, PetSmart, Wayfair retry-after-mutation, Lowe's token-rich.
+- Google Sheets/Docs canvas synthetic input; Amazon.ca Playwright automation.
+- Always-on cloud transcription (sidecar cache is the pattern).
+- The proactive engine's known weakness is OVER-ASKING (measured: interrupt_cost 5.4/day)
+  and acting on third-party-send lines the bank keys as ask-first (false_action_count 19).
+  That is P2 decider territory; overnight/track_b/decider.py is the proven seed.
 
-Latest real bridge findings:
-- Blick exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered art-supply item, with durable known-cart read-back and five delayed independent read-only cart reads. No separate judge has verified it.
-- Five Below exposes real search/product/Add/cart surfaces. The current code can resolve memory and click the real adjacent search-result Add button, but the observed Add path did not survive durable cart read-back. Treat it as a hard-site/non-durable-cart finding until a new concrete cart-readback or mini-cart hypothesis exists.
-- Uncommon Goods exposes product links on search, but direct product and cart pages were too thin through the bridge for a safe Add path in the current probe. Treat it as a hard-site/no-actionable-product-page finding until a new capture hypothesis exists.
-- World Market exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered World Market item, with durable known-cart read-back and a separate read-only fresh cart probe. No separate judge has verified it.
-- Crate & Barrel exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered Crate & Barrel pantry item, with durable known-cart read-back and three delayed independent read-only cart reads. No separate judge has verified it.
-- Vitamin Shoppe exposes real search/product/Add/cart surfaces. The current code can select the real adjacent search-result Add button by document order, but the observed Add path did not survive durable cart read-back and direct read-only cart probes saw no item evidence. Treat it as a hard-site/non-durable-cart finding until a new concrete cart-readback or mini-cart hypothesis exists.
-- Ace Hardware exposes exact search-redirect product/Add/cart surfaces, but the observed Add path did not survive durable cart read-back. Treat it as a hard-site/non-durable-cart finding until a new concrete hypothesis proves stability.
-- ThriftBooks exposes product/Add/cart surfaces. The current code avoids a workbook-variant false mutation, but the observed base-book Add path did not survive durable cart read-back. Treat it as a hard-site/non-durable-cart finding until a new concrete hypothesis proves stability.
-- iHerb exposes product/Add/cart surfaces, but the observed top results for the probed item were broad substitutes. Treat it as a candidate only with an exact product/matching hypothesis.
-- Nordstrom exposes exact product links and a real shopping-bag route on search, but its product and cart pages returned no actionable marks through the bridge. Treat it as a hard-site/no-actionable-marks finding until a new concrete capture hypothesis exists.
-- QVC exposes real search/product/Add/cart surfaces. Current code can complete a vague-memory real-store cart path builder-side for a remembered QVC item whose product-card label includes review text, with fresh cart read-back under cart structure proof. No separate judge has verified it.
-- Dick's Sporting Goods exposes real search/product/Add/cart surfaces, but the observed Add path did not verify a durable cart artifact. Treat it as a hard-site/non-durable-cart finding.
-- Kohl's exposes real search/product/Add/cart surfaces, but the observed Add path did not verify a durable cart artifact. Treat it as a hard-site/non-durable-cart finding.
-- Macy's exposes real search/product/Add/shopping-bag surfaces. Current code can complete a vague-memory real-store cart path builder-side for an exact decimal-bearing remembered item, with durable known-bag read-back. No separate judge has verified it.
-- Wayfair exposes real search/product/Add/basket surfaces. Deep basket text and item-local cart controls required expanded direct-CDP text extraction and tighter cart-element proof. One pre-no-retry builder-side run got basket read-back success after a retry, but current code failed closed after an unverified real mutation and did not retry. Treat Wayfair as an unproven hard-site/cart-readback finding until a new persistence hypothesis or separate judge proof exists.
-- Ulta exposes real search/product/Add/bag surfaces. The main product-page add control is labeled `Add for ship`. Generic recommendation Add controls can appear below the product. Short-window cart reads flickered true then false, and the final five-read durability run failed closed. Treat Ulta as a hard-site/non-durable-cart finding until a new hypothesis proves persistence.
-- GameStop can complete a real search-product-add-cart-verify path builder-side after recognizing `/search/?q=`, `/products/.../<sku>.html`, and `/cart/`, plus settled cart read-back with quantity/cart structure.
-- Harbor Freight exposes real search/product/Add/cart surfaces, but `/checkout/cart` preflight hit a captcha wall before mutation. Treat it as a site-specific hard wall, not an all-work stop.
-- Sur La Table exposes real search/product/shopping-bag surfaces, but current bridge observations do not expose enough product-page identity to click Add safely, and empty shopping-bag recommendation text must be rejected as cart proof.
-- Newegg can complete a real search-product-add-cart-verify path builder-side after recognizing `/p/pl?d=`, `/p/N...`, and `secure.newegg.com/shop/cart`, plus `d` query-token readiness.
-- LEGO exposes real search/product/Add/cart surfaces, but the observed Add to Bag did not persist into an independent cart read-back. Treat it as a hard-site/non-durable-cart finding.
-- Guitar Center exposes real search/product/Add/cart surfaces, but the observed Add to Cart did not persist into durable cart read-back. Treat it as a hard-site/non-durable-cart finding.
-- Sweetwater can complete a real search-product-add-cart-verify path builder-side after recognizing `/store/search?s=`, `/store/detail/<slug>`, and `/store/cart.php`, handling search redirects directly to a matching product page, and treating `/cart.php` as a cart route under item-local cart-structure proof.
-- Adorama can complete a real search-product-add-cart-verify path builder-side after recognizing `/l/?searchinfo=`, `/p/<slug>`, and `/cartview`, after handling compound title tokens such as `SlideLITE`, and after requiring item-local cart structure so recommendation cards do not count as cart proof.
-- B&H Photo Video can complete a real search-product-add-cart-verify path builder-side after recognizing `/c/search?Ntt=`, `/c/product/.../<slug>.html`, and `/find/cart.jsp`, and after changing context hints to ranking signals instead of exclusive filters.
-- Michaels can complete a real search-product-add-cart-verify path builder-side after direct-CDP mark ranking, direct-scroll fallback hardening, and recognizing `/search?q=`, `/product/`, and `/cart`.
-- Chewy can complete a real search-product-add-cart-verify path builder-side after recognizing `/s?query=`, `/dp/`, Chewy search tracking click URLs, and `/app/cart`.
-- Bookshop can complete a real search-product-add-cart-verify path builder-side after recognizing `beta-search`, `keywords`, Bookshop product URLs, variant-heavy search results, and `Add item to cart` labels.
-- Barnes & Noble returned a blank/no-mark search surface in the dedicated bridge path. This is a hard-site finding, not proof.
-- Target can complete real search-product-add-cart-verify and duplicate-safe known-cart verification paths for vague memory-resolved tasks in the dedicated browser path.
-- Walmart can complete real search-product-add-cart-verify paths for vague memory-resolved tasks after generic option labels are skipped and settled product pages are refreshed before add-control scrolling.
-- Best Buy can complete a real search-product-add-cart-verify path for a vague memory-resolved task after current `/product/...` URLs are accepted.
-- Lowe's can complete some real full `/event` vague-memory cart add paths and duplicate-safe known-cart read-backs, but token-rich exact-item paths exposed broad substitute and contradictory-page failures. The latest visible-identity guard blocks the observed contradictory-page Add before mutation, but the gloves path remains a false-action hard finding until a new exact-product hypothesis is proven.
-- IKEA can use a search-result item-specific Add path when product pages are availability-gated, while keeping strict final cart proof.
-- REI can expose product links and cart structure through the bridge, and builder-side read-back can verify an exact remembered cart item under strict proof.
-- PetSmart exposes product pages and Add controls through the bridge, but the observed Add path did not verify a durable cart artifact.
-- Container Store exposes product URLs and Add controls through the bridge, but active-bridge cart preflight was not durable under independent read-back, and the post-hardening rerun hit a captcha-class wall.
-- Home Depot returned only a privacy surface with no product tokens or buyable links. This is a hard-site finding, not proof.
-- Office Depot exposes product and add controls, but its add paths did not verify the known cart page. This is a hard-site finding and not proof.
-- Staples search exposed no actionable product marks through the bridge after settling. This is a hard-site finding and not proof.
-
-Current constraints:
-- Current allowed work is M3 only.
-- Low OpenRouter credit blocks the old heavy WebVoyager planning loop, not building. Continue with deterministic memory resolution, deterministic real-store DOM recipes, cached observations, compact page-state capture, and tiny-model decisions only where needed.
-- Judge quota blocks proof only. Spending money is a hard human gate and was not taken.
-
-Latest checks:
-- Mandatory compaction-proof reads were re-run for `00_AMENDMENT_NEVER_STALL.md`, `AGENTS.md`, `autopilot/02_LAWS.md`, `autopilot/09_REPO_FACTS.md`, `logs/STATE.md`, `autopilot/00_START_HERE.md`, `CODEX_BRIEF.md`, `logs/last_lap.md`, `autopilot/07_MILESTONES.md`, and `autopilot/LESSONS.md`.
-- BrowserHand was updated to refuse unresolved action-task search fallback while preserving read/info search fallback.
-- `engine/.venv/bin/python -m py_compile engine/anticipy_engine/hands/browser_hand.py engine/scripts/test_browser_hand.py` passed.
-- `PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.py` passed.
-- `bash scripts/run_suite.sh` passed 29/29 in stub/mock mode. This is regression coverage only and does not prove M3.
-- `git diff --check` passed.
-- Forbidden-path scan was clean.
-- Credential-shaped diff scan was clean.
-- Product diff eval-literal scan was clean.
-- Held-out/raw tracked-file check was clean.
-- `logs/trace/20260609T224609Z.jsonl` is ignored.
-
-Proven:
-- Setup completed on `autopilot/build`; `scripts/run_suite.sh` passed 29/29 in stub/mock mode; macOS app build passed in setup; setup judge self-check ruled a planted fake FAKE at `logs/verdicts/setup-smoke_selfcheck.md`.
-- M0 clean floor is proven once: `logs/verdicts/20260607T032947Z.md` verifies one real typed Calendar task with connector read-back, screenshot proof, different-family cross-check, clean diff scan, and cleanup.
-
-Not proven:
-- M1 is not proven. The current public production app must be downloaded, installed, and launched by the separate judge from the clean public front door.
-- M2 is not proven. The separate judge has not typed or uploaded through the packaged or public app and verified a real correct artifact.
-- M3 is not proven. Blick, Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, and Macy's builder-side cart artifacts or read-backs exist, and Five Below, Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Ulta, and other sites have hard-site/non-durable-cart findings. The latest no-search-dump BrowserHand change is failure hardening only. No separate judge proof exists.
-- M5 is not proven. The separate judge has not completed onboarding on a fresh account and verified a working personal mesh.
-- Generalization is UNPROVEN.
-- Raw audio inference is not proven and is not the daily gate.
-- The full stranger path is not proven.
-
-Gate status:
-- No all-work human gate is active.
-- Blick, Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Walmart, Lowe's, Best Buy, IKEA, REI, Macy's, and the pre-no-retry Wayfair path can create or verify safe cart artifacts builder-side on some item shapes. Five Below, Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, PetSmart, Container Store, Ulta, Uncommon Goods, and the current-code Wayfair run produced hard-site, no-actionable-marks, or non-durable-cart findings in prior laps. Lowe's token-rich gloves produced pre-fix false actions in prior laps, then the tightened visible-identity guard rejected the repeat before Add. Barnes & Noble produced a blank/no-mark hard-site finding in a prior lap. Other hard-site failures are not all-work stops.
-- Low OpenRouter credit is not a stop. It requires cheaper M3 planning and deterministic browser action hardening.
-- Separate Codex CLI usage for independent builder/judge sessions is exhausted until the reported reset on June 12, 2026 at 5:34 PM local time unless money is spent. This blocks separate proof only. Spending money is a hard human gate and was not taken.
-- Apple Developer ID signing and notarization are unavailable on this Mac: `security find-identity -v -p codesigning` reports 0 valid identities.
-- Owner Chrome has Anticipy extension id `npnpagopediecennpleihemoochikggb` registered at `/Users/omarebrahim/Desktop/Anticipy-Extension`, but disabled.
-- Possible cleanup item: a native Apple Calendar smoke may have created `[Anticipy test] M2 typed smoke 20260607-continue` on June 12, 2026 from 15:00 to 16:00. Local read-back and deletion were blocked by macOS privacy/TCC and AppleScript list timeouts. This remains queued in `PENDING_FOR_OMAR.md`; do not delete or modify real existing Calendar data.
-- Non-blocking connector gates remain in `PENDING_FOR_OMAR.md`: Gmail compose scope, Google Docs Drive scope, Slack tool unavailable.
-
-Drift numbers:
-- Builder-owned tests pass rate: 29/29, 100 percent, stub/mock coverage only.
-- Clean typed M0 reality judge pass rate: 1/3 verified, 33 percent.
-- M1 reality judge pass rate: 0/5 verified, 0 percent.
-- M2 reality judge pass rate: 0/0 verified, not run.
-- M3 real browser-hand reality judge pass rate: 0/64 unjudged builder-side cart attempts, artifacts, or read-backs verified by the separate judge, 0 percent. Prior Blick, Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Lowe's, Walmart, Best Buy, IKEA, REI, Wayfair, and Macy's builder-side cart artifacts or read-backs exist, and Five Below, Vitamin Shoppe, Ace Hardware, ThriftBooks, Nordstrom, Dick's, Kohl's, Harbor Freight, Sur La Table, LEGO, Guitar Center, Barnes & Noble, PetSmart, Container Store, Office Depot, Staples, Ulta, Wayfair, and Lowe's visible-identity/cart-readback findings exist, but no separate judge has verified M3.
-- M5 reality judge pass rate: 0/0 verified, not run.
-- Amended pre-clean audio reality judge pass rate: 0/10 verified, 0 percent.
-- Generalization: UNPROVEN. Real diverse users do not exist yet.
-- Held-out availability: only 4 held-out task-bearing real days are available locally, so the 5-day generalization bar cannot be honestly satisfied yet.
-- Drift siren: active. Builder-owned tests remain green while reality pass rates remain flat.
-
-Realday audio:
-- One timestamped student MP3 and a builder-visible transcript are in `realdays/raw/`.
-- Four timestamped student MP3s are in `realdays/holdout/`. The builder must never read them.
-- Audio transcription is sidecar-cached. Held-out sidecars are judge-only. The inner loop must use typed input or cached text and complete in minutes.
-- The Steve Jobs / Bill Gates interview is a silence control only and never counts for task completion.
-
-Dead ends not to retry blindly:
-- Do not work on UI/status/onboarding/perimeter polish while the hard M3-only amendment is active.
-- Do not use `example.com`, localhost, fixture pages, or contrived no-stakes pages as M3 targets or evidence.
-- Do not type the whole task into browser search or the address bar for action tasks.
-- Do not re-enable BrowserHand search fallback for URL-less action-shaped browse tasks. If a browse action has no real site, fix memory-to-intent or planning so it supplies one.
-- Do not treat context-only memory observations as tasks. A separate action-shaped request must arrive before acting.
-- Do not click generic `Add to cart` controls on search results when no matching product has been identified. Open the matching product first, or require adjacency to a strongly matched product row.
-- Do not treat an add click as proof. Open the real cart and require the requested item tokens in localized cart item evidence with real cart item structure.
-- Do not accept product-page add modals, search-result pages, zero-count cart labels, transient cart badges, broad cart-page text, navigation-only cart shells, same-bridge active-target cart state, or screenshots alone as final cart proof.
-- Do not duplicate an item already present in the cart during repeated builder runs. Read the known cart page first and use `already_in_cart=true` only if cart-page verification passes.
-- Do not let memory item extraction keep the store name or a dangling `on/from/at` site phrase inside the item.
-- Do not trust stale data-index selectors after real-store DOM re-renders. Re-resolve by expected role, name, or href at click time and verify page mutation or cart state.
-- Do not open loosely related product titles before an add attempt. Two-token items must match both tokens, and longer item names need a stronger token majority.
-- Do not treat bare `Options`, `Choose options`, `Select product options`, `View options`, or similar option-control labels as product targets. They are generic controls, not product identity.
-- Do not treat shopping-list, wishlist, favorite, registry, save-for-later, or remove controls as product targets.
-- Do not let recommendation products after an order summary, checkout block, or recommendation section satisfy cart proof.
-- Do not let navigation/category words on a cart shell satisfy cart proof without cart item structure.
-- Do not keep leading room-context words such as kitchen/bathroom/office inside the resolved item when at least two product words remain; keep them as context hints instead.
-- If a product page has item evidence but no Add to Cart control on the first observation, refresh the settled product page once before scrolling. Some real stores render the Add control after the product page text appears.
-- When a real search page has strong product titles but `buyable_product_links=0`, inspect sanitized href shapes and update the product URL classifier. Do not keep treating the store as linkless if the URL pattern drifted.
-- If a real store search page returns synonym titles that do not contain the original query tokens, use the cautious search-result fallback only on search-result URLs and only for buyable product URLs. Do not use it on category, editorial, recommendation, or product pages.
-- Do not treat editorial, advice, how-to, or category pages as buyable product pages for add-to-cart recipes.
-- Some IKEA product pages expose only availability/ZIP checks and no Add control. Move sideways to a search-result add path or another item rather than forcing location changes.
-- Non-generic item-specific Add labels must use the product-hit threshold, not a fixed minimum of 3, so two-token items can use real Add labels without allowing unrelated items.
-- Price-suffixed generic Add labels are product-page controls only unless the surrounding search-result adjacency rules identify the exact product row.
-- Native-bridge known-cart proof must survive an independent `fresh_probe()` observer. If the active bridge sees a cart item but fresh_probe does not, reject the proof and continue or fail honestly.
-- Container Store hit a captcha-class wall after separate-probe hardening. Treat that path as a site-specific gate, not an all-work stop, and move sideways unless there is a new non-gated hypothesis.
-- Active-page cart proof also needs independent fresh-probe confirmation. Do not complete after a product-page add modal, View Cart click, or scrolled cart page unless fresh_probe verifies the same item.
-- For long, token-rich remembered items, do not add a product that keeps only brand plus category or category plus material. Important modifiers must remain present, or the correct action is failure.
-- Do not let product URL slugs or hrefs supply missing identity tokens when the visible product title/text/labels disagree. Visible product identity must clear the item threshold before any real Add click.
-- Do not reward long product titles when token hits tie. Compact ordered item phrases should beat broad titles with scattered requested tokens.
-- Do not let context hints become exclusive product filters. A context word such as kit, camera, kitchen, or office can bias ranking, but it must not discard exact item matches that do not contain the hint.
-- Do not let numeric item tokens fail distinctive-token or ordered-score checks when the visible product label attaches a unit to the number, such as `128GB`. Numeric tokens must match alphanumeric quantity labels without matching different larger numbers.
-- Do not let unrequested bundle, kit, pack, edition, CompactFlash, CFexpress, microSD, or microSDXC variants outrank the remembered base item unless the user's memory requested that variant.
-- Do not accept cart-page item tokens from recommendation cards. On cart routes such as Adorama `/cartview`, item evidence must have local cart-item structure such as quantity or remove before it can prove the cart artifact.
-- Do not let product-title compounds such as `SlideLITE` lose separate remembered tokens, but keep compound matching cautious and boundary-based. Do not add arbitrary short substring matching.
-- Do not treat a search redirect to a matching product page as a failed search surface. If the current URL is buyable and visible identity matches, proceed to product add.
-- Do not forget `.php` cart routes. A mapped known-cart URL such as Sweetwater `/store/cart.php` must also satisfy the generic cart URL classifier before proof can pass.
-- Do not assume a fresh Chrome user-data directory exists. If `ANTICIPY_CHROME_USER_DATA_DIR` is configured, create it before CDP launch or the bridge may fall back to weak no-mark observations.
-- Do not let native direct CDP scroll double-apply wheel plus JavaScript scroll. Product-page scans can overshoot Add controls and then fail without mutation.
-- On nav-heavy commerce pages, do not trust document-order mark caps. Product/Add/cart/search controls must survive observation ranking before the cap.
-- Do not retry Barnes & Noble blindly. The observed search path returned a blank/no-mark surface; retry only with a new concrete hypothesis.
-- Do not fail immediately after the final allowed scroll on a real search page. Check the freshly observed post-scroll state first.
-- Do not let unrequested variant products such as workbook, calendar, guide, or summary editions outrank the base remembered item.
-- Do not treat `Add item to cart` as item identity. It is a generic control and is safe only beside a strongly matched product row.
-- Do not retry the Lowe's token-rich gloves path blindly. It produced wrong or unverified cart additions and needs a new exact-product or cart-readback hypothesis first.
-- Do not keep spending OpenRouter calls through the old heavy planner when credit only permits tiny output caps.
-- Do not retry Office Depot blindly. Product-page Add and adjacent result-row Add both changed the page but did not verify the known cart artifact; retry only with a new concrete cart-readback or modal hypothesis.
-- Do not retry LEGO blindly. A real Add to Bag attempt exposed cart-like overlay evidence, but delayed independent cart read-back was empty.
-- Do not retry Ace Hardware blindly. A real Add click changed the product page and reached `/cart`, but durable and separate read-only cart probes saw no item evidence.
-- Do not retry ThriftBooks blindly. The recipe can now avoid workbook/filter false selection and click Add on the base product, but `/shopping-cart/` did not expose item evidence after mutation.
-- Do not retry Vitamin Shoppe blindly. The recipe can now use document order to click the adjacent search-result Add button, but `/cart/shopping-cart` and direct read-only cart probes did not expose item evidence after mutation.
-- Do not use href-less filter or facet controls as product-open candidates. Labels such as `Unselect ... filter` are controls, not product identity.
-- Do not retry Guitar Center blindly. A real Add to Cart attempt reached `/cart`, but durable cart read-back did not expose the requested item.
-- Do not retry Harbor Freight blindly. The observed `/checkout/cart` preflight hit a captcha wall before mutation.
-- Do not retry Sur La Table blindly. The current bridge path saw empty shopping-bag recommendation text and product pages without visible item identity; retry only with a new concrete Add/control hypothesis.
-- Do not treat a shallow one-shot cart URL observation as proof or as a failure verdict. Dynamic carts can settle after the first observe. Use the settled cart observer plus fresh-probe confirmation.
-- Do not treat short-window fresh cart reads as proof if a later delayed independent read loses the item. Cart completion now needs five delayed fresh reads by default, and any delayed miss must fail closed.
-- Do not retry Ulta blindly. It exposed exact product links and a main `Add for ship` control, but cart visibility flickered under short windows and the final five-read durability run failed closed. Retry only with a new concrete persistence hypothesis.
-- Do not treat exhausted browser retries as a human gate. If the hand did not explicitly return `needs_human`, the step should fail honestly.
-- Do not treat Staples as supported from the current bridge path. It returned no actionable product marks after settling.
-- Do not retry a commerce step after a real changed mutation that failed proof. Current code marks this as non-retryable inside the same goal so a failed Add-to-Cart proof cannot blindly duplicate the item.
-- Do not retry Wayfair blindly. It exposes product/Add/basket surfaces and one pre-no-retry builder-side basket read-back succeeded after a retry, but current code failed closed after the known cart page did not verify the item. Retry only with a new cart persistence or read-back hypothesis, never by repeating the same mutation in the same goal.
-- Do not let decimal product names be treated as sentence endings during memory-to-intent extraction. If a remembered item includes `4.0`, `2.5`, storage sizes, or other numeric variants, preserve the full item before product matching.
-- Do not treat review or rating wording inside a product-card label as automatically non-product if the same label carries exact item identity. Rating-only and review-only links must still fail identity.
-- Do not retry Dick's or Kohl's blindly. Both resolved memory and reached real Add controls, but their cart pages did not durably verify the item under current proof.
-- Do not retry Nordstrom blindly. Search exposed exact product links and a shopping-bag route, but product and cart pages returned no actionable marks through the current bridge path.
-- Do not claim M3 progress from self-tests, mocks, status displays, public renders, screenshots alone, or browser diagnostics.
-- Do not run broad searches over `.env.local`, env backup files, raw Chrome profiles, `.anticipy` state, or raw local data.
-- Google Sheets and Google Docs canvas synthetic input remain dead ends.
-- Amazon.ca Playwright automation remains a dead end.
-- Do not escalate anti-bot arms races for captcha or Cloudflare challenges.
-- Do not design always-on cloud transcription.
-
-- Convert the current Blick path plus prior Crate & Barrel, World Market, QVC, GameStop, Newegg, Sweetwater, Adorama, B&H, Michaels, Chewy, Bookshop, Target, Best Buy, Walmart, Lowe's, IKEA, REI, Wayfair, Macy's, and any future `UNPROVEN-PENDING-JUDGE` artifacts and duplicate-safe cart read-backs through the separate judge when quota returns.
-- Until then, continue real M3 ladder work. Build exact item matching, independent read-back proof, and failure hardening without UI/status/onboarding work. Prefer a new real store or a concrete new hypothesis over blind retries on Barnes & Noble, Office Depot, PetSmart, Container Store, Staples, Nordstrom, Dick's, Kohl's, or Lowe's token-rich gloves.
-
-Law digest:
-Read `00_AMENDMENT_NEVER_STALL.md` first. Never grade your own work. Reality in real apps is proof. No fake, no hardcode, no goal shrink. Never park on judge quota, low credit, or a hard site. M3 only: vague task, memory-resolved real site and item, browser hand changes or safely verifies a real reversible artifact, separate judge verifies. No contrived pages, no search-bar task dumping, no mocks as progress. Build/test actions must be safe, reversible, and self-owned. Raw held-out derivatives never enter git.
+## Law digest (unchanged where it was right)
+Never act on a vent (silent_harm guard is absolute and voids laps). Money/payment is the
+only hard action stop. Real artifact read-back is the only completion proof. Builders never
+grade themselves, never touch factory//personas//scoreboard, never read holdout. Honest
+labels: UNPROVEN until a gate or judge says otherwise. Strategy changes are legal and go
+through ESCALATION -> foreman -> TARGET.md, never silently.

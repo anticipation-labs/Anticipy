@@ -43,7 +43,7 @@ MODEL_ARGS=()
 command claude -p "$PROMPT" \
   --dangerously-skip-permissions \
   --output-format stream-json --verbose \
-  "${MODEL_ARGS[@]}" \
+  ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
   > "$STREAM" 2> "$LAPDIR/build.err"
 rc=$?
 kill "$WATCHDOG" 2>/dev/null

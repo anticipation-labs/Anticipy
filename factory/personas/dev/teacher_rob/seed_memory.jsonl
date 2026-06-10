@@ -1,0 +1,6 @@
+{"kind": "profile_fact", "text": "Teaches 7th grade science, periods 1-5; planning period is 6th, 1:40-2:30.", "importance": 0.8}
+{"kind": "profile_fact", "text": "Runs robotics club Tuesdays and Thursdays after school until 4:30.", "importance": 0.7}
+{"kind": "profile_fact", "text": "Co-teacher Jamal shares the lab and the supply budget.", "people": ["Jamal"], "importance": 0.6}
+{"kind": "open_loop", "text": "Submit the lab supply order before the district purchasing window closes this month.", "fields": {"task": "submit lab supply order"}, "status": "open", "importance": 0.9}
+{"kind": "history", "text": "Was comparing document cameras for the classroom last week; settled on the IPEVO V4K as the one to get.", "importance": 0.7}
+{"kind": "derived", "text": "Grades on Sunday afternoons; weeknight asks land badly.", "confidence": 0.7, "importance": 0.5}
