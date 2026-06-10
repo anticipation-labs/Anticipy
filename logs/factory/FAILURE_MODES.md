@@ -511,3 +511,27 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   test_gateway_retry.py pins gemini_429("1s") parsing AND the sustained-short-hint
   bounded-loop case (4 requests max). If hint trust is ever extended (e.g. gating on
   quotaId PerMinute vs PerDay like gemini-cli), revisit this entry.
+
+## Class F addendum (builder lap 20260610T104837Z)
+- F7 residual "in-memory deferred queue" CLOSED (commit 1ce2269): an engine restart
+  during a quota outage used to eat every deferred line — decider_deferred and
+  _decider_attempts lived only in process memory, so the lines the decider never read
+  vanished with no trace when the process died (launchd restart, crash, deploy), the
+  exact silent-deafness F7 exists to prevent. Now the outage queue persists atomically
+  (tmp + os.replace) to <ANTICIPY_DATA_DIR>/decider_deferred.json on every mutation and
+  a LIVE boot restores it: entries re-enter the FULL pipeline at their due tick, the
+  attempt count rides along so DECIDER_MAX_RETRIES holds ACROSS restarts (a reboot
+  grants no extra lives), and a restored money line still ends at the harm-line ASK.
+  Every failure path keeps failing toward silence: a STUB boot neither restores nor
+  touches the file (no decider = an unread line must never re-enter the pipeline
+  without one; the file waits for the next live boot), a corrupt file boots an empty
+  queue with an honest glassbox log and is set aside as .corrupt (never deleted), a
+  persist IO error logs and carries on in memory, and the trigger_tick drain persists
+  BEFORE re-entry so a crash mid-retry can only LOSE events — it can never leave one
+  on disk to be restored-and-replayed after it may already have acted (no double act).
+  Remaining F7 residual: real-429 storm still not live-observed (deliberate — inducing
+  one would poison the night's shared free-tier quota for verify_gate's live runs).
+  Regression check: engine/scripts/test_deferred_persistence.py (suite entry
+  deferred_persistence) — restart recovery, cross-restart retry bound, money-ASK
+  finality after restore, stub no-touch, corrupt set-aside, no-path no-IO,
+  crash-loses-not-replays ordering.

@@ -136,6 +136,19 @@ its LESSONS.md still binds.
   and 5xx keep byte-identical blind backoff. Pins: test_gateway_retry.py (suite
   33->34, MockTransport, zero network/waiting). Live healthy path 5/5, hint path
   provably dormant on healthy replies (hints_seen=[]).
+- The outage queue now SURVIVES ENGINE RESTARTS (lap 20260610T104837Z, commit
+  1ce2269 — closes the F7 residual "in-memory deferred queue", D16 family):
+  decider_deferred + attempt counts persist atomically to
+  <ANTICIPY_DATA_DIR>/decider_deferred.json on every mutation; a LIVE boot restores
+  them and entries re-enter the FULL pipeline at their due tick. Live-only on both
+  ends (a stub boot neither restores nor touches the file — an unread line never
+  re-enters without a decider); the retry bound holds ACROSS restarts; a restored
+  money line still ends at the harm-line ASK; corrupt files are set aside honestly;
+  the drain persists BEFORE re-entry so a mid-retry crash loses-toward-silence,
+  never replays. Pins: test_deferred_persistence.py (suite 34->35). D16 sibling
+  still open: self.pending asks remain in-memory (restart strands paused goals —
+  the persistence pattern now exists to copy). F7's last residual: real-429 storm
+  live observation.
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,

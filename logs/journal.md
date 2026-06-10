@@ -457,3 +457,23 @@ ratchet ceiling 1.0, gate_P1 already first-closed, TARGET.md still v3 on disk) �
 treadmill 3->4 expected, one tick from the designed escalation that wakes the foreman.
 Deliberately NOT live-observed (same reason as last lap): inducing a real 429 would
 poison tonight's shared free-tier quota for verify_gate's own live runs.
+
+## Lap 20260610T104837Z (builder, FULL) — outage queue survives restarts (F7 residual / D16)
+Took the named next-builder slice from last_lap.md: the Room 1.5 outage queue was
+in-memory only, so an engine restart during a quota window ate every line the decider
+never read — silent catch loss in exactly the deafness window F7 was built to make
+honest. Persisted the queue (entries + attempt counts) atomically under
+ANTICIPY_DATA_DIR and restore it on LIVE boot only; stub boots neither restore nor
+touch the file, since an unread line must never re-enter the pipeline without a
+decider to read it. The retry bound now holds across restarts (attempt counts ride
+along — a reboot grants no extra lives), a restored money line still dies at the
+harm-line's ASK, a corrupt file is set aside honestly, and the drain persists BEFORE
+re-entry so a mid-retry crash loses events (toward silence) instead of ever replaying
+one that may already have acted. Suite 34->35 (new test_deferred_persistence.py, all
+7 pins green first run); stub 8-persona bank bit-identical to the ratchet bests, as
+expected — the seam is invisible without a decider. No live calls spent: the change
+only engages under outage deferral, and inducing a real 429 would poison tonight's
+shared quota. Pre-registered as mechanically dead per D22 (stub primary at ceiling
+1.0, gate_P1 already closed, TARGET still v3 on disk): the treadmill tick 4->5 this
+lap burns reaches K=5 and fires the designed ESCALATION that wakes the foreman to
+flip TARGET to v4/P2 — stated up front in the manifest, not an accident.

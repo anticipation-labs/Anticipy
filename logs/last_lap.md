@@ -1,70 +1,70 @@
 # Last Lap
 
-Lap: 20260610T102837Z
+Lap: 20260610T104837Z
 Date: 2026-06-10
 Phase: registered P1-closed-loop (gate_P1, already closed) — product work is P2-brain
 per TARGET v3 STAGE 2; lap is mechanically dead by D22 (stated in manifest up front;
-treadmill 3->4 is the designed escalation toward the foreman flipping TARGET to v4)
-Slice: BUILD — F7 residual #1: the gateway ignored the server's own 429 retry guidance
-(the live brain is Gemini FREE TIER; blind retries during a quota window are themselves
-quota-counting requests that deepen the outage)
+treadmill 4->5 reaches K=5 and fires the DESIGNED escalation that wakes the foreman
+to flip TARGET to v4/P2 — this is the system working, not a failure)
+Slice: BUILD — F7 residual / D16 family: the Room 1.5 outage queue was in-memory
+only, so an engine restart during a quota window ate every line the decider never
+read (launchd restart, crash, deploy — silent catch loss with no trace, the exact
+deafness F7 exists to make honest)
 
-What changed (commit 6efcad7, code-first per the D20 binding rule):
-- engine/anticipy_engine/core/gateway.py: on 429, _retry_hint_seconds reads the
-  server's stated wait — Retry-After header (delta-seconds; OpenRouter's documented
-  signal) > google.rpc.RetryInfo retryDelay in the error body (proto3 Duration string
-  like "21s"/"15.002899939s", defensive {seconds,nanos} fallback; handles the
-  one-element-ARRAY wrapper the Gemini OpenAI-compat endpoint emits) > a
-  "retry in Ns" phrase in error.message (the only signal confirmed surviving the
-  compat layer). Hint <= 8s (RETRY_HINT_INLINE_CAP_S): sleep hint + 0.25s margin
-  inline, still bounded by the 4-attempt loop. Hint > 8s: return "" after ONE request
-  — fast-fail into the existing Decider UNAVAILABLE -> 75s defer path (F7), which
-  outlasts per-minute windows, instead of burning ~13s and 3 more quota-counting
-  blind retries against a closed window. No hint (the detail-less 429 variant) and
-  all 5xx: byte-identical blind backoff. Hints recorded on gateway.calls for
-  postmortems. New `transport=` injection point so tests never touch the network.
-- engine/scripts/test_gateway_retry.py (NEW, suite 33->34; registered in
-  scripts/run_suite.sh): MockTransport + recorded sleep — pins the parse ladder
-  (header > RetryInfo str/obj > message; array wrap; detail-less/garbage -> None,
-  never raises), short-hint inline recovery, long-hint single-request fast-fail,
-  bounded loop under sustained short hints, 5xx hint-blindness, and the F7
-  end-to-end (long-hint 429 storm -> Decider UNAVAILABLE after exactly one request).
-- Research-first (per contract): two parallel web sweeps established the real shapes
-  before any code — Gemini has NO reliable Retry-After header; per-DAY exhaustion can
-  return a misleading "1s" retryDelay (contained: the attempt bound makes a bad short
-  hint cost at most 3 extra spaced retries before the honest "" -> defer path).
-- Real-world side effects: NONE beyond 5 cheap live model calls (healthy-path probe,
-  invented lines). No 429 was induced (would poison tonight's shared free-tier quota
-  for verify_gate's own live runs); the deterministic pins stand in.
+What changed (commit 1ce2269, code-first per the D20 binding rule):
+- engine/anticipy_engine/core/proactive.py: ProactiveEngine takes deferred_path
+  (default None = no IO, every existing test/caller unchanged). The outage queue
+  (decider_deferred entries + per-event attempt counts) persists atomically
+  (tmp + os.replace) on every mutation; a LIVE boot (decider present) restores it
+  and entries re-enter the FULL pipeline at their due tick. Live-only on BOTH ends:
+  a stub boot neither restores nor touches the file — an unread line must never
+  re-enter the pipeline without a decider — the file waits for the next live boot.
+  Attempt counts ride along so DECIDER_MAX_RETRIES holds ACROSS restarts. Corrupt
+  file -> empty queue + honest glassbox log + file set aside as .corrupt (never
+  deleted). Persist IO error -> log and carry on in memory (disk trouble must not
+  break the decision path). The trigger_tick drain persists BEFORE re-entry, so a
+  crash mid-retry can only LOSE events (fail toward silence) — never leave one on
+  disk to be restored-and-replayed after it may already have acted.
+- engine/anticipy_engine/core/control_core.py: wires
+  deferred_path=<ANTICIPY_DATA_DIR>/decider_deferred.json (same base the GoalStore
+  already uses for restart survival).
+- engine/scripts/test_deferred_persistence.py (NEW, suite 34->35; registered in
+  scripts/run_suite.sh): 7 deterministic pins — restart-mid-outage late catch,
+  cross-restart retry bound (no extra lives from rebooting), restored money line
+  still ends at harm-line ASK, stub no-restore/no-touch + next-live-boot pickup,
+  corrupt set-aside, no-path no-IO default, crash-mid-retry loses-not-replays.
 
 Eval numbers I saw (verify_gate recomputes everything):
-- Suite: 34/34 green (was 33; +test_gateway_retry).
-- Stub tier, full 8-persona dev bank (run 20260610T102837Z-pre): bit-identical to the
-  ratchet bests — catch 1.0 / worst 1.0, false 0, harm 0, interrupt 0.625 avg / 1.0
-  worst, recall_worst 1.0, correct_action 0.6788, e2e 0.3427, worst contractor_luis.
-  Expected invariance (the change only engages on live 429 responses), not movement.
-- Targeted live check (healthy path, 5 invented lines, post-commit): 5/5 expected
-  verdicts (delegated reminder ACT, money ASK, -ing/past-tense/vent SILENT);
-  hints_seen=[] — the hint path never engages on healthy replies.
+- Suite: 35/35 green (was 34; +test_deferred_persistence, all 7 pins first-run green).
+- Stub tier, full 8-persona dev bank (run 20260610T104837Z-pre): bit-identical to
+  the ratchet bests — catch 1.0 / worst 1.0, false 0, harm 0, interrupt 0.625 avg /
+  1.0 worst, recall_worst 1.0, correct_action 0.6788, e2e 0.3427, worst
+  contractor_luis. Expected invariance: the seam only engages when a decider exists
+  (live), and stub constructs none.
+- No live calls spent: the change is dormant on the healthy path (writes happen only
+  on outage deferrals) and inducing a real 429 would poison tonight's shared
+  free-tier quota for verify_gate's live runs. The deterministic pins stand in.
 
 Honest counting:
-- Mechanically dead lap as pre-registered (D22): stub primary catch_rate_worst at the
-  ratchet ceiling 1.0, gate_P1 already first-closed, TARGET.md on disk still v3.
-  Treadmill burns one tick (3->4) toward the designed foreman escalation. The product
-  value — under real quota pressure the engine now waits exactly as long as the server
-  says (short windows recover INLINE with a verdict, long windows stop hammering after
-  one request and defer honestly) — is live-tier catch protection the stub scoreboard
-  cannot see, by design.
+- Mechanically dead lap as pre-registered (D22): stub primary catch_rate_worst at
+  the ratchet ceiling 1.0, gate_P1 already first-closed, TARGET.md on disk still v3.
+  This burns treadmill tick 4->5 = K, which fires ESCALATION and halts the loop —
+  the DESIGNED path that forces the foreman to write TARGET v4 (P2/gate_P2). The
+  product value — a quota-window restart no longer silently eats unread lines —
+  is live-tier catch protection the stub scoreboard cannot see, by design.
 
 Next:
-- Foreman, priority 1 (D22, unchanged, third lap running): actually write TARGET v4 —
-  current_phase: P2-brain, phase_gate: factory/gates/gate_P2.sh. gate_P2 thresholds
-  hold at stub on HEAD, so the first post-flip lap with attempt_gate_close=true should
-  close P2. One more dead lap reaches K=5 and forces this via ESCALATION.
+- Foreman, priority 1 (D22, FOURTH lap running; ESCALATION should now be OPEN):
+  write TARGET v4 — current_phase: P2-brain, phase_gate: factory/gates/gate_P2.sh.
+  gate_P2 thresholds hold at stub on HEAD, so the first post-flip lap with
+  attempt_gate_close=true should close P2.
 - Foreman, priority 2 (D20 x2, unchanged): verify_gate should FAIL when
   uncommitted.patch touches product files, or auto-WIP-commit at session end.
-- Next builder/foreman: full 8-persona LIVE bank post-v10 (foreman/verify_gate run,
-  not a builder session — D20); deferred-queue persistence across engine restarts
-  (F7 residual, D16 family — now the LAST F7 residual besides live observation);
-  F6 (triage live tiebreak fails open, deliberate defer); B6 (quoted-title drop);
-  B7/B8 (gate env); ask-dedupe for restated reminders.
+- Foreman/verify_gate: full 8-persona LIVE bank post-v10 (not a builder session, D20).
+- Next builder: F6 (triage live tiebreak calls run_until_complete inside the running
+  loop, always raises, fails open — decider carries live precision alone); B6
+  (calendar planner drops quoted titles -> artifacts land unlabeled); ask-dedupe for
+  restated reminders; D16 sibling: self.pending asks are still in-memory (a restart
+  strands paused goals with no resolvable ask — same persistence pattern now exists
+  to copy); F7's last residual: real-429 storm live observation (needs a night the
+  shared quota isn't load-bearing).
