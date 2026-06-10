@@ -95,8 +95,18 @@ if "S1_cleanup" not in results:
                              "note": ("no event created" if not event_id
                                       else "pending delete below")}
 
-# cleanup the real test artifact immediately (ledger B1): delete the created event
+# cleanup the real test artifact immediately (ledger B1): delete the created event.
+# launchd context lacks .env.local in env (the 401 of lap 060701Z, ledger B4) — load it.
 if event_id and live_hands:
+    if not os.environ.get("ARCADE_API_KEY"):
+        try:
+            for _line in open(".env.local"):
+                _line = _line.strip()
+                if _line.startswith(("ARCADE_API_KEY=", "ARCADE_USER_ID=")):
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k, _v)
+        except FileNotFoundError:
+            pass
     try:
         from arcadepy import Arcade  # engine venv dependency; direct delete is simplest
         client = Arcade(api_key=os.environ.get("ARCADE_API_KEY", ""))

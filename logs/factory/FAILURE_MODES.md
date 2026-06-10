@@ -379,3 +379,45 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   ARCADE_API_KEY, so even S1's built-in cleanup fails there) — morning foreman cleanup
   required until B7 is fixed; the stranded ids will be in
   logs/factory/runs/gatep1-20260610T091120Z/gate_p1_results.json.
+
+## Class C addendum (judge, lap 20260610T091120Z)
+- C13 OPEN Dev-bank day-line literals accumulate UNSCANNED in product code, and prompt-purity
+  self-attestations are never machine-checked. Judge evidence (all prior kept laps' commits
+  16956ef/ef30b63/e8caf95/2d62aa8 — NOT this lap's diff, which is logs-only):
+  (a) EXECUTABLE: triage.py _ALREADY_HANDLED carries `\bone less thing\b` and
+  `(he|she|they)...can grab` — together they reproduce parent_dana day01:24 ("he can grab
+  Jonah today, one less thing") verbatim; debounce.py's _RETRACTION alternation set maps
+  nearly 1:1 onto the dev bank's retraction lines (we're even/square, do nothing, park it,
+  leave the payment...); each alternant is a real English idiom, but the SET was assembled
+  by enumerating dev lines — the wording, not the shape, was lifted.
+  (b) MODEL-FACING: decider.py's live _PROMPT (line ~72) contains "so I actually go" — a
+  verbatim 4-word fragment of student_kayla day01:6 (a catch line) — while the same file's
+  docstring (line ~18) attests the prompt "contains no eval line". The attestation is false
+  and nothing verifies such claims.
+  (c) ~18 more verbatim or name-swapped dev day-line quotations sit in comments/docstrings
+  of triage.py/debounce.py/decider.py/core/proactive.py (incl. bank character names Jonah,
+  Beto, Raj) — non-executable, but they normalize the pattern.
+  Why it matters: dev-bank stub metrics (catch 1.0/1.0, false 0) partially measure
+  MEMORIZATION of the bank, not inference; this lap's judge holdout slice quantifies the
+  gap (holdout catch worst 0.3333 vs dev worst 1.0; counts only). HOLDOUT-LEAK CHECK
+  NEGATIVE: every product-code example phrase absent from dev (e.g. "so the morning isn't
+  chaos", "tomorrow-me will thank me", "showing Ana the photos") has ZERO matches in the
+  holdout bank — they are invented/live-run paraphrases, not leaked eval lines.
+  Not P1-blocking (gate_P1 legs are typed probes; P1 has no persona-metric thresholds) but
+  P2-RELEVANT: gate_P2 thresholds judged on holdout at close will expose exactly this gap
+  (0.3333 << 0.70). The scan hole: scans.sh owner_literals checks only the owner denylist;
+  no scan compares product-diff added lines against dev day files.
+  Fix options (foreman): add a bank-literal scan (flag any >=4-gram from
+  factory/personas/dev/*/days/*.txt appearing in added product lines); machine-check
+  prompt-purity attestations the same way; builder rule going forward — abstract the
+  SHAPE of bank evidence, never its wording.
+- C14 Reverted laps rolled back the MEASUREMENT STATE: product_scoreboard.csv and
+  RATCHET.json are tracked but updated uncommitted between lap commits, so the revert
+  path's `git reset --hard` erased 6 scoreboard rows (including the P1-closure REAL row)
+  and regressed the ratchet/treadmill — observed live when wall-capped lap 083047Z
+  reverted (treadmill impossibly went 4->2, phantom "movement" re-fired). PREVENTED
+  (2026-06-10): both reset sites in loop.sh snapshot/restore the measurement files;
+  books reconstructed from lap dirs + the untracked journal (rows marked RECONSTRUCTED).
+  Lesson: the journal being untracked was the design choice that made truth recoverable.
+  Note: builder lap 091120Z independently DETECTED the accounting loss and re-closed
+  gate_P1 to repair phase state — the self-correction layer worked.

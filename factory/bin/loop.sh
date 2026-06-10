@@ -55,8 +55,16 @@ if [[ -f factory/.lap_in_progress ]]; then
   if [[ -n "$ORPHAN_BASE" && ! -f "logs/factory/laps/$ORPHAN/gate_results.json" ]]; then
     if [[ "$(git rev-parse HEAD)" != "$ORPHAN_BASE" ]]; then
       git diff "$ORPHAN_BASE" HEAD > "logs/factory/laps/$ORPHAN/orphaned.patch" 2>/dev/null || true
+      MEAS_TMP=$(mktemp -d)
+      for MF in logs/factory/product_scoreboard.csv logs/factory/RATCHET.json logs/factory/FAILURE_MODES.md; do
+        [[ -f "$MF" ]] && cp "$MF" "$MEAS_TMP/$(basename "$MF")"
+      done
       git reset --hard "$ORPHAN_BASE" >/dev/null 2>&1 || true
-      journal "loop start: rolled back ORPHANED unverified lap $ORPHAN to ${ORPHAN_BASE:0:8} (patch kept)"
+      for MF in product_scoreboard.csv RATCHET.json FAILURE_MODES.md; do
+        [[ -f "$MEAS_TMP/$MF" ]] && cp "$MEAS_TMP/$MF" "logs/factory/$MF"
+      done
+      rm -rf "$MEAS_TMP"
+      journal "loop start: rolled back ORPHANED unverified lap $ORPHAN to ${ORPHAN_BASE:0:8} (patch kept, measurement preserved)"
     fi
     mkdir -p logs/factory/aborted
     git diff -- . ':!logs' > "logs/factory/aborted/$(date -u +%Y%m%dT%H%M%SZ)-$ORPHAN.patch" 2>/dev/null || true
@@ -167,7 +175,17 @@ while true; do
     KEPT=false
     if [[ "$AFTER" != "$BEFORE" ]]; then
       git diff "$BEFORE" "$AFTER" > "$LAPDIR/reverted.patch" || true
+      # measurement state is tracked but updated between commits — reset --hard
+      # rolled it back once and corrupted the books (ledger C14). Snapshot/restore.
+      MEAS_TMP=$(mktemp -d)
+      for MF in logs/factory/product_scoreboard.csv logs/factory/RATCHET.json logs/factory/FAILURE_MODES.md; do
+        [[ -f "$MF" ]] && cp "$MF" "$MEAS_TMP/$(basename "$MF")"
+      done
       git reset --hard "$BEFORE" >/dev/null
+      for MF in product_scoreboard.csv RATCHET.json FAILURE_MODES.md; do
+        [[ -f "$MEAS_TMP/$MF" ]] && cp "$MEAS_TMP/$MF" "logs/factory/$MF"
+      done
+      rm -rf "$MEAS_TMP"
     fi
   fi
 
