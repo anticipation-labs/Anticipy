@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from typing import List, Optional
 
 CHEAP = "cheap"
@@ -22,6 +23,66 @@ PROVIDER_STUB = "stub"
 PROVIDER_OPENROUTER = "openrouter"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# 429 retry-hint honoring (ledger F7 residual). The live brain is Gemini free tier,
+# whose 429s state the server's own wait: google.rpc.RetryInfo retryDelay in the error
+# body (a proto3 Duration string like "21s" / "15.002899939s"; the OpenAI-compat
+# endpoint sometimes wraps the error in a one-element array, and sometimes the only
+# surviving signal is a "Please retry in Ns" phrase in the message). OpenRouter
+# documents a Retry-After delta-seconds header. A hint at or under the cap is honored
+# inline (plus a small margin so an exact-boundary retry doesn't re-hit the window);
+# a longer hint means the quota window outlasts the request path — return the empty
+# non-read immediately so the caller's UNAVAILABLE -> defer path owns the wait,
+# instead of burning more blind retries that count against the same quota.
+RETRY_HINT_INLINE_CAP_S = 8.0
+RETRY_HINT_MARGIN_S = 0.25
+_RETRY_IN_MSG_RE = re.compile(r"retry in\s+([0-9]+(?:\.[0-9]+)?)\s*s", re.IGNORECASE)
+
+
+def _retry_hint_seconds(resp) -> Optional[float]:
+    """The server-stated wait (seconds) before retrying a 429, or None if it gave none.
+
+    Sources, most authoritative first: the Retry-After header (delta-seconds only;
+    the rare HTTP-date form is treated as no hint), RetryInfo retryDelay in the error
+    body (string Duration, with a defensive {seconds, nanos} object fallback), then a
+    "retry in Ns" phrase in the error message. Never raises — a malformed hint is
+    just no hint, and the caller keeps its blind backoff.
+    """
+    try:
+        ra = (resp.headers.get("retry-after") or "").strip()
+        if ra:
+            try:
+                return max(0.0, float(ra))
+            except ValueError:
+                pass
+        data = resp.json()
+        if isinstance(data, list):  # Gemini OpenAI-compat: [{"error": {...}}]
+            data = next((d for d in data if isinstance(d, dict)), {})
+        err = data.get("error") if isinstance(data, dict) else None
+        if not isinstance(err, dict):
+            return None
+        for detail in err.get("details") or []:
+            if not isinstance(detail, dict) or \
+                    not str(detail.get("@type", "")).endswith("RetryInfo"):
+                continue
+            delay = detail.get("retryDelay")
+            if isinstance(delay, str) and delay.strip().endswith("s"):
+                try:
+                    return max(0.0, float(delay.strip()[:-1]))
+                except ValueError:
+                    pass
+            if isinstance(delay, dict):
+                try:
+                    return max(0.0, float(delay.get("seconds", 0))
+                               + float(delay.get("nanos", 0)) / 1e9)
+                except (TypeError, ValueError):
+                    pass
+        m = _RETRY_IN_MSG_RE.search(str(err.get("message", "")))
+        if m:
+            return max(0.0, float(m.group(1)))
+    except Exception:
+        return None
+    return None
+
 
 class ModelGateway:
     # gate + plan (proactive brain) and agent (the web-agent loop) may use smart
@@ -29,7 +90,8 @@ class ModelGateway:
 
     def __init__(self, provider: Optional[str] = None, endpoint: Optional[str] = None,
                  stub=None, timeout: float = 60.0,
-                 cheap_model: Optional[str] = None, smart_model: Optional[str] = None) -> None:
+                 cheap_model: Optional[str] = None, smart_model: Optional[str] = None,
+                 transport=None) -> None:
         self.provider = provider or os.environ.get("ANTICIPY_MODEL_PROVIDER", PROVIDER_STUB)
         self.endpoint = endpoint  # optional custom OpenAI-compatible endpoint
         self.timeout = timeout
@@ -43,6 +105,7 @@ class ModelGateway:
         self._url = os.environ.get("ANTICIPY_OPENAI_BASE_URL", OPENROUTER_URL)
         self._key = (os.environ.get("ANTICIPY_MODEL_API_KEY")
                      or os.environ.get("OPENROUTER_API_KEY"))
+        self._transport = transport  # test injection (httpx.MockTransport); None in prod
 
     async def think(self, task: str, tier: str, caller: str, image: Optional[str] = None,
                     json_mode: bool = False, temperature: Optional[float] = None,
@@ -93,12 +156,26 @@ class ModelGateway:
 
         # Retry transient empties / 429 / 5xx — the provider intermittently returns
         # empty content under load, which would otherwise read as a spurious failure.
+        # On 429 the server's own retry hint is honored (see _retry_hint_seconds):
+        # short hints sleep inline, long hints fail fast into the caller's
+        # UNAVAILABLE -> defer path (ledger F7) instead of hammering a closed window.
         last = ""
         for attempt in range(4):
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with httpx.AsyncClient(timeout=self.timeout,
+                                             transport=self._transport) as client:
                     resp = await client.post(self._url, headers=headers, json=body)
-                if resp.status_code in (429, 500, 502, 503, 504):
+                if resp.status_code == 429:
+                    hint = _retry_hint_seconds(resp)
+                    if hint is not None:
+                        self.calls[-1]["retry_hint_s"] = hint  # visible in postmortems
+                        if hint > RETRY_HINT_INLINE_CAP_S:
+                            return ""  # window outlasts us -> the defer path owns the wait
+                        await asyncio.sleep(hint + RETRY_HINT_MARGIN_S)
+                        continue
+                    await asyncio.sleep(1.5 * (attempt + 1))  # no guidance -> blind backoff
+                    continue
+                if resp.status_code in (500, 502, 503, 504):
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
                 resp.raise_for_status()
