@@ -74,6 +74,16 @@ def main():
     assert not any("clone myself" in c.source_text.lower() for c in cards)
     assert "handoff" not in json.dumps([c.model_dump(mode="json") for c in cards]).lower()
 
+    # F28: the money pre-gate matches "order" as the SPEND-VERB shape, never the bare
+    # noun — a draft request about a supply order is NOT money-blocked (the spine rules
+    # it), while real order-commands stay blocked. Work vocabulary stays cardless.
+    draft_order = mode.ingest("Draft the order email to Vicky with the list from my desk doc.")
+    assert not any(c.disposition == "blocked" for c in draft_order.cards), signature(draft_order)
+    beakers = mode.ingest("Order the beakers for the lab demo on the district card.")
+    assert any(c.disposition == "blocked" for c in beakers.cards), signature(beakers)
+    noun_order = mode.ingest("That's a change order. Everything is a change order.")
+    assert not noun_order.cards, signature(noun_order)
+
     asyncio.run(control_core_check())
     print("PASS owner_mode: noisy owner transcript -> shared durable action cards")
 

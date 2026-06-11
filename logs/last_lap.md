@@ -1,56 +1,72 @@
 # Last Lap
 
-Lap: 20260611T095522Z (build, TARGET v7 item 1 — e2e_completion_rate)
+Lap: 20260611T101809Z (build, TARGET v7 item 1 — e2e_completion_rate, ledger F28)
 
 ## What changed
-- `engine/anticipy_engine/hands/browser_hand.py`: BrowserHand gets an explicit
-  `mode` (class default LIVE). Mock mode (ledger F26) applies the live path's own
-  deterministic gates FIRST — an action-shaped task with no resolved real site
-  fails with the identical live refusal (no search dumping) — then returns a
-  loudly-labeled proof artifact (`{"id": "mock-…", "mock": true, "url": …,
-  "screenshot": "mock://…"}`) instead of touching a browser. New unit pins.
-- `engine/anticipy_engine/core/control_core.py`: wires `mode` from the SAME
-  `ANTICIPY_HANDS_MODE` env ApiHand follows (mock default, live explicit);
-  `ANTICIPY_BROWSER_HAND_MODE` narrows the knob for integrations that need the
-  real-WS browser leg while the API hand stays mock.
-- `scripts/hands_loop.sh`: declares its browser leg live (the test's purpose is
-  the reroute reaching the REAL WS with a simulated extension; under mock the
-  hand would answer the reroute itself — and its no-url post job was only ever
-  "succeeding" because the simulated extension blind-succeeds what the real
-  extension dead-ends; F25 lesson applied: pin re-derived, not papered).
-- Ledger: F26 FIXED, F27 OPEN (see below). Manifest pre-registered; results match.
+- `engine/anticipy_engine/proactive/harm.py` — requested-action SCOPE (F28), all
+  closed-class, deny-direction-bounded, money rule still checked first:
+  - a TIMED self-reminder frame that precedes the send token cancels the
+    binding-send reading within its own clause ("Remind me Wednesday at 7pm to
+    send the plan" -> calendar_hold; the embedded send is re-gated when the hold
+    fires — `_fire_reminder` already does this in code). A `FOLLOWUP_PREFIX`
+    refire line NEVER re-cancels, so a deferred send still ends at the ask.
+  - an explicit draft request's purpose tail ("so I just hit send", "ready to
+    send") is stripped before the hard-send test (draft frame required).
+  - "drafted" joined `_DRAFT_FRAME`; money gerund-noun compounds ("purchasing
+    window") are stripped before the money test only; "follow[- ]?up" joined the
+    schedule/set up/book calendar nouns.
+- `engine/anticipy_engine/core/gateway.py` — stub-planner honesty (the keyless
+  default-boot planner): a self-reminder line plans EXACTLY the open-loop write
+  with the GOAL line as the loop text (remind_ts grounds from the spoken time;
+  fired = NOTIFY — proven zero send_email jobs end-to-end); a draft-framed
+  request plans `send_email_draft` (Gmail.WriteDraftEmail — never sends) instead
+  of `send_email`.
+- `engine/anticipy_engine/owner_mode.py` — the money/browser pre-gate matches
+  "order" as harm.py's spend-VERB shape ("order the beakers" stays blocked); the
+  bare noun ("supply order", "change order", "order email", "Lunch order in") no
+  longer money-blocks draft requests or junk-asks on vents.
+- `engine/anticipy_engine/core/proactive.py` — refire events share harm.py's
+  `FOLLOWUP_PREFIX` constant.
+- Pins: F28 act/deny battery in test_harmline.py; planner pins in
+  test_gateway.py; pre-gate pins in test_owner_mode.py; end-to-end DRAFT_ORDER
+  pin in test_owner_ingest_event.py. Two integration pins re-derived honestly
+  per F25 (brain_loop's fed line dropped its reminder clause to keep its
+  3-real-worker purpose; hands_loop's draft-framed email is the
+  send_email_draft ApiHand leg now).
 
 ## Numbers I saw (builder-side, stub, dev bank)
 - OFFICIAL owner lane (ANTICIPY_OWNER_INGEST=1): e2e_completion_rate
-  0.4618 -> 0.4797 (+0.0179). Catch 1.0/1.0, false 0, harm 0, interrupt
-  1.125/1.5, correct 0.6788, recall_worst 1.0 — all EXACTLY unchanged.
-- Default lane: e2e equally 0.4618 -> 0.4797 (shared hand plumbing, disclosed);
-  interrupt 0.625/1.0 and everything else bit-identical to ratchet bests.
-- Per-line decisions: ZERO diffs across 493 lines x 16 persona-days in BOTH
-  lanes (execution-layer change only; decisions precede execution).
-- Suite 42/42. Selftest PASS. Zero spend, zero real-world artifacts.
+  0.4797 -> 0.5918 (+0.1121 — past the 0.02 epsilon). Catch 1.0/1.0, false 0,
+  harm 0, recall_worst 1.0 EXACTLY unchanged. correct_action_rate
+  0.6788 -> 0.7909. interrupt 1.125 -> 0.6875 avg (worst 1.5 unchanged): the
+  noun-"order" pre-gate junk asks died and the money-tripwire lines now follow
+  the spine's own debounce/triage stance — per-line identical to the default
+  lane's long-standing decisions (F17 parity).
+- Default lane: e2e equally 0.5918 (shared harm/planner plumbing, disclosed);
+  per-line decision diff vs 095522Z = EXACTLY the six intended flips, zero
+  others; interrupt 0.625/1.0 and all other aggregates at ratchet bests.
+- Owner-lane per-line diff vs 095522Z = 13 lines, every one accounted for:
+  6 intended ask->act flips (all completed with proof), 4 noun-"order" vent
+  asks -> ignore, 3 retracted money-tripwire lines -> the spine's held/ignore
+  (never act; silent end exactly as the bank keys them).
+- Suite 42/42. Scorer selftest PASS. Zero spend, zero real-world artifacts.
 
-## Exactly which items moved (scorer-replica diagnostic, runs/-pre vs -post)
-- COMPLETED 26 -> 27: contractor_luis day02 "cabinet delivery monday 8" — its
-  goal's only step ("open the page", junk-planted by the disclosed "on site"
-  stub trigger) is live-navigable (search-fallback navigate + screenshot =
-  exactly what the real extension would do), so mock completes it. F27 OPEN:
-  the semantically right artifact is a calendar block; the stub planner lacks a
-  "block <time range>" trigger — that is the named next plumbing slice.
-- ACT_STALLED 2 -> 1: doctor_amara day01 "hoka shoes wide cart" now FAILS
-  honestly (whole-prompt cart dump, no resolved site — the identical live
-  refusal) instead of parking at "waiting". Cannot complete honestly until the
-  product resolves a real site (memory has the item, no store; P4 territory).
-- Remaining e2e gap on this bank is NOT plumbing: 16 expected-ask items the
-  scorer never counts complete + 12 expected-acts the spine decides ASK on
-  (decider/harm-line, holdout-risky — foreman territory, per the F23 queue).
+## Exactly which items moved (6 completions, 5 personas)
+- contractor_luis d01 "remind me Wednesday 7pm send Ramos site plan" (hold+notify)
+- doctor_amara d01 "get that request drafted to Dee" (send_email_draft)
+- doctor_amara d02 "remind me tomorrow 9am send Dee the confirmation" (hold)
+- founder_jin d01 "book a follow-up with the Brightline folks Thursday 2pm"
+- parent_dana d02 "email Maya's teacher... can someone draft that" (draft)
+- teacher_rob d01 "Draft the order email to Vicky... purchasing window" (draft)
 
 ## What's next
-1. F27: stub-planner calendar trigger for time-anchored "block X to Y" (the F24
-   "set up" precedent — product fix, the stub is the keyless default planner).
-2. F23 (TARGET item 2): money pre-gate interrupt delta (1.125 vs 0.625) —
-   foreman call queued on letting the spine rule money-shaped vents while
-   keeping never-pending/never-execute.
-3. P3 live gate still waits ONLY on OWNER_PHONE confirmation (PENDING_FOR_OMAR).
-   Note: factory/gates/gate_P3.sh does not exist yet (TARGET names it as the
-   phase gate; foreman item — a builder may not create control-plane gates).
+1. The cart-staging cluster (5 expected-acts) needs BOTH a cart-verb scope rule
+   AND memory-resolved real sites to complete honestly in mock — P4 territory;
+   pri's "buy ... add it to the cart" additionally sits behind the F23 money
+   stance (foreman queue).
+2. F27 still OPEN (luis cabinet item completes via its junk browse step; the
+   semantically right artifact is a calendar block — stub "block X to Y"
+   create_event trigger is the named slice; correct_action_rate prices it).
+3. P3 live gate still waits ONLY on OWNER_PHONE confirmation (PENDING_FOR_OMAR);
+   gate_P3.sh itself does not exist yet (foreman item — builders may not create
+   control-plane gates).

@@ -8,13 +8,16 @@ from anticipy_engine.core.control_core import ControlCore
 from anticipy_engine.core.envelopes import Goal, GoalState, JobStatus, Result, Risk, Step, StepState
 from anticipy_engine.core.workers import FAIL, SUCCESS
 
-EVENT = "Draft the Q3 deck, schedule a review, and remind me to follow up on Friday."
+# No self-reminder frame here on purpose: a "remind me ..." line now honestly plans
+# ONLY the open-loop hold (re-gated when it fires), and this test's purpose is the
+# multi-step pipeline across all three real workers.
+EVENT = "Draft the Q3 deck for Sarah, schedule a review, and make a note to follow up on Friday."
 
 
 async def main() -> None:
     core = ControlCore()  # data dir from ANTICIPY_DATA_DIR
 
-    # NOTE: the plan's three intents are now all REAL workers (send_email +
+    # NOTE: the plan's three intents are now all REAL workers (send_email_draft +
     # create_event -> ApiHand, write_memory -> the real MemoryWorker), so there is no
     # scriptable stub left in the plan to inject a failure. Orchestrator retry/reroute
     # is covered by test_orchestrator.py; here we prove the end-to-end pipeline and
@@ -30,9 +33,10 @@ async def main() -> None:
     assert out["decision"] == "act" and out["goal_id"], out
     goal = core.store.load(out["goal_id"])
 
-    # (3) planned into the three stub-backed steps, in order
+    # (3) planned into the three stub-backed steps, in order (the draft request plans
+    # the DRAFT — send_email_draft never sends; ledger F28 requested-action scope)
     intents = [s.intent for s in goal.steps]
-    assert intents == ["send_email", "create_event", "write_memory"], intents
+    assert intents == ["send_email_draft", "create_event", "write_memory"], intents
 
     # (4) the REAL MemoryWorker handled the write_memory plan step on the frozen
     # contract and returned proof (memory baked into the orchestrator's dispatch)

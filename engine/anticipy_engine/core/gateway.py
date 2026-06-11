@@ -204,6 +204,13 @@ class ModelGateway:
 # planned a junk post_to_x step that parked otherwise-complete goals at
 # needs_human. This stub is also the planner for keyless default boots.
 _POST_WORD_RE = re.compile(r"\bpost(?:ed|ing|s)?\b(?!-)")
+# A SELF-reminder line's honest plan IS the open-loop write: the drawer grounds
+# remind_ts from the spoken time and Room 3 re-gates the embedded action when the
+# reminder fires. No side steps may ride a reminder (the F24 junk-step family — a
+# "remind me ... to send X" line must hold, not send now), and the loop text is the
+# GOAL line itself, never the whole plan prompt (no prompt dumping).
+_SELF_REMINDER_RE = re.compile(r"\b(?:remind me|set (?:a |an )?reminder|reminder to|don'?t forget)\b", re.I)
+_GOAL_LINE_RE = re.compile(r"\bGOAL: (?P<goal>[^\n]+)")
 
 
 def default_stub(task: str, tier: str, caller: str) -> str:
@@ -215,8 +222,20 @@ def default_stub(task: str, tier: str, caller: str) -> str:
         return json.dumps({"decision": decision, "reason": f"stub gate read of: {task[:80]}"})
 
     if caller == "plan":
+        if _SELF_REMINDER_RE.search(task):
+            goal_m = _GOAL_LINE_RE.search(task)
+            loop_text = (goal_m.group("goal") if goal_m else task).strip()
+            return json.dumps({"steps": [{"intent": "write_memory",
+                                          "args": {"kind": "open_loop", "text": loop_text},
+                                          "risk": "low"}]})
         steps = []
-        if any(k in t for k in ("email", "send", "deck", "draft")):
+        # an explicit draft request plans the DRAFT (Gmail.WriteDraftEmail — never
+        # sends); only undrafted email/send requests plan the gated send
+        if "draft" in t:
+            steps.append({"intent": "send_email_draft",
+                          "args": {"to": "Sarah", "subject": "Q3 deck", "body": "Attached."},
+                          "risk": "low"})
+        elif any(k in t for k in ("email", "send", "deck")):
             steps.append({"intent": "send_email",
                           "args": {"to": "Sarah", "subject": "Q3 deck", "body": "Attached."},
                           "risk": "needs_confirm"})

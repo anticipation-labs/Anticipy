@@ -34,7 +34,7 @@ from ..proactive.decider import (
     SILENT as DECIDER_SILENT,
     UNAVAILABLE as DECIDER_UNAVAILABLE,
 )
-from ..proactive.harm import HarmLine
+from ..proactive.harm import FOLLOWUP_PREFIX, HarmLine
 from ..proactive.triage import Triage
 from ..proactive.trigger import TriggerWatcher
 from .bus import Bus
@@ -362,7 +362,7 @@ class ProactiveEngine:
             if loop.get("remind_ts") is not None:
                 decision = await self._fire_reminder(loop, task, now)
             else:
-                ev = Event(source=EventSource.system, text=f"Follow up on your commitment: {task}")
+                ev = Event(source=EventSource.system, text=f"{FOLLOWUP_PREFIX} {task}")
                 decision = await self.on_event(ev, now=now)   # SAME triage -> harm-line -> act/ask; budget applies
             if self.glassbox is not None:
                 self.glassbox.log("trigger_fired", {"loop_id": loop.get("id"), "task": task,
@@ -378,7 +378,7 @@ class ProactiveEngine:
         ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": task}))
         verdict = self.harm.assess(task, ctx.output or {})
         if verdict.detrimental:
-            ev = Event(source=EventSource.system, text=f"Follow up on your commitment: {task}")
+            ev = Event(source=EventSource.system, text=f"{FOLLOWUP_PREFIX} {task}")
             return await self.on_event(ev, now=now)
         suppress = self.budget.suppressed(task, verdict.category, now)
         if suppress:

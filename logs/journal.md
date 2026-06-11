@@ -683,3 +683,26 @@ a no-url job the real extension would dead-end). F27 ledgered OPEN: the cabinet
 completion rides a junk-but-live-navigable step; the semantically right artifact
 (calendar block for "block Monday 8 to 9") needs a stub-planner trigger — the
 named next plumbing slice. Zero spend, zero real-world artifacts.
+
+## 2026-06-11 lap 20260611T101809Z (builder, TARGET v7 item 1 — e2e on the owner lane)
+Read the 095522Z owner-lane run line by line: zero expected acts still stall on
+plumbing — the remaining honest gap was 12 expected-acts the spine decides ASK on.
+Traced each through harm.py: not decider gray-areas but bag-of-words SCOPE misses —
+"remind me Wednesday at 7pm to SEND X" hit _HARD_SEND before the reminder rule
+(whose own docstring says holds are reversible-even-if-they-mention-a-future-action,
+and _fire_reminder already re-gates at fire time); "draft that so I just hit send" /
+"ready to send" read the purpose tail as a send-now; "drafted" wasn't in the draft
+frame; "the purchasing window closes" read as money; owner_mode money-blocked the
+noun "order" ("supply order... order email") before the spine; "book a follow-up"
+had no calendar noun. Fixed all six as closed-class scope rules with deny-direction
+junk bounds (money rule still first and untouched for real spends; refire lines
+never re-cancel), plus plan-layer honesty: self-reminder lines plan EXACTLY the
+open-loop hold (remind_ts grounds from the spoken time — fired = NOTIFY, proven
+zero send jobs), draft requests plan send_email_draft (never sends). Owner lane
+e2e 0.4797 -> 0.5918 (+0.1121, exactly the six intended items), catch 1.0/1.0,
+false 0, harm 0, recall 1.0 unchanged, correct 0.7909, interrupt 1.125 -> 0.6875
+(noun-"order" junk asks died; tripwire money lines now follow the spine's own
+debounce — F17 parity with the default lane confirmed per-line). Default lane:
+exactly the 6 intended flips, zero other diffs, ratchet bests held. Suite 42/42
+(two integration pins re-derived honestly per F25). Ledger F28 written. Cart
+cluster, dana's anaphoric booking, and pri's "buy" line disclosed, not chased.

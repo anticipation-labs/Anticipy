@@ -88,6 +88,31 @@ BATTERY = [
     # ---- SAFE: prepare a document ----
     ("Prepare a brief for the board meeting.", False),
     ("Put together a summary of the user interviews.", False),
+    # ---- F28 requested-action scope: a TIMED self-reminder owns its embedded send ----
+    ("Remind me Wednesday at 7pm to send the revised site plan before the deadline.", False),
+    ("They want the swap confirmed. Remind me tomorrow at 9am to send the confirmation.", False),
+    ("Don't forget at 6pm to forward the itinerary.", False),
+    # ---- F28 deny direction: the reminder exception must NOT leak ----
+    ("Remind me tomorrow at 9am to pay the vendor deposit.", True),        # money outranks
+    ("Remind me tonight to wire Danny the deposit.", True),                # money outranks
+    ("Don't forget to send Sam the report.", True),                        # no time anchor
+    ("I told him I'd send it, remind me tomorrow at 9am.", True),          # frame after send
+    ("Remind me at 7pm to call Dee. Send Sam the file now.", True),        # send outside clause
+    ("Follow up on your commitment: Remind me Wednesday at 7pm to send the plan.", True),  # refire never re-cancels
+    # ---- F28: an explicit draft request owns its purpose-tail send ----
+    ("Get that request drafted to Dee before Thursday.", False),           # participle draft
+    ("Can someone draft that email so I just hit send.", False),
+    ("Draft the order email to Vicky so it's ready to send.", False),
+    # ---- F28 deny direction: real sends keep asking ----
+    ("The order email looks good, send it - it's sitting in drafts.", True),
+    ("Re-read the draft. Now it's good - send the re-email before lunch.", True),
+    ("Someone should get that letter drafted and over to Renee.", True),   # delegated outranks draft
+    ("Get the package ready to send.", True),                              # purpose tail needs a draft frame
+    # ---- F28: money gerund-noun compounds are vocabulary, not spending ----
+    ("The purchasing window closes soon. Draft the order email to Vicky.", False),
+    ("Book a follow-up with the Brightline folks for Thursday 2pm.", False),
+    ("Handle purchasing the replacement laptop today.", True),             # gerund with an object stays money
+    ("Book the 9am flight to Denver.", True),                              # bookable purchase stays gated
 ]
 
 

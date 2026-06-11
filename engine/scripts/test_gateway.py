@@ -50,6 +50,29 @@ async def main() -> None:
         "Plan: post the team update tonight.", tier=SMART, caller="plan"))
     assert "post_to_x" in [s["intent"] for s in plan3["steps"]], plan3
 
+    # F28: a SELF-reminder line plans EXACTLY the open-loop hold, and the loop text is
+    # the GOAL line itself (remind_ts grounds from the spoken time; Room 3 re-gates the
+    # embedded action at fire time) — never the whole plan prompt, never a send-now step
+    plan4 = json.loads(await gw2.think(
+        "Plan the goal into ordered steps. ...\nGOAL: Remind me Wednesday at 7pm to send "
+        "the revised Ramos site plan before the Thursday deadline.\n\nCAPTURE_CONTEXT:\ntimezone=UTC",
+        tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan4["steps"]] == ["write_memory"], plan4
+    loop_text = plan4["steps"][0]["args"]["text"]
+    assert loop_text.startswith("Remind me Wednesday at 7pm"), loop_text
+    assert "Plan the goal" not in loop_text and "CAPTURE_CONTEXT" not in loop_text, loop_text
+
+    # F28: a draft-framed request plans the DRAFT (never sends); undrafted email/send
+    # requests keep the gated send step
+    plan5 = json.loads(await gw2.think(
+        "Plan: Draft the order email to Vicky so it's ready to send.", tier=SMART, caller="plan"))
+    intents5 = [s["intent"] for s in plan5["steps"]]
+    assert "send_email_draft" in intents5 and "send_email" not in intents5, plan5
+    plan6 = json.loads(await gw2.think(
+        "Plan: send Sarah the Q3 deck.", tier=SMART, caller="plan"))
+    steps6 = {s["intent"]: s for s in plan6["steps"]}
+    assert "send_email" in steps6 and steps6["send_email"]["risk"] == "needs_confirm", plan6
+
     print("PASS piece 3: model gateway")
     print("  plan intents:", intents)
     print("  smart calls:", len(gw.smart_calls), "| total cost:", gw.total_cost())

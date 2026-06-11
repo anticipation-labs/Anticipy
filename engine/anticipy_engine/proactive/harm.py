@@ -9,7 +9,11 @@ the weak confidence signal forces an ask).
 
 General categories only — no site/test-specific branches. Order matters:
   1. hard detrimental (money / destroy / post-public / sign-up / auth-wall) — OVERRIDE all.
-  2. hard send (send/forward/dm) — binding, gray via memory.
+  2. hard send (send/forward/dm) — binding, gray via memory. Scope, not weakening: a send
+     token that is only the COMPLEMENT of a timed self-reminder frame ("remind me Wednesday
+     at 7pm to send the plan") or the purpose tail of an explicit draft request ("draft it
+     so I just hit send") is not the requested action — rules 3/5 own those lines, and the
+     deferred send is re-gated when the reminder fires (Room 3 -> this same assess).
   3. reminder / calendar hold — reversible even if it mentions a future action (re-gated when
      it fires; Room 3).
   4. soft send (email/reply/message) WITHOUT a draft frame — binding, gray via memory.
@@ -47,6 +51,37 @@ _HARD = [
 ]
 _HARD_SEND = re.compile(r"\b(send|sends|sending|forward|forwards|forwarding|dm|dms|reach out|"
                         r"invite|invites|inviting)\b")
+# Room 3 refire marker (proactive.trigger_tick builds its follow-up events with this
+# prefix): a refired loop line must NEVER re-cancel the send reading, so a deferred
+# "remind me ... to send X" terminates at the ask when it fires instead of looping.
+FOLLOWUP_PREFIX = "Follow up on your commitment:"
+# Timed SELF-reminder frame: when it PRECEDES the send token and carries a concrete
+# time anchor in its own clause, the requested action is the reminder (rule 3) — the
+# hold is reversible and _fire_reminder re-gates the embedded action at fire time.
+# Money (rule 1) is checked first and always outranks this exception.
+_SELF_REMINDER = re.compile(r"\b(?:remind me|set (?:a |an )?reminder|reminder to|don'?t forget)\b")
+_REMINDER_TIME_ANCHOR = re.compile(
+    r"\b(?:today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+    r"noon|midnight|in \d+ (?:minutes?|hours?|days?))\b"
+    r"|\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b")
+_CLAUSE_END = re.compile(r"[.;!?]")
+# An explicit draft request may NAME the send the owner will do later ("can someone
+# draft that so I just hit send", "...so it's ready to send"): the purpose tail is not
+# the requested action. Stripped ONLY when a draft frame is present; a real send
+# command ("send the Vicky order email, it's sitting in drafts") never matches.
+_SEND_PURPOSE_TAIL = re.compile(
+    r"\bso (?:that )?(?:i|we) (?:can |could |just |finally )?(?:hit |press |click |tap )?send\b"
+    r"|\bready (?:to send|for (?:me|us) to send)\b")
+# Money = SPENDING verbs; a money GERUND modifying a closed-class non-transaction noun
+# ("the purchasing window closes soon") is procurement/deadline vocabulary, not a spend
+# instruction — strip the compound before the money test. Any real spend verb elsewhere
+# in the line still gates, and stripping alone never acts (the rest of the line must
+# still match an explicit reversible shape or it stays fail-safe ask).
+_MONEY_GERUND_NOUN = re.compile(
+    r"\b(?:purchasing|buying|spending)\s+"
+    r"(?:window|windows|deadline|deadlines|cutoff|cutoffs|freeze|cycle|cycles|"
+    r"period|periods|process|processes|policy|policies|approval|approvals|paperwork|"
+    r"department|departments|office|team|teams|manager|managers|decision|decisions)\b")
 _SOFT_SEND = re.compile(r"\b(email|emails|emailing|message|messages|messaging|text|texts|texting|"
                         r"reply|replies|replying|respond|responds|responding|tell|tells|telling|"
                         r"ping|pings|pinging)\b")
@@ -68,7 +103,7 @@ _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t f
                        # "block 9 to noon", "block Monday 8 to 9" — a hold phrased as a time range
                        r"|\bblock\b[^.;!?]{0,40}?\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|midnight)\s*"
                        r"(?:to|until|till|through|-|–)\s*(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|midnight)\b")
-_DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafting|prepare|prepares|preparing|compose|composes|composing|"
+_DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafted|drafting|prepare|prepares|preparing|compose|composes|composing|"
                           r"write up|writes up|outline|outlines|put together)\b")
 _VAGUE_CART = re.compile(
     r"\b(?:get|grab|add|put)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:thing|one|item|product)\b",
@@ -98,7 +133,7 @@ _REVERSIBLE: List[Tuple[str, str]] = [
     ("reservation", r"\b(book|books|booking|reserve|reserves|reserving|hold)\b[\w' ]{0,20}"
                     r"\b(table|reservation|appointment|spot|slot|room|court|tee time)\b"),
     ("calendar", r"\b(schedule|set up|book)\b[\w' ]{0,20}\b(meeting|call|standup|sync|appointment|"
-                 r"1:1|one[- ]on[- ]one|interview|review)\b"),
+                 r"1:1|one[- ]on[- ]one|interview|review|follow[- ]?up)\b"),
     ("calendar_event", r"\b(create|add|make|put)\b[\w' \"\[\]\-:,.]{0,80}"
                        r"\b(calendar event|calendar entry|event (on|in) (my |the )?calendar)\b"),
     ("doc", r"\b(prepare|create|put together|make)\b[\w' ]{0,20}\b(doc|document|memo|brief|report|deck|"
@@ -137,12 +172,19 @@ class HarmLine:
 
     def assess(self, action_text: str, ctx: Optional[dict] = None) -> HarmVerdict:
         t = (action_text or "").lower()
-        # 1) hard detrimental — overrides everything
-        hard = _first_match(t, _HARD)
+        # 1) hard detrimental — overrides everything (including the rule-2 scoping below:
+        #    "remind me tomorrow at 9 to pay the vendor" stays an ask). The money test
+        #    ignores gerund-noun compounds ("the purchasing window closes"), never verbs.
+        hard = _first_match(_MONEY_GERUND_NOUN.sub(" ", t), _HARD)
         if hard is not None:
             return HarmVerdict(True, hard, f"detrimental:{hard} -> ask before acting")
-        # 2) hard send (send/forward/dm) — binding, gray via memory
-        if _HARD_SEND.search(t):
+        # 2) hard send (send/forward/dm) — binding, gray via memory. Two SCOPE exceptions
+        #    (the send token is provably not the requested action): a draft request's
+        #    purpose tail is stripped first, and a send that is the complement of a timed
+        #    self-reminder frame falls through to rule 3 (re-gated when the hold fires).
+        t_send = _SEND_PURPOSE_TAIL.sub(" ", t) if _DRAFT_FRAME.search(t) else t
+        send_ms = list(_HARD_SEND.finditer(t_send))
+        if send_ms and not all(self._reminder_scoped_send(t_send, m.start()) for m in send_ms):
             return self._assess_send(t, ctx)
         # 2b) delegation / hand-off to a person ("have someone look into X", "get those
         #     answers over to Sam") — work direction aimed at a human is ALWAYS binding;
@@ -168,6 +210,26 @@ class HarmLine:
             return HarmVerdict(False, rev, f"reversible:{rev} -> act")
         # 7) cannot confirm safe -> fail-safe ASK
         return HarmVerdict(True, "unclassified", "cannot confirm safe -> fail-safe ask", confidence="unsure")
+
+    @staticmethod
+    def _reminder_scoped_send(t: str, send_pos: int) -> bool:
+        """True iff the send token at send_pos is the COMPLEMENT of a timed self-reminder
+        frame that precedes it ("remind me Wednesday at 7pm to send the plan") — then the
+        requested action is the reminder (rule 3, reversible, re-gated at fire time). A
+        refired loop line (FOLLOWUP_PREFIX) never re-cancels, so the deferred send still
+        terminates at the ask. Deny-direction: frame after the send, send outside the
+        frame's own clause ("remind me at 7pm to call Dee. Send Sam the file now."), or
+        no concrete time anchor inside that clause, keeps the binding-send reading."""
+        if t.lstrip().startswith(FOLLOWUP_PREFIX.lower()):
+            return False
+        rem = _SELF_REMINDER.search(t)
+        if rem is None or rem.start() > send_pos:
+            return False
+        end = _CLAUSE_END.search(t, rem.start())
+        clause_end = end.start() if end is not None else len(t)
+        if send_pos >= clause_end:
+            return False
+        return bool(_REMINDER_TIME_ANCHOR.search(t[rem.start():clause_end]))
 
     def _assess_send(self, t: str, ctx: Optional[dict]) -> HarmVerdict:
         top = float((ctx or {}).get("top_relevance", 0.0) or 0.0)

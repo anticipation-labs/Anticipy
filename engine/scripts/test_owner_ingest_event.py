@@ -45,6 +45,12 @@ SEND_SAM = "okay just send Sam the revised decking file before Friday."
 REPORTED_PROMISE = "Sam needs the revised decking before Friday; I told him I'd send it."
 # an imperative the spine catches but the regex cannot shape (the F17 catch fix)
 UNSHAPED_ACT = "Set up a quick review with the roofing vendor for Thursday 2pm, 30 minutes."
+# F28 requested-action scope: a draft request whose line carries work vocabulary
+# ("supply order", "purchasing window", "ready to send") is NOT money, NOT a send —
+# the pre-gate must not block it, the spine must act, and the plan is the DRAFT
+DRAFT_ORDER = ("That supply order is STILL not submitted - the purchasing window closes "
+               "soon. Draft the order email to Marta with the list from my desk file so "
+               "it's ready to send.")
 CART_NO_BUY = "that water-table thing for the birthday, put it in the cart if you find it, don't buy it."
 MONEY = "order the replacement filter today and just pay whatever it costs."
 PROFILE = "My wife Maya prefers texts after lunch."
@@ -80,6 +86,7 @@ async def owner_lane_check():
         ask = await core.feed("app", SEND_SAM, {})
         promise = await core.feed("app", REPORTED_PROMISE, {})
         unshaped = await core.feed("app", UNSHAPED_ACT, {})
+        draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
         remember = await core.feed("app", PROFILE, {})
@@ -94,7 +101,7 @@ async def owner_lane_check():
         await core.stop()
 
     # the realday/scorer contract: decision + goal_id + ask_id on every response
-    for out in (noise, act, ask, promise, unshaped, cart, money, remember, clarify):
+    for out in (noise, act, ask, promise, unshaped, draft_order, cart, money, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
 
@@ -128,6 +135,14 @@ async def owner_lane_check():
     assert un_rec["state"] == "done" and un_rec["proof"], un_rec
     assert un_rec["owner_card"]["action"] == "execute_owner_task", un_rec
     assert any(p["type"] == "engine_execution" for p in un_rec["owner_card"]["proof"]), un_rec
+
+    # F28: the draft request acts (no money pre-gate on the noun "order"; no send
+    # reading on the purpose tail) and the executed plan is the DRAFT — never a send
+    assert draft_order["decision"] == "act", draft_order
+    do_rec = _record(tmp, draft_order["goal_id"])
+    assert do_rec["state"] == "done" and do_rec["proof"], do_rec
+    do_steps = [s.get("intent") for s in do_rec["steps"]]
+    assert "send_email_draft" in do_steps and "send_email" not in do_steps, do_steps
 
     # do card the spine refuses: the truthful decision is ignore, never a paper act
     assert cart["decision"] == "ignore", cart

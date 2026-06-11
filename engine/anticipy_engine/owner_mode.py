@@ -66,8 +66,12 @@ _REMEMBER = re.compile(
 # C22: routing tokens must stay generic verbs/nouns — never vocabulary tuned to the
 # persona bank or the directive's sample transcript (pre-games Stage B scoring).
 _SEND = re.compile(r"\b(send|email|text|tell|reply|follow up|circle back|draft)\b", re.I)
-_BROWSER = re.compile(r"\b(grab|buy|order|purchase|checkout|cart|find|look up|research)\b", re.I)
-_MONEY = re.compile(r"\b(pay|buy|order|purchase|checkout|wire|venmo|zelle|cashapp|credit card|payment)\b", re.I)
+# "order" gates as the SPEND-VERB shape (harm.py's money rule: "order the beakers",
+# "order lunch"), never the bare noun — "the supply order", "a change order" and
+# "the order email" are work vocabulary, not purchases (requested-action scope).
+_ORDER_VERB = r"order (?:a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffee|\d)"
+_BROWSER = re.compile(r"\b(grab|buy|" + _ORDER_VERB + r"|purchase|checkout|cart|find|look up|research)\b", re.I)
+_MONEY = re.compile(r"\b(pay|buy|" + _ORDER_VERB + r"|purchase|checkout|wire|venmo|zelle|cashapp|credit card|payment)\b", re.I)
 _NO_BUY = re.compile(r"\b(don'?t buy|do not buy|don'?t checkout|do not checkout|cart only|just.*cart)\b", re.I)
 _PROFILE = re.compile(
     r"\b(my name is|i am a|i'm a|i work at|i work as|i live in|i prefer|i like|i hate|"

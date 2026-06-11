@@ -48,9 +48,11 @@ async def main():
 
     assert goal["state"] == "done", goal["state"]
     steps = {s["intent"]: s for s in goal["steps"]}
-    assert "send_email" in steps and "post_to_x" in steps, list(steps)
+    # the draft-framed email plans the DRAFT (send_email_draft — never sends; F28);
+    # it is equally an ApiHand step, which is this leg's purpose
+    assert "send_email_draft" in steps and "post_to_x" in steps, list(steps)
 
-    se = steps["send_email"]
+    se = steps["send_email_draft"]
     assert se["state"] == "done" and se["result"]["proof"]["id"].startswith("mock-"), se  # API hand (mock)
 
     px = steps["post_to_x"]
@@ -67,7 +69,7 @@ async def main():
         assert need in kinds, (need, sorted(kinds))
 
     print("PASS hands DONE-TEST (integrated, headless):")
-    print("  send_email -> API hand (mock) proof id:", se["result"]["proof"]["id"])
+    print("  send_email_draft -> API hand (mock) proof id:", se["result"]["proof"]["id"])
     print("  post_to_x  -> no Arcade tool -> rerouted to browser hand; screenshot proof:",
           bool(px["result"]["proof"].get("screenshot")))
     print("  smart_calls:", gw["smart_calls"], "| scorecard:", sc)

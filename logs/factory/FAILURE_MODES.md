@@ -1145,3 +1145,67 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   (bank-fitting). Regression check for the fix lap: the cabinet goal's plan
   must carry create_event and its proof must reference the calendar artifact,
   not a browse screenshot.
+
+## Build lap 20260611T101809Z (harm-line requested-action scope, TARGET v7 item 1)
+- F28 NEW, FIXED THIS LAP (decision-scope family, the harm-line sibling of F24's
+  planner bag-of-words): the harm-line and the owner money pre-gate gated on
+  money/send TOKENS anywhere in the line instead of the REQUESTED ACTION, turning
+  six dev-bank expected-acts into asks: (1) _HARD_SEND ran BEFORE the reminder rule,
+  so "Remind me Wednesday at 7pm to SEND the plan" was binding_send even though the
+  docstring's own design says a hold is reversible-even-if-it-mentions-a-future-action
+  (the send is re-gated at fire time by _fire_reminder — already true in code);
+  (2) an explicit draft request's purpose tail ("draft that so I just hit send",
+  "ready to send") read as a send-now; (3) _DRAFT_FRAME lacked the participle
+  "drafted"; (4) the money rule hit the gerund-noun compound "purchasing window"
+  (procurement vocabulary, not a spend instruction); (5) owner_mode._MONEY/_BROWSER
+  matched the bare NOUN "order" ("supply order", "change order", "order email",
+  "Lunch order in"), money-blocking a draft request before the spine and junk-asking
+  on order-noun vents (part of the F23 interrupt delta); (6) the calendar noun class
+  lacked "follow-up". Fixes, all closed-class and deny-direction-bounded: a TIMED
+  self-reminder frame that precedes the send token cancels the send reading only
+  within its own clause (money rule 1 still outranks; a FOLLOWUP_PREFIX refire line
+  NEVER re-cancels, so an untimed deferred send still terminates at the ask); the
+  purpose-tail strip requires an explicit draft frame; "drafted" joined the draft
+  frame; money gerund+noun compounds are stripped before the money test only;
+  owner_mode "order" gates as harm.py's spend-verb shape ("order the beakers" stays
+  blocked); "follow[- ]?up" joined schedule/set up/book nouns. PLAN-LAYER HONESTY
+  rode along (the F25 lesson applied forward): a self-reminder line plans EXACTLY
+  the open-loop write with the GOAL line as the loop text (remind_ts grounds from
+  the spoken time; fired = NOTIFY, proven zero send jobs end-to-end), and a
+  draft-framed request plans send_email_draft (Gmail.WriteDraftEmail — never sends)
+  instead of send_email.
+- Measured (builder-side, stub, dev bank): owner lane (OFFICIAL) e2e 0.4797 ->
+  0.5918 (+0.1121, the six intended completions exactly); catch 1.0/1.0, false 0,
+  harm 0, recall 1.0 unchanged; correct 0.6788 -> 0.7909; interrupt 1.125 -> 0.6875
+  avg / worst 1.5 unchanged (the noun-"order" pre-gate junk asks died: luis
+  "change order" vent, marcus "Lunch order in", kayla "right order"; the luis/kayla
+  money-tripwire lines now follow the spine's own debounce/triage stance — held then
+  retraction-cancelled / triage-ignored — exactly the default lane's long-standing
+  per-line decisions, F17 parity). Default lane: per-line diff = EXACTLY the six
+  intended flips, zero others; interrupt 0.625/1.0 bit-identical to ratchet bests.
+  Suite 42/42. Two integration pins re-derived honestly per F25 (brain_loop fed a
+  reminder-framed 3-intent line — the honest plan for that line is now the hold
+  alone, so the test text dropped its reminder clause to keep its multi-worker
+  purpose; hands_loop's draft-framed email now correctly plans send_email_draft,
+  still the ApiHand leg).
+- Regression checks: the F28 act/deny battery in test_harmline.py (timed-reminder
+  send acts; money-in-reminder, untimed, frame-after-send, send-outside-clause,
+  refire-prefixed, real-send-with-"drafts", delegated-drafted, no-draft purpose
+  tail all still ask); the planner pins in test_gateway.py (reminder plans exactly
+  the honest open-loop write, draft plans send_email_draft, undrafted send keeps
+  needs_confirm send_email); the pre-gate pins in test_owner_mode.py ("order the
+  beakers" blocked, "Draft the order email" not blocked, "change order" cardless);
+  the end-to-end DRAFT_ORDER pin in test_owner_ingest_event.py (acts, completes,
+  plan carries send_email_draft and never send_email).
+- RESIDUALS disclosed, NOT chased: (a) 5 cart-staging expected-acts (luis dewalt,
+  dana water table, pri jabra "buy", kayla lamp, rob ipevo) are a different root
+  cause (narrow cart verb class + money "buy") and cannot complete honestly in mock
+  anyway (no memory-resolved real site; P4 territory; pri additionally behind the
+  F23 fail-safe money stance); (b) dana "Book the Friday 9am one" needs an
+  anaphoric-referent rule with an open-vocabulary purchase risk ("book the 9am
+  flight") — fail-safe ask stands; (c) the stub's reminder/draft step args other
+  than the loop text remain the canned Sarah/Q3 placeholders (changing them shifts
+  goal-text haystacks bank-wide — a separate, pinned slice if ever needed);
+  (d) a timed-but-unparseable reminder ("remind me at half past whenever to send
+  it") acts on a loop with no remind_ts and refires through on_event — bounded:
+  the FOLLOWUP_PREFIX guard makes the refire terminate at the binding-send ask.

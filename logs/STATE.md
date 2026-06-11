@@ -81,6 +81,34 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- THE HARM-LINE GATES THE REQUESTED ACTION, e2e MOVED BIG (lap 20260611T101809Z,
+  build — ledger F28 FIXED): six dev-bank expected-acts were asks because the
+  harm-line and the owner money pre-gate matched money/send TOKENS anywhere in
+  the line instead of the requested action: _HARD_SEND outranked the reminder
+  rule ("Remind me Wednesday at 7pm to SEND X" — the docstring's own design says
+  holds are reversible and _fire_reminder already re-gates at fire time), draft
+  purpose tails ("so I just hit send", "ready to send") read as send-now,
+  "drafted" missing from the draft frame, "purchasing window" read as money,
+  owner_mode money-blocked the bare NOUN "order" before the spine, and
+  "follow-up" was missing from the calendar nouns. Fixed as closed-class scope
+  rules with pinned deny bounds (money rule still first and untouched for real
+  spends; FOLLOWUP_PREFIX refires never re-cancel), plus plan-layer honesty:
+  self-reminder lines plan EXACTLY the open-loop hold (remind_ts grounded from
+  the spoken time; fired = NOTIFY, proven zero send jobs end-to-end) and draft
+  requests plan send_email_draft (never sends). Owner lane (OFFICIAL): e2e
+  0.4797 -> 0.5918 (+0.1121, exactly the six intended completions); catch
+  1.0/1.0, false 0, harm 0, recall 1.0 unchanged; correct 0.6788 -> 0.7909;
+  interrupt 1.125 -> 0.6875 avg (worst 1.5) — the noun-"order" pre-gate junk
+  asks died and the money-tripwire lines now follow the spine's own
+  debounce/triage stance, per-line identical to the default lane (F17 parity;
+  the F23 delta shrank as a side effect of scope, not of weakening — money
+  still never executes). Default lane: per-line diff = EXACTLY the six flips,
+  everything else at ratchet bests. Suite 42/42 (brain_loop/hands_loop pins
+  re-derived per F25 — the draft-framed email is the send_email_draft leg now).
+  Disclosed, not chased: the 5 cart-staging expected-acts (separate root cause
+  + no memory-resolved site in mock, P4), dana's anaphoric "book the Friday 9am
+  one" (open-vocab purchase risk), pri's "buy" line (F23 stance), F27 still
+  open (the cabinet item's right artifact is a calendar block).
 - THE BROWSER HAND HAS A MOCK TIER, e2e MOVED AGAIN (lap 20260611T095522Z, build —
   ledger F26 FIXED): BrowserHand was the only hand without a mock mode — every
   browser-routed step in a stub run hit the real hand with no extension and
