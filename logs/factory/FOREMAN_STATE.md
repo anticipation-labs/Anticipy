@@ -1,6 +1,21 @@
 # FOREMAN STATE — updated at the end of every foreman session
 
-Last updated: 2026-06-10 (session: Factory bootstrap + P0 completion)
+Last updated: 2026-06-10 (session: Owner Action Engine directive + shared intake)
+
+## Current owner directive
+- Omar redirected the work away from narrow phase grinding and toward the real Owner
+  Action Engine: memory, proactive engine, onboarding, API hand, browser hand, and
+  voice/text must work together.
+- Durable handoff file: `.claude/OWNER_ACTION_ENGINE.md`. Read it first in interactive
+  product sessions.
+- First owner-path code landed this session: `POST /owner/ingest` shares the same intake
+  for pay-to-try, Start Listening, MP3 transcript, and pasted transcript. It captures ugly
+  transcript lines and writes durable task cards to memory/open loops.
+- Second owner-path code landed this session: `POST /owner/onboard` writes first-run
+  owner identity, people, preferences, app connections, common stores/accounts, and
+  missing-connection loops into memory.
+- Do not build a special handoff mode. Use `ask` or `blocked` cards and keep proof in the
+  ledger.
 
 ## Where things stand
 - Factory P0 is COMPLETE and verified: persona harness (8 dev + 4 holdout), self-proving
@@ -48,3 +63,15 @@ Last updated: 2026-06-10 (session: Factory bootstrap + P0 completion)
 - TARGET v3 chains the night: stage 1 close P1 (attempt_gate_close), stage 2 P2 decider.
 - gate_P2.sh exists. Scorer accounting fixed (C3) — catch numbers not comparable to pre-fix rows.
 - Morning artifacts: logs/factory/MORNING_REPORT.md + scoreboard rows from the night.
+
+## Evening session (2026-06-10 ~20:30 PDT) — parallel-lane reconciliation
+- While this session was suspended: Factory ran 7 more laps (F7 outage hardening, decider
+  re-lands, F15a SHAPE fix committed 96eb92f), halted on K=5; a SEPARATE Claude automation
+  acted as foreman: resolved the escalation (TARGET v5, C17 judge-REAL closure, D23/
+  SKIPPED_LIMIT in loop.sh), built the Owner Action Engine lane (/owner/ingest,
+  /owner/onboard, .claude/OWNER_ACTION_ENGINE.md, 30-min automation), left it uncommitted.
+- Foreman ruling: lane ALIVE + Amendment 1 (lock discipline for all actors, commit every
+  session, one honesty instrument, execution inherits safety spine). TARGET v6 unifies:
+  Stage A re-attempt P2 closure (F15a unjudged), Stage B owner-card execution + P3 plumbing.
+- Other agent's work safety-scanned (cards only, no side effects), suite GREEN, committed
+  by this session with credit.

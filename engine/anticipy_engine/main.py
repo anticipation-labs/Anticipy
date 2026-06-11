@@ -25,6 +25,7 @@ from .brain import Brain
 from .core.control_core import ControlCore
 from .core.envelopes import Job, new_id
 from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
+from .owner_onboarding import OwnerOnboardingIn
 
 ENGINE_NAME = "anticipy-engine"
 
@@ -89,6 +90,13 @@ class EventIn(BaseModel):
     meta: dict = Field(default_factory=dict)
 
 
+class OwnerIngestIn(BaseModel):
+    text: str
+    source: str = "transcript"
+    meta: dict = Field(default_factory=dict)
+    execute_actions: bool = False
+
+
 class ResolveIn(BaseModel):
     ask_id: str
     approved: bool
@@ -123,6 +131,18 @@ def extension_hello(body: ExtensionHello) -> dict:
 @app.post("/event")
 async def event(body: EventIn) -> dict:
     return await core.feed(body.source, body.text, body.meta)
+
+
+@app.post("/owner/ingest")
+async def owner_ingest(body: OwnerIngestIn) -> dict:
+    """One shared Action Engine intake for typed transcript, MP3, listening, and pay-to-try."""
+    return await core.owner_ingest(body.source, body.text, body.meta, execute_actions=body.execute_actions)
+
+
+@app.post("/owner/onboard")
+async def owner_onboard(body: OwnerOnboardingIn) -> dict:
+    """First-run setup writes people, preferences, apps, stores, and gates into memory."""
+    return await core.owner_onboard(body)
 
 
 @app.post("/trigger/tick")

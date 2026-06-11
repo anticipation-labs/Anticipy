@@ -843,3 +843,22 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   dev decision diff (zero changes beyond intended). If a judge holdout count ever
   names an appositive junk ask, extend _BENEF_GAP_NARR (the finite-verb list), never
   weaken the three anchors.
+
+## Foreman repair, 2026-06-11 (false P2 closure after judge limit)
+- C17 NEW, FIXED: phase closure trusted the mechanical gate when the adversarial judge
+  failed externally. Lap 20260611T000748Z passed the dev-bank P2 gate and then the
+  judge subprocess hit the Claude session limit before writing judge.json,
+  verdict.md, or holdout_metrics.json. loop.sh treated missing judge output as
+  non-veto, and scoreboard.py closed P2 from phase_gate_passed+kept alone. Fix:
+  loop.sh writes JUDGE_ERROR/JUDGE_SKIPPED for any phase-close candidate without a
+  trusted judge, blocks keep unless the verdict is REAL, and scoreboard.py only records
+  first_closure when judge_verdict == REAL. Regression check: a phase gate pass with
+  missing/non-REAL judge.json yields gate_closed False and cannot write
+  RATCHET.phases_closed.
+- D23 NEW, FIXED: Claude session-limit laps were counted as real no-movement laps.
+  The five fast laps after 000748Z were api_error_status=429 "You've hit your session
+  limit" envelopes, but verify/score still ran against unchanged HEAD and burned the
+  treadmill to K=5. Fix: loop.sh detects build session-limit/429 results immediately,
+  writes skipped.json status SKIPPED_LIMIT, removes .lap_in_progress, sleeps a backoff,
+  and skips verify, scoreboard, spend, and treadmill. Regression check: a limit-hit
+  build creates no product_scoreboard row and does not increment treadmill_count.

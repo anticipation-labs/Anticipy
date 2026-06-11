@@ -18,6 +18,9 @@ is the cardinal sin.
    `factory/TARGET.md` govern you completely. Ignore the foreman notes below.
 2. **Foreman / interactive session with Omar** (anything else): you are the architect.
    Read, in order:
+   - `.claude/OWNER_ACTION_ENGINE.md` — Omar's current product directive: build the real
+     owner operating path across memory, proactive engine, onboarding, API/browser hands,
+     and voice/text; do not collapse back to one narrow brain loop
    - `logs/STATE.md` — current regime, what's proven, baseline numbers, dead ends
    - `factory/TARGET.md` — current phase + work list (you own this file)
    - `logs/factory/FOREMAN_STATE.md` — where the last foreman session left off
@@ -27,6 +30,10 @@ is the cardinal sin.
    The approved master plan: `~/.claude/plans/oh-my-god-everybody-iterative-puffin.md`
 
 ## The Factory (the forcing system — how all building happens)
+The Factory is a forcing system, not the product. Omar's current interactive directive is
+the Owner Action Engine operating path in `.claude/OWNER_ACTION_ENGINE.md`; use the Factory
+only to keep work honest and moving.
+
 - Nightly launchd `com.anticipy.factory` runs `factory/bin/loop.sh --nightly` 22:30→07:00.
   Each lap: fresh bounded builder session → mechanical gates (scans + suite + 8-persona
   eval) → scoreboard → keep or git-revert → treadmill detector.

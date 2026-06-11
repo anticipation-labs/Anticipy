@@ -1,5 +1,18 @@
 # STATE
 
+OWNER DIRECTIVE 2026-06-10: the immediate product priority is the Owner Action Engine,
+not another narrow loop around one brain metric. Durable directive:
+`.claude/OWNER_ACTION_ENGINE.md`. The required path is memory + proactive engine +
+onboarding + API hand + browser hand + voice/text, with pay-to-try, Start Listening, MP3,
+and pasted transcript all feeding the same engine. First implementation landed this
+session: `POST /owner/ingest` -> `OwnerMode.ingest` -> durable task cards in memory/open
+loops, pinned by `engine/scripts/test_owner_mode.py`. Follow-up implementation in the
+same session: `POST /owner/onboard` -> `OwnerOnboardingIn` -> owner identity, people,
+preferences, app-connection state, stores, and missing-connection open loops in memory,
+pinned by `engine/scripts/test_owner_onboarding.py`. Do not build a special handoff mode;
+use explicit `ask` or `blocked` cards. Do not test primarily on clean commands; use ugly
+real-life transcript with mostly useless speech and a tiny useful fraction.
+
 REGIME CHANGE 2026-06-10: the autopilot/ loop (Codex-driven, milestone M-ladder) is RETIRED.
 The successor is the FACTORY (factory/), built and smoke-proven this session. The owner
 approved the plan at ~/.claude/plans/oh-my-god-everybody-iterative-puffin.md: finish line for

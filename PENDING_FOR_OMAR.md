@@ -1,5 +1,12 @@
 # PENDING_FOR_OMAR
 
+Current directive: build the real Owner Action Engine, not a narrow brain-only loop.
+The durable handoff is `.claude/OWNER_ACTION_ENGINE.md`. First shared intake path is now
+`POST /owner/ingest`: pay-to-try, Start Listening, MP3 transcript, and pasted transcript
+all enter the same engine and produce durable memory/open-loop task cards from ugly daily
+speech. `POST /owner/onboard` now writes first-run owner identity, people, preferences,
+app connections, stores, and missing-connection loops into that same memory system.
+
 Nothing is blocking. The Factory is fully self-sufficient: nightly launchd at 22:30 from
 `~/Anticipy` (TCC solved by the move — no Full Disk Access needed), engine brain on
 Gemini free tier (no OpenRouter funding needed). Read `logs/factory/MORNING_REPORT.md`.

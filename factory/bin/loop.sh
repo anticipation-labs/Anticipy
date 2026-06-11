@@ -123,11 +123,36 @@ while true; do
   bash factory/bin/build_lap.sh "$LAP" "$TIER"
   BUILD_RC=$?
   AFTER=$(git rev-parse HEAD)
+  LIMIT_HIT=$("$PY" - "$LAPDIR/build.json" <<'PY'
+import json, sys
+try:
+    obj = json.load(open(sys.argv[1]))
+except Exception:
+    obj = {}
+result = str(obj.get("result", "")).lower()
+is_limit = obj.get("api_error_status") == 429 or "session limit" in result
+print("true" if is_limit else "false")
+PY
+  )
   # builder may leave uncommitted PRODUCT edits on timeout/crash — preserve then drop them
   # (logs/ and PENDING_FOR_OMAR.md are legitimate lap outputs; they stay)
   if [[ -n "$(git status --porcelain -- . ':!logs' ':!PENDING_FOR_OMAR.md' | grep -vE '^\?\?' || true)" ]]; then
     git diff -- . ':!logs' ':!PENDING_FOR_OMAR.md' > "$LAPDIR/uncommitted.patch" || true
     git checkout -- . ':!logs' ':!PENDING_FOR_OMAR.md' 2>/dev/null || true
+  fi
+  if [[ "$LIMIT_HIT" == "true" ]]; then
+    if [[ "$AFTER" != "$BEFORE" ]]; then
+      git diff "$BEFORE" "$AFTER" > "$LAPDIR/reverted.patch" || true
+      git reset --hard "$BEFORE" >/dev/null
+    fi
+    cat > "$LAPDIR/skipped.json" <<EOF
+{"lap":"$LAP","status":"SKIPPED_LIMIT","reason":"builder session limit / 429","build_rc":$BUILD_RC}
+EOF
+    journal "lap $LAP skipped: SKIPPED_LIMIT (builder session limit/429; no score, no treadmill)"
+    rm -f factory/.lap_in_progress
+    LAPS=$((LAPS + 1))
+    sleep "${SESSION_LIMIT_BACKOFF_SECONDS:-180}"
+    continue
   fi
 
   # ---- mechanical verify (wall-capped; a hung gate must not strand the lap, ledger D6) ----
@@ -150,24 +175,49 @@ while true; do
     [[ "$AGE_DAYS" -lt "${JUDGE_SELFCHECK_EVERY_DAYS:-7}" ]] && SC_DUE=false
   fi
   PHASE_CLOSED=$("$PY" -c "import json;print(json.dumps(json.load(open('$LAPDIR/gate_results.json')).get('phase_gate_passed', False)))" 2>/dev/null || echo false)
+  JUDGE_BLOCK=false
   if [[ "$TIER" == "FULL" ]]; then
     if [[ "$SC_DUE" == "true" ]]; then
       bash factory/bin/judge_lap.sh "$LAP" --self-check || journal "lap $LAP: judge selfcheck errored"
       if [[ -f "$LAPDIR/selfcheck.md" ]] && ! grep -qi 'FAKE' "$LAPDIR/selfcheck.md"; then
         echo '{"verdict": "JUDGE_BROKEN"}' > "$LAPDIR/judge.json"
         journal "lap $LAP: JUDGE_BROKEN — selfcheck failed to catch the planted fake"
+        JUDGE_BLOCK=true
       fi
     fi
-    if [[ "$PHASE_CLOSED" == "true" ]] && "$PY" factory/bin/spend.py check --kind judge >/dev/null 2>&1; then
-      bash factory/bin/judge_lap.sh "$LAP" || journal "lap $LAP: judge errored"
-      JUDGE_RAN=true
+    if [[ "$PHASE_CLOSED" == "true" && "$JUDGE_BLOCK" == "false" ]]; then
+      if "$PY" factory/bin/spend.py check --kind judge >/dev/null 2>&1; then
+        if ! bash factory/bin/judge_lap.sh "$LAP"; then
+          journal "lap $LAP: judge errored — phase closure blocked"
+          echo '{"verdict": "JUDGE_ERROR", "reason": "judge_lap.sh failed or hit an external limit before writing a trusted verdict"}' > "$LAPDIR/judge.json"
+        elif [[ ! -f "$LAPDIR/judge.json" ]]; then
+          journal "lap $LAP: judge wrote no judge.json — phase closure blocked"
+          echo '{"verdict": "JUDGE_ERROR", "reason": "judge_lap.sh exited without judge.json"}' > "$LAPDIR/judge.json"
+        fi
+        JUDGE_RAN=true
+      else
+        journal "lap $LAP: judge budget unavailable — phase closure blocked"
+        echo '{"verdict": "JUDGE_SKIPPED", "reason": "judge budget unavailable for phase-close candidate"}' > "$LAPDIR/judge.json"
+      fi
     fi
   fi
 
   # ---- keep / revert ----
   VETO=false
-  if [[ -f "$LAPDIR/judge.json" ]] && grep -qE '"verdict":\s*"(FAKE|VETO)"' "$LAPDIR/judge.json"; then
+  JUDGE_VERDICT=$("$PY" - "$LAPDIR/judge.json" <<'PY'
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get("verdict", "NA"))
+except Exception:
+    print("NA")
+PY
+  )
+  if [[ -f "$LAPDIR/judge.json" ]] && grep -qE '"verdict":\s*"(FAKE|VETO|JUDGE_BROKEN|JUDGE_ERROR|JUDGE_SKIPPED)"' "$LAPDIR/judge.json"; then
     VETO=true
+  fi
+  if [[ "$PHASE_CLOSED" == "true" && "$JUDGE_VERDICT" != "REAL" ]]; then
+    VETO=true
+    journal "lap $LAP: phase close blocked until judge verdict REAL (have $JUDGE_VERDICT)"
   fi
   if [[ "$GATE" == "PASS" && "$VETO" == "false" ]]; then
     KEPT=true

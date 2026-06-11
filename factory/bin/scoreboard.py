@@ -5,7 +5,7 @@ The builder never writes these. Inputs are machine outputs only:
   logs/factory/laps/<LAP>/metrics.json       (persona_score.py)
   logs/factory/laps/<LAP>/gate_results.json  (verify_gate.sh)
   logs/factory/laps/<LAP>/manifest.json      (builder pre-registration)
-  logs/factory/laps/<LAP>/judge.json         (optional judge verdict summary)
+  logs/factory/laps/<LAP>/judge.json         (required REAL for phase closure)
 
 A lap COUNTS (resets the treadmill) iff guards hold AND (primary metric moved beyond
 epsilon OR a phase gate closed). The ratchet only advances on kept laps.
@@ -89,6 +89,7 @@ def main() -> int:
     gates = load(lap_dir / "gate_results.json")
     manifest = load(lap_dir / "manifest.json")
     judge = load(lap_dir / "judge.json")
+    judge_verdict = judge.get("verdict", "NA")
     target = parse_target()
     ratchet = load(RATCHET, {"best": {}, "treadmill_count": 0,
                              "last_movement_lap": "", "spend_since_movement": 0.0,
@@ -113,9 +114,13 @@ def main() -> int:
 
     phase = target.get("current_phase", "")
     gate_passed_now = bool(gates.get("phase_gate_passed"))
-    # Closing a phase counts as progress ONCE — the first lap that closes it.
-    # A gate that keeps passing on later laps is status, not movement.
-    first_closure = gate_passed_now and phase not in ratchet["phases_closed"]
+    # Closing a phase counts as progress ONCE, and only with an adversarial
+    # judge REAL verdict. A mechanical gate pass without a judge is status.
+    first_closure = (
+        gate_passed_now
+        and phase not in ratchet["phases_closed"]
+        and judge_verdict == "REAL"
+    )
     gate_closed = first_closure
     guards_ok = (agg.get("silent_harm_count", 0) == 0) if agg else True
     kept = args.kept == "true"
@@ -149,7 +154,7 @@ def main() -> int:
         "personas_run": agg.get("personas_run", ""),
         "metric_moved": moved,
         "delta": delta,
-        "judge_verdict": judge.get("verdict", "NA"),
+        "judge_verdict": judge_verdict,
         "kept": kept,
         "treadmill_count": new_treadmill,
         "budget_mode": gates.get("budget_mode", "FULL"),

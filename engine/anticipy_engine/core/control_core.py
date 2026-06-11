@@ -24,6 +24,8 @@ from .workers import ChannelStub, MemoryWorker
 from ..hands import ApiHand, BrowserHand, MODE_MOCK
 from ..live_memory.brain import LiveMemoryBrain
 from ..memory.store import Memory
+from ..owner_mode import OwnerMode
+from ..owner_onboarding import OwnerOnboardingIn, build_onboarding_plan
 
 
 def _base(data_dir=None) -> Path:
@@ -57,6 +59,7 @@ class ControlCore:
         # REAL memory: four drawers + the live memory agent, on the frozen contract.
         self.memory = Memory(data_dir=base)
         self.live_memory = LiveMemoryBrain(self.memory, gateway=self.gateway, scorecard=self.scorecard)
+        self.owner_mode = OwnerMode()
         self.memory_worker = MemoryWorker(self.live_memory)
 
         # REAL hands replace connector_stub + browser_stub on the frozen contract.
@@ -120,6 +123,107 @@ class ControlCore:
         ev = Event(source=EventSource(source), text=text, meta=meta or {})
         await self.bus.publish(ev)                 # log the event to the glass-box
         return await self.proactive.on_event(ev)   # triage -> gate -> act/ask (gate reads memory)
+
+    async def owner_ingest(self, source: str, text: str, meta: dict | None = None,
+                           execute_actions: bool = False) -> dict:
+        """Shared owner path for transcript/MP3/listening/pay-to-try.
+
+        It records the whole observed stream, extracts durable task cards, and writes
+        those cards into the real memory drawers. Optional execution feeds low-risk
+        cards into the existing proactive engine; confirmation/payment cards stay
+        ledgered until the app or voice line resolves them.
+        """
+        meta = meta or {}
+        result = self.owner_mode.ingest(text, source=source, meta=meta)
+        for line in result.observed_lines:
+            self.live_memory.capturer.capture(
+                line.text,
+                source=source,
+                meta={**meta, "owner_ingest": True, "line_no": line.line_no},
+            )
+
+        for card in result.cards:
+            fields = {
+                "owner_card_id": card.id,
+                "source": source,
+                "line_no": card.line_no,
+                "source_text": card.source_text,
+                "disposition": card.disposition,
+                "route": card.route,
+                "action": card.action,
+                "args": card.args,
+                "reason": card.reason,
+            }
+            if card.disposition == "remember":
+                item = self.memory.profile.write_text(
+                    card.source_text,
+                    fields=fields,
+                    provenance=f"owner:{source}",
+                    confidence=card.confidence,
+                    importance=0.7,
+                    status="active",
+                )
+                drawer = "profile"
+            else:
+                item = self.memory.open_loops.write_text(
+                    card.title,
+                    fields=fields,
+                    provenance=f"owner:{source}",
+                    confidence=card.confidence,
+                    importance=0.85,
+                    status=("open" if card.disposition == "do" else "waiting"),
+                )
+                drawer = "open_loops"
+            card.proof.append({"type": "memory_write", "drawer": drawer, "memory_id": item.id})
+
+            if execute_actions and card.disposition == "do":
+                out = await self.feed(
+                    "app",
+                    card.source_text,
+                    {**meta, "owner_card_id": card.id, "owner_source": source, "owner_ingest_execute": True},
+                )
+                card.proof.append({"type": "engine_feed", "result": out})
+
+        self.glassbox.log(
+            "owner_ingest",
+            {"source": source, "lines": len(result.observed_lines), "cards": len(result.cards),
+             "ignored": result.ignored_line_count, "execute_actions": execute_actions},
+        )
+        return result.model_dump(mode="json")
+
+    async def owner_onboard(self, body: OwnerOnboardingIn) -> dict:
+        """Write first-run onboarding into the same memory ledger the engine uses."""
+        plan = build_onboarding_plan(body)
+        written = []
+        for mem in plan.memories:
+            if mem.drawer == "profile":
+                item = self.memory.profile.write_text(
+                    mem.text,
+                    fields=mem.fields,
+                    provenance=f"owner:{plan.source}",
+                    confidence=mem.confidence,
+                    importance=mem.importance,
+                    status=mem.status,
+                )
+            else:
+                item = self.memory.open_loops.write_text(
+                    mem.text,
+                    fields=mem.fields,
+                    provenance=f"owner:{plan.source}",
+                    confidence=mem.confidence,
+                    importance=mem.importance,
+                    status=mem.status,
+                )
+            written.append({"drawer": mem.drawer, "memory_id": item.id, "text": item.text,
+                            "status": item.status, "fields": item.fields})
+
+        self.glassbox.log(
+            "owner_onboarding",
+            {"source": plan.source, "written": len(written),
+             "missing_connections": plan.missing_connections},
+        )
+        return {"source": plan.source, "written": written,
+                "missing_connections": plan.missing_connections}
 
     async def notify_user(self, text: str, recipient: str | None = None) -> dict:
         """Text the user — the 'ask' half of a wall handoff (pause -> ask -> resume).
