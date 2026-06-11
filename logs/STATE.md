@@ -54,7 +54,7 @@ its LESSONS.md still binds.
 - Possible stray artifact: `[Anticipy test] M2 typed smoke 20260607-continue` calendar
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
-## Current phase: P1 CLOSED (lap 20260610T060701Z) -> P2-brain (TARGET v3 STAGE 2)
+## Current phase: P1 CLOSED (lap 20260610T060701Z) -> P2-brain (TARGET v4 STAGE A: gate-close attempts; the judge's HOLDOUT run is the instrument — dev bank saturated at 1.0, C13)
 - ACCOUNTING DESTRUCTION (2026-06-10, ledger D21): lap 083047Z's kept=False revert
   (`git reset --hard`) rolled the tracked-but-never-lap-committed scoreboard/RATCHET back
   to foreman snapshot ea08490 — erasing the P1 first-close record, six scoreboard rows
@@ -149,6 +149,26 @@ its LESSONS.md still binds.
   still open: self.pending asks remain in-memory (restart strands paused goals —
   the persistence pattern now exists to copy). F7's last residual: real-429 storm
   live observation.
+- The HOLDOUT CAMPAIGN (P2 closure, TARGET v4 STAGE A): three judge-verified-good
+  diffs (laps 131707Z, 223727Z, 232257Z) were each VETOed-and-reverted solely because
+  the holdout floor (worst >= 0.70) was not yet met — VETO is the judge's only lever
+  that prevents a false P2 close (scoreboard stamps phases_closed on any kept
+  phase_gate_passed row). Trajectory of the judge's holdout counts: worst 0.3333 ->
+  0.6667, aggregate 0.625 -> 0.8542, false 0, harm 0 throughout; interrupt_worst 3.0
+  at ZERO margin on gradta_ming and nurse_helen (one junk ask on either fails the
+  gate). Two falsified blind lexicon sweeps established F15: closed-class lexicons
+  cannot chase the holdout's open vocabulary; verdicts now disclose residuals at
+  SHAPE granularity. Lap 20260611T000748Z re-landed the 232257Z diff VERBATIM (its
+  verdict's condition 1) and added the disclosed shape: the BENEFACTIVE-STAGING
+  IMPERATIVE (clause-initial open-vocabulary imperative or causative-get +
+  determiner-fronted object + same-clause "for me/us" tail), junk-bounded by three
+  structural anchors + closed-class denies, every judge-enumerated junk class pinned
+  (154 pins), full-bank dev decision diff = exactly the one intended re-land change
+  (the rule is provably inert on dev). Disclosed residual: F16 (appositive gratitude
+  narration). Gate-close attempted; the judge holdout run decides. If VETO again,
+  verdict condition 3 hands the structural options to the foreman (judge-named-lexeme
+  channel amendment after K falsified sweeps, or live-tier holdout instrument);
+  treadmill at 4 — the next dead lap fires the designed escalation.
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,

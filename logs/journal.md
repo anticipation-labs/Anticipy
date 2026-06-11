@@ -477,3 +477,30 @@ shared quota. Pre-registered as mechanically dead per D22 (stub primary at ceili
 1.0, gate_P1 already closed, TARGET still v3 on disk): the treadmill tick 4->5 this
 lap burns reaches K=5 and fires the designed ESCALATION that wakes the foreman to
 flip TARGET to v4/P2 — stated up front in the manifest, not an accident.
+
+## Lap 20260611T000748Z (builder, P2-brain, TARGET v4 STAGE A)
+Executed the 232257Z verdict's four re-land conditions. (1) Re-landed that lap's
+judge-verified diff VERBATIM from laps/20260610T232257Z/reverted.patch (triage
+clause-scope + inventory sweep + F14 fix, debounce F9 binding_send hold,
+test_triage_clause_scope.py with the C21-clean pins, run_suite.sh registration) —
+clean git apply against the identical base commit 48b76d8. (2) Closed the residue by
+SHAPE, not a third falsified lexicon sweep (F15b): the benefactive-staging imperative
+the verdict disclosed — clause-initial open-vocabulary imperative or causative-get,
+determiner-fronted object BETWEEN verb and "for me/us", same-clause tail — as
+_benefactive_imperative in triage.py, with head/morphology/idiom denies bounding the
+junk classes. (3) Junk-ask bound at the two interrupt-3.0 personas: three structural
+anchors, every judge-enumerated junk class carries a DROP pin (subject-ful narration,
+no-object "pray for me", did-X-for-me gratitude, dropped-subject past heads, gerund/
+3rd-person-s heads, vicarious well-wishes, present-company favors), one C21 near-miss
+caught builder-side (a pin name "Dev" turned out to be a bank person — rewritten with
+a verified-fresh name before commit), and the full-bank dev decision diff vs
+104837Z-pre came back 493 events / EXACTLY one change (kayla day02:17 ignore->held,
+the pre-registered re-land change) — the shape rule is provably inert on dev. One
+disclosed residual ledgered as F16 (appositive gratitude narration can pass the
+anchors; gap-deny is the bound). Suite 36/36; stub full bank bit-identical to ratchet
+bests (catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0); 154 pins, 0 smart calls;
+zero model spend. (4) attempt_gate_close=true — the judge's fresh holdout run is the
+instrument and the verdict; worst was 0.6667 (nurse_helen 2/3) with both residual
+misses fitting the disclosed shape. If the floor still fails, verdict condition 3
+stands: structural options (judge-named-lexeme channel amendment or live-tier holdout
+instrument) are foreman calls; treadmill sits at 4.

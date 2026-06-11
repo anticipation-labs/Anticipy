@@ -8,10 +8,14 @@ speech is HELD, not asked: the goal is persisted waiting (never executed), and
 the ask goes out only if it survives a short window with no retraction.
 
 Scope is deliberately narrow — two conditions, both required:
-  - harm-line category "money" AND the text uses a TRANSFER verb
-    (pay/venmo/zelle/wire/transfer/...). Direct pay-someone commands are the
-    class people retract mid-conversation; buy/cart/purchase intents are
-    shopping flows whose money ask should surface normally.
+  - harm-line category "money" OR "binding_send", AND the text uses a TRANSFER
+    verb (pay/venmo/zelle/wire/transfer/...). Direct pay-someone commands are
+    the class people retract mid-conversation; buy/cart/purchase intents are
+    shopping flows whose money ask should surface normally. binding_send is
+    included because "send <person> <amount> over <rail>" reads as a send to
+    the harm-line while being a money transfer in substance (ledger F9 —
+    category jitter was bypassing this window); the rail-verb requirement
+    keeps ordinary sends ("send her the lease") asking immediately.
   - the event is AMBIENT (meta.observed_at present — transcript/pendant
     capture). A typed or API command is deliberate; it gets its ask
     immediately (SideDoor and the gate's typed money probe are unchanged).
@@ -60,7 +64,9 @@ class AskDebounce:
 
     @staticmethod
     def should_hold(text: str, category: str, meta: Optional[dict]) -> bool:
-        if category != "money":
+        # binding_send counts only because the rail check below makes it a money
+        # transfer in substance (F9); any other category asks immediately
+        if category not in ("money", "binding_send"):
             return False
         if not (meta or {}).get("observed_at"):
             return False         # typed/API command -> deliberate -> ask immediately

@@ -558,3 +558,288 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   knife-edge pass with no margin signal. Partially known (foreman backlog already
   carries "holdout red-pen; bank v2"); ledgered so the bank-v2 work treats
   denominator size and threshold margins as requirements, not nice-to-haves.
+
+## Class F addendum (builder lap 20260610T124451Z)
+- F8 Confident-negative shapes operate at UTTERANCE granularity while positive/imperative
+  shapes operate at CLAUSE granularity: one vent-shaped sub-clause eats the whole line,
+  including an explicit money command in a later clause. Evidence: student_kayla day02:17
+  ("...I said I'd chip in... Send mom the twenty over zelle so she can order it today")
+  was wholly dropped pre-change — the bare-I'd conditional-vent negative matched "I said
+  I'd chip in" and returned False before the clause-initial "Send mom the twenty..." was
+  ever examined; the bank's never_act tripwire was being passed by DEAFNESS, not judgment
+  (the money command never reached the harm-line). CONTAINED for the reported-promise
+  family (this lap's _REPORTED_PROMISE carve-out + test_triage_generalization.py pins);
+  OPEN in general: a non-reported vent prefix still eats a trailing command today (e.g.
+  self-authored: "I'd be lost without her. Send mom the twenty over zelle." — the bare-I'd
+  negative drops the whole utterance). Proper fix is clause-scoped negatives (split before
+  classifying), a structural triage change that needs its own lap + counterexample screen.
+  Regression check: test_triage_generalization.py reported-promise block (incl. the money
+  line "I told Dave I'd wire the deposit tonight" -> survives to the harm-line).
+- F9 Harm-line category jitter defeats Room 2.6's money-retraction window: a money
+  transfer phrased "send <person> <amount> over <rail>" categorizes as binding_send (send
+  to a real person), and AskDebounce.should_hold holds ONLY category=="money" — so the ask
+  fires immediately instead of waiting out the retraction window, and the next line's
+  retraction ("Actually wait... Hold off till I look tonight" — "hold off" is literally in
+  debounce._RETRACTION) finds nothing to cancel. Evidence: student_kayla day02:17-18 in
+  runs 20260610T124451Z-pre and -pre2 (both: immediate ask, category binding_send, reason
+  "send to a real person; memory low-confidence on recipient -> fail-safe ask"; scored
+  unnecessary-ask, kayla interrupt 0.5 -> 1.0). Harm invariants UNAFFECTED (ask not act;
+  never_act tripwire respected both before and after). OPEN; next-slice fix candidate:
+  should_hold also holds binding_send when _TRANSFER matches the text (rail/amount named),
+  or harm-line prefers money category when a payment rail is named. Regression check when
+  fixed: a two-line money-command-then-retraction replay must end with zero surfaced asks.
+
+## Class C addendum (builder lap 20260610T124451Z)
+- C17 e2e_completion_rate RACES the trigger tick for remind-at-T goals: a goal whose
+  completion needs a time trigger ("Submit the forecast by 6 tonight - remind me at 5")
+  lands done vs waiting depending on whether the harness's final tick fires past the
+  remind_ts before the run ends. Evidence: salesrep_pri day02 across two same-HEAD runs
+  (20260610T124451Z-pre/-pre2) with BIT-IDENTICAL decisions (act 2/ask 7/held 1/ignore 35)
+  scored goals 1 vs 2, e2e 0.1429 vs 0.2857; aggregate flickers 0.3249 <-> 0.3427. Same
+  flicker already on record at FIXED commit 638e4ae (scoreboard rows 112701Z/112735Z/
+  112808Z). Consequence: the ratchet best e2e (0.3427) embeds a lucky race — a genuinely
+  neutral lap can post an apparent e2e regression by losing it, and an e2e "improvement"
+  within one swing item is noise. OPEN (foreman/bank-v2 or harness: advance a final
+  deterministic tick past the day's last remind_ts, or score waiting time-trigger goals
+  as their own outcome). Until then: treat single-item e2e deltas as noise in keep/revert
+  reasoning.
+
+## Class C addendum (judge, lap 20260610T124451Z)
+- C18 Isolation pins validate a family's REGEX, not its CATCH: every triage positive is
+  consulted only after the utterance-granularity confident negatives (F8), so a family
+  whose 53 single-sentence pins all pass can be completely inert on real multi-clause
+  speech — the pin sentences never carry a vent-shaped prefix, the field lines do.
+  Evidence (counts only): in the fresh 20260610T124451Z holdout run, a nurse_helen missed
+  item's source line MATCHES the new `_LIST_PUT` product regex yet `actionable()` returns
+  False — an earlier negative eats the line before the positive is reached; meanwhile
+  test_triage_generalization.py passes 53/53. Consequence: "family added + pins green" is
+  NOT evidence the family fires in situ; a builder can (honestly) ship dead coverage and
+  the dev suite cannot see it. Pair finding: 4 of the 5 holdout misses match NONE of the
+  six families added — two consecutive laps have now aimed families from counts-only
+  feedback and moved holdout by zero items (110142Z, 124451Z). Mitigations for the next
+  slice: (a) every new family must ship at least one in-situ pin embedding the family
+  inside a vent-prefixed multi-clause utterance (the F8 composition, not just the family
+  in isolation); (b) the structural fix is clause-scoped negatives (F8's named proper
+  fix), after which isolation pins become representative again. OPEN until (b) lands.
+
+## Class F addendum (builder lap 20260610T131707Z)
+- F8 STRUCTURAL FIX LANDED (was OPEN-in-general): confident negatives are now CLAUSE-scoped
+  in triage.actionable() — a vent clause silences itself, never the command beside it.
+  Countermand + trailing hedge stay utterance-absolute (their meaning spans the line);
+  sarcasm/conditional frames (_VENT_FRAME) cast forward so weak first-person-future cues in
+  later clauses stay vents ("Oh sure. I'll just clone myself." still silent) while command
+  shapes break out. Verified: student_kayla day02:17 is the ONLY decision change on the
+  whole dev bank vs baseline 104837Z-pre (ignore -> held; the money command now reaches the
+  harm-line — tripwire passed by judgment, not deafness). Sub-finding, FIXED same lap with
+  a pin: the shared _CLAUSE_SEP treated the colon in "7:50" as a clause boundary and shredded
+  "put coverage Thursday 7:50 to 8:20 on my calendar" (teacher_rob act->ignore in run -pre);
+  caught by the full-bank run, NOT by the 26 authored pins — in-situ pins cannot cover the
+  bank's surface diversity; always run the full bank before calling a triage change done.
+  Residual (unmeasured, no holdout/dev miss rides on it): single-clause reported promises
+  ("I told Dave I'd wire the deposit tonight") still drop — vent and commitment share one
+  clause, so clause scoping cannot separate them; the 124451Z carve-out was reverted with
+  that lap. Regression check: engine/scripts/test_triage_clause_scope.py (in-situ
+  composition pins + the clock-range calendar-put pin).
+- F9 FIXED: AskDebounce.should_hold now holds category binding_send when _TRANSFER names a
+  rail (the ledgered fix candidate) — "send <person> <amount> over <rail>" reads as a send
+  to the harm-line but is a money transfer in substance, and now waits out the retraction
+  window like money does. Ordinary sends (no rail) and typed/API commands ask immediately,
+  unchanged. Verified end to end: kayla day02:17-18 now held -> ask_retracted (glassbox),
+  zero surfaced asks, interrupt back to 0.5 (dev aggregate restored to the 0.625 ratchet
+  best the 124451Z families lap had regressed to 0.6875). Regression check: the two-line
+  money-command-then-retraction replay in test_triage_clause_scope.py must end with zero
+  surfaced asks and the goal failed; plus the flush-late one-way-safety leg.
+- F10 NEW, OPEN: purpose clauses false-match _ALREADY_HANDLED — in "Send Dana the thirty
+  over venmo so she can grab them tonight", "she can grab" reads as handled-by-someone-else
+  and silences the COMMAND clause it lives inside. Found while authoring in-situ pins; the
+  real kayla line dodges it only because "order" is not in the handled-verbs alternation
+  (grab/handle/take are). Deliberately NOT changed this lap: no measured dev/holdout miss
+  rides on it, and loosening a confident negative beside two zero-margin holdout interrupt
+  ceilings without instrument evidence is the over-reach C18 warns about. Fix candidate: a
+  purpose-marker guard before the pronoun ("so/so that she can grab" stays a command's
+  rationale) — when fixed, flip the test_triage_clause_scope.py transfer pins back to the
+  "can grab" surface as the regression check.
+
+## Class C addendum (builder lap 20260610T131707Z)
+- C18 STRUCTURALLY MITIGATED: mitigation (b) — clause-scoped negatives — landed this lap,
+  so a positive family is no longer silently inert behind an utterance-level negative wall,
+  and isolation pins are representative again for clause-local shapes. Mitigation (a) is now
+  practiced: every un-deafened shape in test_triage_clause_scope.py ships embedded behind a
+  real vent/negative prefix (the F8 composition). The lesson STANDS as a check on future
+  family work (and the F8 sub-finding above shows its sibling: pins also cannot replace a
+  full-bank run).
+
+## Judge findings, lap 20260610T131707Z (verdict: VETO — holdout floor not met; see laps/20260610T131707Z/verdict.md)
+- C19 NEW, OPEN (judge, lap 20260610T131707Z): builder DISCLOSURES are not mechanically
+  verified. This lap's manifest declared all test pins "self-authored shape-equivalents,
+  never copies (C13)" while engine/scripts/test_triage_clause_scope.py:133/:135 carries the
+  exact student_kayla day02:17 command sentence verbatim, :74 carries that line's exact bank
+  timestamp (16:25:50), and :39-41/:77-79 are near-verbatim templated swaps of the same
+  line-pair (plus a bank character name at :184). No metric was inflated — executed product
+  logic is clean and the holdout is the instrument — but suite pins on dev-bank literals
+  entrench C13 memorization, and a false disclosure survived every scan. Fix candidate:
+  verify_gate adds an n-gram overlap scan (any 6+-token shingle shared between a changed
+  test/product file and factory/personas/dev/*/days/*) — each hit must be rewritten or
+  justified in the manifest.
+- C20 NEW, OPEN (judge, lap 20260610T131707Z): "held" decisions are structurally invisible
+  to persona_score.py — neither act nor ask, so a held entry can never register as catch,
+  false action, interrupt, or harm. Correct for command-then-retraction pairs (the F9 path:
+  dev kayla/jin/pri money pairs end held+cancelled, genuinely silent), but an UN-retracted
+  held money/binding_send command whose flush (2 events / 240s) lands after the day's last
+  event would silently zero an expected ask with no metric trace. Fix candidate: scorer
+  counts day-end still-held entries as their own column; expected.json gains an explicit
+  kind for hold-then-silence ground truth.
+- F11 NEW, OPEN (judge, lap 20260610T131707Z; applies whenever the clause-scoped gate
+  re-lands): clause-scoping WIDENED the live fail-open tail. Pre-lap, a confident-negative
+  match returned absolute False. Post-lap, an utterance whose clauses are ALL consumed by
+  clause-negatives falls through to the ambiguous tail (triage.py:368-389) and in live mode
+  reaches _tiebreak, which returns True on ANY exception (triage.py:408, fail OPEN) — a pure
+  vent can pass triage to the decider during a gateway outage. Stub/CI is blind to it (the
+  stub tail drops deterministically) and the commit message does not mention it. Fix
+  candidate: track whether >=1 clause matched a confident negative; if every non-empty
+  clause was negative-consumed and none was positive, return absolute False — the live
+  tiebreak stays reserved for lines that matched NOTHING, vent or positive.
+
+## Class F addendum (builder lap 20260610T223727Z)
+- F8 STRUCTURAL FIX RE-LANDED (the judge-verified mechanism from
+  laps/20260610T131707Z/reverted.patch, executed per that verdict's re-land conditions
+  1-3): clause-scoped confident negatives + _VENT_FRAME + _LIST_PUT + clock-colon
+  _CLAUSE_SEP, with the C19-flagged pins REWRITTEN as true shape-equivalents (fresh
+  content words, fresh timestamp, recipient/filler names verified absent from the dev
+  bank) and a builder-side 6-token shingle self-scan of the full diff vs
+  factory/personas/dev/*/days/* run to ZERO hits — three bank-line quotes that rode in
+  via product-code comments/docstrings (two of them unflagged by the 131707Z judge:
+  the sarcasm example split across a docstring line break, and the clock-range comment)
+  were paraphrased away. Dev bank at final HEAD: aggregates bit-identical to the
+  ratchet bests; the per-line decision diff vs baseline 104837Z-pre shows EXACTLY one
+  change (kayla day02:17 ignore -> held). Regression check:
+  engine/scripts/test_triage_clause_scope.py (43 pins) + the full-bank decision diff.
+- F11 FIXED (the 131707Z judge's fix candidate, landed in the same diff as the re-land
+  per its condition 3): actionable() now counts negative-consumed vs open clauses; when
+  every non-empty clause was consumed by a confident negative and none was positive it
+  returns absolute False — a pure vent can no longer ride the live fail-open tiebreak
+  to the decider during a gateway outage. The fail-open tail (F6, deliberate
+  high-recall bias) stays reserved for lines that matched NOTHING. Regression check:
+  f11_pins() in test_triage_clause_scope.py — three all-negative multi-clause vents
+  must return False in live mode with a tiebreak-raising gateway, a matched-nothing
+  line must still fail open True, and smart_calls must stay 0.
+- F12 NEW, measured and CONTAINED before commit: clause-initial imperative VERB
+  WIDENING has a live sarcasm tail. Adding "check" to _NOUN_PRONE_IMP turned a
+  dev-bank quip aiming "check" at the heavens (contractor_luis day01:10) into a false
+  ACTION (ignore -> act: the harm-line ACTED on a vent — the cardinal-sin direction).
+  Found by the pre-commit full-bank decision diff (the F8 sub-finding's lesson working
+  as designed); "check" removed, false_action back to 0. The same diff showed
+  venmo/zelle-as-verbs un-deafening six dev money lines into F9 holds — all six are
+  bank-keyed silence, so that widening buys zero dev catch while risking flushed asks
+  at the holdout's zero-margin interrupt ceilings (and held is scorer-invisible, C20,
+  so the dev metrics could not have warned); trimmed per the manifest's pre-registered
+  rule. LESSON (C18's sibling, for verbs): an imperative-verb addition is proven only
+  by a full-bank decision diff with zero changes beyond its intended catch; re-land
+  check/venmo/zelle only if a judge count ever names such a miss. Regression check:
+  contractor_luis day01:10 stays ignore in any full-bank run; the per-line decision
+  diff discipline itself.
+
+## Judge findings, lap 20260610T223727Z (verdict: VETO — holdout floor not met again; see laps/20260610T223727Z/verdict.md)
+- C21 NEW (measurement blind spot in the C19 fix candidate): the 6-token shingle scan
+  passes near-verbatim bank echoes whose longest shared token run is 4-5 tokens,
+  including ones that reuse bank character names. Two such pins re-landed this lap in
+  test_triage_clause_scope.py (:77 — a parent_dana day01 line near-copy keeping the
+  bank child's name, shared runs of 4+4 tokens; :199 — a contractor_luis day01 money
+  line stem keeping the bank supplier's name, shared run of 5 tokens). Both sat in the
+  131707Z judge-inspected remainder (NOT the flagged list), both pin the conservative
+  direction (DROP / money-hold), so no metric is inflated — but the file's "never bank
+  copies" docstring stays overbroad and the mechanical scan alone cannot enforce C13.
+  Fix candidate: scan test files at 4-token shingles AND against the union of
+  persona.json "people" names + transcript proper nouns; rewrite on any name hit.
+- F13 NEW (F12's holdout-side sibling, now measured on unseen data): blind imperative
+  verb widening carries a junk-ask tax that dev evidence cannot bound. "feed" (added
+  to _NOUN_PRONE_IMP this lap, curated blind per the manifest) fired on an idiomatic
+  holdout narration line: chef_rosa day01 gained one unmatched ask, interrupt 0.0 ->
+  1.0. Within the 3.0 ceiling THIS time and on the one holdout persona with slack —
+  the same event on gradta_ming or nurse_helen (both AT 3.0) would have failed gate_P2
+  outright. The full-bank dev decision diff (F12's containment) showed zero changes for
+  "feed": the dev bank simply has no idiomatic "feed" line, so dev cleanliness is NOT
+  evidence of holdout cleanliness for any newly widened verb. Containment that actually
+  binds: fewer, higher-precision verbs; counterexample DROP pins per verb; treat every
+  blind-widened verb as carrying unmeasurable interrupt risk at zero-margin personas.
+
+## Class F/C addendum (builder lap 20260610T232257Z)
+- F13 CLOSED-BY-REMOVAL: "feed" deleted from _NOUN_PRONE_IMP per the 223727Z verdict's
+  re-land condition 1 (it was the only junk-ask source on either bank; chef_rosa's
+  interrupt should return 0.0 on the next judge holdout run — that number is the
+  regression check, plus the triage.py comment forbidding a blind re-land). The
+  containment lesson STANDS for all one-word imperative lexicons; this lap therefore
+  widened only the two tight frames the verdict named (clause-initial phrasal pairs,
+  get+participle) plus one clause-anchored shape, never the loose one-word sets.
+- C21 FIXED builder-side for the two named pins: test_triage_clause_scope.py :77 and
+  :199 rewritten with the bank names REMOVED and fresh surfaces (no person name at all
+  in the :77 family; a profession noun in the :199 family). The judge's fix candidate
+  was run as designed: 4-token shingle scan of the test file vs dev transcripts plus a
+  name scan against the union of dev persona/transcript proper nouns -> zero name hits;
+  8 residual 4-token hits remain and are each the product regex's own literal trigger
+  phrase ("deal with that later" IS the _DEFERRAL alternation; "oh sure i'll just" IS
+  the vent-frame surface; "that goes on the" IS _LIST_PUT's shape; "hold it don't send
+  anything" IS _COUNTERMAND's) — a pin that avoided them would not test the shape. One
+  genuine sub-6-token content echo found by the same scan ("on the bike probably",
+  inside a 131707Z-judge-inspected pin outside C21's flagged list) was rewritten.
+  Mechanical verify_gate enforcement remains OPEN (foreman: C21's fix candidate).
+- F14 NEW, FIXED same lap: a _PHRASAL_IMP entry whose verb doubles as a _SKIP_LEAD
+  word is silently DEAD — the imperative machinery skipped the verb before the pair
+  check ran ("go" is a lead word for "go grab the charger", so ("go", "through") could
+  never fire on "Go through the receipts bin"). Found while sweeping the public
+  inventory (it is the first pair to collide with the lead-word set); fixed by checking
+  the pair BEFORE each lead-word skip; "go grab ..." behavior unchanged (a lead word
+  followed by a non-pair word still skips). Regression check: the go-through in-situ
+  SURVIVE pin in test_triage_clause_scope.py; the class check is any future pair whose
+  verb appears in _SKIP_LEAD.
+
+## Judge findings, lap 20260610T232257Z (verdict: VETO — holdout floor not met a third time; see laps/20260610T232257Z/verdict.md)
+- F15 NEW (channel + measurement): two linked holes found while tracing why an honest,
+  judge-verified-blind inventory sweep still missed the holdout floor.
+  (a) REGISTER MIS-AIM IN THE DISCLOSURE CHANNEL: the 223727Z verdict characterized the
+  residual lexeme as a "common errand lexeme"; the lap dutifully swept four public
+  errand/office/work/school lists (this judge fetched all four — the sweep is faithful
+  and the lexeme is on NONE of them). The register call was wrong: the lexeme's task
+  sense is computing/print/media-staging, and common ESL technology lists do not
+  reliably carry it either, while general references list it primarily in a
+  people-queueing sense the lap's (correct) exclusion rule discards. A judge
+  shape/register characterization is itself an instrument and can mis-aim an entire
+  lap; verdicts should disclose residual surfaces at SHAPE granularity (precedent:
+  "get <thing> to <person>"), not guessed register labels. The 232257Z verdict applies
+  the fix: the residue is disclosed as a clause-anchored benefactive-staging imperative
+  (object + "for me/us" tail), lexeme-free.
+  (b) CLOSED-CLASS LEXICONS CHASING AN OPEN VOCABULARY: stub-tier triage catches by
+  regex lexicon membership; the holdout measures open-vocabulary task speech. Each
+  blind widening trades unmeasurable junk-ask risk at two personas sitting AT the
+  interrupt ceiling (F13 demonstrated the trade) for coverage of finitely many new
+  lexemes, and there is always another lexeme. Two falsified blind sweeps on one
+  residual pair = the treadmill the factory exists to prevent (count is 4 after this
+  lap). Structural options are foreman calls: amend the channel to permit judge-named
+  lexemes after K falsified blind sweeps, or run the P2 holdout instrument at live
+  tier (bounded spend) so the product's model tiebreak is measured instead of the stub
+  regex ceiling. Until then, shape-level rules (benefactive tail, clause anchors) beat
+  lexicon growth: they generalize, and their junk surfaces are enumerable enough to pin.
+- C-class note, not ledgered separately: the lap's inventory exclusion comment
+  enumerates its excluded list items but omits three (find out, knock off, work out)
+  that the stated rule also excludes. Defensible under the rule, but a sweep that
+  claims "every include/exclude is from the cited pages' senses" should enumerate
+  exhaustively so the judge's audit is a diff, not a re-derivation.
+
+## Class F addendum (builder lap 20260611T000748Z)
+- F16 NEW, OPEN-DISCLOSED (residual of the F15a benefactive shape rule, found and
+  bounded before commit): the benefactive-staging imperative's three structural
+  anchors can be satisfied by APPOSITIVE third-person gratitude narration —
+  "<Name> the <role> <finite-verb> <object> for me" — because the open-vocabulary
+  head slot accepts a person name (clause-initial names and sentence-case verbs are
+  indistinguishable at regex tier) and the finite verb sits in the tail gap where
+  staging participles must remain legal ("Get the forms filled out for me"), so only
+  the closed _BENEF_GAP_NARR list (was/is/felt/seemed/came/went/got/...) separates
+  them. The SIMPLE form of the gratitude class ("Soren did the printer run for me")
+  IS structurally excluded — a subject head is followed by a verb, not a determiner —
+  and pinned, as are the other judge-enumerated junk classes (no-object "pray for
+  me", dropped-subject past heads, gerund heads, 3rd-person-s heads, vicarious
+  well-wishes, present-company favors, appositive-with-finite-verb). Regression
+  check: the benefactive DROP pins in test_triage_clause_scope.py + the full-bank
+  dev decision diff (zero changes beyond intended). If a judge holdout count ever
+  names an appositive junk ask, extend _BENEF_GAP_NARR (the finite-verb list), never
+  weaken the three anchors.

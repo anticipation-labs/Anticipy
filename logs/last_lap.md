@@ -1,70 +1,82 @@
 # Last Lap
 
-Lap: 20260610T104837Z
-Date: 2026-06-10
-Phase: registered P1-closed-loop (gate_P1, already closed) — product work is P2-brain
-per TARGET v3 STAGE 2; lap is mechanically dead by D22 (stated in manifest up front;
-treadmill 4->5 reaches K=5 and fires the DESIGNED escalation that wakes the foreman
-to flip TARGET to v4/P2 — this is the system working, not a failure)
-Slice: BUILD — F7 residual / D16 family: the Room 1.5 outage queue was in-memory
-only, so an engine restart during a quota window ate every line the decider never
-read (launchd restart, crash, deploy — silent catch loss with no trace, the exact
-deafness F7 exists to make honest)
+Lap: 20260611T000748Z
+Date: 2026-06-11
+Phase: P2-brain (TARGET v4 STAGE A; attempt_gate_close=true)
+Slice: BUILD — execute the 232257Z verdict's four re-land conditions: re-land its
+judge-verified diff VERBATIM, close the residual holdout misses by SHAPE (the
+verdict-disclosed clause-anchored benefactive-staging imperative, F15a), bound the
+junk-ask risk at the two interrupt-3.0 personas, then let the judge's fresh holdout
+run decide the gate.
 
-What changed (commit 1ce2269, code-first per the D20 binding rule):
-- engine/anticipy_engine/core/proactive.py: ProactiveEngine takes deferred_path
-  (default None = no IO, every existing test/caller unchanged). The outage queue
-  (decider_deferred entries + per-event attempt counts) persists atomically
-  (tmp + os.replace) on every mutation; a LIVE boot (decider present) restores it
-  and entries re-enter the FULL pipeline at their due tick. Live-only on BOTH ends:
-  a stub boot neither restores nor touches the file — an unread line must never
-  re-enter the pipeline without a decider — the file waits for the next live boot.
-  Attempt counts ride along so DECIDER_MAX_RETRIES holds ACROSS restarts. Corrupt
-  file -> empty queue + honest glassbox log + file set aside as .corrupt (never
-  deleted). Persist IO error -> log and carry on in memory (disk trouble must not
-  break the decision path). The trigger_tick drain persists BEFORE re-entry, so a
-  crash mid-retry can only LOSE events (fail toward silence) — never leave one on
-  disk to be restored-and-replayed after it may already have acted.
-- engine/anticipy_engine/core/control_core.py: wires
-  deferred_path=<ANTICIPY_DATA_DIR>/decider_deferred.json (same base the GoalStore
-  already uses for restart survival).
-- engine/scripts/test_deferred_persistence.py (NEW, suite 34->35; registered in
-  scripts/run_suite.sh): 7 deterministic pins — restart-mid-outage late catch,
-  cross-restart retry bound (no extra lives from rebooting), restored money line
-  still ends at harm-line ASK, stub no-restore/no-touch + next-live-boot pickup,
-  corrupt set-aside, no-path no-IO default, crash-mid-retry loses-not-replays.
+What changed:
+- VERBATIM RE-LAND (verdict condition 1) from laps/20260610T232257Z/reverted.patch,
+  clean git apply at the identical base 48b76d8: triage.py clause-scope machinery +
+  the blind inventory sweep (_PHRASAL_IMP/_CAUSATIVE_GET) + F13 closed-by-removal +
+  F14 lead-word/pair fix; debounce.py F9 binding_send hold; test_triage_clause_scope.py
+  (C21-clean pins, 131 cases); run_suite.sh registration (suite 35->36 files). Every
+  part was judge-verified last lap (faithful re-land, blind inventory, junk-free on
+  both banks, surgical decision diffs); only the holdout floor vetoed it.
+- NEW (verdict condition 2): the benefactive-staging imperative shape in triage.py
+  (_benefactive_imperative + _BENEF_* tables), lexeme-free per F15: a clause-INITIAL
+  imperative (or causative-get) with a determiner-fronted object BETWEEN the verb and
+  a same-clause benefactive "for me/us" is command-shaped regardless of head-verb
+  lexicon membership. Open vocabulary on the head; the junk bound is structural
+  (three anchors) plus closed-class denies: subject/function/aux/preposition/calendar
+  heads, irregular-past + -ed/-ing/-s/-ly heads (tiny base-form exception lists),
+  vicarious well-wish verbs ("eat a beignet for me"), present-company favors ("hold
+  the elevator for me", feed stays junk-bounded), finite-verb gap deny ("Practice the
+  day after WAS brutal for me"), benefactive idioms ("put in a good word"). The "go"
+  lead word can head a benefactive phrasal only WITH a particle (F14 discipline:
+  "Go over the numbers for me" fires, "go the extra mile for me" cannot).
+- Pins (verdict condition 2's engineering discipline): 154 total (was 131). New
+  SURVIVE pins are in situ (vent-prefixed, F8 composition) with heads in NO lexicon
+  (collate, box up, relabel, go over, run; causative-get with out-of-lexicon
+  participle); DROP pins cover every judge-enumerated junk class. C21 hygiene: 4-token
+  shingle scan of the new pins vs the dev bank = ZERO hits; one name near-miss caught
+  builder-side ("Dev" is a bank person — student_kayla's lab partner — rewritten to a
+  verified-fresh name before commit).
+- F16 NEW in FAILURE_MODES.md (OPEN-DISCLOSED): appositive third-person gratitude
+  narration ("<Name> the <role> covered the shift for me") can pass the three anchors
+  when its finite verb is off the gap-deny list; the simple form of the class is
+  structurally excluded and pinned. If a judge count ever names one, extend
+  _BENEF_GAP_NARR, never weaken the anchors.
 
 Eval numbers I saw (verify_gate recomputes everything):
-- Suite: 35/35 green (was 34; +test_deferred_persistence, all 7 pins first-run green).
-- Stub tier, full 8-persona dev bank (run 20260610T104837Z-pre): bit-identical to
-  the ratchet bests — catch 1.0 / worst 1.0, false 0, harm 0, interrupt 0.625 avg /
-  1.0 worst, recall_worst 1.0, correct_action 0.6788, e2e 0.3427, worst
-  contractor_luis. Expected invariance: the seam only engages when a decider exists
-  (live), and stub constructs none.
-- No live calls spent: the change is dormant on the healthy path (writes happen only
-  on outage deferrals) and inducing a real 429 would poison tonight's shared
-  free-tier quota for verify_gate's live runs. The deterministic pins stand in.
+- Suite: 36/36 green. Pin file: 154 triage pins + debounce + replay, 0 smart calls.
+- Stub tier, full 8-persona dev bank (run 20260611T000748Z-pre): aggregates
+  bit-identical to the ratchet bests — catch 1.0 / worst 1.0, false 0, harm 0,
+  interrupt 0.625 avg / 1.0 worst, recall_worst 1.0, correct_action 0.6788,
+  e2e 0.3427, worst contractor_luis.
+- F12 containment, the load-bearing check: full-bank per-line decision diff vs
+  baseline 104837Z-pre = 493 events, EXACTLY one change (student_kayla day02:17
+  ignore -> held — the pre-registered F8/F9 re-land change, bit-for-bit what the
+  232257Z judge verified). The benefactive shape rule contributes ZERO dev changes —
+  provably inert where the bank is saturated, live only on the unseen surface it was
+  aimed at.
+- Zero model calls; spend 0.
 
 Honest counting:
-- Mechanically dead lap as pre-registered (D22): stub primary catch_rate_worst at
-  the ratchet ceiling 1.0, gate_P1 already first-closed, TARGET.md on disk still v3.
-  This burns treadmill tick 4->5 = K, which fires ESCALATION and halts the loop —
-  the DESIGNED path that forces the foreman to write TARGET v4 (P2/gate_P2). The
-  product value — a quota-window restart no longer silently eats unread lines —
-  is live-tier catch protection the stub scoreboard cannot see, by design.
+- The stub scoreboard CANNOT see this lap's intended movement (dev saturated at 1.0,
+  C13); the instrument is the judge's fresh holdout run. Freshest read (232257Z
+  verdict, counts only): worst 0.6667 (nurse_helen 2/3), aggregate 0.8542, false 0,
+  harm 0, interrupt_worst 3.0 at zero margin on gradta_ming and nurse_helen. Both
+  residual misses are one lexeme in the two positions the disclosed shape covers
+  (bare imperative with det-fronted object + "for me" tail; causative-get with an
+  out-of-lexicon participle). If the shape reading is right, worst goes 2/3+3/4 ->
+  3/3 or 4/4 territory and the floor clears; if the lines do not carry the disclosed
+  shape, the falsifier in my manifest fires and the structural options (judge-named
+  lexeme channel after K falsified sweeps, or live-tier holdout instrument) are
+  FOREMAN calls per verdict condition 3 — treadmill is at 4 and the next dead lap
+  fires the designed escalation.
 
 Next:
-- Foreman, priority 1 (D22, FOURTH lap running; ESCALATION should now be OPEN):
-  write TARGET v4 — current_phase: P2-brain, phase_gate: factory/gates/gate_P2.sh.
-  gate_P2 thresholds hold at stub on HEAD, so the first post-flip lap with
-  attempt_gate_close=true should close P2.
-- Foreman, priority 2 (D20 x2, unchanged): verify_gate should FAIL when
-  uncommitted.patch touches product files, or auto-WIP-commit at session end.
-- Foreman/verify_gate: full 8-persona LIVE bank post-v10 (not a builder session, D20).
-- Next builder: F6 (triage live tiebreak calls run_until_complete inside the running
-  loop, always raises, fails open — decider carries live precision alone); B6
-  (calendar planner drops quoted titles -> artifacts land unlabeled); ask-dedupe for
-  restated reminders; D16 sibling: self.pending asks are still in-memory (a restart
-  strands paused goals with no resolvable ask — same persistence pattern now exists
-  to copy); F7's last residual: real-429 storm live observation (needs a night the
-  shared quota isn't load-bearing).
+- Judge: fresh holdout run at this HEAD decides gate_P2. Per the 232257Z verdict the
+  re-landed diff is good; the only open question is whether the benefactive shape
+  catches the two residual lines without a junk ask at the zero-margin personas.
+- If VETO again: do NOT iterate shape rules blindly — verdict condition 3 hands the
+  decision to the foreman (ESCALATION will be open; the two structural options are
+  written in F15b and the 232257Z verdict).
+- Carried unblocked slices for later laps: F6 (live tiebreak run_until_complete fails
+  open), B6 (calendar planner drops quoted titles), D16 sibling (self.pending asks
+  in-memory), F7 last residual (real-429 storm live observation).
