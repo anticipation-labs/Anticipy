@@ -81,6 +81,31 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- SLOT-CHOICE BOOKINGS ACT + CALENDAR PLANS ARE GROUNDED, e2e AT ITS HONEST
+  CEILING (lap 20260611T112537Z, build — ledger F30 FIXED, F27 FIXED, F31
+  OPENED): "Book the Friday 9am one" asked purely for shape (the slot
+  anaphor's head is "one", so rule-6 verb..noun shapes never saw the
+  appointment) — new shared/slotbooking.py (F29 one-shape-two-consumers
+  pattern: book-verb + concrete-time slot anaphor + same-line closed-class
+  appointment anchor + commerce/travel deny; money outranks) flips exactly
+  parent_dana d02 L7 ask->act in both lanes, and the stub planner's new
+  grounded-calendar branch (GOAL line only, before keyword triggers) plans
+  EXACTLY one create_event with spoken-line args for slot-choice bookings and
+  time-anchored "block X to Y" lines — dana completes ("Maya's checkup" /
+  "Friday 9am", labeled mock proof), the luis cabinet completion now carries
+  calendar proof instead of the "on site" browse screenshot (F27's own
+  regression check), and three already-completing block lines got grounded
+  args (disclosed). Owner lane (OFFICIAL): e2e 0.6305 -> 0.6483 (+0.0178,
+  exactly the one intended completion); catch 1.0/1.0, false 0, harm 0,
+  interrupt 0.6875/1.5, recall 1.0 exactly unchanged; correct 0.8296 ->
+  0.8475. Default lane equal. Per-line diff both lanes = exactly the one
+  flip. Suite 43/43 (new F30 battery + planner pins). F31 (foreman-owned):
+  +0.0178 is UNDER the 0.02 epsilon — dead-but-kept by design — and every
+  remaining non-complete expected act is fenced (storeless carts = owner-path
+  capture territory, pri behind F23, 16 expected-asks structural), so the e2e
+  instrument can no longer register honest builder work; the right move is a
+  TARGET v8 re-aim (correct_action_rate has real headroom at 0.8475), not
+  metric-chasing.
 - MEMORY-NAMED STORES NOW RESOLVE, e2e MOVED AGAIN (lap 20260611T105558Z, build —
   ledger F29 FIXED): the whole memory->site chain required the owner to have
   SPOKEN a hostname, but people remember stores the way they speak ("at

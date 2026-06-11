@@ -727,3 +727,24 @@ in both lanes = exactly the 2 intended flips across 493 lines x 16 persona-days;
 1.0/1.0, false 0, harm 0, interrupt 0.6875/1.5, recall 1.0 all bit-identical. Suite 43/43
 (new storesite battery). Zero spend, zero real-world artifacts. Next named slice: dana's
 "Book the Friday 9am one" slot-choice rule (+ F27's "block X to Y" calendar trigger).
+
+2026-06-11 lap 20260611T112537Z (build, TARGET v7 item 1): the named pair from the
+last lap's handoff. (a) F30: "Book the Friday 9am one" — the offered-slot anaphor's
+head is "one", so no verb..noun reservation shape could see the appointment;
+parent_dana d02 L7 (expected act) asked for shape, not safety. New
+shared/slotbooking.py (the F29 one-shape-two-consumers pattern): book-verb +
+slot anaphor with a concrete time + same-line appointment-noun anchor +
+commerce/travel deny; money still outranks. (b) F27: the stub planner got a
+grounded-calendar branch on the GOAL line — time-anchored "block X to Y" and the
+slot-choice shape plan EXACTLY one create_event with spoken-line args (no canned
+Lunch-with-Sarah, no "on site" browse junk); the luis cabinet completion now
+carries calendar proof per F27's own ledgered check. Owner lane (OFFICIAL):
+e2e 0.6305 -> 0.6483 (+0.0178, exactly the one intended completion), correct
+0.8296 -> 0.8475, every guard exactly unchanged (catch 1.0/1.0, false 0, harm 0,
+interrupt 0.6875/1.5, recall 1.0); default lane equal; per-line diff BOTH lanes =
+exactly the one flip; suite 43/43. HONEST DISCLOSURE: +0.0178 is under the 0.02
+epsilon — this lap cannot mechanically count, and after it the e2e instrument is
+at its honest ceiling (every remaining flip is fenced: storeless carts, F23 money
+stance, structural expected-asks). Ledgered as F31 (foreman-owned): the right
+move is a TARGET v8 re-aim, not builder metric-chasing. Zero spend, zero
+real-world artifacts.

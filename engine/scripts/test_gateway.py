@@ -73,6 +73,27 @@ async def main() -> None:
     steps6 = {s["intent"]: s for s in plan6["steps"]}
     assert "send_email" in steps6 and steps6["send_email"]["risk"] == "needs_confirm", plan6
 
+    # F27/F30: grounded calendar shapes plan EXACTLY one create_event whose args come
+    # from the SPOKEN line — the canned placeholder args never ride a grounded shape,
+    # and a bare keyword ("on site") never plants a junk browse step on a block line
+    plan7 = json.loads(await gw2.think(
+        "Plan the goal into ordered steps. ...\nGOAL: The office has Thursday 10am or "
+        "Monday 2 open for Leo's checkup. Book the Thursday 10am one.", tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan7["steps"]] == ["create_event"], plan7
+    assert plan7["steps"][0]["args"]["when"] == "Thursday 10am", plan7
+    assert "checkup" in plan7["steps"][0]["args"]["title"], plan7
+    assert "Sarah" not in json.dumps(plan7), plan7
+    plan8 = json.loads(await gw2.think(
+        "Plan the goal into ordered steps. ...\nGOAL: Crew confirmed for the Pico job - "
+        "block Tuesday 2 to 3 for the inspection walkthrough so I'm on site for it.",
+        tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan8["steps"]] == ["create_event"], plan8
+    assert plan8["steps"][0]["args"]["when"] == "Tuesday 2 to 3", plan8
+    assert plan8["steps"][0]["args"]["title"] == "inspection walkthrough", plan8
+    plan9 = json.loads(await gw2.think(
+        "Plan: Remind me tomorrow at 8am to block 9 to 10 for the gym.", tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan9["steps"]] == ["write_memory"], plan9  # the reminder hold still wins
+
     print("PASS piece 3: model gateway")
     print("  plan intents:", intents)
     print("  smart calls:", len(gw.smart_calls), "| total cost:", gw.total_cost())

@@ -1274,3 +1274,74 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   slot-choice booking shape (same-line appointment-noun anchor, travel-noun
   deny) is the named next decision-layer slice; the plan layer would need a
   grounded create_event for it (F27's "block X to Y" trigger is the sibling).
+
+## Build lap 20260611T112537Z (slot-choice booking + grounded calendar plans, TARGET v7 item 1)
+- F30 NEW, FIXED THIS LAP (decision-shape family — the booking sibling of F29's
+  vocabulary gap): an OFFERED-SLOT booking is spoken as an anaphor whose head is
+  "one" ("Dr. Patel's office ... they have Friday 9am or next Tuesday 2. Book
+  the Friday 9am one") — the harm-line's rule-6 reservation/calendar shapes
+  require the appointment NOUN within ~20 chars after the verb, so the
+  appointment-anchored slot choice structurally fell to the rule-7 fail-safe
+  ask (parent_dana d02 L7, an expected act, stalled as an ask for shape, not
+  safety). Fixed: shared/slotbooking.py (the F29 anti-drift pattern — ONE
+  shape imported by BOTH consumers, so the decision-layer ACT population is
+  exactly the plan-layer completable population): book-verb + determiner-
+  fronted slot anaphor headed by "one" + concrete time token INSIDE the slot
+  ("the earlier one" stays an ask — resolving it needs the offer context a
+  deterministic rule cannot see) + same-line closed-class appointment-noun
+  anchor (appointment/checkup/check-up/cleaning/visit) + commerce/travel-noun
+  deny (flight/train/hotel/ticket/... — a slot-priced purchase keeps its
+  fail-safe/money reading); hard rules are tested first, so money ALWAYS
+  outranks ("...and pay the copay" stays an ask).
+- F27 FIXED THIS LAP (its own ledgered regression check satisfied): the stub
+  planner now has a grounded-calendar branch that runs on the GOAL line before
+  the keyword triggers — a time-anchored "block X to Y" ("block Monday 8 to 9
+  for the cabinet delivery") and an F30 slot-choice booking each plan EXACTLY
+  one create_event whose args come from the SPOKEN line (title from the
+  "for <purpose>" tail / possessive+appointment-noun, when = the spoken
+  window/slot verbatim) — never the canned Lunch-with-Sarah placeholders
+  (LESSONS 2026-06-07: a real artifact is still fake if semantically wrong)
+  and no keyword junk rides ("on site" no longer plants the browse_task that
+  carried the cabinet completion). The cabinet goal's plan now carries
+  create_event and its proof references the calendar artifact
+  (GoogleCalendar.CreateEvent mock id), not a browse screenshot. The branch is
+  stub/keyless-tier only: the LIVE planner grounds ISO datetimes itself and
+  ApiHand's _block_ungrounded_calendar_write keeps refusing ungrounded live
+  calendar writes (fail-safe unchanged). The self-reminder branch still wins
+  ("remind me at 8am to block 9 to 10" stays the open-loop hold).
+- Measured (builder-side, stub, dev bank): owner lane (OFFICIAL) e2e 0.6305 ->
+  0.6483 (+0.0178 — exactly the one intended completion, dana 5/7 -> 6/7);
+  catch 1.0/1.0, false 0, harm 0, interrupt 0.6875/1.5, recall 1.0 ALL exactly
+  unchanged; correct 0.8296 -> 0.8475. Default lane: e2e equal 0.6483 (shared
+  plumbing, disclosed), interrupt 0.625/1.0 at ratchet bests. Per-line decision
+  diff pre->post, BOTH lanes, 493 lines x 16 persona-days: EXACTLY the one
+  intended ask->act flip (dana d02 L7), zero others. Goal diffs: dana's goal
+  waiting->done with grounded labeled mock proof; luis cabinet done-via-browse
+  -> done-via-create_event (the F27 check); three already-completing block
+  lines (jin d01 L21, amara d01 L5, marcus d01 L5) keep state/decision and get
+  grounded args (spoken window) instead of canned ones — disclosed, the honest
+  direction. Suite 43/43.
+- Regression checks: the F30 accept/deny battery in test_harmline.py (cleaning
+  slot acts, possessive-checkup slot acts; no-anchor, commerce-deny,
+  no-time-in-slot, money-outranks all still ask; "Book the 9am flight" pin
+  unchanged); the F27/F30 planner pins in test_gateway.py (slot plan = exactly
+  one grounded create_event, canned args never ride; block plan = exactly one
+  grounded create_event and NO browse_task despite "on site" in the line;
+  reminder-over-block scoping pin). All pin sentences are non-bank.
+- F31 NEW, OPEN, FOREMAN-OWNED (instrument family, sibling of the v7 re-aim
+  rationale): the official e2e instrument is now AT ITS HONEST CEILING for
+  builder laps — every remaining non-complete expected act is fenced (luis
+  DeWalt / amara Hoka / rob IPEVO name NO store in any memory line: completing
+  them in stub would require inventing a site, a banned fake; pri's "buy ...
+  add it to the cart" is behind the F23 fail-safe money stance, foreman queue;
+  the 16 expected-asks are structural — the scorer counts completions only on
+  expected acts), and every possible single-item flip is worth +0.0178..+0.0208
+  aggregate against epsilon_noise 0.02 — so even a perfect lap can no longer
+  mechanically count as movement (this lap: +0.0178 < 0.02, dead-but-kept by
+  design). The previous lap's "pair them to clear epsilon" arithmetic was
+  wrong: the F27 item already counted complete (its fix is correctness, not
+  e2e). Expected consequence: treadmill counts up on honest work until K=5
+  escalates — the correct fix is a foreman re-aim (TARGET v8: new primary
+  metric or instrument, e.g. correct_action_rate at 0.8475 with visible
+  headroom, owner-path capture for the storeless cart items, the F23 stance
+  decision, or the human-gated P3 live legs), NOT builder metric-chasing.

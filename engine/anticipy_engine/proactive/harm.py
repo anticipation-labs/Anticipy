@@ -28,6 +28,7 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from ..shared.slotbooking import match_slot_choice_booking
 from ..shared.storesite import derive_store_site
 
 # --- hard detrimental (ASK; override everything). Money = SPENDING verbs, not price mentions. ---
@@ -211,6 +212,14 @@ class HarmLine:
             return HarmVerdict(False, "draft", "reversible:draft (not send) -> act")
         if _VAGUE_CART.search(t) and self._memory_has_cart_target(ctx, t):
             return HarmVerdict(False, "cart", "reversible:memory-resolved cart target -> act")
+        # 5b) anaphoric slot-choice booking ("they have Friday 9am or Tuesday 2.
+        #     Book the Friday 9am one") — the slot anaphor's head is "one", so the
+        #     rule-6 verb..noun shapes never see the appointment. Shared shape
+        #     (slotbooking.py): same-line appointment-noun anchor + concrete time
+        #     in the slot + commerce/travel deny; hard rules above always outrank.
+        if match_slot_choice_booking(t) is not None:
+            return HarmVerdict(False, "reservation",
+                               "reversible:slot-choice booking anchored to an appointment -> act")
         # 6) other reversible
         rev = _first_match(t, _REVERSIBLE)
         if rev is not None:

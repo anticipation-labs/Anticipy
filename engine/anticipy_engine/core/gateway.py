@@ -211,6 +211,43 @@ _POST_WORD_RE = re.compile(r"\bpost(?:ed|ing|s)?\b(?!-)")
 # GOAL line itself, never the whole plan prompt (no prompt dumping).
 _SELF_REMINDER_RE = re.compile(r"\b(?:remind me|set (?:a |an )?reminder|reminder to|don'?t forget)\b", re.I)
 _GOAL_LINE_RE = re.compile(r"\bGOAL: (?P<goal>[^\n]+)")
+# Grounded calendar shapes (decided act upstream by the harm-line's calendar_hold /
+# slot-choice rules): the honest plan is ONE create_event whose args come from the
+# SPOKEN line — never the canned Lunch-with-Sarah placeholders (LESSONS 2026-06-07:
+# a real artifact is still fake if it is semantically wrong) and never a junk
+# browse step planted by a bare keyword ("on site" -> browse_task parked the
+# cabinet-delivery block on a screenshot instead of a calendar block; ledger F27).
+# At the LIVE tier the real planner grounds ISO datetimes itself and ApiHand keeps
+# refusing ungrounded calendar writes; this branch is the stub/keyless tier only.
+_OWNER_TASK_PREFIX_RE = re.compile(r"^\s*owner task:\s*", re.I)
+_TIME_TOKEN = r"(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|midnight)"
+_BLOCK_RANGE_RE = re.compile(
+    r"\bblock\b[^.;!?]{0,40}?(?P<window>(?:(?:mon|tues|wednes|thurs|fri|satur|sun)day\s+)?"
+    + _TIME_TOKEN + r"\s*(?:to|until|till|through|-|–)\s*" + _TIME_TOKEN + r")\b",
+    re.I,
+)
+_BLOCK_PURPOSE_RE = re.compile(
+    r"\bfor\s+(?:the\s+|a\s+|an\s+)?(?P<purpose>[^.;!?,]{3,60}?)"
+    r"(?=\s+(?:so|because|since|before|after)\b|[.;!?,]|$)",
+    re.I,
+)
+
+
+def _grounded_calendar_step(goal_line: str) -> Optional[dict]:
+    from ..shared.slotbooking import appointment_title, match_slot_choice_booking
+
+    line = _OWNER_TASK_PREFIX_RE.sub("", goal_line or "").strip()
+    slot = match_slot_choice_booking(line)
+    if slot:
+        title = appointment_title(line) or line[:80]
+        return {"intent": "create_event", "args": {"title": title, "when": slot}, "risk": "low"}
+    m = _BLOCK_RANGE_RE.search(line)
+    if m:
+        window = re.sub(r"\s+", " ", m.group("window")).strip()
+        pm = _BLOCK_PURPOSE_RE.search(line, m.end())
+        title = re.sub(r"\s+", " ", pm.group("purpose")).strip() if pm else line[:80]
+        return {"intent": "create_event", "args": {"title": title, "when": window}, "risk": "low"}
+    return None
 
 
 def default_stub(task: str, tier: str, caller: str) -> str:
@@ -222,12 +259,16 @@ def default_stub(task: str, tier: str, caller: str) -> str:
         return json.dumps({"decision": decision, "reason": f"stub gate read of: {task[:80]}"})
 
     if caller == "plan":
+        goal_m = _GOAL_LINE_RE.search(task)
+        goal_line = (goal_m.group("goal") if goal_m else task).strip()
         if _SELF_REMINDER_RE.search(task):
-            goal_m = _GOAL_LINE_RE.search(task)
-            loop_text = (goal_m.group("goal") if goal_m else task).strip()
             return json.dumps({"steps": [{"intent": "write_memory",
-                                          "args": {"kind": "open_loop", "text": loop_text},
+                                          "args": {"kind": "open_loop", "text": goal_line},
                                           "risk": "low"}]})
+        # grounded calendar shapes plan EXACTLY the one event — no keyword steps ride
+        grounded = _grounded_calendar_step(goal_line)
+        if grounded is not None:
+            return json.dumps({"steps": [grounded]})
         steps = []
         # an explicit draft request plans the DRAFT (Gmail.WriteDraftEmail — never
         # sends); only undrafted email/send requests plan the gated send

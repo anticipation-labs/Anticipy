@@ -119,6 +119,15 @@ BATTERY = [
     ("Stick the new headphones in the cart.", True),
     ("Throw the blender in the cart and I'll deal with it later.", True),
     ("Grab the clamp one from my cart.", True),
+    # ---- F30 anaphoric slot-choice booking: the offered slot's anaphor head is
+    # "one", so verb..noun reservation shapes never see the appointment. Accepts
+    # only appointment-anchored + concrete-time slots; every deny stays ask ----
+    ("The office has Thursday 10am or Monday 2 open for the cleaning. Book the Thursday 10am one.", False),
+    ("Book the Tuesday 3pm one for Leo's checkup, mornings are full.", False),
+    ("Book the Thursday 10am one.", True),                                   # no appointment anchor
+    ("They have a 9am and a noon flight. Book the 9am one for our visit.", True),  # commerce/travel deny
+    ("Book the earlier one for Leo's checkup.", True),                       # no concrete time in the slot
+    ("Book the Thursday 10am one for the cleaning and pay the copay.", True),  # money outranks
 ]
 
 # ---- F29: a vague cart-put request resolves to ACT only when memory names a
