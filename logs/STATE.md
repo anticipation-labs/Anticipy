@@ -81,6 +81,30 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- THE BROWSER HAND HAS A MOCK TIER, e2e MOVED AGAIN (lap 20260611T095522Z, build —
+  ledger F26 FIXED): BrowserHand was the only hand without a mock mode — every
+  browser-routed step in a stub run hit the real hand with no extension and
+  parked its goal at waiting ("browser helper isn't connected"), so the e2e
+  instrument could never see the browser path. Now it takes the SAME
+  ANTICIPY_HANDS_MODE contract as ApiHand (mock default via ControlCore, live
+  only explicit; class default LIVE keeps the /ws/browse diagnostic + unit pins
+  real; ANTICIPY_BROWSER_HAND_MODE narrows the knob for hands_loop's real-WS
+  reroute leg). The mock runs the live path's OWN deterministic refusal gates
+  first (action task with no resolved real site fails the identical live way —
+  no search dumping; the amara cart whole-prompt dump now fails honestly
+  instead of waiting) and only live-navigable jobs return a loudly-labeled
+  proof artifact. Owner lane (OFFICIAL): e2e 0.4618 -> 0.4797; catch 1.0/1.0,
+  false 0, harm 0, interrupt 1.125/1.5, correct 0.6788, recall 1.0 all exactly
+  unchanged; default lane equal at 0.4797 (shared plumbing, disclosed),
+  interrupt 0.625/1.0; per-line decisions ZERO diffs (493 lines x 16
+  persona-days, both lanes). Suite 42/42. Disclosed fail-safe behavior change:
+  default-boot engines no longer drive the owner's real Chrome (browse mock
+  unless live env, like real sends). F27 OPEN: the one moved item (luis
+  "block Monday 8 to 9" cabinet delivery) completes via its junk-but-live-
+  navigable browse step; the right artifact is a calendar block — the stub
+  planner needs a time-anchored "block X to Y" trigger (next plumbing slice).
+  Remaining dev-bank e2e gap is NOT plumbing: 16 expected-asks (scorer never
+  counts them complete) + 12 spine-ASK expected-acts (decider/harm-line).
 - PLANNER JUNK STEPS KILLED, e2e MOVED (lap 20260611T093358Z, build — first lap under
   TARGET v7; ledger F24 FIXED, F25 FIXED): _plan_prompt appended the RELEVANT MEMORY
   dump for every provider while the stub planner keyword-greps the whole prompt, so

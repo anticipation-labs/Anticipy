@@ -656,3 +656,30 @@ Residuals disclosed: "on site" spoken text keeps one luis goal waiting (carving 
 would be bank-fitting); the stub's empty-plan fallback still dumps the whole prompt into
 browse_task; the 12 ask-decisions need decider work, not plumbing. Zero spend, zero
 real-world artifacts.
+
+## 2026-06-11 lap 20260611T095522Z (builder, build, TARGET v7 item 1)
+Diagnosed the official owner-lane e2e frontier from runs/20260611T093358Z with a
+scorer-replica diagnostic: of 56 caught expected items, 26 completed, 16 are
+expected-ASK items the scorer can never count complete, 12 are expected-acts the
+spine decides ASK on (decider/harm-line territory, untouched), and exactly 2 were
+expected-acts that DID decide act but parked at goal state "waiting" — both on
+browse_task steps returning needs_human("browser helper isn't connected").
+Root cause in code (ledger F26): BrowserHand was the only hand without a mock
+tier; ApiHand and channels return labeled mock artifacts under
+ANTICIPY_HANDS_MODE=mock, the browser hand always hit the real (absent) link.
+Fix: explicit mode on BrowserHand wired to the same env (class default LIVE so
+the /ws/browse diagnostic and unit pins keep real-link semantics;
+ANTICIPY_BROWSER_HAND_MODE lets hands_loop.sh keep its real-WS reroute leg). The
+mock runs the live path's own deterministic refusal gates first — the amara cart
+whole-prompt dump still fails exactly like live would (no resolved site), now
+honestly "failed" instead of parked "waiting" — and only live-navigable jobs get
+a loudly-labeled proof artifact. Result on the official instrument: e2e 0.4618
+-> 0.4797 (+0.0179, the luis cabinet goal completing the way live would), catch
+1.0/1.0, false 0, harm 0, interrupt 1.125/1.5 owner / 0.625/1.0 default,
+correct 0.6788, recall 1.0 all exactly unchanged; per-line decisions ZERO diffs
+across 493 lines x 16 persona-days in BOTH lanes; suite 42/42 (hands_loop pin
+honestly re-derived per the F25 lesson — its simulated extension blind-succeeded
+a no-url job the real extension would dead-end). F27 ledgered OPEN: the cabinet
+completion rides a junk-but-live-navigable step; the semantically right artifact
+(calendar block for "block Monday 8 to 9") needs a stub-planner trigger — the
+named next plumbing slice. Zero spend, zero real-world artifacts.

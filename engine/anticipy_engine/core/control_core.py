@@ -85,6 +85,11 @@ class ControlCore:
             agent_timeout=float(os.environ.get("ANTICIPY_AGENT_TIMEOUT", "240")),
             notifier=self.notify_user,
             fallback_link=native_bridge,
+            # Same env discipline as ApiHand: mock default, live only explicit.
+            # ANTICIPY_BROWSER_HAND_MODE narrows the knob for integrations that
+            # need the real-WS browser leg while the API hand stays mock
+            # (scripts/hands_loop.sh); it never widens a live default.
+            mode=os.environ.get("ANTICIPY_BROWSER_HAND_MODE") or hands_mode,
         )
         self.channel = ChannelStub()  # send_email only — the real ChannelWorker owns text/call
         # Real channels (mock by default; live only with ANTICIPY_CHANNELS_MODE=live +

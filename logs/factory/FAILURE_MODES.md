@@ -1104,3 +1104,44 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   browse_task carries the WHOLE prompt as the task string (LESSONS' search-bar
   dumping shape, now more visible with shorter prompts); (c) the 12 expected-act
   items the spine decides ASK on are decider/harm-line territory, not plumbing.
+
+## Build lap 20260611T095522Z (browser hand mock tier, TARGET v7 item 1)
+- F26 NEW, FIXED THIS LAP (hand-tier asymmetry; the last hand without a mock):
+  BrowserHand had NO mock mode — ApiHand and the channels return labeled
+  proof-carrying mock artifacts under ANTICIPY_HANDS_MODE=mock, but every
+  browser-routed step in a stub persona run hit the real hand with no extension
+  connected and returned needs_human("the browser helper isn't connected"),
+  parking its goal at "waiting" forever. The e2e instrument could never see the
+  browser path complete, regardless of plan quality (both ACT_STALLED items in
+  runs/20260611T093358Z were this). Fixed: BrowserHand takes an explicit mode —
+  ControlCore wires the SAME ANTICIPY_HANDS_MODE env ApiHand follows (mock
+  default, live only explicit; ANTICIPY_BROWSER_HAND_MODE narrows the knob for
+  scripts/hands_loop.sh, whose declared purpose is the reroute leg reaching the
+  REAL WS while the API hand stays mock). The class default is LIVE so every
+  direct construction (unit FakeLink pins, the /ws/browse transport diagnostic)
+  keeps real-link semantics. The mock applies the live path's OWN deterministic
+  gates FIRST — an action-shaped task with no resolved real site fails with the
+  IDENTICAL refusal (LESSONS' no-search-dumping rule; the doctor_amara cart dump
+  now fails honestly instead of waiting) — and only a live-navigable job returns
+  {"id": "mock-…", "mock": true, "url": …, "screenshot": "mock://…"}.
+  Disclosed behavior change, fail-safe direction: a default-boot engine can no
+  longer drive the owner's real Chrome extension (browse is mock unless
+  ANTICIPY_HANDS_MODE=live, exactly like real email sends). Regression checks:
+  the mock pins in test_browser_hand.py (labeled artifact, live refusal intact,
+  link never touched, default construction live) + hands_loop (reroute must
+  reach the real WS).
+- F27 NEW, OPEN (disclosed, not chased — plan-semantics sibling of LESSONS
+  2026-06-07 "a real artifact is still fake if semantically wrong"): the ONE
+  e2e item this lap moved (contractor_luis day02 "block Monday 8 to 9 for the
+  cabinet delivery") completes through its junk-but-live-navigable browse step
+  ("open the page", planted by the disclosed "on site" trigger) — the
+  semantically right artifact (a calendar block) is never planned because the
+  stub planner has no calendar trigger for "block <time range>". The completion
+  honestly mirrors live (the extension would navigate the search URL and
+  screenshot, success), and correct_action_rate already prices the semantic
+  miss (unchanged 0.6788). Fix direction: a stub-planner calendar trigger for
+  time-anchored "block X to Y" (the F24 "set up" precedent — a product fix,
+  the stub is the keyless default-boot planner), NEVER a "site"-trigger carve
+  (bank-fitting). Regression check for the fix lap: the cabinet goal's plan
+  must carry create_event and its proof must reference the calendar artifact,
+  not a browse screenshot.

@@ -18,6 +18,10 @@ HOST=127.0.0.1
 PORT="${ANTICIPY_ENGINE_PORT:-8794}"
 export ANTICIPY_DATA_DIR="$(mktemp -d -t anticipy-hands-XXXXXX)"
 export ANTICIPY_HANDS_MODE="${ANTICIPY_HANDS_MODE:-mock}"   # no real sends in this test
+# This test's whole point is the reroute leg reaching the REAL browser hand over
+# the real WS (simulated extension); the API hand stays mock. Without this the
+# mock browser hand answers the reroute itself and the WS leg goes untested.
+export ANTICIPY_BROWSER_HAND_MODE=live
 
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then echo "port $PORT busy" >&2; exit 1; fi
 "$PY" -m uvicorn --app-dir "$ENGINE_DIR" anticipy_engine.main:app --host "$HOST" --port "$PORT" --log-level warning &

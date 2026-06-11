@@ -1,68 +1,56 @@
 # Last Lap
 
-Lap: 20260611T093358Z
-Date: 2026-06-11
-Phase: P3-voice (TARGET v7 — official instrument is the owner lane, eval_env ANTICIPY_OWNER_INGEST=1)
-Slice: e2e_completion_rate, ranked work item 1 (stalled expected acts -> completed with
-proof). Owner-lane e2e 0.3427 -> 0.4618 builder-side; verify_gate recomputes.
+Lap: 20260611T095522Z (build, TARGET v7 item 1 — e2e_completion_rate)
 
-Diagnosis (evidence first, from runs/20260611T085136Z-owner-post3): of 56 caught expected
-tasks, 19 stalled. 12 are spine ASK decisions (decider/harm-line territory — out of
-scope). 7 were goals whose REAL steps already succeeded WITH proof but whose plan also
-carried a junk browse_task/post_to_x step that returns needs_human in mock — parking the
-goal "waiting" forever. Junk sources, located in code:
-- 5/7: _plan_prompt appended "RELEVANT MEMORY: {context}" for EVERY provider while the
-  deterministic stub planner keyword-greps the whole prompt; injected memory lines
-  ("...site plan...", "...post-call...") triggered steps the goal never asked for.
-- 2/7: bare-substring keyword hits in the spoken line itself ("post-shift" -> "post").
+## What changed
+- `engine/anticipy_engine/hands/browser_hand.py`: BrowserHand gets an explicit
+  `mode` (class default LIVE). Mock mode (ledger F26) applies the live path's own
+  deterministic gates FIRST — an action-shaped task with no resolved real site
+  fails with the identical live refusal (no search dumping) — then returns a
+  loudly-labeled proof artifact (`{"id": "mock-…", "mock": true, "url": …,
+  "screenshot": "mock://…"}`) instead of touching a browser. New unit pins.
+- `engine/anticipy_engine/core/control_core.py`: wires `mode` from the SAME
+  `ANTICIPY_HANDS_MODE` env ApiHand follows (mock default, live explicit);
+  `ANTICIPY_BROWSER_HAND_MODE` narrows the knob for integrations that need the
+  real-WS browser leg while the API hand stays mock.
+- `scripts/hands_loop.sh`: declares its browser leg live (the test's purpose is
+  the reroute reaching the REAL WS with a simulated extension; under mock the
+  hand would answer the reroute itself — and its no-url post job was only ever
+  "succeeding" because the simulated extension blind-succeeds what the real
+  extension dead-ends; F25 lesson applied: pin re-derived, not papered).
+- Ledger: F26 FIXED, F27 OPEN (see below). Manifest pre-registered; results match.
 
-What changed:
-- engine/anticipy_engine/core/orchestrator.py (_plan_prompt): the memory section now
-  rides only with a real provider — the SAME documented gate the function already used
-  for the intent vocabulary ("the stub gateway greps the prompt for keywords"). At the
-  deterministic tier the memory reader remains the _memory_resolved_browser_step
-  pre-pass, which receives context directly before any model call. Live-provider prompt
-  unchanged (pinned).
-- engine/anticipy_engine/core/gateway.py (default_stub): the post_to_x trigger is the
-  WORD post (\bpost(?:ed|ing|s)?\b(?!-)) — hyphen compounds/prefixes ("post-shift",
-  "postpone") no longer plan a social post; "set up" joined the create_event triggers
-  (already a gate trigger; a time-anchored "set up X" is a calendar write). The stub is
-  also the planner for keyless default boots, so these are product fixes, not eval-only.
-- Pins: test_orchestrator.test_stub_plan_ignores_memory_inject (noisy inject must not
-  change the stub plan or prompt; live prompt must keep RELEVANT MEMORY),
-  test_gateway post-word pins (non-bank sentences), test_owner_ingest_event proof pin
-  now accepts the drawer memory_id as the artifact reference for a reminder line whose
-  honest plan IS the open-loop write.
-- Ledger: F24 (planner memory-noise junk steps park proof-complete goals; FIXED),
-  F25 (two suite pins were green only BECAUSE of F24 — pins masked by the bug they
-  could not see; FIXED, with the lesson written).
+## Numbers I saw (builder-side, stub, dev bank)
+- OFFICIAL owner lane (ANTICIPY_OWNER_INGEST=1): e2e_completion_rate
+  0.4618 -> 0.4797 (+0.0179). Catch 1.0/1.0, false 0, harm 0, interrupt
+  1.125/1.5, correct 0.6788, recall_worst 1.0 — all EXACTLY unchanged.
+- Default lane: e2e equally 0.4618 -> 0.4797 (shared hand plumbing, disclosed);
+  interrupt 0.625/1.0 and everything else bit-identical to ratchet bests.
+- Per-line decisions: ZERO diffs across 493 lines x 16 persona-days in BOTH
+  lanes (execution-layer change only; decisions precede execution).
+- Suite 42/42. Selftest PASS. Zero spend, zero real-world artifacts.
 
-Eval numbers I saw (verify_gate recomputes the official ones):
-- Owner lane (OFFICIAL, ANTICIPY_OWNER_INGEST=1, dev bank, stub): e2e 0.3427 -> 0.4618;
-  catch 1.0/1.0, false 0, harm 0, interrupt 1.125/1.5, recall 1.0, correct 0.6788 — all
-  exactly unchanged. Per-persona e2e: luis 0->0.2857, amara 0.1667->0.5, kayla
-  0.3333->0.5, rob 0.3333->0.5; jin/marcus/dana/pri unchanged (no regressions).
-- Default lane: e2e 0.3427 -> 0.4618 (shared planner, disclosed); every other aggregate
-  exactly at ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0).
-- Per-line decision diff pre vs final HEAD: ZERO across 16 persona-days in BOTH lanes —
-  the change is plan-layer only; act/ask/silent verdicts untouched.
-- Suite 42/42. Zero model calls, zero spend, zero real-world artifacts.
+## Exactly which items moved (scorer-replica diagnostic, runs/-pre vs -post)
+- COMPLETED 26 -> 27: contractor_luis day02 "cabinet delivery monday 8" — its
+  goal's only step ("open the page", junk-planted by the disclosed "on site"
+  stub trigger) is live-navigable (search-fallback navigate + screenshot =
+  exactly what the real extension would do), so mock completes it. F27 OPEN:
+  the semantically right artifact is a calendar block; the stub planner lacks a
+  "block <time range>" trigger — that is the named next plumbing slice.
+- ACT_STALLED 2 -> 1: doctor_amara day01 "hoka shoes wide cart" now FAILS
+  honestly (whole-prompt cart dump, no resolved site — the identical live
+  refusal) instead of parking at "waiting". Cannot complete honestly until the
+  product resolves a real site (memory has the item, no store; P4 territory).
+- Remaining e2e gap on this bank is NOT plumbing: 16 expected-ask items the
+  scorer never counts complete + 12 expected-acts the spine decides ASK on
+  (decider/harm-line, holdout-risky — foreman territory, per the F23 queue).
 
-Honest accounting:
-- Two unplanned-but-disclosed fixes (manifest addendum): the suite exposed pins that
-  passed only via the pollution; fixing them honestly was required to keep the suite
-  green at the fixed planner.
-- Residuals NOT chased: "on site" spoken text keeps one contractor_luis goal waiting
-  (carving that phrase out would be bank-fitting); the stub's empty-plan fallback still
-  dumps the whole prompt into browse_task (LESSONS' search-bar shape, now more visible);
-  C13 applies — dev-bank numbers are bank-fit, holdout rules gate-grade claims.
-
-Next:
-- The remaining e2e headroom on this instrument: 12 expected acts the spine decides ASK
-  on (the eval never answers asks) — decider/harm-line territory, needs a foreman call
-  on whether chasing it is in-scope vs the F23 money pre-gate interrupt item (TARGET
-  ranked item 2).
-- F23: owner-lane interrupt 1.125 vs default 0.625 is still entirely the money pre-gate
-  on money-flavored vents (fail-safe; foreman ruling queued).
-- P3 closure still waits ONLY on OWNER_PHONE confirmation + live Twilio env
-  (PENDING_FOR_OMAR item 2).
+## What's next
+1. F27: stub-planner calendar trigger for time-anchored "block X to Y" (the F24
+   "set up" precedent — product fix, the stub is the keyless default planner).
+2. F23 (TARGET item 2): money pre-gate interrupt delta (1.125 vs 0.625) —
+   foreman call queued on letting the spine rule money-shaped vents while
+   keeping never-pending/never-execute.
+3. P3 live gate still waits ONLY on OWNER_PHONE confirmation (PENDING_FOR_OMAR).
+   Note: factory/gates/gate_P3.sh does not exist yet (TARGET names it as the
+   phase gate; foreman item — a builder may not create control-plane gates).

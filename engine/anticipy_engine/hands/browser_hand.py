@@ -10,6 +10,14 @@ screenshot proof with a per-job TIMEOUT, and never hangs or fakes a success:
   - success without a screenshot       -> failed (no proof, not done)
   - success with screenshot            -> success + proof
 
+MOCK mode (the same ANTICIPY_HANDS_MODE contract as ApiHand, wired by
+ControlCore; direct constructions default LIVE): no browser, no model — but the
+live path's own deterministic gates still rule first, so a job live would
+refuse (an action-shaped task with no resolved real site) is refused
+identically, and only a live-navigable job returns a loudly-labeled mock
+artifact. That lets the orchestrator drive browser-routed goals to
+done-with-proof in the stub tier with zero real-world side effects.
+
 Vision verify (smart model on the screenshot) plugs in at the model gateway;
 cost stays disciplined (smart only at the verify/decision point, not every step).
 """
@@ -25,6 +33,7 @@ from ..core.browser_link import BrowserLink
 from ..core.envelopes import Job, JobStatus, Result
 from ..core.worker import Worker
 from ..agent.webvoyager import WebVoyagerAgent
+from .api_hand import MODE_LIVE, MODE_MOCK
 
 _URL_RE = re.compile(r"https?://[^\s<>\]})\"']+")
 _BARE_DOMAIN_RE = re.compile(
@@ -103,7 +112,9 @@ class BrowserHand(Worker):
         notifier=None,
         agent_factory=WebVoyagerAgent,
         fallback_link: Optional[Any] = None,
+        mode: str = MODE_LIVE,
     ) -> None:
+        self.mode = mode
         self.link = link
         self.fallback_link = fallback_link
         self.timeout = timeout
@@ -124,6 +135,8 @@ class BrowserHand(Worker):
         return None
 
     async def handle(self, job: Job) -> Result:
+        if self.mode == MODE_MOCK:
+            return self._handle_mock(job)
         link = self._active_link()
         if link is None:
             reason = "the browser helper isn't connected"
@@ -136,6 +149,31 @@ class BrowserHand(Worker):
         if job.intent == "browse_task" and self.gateway is not None:
             return await self._handle_agent(job, link)
         return await self._handle_once(job, link)
+
+    def _handle_mock(self, job: Job) -> Result:
+        """Mock tier: the live path's deterministic gates first, then a labeled
+        mock artifact — never a success for a job live would refuse."""
+        args = job.args if isinstance(job.args, dict) else {}
+        task = str(args.get("task") or "").strip()
+        target_args = _with_target(args, allow_search=job.intent == "read_page" or not _action_task_needs_site(task))
+        if job.intent == "browse_task" and task and not _start_url(target_args, allow_search=False):
+            if _action_task_needs_site(task):
+                return Result(
+                    job_id=job.id,
+                    status=JobStatus.failed,
+                    proof=None,
+                    output={"reason": "browser action task has no resolved real site; refusing search fallback",
+                            "mock": True},
+                    error="browser action task has no resolved real site",
+                )
+        url = _start_url(target_args)
+        if not url:
+            return Result(job_id=job.id, status=JobStatus.failed, proof=None,
+                          output={"mock": True}, error="no url/task to browse")
+        proof = {"id": f"mock-{job.id[:8]}", "mock": True, "url": url,
+                 "screenshot": f"mock://shot/{job.id[:8]}.png"}
+        return Result(job_id=job.id, status=JobStatus.success, proof=proof,
+                      output={"mock": True, "url": url, "task": task})
 
     async def _handle_once(self, job: Job, link=None) -> Result:
         link = link or self.link

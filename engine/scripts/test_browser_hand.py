@@ -5,7 +5,7 @@ Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.
 import asyncio
 
 from anticipy_engine.core.envelopes import Job, JobStatus
-from anticipy_engine.hands.browser_hand import BrowserHand
+from anticipy_engine.hands.browser_hand import BrowserHand, MODE_MOCK
 
 
 class FakeLink:
@@ -76,8 +76,37 @@ async def main():
     await BrowserHand(link3).handle(Job(intent="browse_task", args={"task": "open https://anticipy.ai now"}))
     assert "url" not in link3.last_args, link3.last_args
 
+    # ---- MOCK mode (ANTICIPY_HANDS_MODE=mock via ControlCore; default stays LIVE) ----
+    # navigable job -> loudly-labeled mock artifact, the link NEVER touched
+    mock_link = FakeLink(connected=False)
+    hand = BrowserHand(mock_link, mode=MODE_MOCK)
+    r = await hand.handle(Job(intent="browse_task", args={"task": "open the page"}))
+    assert r.status == JobStatus.success, r
+    assert r.proof["mock"] is True and r.proof["id"].startswith("mock-"), r.proof
+    assert r.proof.get("screenshot") and r.proof.get("url"), r.proof
+    assert mock_link.last_args is None, "mock mode must never touch the browser link"
+    # the live refusal still rules: an action-shaped task with no resolved real
+    # site FAILS exactly like live — mock must not complete what live refuses
+    r = await hand.handle(Job(
+        intent="browse_task",
+        args={"task": "get the ones I picked out, the wide ones, put them in the cart"},
+    ))
+    assert r.status == JobStatus.failed and "resolved real site" in r.error, r
+    # a memory-resolved cart job (site + item from the planner pre-pass) succeeds
+    r = await hand.handle(Job(intent="browse_task", args={
+        "task": "On https://store.test, find wide shoes and add to the cart. Do not checkout.",
+        "url": "https://store.test", "resolved_from_memory": True}))
+    assert r.status == JobStatus.success and r.proof["url"] == "https://store.test", r
+    # nothing to navigate to -> failed, never a proof-carrying success
+    r = await hand.handle(Job(intent="read_page", args={}))
+    assert r.status == JobStatus.failed and not r.proof, r
+    # default construction is LIVE: not-connected still hands back to the human
+    r = await BrowserHand(FakeLink(connected=False)).handle(Job(intent="browse_task", args={"task": "open the page"}))
+    assert r.status == JobStatus.needs_human, r
+
     print("PASS piece 3 (unit): browser hand — success/proof, not-connected, timeout, disconnect, "
-          "login-wall, no-proof, search-fallback for info, no search-dump for actions, explicit url preserved")
+          "login-wall, no-proof, search-fallback for info, no search-dump for actions, explicit url "
+          "preserved, mock tier (labeled artifact, live refusals intact, link untouched, default live)")
 
 
 if __name__ == "__main__":
