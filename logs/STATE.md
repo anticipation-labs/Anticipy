@@ -68,6 +68,25 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v6 STAGE B: the Owner Action Engine execution path
+- THE BARE REPORTED PROMISE IS CAUGHT (lap 20260611T085136Z, build — ledger F21
+  FIXED on the main path): root cause was triage._CONDITIONAL_VENT's bare-I'd
+  alternative eating reported-promise clauses as counterfactual vents at clause
+  scope. New clause-scoped reported-promise shape (first-person told/promised/said
+  frame + irrealis I'd/I'll complement + open-vocabulary base verb) cancels the
+  bare-I'd vent reading and counts as a positive; harm-line re-gates the send ->
+  REAL pending ask (the owner-lane PROMISE pin flipped ignore->ask exactly per the
+  F21 regression check; F17 one-brain contract unchanged). Junk bound: structural
+  anchors + closed-class deny-direction checks (participle 'd=had, negation/hedge/
+  vow words, deferral idioms, retorts/regret/habituals/resolved-"and I did"/
+  but-failure tails, joke markers), every class pinned (clause-scope pins 157->187,
+  suite 42/42); an adversarial probe session drove the deny set, residuals
+  disclosed in FAILURE_MODES. Provably inert on the dev bank: per-line decision
+  diff vs pre = ZERO across 493 lines x 16 persona-days in BOTH lanes; aggregates
+  bit-identical to ratchet bests / documented owner numbers. Catch movement is
+  off-bank only — the primary instrument is now SATURATED everywhere a builder can
+  read (dev 1.0/1.0 AND last judged holdout 1.0 worst, 041654Z verdict): foreman
+  needs a new measurable aim. Disclosed risk: new ask shape, blind holdout
+  interrupt margin (3.0 zero-margin x2 personas) — next judge holdout run rules.
 - THE OWNER LANE IS ONE BRAIN (lap 20260611T082216Z, build — ledger F17 CLOSED on
   the dev instrument): ControlCore._spine_card feeds every observed owner line
   through the proven spine (triage -> decider -> harm-line -> orchestrator/hands,

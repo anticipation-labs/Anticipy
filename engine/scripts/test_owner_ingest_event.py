@@ -39,10 +39,10 @@ from anticipy_engine.core.control_core import ControlCore  # noqa: E402
 NOISE = "oh sure, I'll just clone myself, that'll fix the schedule."
 PICKUP = "school moved pickup to 3 today, please remind me before I forget."
 SEND_SAM = "okay just send Sam the revised decking file before Friday."
-# a reported promise the spine's triage currently judges silent (ledger F21): the
-# one-brain contract is that the owner lane reports that verdict truthfully even
-# though the regex shapes an ask card — silence, durable open loop, no paper ask
-PROMISE_SILENT = "Sam needs the revised decking before Friday; I told him I'd send it."
+# the bare reported promise (ledger F21, FIXED): triage's reported-promise shape now
+# catches it and the harm-line re-gates the send -> a REAL pending ask, resolvable —
+# never a silent drop, never a paper ask
+REPORTED_PROMISE = "Sam needs the revised decking before Friday; I told him I'd send it."
 # an imperative the spine catches but the regex cannot shape (the F17 catch fix)
 UNSHAPED_ACT = "Set up a quick review with the roofing vendor for Thursday 2pm, 30 minutes."
 CART_NO_BUY = "that water-table thing for the birthday, put it in the cart if you find it, don't buy it."
@@ -78,7 +78,7 @@ async def owner_lane_check():
         noise = await core.feed("app", NOISE, {})
         act = await core.feed("app", PICKUP, {})
         ask = await core.feed("app", SEND_SAM, {})
-        promise = await core.feed("app", PROMISE_SILENT, {})
+        promise = await core.feed("app", REPORTED_PROMISE, {})
         unshaped = await core.feed("app", UNSHAPED_ACT, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
@@ -132,12 +132,13 @@ async def owner_lane_check():
     assert cart_rec["state"] == "open", "a card that never executed must never look done"
     assert not cart_rec["proof"], cart_rec
 
-    # a shaped ask card the spine judges silent reports that verdict verbatim:
-    # durable open loop, NO pending ask, NEVER a paper ask (F17; residual F21)
-    assert promise["decision"] == "ignore" and promise["ask_id"] is None, promise
+    # the bare reported promise is a real commitment (F21 FIXED): the spine catches
+    # it, the harm-line re-gates the send, and the card is a REAL pending ask (the
+    # F17 one-brain contract unchanged — this is the spine's verdict, not the regex's)
+    assert promise["decision"] == "ask" and promise["ask_id"], promise
     pr_rec = _record(tmp, promise["goal_id"])
-    assert pr_rec["state"] == "open" and not pr_rec["proof"], pr_rec
-    assert pr_rec["owner_card"]["execution"]["decision"] == "ignore", pr_rec
+    assert pr_rec["state"] == "waiting", pr_rec
+    assert pr_rec["owner_card"]["execution"]["decision"] == "ask", pr_rec
 
     # ask card: a REAL pending ask in /pending, resolvable by the existing flow
     assert ask["decision"] == "ask" and ask["ask_id"], ask
@@ -155,7 +156,8 @@ async def owner_lane_check():
     # /pending carries exactly the ask cards — the blocked money card is NOT resolvable
     pending_ids = {p["ask_id"] for p in pending}
     assert ask["ask_id"] in pending_ids and clarify["ask_id"] in pending_ids, pending
-    assert money["goal_id"] not in pending_ids and len(pending) == 2, pending
+    assert promise["ask_id"] in pending_ids, pending
+    assert money["goal_id"] not in pending_ids and len(pending) == 3, pending
 
     # NO declines: record marked, ask gone from /pending
     assert declined["approved"] is False, declined

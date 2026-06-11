@@ -609,3 +609,26 @@ reported-promise shape ("X needs Y; I told him I'd send it") — previously mask
 the regex paper-ask; pinned as-is, triage fix is a future main-path lap. Zero model
 calls, zero spend, zero real-world artifacts. No gate close attempted (P2 already
 closed); scoreboard/RATCHET untouched (loop's sole writers).
+
+## 2026-06-11 — lap 20260611T085136Z (build, F21: the bare reported promise)
+Read TARGET v6 at STAGE B with items 1-3 already landed and the treadmill at 4, and
+chose the one ledger-named product slice aimed at catch_rate_worst: F21, the spine
+silently dropping "Sam needs the revised decking before Friday; I told him I'd send
+it." Found the root cause in code rather than guessing: _CONDITIONAL_VENT's bare-I'd
+alternative eats any reported-promise clause as a counterfactual vent before positives
+run. Built a clause-scoped reported-promise shape (first-person told/promised/said
+frame + irrealis I'd/I'll complement + open-vocabulary base verb) that cancels the
+bare-I'd vent reading and counts as a positive; the harm-line re-gates the send to a
+real ask. Swept the dev bank first (21 frame-adjacent lines, all either already-caught
+or excluded by anchors), then ran an adversarial probe session against the rule, which
+surfaced real leak families (resolved "...and I did", but-failure narration, self-
+promises, habituals, vows, joke markers) — all closed with closed-class deny-direction
+checks, every class pinned (187 clause-scope pins, suite 42/42). Pre/post per-line
+decision diffs: ZERO changes across 493 lines x 16 persona-days in BOTH lanes;
+aggregates bit-identical to ratchet bests. Honest accounting: catch_rate_worst is
+saturated at 1.0 on the dev bank AND the last judged holdout, so this lap cannot move
+the official metric and was pre-registered as such — if the scoreboard rules it dead,
+that is the 5th dead lap and the designed K=5 escalation hands the saturated-instrument
+question to the foreman. Residual risk disclosed: a new ask shape carries blind holdout
+interrupt risk at the 3.0 zero-margin personas; the deny battery is the defense and the
+next judge holdout run rules. Zero spend, zero real-world artifacts, stub/mock only.

@@ -1020,3 +1020,47 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   while keeping never-pending/never-execute (the harm-line already makes money lines
   un-actable), or vent-deny the pre-gate. Regression check: owner-lane
   interrupt_cost vs the default path on the same bank; the delta should only shrink.
+
+## Build lap 20260611T085136Z (reported-promise triage shape, ledger F21)
+- F21 UPDATE — FIXED on the main path (was OPEN): root cause located in CODE, not just
+  behavior — triage._CONDITIONAL_VENT's bare \bi'd\b alternative consumed any clause
+  containing "I'd" as a confident counterfactual vent at clause scope BEFORE positives
+  ran, so the bare reported promise ("Sam needs the revised decking before Friday; I
+  told him I'd send it.") was silently dropped: the cardinal-MISS direction, a real
+  commitment lost. Fix (triage.py, _reported_promise + _RP_*): a clause-scoped
+  REPORTED-PROMISE shape — first-person matrix frame ("I told/promised <person>",
+  "I said") + irrealis complement (I'd/I would/I'll/I will) + open-vocabulary
+  base-form committed verb + content floor — CANCELS the bare-I'd vent reading
+  (precedent: a concrete _TIME_ANCHOR cancels _HEDGE) and counts as a positive. The
+  caught line routes harm-line _HARD_SEND -> binding_send -> fail-safe ASK: the
+  PROMISE pin in test_owner_ingest_event flipped exactly per the regression check the
+  F21 entry wrote (decision ask, real ask_id, record waiting, /pending carries it).
+- The junk bound is structural + closed-class denies, deny-direction only, every deny
+  class exercised by a pin in test_triage_clause_scope (the file grew 30 reported-
+  promise pins; 187 total): participle backshift ('d = had: "I'd sent it", regular
+  -ed with _RP_ED_BASE exceptions), negation/hedge/vow verb-slot words
+  (never/not/probably/always/rather), deferral heads + idioms ("think about it",
+  "get back to her", "handle it" over a bare pronoun), vow/vent heads
+  (love/hate/die/cry/...), unanchored be-vows ("be a better person" vs "be there by
+  six"), tag-question retorts ("...didn't I?"), wish-regret, told/promised MYSELF,
+  habitual prefix ("Every week I told him I'd quit smoking" — prefix-scoped),
+  resolved/failed complements ("...and I did", "...but traffic killed me"; the
+  but-deny is TAIL-scoped so a discourse-but BEFORE the frame still catches), joke
+  markers (just kidding/obviously/spoiler/no matter what/eat my hat). An adversarial
+  probe session (23 families, instructed to refute the junk bound) drove the deny
+  additions; its two surviving residuals are accepted and disclosed: unmarked
+  open-vocabulary hyperbole ("I told him I'd eat a horse") fails toward ask, and
+  sarcasm/conditional frames + trailing hedges still outrank the promise frame
+  (utterance/frame-absolute negatives unchanged).
+- Proven this lap: suite 42/42; per-line decision diff vs pre-change runs = ZERO
+  changes across 493 lines x 16 persona-days in BOTH lanes (default and
+  ANTICIPY_OWNER_INGEST=1); both lanes' aggregates bit-identical to ratchet bests /
+  documented owner numbers. So the shape is provably inert on the dev bank — its
+  catch movement lives only off-bank (the F21 line itself, now pinned ask).
+- DISCLOSED, not measurable by a builder: holdout interrupt risk. Any new ask shape
+  can junk-ask on holdout vent lines, and interrupt_cost_worst sits at 3.0 ZERO
+  margin on two holdout personas (041654Z verdict, counts only). The deny battery
+  above is the defense; the next judge holdout run rules. Regression checks: the
+  PROMISE ask pin (test_owner_ingest_event), the reported-promise pin block
+  (test_triage_clause_scope), and the both-lanes zero-diff bar (any dev decision
+  drift from this rule = the junk bound broke).

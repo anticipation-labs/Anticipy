@@ -158,6 +158,92 @@ _TRAILING_HEDGE = re.compile(
     r"[\s.!…\"']*$",
     re.I)
 
+# ---------- reported promise (ledger F21) ----------
+# "Sam needs the revised decking before Friday; I told him I'd send it." — a
+# first-person reported COMMITMENT ("I told/promised <person> (that) I'd <verb> ...",
+# "I said I'd <verb> ...") is the everyday shape a person uses for an obligation they
+# already own. The bare-I'd alternative of _CONDITIONAL_VENT was consuming the clause
+# as a counterfactual vent at clause scope, so the spine silently dropped it — the
+# cardinal-miss direction (a real commitment lost). The frame CANCELS the bare-I'd
+# vent reading (precedent: a concrete _TIME_ANCHOR cancels _HEDGE) and counts as a
+# positive. Open-vocabulary on the committed verb (closed-class lexicons chasing an
+# open vocabulary lost twice — F15b); the junk bound is structural anchors plus
+# closed-class denies, each class pinned in test_triage_clause_scope:
+#   - the matrix subject must be literal first-person "i told/promised/said" — "she
+#     told me she'd send it" is someone else's promise, "they told me i'd need a
+#     form" has no "i told", and an open sarcasm/conditional frame ("If I won the
+#     lottery I'd ...") never reaches this rule (_VENT_FRAME consumes it first);
+#   - backshift ambiguity: a complement verb in past-participle form means 'd = had —
+#     narration of a DONE thing ("I told him I'd sent it"), denied; base verbs that
+#     merely end in -ed (need, proceed) and base==participle forms (put, set, cut,
+#     read, let) pass — true ambiguity fails toward catch, the frame already vouches;
+#   - reported DEFERRAL is not a commitment: "I'd think about it", "I'd get back to
+#     her", "I'd handle it" (deferral verb + bare pronoun) keep today's silence — the
+#     existing "I told him I'd think about it" pin holds; "I'd handle the cups and
+#     plates" (real object) is a commitment and passes;
+#   - negation and probability hedges deny ("I'd never send it", "I'd probably come");
+#   - the commitment needs content: at least one token after the verb ("I told him
+#     I'd go" stays out — conservative, disclosed residual).
+_RP_FRAME = re.compile(
+    r"\bi\s+(?:told|promised)\s+(?:[\w'\-]+\s+){0,3}?i(?:'d|'ll|\s+would|\s+will)\s+(.{1,80})"
+    r"|\bi\s+said\s+(?:that\s+)?i(?:'d|'ll|\s+would|\s+will)\s+(.{1,80})",
+    re.I)
+# intensity adverbs that may sit before the committed verb without changing it
+_RP_GAP_ADVERBS = {"just", "really", "definitely", "certainly", "totally",
+                   "absolutely", "gladly", "happily", "personally", "also", "still"}
+# a hedge, negator, or vow/habit marker in the verb slot kills the commitment reading
+_RP_HEDGE_NEG = {"probably", "maybe", "perhaps", "possibly", "hopefully", "never",
+                 "not", "only", "always", "rather"}
+# deferral/musing heads — never an assistant task regardless of object
+_RP_DEFER_HEADS = {"think", "consider", "see", "sleep", "try", "mull", "ponder",
+                   "pray", "wait", "guess"}
+# vow/vent heads — emotional declarations, hyperbole, threats; feelings, not tasks
+_RP_VOW_HEADS = {"love", "hate", "miss", "die", "kill", "murder", "strangle",
+                 "scream", "cry", "explode", "lose"}
+# unambiguous past participles: 'd = had, the thing is already done (narration).
+# base==participle forms (put/set/cut/read/let/come/run) are deliberately absent.
+_RP_PARTICIPLES = {
+    "sent", "done", "gone", "been", "made", "taken", "given", "seen", "brought",
+    "bought", "paid", "found", "gotten", "written", "spoken", "told", "said",
+    "kept", "met", "built", "caught", "dealt", "held", "led", "lost", "meant",
+    "sold", "won", "worn", "driven", "drawn", "eaten", "fallen", "flown",
+    "forgotten", "frozen", "grown", "known", "ridden", "risen", "shaken", "shown",
+    "stolen", "sung", "swum", "thrown", "woken", "chosen", "begun", "broken",
+    "got", "had", "left", "heard", "felt", "stood", "understood", "sat", "laid",
+}
+# base verbs that happen to end in -ed (same morphology exception as _BENEF_ED_BASE)
+_RP_ED_BASE = {"need", "feed", "speed", "heed", "seed", "weed", "breed", "embed",
+               "shred", "exceed", "proceed", "succeed"}
+# a tag-question retort ("I told you I'd finish it, didn't I?") reminds the listener
+# of a KEPT promise, and "wish/wished I told..." is counterfactual regret — both are
+# narration about the past, never an open commitment
+_RP_RETORT_REGRET = re.compile(
+    r"\b(?:didn'?t|haven'?t|don'?t)\s+i\b[\s?!.…\"']*$"
+    r"|\bwish(?:ed)?\s+i\s+(?:told|promised|said)\b")
+# habitual narration BEFORE the frame ("Every week I told him I'd quit smoking") is a
+# pattern being narrated, not an open commitment — checked against the frame prefix
+_RP_HABITUAL = re.compile(
+    r"\bevery\s+(?:time|day|week|month|year|morning|night|meeting|shift)\b")
+# resolution/failure/joke narration INSIDE the complement (adversarial-probe families,
+# all deny-direction): "...and I did" closes the loop, "...but traffic killed me"
+# narrates the failure or the polite refusal, vow/joke markers are feelings. A "but"
+# BEFORE the frame is discourse contrast and stays out of this deny (tail-scoped).
+_RP_RESOLVED = re.compile(
+    r"\b(?:and|which)\s+(?:i|it|that|he|she|they)\s+(?:did|have|went|got|already|was|were|is)\b"
+    r"|\balready\s+did\b|\bi\s+(?:wasn'?t|didn'?t|never\s+did)\b"
+    r"|\bbut\b"
+    r"|\bjust\s+kidding\b|\bkidding\b|\bjk\b|\bobviously\b|\bspoiler\b|\byeah right\b"
+    r"|\bno matter what\b|\beat my hat\b"
+    r"|\b(?:my|our)\s+best\b|\bmy all\b|\bgive it a\b|\bbe there for\b")
+# deferral idioms over a bare pronoun object — the speaker is parking it (_DEFERRAL's
+# philosophy, mirrored for the reported frame). Matched against space-joined tokens.
+_RP_DEFER_IDIOM = re.compile(
+    r"^(?:get back\b|circle back\b|get around to\b|sleep on\b"
+    r"|look into (?:it|that|this)\b|see about (?:it|that)\b"
+    r"|(?:handle|look at|figure out|sort out|deal with|take care of|get to|"
+    r"think about|think over) (?:it|that|this|them)\b"
+    r"|(?:figure|sort|work) (?:it|that|this) out\b)")
+
 # ---------- task idioms (positive even without a clause-initial verb) ----------
 # "put/get/goes/stick/block/need ... on|in|to my/the calendar" — THE canonical spoken
 # calendar command ("That goes on the calendar now", "I need that on my calendar").
@@ -485,6 +571,8 @@ class Triage:
             return True
         if vent_frame:
             return False
+        if self._reported_promise(ct):
+            return True
         if any(r.search(ct) for r in self._intent_re):
             return True
         if _DEADLINE.search(ct) and _FIRST_PERSON.search(ct):
@@ -587,6 +675,42 @@ class Triage:
         return True
 
     @staticmethod
+    def _reported_promise(ct: str) -> bool:
+        """Clause-scoped reported promise (ledger F21): 'I told him I'd send it.' —
+        a first-person told/promised/said frame whose complement is an irrealis
+        first-person commitment (I'd/I would/I'll/I will + base verb + content).
+        Open-vocabulary on the committed verb; the frame anchors plus the deny
+        classes documented at _RP_FRAME carry the junk bound (each class pinned)."""
+        m = _RP_FRAME.search(ct)
+        if not m:
+            return False
+        if _RP_RETORT_REGRET.search(ct):
+            return False         # kept-promise retort ("...didn't I?") / regret ("wish I told...")
+        if re.search(r"\b(?:told|promised)\s+myself\b", ct):
+            return False         # a promise to oneself is resolution-talk, not a handoff
+        if _RP_HABITUAL.search(ct, 0, m.start() + 1):
+            return False         # "every week I told him I'd ..." narrates a pattern
+        tail = m.group(1) or m.group(2) or ""
+        if _RP_RESOLVED.search(tail):
+            return False         # "...and I did" / "...but <failure>" / vow & joke markers
+        toks = re.findall(r"[a-z][\w'\-]*", tail.lower())
+        while toks and toks[0] in _RP_GAP_ADVERBS:
+            toks.pop(0)
+        if len(toks) < 2:        # the committed verb + at least one content token
+            return False
+        v = toks[0]
+        if (v in _RP_HEDGE_NEG or v in _RP_DEFER_HEADS or v in _RP_VOW_HEADS
+                or v in _RP_PARTICIPLES):
+            return False
+        if v.endswith("ed") and v not in _RP_ED_BASE:
+            return False         # regular participle: 'd = had — already done, narration
+        if v == "be" and not re.search(r"\b(?:there|at|in|on|by|home|early|over)\b", tail):
+            return False         # "I'd be there by six" commits; "I'd be a better person" vows
+        if _RP_DEFER_IDIOM.match(" ".join(toks[:5])):
+            return False
+        return True
+
+    @staticmethod
     def _vocative_aside(raw: str) -> bool:
         """'Jordan can you pull the freight numbers' / 'Casey just wire grandma...' — the
         speaker is addressing a PRESENT third party by name; the request is theirs, not
@@ -640,7 +764,9 @@ class Triage:
                 vent_frame = True
                 negative_clauses += 1
                 continue
-            if _CONDITIONAL_VENT.search(ct):
+            if _CONDITIONAL_VENT.search(ct) and not self._reported_promise(ct):
+                # a reported-promise frame cancels the bare-I'd vent reading (F21),
+                # exactly as a concrete time anchor cancels the hedge below
                 negative_clauses += 1
                 continue
             if _DEFERRAL.search(ct):
