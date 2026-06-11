@@ -542,7 +542,15 @@ class Orchestrator:
                      'the user supplied a concrete date and clock time, or a relative day plus clock time '
                      'that can be grounded from CURRENT_LOCAL_TIME. Never use capture time as the event time '
                      'unless the user explicitly asked for now.')
-        return base + (f"\nRELEVANT MEMORY: {context}" if context else "")
+            # Memory rides only with a real model, for the same reason as the vocabulary
+            # above: the stub greps the prompt for keywords, so injected memory lines
+            # ("...site plan...", "...post-call...") grew junk browse_task/post_to_x
+            # steps on unrelated goals that then parked at needs_human. At the
+            # deterministic tier the memory reader is the _memory_resolved_browser_step
+            # pre-pass, which receives `context` directly before any model call.
+            if context:
+                base += f"\nRELEVANT MEMORY: {context}"
+        return base
 
     @staticmethod
     def _parse_plan(raw: str) -> list:

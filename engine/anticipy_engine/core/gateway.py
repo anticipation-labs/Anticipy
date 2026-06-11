@@ -199,6 +199,13 @@ class ModelGateway:
 # ---------------------------------------------------------------------------
 # Deterministic stub "model" — reproducible, free, drives the brain tests.
 # ---------------------------------------------------------------------------
+# "post" must be the WORD post (post/posts/posted/posting), not a hyphenated
+# compound ("post-shift dinner") or a prefix ("postpone"): the bare substring
+# planned a junk post_to_x step that parked otherwise-complete goals at
+# needs_human. This stub is also the planner for keyless default boots.
+_POST_WORD_RE = re.compile(r"\bpost(?:ed|ing|s)?\b(?!-)")
+
+
 def default_stub(task: str, tier: str, caller: str) -> str:
     t = task.lower()
     if caller == "gate":
@@ -213,13 +220,15 @@ def default_stub(task: str, tier: str, caller: str) -> str:
             steps.append({"intent": "send_email",
                           "args": {"to": "Sarah", "subject": "Q3 deck", "body": "Attached."},
                           "risk": "needs_confirm"})
-        if any(k in t for k in ("lunch", "book", "calendar", "meet", "schedule")):
+        # "set up" is already a gate-trigger word; a time-anchored "set up X" is a
+        # calendar write (it used to reach create_event only via memory-noise steps)
+        if any(k in t for k in ("lunch", "book", "calendar", "meet", "schedule", "set up")):
             steps.append({"intent": "create_event",
                           "args": {"title": "Lunch with Sarah", "when": "Friday 12:00"}, "risk": "low"})
         if any(k in t for k in ("remind", "friday", "follow", "later")):
             steps.append({"intent": "write_memory",
                           "args": {"kind": "open_loop", "text": "Send Sarah the Q3 deck Friday"}, "risk": "low"})
-        if any(k in t for k in ("post", "tweet", "launch", " x ", " x.", "on x")):
+        if _POST_WORD_RE.search(t) or any(k in t for k in ("tweet", "launch", " x ", " x.", "on x")):
             steps.append({"intent": "post_to_x", "args": {"text": "We just launched. "}, "risk": "low"})
         if any(k in t for k in ("browse", "open ", "website", "site", "check the")):
             steps.append({"intent": "browse_task", "args": {"task": "open the page"}, "risk": "low"})

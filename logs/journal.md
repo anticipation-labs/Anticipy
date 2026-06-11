@@ -632,3 +632,27 @@ that is the 5th dead lap and the designed K=5 escalation hands the saturated-ins
 question to the foreman. Residual risk disclosed: a new ask shape carries blind holdout
 interrupt risk at the 3.0 zero-margin personas; the deny battery is the defense and the
 next judge holdout run rules. Zero spend, zero real-world artifacts, stub/mock only.
+
+## 2026-06-11 — lap 20260611T093358Z (build, e2e_completion_rate on the owner-lane instrument)
+First lap under TARGET v7 (official instrument = ANTICIPY_OWNER_INGEST=1). Diagnosed the
+e2e gap from the last lap's owner-lane run dirs before touching anything: of 56 caught
+expected tasks, 19 stalled — 12 are spine ASK decisions (out of scope, decider territory)
+and 7 were goals whose REAL steps succeeded with proof but whose plan also carried a junk
+browse_task/post_to_x step that returned needs_human in mock and parked the goal at
+"waiting" forever. Root cause in code: _plan_prompt appended the RELEVANT MEMORY dump for
+every provider while the stub planner keyword-greps the whole prompt (5/7 items had the
+junk trigger ONLY in injected memory — "site plan", "post-call"), plus bare-substring
+keyword hits in spoken text ("post-shift" -> post_to_x). Fixed by gating the memory
+section to the live provider (the same documented gate the function already used for the
+intent vocabulary; the deterministic _memory_resolved_browser_step pre-pass stays the
+stub tier's memory reader) and making the stub's post trigger word-boundary-aware. The
+suite then caught two pins that had been green only BECAUSE of the pollution (PICKUP's
+artifact-id proof, UNSHAPED_ACT's completion both rode junk steps) — fixed honestly and
+ledgered F25; "set up" joined the stub's scheduling triggers. Result at final HEAD:
+owner-lane e2e 0.3427 -> 0.4618 (catch 1.0/1.0, false 0, harm 0, interrupt 1.125/1.5 all
+exactly unchanged), default lane equal at 0.4618 with every other aggregate at ratchet
+bests, per-line decisions ZERO diffs in both lanes (plan-layer only), suite 42/42.
+Residuals disclosed: "on site" spoken text keeps one luis goal waiting (carving it out
+would be bank-fitting); the stub's empty-plan fallback still dumps the whole prompt into
+browse_task; the 12 ask-decisions need decider work, not plumbing. Zero spend, zero
+real-world artifacts.

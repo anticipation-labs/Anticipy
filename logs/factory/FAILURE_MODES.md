@@ -1064,3 +1064,43 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   PROMISE ask pin (test_owner_ingest_event), the reported-promise pin block
   (test_triage_clause_scope), and the both-lanes zero-diff bar (any dev decision
   drift from this rule = the junk bound broke).
+
+## Build lap 20260611T093358Z (planner junk steps vs e2e, TARGET v7 item 1)
+- F24 NEW, FIXED THIS LAP (planner-inject family, sibling of F22): the orchestrator's
+  _plan_prompt appended "RELEVANT MEMORY: {context}" for EVERY provider while the
+  deterministic stub planner keyword-greps the whole prompt — so memory lines
+  ("...site plan...", "...post-call...") grew junk browse_task/post_to_x steps on
+  unrelated goals, each junk step returned needs_human in mock, and the goal parked
+  at "waiting" with its REAL steps already done-with-proof. 5 of the 7
+  stalled-with-proof expected acts in runs/20260611T085136Z-owner-post3 had no junk
+  trigger in their own goal text. Second noise source: bare-substring keyword hits
+  in spoken text ("post-shift" -> post_to_x). Fix: (1) the memory section now rides
+  only with a real provider — the SAME documented gate _plan_prompt already used for
+  the intent vocabulary; at the deterministic tier the memory reader remains the
+  _memory_resolved_browser_step pre-pass, which receives context directly; (2) the
+  stub's post trigger is the WORD post (\bpost(?:ed|ing|s)?\b(?!-)) — hyphen
+  compounds and prefixes ("post-shift", "postpone") no longer plan a social post.
+  Owner-lane (official instrument) e2e 0.3427 -> 0.4618; default lane equal;
+  decisions per-line identical in both lanes (plan-layer only). Regression checks:
+  test_orchestrator.test_stub_plan_ignores_memory_inject (noisy memory inject must
+  not change the stub plan or the prompt; the live-provider prompt must keep
+  RELEVANT MEMORY), test_gateway's post-word pins.
+- F25 NEW, FIXED THIS LAP (eval-pin honesty, surfaced BY the F24 fix): two suite
+  pins in test_owner_ingest_event were green only BECAUSE of the F24 pollution —
+  PICKUP's done-proof carried an artifact "id" only because junk send_email/
+  create_event steps rode its plan, and UNSHAPED_ACT ("Set up a quick review...")
+  reached "done" only through those junk steps (its own text triggered NO stub plan
+  keyword, so the honest plan fell through to the browse fallback -> needs_human).
+  Fixes: the proof pin accepts the drawer memory_id as the artifact reference for a
+  reminder line whose honest plan IS the open-loop write; "set up" joined the
+  stub's scheduling triggers (it was already a gate trigger; a time-anchored
+  "set up X" is a calendar write). A pin that passes because of a bug it cannot see
+  is a standing risk: when fixing plumbing, re-derive what each touched pin SHOULD
+  assert. Regression check: the updated pins themselves + suite 42/42 at the fixed
+  planner.
+- RESIDUALS disclosed, NOT chased (would be bank-fitting or out of slice):
+  (a) "on site" in spoken text legitimately matches the stub browse trigger "site"
+  (contractor_luis day02 stays waiting); (b) the stub's empty-plan fallback
+  browse_task carries the WHOLE prompt as the task string (LESSONS' search-bar
+  dumping shape, now more visible with shorter prompts); (c) the 12 expected-act
+  items the spine decides ASK on are decider/harm-line territory, not plumbing.

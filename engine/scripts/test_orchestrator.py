@@ -108,6 +108,40 @@ async def test_deterministic_calendar_plan():
     print("  deterministic calendar: create_event step done with concrete args")
 
 
+async def test_stub_plan_ignores_memory_inject():
+    tmp, bus, gw, store, _ = make_env()
+    from anticipy_engine.core.gateway import default_stub
+    seen = []
+
+    def recording_stub(task, tier, caller):
+        seen.append(task)
+        return default_stub(task, tier, caller)
+
+    gw = ModelGateway(stub=recording_stub)
+    # memory full of planner-keyword noise; none of it is part of THIS goal
+    noisy = {"open_loops": ["check the hardware site for the posted hours"],
+             "notes": "open the returns page later"}
+    orch = Orchestrator(bus, gw, store, approver=AutoApprover(True),
+                        memory_context=lambda about: noisy)
+    await bus.start()
+    try:
+        goal = await orch.start_goal(Goal(
+            intent="x",
+            description="Get the quarterly vendor sync on my calendar for Tuesday morning."))
+    finally:
+        await bus.stop()
+    # the deterministic tier plans from the GOAL alone: memory keyword noise must
+    # not grow junk browse/post steps that park the goal at needs_human
+    assert "RELEVANT MEMORY" not in seen[0], seen[0]
+    assert [s.intent for s in goal.steps] == ["create_event"], goal.steps
+    assert goal.state == GoalState.done, goal.state
+    # a REAL model still receives the memory: the inject seam is live-path intact
+    live_orch = Orchestrator(bus, ModelGateway(provider="openrouter"), store)
+    prompt = live_orch._plan_prompt(Goal(intent="x", description="anything"), noisy)
+    assert "RELEVANT MEMORY" in prompt, prompt
+    print("  stub plan ignores memory inject: create_event only, done; live prompt keeps memory")
+
+
 async def test_approval_denied():
     tmp, bus, gw, store, _ = make_env()
     orch = Orchestrator(bus, gw, store, approver=AutoApprover(False))  # deny everything risky
@@ -156,6 +190,7 @@ async def main():
     await test_verify_before_done()
     await test_empty_plan_never_done()
     await test_deterministic_calendar_plan()
+    await test_stub_plan_ignores_memory_inject()
     await test_approval_denied()
     await test_persist_and_resume()
     print("PASS piece 4: orchestrator (plan/dispatch/verify/retry/reroute/persist/resume)")

@@ -80,7 +80,25 @@ its LESSONS.md still binds.
 - Possible stray artifact: `[Anticipy test] M2 typed smoke 20260607-continue` calendar
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
-## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v6 STAGE B: the Owner Action Engine execution path
+## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- PLANNER JUNK STEPS KILLED, e2e MOVED (lap 20260611T093358Z, build — first lap under
+  TARGET v7; ledger F24 FIXED, F25 FIXED): _plan_prompt appended the RELEVANT MEMORY
+  dump for every provider while the stub planner keyword-greps the whole prompt, so
+  injected memory lines ("site plan", "post-call") and bare-substring spoken hits
+  ("post-shift" -> post) grew junk browse_task/post_to_x steps that returned
+  needs_human in mock and parked proof-complete goals at "waiting" (7 of the 19
+  stalled expected acts; the other 12 are spine ASK decisions, decider territory).
+  Fix: memory section provider-gated exactly like the existing intent-vocabulary gate
+  (deterministic tier's memory reader stays the _memory_resolved_browser_step
+  pre-pass); stub post trigger is the WORD post; "set up" joined the scheduling
+  triggers. Owner lane (OFFICIAL): e2e 0.3427 -> 0.4618, catch 1.0/1.0, false 0,
+  harm 0, interrupt 1.125/1.5 (F23 delta) all exactly unchanged; default lane equal
+  at 0.4618, everything else at ratchet bests; per-line decisions ZERO diffs in both
+  lanes (plan-layer only). F25 lesson: two suite pins were green only BECAUSE of the
+  pollution (junk steps carried PICKUP's artifact id and completed UNSHAPED_ACT) —
+  when fixing plumbing, re-derive what each touched pin should assert. Suite 42/42.
+  Residuals: "on site" keeps one luis goal waiting (carving it = bank-fitting); the
+  stub's empty-plan fallback dumps the whole prompt into browse_task.
 - THE BARE REPORTED PROMISE IS CAUGHT (lap 20260611T085136Z, build — ledger F21
   FIXED on the main path): root cause was triage._CONDITIONAL_VENT's bare-I'd
   alternative eating reported-promise clauses as counterfactual vents at clause

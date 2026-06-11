@@ -109,7 +109,11 @@ async def owner_lane_check():
     assert rec["state"] == "done", "an executed do card must mirror its goal's state"
     assert rec["steps"], rec
     assert rec["proof"], "done without proof is the cardinal orchestrator sin"
-    assert any((p or {}).get("id") for p in rec["proof"].values()), rec["proof"]
+    # the proof must reference a real artifact: an external id, or the drawer
+    # memory_id for a reminder line whose honest plan is the open-loop write
+    # (plans no longer carry memory-noise side steps, so PICKUP plans exactly that)
+    assert any((p or {}).get("id") or (p or {}).get("memory_id")
+               for p in rec["proof"].values()), rec["proof"]
     assert "pickup" in rec["description"].lower(), rec
     card_proof = rec["owner_card"]["proof"]
     assert any(p["type"] == "memory_write" for p in card_proof), rec

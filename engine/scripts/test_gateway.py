@@ -40,6 +40,16 @@ async def main() -> None:
     assert len(gw.smart_calls) == 2
     assert gw.total_cost() > 0
 
+    # the post_to_x trigger is the WORD post — hyphen compounds and prefixes are
+    # not social posts (a junk post step parks an otherwise-complete goal)
+    gw2 = ModelGateway()
+    plan2 = json.loads(await gw2.think(
+        "Plan: remind me to ice my knee tomorrow, post-run.", tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan2["steps"]] == ["write_memory"], plan2
+    plan3 = json.loads(await gw2.think(
+        "Plan: post the team update tonight.", tier=SMART, caller="plan"))
+    assert "post_to_x" in [s["intent"] for s in plan3["steps"]], plan3
+
     print("PASS piece 3: model gateway")
     print("  plan intents:", intents)
     print("  smart calls:", len(gw.smart_calls), "| total cost:", gw.total_cost())

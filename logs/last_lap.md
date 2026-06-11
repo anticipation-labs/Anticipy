@@ -1,69 +1,68 @@
 # Last Lap
 
-Lap: 20260611T085136Z
+Lap: 20260611T093358Z
 Date: 2026-06-11
-Phase: P2-brain CLOSED -> TARGET v6 STAGE B (Owner Action Engine execution path)
-Slice: F21 FIXED on the main path — the bare reported promise ("Sam needs the revised
-decking before Friday; I told him I'd send it.") is now CAUGHT by the spine and lands
-as a real pending ask. Root cause was in code: triage._CONDITIONAL_VENT's bare \bi'd\b
-alternative consumed any reported-promise clause as a counterfactual vent at clause
-scope before positives ran. Aimed at catch_rate_worst; pre-registered honestly that
-the OFFICIAL metric CANNOT move (saturated 1.0 on the dev bank AND the last judged
-holdout per the 041654Z verdict, counts only) — the catch movement lives off-bank.
+Phase: P3-voice (TARGET v7 — official instrument is the owner lane, eval_env ANTICIPY_OWNER_INGEST=1)
+Slice: e2e_completion_rate, ranked work item 1 (stalled expected acts -> completed with
+proof). Owner-lane e2e 0.3427 -> 0.4618 builder-side; verify_gate recomputes.
+
+Diagnosis (evidence first, from runs/20260611T085136Z-owner-post3): of 56 caught expected
+tasks, 19 stalled. 12 are spine ASK decisions (decider/harm-line territory — out of
+scope). 7 were goals whose REAL steps already succeeded WITH proof but whose plan also
+carried a junk browse_task/post_to_x step that returns needs_human in mock — parking the
+goal "waiting" forever. Junk sources, located in code:
+- 5/7: _plan_prompt appended "RELEVANT MEMORY: {context}" for EVERY provider while the
+  deterministic stub planner keyword-greps the whole prompt; injected memory lines
+  ("...site plan...", "...post-call...") triggered steps the goal never asked for.
+- 2/7: bare-substring keyword hits in the spoken line itself ("post-shift" -> "post").
 
 What changed:
-- engine/anticipy_engine/proactive/triage.py: new clause-scoped REPORTED-PROMISE
-  shape (_reported_promise + _RP_* regexes/sets): first-person matrix frame
-  ("I told/promised <person>", "I said") + irrealis complement (I'd/I would/I'll/
-  I will) + open-vocabulary base-form committed verb + content floor. It BOTH cancels
-  the bare-I'd vent reading in actionable() (precedent: _TIME_ANCHOR cancels _HEDGE)
-  and counts as a positive in _clause_positive (after the vent_frame gate, so open
-  sarcasm frames still win). Junk bound: structural anchors + closed-class
-  deny-direction checks — participle backshift ('d=had), negation/hedge/vow verb-slot
-  words, deferral heads/idioms, vow heads, unanchored be-vows, tag-question retorts,
-  wish-regret, promised-myself, habitual prefixes, resolved/failed complements
-  ("...and I did", tail-scoped "but"), joke markers. An adversarial probe session
-  (instructed to refute the junk bound, 23 families) drove the deny set; its
-  surviving residuals are disclosed in FAILURE_MODES (unmarked hyperbole fails
-  toward ask).
-- engine/scripts/test_triage_clause_scope.py: +30 reported-promise pins (allow AND
-  every deny class; 187 pins total). New pin names verified absent from the dev bank
-  (the one collision found, a bank proper noun, was renamed before commit).
-- engine/scripts/test_owner_ingest_event.py: the F21 pin flipped exactly per the
-  ledger's written regression check — PROMISE_SILENT renamed REPORTED_PROMISE,
-  decision ignore -> ask with a real ask_id, record open -> waiting, /pending now
-  carries it (count 2 -> 3). The F17 one-brain contract is unchanged: this is the
-  SPINE's verdict, not a regex side-door.
+- engine/anticipy_engine/core/orchestrator.py (_plan_prompt): the memory section now
+  rides only with a real provider — the SAME documented gate the function already used
+  for the intent vocabulary ("the stub gateway greps the prompt for keywords"). At the
+  deterministic tier the memory reader remains the _memory_resolved_browser_step
+  pre-pass, which receives context directly before any model call. Live-provider prompt
+  unchanged (pinned).
+- engine/anticipy_engine/core/gateway.py (default_stub): the post_to_x trigger is the
+  WORD post (\bpost(?:ed|ing|s)?\b(?!-)) — hyphen compounds/prefixes ("post-shift",
+  "postpone") no longer plan a social post; "set up" joined the create_event triggers
+  (already a gate trigger; a time-anchored "set up X" is a calendar write). The stub is
+  also the planner for keyless default boots, so these are product fixes, not eval-only.
+- Pins: test_orchestrator.test_stub_plan_ignores_memory_inject (noisy inject must not
+  change the stub plan or prompt; live prompt must keep RELEVANT MEMORY),
+  test_gateway post-word pins (non-bank sentences), test_owner_ingest_event proof pin
+  now accepts the drawer memory_id as the artifact reference for a reminder line whose
+  honest plan IS the open-loop write.
+- Ledger: F24 (planner memory-noise junk steps park proof-complete goals; FIXED),
+  F25 (two suite pins were green only BECAUSE of F24 — pins masked by the bug they
+  could not see; FIXED, with the lesson written).
 
 Eval numbers I saw (verify_gate recomputes the official ones):
-- Suite: 42/42 green (187 clause-scope pins, 0 smart calls).
-- Default lane, dev bank, stub: -pre vs final HEAD (-post3) per-line decision diff =
-  ZERO changes across 493 lines x 16 persona-days; aggregates bit-identical to
-  ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, recall 1.0,
-  correct 0.6788, e2e 0.3427).
-- Owner lane (ANTICIPY_OWNER_INGEST=1): same — zero per-line diffs, aggregates
-  exactly the documented owner numbers (interrupt 1.125/1.5 = the F23 money
-  pre-gate delta, untouched).
-- The rule is provably inert on the dev bank; its only behavior change is off-bank
-  (the F21 family, pinned). Zero model calls, zero spend, zero real-world artifacts.
+- Owner lane (OFFICIAL, ANTICIPY_OWNER_INGEST=1, dev bank, stub): e2e 0.3427 -> 0.4618;
+  catch 1.0/1.0, false 0, harm 0, interrupt 1.125/1.5, recall 1.0, correct 0.6788 — all
+  exactly unchanged. Per-persona e2e: luis 0->0.2857, amara 0.1667->0.5, kayla
+  0.3333->0.5, rob 0.3333->0.5; jin/marcus/dana/pri unchanged (no regressions).
+- Default lane: e2e 0.3427 -> 0.4618 (shared planner, disclosed); every other aggregate
+  exactly at ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0).
+- Per-line decision diff pre vs final HEAD: ZERO across 16 persona-days in BOTH lanes —
+  the change is plan-layer only; act/ask/silent verdicts untouched.
+- Suite 42/42. Zero model calls, zero spend, zero real-world artifacts.
 
 Honest accounting:
-- This is the 5th lap since last_movement_lap with the primary metric saturated on
-  every instrument a builder may read. If the scoreboard rules it dead, the designed
-  K=5 treadmill escalation fires and the foreman re-aims — that is the system
-  working, not a failure of this lap. attempt_gate_close=false (P2 already closed).
-- Disclosed risk: a NEW ask shape carries blind holdout interrupt risk
-  (interrupt_cost_worst 3.0 at zero margin on two holdout personas). The deny
-  battery + zero-diff dev bar are the defense; the next judge holdout run rules.
+- Two unplanned-but-disclosed fixes (manifest addendum): the suite exposed pins that
+  passed only via the pollution; fixing them honestly was required to keep the suite
+  green at the fixed planner.
+- Residuals NOT chased: "on site" spoken text keeps one contractor_luis goal waiting
+  (carving that phrase out would be bank-fitting); the stub's empty-plan fallback still
+  dumps the whole prompt into browse_task (LESSONS' search-bar shape, now more visible);
+  C13 applies — dev-bank numbers are bank-fit, holdout rules gate-grade claims.
 
 Next:
-- F23 foreman ruling (money pre-gate asks on money-flavored vents — the whole
-  owner-lane interrupt delta).
-- The /owner/ingest execute_actions=false preview door still uses the regex-only
-  extractor (needs the one-brain treatment before any non-executing door ships).
-- P3 closure waits ONLY on OWNER_PHONE confirmation + live Twilio env
-  (PENDING_FOR_OMAR item 2); F20 clarification reply and D16 pending-map
-  persistence remain queued for live ops.
-- Foreman: the primary instrument is saturated (dev AND holdout at 1.0 catch) —
-  TARGET needs a new measurable aim (bank v2 / holdout red-pen / live-tier
-  instrument / e2e or interrupt as primary).
+- The remaining e2e headroom on this instrument: 12 expected acts the spine decides ASK
+  on (the eval never answers asks) — decider/harm-line territory, needs a foreman call
+  on whether chasing it is in-scope vs the F23 money pre-gate interrupt item (TARGET
+  ranked item 2).
+- F23: owner-lane interrupt 1.125 vs default 0.625 is still entirely the money pre-gate
+  on money-flavored vents (fail-safe; foreman ruling queued).
+- P3 closure still waits ONLY on OWNER_PHONE confirmation + live Twilio env
+  (PENDING_FOR_OMAR item 2).
