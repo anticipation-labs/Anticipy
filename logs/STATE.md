@@ -182,6 +182,16 @@ its LESSONS.md still binds.
   verdict condition 3 hands the structural options to the foreman (judge-named-lexeme
   channel amendment after K falsified sweeps, or live-tier holdout instrument);
   treadmill at 4 — the next dead lap fires the designed escalation.
+  UPDATE (lap 20260611T041654Z): the 000748Z closure attempt ended JUDGE_ERROR (external
+  judge session limit; C17 correctly voided the close — F15a has NEVER been judged).
+  Foreman repaired (D23: session-limit laps don't count as treadmill; treadmill reset 0)
+  and landed TARGET v6 + the Owner Action Engine lane (ee77765). Lap 041654Z is the
+  TARGET v6 STAGE A re-attempt: HEAD verified healthy (suite 38/38 incl. 2 new owner
+  tests; fresh stub full bank bit-identical to ratchet bests, selftest PASS; per-line
+  decision diff vs 000748Z-pre = 16/16 persona-days byte-identical, so the owner lane
+  is provably inert on the persona path and the judge rules on exactly the F15a brain
+  state). attempt_gate_close=true; zero code changes, zero spend; the judge's fresh
+  holdout run decides.
 
 ## P1 history (work list was TARGET v2)
 Scheduler for trigger_tick; due-time grounding (duetime.py); reminder routing (notify,

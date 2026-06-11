@@ -504,3 +504,23 @@ instrument and the verdict; worst was 0.6667 (nurse_helen 2/3) with both residua
 misses fitting the disclosed shape. If the floor still fails, verdict condition 3
 stands: structural options (judge-named-lexeme channel amendment or live-tier holdout
 instrument) are foreman calls; treadmill sits at 4.
+
+## Lap 20260611T041654Z (builder, P2-brain, TARGET v6 STAGE A)
+The prescribed re-attempt of the P2 gate close. Context: lap 20260611T000748Z landed
+the F15a benefactive-staging shape fix (commit 96eb92f) and attempted the close, but
+its judge died to an external session limit (JUDGE_ERROR; no holdout_metrics.json
+exists) — C17 correctly voided that close, and the F15a diff has therefore NEVER been
+judged. Since then the foreman committed ee77765 (Owner Action Engine lane: new
+owner_mode.py / owner_onboarding.py endpoints + tests, TARGET v6). This lap verified
+HEAD healthy on three axes before re-attempting: (1) suite 38/38 green (the F15a 36 +
+2 owner tests); (2) fresh full-bank stub persona run (20260611T041654Z-pre) —
+aggregates BIT-IDENTICAL to the ratchet bests (catch 1.0/worst 1.0, false 0, harm 0,
+interrupt 0.625/worst 1.0, recall_worst 1.0, correct_action 0.6788, e2e 0.3427,
+worst contractor_luis), scorer selftest PASS; (3) per-line decision diff vs the last
+verified run (000748Z-pre): 16/16 persona-day summaries byte-identical — the foreman's
+owner lane is provably inert on the persona path, so the product state under judgment
+is exactly the judge-unjudged F15a state. No code changes; zero model spend;
+attempt_gate_close=true. The judge's fresh holdout run is the instrument and the
+verdict: freshest read (232257Z verdict counts) was worst 0.6667 with the residual
+miss being the single benefactive sentence F15a was built for. If VETO, the named
+residue is the next hypothesis per TARGET v6 STAGE A.
