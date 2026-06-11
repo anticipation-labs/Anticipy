@@ -1,57 +1,72 @@
 # Last Lap
 
-Lap: 20260611T120957Z (groundwork — ledger F20 FIXED: ambiguous inbound replies
-now draw one bounded clarification; TARGET v7 item 4's "build and mock-prove
-everything around the P3 gate". DISCLOSED in the manifest up front: primary
-metric e2e is at its F31 honest ceiling and gate_P3 cannot first-close from a
-builder lap (live legs human-gated on OWNER_PHONE; the gate script itself is a
-foreman item) — so this lap reads mechanically DEAD (moved=none) by design,
-the third in the designed walk toward the K=5 escalation -> TARGET v8 re-aim.)
+Lap: 20260611T132034Z (groundwork — pending-ask persistence, the D16 sibling:
+the ledger's LAST named mock-side P3 residual, sanctioned by TARGET v7 item 4's
+"build and mock-prove everything around the P3 gate". DISCLOSED in the manifest
+up front: primary metric e2e is at its F31 honest ceiling and gate_P3 cannot
+first-close from a builder lap (live legs human-gated on OWNER_PHONE; the gate
+script itself is a foreman item) — so this lap reads mechanically DEAD
+(moved=none) by design, the fourth in the designed walk toward the K=5
+escalation -> TARGET v8 re-aim.)
 
 ## What changed
-- `engine/anticipy_engine/channels/inbound.py` — the ambiguous-reply branch
-  (bare YES/NO with !=1 asks pending, or a code matching nothing) still refuses
-  to resolve anything, but now TELLS the owner so (F20's own queued fix):
-  `_clarify` sends ONE bounded clarification SMS per poll pass through the
-  existing `notify_user` door (ChannelWorker -> shared TextChannel, mock/live
-  triad, never-crash), listing the exact pending reply codes — at most 5, action
-  snippets truncated to 60 chars, "nothing is pending" when there are none.
-  Bounds all fail toward silence: one send per pass even if the send fails
-  (never burst-retry SMS), the clarification COUNTS against the proactive
-  AnnoyanceBudget and is SUPPRESSED when the daily budget is spent, recipient is
-  the already-verified owner number only, seen-sid gating means it never
-  replays. It can only ever send text: no resolve/approve/goal/execution in any
-  branch; the owner's exact-code resolution is itself never budget-gated.
-- `engine/scripts/test_inbound.py` — the F20 battery: two-pending clarification
-  listing both codes + budget draw; zero-pending honest "nothing is pending";
-  one-per-pass burst bound (second ambiguous reply in the same pass draws
-  nothing; a wrong-sender valid code draws nothing); budget-exhausted
-  suppression with the exact-code resolve still working; seen/restart never
-  re-clarify; OWNER_PHONE-unset sends nothing.
+- `engine/anticipy_engine/core/proactive.py`: ProactiveEngine takes `pending_path`;
+  the pending-ask map (ask_id -> {goal_id, action, reason, category}) now persists
+  atomically (tmp + os.replace) on EVERY mutation — the `_send_ask` add and the
+  `resolve_ask` pop (pop persists BEFORE the goal resumes: a crash mid-resolve can
+  only LOSE the ask toward silence, never replay an approval — the deferred-drain
+  ordering law). `_restore_pending` on boot validates every entry against the
+  durable goal store: only goals still at state=waiting come back; missing or
+  already-run goals are dropped and pruned from the file; a corrupt file boots
+  empty, logs `pending_restore_failed`, and is set aside `.corrupt`; no path
+  (the default in every direct-construction test) = no IO at all. Restore is
+  PASSIVE state — nothing re-enters the pipeline; a restored ask waits for the
+  owner's own YES/NO exactly like a live one.
+- `engine/anticipy_engine/core/control_core.py`: wires
+  `pending_path=<data>/pending_asks.json` (mirrors `deferred_path`); fixed the
+  now-stale "_owner_card_goals is in-memory like proactive.pending itself" comment.
+- `engine/scripts/test_pending_persistence.py` (NEW, suite 43 -> 44): restart
+  survival + YES resumes the EXACT goal to done; NO-after-restart declines without
+  executing; store-validation drops stale entries and prunes the file; crash
+  ordering (pop persists before resume; the goal stays honestly paused after a
+  lost approval); corrupt set-aside; no-path zero-IO; and the gate_P3 inbound leg
+  END-TO-END — ControlCore restart with BOTH in-memory maps gone, inbound
+  "YES <code>" resolves the restored ask, goal done, owner card written back
+  through the F18 durable linkage.
+- `scripts/run_suite.sh`: wired the new test.
+- Ledger: D16-sibling residual (under F18) -> FIXED entry with regression check;
+  remaining D16-family siblings disclosed (D16 proper TriggerWatcher._fired,
+  budget/debounce day-state — all lose toward silence on restart).
 
-## Numbers I saw (builder-side, stub, dev bank)
-- OFFICIAL owner lane (ANTICIPY_OWNER_INGEST=1): catch 1.0/1.0, false 0, harm 0,
-  interrupt 0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0 — aggregates
-  bit-identical pre->post, at the ratchet bests. Default lane identical too.
-- Per-line decision diff pre->post, BOTH lanes, 493 lines x 16 persona-days:
-  ZERO (the InboundPoller is never constructed in persona runs — verified, not
-  assumed). Scorer selftest PASS both lanes.
-- Suite 43/43. Zero spend, zero real-world artifacts.
-- Run dirs: logs/factory/runs/20260611T120957Z-{pre,post}-{owner,default}.
+## Why (the product fact)
+The whole P3 inbound chain was restart-proof EXCEPT its first link: goals are
+durable, owner-card linkage is durable (F18), inbound seen-sids are durable —
+but the pending map that lets a reply MATCH an ask was in-memory. On a live day
+(gate_P3: "inbound reply resolves a real pending ask") any engine restart between
+the ask SMS and the owner's reply made the reply resolve NOTHING; the F20
+clarifier would then honestly tell the owner "nothing is pending" about an ask
+the product itself had sent. Named in STATE.md and the last lap's commit as the
+remaining mock-side item under TARGET v7 item 4.
 
-## Status / what's next
-- This is an honest DEAD lap on the official instrument by design (treadmill
-  should be at 3). F31's designed outcome stands: the next builder laps have no
-  honest e2e slice; the right move is the K=5 escalation -> foreman TARGET v8
-  re-aim (candidates per F31: correct_action_rate 0.8475 headroom, owner-path
-  capture for storeless cart items, the F23 money-STANCE call, the human-gated
-  P3 live legs + gate_P3.sh authoring — both foreman items).
-- P3 mock-side residuals a future lap could still take under item 4's sanction:
-  the D16 sibling (proactive.pending is in-memory — an engine restart between
-  ask-SMS and the owner's YES strands the ask itself; the
-  decider_deferred.json persistence pattern is the named fix) and F19 (live
-  text.py realm-dependent auth — port the explicit-header pattern if the first
-  live SMS leg fails). Both are disclosed in the ledger; neither moves the
-  official instrument either.
-- Still waiting on Omar: OWNER_PHONE confirmation (PENDING_FOR_OMAR item 1)
-  unblocks the P3 live gate night.
+## Eval numbers seen (builder-side, stub)
+- Suite 44/44 green.
+- OFFICIAL instrument (full pre AND post runs, BOTH lanes): bit-identical at the
+  ratchet bests — catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0,
+  e2e 0.6483, correct 0.8475, recall 1.0; aggregate AND per-persona JSON equal.
+- Per-line decision diff pre->post: ZERO in both lanes (default 493 decision
+  lines, owner 492 — counts equal pre vs post within each lane; the 1-line lane
+  difference exists in the pre runs and predates this change). Goal
+  (intent,state) multisets identical; /pending dumps identical modulo fresh-run
+  UUIDs; the only new run artifact is the intended data/pending_asks.json.
+- Zero spend, zero real-world artifacts, no live legs.
+
+## What's next
+- P3 mock-side residuals under item 4 are now EXHAUSTED builder-side: the D16
+  sibling is fixed; F19 (live text auth realm) is live-observable only.
+- gate_P3 closure still waits on the two human/foreman gates: Omar's OWNER_PHONE
+  confirmation (PENDING_FOR_OMAR) and the gate_P3.sh script itself (foreman item
+  — it does not exist yet).
+- The designed next step remains the K=5 escalation -> TARGET v8 re-aim
+  (correct_action_rate has real headroom at 0.8475). D16 proper
+  (TriggerWatcher._fired double-fire on restart) is the one remaining
+  restart-robustness sibling with a non-silent failure direction.

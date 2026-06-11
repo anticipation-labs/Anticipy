@@ -1422,3 +1422,48 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   budget_clarify_check pins suppression-toward-silence and the ungated
   exact-code resolve. A clarification that resolves anything, texts a non-owner,
   or sends twice in a pass = the failure returned.
+
+## Groundwork lap 20260611T132034Z (pending-ask persistence, the D16 sibling — TARGET v7 item 4 "mock-prove everything around the P3 gate")
+- D16-SIBLING UPDATE — FIXED (was OPEN under the F18 residual: proactive.pending
+  was in-memory, so an engine restart between the ask SMS and the owner's reply
+  stranded the ASK itself — "unknown or already-resolved ask" — even though the
+  F18 record linkage and the paused goal both survive on disk): the residual's
+  own named fix, the decider_deferred.json persistence pattern applied to the
+  pending map. ProactiveEngine(pending_path=...) persists pending atomically
+  (tmp + os.replace) on EVERY mutation — _send_ask add, resolve_ask pop — and a
+  boot restores it; ControlCore wires <data>/pending_asks.json unconditionally,
+  mirroring deferred_path. Restore is PASSIVE state: it never re-enters the
+  pipeline or resumes anything (a restored entry waits for the owner's own
+  YES/NO exactly like a live one), and it validates every entry against the
+  durable goal store — only goals still at state=waiting come back; missing or
+  already-run goals are DROPPED toward silence and pruned from the file (an ask
+  that cannot safely resume its exact goal must not be resumable). The resolve
+  pop persists BEFORE the goal resumes, so a crash mid-resolve can only LOSE the
+  ask (fail toward silence), never leave an approval on disk to replay after the
+  goal may already have acted (the deferred-drain ordering law). A corrupt file
+  boots empty, logs pending_restore_failed, and is set aside as .corrupt. No
+  pending_path (every direct-construction test) = no IO at all. Decision-inert
+  by construction: nothing in the on_event decision path reads self.pending
+  (consumers are /pending listing, the inbound resolver/clarifier, and
+  resolve_ask itself).
+- Measured (builder-side, stub): suite 44/44 (new test_pending_persistence.py:
+  restart-survival with YES resuming the EXACT goal to done; NO-after-restart
+  declining without executing; store-validation dropping missing/non-waiting
+  goals and pruning the file; crash-ordering pop-persists-before-resume with the
+  goal staying honestly paused; corrupt set-aside; no-path zero-IO; and the
+  gate_P3 inbound leg end-to-end — ControlCore restart with BOTH in-memory maps
+  gone, inbound "YES <code>" resolves the restored ask, goal done, owner card
+  written back through the F18 durable linkage). OFFICIAL instrument verified by
+  full pre/post persona runs in BOTH lanes (see lap dir).
+- STILL OPEN, D16 family (disclosed, not chased — separate slices): D16 proper
+  (TriggerWatcher._fired in-memory: restart can double-fire reminders);
+  AnnoyanceBudget day-counts and AskDebounce money holds reset on restart (both
+  lose toward MORE silence/fewer interruptions on money — the safe direction);
+  ControlCore._owner_card_goals stays in-memory BY DESIGN (the F18 durable
+  execution.goal_id fallback is the persistence, pinned across restart in the
+  new e2e test).
+- Regression check: test_pending_persistence.py — the restart pin (a pending ask
+  must survive into a fresh engine and YES must resume the exact paused goal)
+  and the e2e pin (ControlCore restart + inbound YES -> goal done + card
+  write-back). A YES after restart answering "unknown or already-resolved ask"
+  while <data>/pending_asks.json holds the entry = the failure returned.

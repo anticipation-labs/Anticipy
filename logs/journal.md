@@ -796,3 +796,30 @@ bit-identical at the ratchet bests; per-line decision diff ZERO across 493
 lines x 16 persona-days (the poller never runs in persona runs — proven, not
 assumed). Ledger: F20 -> FIXED with the regression battery in test_inbound.py.
 Zero spend, zero real-world artifacts.
+
+## 2026-06-11 — lap 20260611T132034Z (builder, groundwork: pending-ask persistence, the D16 sibling)
+Did the ledger's last named mock-side P3 residual (TARGET v7 item 4 "mock-prove
+everything around the gate"): proactive.pending — the map that lets an owner's
+YES/NO match a pending ask — lived only in memory, so an engine restart between
+the ask SMS and the reply stranded the ask ("unknown or already-resolved ask")
+even though the paused goal and the F18 card linkage both survive on disk.
+Applied the residual's own named fix, the decider_deferred.json pattern:
+ProactiveEngine(pending_path=...) persists the map atomically on every mutation
+(add at _send_ask, pop at resolve_ask — pop persists BEFORE the goal resumes so
+a crash mid-resolve loses the ask toward silence, never replays an approval) and
+a boot restores ONLY entries whose goal is still waiting in the durable store
+(missing/already-run goals drop and the file is pruned; corrupt files set aside
+.corrupt with an honest log; no path = no IO). ControlCore wires
+<data>/pending_asks.json mirroring deferred_path. Restore is passive — nothing
+re-enters the pipeline; nothing in the on_event decision path reads the map.
+Verified: new test_pending_persistence.py 7-pin battery incl. the gate_P3
+inbound leg end-to-end (ControlCore restart with BOTH in-memory maps gone ->
+inbound "YES <code>" resolves, goal done, owner card written back via F18);
+suite 44/44; full pre/post persona runs in BOTH lanes bit-identical at the
+ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483,
+correct 0.8475, recall 1.0), per-line decision diff ZERO (default 493 lines,
+owner 492, 16 persona-days each), goal-state multisets identical, /pending
+dumps identical modulo fresh-run UUIDs; only new run artifact = the intended
+pending_asks.json. Honest DEAD lap BY DESIGN, disclosed in the manifest (e2e at
+the F31 ceiling, items 1/2 exhausted, 3/4 judge/human-gated; treadmill at 3
+walking toward the designed K=5 re-aim). Zero spend, zero real-world artifacts.

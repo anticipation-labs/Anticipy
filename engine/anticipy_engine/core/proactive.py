@@ -77,6 +77,7 @@ class ProactiveEngine:
         user_contact: str = "+10000000000",
         decider=None,
         deferred_path=None,
+        pending_path=None,
     ) -> None:
         self.bus = bus
         self.gateway = gateway
@@ -109,6 +110,16 @@ class ProactiveEngine:
         self._deferred_path = Path(deferred_path) if deferred_path else None
         if self._deferred_path is not None and self.decider is not None:
             self._restore_deferred()
+        # Pending-ask persistence (the D16 sibling): the ask SMS carries a reply code,
+        # but the map that lets a YES/NO match it lived only in memory — an engine
+        # restart between the ask and the owner's reply stranded the ask even though
+        # the paused goal itself is durable in the store. Restoring is PASSIVE state:
+        # it never re-enters the pipeline or resumes anything — a restored entry waits
+        # for the owner's own YES/NO exactly like a live one, and only entries whose
+        # goal is still PAUSED in the store come back. No path (the default) = no IO.
+        self._pending_path = Path(pending_path) if pending_path else None
+        if self._pending_path is not None:
+            self._restore_pending()
 
     async def on_event(self, event: Event, now: Optional[float] = None) -> dict:
         now = now if now is not None else now_ts()
@@ -285,6 +296,61 @@ class ProactiveEngine:
                 self.glassbox.log("decider_deferred_persist_failed",
                                   {"path": str(p), "error": str(exc)})
 
+    def _restore_pending(self) -> None:
+        """Reload the pending-ask map written by a previous engine (the D16 sibling)
+        so the owner's YES/NO still matches after a restart. Each entry must point
+        at a goal that is still PAUSED in the durable store — anything else
+        (resolved, executed, missing) is dropped toward silence: an ask that cannot
+        safely resume its exact goal must not be resumable. Any failure here fails
+        toward silence too: boot with an empty map, log honestly, set the
+        unreadable file aside."""
+        p = self._pending_path
+        if not p.exists():
+            return
+        try:
+            restored, dropped = {}, 0
+            for ask_id, entry in json.loads(p.read_text()).items():
+                goal = self.orchestrator.store.load(entry["goal_id"])
+                if goal is not None and goal.state == GoalState.waiting:
+                    restored[str(ask_id)] = {"goal_id": str(entry["goal_id"]),
+                                             "action": str(entry["action"]),
+                                             "reason": str(entry["reason"]),
+                                             "category": str(entry.get("category", ""))}
+                else:
+                    dropped += 1
+            self.pending = restored
+            if self.glassbox is not None:
+                self.glassbox.log("pending_restored",
+                                  {"count": len(restored), "dropped": dropped,
+                                   "path": str(p)})
+            if dropped:
+                self._persist_pending()   # prune stale entries; they must never linger
+        except Exception as exc:
+            self.pending = {}
+            try:
+                p.rename(p.with_suffix(p.suffix + ".corrupt"))
+            except OSError:
+                pass
+            if self.glassbox is not None:
+                self.glassbox.log("pending_restore_failed",
+                                  {"path": str(p), "error": str(exc)})
+
+    def _persist_pending(self) -> None:
+        """Atomically snapshot the pending-ask map on every mutation. A disk failure
+        must never break the ask path — log it and carry on in memory."""
+        if self._pending_path is None:
+            return
+        p = self._pending_path
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            tmp.write_text(json.dumps(self.pending, indent=2))
+            os.replace(tmp, p)
+        except OSError as exc:
+            if self.glassbox is not None:
+                self.glassbox.log("pending_persist_failed",
+                                  {"path": str(p), "error": str(exc)})
+
     def _flush_held(self, h: dict) -> None:
         """A held money ask survived its retraction window — send the SAME ask, late."""
         goal = self.orchestrator.store.load(h["goal_id"])
@@ -302,6 +368,7 @@ class ProactiveEngine:
                f"Reply YES {ask_id[:6]} to proceed, NO {ask_id[:6]} to skip.")
         sent = self.channel.send(self.user_contact, msg)
         self.pending[ask_id] = {"goal_id": goal.id, "action": action, "reason": reason, "category": category}
+        self._persist_pending()
         if self.glassbox is not None:
             self.glassbox.log("ask_sent", {"ask_id": ask_id, "goal_id": goal.id, "channel": self.channel.name,
                                            "to": self.user_contact, "sent": bool(sent.get("sent"))})
@@ -313,6 +380,10 @@ class ProactiveEngine:
         p = self.pending.pop(ask_id, None)
         if p is None:
             return {"ask_id": ask_id, "resolved": False, "reason": "unknown or already-resolved ask"}
+        # persist the pop BEFORE resuming/declining: a crash mid-resolve can only
+        # LOSE the ask (fail toward silence) — the file must never hold an entry
+        # whose approval may already have acted (same law as the deferred drain).
+        self._persist_pending()
         goal = self.orchestrator.store.load(p["goal_id"])
         if approved:
             goal = await self.orchestrator.start_goal(goal)   # resume the EXACT paused goal -> run to done

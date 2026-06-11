@@ -117,11 +117,12 @@ class ControlCore:
             self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard,
             channel=self.text_channel, user_contact=self._user_contact(),
             deferred_path=base / "decider_deferred.json",
+            pending_path=base / "pending_asks.json",
         )
         # Owner cards awaiting a YES/NO: goal_id -> {record_path, card_id}, so resolve()
         # can write the resolved goal's outcome back onto the durable card record.
-        # In-memory like proactive.pending itself (D16 sibling, disclosed) — the durable
-        # linkage survives in the record's execution.goal_id field.
+        # In-memory by design — the durable linkage survives in the record's
+        # execution.goal_id field and resolve() falls back to scanning for it (F18).
         self._owner_card_goals: dict = {}
 
     async def start(self) -> None:

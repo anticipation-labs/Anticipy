@@ -81,6 +81,32 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- PENDING ASKS NOW SURVIVE ENGINE RESTARTS (lap 20260611T132034Z, groundwork —
+  the D16 SIBLING FIXED, the ledger's last named mock-side P3 residual; TARGET
+  v7 item 4 "mock-prove everything around the P3 gate"; honest DEAD lap by
+  design, disclosed in the manifest — treadmill walks 3 -> 4 toward the designed
+  K=5 re-aim). The P3 inbound chain was restart-proof except its FIRST link:
+  goals, owner-card linkage (F18), and seen-sids are all durable, but
+  proactive.pending — the map that lets the owner's YES/NO match an ask — was
+  in-memory, so a restart between the ask SMS and the reply made the reply
+  resolve NOTHING (and the F20 clarifier would honestly say "nothing is
+  pending" about an ask the product itself sent). Fix = the residual's own
+  named pattern (decider_deferred.json): ProactiveEngine(pending_path=...)
+  persists the map atomically on every mutation (the resolve pop persists
+  BEFORE the goal resumes — a crash mid-resolve loses the ask toward silence,
+  never replays an approval); boot-restore is PASSIVE (never re-enters the
+  pipeline) and store-validated (only still-waiting goals come back; stale
+  entries pruned; corrupt files set aside .corrupt; no path = no IO);
+  ControlCore wires <data>/pending_asks.json. Verified: suite 44/44 (new
+  test_pending_persistence.py 7-pin battery incl. the gate_P3 inbound leg
+  end-to-end: ControlCore restart with BOTH in-memory maps gone -> inbound
+  "YES <code>" resolves, goal done, card written back via F18); full pre/post
+  persona runs BOTH lanes bit-identical at the ratchet bests, per-line decision
+  diff ZERO, goal-state multisets identical. P3 mock-side residuals are now
+  EXHAUSTED builder-side (F19 is live-observable only); gate_P3 waits on
+  OWNER_PHONE (Omar) + the gate script (foreman). D16 proper
+  (TriggerWatcher._fired restart double-fire) is the one remaining
+  restart-robustness sibling with a non-silent failure direction.
 - AMBIGUOUS INBOUND REPLIES NOW DRAW A BOUNDED CLARIFICATION (lap
   20260611T120957Z, groundwork — ledger F20 FIXED; TARGET v7 item 4
   "mock-prove everything around the P3 gate"; honest DEAD lap by design,
