@@ -524,3 +524,23 @@ attempt_gate_close=true. The judge's fresh holdout run is the instrument and the
 verdict: freshest read (232257Z verdict counts) was worst 0.6667 with the residual
 miss being the single benefactive sentence F15a was built for. If VETO, the named
 residue is the next hypothesis per TARGET v6 STAGE A.
+
+2026-06-11 (lap 20260611T043446Z, builder, groundwork): P2 closed last lap (judge REAL),
+so this was the first TARGET v6 STAGE B lap — owner-path honesty wiring, engine side.
+Landed the seam TARGET prescribed: with ANTICIPY_OWNER_INGEST=1, POST /event routes
+through the owner card path (ControlCore.owner_event -> owner_ingest) and answers in the
+proactive shape (decision/goal_id/ask_id), with dispositions mapped fail-toward-ask
+(ask/blocked->ask, do->act, remember/none->silent) and every card persisted as a
+goal-shaped record under <data>/owner_cards/ that persona_run's collector already
+harvests; recursion guard keeps execute_actions feeds on the proactive path. Mid-lap I
+found judge C22 ruled Stage B metrics pre-gamed until owner_mode's eval-tuned routing
+literals die, so (manifest amended first) I deleted the four named groups plus two
+deny-side sample-transcript literals; suite stayed 39/39 and owner catch was UNCHANGED —
+the tuned tokens were producing false actions (17->15), not catches. Deliverable: the
+owner lane's first worst-persona numbers on the unchanged instrument — catch 0.5054 /
+worst 0.2222 (founder_jin), false 15, harm 0, interrupt 0.6875/1.5, e2e 0.0,
+recall_worst 0.25 — versus the proactive path's 1.0/1.0/false-0 on the same bank, on the
+same HEAD (default path verified bit-identical to ratchet bests at -pre and -pre2).
+Ledgered F17: the owner doors currently ship a second, weaker brain; fix direction is
+routing cards through the proven triage/decider spine or the hybrid extractor, not more
+regex. Zero spend, zero side effects, stub/mock throughout.

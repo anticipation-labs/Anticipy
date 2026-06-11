@@ -862,3 +862,54 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   writes skipped.json status SKIPPED_LIMIT, removes .lap_in_progress, sleeps a backoff,
   and skips verify, scoreboard, spend, and treadmill. Regression check: a limit-hit
   build creates no product_scoreboard row and does not increment treadmill_count.
+
+## Judge, lap 20260611T041654Z (P2 close verdict)
+- C22 NEW, OPEN (judge): owner_mode.py routing regexes hardcode eval/test vocabulary.
+  engine/anticipy_engine/owner_mode.py (landed in ee77765, foreman lane) routes with
+  _BROWSER containing "water[- ]?table" and "that .* thing" and _SEND containing
+  "decking|deck|new version|revised" — these literally match dev persona text
+  (parent_dana day01 "that water table thing" + seed_memory; founder_jin/salesrep_pri/
+  student_kayla "deck" lines) and the sample transcript in .claude/OWNER_ACTION_ENGINE.md
+  that engine/scripts/test_owner_mode.py copies verbatim, making the two new owner suite
+  tests partially self-fulfilling. INERT for the P2 persona gate (owner_mode is
+  unreachable from POST /event; verified concretely this lap) so the 041654Z closure is
+  not tainted — but TARGET v6 STAGE B plans to score owner cards against the same
+  persona bank, which these literals would pre-game, and the owner_literals scan has a
+  blind spot here: it targets Omar-personal literals, not persona-bank text. Required
+  before any Stage B metric counts: generalize the routing tokens (or score against
+  text the regexes were not tuned on) and extend the owner_literals scan (or a sibling)
+  to flag dev-bank n-grams in product code on the owner path. Regression check: grep
+  owner_mode.py routing tables against factory/personas/dev/*/days/*.txt 4-gram shingles
+  must come back empty before Stage B scoring is trusted.
+
+## Build lap 20260611T043446Z (owner-path honesty wiring, TARGET v6 STAGE B item 1)
+- F17 NEW, OPEN (measured the moment the instrument existed): the owner lane ships a
+  SECOND, WEAKER BRAIN. The deterministic regex first pass in owner_mode.py scores,
+  on the very same dev bank where the proactive path holds catch 1.0/worst 1.0 with
+  false 0: catch 0.5054 / worst 0.2222 (founder_jin), false_action_count 15 (acts on
+  narration/reports the main triage correctly silences), memory_recall_worst 0.25,
+  e2e_completion 0.0 (cards do not execute yet — honest), interrupt 0.6875/1.5,
+  silent_harm 0 (money lines never act; blocked->ask mapping held). One product,
+  two brains: every door routed through /owner/ingest today gets the 0.22 brain, not
+  the 1.0 brain. The fix direction is NOT to grow the regex tables (F15 already
+  falsified closed-class lexicon chasing on the main path; C22 shows where tuned
+  tokens lead) but to route owner cards through the proven triage/decider/harm-line
+  spine or a hybrid extractor (OWNER_ACTION_ENGINE item 4) — foreman/TARGET call.
+  Regression check: the owner-lane instrument itself — ANTICIPY_OWNER_INGEST=1
+  persona_run on the dev bank; any future owner-extractor change must move these
+  numbers, and gate-grade claims must come from the judge's holdout, never this bank.
+- C22 PRODUCT-SIDE LANDED this lap (scan side still foreman): the four judge-named
+  eval-tuned routing literal groups (_BROWSER "water[- ]?table" + "that .* thing",
+  _SEND "decking|deck|new version|revised") are deleted from owner_mode.py, plus two
+  same-class deny-side literals (_VENT_OR_JOKE "clone myself", "that'?ll fix") that
+  4-gram-shingle-match parent_dana day01's vent line verbatim. None were load-bearing:
+  suite stays 39/39 green and owner-lane catch is UNCHANGED at 0.5054/0.2222 after
+  removal (false dropped 17->15 — the tuned tokens were creating false actions, not
+  catches). Distinctive-literal grep of remaining routing tables vs dev bank days +
+  seeds now comes back clean of the judge-named class; residual disclosed honestly:
+  "circle back" (2-gram generic business idiom in _SEND) and single generic verbs
+  (send/buy/find/...) do appear in bank text — owner_mode.py POSTDATES the frozen bank,
+  so the judge should rule whether any remaining short token counts as tuned; the
+  4-gram shingle bar C22 set is met.
+  The C22-required shingle SCAN (mechanical, every diff) remains OPEN for the foreman —
+  builders cannot extend factory/ scans.

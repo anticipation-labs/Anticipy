@@ -6,6 +6,7 @@ layer and the tests drive it through `feed()` and `resume()`.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -50,6 +51,7 @@ class ControlCore:
     def __init__(self, data_dir=None) -> None:
         load_local_env()  # make .env.local keys (Arcade, etc.) available
         base = _base(data_dir)
+        self.data_dir = base
         self.browser_link = BrowserLink()
         self.glassbox = GlassBox(base / "glassbox.jsonl")
         self.scorecard = Scorecard(base / "scorecard.jsonl")
@@ -118,11 +120,51 @@ class ControlCore:
             "derived": [i.text for i in inj["derived"]],
         }
 
+    @staticmethod
+    def _owner_event_enabled() -> bool:
+        return (os.environ.get("ANTICIPY_OWNER_INGEST", "") or "").strip().lower() in {"1", "true", "yes", "on"}
+
     async def feed(self, source: str, text: str, meta: dict | None = None) -> dict:
+        meta = meta or {}
+        # Owner-lane honesty seam: with ANTICIPY_OWNER_INGEST=1 the same /event pipe the
+        # persona runner already drives goes through the owner card path instead, so the
+        # unchanged runner+scorer measure owner cards with worst-persona honesty. The
+        # owner_ingest_execute guard keeps execute_actions card feeds on the proactive
+        # path (no recursion back into the owner lane).
+        if self._owner_event_enabled() and not meta.get("owner_ingest_execute"):
+            return await self.owner_event(source, text, meta)
         self.live_memory.capturer.capture(text, source=source, meta=meta)  # CAPTURE before anything acts
-        ev = Event(source=EventSource(source), text=text, meta=meta or {})
+        ev = Event(source=EventSource(source), text=text, meta=meta)
         await self.bus.publish(ev)                 # log the event to the glass-box
         return await self.proactive.on_event(ev)   # triage -> gate -> act/ask (gate reads memory)
+
+    async def owner_event(self, source: str, text: str, meta: dict | None = None) -> dict:
+        """One observed line through the owner card path, answered in the same shape as
+        the proactive path ({decision, goal_id, ask_id, ...}) so realday.sh and
+        persona_score.py grade owner cards without modification.
+
+        Decision mapping fails toward ask: a confirmation-needed or blocked card outranks
+        a do card, which outranks a memory-only card; no card means silence. Cards do NOT
+        execute here — execution with proof write-back is the next slice — so the
+        instrument honestly shows e2e_completion 0 until execution is real.
+        """
+        out = await self.owner_ingest(source, text, meta, execute_actions=False)
+        rank = {"ask": 3, "blocked": 3, "do": 2, "remember": 1}
+        top = None
+        for card in out.get("cards", []):
+            if top is None or rank.get(card.get("disposition"), 0) > rank.get(top.get("disposition"), 0):
+                top = card
+        if top is None:
+            decision, goal_id, reason, category = "ignore", None, "owner: no actionable card in line", "noise"
+        elif top["disposition"] in ("ask", "blocked"):
+            decision, goal_id, reason, category = "ask", top["id"], top.get("reason", ""), top["disposition"]
+        elif top["disposition"] == "do":
+            decision, goal_id, reason, category = "act", top["id"], top.get("reason", ""), "do"
+        else:
+            decision, goal_id, reason, category = "remember", top["id"], top.get("reason", ""), "remember"
+        return {"decision": decision, "category": category, "reason": reason,
+                "goal_id": goal_id, "ask_id": None, "owner_lane": True,
+                "cards": out.get("cards", [])}
 
     async def owner_ingest(self, source: str, text: str, meta: dict | None = None,
                            execute_actions: bool = False) -> dict:
@@ -183,6 +225,24 @@ class ControlCore:
                     {**meta, "owner_card_id": card.id, "owner_source": source, "owner_ingest_execute": True},
                 )
                 card.proof.append({"type": "engine_feed", "result": out})
+
+            # Durable card record, shaped like a goal (id/intent/steps/state) so the
+            # factory's existing run collector and scorer read owner cards unchanged.
+            # state stays "open" until execution writes real proof — a card that never
+            # ran must never look done.
+            record_path = self.data_dir / "owner_cards" / f"{card.id}.json"
+            card.proof.append({"type": "card_record", "path": str(record_path)})
+            record = {
+                "id": card.id,
+                "intent": card.action,
+                "description": f"{card.title} — {card.source_text}",
+                "state": "open",
+                "steps": [],
+                "proof": {},
+                "owner_card": card.model_dump(mode="json"),
+            }
+            record_path.parent.mkdir(parents=True, exist_ok=True)
+            record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
 
         self.glassbox.log(
             "owner_ingest",

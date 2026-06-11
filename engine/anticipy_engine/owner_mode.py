@@ -60,8 +60,10 @@ _REMEMBER = re.compile(
     r"i need to|need to|gotta|i have to|i should|i told .* i'?d)\b",
     re.I,
 )
-_SEND = re.compile(r"\b(send|email|text|tell|reply|follow up|circle back|draft|decking|deck|new version|revised)\b", re.I)
-_BROWSER = re.compile(r"\b(grab|buy|order|purchase|checkout|cart|find|look up|research|water[- ]?table|that .* thing)\b", re.I)
+# C22: routing tokens must stay generic verbs/nouns — never vocabulary tuned to the
+# persona bank or the directive's sample transcript (pre-games Stage B scoring).
+_SEND = re.compile(r"\b(send|email|text|tell|reply|follow up|circle back|draft)\b", re.I)
+_BROWSER = re.compile(r"\b(grab|buy|order|purchase|checkout|cart|find|look up|research)\b", re.I)
 _MONEY = re.compile(r"\b(pay|buy|order|purchase|checkout|wire|venmo|zelle|cashapp|credit card|payment)\b", re.I)
 _NO_BUY = re.compile(r"\b(don'?t buy|do not buy|don'?t checkout|do not checkout|cart only|just.*cart)\b", re.I)
 _PROFILE = re.compile(
@@ -70,8 +72,8 @@ _PROFILE = re.compile(
     re.I,
 )
 _VENT_OR_JOKE = re.compile(
-    r"\b(clone myself|kill me|this is stupid|whatever|ugh|i swear|i hate this|"
-    r"can'?t believe|that'?ll fix|sarcasm|lol|haha)\b",
+    r"\b(kill me|this is stupid|whatever|ugh|i swear|i hate this|"
+    r"can'?t believe|sarcasm|lol|haha)\b",
     re.I,
 )
 _FILLER = {
