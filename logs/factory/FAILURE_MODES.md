@@ -1467,3 +1467,57 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   and the e2e pin (ControlCore restart + inbound YES -> goal done + card
   write-back). A YES after restart answering "unknown or already-resolved ask"
   while <data>/pending_asks.json holds the entry = the failure returned.
+
+## Groundwork lap 20260611T133818Z (trigger fired-state persistence, D16 proper — TARGET v7 item 4 "mock-prove everything around the P3 gate")
+- D16 UPDATE — FIXED (was OPEN since the P1 ledger: TriggerWatcher._fired — the
+  fire-once guard — was in-memory while the open-loop ledger it watches is
+  durable, so EVERY engine restart re-fired every still-listed already-fired due
+  loop: duplicate "Reminder:" sends to the owner, and duplicate full-pipeline
+  re-entry for follow-up loops where an ACT-decided commitment would EXECUTE
+  AGAIN; the restart double-fire was even silently exercised on HEAD by
+  test_trigger_notify.py's second engine over the same ledger, which only
+  asserted about its own new loop): the entry's own queued fix — persist
+  fired-state ON THE LOOP RECORD (fields["fired_at"]), not a sidecar file.
+  trigger_tick stamps fired_at onto the durable record through the existing
+  mark_loop bus intent BEFORE any send or pipeline re-entry (mark-before-act,
+  the inbound seen-sid law): a crash after the stamp and before the send LOSES
+  that firing toward silence — never a late duplicate; a FAILED stamp skips the
+  firing in the same direction (never fire unstamped) with an honest
+  trigger_stamp_failed glassbox log, and the unstamped loop fires on the next
+  healthy boot (the skip is a retry, not a loss). TriggerWatcher._due treats
+  any non-None fired_at as fired-forever (corrupt values fail toward silence);
+  the in-memory _fired set stays as the same-session guard. mark_loop grew an
+  optional fired_at arg — a pure stamp leaves ledger status alone; the legacy
+  no-arg default ("waiting") is preserved and pinned. list_open_loops now
+  carries fields.fired_at so the watcher can see the stamp. No new wiring: the
+  stamp rides the durable SQLite ledger every engine already has; contexts
+  without a real MemoryWorker already get loops=[] (their list_open_loops
+  fails), so nothing fires there at all.
+- Measured (builder-side, stub): suite 45/45 (new test_trigger_persistence.py:
+  reminder restart no-double-fire with the stamp landing before the send;
+  follow-up/act restart never re-enters the pipeline or creates a second goal;
+  crash-after-stamp-before-send loses the firing toward silence across restart;
+  failed-stamp skips unstamped with honest log then fires next healthy boot;
+  mark_loop contract pins; ControlCore end-to-end restart on one data dir — the
+  gate_P3 trigger leg cannot double-interrupt). OFFICIAL instrument verified by
+  full pre/post persona runs in BOTH lanes: aggregates AND per-persona scores
+  bit-identical at the ratchet bests, per-line decision diff ZERO (owner 492 /
+  default 493 decision lines x 16 persona-days), goal (intent,state) multisets
+  identical, fired_at absent from every persona-run artifact (trigger_tick is
+  never invoked in persona runs — verified by grep of persona_run.py AND by
+  artifact scan, not assumed).
+- DESIGN NOTE (disclosed, deliberate): a budget-SUPPRESSED reminder is stamped
+  too — today it never re-fires within a session; the stamp extends exactly
+  that semantics across restarts (lose toward silence, the product's stated
+  direction). The loop record itself stays open in the ledger either way.
+- STILL OPEN, D16 family (disclosed, not chased — separate slices):
+  AnnoyanceBudget day-counts and AskDebounce money holds reset on restart (a
+  restart could let a crash-loop day exceed the daily interruption cap; money
+  holds re-gate through the harm-line so money still never executes — the
+  exposure is annoyance, not harm); ControlCore._owner_card_goals in-memory BY
+  DESIGN (F18 durable fallback pinned).
+- Regression check: test_trigger_persistence.py — the restart pins (a fired
+  reminder/follow-up must fire NOTHING on a fresh engine over the same ledger)
+  and the e2e pin (restarted ControlCore re-fires nothing, owner gets no
+  duplicate). A second "Reminder:" send for the same loop id across a restart =
+  the failure returned.

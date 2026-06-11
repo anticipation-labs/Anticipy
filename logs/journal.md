@@ -823,3 +823,26 @@ dumps identical modulo fresh-run UUIDs; only new run artifact = the intended
 pending_asks.json. Honest DEAD lap BY DESIGN, disclosed in the manifest (e2e at
 the F31 ceiling, items 1/2 exhausted, 3/4 judge/human-gated; treadmill at 3
 walking toward the designed K=5 re-aim). Zero spend, zero real-world artifacts.
+
+## 2026-06-11 — lap 20260611T133818Z (builder, groundwork)
+Did D16 proper — the ledger's oldest open restart-robustness entry and the only
+one with a non-silent failure direction: TriggerWatcher._fired (the fire-once
+guard) was in-memory over a durable ledger, so every engine restart re-fired
+every already-fired due loop — duplicate reminder SMS to the owner, duplicate
+full-pipeline re-entry for follow-ups (where an ACT-decided commitment would
+execute AGAIN). The fix is the entry's own queued one: stamp fields["fired_at"]
+on the durable loop record via the existing mark_loop intent BEFORE any send or
+re-entry (mark-before-act); _due treats any stamp as fired-forever; a failed
+stamp skips the firing unstamped (honest log, retries next boot); a crash after
+stamp loses that firing toward silence. Found that test_trigger_notify.py's
+second engine was already silently exercising the double-fire on HEAD. New
+test_trigger_persistence.py (6 pins incl. ControlCore restart e2e), suite 45/45.
+Proof of official-instrument inertness: full pre/post persona runs in BOTH
+lanes bit-identical at ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt
+0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0); per-line decision diff ZERO
+(owner 492 / default 493 lines x 16 persona-days); goal multisets identical;
+fired_at absent from all persona-run artifacts. Disclosed up front in the
+manifest: expected mechanically DEAD (moved=none) — e2e is at the F31 ceiling,
+items 1/2 exhausted, 3/4 judge/human-gated — and this is dead lap #5: the
+DESIGNED K=5 escalation should fire after this lap and hand the foreman the
+TARGET v8 re-aim. Zero spend, zero real-world artifacts, no live legs.

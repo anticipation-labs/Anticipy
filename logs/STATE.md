@@ -81,6 +81,32 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- FIRED TRIGGERS NEVER RE-FIRE ACROSS RESTARTS (lap 20260611T133818Z,
+  groundwork — D16 PROPER FIXED, the ledger's oldest open restart entry and
+  the one with a NON-SILENT failure direction; TARGET v7 item 4 "mock-prove
+  everything around the P3 gate"; honest DEAD lap by design, disclosed in the
+  manifest — dead lap #5, the DESIGNED K=5 escalation -> TARGET v8 re-aim).
+  TriggerWatcher._fired (the fire-once guard) was in-memory over a durable
+  ledger: every engine restart re-fired every already-fired due loop —
+  duplicate reminder sends to the owner, duplicate full-pipeline re-entry
+  where an ACT follow-up would execute AGAIN (test_trigger_notify's second
+  engine silently exercised this on HEAD). Fix = the D16 entry's own queued
+  one: trigger_tick stamps fields["fired_at"] on the DURABLE loop record via
+  the existing mark_loop intent BEFORE any send/re-entry (mark-before-act, the
+  seen-sid law); _due treats any stamp as fired-forever; a crash after the
+  stamp LOSES the firing toward silence (never a late duplicate); a failed
+  stamp skips the firing unstamped (honest trigger_stamp_failed log) and
+  retries next healthy boot; pure stamps leave ledger status alone, legacy
+  mark_loop default pinned. No new files/wiring — the stamp rides the SQLite
+  ledger. Verified: suite 45/45 (new test_trigger_persistence.py 6-pin battery
+  incl. ControlCore restart e2e — the gate_P3 trigger leg cannot
+  double-interrupt); full pre/post persona runs BOTH lanes bit-identical at
+  the ratchet bests, per-line decision diff ZERO (owner 492 / default 493
+  lines x 16 persona-days), goal multisets identical, fired_at absent from
+  every persona-run artifact. The D16 family is now closed on every non-silent
+  edge (deferred queue 1ce2269, pending asks 41da3c3, fired triggers here);
+  remaining siblings (budget/debounce day-state) fail toward bounded annoyance
+  only. gate_P3 still waits on OWNER_PHONE (Omar) + gate_P3.sh (foreman).
 - PENDING ASKS NOW SURVIVE ENGINE RESTARTS (lap 20260611T132034Z, groundwork —
   the D16 SIBLING FIXED, the ledger's last named mock-side P3 residual; TARGET
   v7 item 4 "mock-prove everything around the P3 gate"; honest DEAD lap by

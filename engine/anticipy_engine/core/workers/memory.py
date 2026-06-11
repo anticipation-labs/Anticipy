@@ -30,20 +30,30 @@ class MemoryWorker(Worker):
             loops = [l for l in self.lm.memory.open_loops.all() if l.status in ("open", "waiting")]
             out = [{"id": l.id, "task": l.fields.get("task", l.text), "due": l.fields.get("due", ""),
                     "due_ts": l.fields.get("due_ts"), "remind_ts": l.fields.get("remind_ts"),
-                    "created_ts": l.timestamp, "text": l.text}
+                    "created_ts": l.timestamp, "text": l.text,
+                    "fired_at": l.fields.get("fired_at")}
                    for l in loops]
             return Result(job_id=job.id, status=JobStatus.success, output={"loops": out},
                           proof={"loops": len(out)}, cost=0.0)
         if job.intent == "mark_loop":
-            # ledger state change (e.g. a fired reminder -> waiting on the user)
+            # ledger state change (e.g. a fired reminder -> waiting on the user), and/or
+            # the durable fired stamp (ledger D16: trigger_tick stamps fired_at BEFORE any
+            # send/act so a restart can never re-fire the loop). A pure fired_at stamp
+            # leaves status alone; a call with neither arg keeps the legacy default.
             item = self.lm.memory.open_loops.get(str(job.args.get("id") or ""))
             if item is None:
                 return Result(job_id=job.id, status=JobStatus.failed,
                               error="unknown open loop", proof=None)
-            item.status = str(job.args.get("status") or "waiting")
+            fired_at = job.args.get("fired_at")
+            if fired_at is not None:
+                item.fields["fired_at"] = float(fired_at)
+            status = job.args.get("status")
+            if status is not None or fired_at is None:
+                item.status = str(status or "waiting")
             self.lm.memory.open_loops.update(item)
             return Result(job_id=job.id, status=JobStatus.success,
-                          output={"id": item.id, "status": item.status},
+                          output={"id": item.id, "status": item.status,
+                                  "fired_at": item.fields.get("fired_at")},
                           proof={"id": item.id}, cost=0.0)
         if job.intent == "read_context":
             inj = self.lm.inject(job.args.get("about", ""))

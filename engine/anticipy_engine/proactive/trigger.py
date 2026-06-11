@@ -18,7 +18,10 @@ class TriggerConfig:
 
 class TriggerWatcher:
     """Watches the ledger against a clock. `tick(loops, now)` returns the loops that fire now,
-    each at most once (idempotent via an in-memory fired-id set)."""
+    each at most once — within a session via the in-memory fired-id set, and ACROSS engine
+    restarts via the durable `fired_at` stamp the loop record carries (ledger D16: a restart
+    must never re-fire an already-fired loop — no duplicate reminder sends, no duplicate
+    pipeline re-entry)."""
 
     def __init__(self, config: Optional[TriggerConfig] = None) -> None:
         self.cfg = config or TriggerConfig()
@@ -26,6 +29,8 @@ class TriggerWatcher:
 
     def _due(self, loop: dict, now: float) -> bool:
         if loop.get("id") in self._fired:
+            return False
+        if loop.get("fired_at") is not None:   # D16: durably fired (any prior session) — never again
             return False
         for key in ("remind_ts", "due_ts"):                  # TIME: remind lead (due-15m) beats due
             ts = loop.get(key)

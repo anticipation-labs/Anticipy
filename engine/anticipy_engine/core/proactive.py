@@ -38,7 +38,7 @@ from ..proactive.harm import FOLLOWUP_PREFIX, HarmLine
 from ..proactive.triage import Triage
 from ..proactive.trigger import TriggerWatcher
 from .bus import Bus
-from .envelopes import Event, EventSource, Goal, GoalState, Job, now_ts
+from .envelopes import Event, EventSource, Goal, GoalState, Job, JobStatus, now_ts
 from .gateway import PROVIDER_OPENROUTER, ModelGateway
 from .orchestrator import Orchestrator
 
@@ -430,6 +430,18 @@ class ProactiveEngine:
         out = []
         for loop in fired:
             task = loop.get("task") or loop.get("text") or "your commitment"
+            # Ledger D16: stamp fired-state on the DURABLE loop record BEFORE any
+            # send or pipeline re-entry (mark-before-act, the seen-sid law): a crash
+            # mid-fire LOSES this firing toward silence — a restart can never re-fire
+            # it as a duplicate reminder or a duplicate execution. A failed stamp
+            # skips the firing in the same direction: never fire unstamped.
+            stamp = await self.bus.submit_job(Job(intent="mark_loop",
+                                                  args={"id": loop.get("id"), "fired_at": now}))
+            if stamp.status != JobStatus.success:
+                if self.glassbox is not None:
+                    self.glassbox.log("trigger_stamp_failed", {"loop_id": loop.get("id"),
+                                                               "task": task, "error": stamp.error})
+                continue
             if loop.get("remind_ts") is not None:
                 decision = await self._fire_reminder(loop, task, now)
             else:
