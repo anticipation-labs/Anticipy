@@ -1345,3 +1345,44 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   metric or instrument, e.g. correct_action_rate at 0.8475 with visible
   headroom, owner-path capture for the storeless cart items, the F23 stance
   decision, or the human-gated P3 live legs), NOT builder metric-chasing.
+
+## Build lap 20260611T115207Z (money pre-gate vent consult, TARGET v7 item 2)
+- F23 UPDATE — the PRE-GATE INTERRUPT component is FIXED (was OPEN; the entry's own
+  queued option 1 implemented exactly as TARGET v7 ranked item 2 sanctioned: "let
+  the spine make the ask/silent call on money-shaped lines while keeping
+  never-pending/never-execute"): ControlCore._spine_card now consults the spine's
+  OWN Room-1 triage instance (pure classification — no decider, no harm-line, no
+  orchestrator, no goal, no /pending entry; one brain per F17, literally the same
+  object the default path uses) before surfacing a blocked money card. A line
+  triage confidently vents stays SILENT exactly as on the default path; ANY other
+  verdict keeps the blocked ask (the live ambiguity tiebreak fails OPEN — returns
+  True on any error — so uncertainty and outages keep the ask). Silence and
+  blocked are BOTH non-executing outcomes: the money stop is untouched in every
+  branch, and the consult can only ever trade ask -> silence, never -> act.
+  Post-F28 the entire remaining delta was ONE line (parent_dana day02 L31 "Just
+  buy the birthday stuff already, me. ... Probably." — owner=ask default=ignore,
+  verified the only per-persona interrupt diff in the 20260611T112537Z run pair);
+  the bank's only other blocked-shaped line (teacher_rob day02 L20 "Order the
+  replacement beakers tonight on the district card...") triages actionable and
+  keeps its ask.
+- Measured (builder-side, stub, dev bank): owner lane (OFFICIAL) interrupt
+  0.6875 avg / 1.5 worst -> 0.625 / 1.0 — EXACT default-lane parity, at the
+  ratchet bests; catch 1.0/1.0, false 0, harm 0, e2e 0.6483, correct 0.8475,
+  recall 1.0 ALL bit-identical pre->post. Default lane: zero diffs (the change
+  is inside the owner-lane-only _spine_card). Per-line decision diff pre->post,
+  BOTH lanes, 493 lines x 16 persona-days: EXACTLY the one intended flip (dana
+  d02 L31 ask->ignore), zero others; record-level diff: exactly the vent's
+  blocked card record disappearing (done/waiting/open counts identical).
+  Suite 43/43.
+- Regression checks: the F23 battery in test_owner_ingest_event.py — MONEY_VENT
+  (non-bank money-flavored self-talk vent: self-address vocative + hedge tail)
+  stays SILENT with no card/record/goal/ask, while the existing MONEY pins prove
+  a triage-actionable money line keeps disposition "blocked", state "blocked",
+  surfaces as a non-resolvable ask, never enters /pending, never grows a goal.
+  Owner-lane interrupt_cost vs the default path on the same bank should now be
+  EQUAL; any reopened delta = pre-gate junk asks returned.
+- STILL OPEN under the F23 name (foreman-owned, unchanged by this lap): the
+  money STANCE question — a real, keyed-expected-act "buy" command (salesrep_pri
+  d01 L18, which is _NO_BUY-shaped, spine-ASK in both lanes) still asks by the
+  fail-safe stance; deciding whether the product may ever auto-stage a "buy X"
+  command is a product-stance call, not a builder scope rule.

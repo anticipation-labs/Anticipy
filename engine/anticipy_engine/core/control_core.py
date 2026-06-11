@@ -213,10 +213,21 @@ class ControlCore:
         orchestrator/hands) is the ONLY act/ask/silent decision-maker for owner
         lines. The regex classifier only shapes the durable card (title/route/args)
         and adds silent memory; it can no longer act or ask on its own. Money-shaped
-        browser lines stay pre-gated blocked: never the spine, never /pending,
-        never executed (the harm-line stance is final)."""
+        browser lines stay pre-gated blocked: never the spine's execution path,
+        never /pending, never executed (the harm-line stance is final) — but a
+        money-flavored line the spine's OWN triage confidently vents stays silent
+        exactly as it would on the default path (F23)."""
         shaped = self.owner_mode.card_for_line(line, source)
         if shaped is not None and shaped.disposition == "blocked":
+            # F23: the pre-gate's guarantee is that a money line can NEVER EXECUTE,
+            # not that a money-flavored vent must interrupt. The consult is the
+            # spine's own Room-1 triage instance — pure classification, no decider,
+            # no harm-line, no orchestrator, no goal, no /pending — so the vent
+            # judgment stays one brain (F17), and silence vs blocked are both
+            # non-executing outcomes. Uncertainty keeps the ask: the live
+            # ambiguity tiebreak fails OPEN (returns True on any error).
+            if not self.proactive.triage.actionable(line.text):
+                return None
             return shaped
         out = await self.feed("app", line.text,
                               {**meta, "owner_source": source, "owner_ingest_execute": True})

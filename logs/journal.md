@@ -748,3 +748,29 @@ at its honest ceiling (every remaining flip is fenced: storeless carts, F23 mone
 stance, structural expected-asks). Ledgered as F31 (foreman-owned): the right
 move is a TARGET v8 re-aim, not builder metric-chasing. Zero spend, zero
 real-world artifacts.
+
+2026-06-11 lap 20260611T115207Z (build, TARGET v7 item 2 — F23 money pre-gate
+interrupt): With the primary e2e metric at its F31 honest ceiling, I did the
+foreman's ranked item 2 instead of a false "out of ideas" no-op, disclosing in
+the manifest that the lap would read mechanically dead. Evidence first: scored
+both lanes of the last lap's run pair and found the ENTIRE remaining owner-vs-
+default interrupt delta was one line — parent_dana day02 L31 "Just buy the
+birthday stuff already, me. ... Probably.", a money-flavored self-talk vent the
+spine ignores but the owner money pre-gate short-circuits into a blocked ask
+BEFORE the spine can vent it. Fix was the F23 entry's own queued option:
+_spine_card now consults the spine's OWN triage instance (pure classification,
+no execution machinery) on blocked-shaped lines — confident vent stays silent
+like the default path, anything else keeps the blocked ask (live tiebreak fails
+OPEN toward the ask; silence and blocked both never execute, so the money stop
+is intact in every branch). The bank's only other blocked-shaped line (rob's
+"Order the replacement beakers tonight on the district card") triages
+actionable and keeps its ask. Result: owner interrupt 0.6875/1.5 -> 0.625/1.0,
+exact default parity at the ratchet bests; every other aggregate bit-identical
+in both lanes; per-line diff = exactly the one intended flip across 493 lines x
+16 persona-days, zero default-lane diffs; record diff = exactly the vent's
+blocked card disappearing. Suite 43/43 with the new non-bank MONEY_VENT pin.
+As predicted: moved=none (primary e2e unchanged at 0.6483) — honest dead lap,
+treadmill walks toward the K=5 re-aim F31 calls for. F23's pre-gate interrupt
+component is FIXED in the ledger; the money STANCE question (pri's keyed
+expected-act "buy" command asking by fail-safe) stays foreman-owned. Zero
+spend, zero real-world artifacts.

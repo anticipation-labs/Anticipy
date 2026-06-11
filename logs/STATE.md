@@ -81,6 +81,32 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- THE OWNER LANE'S INTERRUPT COST IS AT EXACT SPINE PARITY (lap
+  20260611T115207Z, build — ledger F23 pre-gate interrupt component FIXED;
+  TARGET v7 ranked item 2; honest DEAD lap by design, disclosed in the
+  manifest: primary e2e is at the F31 ceiling). Post-F28 the ENTIRE remaining
+  owner-vs-default interrupt delta was ONE line (parent_dana d02 L31 "Just buy
+  the birthday stuff already, me. ... Probably." — a money-flavored self-talk
+  vent the spine ignores but the money pre-gate short-circuited into a blocked
+  ask BEFORE the spine could vent it). Fix = the F23 entry's own queued option:
+  ControlCore._spine_card consults the spine's OWN triage instance (pure
+  classification — no decider/harm-line/orchestrator/goal//pending; one brain,
+  F17) on blocked-shaped lines; confident vent -> silent like the default
+  path, anything else -> the blocked ask stands (live tiebreak fails OPEN
+  toward the ask). Silence and blocked both never execute: the money stop is
+  intact in every branch. The bank's only other blocked-shaped line (rob's
+  "Order the replacement beakers tonight on the district card") triages
+  actionable and keeps its ask. Owner lane (OFFICIAL): interrupt 0.6875/1.5 ->
+  0.625/1.0 (exact default parity, at ratchet bests); catch 1.0/1.0, false 0,
+  harm 0, e2e 0.6483, correct 0.8475, recall 1.0 bit-identical. Default lane:
+  ZERO diffs. Per-line diff both lanes = exactly the one intended flip (493
+  lines x 16 persona-days); record diff = exactly the vent's blocked card
+  disappearing. Suite 43/43 (new non-bank MONEY_VENT pin + unchanged MONEY
+  blocked pins). TARGET v7's builder-workable items are now EXHAUSTED: item 1
+  at the F31 ceiling, item 2 at parity (remaining asks are the spine's own
+  stance in both lanes), items 3/4 judge/human-gated. Still F23-OPEN
+  (foreman): the money STANCE question — pri's keyed expected-act "buy"
+  command asks by fail-safe; auto-staging "buy X" is a product-stance call.
 - SLOT-CHOICE BOOKINGS ACT + CALENDAR PLANS ARE GROUNDED, e2e AT ITS HONEST
   CEILING (lap 20260611T112537Z, build — ledger F30 FIXED, F27 FIXED, F31
   OPENED): "Book the Friday 9am one" asked purely for shape (the slot

@@ -53,6 +53,10 @@ DRAFT_ORDER = ("That supply order is STILL not submitted - the purchasing window
                "it's ready to send.")
 CART_NO_BUY = "that water-table thing for the birthday, put it in the cart if you find it, don't buy it."
 MONEY = "order the replacement filter today and just pay whatever it costs."
+# F23: a money-flavored SELF-TALK VENT (self-address vocative + hedge/deferral tail) —
+# the spine's own triage vents it, so a pre-gate blocked ask would be a junk interrupt;
+# it stays SILENT, and silence (like blocked) has no execution path: money never runs
+MONEY_VENT = "Ugh, just buy the dumb gift already, me. Maybe next month. Probably."
 PROFILE = "My wife Maya prefers texts after lunch."
 CLARIFY = "can you check with Priya about the vendor call?"
 
@@ -89,6 +93,7 @@ async def owner_lane_check():
         draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
+        money_vent = await core.feed("app", MONEY_VENT, {})
         remember = await core.feed("app", PROFILE, {})
         clarify = await core.feed("app", CLARIFY, {})
         # recursion guard: an execute_actions card feed stays on the proactive path
@@ -101,7 +106,7 @@ async def owner_lane_check():
         await core.stop()
 
     # the realday/scorer contract: decision + goal_id + ask_id on every response
-    for out in (noise, act, ask, promise, unshaped, draft_order, cart, money, remember, clarify):
+    for out in (noise, act, ask, promise, unshaped, draft_order, cart, money, money_vent, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
 
@@ -171,6 +176,13 @@ async def owner_lane_check():
     assert money_rec["state"] == "blocked", money_rec
     assert not money_rec["steps"] and not money_rec["proof"], money_rec
     assert not (tmp / "goals" / f"{money['goal_id']}.json").exists(), "blocked card grew a goal"
+
+    # F23: a money-flavored vent the spine's OWN triage silences stays SILENT — no
+    # junk ask, no card, no record, no goal, nothing resolvable. The MONEY pin above
+    # is the other half of the bound: a triage-actionable money line keeps its
+    # blocked ask, so the consult can only ever trade ask -> silence, never -> act.
+    assert money_vent["decision"] == "ignore" and money_vent["ask_id"] is None, money_vent
+    assert money_vent["goal_id"] is None and not money_vent["cards"], money_vent
 
     # /pending carries exactly the ask cards — the blocked money card is NOT resolvable
     pending_ids = {p["ask_id"] for p in pending}
