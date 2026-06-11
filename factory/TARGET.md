@@ -1,5 +1,5 @@
-# TARGET v7
-updated: 2026-06-11T09:45:00Z by foreman (K=5 escalation resolved: official instrument re-aimed at the owner lane — the saturated metric could not see the product's real frontier)
+# TARGET v8
+updated: 2026-06-11T14:05:00Z by foreman (second K=5 resolved: e2e instrument at its honest ceiling per F31 AND gate_P3.sh did not exist — both were foreman debts, now paid)
 north_star: A person's messy day in -> the right tasks caught, done for real, proven; wrong ones never done.
 current_phase: P3-voice
 primary_metric: e2e_completion_rate
@@ -9,30 +9,36 @@ eval_tier: stub
 eval_env: ANTICIPY_OWNER_INGEST=1
 budget_week_usd: 200
 allowed_strategies: |
-  THE INSTRUMENT MOVED TO THE OWNER LANE (escalation 2026-06-11T09:26Z, resolved same
-  night): the official persona eval now runs with ANTICIPY_OWNER_INGEST=1 — the same
-  front door the product ships (owner cards through the one-brain spine, F17 closed).
-  e2e_completion_rate baseline ties the old ratchet best exactly (0.3427); movement =
-  more expected tasks ENDING in a completed, proof-carrying artifact in stub mode
-  (mock hands return artifacts; the orchestrator must drive cards to done with
-  read-back proof recorded on the card/goal). Ranked work:
-  1. e2e completion: diagnose per-persona logs/factory/runs/<lap>/ — which expected
-     actions stall open/waiting instead of completing with proof in the stub tier.
-     Fix the product plumbing (planner inject, goal lifecycle, card->goal->proof
-     write-back). NEVER the scorer, NEVER personas/.
-  2. F23 (money pre-gate interrupting on money-flavored vents): reduce interrupt cost
-     toward the 1.0 best WITHOUT weakening the money stop (fail-safe direction stands;
-     money still never executes).
-  3. Closure-grade claims are judged on holdout WITH ANTICIPY_OWNER_INGEST=1
-     (judge instruction; C13 — dev numbers are bank-fit and prove nothing alone).
-     F21's fix (reported-promise catch) rides the next judged holdout run.
-  4. P3-voice gate (gate_P3.sh: real outbound TTS call read back status=completed,
-     inbound YES resolves a real pending ask, trigger->call <= 60s) is HUMAN-GATED:
-     OWNER_PHONE must be confirmed by Omar in PENDING_FOR_OMAR.md first. Build and
-     mock-prove everything around it; do NOT attempt the live gate.
+  Check factory/config/owner_phone.confirmed for stage:
+
+  STAGE A (owner_phone.confirmed EXISTS — Omar confirmed his number): attempt the P3
+  closure. gate_P3.sh now exists (foreman-written): real outbound TTS call to
+  OWNER_PHONE with independent Twilio REST read-back, real reply-code ask SMS, and
+  Omar's real "YES <code>" resolving the ask (S3 is interactive — the gate waits up to
+  10 min; it is meant to run while Omar is awake, typically a foreman-supervised
+  daytime run with FACTORY_FORCE_GATE=1). Verify engine HEAD healthy first (suite +
+  stub persona pass), set "attempt_gate_close": true, let the gate + judge rule.
+  Judge instruction: closure-grade holdout runs use ANTICIPY_OWNER_INGEST=1 (C13).
+
+  STAGE B (no confirm marker): P4-browser groundwork, mock-proven, pre-registered
+  honestly as instrument-dead (e2e is at the F31 ceiling — foreman-owned; do NOT
+  chase sub-epsilon flips or invent stores for fenced acts):
+  1. agent/site_hints.py: per-host hints (search/cart/product URL shapes) as JSON in
+     the data dir; one-time export from webvoyager's host-literal tables; successful
+     runs write learned hints back. Then DELETE the host literals from agent code —
+     the P4 grep gate (zero retailer hostnames in agent/*.py) is the target shape.
+  2. agent/proof.py: extract the multi-read artifact read-back discipline from the
+     cart path and generalize it beyond carts.
+  3. Focused tests with mocks; suite green; persona guards absolute; default lane and
+     owner lane bit-identical to ratchet bests (the e2e ceiling means ANY decision
+     drift is a regression, not progress).
+  FOREMAN-OWNED (not builder work, listed for honesty): persona bank v2 authoring
+  (unsaturates catch, gives e2e headroom — the durable instrument fix), Omar's
+  OWNER_PHONE confirm, holdout red-pen.
 banned_work: |
-  NEVER attempt gate_P3 live legs (real calls/SMS to OWNER_PHONE) until Omar confirms
-  the number in PENDING_FOR_OMAR.md — a wrong-number 3am call is a product sin.
+  NEVER run live calls/SMS to OWNER_PHONE unless factory/config/owner_phone.confirmed
+  exists (gate_P3.sh enforces this; the ban is absolute everywhere else too).
+  Never invent a store/site for memory-fenced acts (F31) — that is a faked completion.
   Per-store DOM recipes. example.com / localhost / fixture targets as task evidence.
   Search-bar task dumping. Never edit factory/ control plane, personas/,
   scripts/realday.sh, the scoreboard, or read any holdout content. Never edit the
@@ -40,14 +46,11 @@ banned_work: |
   self-owned, labeled, reversible, cleaned up. NEVER edit or commit while
   factory/.lock exists (applies to every actor).
 notes: |
-  Treadmill K=5 fired after 5 KEPT laps (substantive work, invisible metric):
-  catch_rate_worst was saturated at 1.0 on dev AND the last judged holdout (041654Z),
-  and P3 closure is human-gated — so the official instrument could not register the
-  real frontier (owner-lane catch 0.22->1.0 worst, false 15->0, recall 0.25->1.0,
-  e2e 0.0->0.3427, F17 one-brain closed, F21 fixed on main path, voice plumbing
-  mock-proven). v7 makes the owner lane the official instrument (eval_env above;
-  verify_gate.sh now honors it). Non-primary metric deltas may shift with the
-  instrument switch (disclosed; guards unchanged and absolute — false==0, harm==0).
-  C17 judge-REAL closures and D23 SKIPPED_LIMIT handling carried forward. Owner asks
-  open: OWNER_PHONE confirm (unblocks P3 gate), holdout red-pen, bank v2
-  (foreman-owned). P0/P1/P2 closed and certified in RATCHET.
+  Night of 2026-06-10/11 in one line: P2-brain CLOSED judge-REAL (holdout worst 1.0),
+  owner lane became the product (one brain, executing cards with proof, voice+inbound
+  plumbing mock-proven, restart-safe asks and triggers), official e2e 0.3427 -> 0.6483,
+  ten ledger entries FIXED, two honest K=5 escalations resolved by re-aim. The second
+  escalation's root causes were foreman debts: F31 (instrument ceiling — bank v2 is
+  the fix, foreman-owned) and the missing gate_P3.sh (now written, human-guarded).
+  C17 judge-REAL closures, D23 SKIPPED_LIMIT handling, eval_env lever carried forward.
+  Phases closed: P0, P1, P2.
