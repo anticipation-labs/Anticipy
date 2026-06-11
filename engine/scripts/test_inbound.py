@@ -5,14 +5,18 @@ Fake-transport (injected fetch; zero network) pins:
     "NO <code>" resolves exactly that pending ask THROUGH ControlCore.resolve
   - bare YES resolves only when exactly ONE ask is pending; ambiguity (two pending,
     or a code matching nothing) resolves NOTHING — never guess an approval
+  - F20: an ambiguous owner reply draws EXACTLY ONE bounded clarification SMS per
+    poll pass (listing the pending codes; "nothing pending" when there are none),
+    to the owner only, budget-counted and budget-suppressed toward silence; it
+    never resolves anything, and the exact-code path still works regardless
   - F18: an owner card record gets its resolution write-back even when the
     in-memory goal->record map is GONE (restart/desync) — the durable
     execution.goal_id linkage carries it
   - non-YES/NO inbound is owner speech -> the same /owner/ingest door (cards with
     source "sms")
-  - safety: no OWNER_PHONE -> refuse everything; non-owner senders skipped;
-    outbound-direction and pre-floor (stale) messages never act; a processed sid
-    never replays — not in a later poll, not after a poller restart
+  - safety: no OWNER_PHONE -> refuse everything; non-owner senders skipped (and
+    never clarified); outbound-direction and pre-floor (stale) messages never act;
+    a processed sid never replays — not in a later poll, not after a poller restart
 
 Run:  PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_inbound.py
 """
@@ -20,6 +24,7 @@ import asyncio
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 
 os.environ.setdefault("ANTICIPY_MODEL_PROVIDER", "stub")
@@ -67,11 +72,22 @@ async def code_roundtrip_check():
         inbox = []
         poller = InboundPoller(core, fetch=lambda: list(inbox))
 
-        # bare YES with TWO pending -> ambiguous, nothing resolves
+        # bare YES with TWO pending -> ambiguous, nothing resolves — and the owner
+        # is TOLD so (F20): exactly one bounded clarification listing both codes
+        sends0 = len(core.text_channel.sent)
+        b0 = core.proactive.budget.count(time.time())
         inbox.append(sms("SM1", "YES"))
         out = await poller.poll_once()
         assert not out["resolved"] and out["skipped"][0]["reason"] == "ambiguous", out
         assert len(core.pending_asks()) == 2
+        assert out["clarified"] == [{"sid": "SM1", "pending": 2, "sent": True}], out
+        assert len(core.text_channel.sent) == sends0 + 1
+        clar = core.text_channel.sent[-1]
+        assert clar["to"] == OWNER and clar.get("mock"), clar
+        assert code1 in clar["message"] and code2 in clar["message"], clar["message"]
+        assert "ambiguous" in clar["message"].lower(), clar["message"]
+        assert core.proactive.budget.count(time.time()) == b0 + 1, \
+            "a clarification draws on the interruption budget (F20)"
 
         # NO + code1 -> exactly ask1 declines (goal failed), ask2 untouched
         inbox.append(sms("SM2", f"no, {code1.upper()}"))
@@ -80,22 +96,37 @@ async def code_roundtrip_check():
         assert core.store.load(ask1["goal_id"]).state == GoalState.failed
         assert len(core.pending_asks()) == 1
 
-        # bare YES with exactly ONE pending -> resolves it to done
+        # bare YES with exactly ONE pending -> resolves it to done, no clarification
         inbox.append(sms("SM3", "Yes."))
         out = await poller.poll_once()
         assert [r["ask_id"] for r in out["resolved"]] == [ask2["ask_id"]], out
         assert core.store.load(ask2["goal_id"]).state == GoalState.done
         assert not core.pending_asks()
+        assert not out["clarified"], out
 
-        # same inbox again -> every sid already seen, nothing replays
+        # bare YES with ZERO pending -> still ambiguous, still refused; the
+        # clarification honestly says nothing is pending (no codes to invent)
+        inbox.append(sms("SM4", "yes"))
+        out = await poller.poll_once()
+        assert not out["resolved"] and out["skipped"][0]["reason"] == "ambiguous", out
+        assert out["clarified"] and out["clarified"][0]["pending"] == 0, out
+        assert "nothing is pending" in core.text_channel.sent[-1]["message"], \
+            core.text_channel.sent[-1]
+
+        # same inbox again -> every sid already seen, nothing replays (and a seen
+        # ambiguous reply never re-clarifies)
+        sends1 = len(core.text_channel.sent)
         out = await poller.poll_once()
         assert not out["resolved"] and not out["ingested"] and not out["skipped"], out
+        assert not out["clarified"] and len(core.text_channel.sent) == sends1, out
 
         # poller RESTART (same data dir) -> seen set persisted, still no replay
         poller2 = InboundPoller(core, fetch=lambda: list(inbox))
         out = await poller2.poll_once()
         assert not out["resolved"] and not out["ingested"] and not out["skipped"], out
-        assert json.loads((tmp / "inbound_seen.json").read_text())["sids"] == ["SM1", "SM2", "SM3"]
+        assert not out["clarified"] and len(core.text_channel.sent) == sends1, out
+        assert json.loads((tmp / "inbound_seen.json").read_text())["sids"] == [
+            "SM1", "SM2", "SM3", "SM4"]
     finally:
         await core.stop()
 
@@ -151,25 +182,36 @@ async def safety_check():
         code = ask["ask_id"][:6]
         valid = f"yes {code}"
 
-        # OWNER_PHONE unset -> the poller refuses to even fetch
+        # OWNER_PHONE unset -> the poller refuses to even fetch (and cannot clarify:
+        # there is no verified number to text)
         os.environ.pop("OWNER_PHONE", None)
+        sends0 = len(core.text_channel.sent)
         poller = InboundPoller(core, fetch=lambda: [sms("SM20", valid)])
         out = await poller.poll_once()
         assert out["fetched"] == 0 and not out["resolved"], out
         assert len(core.pending_asks()) == 1
+        assert len(core.text_channel.sent) == sends0
         os.environ["OWNER_PHONE"] = OWNER
 
-        # wrong sender / outbound echo / stale history: seen, never acted on
+        # wrong sender / outbound echo / stale history: seen, never acted on.
+        # The two ambiguous OWNER replies in the SAME pass draw exactly ONE
+        # clarification (F20 burst bound); the wrong-sender valid code draws none.
         poller = InboundPoller(core, fetch=lambda: [
             sms("SM21", valid, frm="+15551230000"),
             sms("SM22", valid, direction="outbound-api"),
             sms("SM23", valid, date_sent="Mon, 01 Jan 2024 00:00:00 +0000"),
             sms("SM24", "yes zzzz99"),   # well-formed code matching nothing
+            sms("SM26", "no qqqq11"),    # second ambiguous reply, same pass
         ])
         out = await poller.poll_once()
         assert not out["resolved"] and not out["ingested"], out
         assert {s["reason"] for s in out["skipped"]} == {"sender", "stale", "ambiguous"}, out
         assert len(core.pending_asks()) == 1, "no unauthorized resolution may happen"
+        assert [c["sid"] for c in out["clarified"]] == ["SM24"], out
+        assert len(core.text_channel.sent) == sends0 + 1, "one clarification per pass"
+        clar = core.text_channel.sent[-1]
+        assert clar["to"] == OWNER and "ZZZZ99" in clar["message"], clar
+        assert code in clar["message"], "the clarification lists the real pending code"
 
         # and the REAL owner reply still works after all that
         poller2 = InboundPoller(core, fetch=lambda: [sms("SM25", valid)])
@@ -181,6 +223,38 @@ async def safety_check():
         os.environ["OWNER_PHONE"] = OWNER
 
 
+async def budget_clarify_check():
+    """F20 budget bound: a spent interruption budget suppresses the clarification
+    (toward silence — the glassbox entry still records the refusal) but NEVER
+    gates the owner's exact-code resolution itself."""
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-inb-budget-"))
+    core = ControlCore(data_dir=tmp)
+    await core.start()
+    try:
+        ask = await core.feed("app", WIRE2, {})
+        assert ask["decision"] == "ask"
+        budget = core.proactive.budget
+        now = time.time()
+        while budget.count(now) < budget.max_per_day:
+            budget.record_interruption(now)
+
+        sends0 = len(core.text_channel.sent)
+        poller = InboundPoller(core, fetch=lambda: [sms("SM30", "yes zzzz99")])
+        out = await poller.poll_once()
+        assert out["skipped"][0]["reason"] == "ambiguous" and not out["clarified"], out
+        assert len(core.text_channel.sent) == sends0, "over budget -> silent"
+        assert len(core.pending_asks()) == 1
+
+        # resolution is the owner's own action, never an interruption: the exact
+        # code resolves even with the budget fully spent
+        poller2 = InboundPoller(core, fetch=lambda: [sms("SM31", f"yes {ask['ask_id'][:6]}")])
+        out = await poller2.poll_once()
+        assert [r["ask_id"] for r in out["resolved"]] == [ask["ask_id"]], out
+        assert core.store.load(ask["goal_id"]).state == GoalState.done
+    finally:
+        await core.stop()
+
+
 def main():
     # live_ready stays false throughout (no ANTICIPY_CHANNELS_MODE): this test
     # must never construct a Twilio transport
@@ -188,8 +262,10 @@ def main():
     asyncio.run(code_roundtrip_check())
     asyncio.run(owner_card_check())
     asyncio.run(safety_check())
+    asyncio.run(budget_clarify_check())
     print("PASS inbound: YES/NO+code -> ControlCore.resolve (F18 durable write-back), "
-          "speech -> owner_ingest, ambiguity/sender/stale/replay all refused")
+          "speech -> owner_ingest, ambiguity/sender/stale/replay all refused, "
+          "ambiguous owner replies draw ONE bounded budget-capped clarification (F20)")
 
 
 if __name__ == "__main__":

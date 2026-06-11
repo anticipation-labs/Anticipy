@@ -1386,3 +1386,39 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   d01 L18, which is _NO_BUY-shaped, spine-ASK in both lanes) still asks by the
   fail-safe stance; deciding whether the product may ever auto-stage a "buy X"
   command is a product-stance call, not a builder scope rule.
+
+## Groundwork lap 20260611T120957Z (F20 clarification reply, TARGET v7 item 4 "mock-prove everything around the P3 gate")
+- F20 UPDATE — FIXED (was OPEN, live-UX gap: an ambiguous inbound reply — bare
+  YES/NO with !=1 asks pending, or a code matching nothing — resolved NOTHING and
+  told the owner NOTHING, so on a live multi-ask day the owner believes they
+  answered while the ask silently strands): the entry's own queued fix,
+  implemented exactly as ledgered — InboundPoller._clarify sends ONE bounded
+  clarification SMS back over the same channel through the existing notify_user
+  door (ChannelWorker -> shared TextChannel; mock/live triad; never-crash),
+  listing the exact pending reply codes (head names what failed: "code X matches
+  nothing" / "N asks are pending"; "nothing is pending" when there are none —
+  no codes invented; at most 5 listed, action snippets truncated to 60 chars).
+  Bounds, each failing toward silence: at most ONE clarification per poll pass
+  (a burst of ambiguous messages is one confusion); the clarification COUNTS
+  against the proactive AnnoyanceBudget (record_interruption on success) and is
+  SUPPRESSED when the daily budget is spent (glassbox inbound_clarify_suppressed
+  carries it); recipient is the already-verified owner number only (non-owner
+  senders are skipped before the reply parser; OWNER_PHONE unset refuses the
+  whole poll); seen-sid gating means a clarification can never replay. It can
+  only ever SEND TEXT: no resolve/approve/goal/execution in any branch, and the
+  owner's exact-code resolution is itself never budget-gated (resolution is the
+  owner's own action, not an interruption).
+- Measured (builder-side, stub): suite 43/43 (test_inbound grew the F20 battery:
+  two-pending clarification listing both codes + budget draw, zero-pending
+  honest "nothing is pending", one-per-pass burst bound with a wrong-sender
+  valid code drawing nothing, budget-exhausted suppression with exact-code
+  resolution still working, seen/restart never re-clarify). OFFICIAL instrument
+  untouched by construction (InboundPoller is never built in persona runs) and
+  verified by full pre/post runs in BOTH lanes — aggregates bit-identical at the
+  ratchet bests, per-line decision diff ZERO across 493 lines x 16 persona-days.
+- Regression check: test_inbound.py — code_roundtrip_check pins refusal +
+  exactly-one clarification (the F20 entry's named check), safety_check pins the
+  burst bound and that non-owner/unset-phone paths never clarify,
+  budget_clarify_check pins suppression-toward-silence and the ungated
+  exact-code resolve. A clarification that resolves anything, texts a non-owner,
+  or sends twice in a pass = the failure returned.

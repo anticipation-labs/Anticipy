@@ -81,6 +81,27 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- AMBIGUOUS INBOUND REPLIES NOW DRAW A BOUNDED CLARIFICATION (lap
+  20260611T120957Z, groundwork — ledger F20 FIXED; TARGET v7 item 4
+  "mock-prove everything around the P3 gate"; honest DEAD lap by design,
+  disclosed in the manifest: e2e is at the F31 ceiling and gate_P3 is
+  human-gated, treadmill walks toward the designed K=5 re-aim). An ambiguous
+  owner SMS reply (bare YES/NO with !=1 asks pending, or a code matching
+  nothing) still resolves NOTHING — but the owner is now TOLD so:
+  InboundPoller._clarify sends ONE bounded clarification per poll pass through
+  notify_user (ChannelWorker -> shared TextChannel, mock/live triad), listing
+  the exact pending reply codes ("nothing is pending" when none; at most 5
+  listed, 60-char action snippets). Every bound fails toward silence: one send
+  per pass, AnnoyanceBudget-counted AND budget-suppressed when the day's
+  interruptions are spent, owner-recipient-only, seen-sid gated (never
+  replays); no resolve/approve/goal/execution in any branch, and the
+  exact-code resolution itself is never budget-gated. Verified: suite 43/43
+  (F20 battery in test_inbound.py); full pre/post persona runs BOTH lanes
+  bit-identical at the ratchet bests; per-line decision diff ZERO (493 lines x
+  16 persona-days — the poller never runs in persona runs, proven not
+  assumed). P3 mock-side residuals left under item 4: the D16 sibling
+  (proactive.pending in-memory across restarts) and F19 (live text auth
+  realm pattern, live-observable only).
 - THE OWNER LANE'S INTERRUPT COST IS AT EXACT SPINE PARITY (lap
   20260611T115207Z, build — ledger F23 pre-gate interrupt component FIXED;
   TARGET v7 ranked item 2; honest DEAD lap by design, disclosed in the

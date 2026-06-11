@@ -774,3 +774,25 @@ treadmill walks toward the K=5 re-aim F31 calls for. F23's pre-gate interrupt
 component is FIXED in the ledger; the money STANCE question (pri's keyed
 expected-act "buy" command asking by fail-safe) stays foreman-owned. Zero
 spend, zero real-world artifacts.
+
+## 2026-06-11 — lap 20260611T120957Z (groundwork: F20 clarification reply)
+TARGET v7's ranked items are exhausted (item 1 at the F31 e2e ceiling, item 2 at
+exact interrupt parity last lap, items 3/4 judge/human-gated), so instead of a
+false out-of-ideas no-op I took the ledger's own named open P3 item under item
+4's sanction ("build and mock-prove everything around the gate"): F20 — an
+ambiguous owner SMS reply (bare YES/NO with !=1 pending, or a code matching
+nothing) refused correctly but SILENTLY, so live the owner believes they
+answered while the ask strands. Implemented the entry's queued fix verbatim:
+InboundPoller._clarify sends exactly ONE bounded clarification per poll pass
+back over the same channel via notify_user (mock/live triad), listing the exact
+pending codes ("nothing is pending" when none — no invented codes), counted
+against AnnoyanceBudget and suppressed toward silence when the daily budget is
+spent; owner-recipient-only; it can only ever send text — no
+resolve/approve/goal/execute in any branch, and exact-code resolution is never
+budget-gated. Disclosed up front in the manifest: this reads mechanically DEAD
+(no e2e movement is honestly available; treadmill walks toward the designed K=5
+re-aim). Verified: suite 43/43; full pre/post persona runs in BOTH lanes
+bit-identical at the ratchet bests; per-line decision diff ZERO across 493
+lines x 16 persona-days (the poller never runs in persona runs — proven, not
+assumed). Ledger: F20 -> FIXED with the regression battery in test_inbound.py.
+Zero spend, zero real-world artifacts.

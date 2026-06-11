@@ -1,59 +1,57 @@
 # Last Lap
 
-Lap: 20260611T115207Z (build, TARGET v7 item 2 — interrupt_cost on the official
-owner-lane instrument; ledger F23 pre-gate interrupt component FIXED. DISCLOSED
-in the manifest up front: primary_metric e2e is at its F31 honest ceiling, so
-this lap reads mechanically dead (moved=none) by design — doing the foreman's
-ranked item 2 honestly instead of a false "out of ideas" no-op.)
+Lap: 20260611T120957Z (groundwork — ledger F20 FIXED: ambiguous inbound replies
+now draw one bounded clarification; TARGET v7 item 4's "build and mock-prove
+everything around the P3 gate". DISCLOSED in the manifest up front: primary
+metric e2e is at its F31 honest ceiling and gate_P3 cannot first-close from a
+builder lap (live legs human-gated on OWNER_PHONE; the gate script itself is a
+foreman item) — so this lap reads mechanically DEAD (moved=none) by design,
+the third in the designed walk toward the K=5 escalation -> TARGET v8 re-aim.)
 
 ## What changed
-- `engine/anticipy_engine/core/control_core.py` — `_spine_card`'s blocked
-  branch now consults the spine's OWN Room-1 triage instance before surfacing
-  a blocked money card (one brain, F17: literally the same Triage object the
-  default path uses; pure classification — no decider, no harm-line, no
-  orchestrator, no goal, no /pending). Triage-vented line -> silent, exactly
-  the default path's verdict; ANY other verdict -> the blocked ask stands.
-  The live ambiguity tiebreak fails OPEN (True on any error), so uncertainty
-  and gateway outages keep the ask. Silence and blocked are both non-executing
-  outcomes: money never runs in any branch; the consult can only trade
-  ask -> silence, never -> act.
-- `engine/scripts/test_owner_ingest_event.py` — new non-bank MONEY_VENT pin
-  ("Ugh, just buy the dumb gift already, me. Maybe next month. Probably."):
-  decision ignore, no card, no record, no goal, no ask. The existing MONEY
-  pins are the other half of the bound: a triage-actionable money line keeps
-  disposition "blocked", state "blocked", non-resolvable ask, never /pending,
-  never grows a goal — all unchanged.
+- `engine/anticipy_engine/channels/inbound.py` — the ambiguous-reply branch
+  (bare YES/NO with !=1 asks pending, or a code matching nothing) still refuses
+  to resolve anything, but now TELLS the owner so (F20's own queued fix):
+  `_clarify` sends ONE bounded clarification SMS per poll pass through the
+  existing `notify_user` door (ChannelWorker -> shared TextChannel, mock/live
+  triad, never-crash), listing the exact pending reply codes — at most 5, action
+  snippets truncated to 60 chars, "nothing is pending" when there are none.
+  Bounds all fail toward silence: one send per pass even if the send fails
+  (never burst-retry SMS), the clarification COUNTS against the proactive
+  AnnoyanceBudget and is SUPPRESSED when the daily budget is spent, recipient is
+  the already-verified owner number only, seen-sid gating means it never
+  replays. It can only ever send text: no resolve/approve/goal/execution in any
+  branch; the owner's exact-code resolution is itself never budget-gated.
+- `engine/scripts/test_inbound.py` — the F20 battery: two-pending clarification
+  listing both codes + budget draw; zero-pending honest "nothing is pending";
+  one-per-pass burst bound (second ambiguous reply in the same pass draws
+  nothing; a wrong-sender valid code draws nothing); budget-exhausted
+  suppression with the exact-code resolve still working; seen/restart never
+  re-clarify; OWNER_PHONE-unset sends nothing.
 
 ## Numbers I saw (builder-side, stub, dev bank)
-- OFFICIAL owner lane (ANTICIPY_OWNER_INGEST=1): interrupt_cost 0.6875 -> 0.625,
-  interrupt_cost_worst 1.5 -> 1.0 — EXACT default-lane parity, at the ratchet
-  bests. catch 1.0/1.0, false 0, harm 0, e2e 0.6483, correct 0.8475,
-  recall_worst 1.0 ALL bit-identical pre->post. Worst persona contractor_luis
-  (e2e), interrupt worst now 1.0 (marcus/dana/pri — same as default).
-- Default lane: ZERO diffs (the change lives inside the owner-lane-only
-  _spine_card); all aggregates at ratchet bests.
+- OFFICIAL owner lane (ANTICIPY_OWNER_INGEST=1): catch 1.0/1.0, false 0, harm 0,
+  interrupt 0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0 — aggregates
+  bit-identical pre->post, at the ratchet bests. Default lane identical too.
 - Per-line decision diff pre->post, BOTH lanes, 493 lines x 16 persona-days:
-  EXACTLY one flip — parent_dana day02 L31 ("Just buy the birthday stuff
-  already, me. ... Probably.") ask -> ignore in the owner lane. Zero others.
-- Record-level diff: exactly the vent's blocked card record disappearing;
-  done/waiting/open counts identical.
-- Suite 43/43. Scorer selftest PASS. Zero spend, zero real-world artifacts.
-- Run dirs: logs/factory/runs/20260611T115207Z-{pre-owner,post-owner,post-default}.
+  ZERO (the InboundPoller is never constructed in persona runs — verified, not
+  assumed). Scorer selftest PASS both lanes.
+- Suite 43/43. Zero spend, zero real-world artifacts.
+- Run dirs: logs/factory/runs/20260611T120957Z-{pre,post}-{owner,default}.
 
 ## Status / what's next
-- This lap is an honest DEAD lap on the official instrument (e2e unchanged
-  0.6483; the scoreboard counts movement only on the primary metric) — exactly
-  as F31 predicts. The treadmill should now be at 2; F31's designed outcome is
-  the K=5 escalation -> foreman TARGET v8 re-aim. v8 candidates (from F31):
-  correct_action_rate (0.8475, real headroom: kayla compound-item args, stub
-  canned send/draft args), owner-path capture for storeless cart items, the
-  F23 money-STANCE decision (pri's keyed expected-act "buy" command still asks
-  by fail-safe — a product-stance call, foreman-owned), or the human-gated P3
-  live legs (OWNER_PHONE confirm still pending in PENDING_FOR_OMAR.md;
-  gate_P3.sh still does not exist — foreman item).
-- With this lap, TARGET v7's builder-workable ranked items are exhausted:
-  item 1 (e2e) is at the F31 ceiling, item 2 (F23 interrupt) is now at exact
-  spine parity — the remaining owner-lane asks ARE the spine's own stance in
-  both lanes. Items 3 (holdout judging) and 4 (P3 live gate) are judge/human
-  gated. A next builder lap has no honest TARGET v7 slice left; an honest
-  no-change manifest (or foreman re-aim before tonight) is the right path.
+- This is an honest DEAD lap on the official instrument by design (treadmill
+  should be at 3). F31's designed outcome stands: the next builder laps have no
+  honest e2e slice; the right move is the K=5 escalation -> foreman TARGET v8
+  re-aim (candidates per F31: correct_action_rate 0.8475 headroom, owner-path
+  capture for storeless cart items, the F23 money-STANCE call, the human-gated
+  P3 live legs + gate_P3.sh authoring — both foreman items).
+- P3 mock-side residuals a future lap could still take under item 4's sanction:
+  the D16 sibling (proactive.pending is in-memory — an engine restart between
+  ask-SMS and the owner's YES strands the ask itself; the
+  decider_deferred.json persistence pattern is the named fix) and F19 (live
+  text.py realm-dependent auth — port the explicit-header pattern if the first
+  live SMS leg fails). Both are disclosed in the ledger; neither moves the
+  official instrument either.
+- Still waiting on Omar: OWNER_PHONE confirmation (PENDING_FOR_OMAR item 1)
+  unblocks the P3 live gate night.
