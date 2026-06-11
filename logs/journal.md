@@ -706,3 +706,24 @@ debounce — F17 parity with the default lane confirmed per-line). Default lane:
 exactly the 6 intended flips, zero other diffs, ratchet bests held. Suite 42/42
 (two integration pins re-derived honestly per F25). Ledger F28 written. Cart
 cluster, dana's anaphoric booking, and pri's "buy" line disclosed, not chased.
+
+## 2026-06-11 — lap 20260611T105558Z (build, TARGET v7 item 1: e2e on the owner lane)
+Took the cart-staging cluster the last lap disclosed. Read the raw owner-lane run first:
+of the 5 stalled cart expected-acts, exactly 2 have a memory line naming a real store the
+way people speak ("at Target", "on Amazon") — and the whole memory->site chain required a
+SPOKEN dotted hostname, so the existing memory-resolved cart rule was dead code on real
+speech (plus _MEM_PRODUCT had drifted from the orchestrator's product-hint list, and the
+vague-anaphor shape rejected "that water table thing"/"the clamp one"). Built
+shared/storesite.py: derive https://www.<store>.com from a product-shaped memory line's
+single capitalized store name after at/on/from — no retailer literals, every deny bound
+failing toward "" — and imported it on BOTH sides (harm decision + orchestrator plan) so
+the ACT population equals the completable population. Deliberately did NOT widen bare
+stick/throw cart verbs: tracing the storeless rob line showed it would junk-complete via
+the stub planner's canned "later"->write_memory step (fake artifact) — ledgered as the
+F29 near-miss with deny pins instead. Result: owner-lane e2e 0.5918 -> 0.6305 (+0.0387,
+exactly the predicted two completions, dana water table -> target.com, kayla desk lamp ->
+amazon.com, both with labeled mock proof + honest derived-site provenance); per-line diff
+in both lanes = exactly the 2 intended flips across 493 lines x 16 persona-days; catch
+1.0/1.0, false 0, harm 0, interrupt 0.6875/1.5, recall 1.0 all bit-identical. Suite 43/43
+(new storesite battery). Zero spend, zero real-world artifacts. Next named slice: dana's
+"Book the Friday 9am one" slot-choice rule (+ F27's "block X to Y" calendar trigger).

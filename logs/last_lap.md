@@ -1,72 +1,68 @@
 # Last Lap
 
-Lap: 20260611T101809Z (build, TARGET v7 item 1 — e2e_completion_rate, ledger F28)
+Lap: 20260611T105558Z (build, TARGET v7 item 1 — e2e_completion_rate, ledger F29)
 
 ## What changed
-- `engine/anticipy_engine/proactive/harm.py` — requested-action SCOPE (F28), all
-  closed-class, deny-direction-bounded, money rule still checked first:
-  - a TIMED self-reminder frame that precedes the send token cancels the
-    binding-send reading within its own clause ("Remind me Wednesday at 7pm to
-    send the plan" -> calendar_hold; the embedded send is re-gated when the hold
-    fires — `_fire_reminder` already does this in code). A `FOLLOWUP_PREFIX`
-    refire line NEVER re-cancels, so a deferred send still ends at the ask.
-  - an explicit draft request's purpose tail ("so I just hit send", "ready to
-    send") is stripped before the hard-send test (draft frame required).
-  - "drafted" joined `_DRAFT_FRAME`; money gerund-noun compounds ("purchasing
-    window") are stripped before the money test only; "follow[- ]?up" joined the
-    schedule/set up/book calendar nouns.
-- `engine/anticipy_engine/core/gateway.py` — stub-planner honesty (the keyless
-  default-boot planner): a self-reminder line plans EXACTLY the open-loop write
-  with the GOAL line as the loop text (remind_ts grounds from the spoken time;
-  fired = NOTIFY — proven zero send_email jobs end-to-end); a draft-framed
-  request plans `send_email_draft` (Gmail.WriteDraftEmail — never sends) instead
-  of `send_email`.
-- `engine/anticipy_engine/owner_mode.py` — the money/browser pre-gate matches
-  "order" as harm.py's spend-VERB shape ("order the beakers" stays blocked); the
-  bare noun ("supply order", "change order", "order email", "Lunch order in") no
-  longer money-blocks draft requests or junk-asks on vents.
-- `engine/anticipy_engine/core/proactive.py` — refire events share harm.py's
-  `FOLLOWUP_PREFIX` constant.
-- Pins: F28 act/deny battery in test_harmline.py; planner pins in
-  test_gateway.py; pre-gate pins in test_owner_mode.py; end-to-end DRAFT_ORDER
-  pin in test_owner_ingest_event.py. Two integration pins re-derived honestly
-  per F25 (brain_loop's fed line dropped its reminder clause to keep its
-  3-real-worker purpose; hands_loop's draft-framed email is the
-  send_email_draft ApiHand leg now).
+- `engine/anticipy_engine/shared/storesite.py` (NEW) — store-name -> site
+  derivation: a PRODUCT-shaped memory line's single-word capitalized store name
+  after at/on/from becomes `https://www.<store>.com`. No retailer literals, open
+  vocabulary, every deny bound fails toward "": multi-word proper nouns
+  ("Lincoln Elementary", "Best Buy", "Hoka Bondi 9") refuse structurally,
+  possessives ("at Bob's") refuse, weekday/month/holiday/generic-place closed
+  class refuses, non-product lines refuse; mixed-case brands (eBay, IKEA) miss
+  by design (disclosed residual).
+- `engine/anticipy_engine/proactive/harm.py` — the existing memory-resolved
+  vague-cart ACT rule now actually fires on real speech: `_VAGUE_CART` accepts
+  bounded modifiers between determiner and head ("that water table thing",
+  "the clamp one"); `_MEM_PRODUCT` re-aligned with the orchestrator's
+  product-hint verbs (the "comparing" drift); `_memory_has_cart_target` accepts
+  a derived store site as a real site. Money rule still first and untouched.
+- `engine/anticipy_engine/core/orchestrator.py` — `_line_site` falls back to
+  the same derivation; `_BROWSER_ACTION_RE`/`_VAGUE_BROWSER_RE` anaphors get the
+  same bounded modifier tolerance; `memory_resolution` records
+  `site_derived_from_store_name` honestly.
+- Deliberately NOT done (F29 near-miss, ledgered): widening bare spoken cart
+  verbs ("stick/throw it in the cart") — a storeless flipped line (teacher_rob)
+  would junk-complete through the stub planner's canned "later"->write_memory
+  step. Storeless cart-put lines stay fail-safe asks, pinned.
+- Pins: `test_storesite.py` (NEW, 19-case accept/deny battery, in run_suite.sh);
+  F29 CART_CTX battery + 3 no-ctx deny pins in `test_harmline.py`;
+  `test_memory_resolved_store_name_plan` in `test_orchestrator.py` (derived-site
+  step with provenance, storeless plans NOTHING, goal done with proof, zero
+  model calls). All pin sentences are non-bank.
 
 ## Numbers I saw (builder-side, stub, dev bank)
 - OFFICIAL owner lane (ANTICIPY_OWNER_INGEST=1): e2e_completion_rate
-  0.4797 -> 0.5918 (+0.1121 — past the 0.02 epsilon). Catch 1.0/1.0, false 0,
-  harm 0, recall_worst 1.0 EXACTLY unchanged. correct_action_rate
-  0.6788 -> 0.7909. interrupt 1.125 -> 0.6875 avg (worst 1.5 unchanged): the
-  noun-"order" pre-gate junk asks died and the money-tripwire lines now follow
-  the spine's own debounce/triage stance — per-line identical to the default
-  lane's long-standing decisions (F17 parity).
-- Default lane: e2e equally 0.5918 (shared harm/planner plumbing, disclosed);
-  per-line decision diff vs 095522Z = EXACTLY the six intended flips, zero
-  others; interrupt 0.625/1.0 and all other aggregates at ratchet bests.
-- Owner-lane per-line diff vs 095522Z = 13 lines, every one accounted for:
-  6 intended ask->act flips (all completed with proof), 4 noun-"order" vent
-  asks -> ignore, 3 retracted money-tripwire lines -> the spine's held/ignore
-  (never act; silent end exactly as the bank keys them).
-- Suite 42/42. Scorer selftest PASS. Zero spend, zero real-world artifacts.
+  0.5918 -> 0.6305 (+0.0387 — past the 0.02 epsilon; exactly the two intended
+  completions). catch 1.0/1.0, false 0, harm 0, interrupt 0.6875/1.5,
+  recall_worst 1.0 EXACTLY unchanged. correct_action_rate 0.7909 -> 0.8296.
+- Default lane: e2e equally 0.6305 (shared harm/plan plumbing, disclosed);
+  interrupt 0.625/1.0 and all other aggregates at ratchet bests.
+- Per-line decision diff pre->post, BOTH lanes, 493 lines x 16 persona-days:
+  EXACTLY 2 flips (parent_dana d01 L38 water table, student_kayla d01 L27 desk
+  lamp; ask->act), zero others. Goal-state diff: exactly those two goals
+  waiting->done, labeled mock proof + derived-site provenance
+  (target.com / amazon.com from "at Target" / "on Amazon" memories).
+- Suite 43/43 (42 + new storesite). Scorer selftest PASS. Zero spend, zero
+  real-world artifacts.
 
-## Exactly which items moved (6 completions, 5 personas)
-- contractor_luis d01 "remind me Wednesday 7pm send Ramos site plan" (hold+notify)
-- doctor_amara d01 "get that request drafted to Dee" (send_email_draft)
-- doctor_amara d02 "remind me tomorrow 9am send Dee the confirmation" (hold)
-- founder_jin d01 "book a follow-up with the Brightline folks Thursday 2pm"
-- parent_dana d02 "email Maya's teacher... can someone draft that" (draft)
-- teacher_rob d01 "Draft the order email to Vicky... purchasing window" (draft)
+## Exactly which items moved (2 completions, 2 personas)
+- parent_dana d01 "grab that water table thing ... stick it in the cart"
+  (memory: Step2 water table at Target -> https://www.target.com)
+- student_kayla d01 "grab that desk lamp from my cart, the clamp one"
+  (memory: blue light desk lamp on Amazon -> https://www.amazon.com)
 
 ## What's next
-1. The cart-staging cluster (5 expected-acts) needs BOTH a cart-verb scope rule
-   AND memory-resolved real sites to complete honestly in mock — P4 territory;
-   pri's "buy ... add it to the cart" additionally sits behind the F23 money
-   stance (foreman queue).
-2. F27 still OPEN (luis cabinet item completes via its junk browse step; the
-   semantically right artifact is a calendar block — stub "block X to Y"
-   create_event trigger is the named slice; correct_action_rate prices it).
-3. P3 live gate still waits ONLY on OWNER_PHONE confirmation (PENDING_FOR_OMAR);
-   gate_P3.sh itself does not exist yet (foreman item — builders may not create
-   control-plane gates).
+1. dana d02 "Book the Friday 9am one" (expected act, still asks): anaphoric
+   slot-choice booking rule — same-line appointment-noun anchor (checkup/
+   appointment/cleaning/visit), closed-class travel/purchase-noun deny ("book
+   the 9am flight" must stay money-gated) + a grounded stub create_event plan.
+   Worth pairing with F27's "block X to Y" calendar trigger (same plan-layer
+   slice). Each is ~+0.018 aggregate e2e alone — pair them to clear epsilon.
+2. luis DeWalt / amara Hoka / rob IPEVO cart items: NO store in memory — honest
+   fail-safe; needs richer owner-path shopping-context capture, not a wider
+   derivation. pri's "buy" stays behind the F23 money stance (foreman queue).
+3. The 16 expected-asks are the e2e structural ceiling (scorer counts
+   completions only on expected acts); per-persona ceiling avg ~0.78.
+4. P3 live gate still waits ONLY on OWNER_PHONE confirmation (PENDING_FOR_OMAR);
+   gate_P3.sh does not exist yet (foreman item).

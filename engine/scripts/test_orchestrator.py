@@ -142,6 +142,50 @@ async def test_stub_plan_ignores_memory_inject():
     print("  stub plan ignores memory inject: create_event only, done; live prompt keeps memory")
 
 
+async def test_memory_resolved_store_name_plan():
+    # F29: memory names stores the way people speak ("at Walmart"), never as
+    # hostnames. The resolver derives the site (deny-bounded; shared/storesite),
+    # records the provenance honestly, and a storeless vague request still plans
+    # NO browse step (no instruction dumping). Non-bank sentences on purpose.
+    from anticipy_engine.core.orchestrator import _browser_action_step, _memory_resolved_browser_step
+
+    spoken = "Grab that ring light thing I was looking at, just stick it in the cart."
+    resolving = {"history": ["Was comparing ring lights at Walmart last week - liked the Neewer kit best."]}
+    step = _memory_resolved_browser_step(spoken, resolving)
+    assert step is not None and step.intent == "browse_task", step
+    assert step.args["url"] == "https://www.walmart.com", step.args
+    assert step.args["resolved_from_memory"] is True
+    assert step.args["memory_resolution"]["site_derived_from_store_name"] is True, step.args
+    assert "Do not checkout" in step.args["task"], step.args
+    assert "ring lights" in step.args["item"] if "item" in step.args else True
+
+    # a memory line with a SPOKEN hostname keeps provenance False (heard, not derived)
+    heard = {"history": ["Was looking at the Neewer ring light kit on bhphotovideo.com last week."]}
+    step2 = _memory_resolved_browser_step(spoken, heard)
+    assert step2 is not None and step2.args["url"].startswith("https://bhphotovideo.com"), step2.args
+    assert step2.args["memory_resolution"]["site_derived_from_store_name"] is False, step2.args
+
+    # storeless memory: vague action line plans NOTHING at the deterministic tier
+    storeless = {"history": ["Was comparing ring lights last week - liked the Neewer kit best."]}
+    assert _memory_resolved_browser_step(spoken, storeless) is None
+    assert _browser_action_step(spoken, storeless) is None  # never a whole-line dump
+
+    # end-to-end: the resolved plan drives the goal to done with proof, zero model calls
+    tmp, bus, gw, store, _ = make_env()
+    orch = Orchestrator(bus, gw, store, approver=AutoApprover(True),
+                        memory_context=lambda about: resolving)
+    await bus.start()
+    try:
+        goal = await orch.start_goal(Goal(intent="cart", description=spoken))
+    finally:
+        await bus.stop()
+    assert [s.intent for s in goal.steps] == ["browse_task"], goal.steps
+    assert goal.state == GoalState.done and goal.steps[0].result.proof, goal.state
+    assert len(gw.smart_calls) == 0
+    print("  memory-resolved store name: derived-site browse plan, honest provenance, "
+          "storeless stays unplanned, goal done with proof")
+
+
 async def test_approval_denied():
     tmp, bus, gw, store, _ = make_env()
     orch = Orchestrator(bus, gw, store, approver=AutoApprover(False))  # deny everything risky
@@ -191,6 +235,7 @@ async def main():
     await test_empty_plan_never_done()
     await test_deterministic_calendar_plan()
     await test_stub_plan_ignores_memory_inject()
+    await test_memory_resolved_store_name_plan()
     await test_approval_denied()
     await test_persist_and_resume()
     print("PASS piece 4: orchestrator (plan/dispatch/verify/retry/reroute/persist/resume)")

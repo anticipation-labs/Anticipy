@@ -81,6 +81,36 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+- MEMORY-NAMED STORES NOW RESOLVE, e2e MOVED AGAIN (lap 20260611T105558Z, build —
+  ledger F29 FIXED): the whole memory->site chain required the owner to have
+  SPOKEN a hostname, but people remember stores the way they speak ("at
+  Target", "on Amazon") — so the harm-line's memory-resolved cart rule and the
+  orchestrator's resolver were dead code on real speech, and 2 of the 5
+  cart-staging expected-acts stalled as asks purely for vocabulary. New
+  shared/storesite.py derives https://www.<store>.com from a product-shaped
+  memory line (single capitalized store name after at/on/from; NO retailer
+  literals; deny bounds all fail toward "": multi-word proper nouns,
+  possessives, weekday/month/holiday/place closed class, non-product lines;
+  eBay/IKEA-style casing misses by design). Both consumers import it, so the
+  decision-layer ACT population == the plan-layer completable population;
+  resolved steps record site_derived_from_store_name + the no-checkout
+  instruction. The vague-anaphor shapes take bounded modifiers ("that water
+  table thing", "the clamp one"); harm's _MEM_PRODUCT realigned with the
+  orchestrator list (the "comparing" drift). DELIBERATE non-fix (F29
+  near-miss): bare stick/throw cart verbs stay un-widened — a storeless
+  flipped line (rob) would junk-complete via the stub planner's canned
+  "later"->write_memory step; storeless cart-puts stay fail-safe asks, pinned.
+  Owner lane (OFFICIAL): e2e 0.5918 -> 0.6305 (+0.0387, exactly the 2 intended
+  completions: dana water table -> target.com, kayla desk lamp -> amazon.com,
+  labeled mock proof + derived provenance); catch 1.0/1.0, false 0, harm 0,
+  interrupt 0.6875/1.5, recall 1.0 exactly unchanged; correct 0.7909 -> 0.8296.
+  Default lane equal at 0.6305 (shared plumbing), interrupt 0.625/1.0 at
+  ratchet bests. Per-line diff BOTH lanes = exactly the 2 flips (493 lines x
+  16 days). Suite 43/43 (new storesite battery). Next named: dana "Book the
+  Friday 9am one" slot-choice rule + F27 "block X to Y" trigger (pair to clear
+  epsilon); luis/amara/rob cart items have NO store in memory (honest
+  fail-safe — owner-path capture territory); 16 expected-asks remain the e2e
+  structural ceiling.
 - THE HARM-LINE GATES THE REQUESTED ACTION, e2e MOVED BIG (lap 20260611T101809Z,
   build — ledger F28 FIXED): six dev-bank expected-acts were asks because the
   harm-line and the owner money pre-gate matched money/send TOKENS anywhere in

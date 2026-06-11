@@ -1209,3 +1209,68 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   (d) a timed-but-unparseable reminder ("remind me at half past whenever to send
   it") acts on a loop with no remind_ts and refires through on_event — bounded:
   the FOLLOWUP_PREFIX guard makes the refire terminate at the binding-send ask.
+
+## Build lap 20260611T105558Z (memory-resolved store sites, TARGET v7 item 1)
+- F29 NEW, FIXED THIS LAP (resolution-vocabulary family — the memory side of
+  F28's requested-action scope): the memory->site resolution chain required the
+  owner to have SPOKEN a hostname. People never do that — they remember stores
+  the way they speak ("the water table at Target", "a desk lamp on Amazon") —
+  so the harm-line's existing memory-resolved cart rule (_VAGUE_CART +
+  _memory_has_cart_target) and the orchestrator's _memory_resolved_browser_step
+  were dead code on real speech: _MEM_SITE/_line_site only accepted dotted
+  domains, the vague-anaphor shape rejected modifier-bearing heads ("that water
+  table thing", "the clamp one" — determiner and head had to be adjacent), and
+  _MEM_PRODUCT had silently DRIFTED from the orchestrator's _PRODUCT_HINT_RE
+  ("comparing" missing on the harm side), so a compared-then-chosen memory never
+  resolved. Two dev-bank cart-staging expected-acts (parent_dana water table
+  "at Target", student_kayla desk lamp "on Amazon") stalled as fail-safe asks.
+  Fixed: shared/storesite.py derives https://www.<store>.com from a
+  product-shaped memory line's single-word capitalized store name after
+  at/on/from — NO retailer literals, open vocabulary, every deny bound failing
+  toward "" (multi-word proper nouns "Lincoln Elementary"/"Best Buy"/"Hoka
+  Bondi 9" refuse structurally; possessives "at Bob's" refuse; weekday/month/
+  holiday/generic-place closed class refuses; non-product lines refuse;
+  mixed-case brands eBay/IKEA miss BY DESIGN — disclosed residual). Both
+  consumers import it (harm.py for the ACT decision, orchestrator for the plan),
+  so the decision-layer ACT population is exactly the population the plan layer
+  can complete; the resolved step records site_derived_from_store_name honestly
+  and its task carries the no-checkout instruction verbatim.
+- NEAR-MISS, deliberately NOT done (the F24/F25 lesson applied in advance):
+  widening the bare spoken cart-put verbs ("stick/throw it in the cart") in
+  _REVERSIBLE would have flipped the storeless teacher_rob line to ACT, whose
+  goal then falls past the empty deterministic plan into the stub planner —
+  and "LATER" in that line triggers the canned write_memory step, which always
+  succeeds with drawer proof: a FAKE completion on a junk artifact. The cart
+  flip therefore lives ONLY behind the memory-resolved rule (real remembered
+  store required); storeless cart-put lines stay fail-safe asks, pinned.
+- Measured (builder-side, stub, dev bank): owner lane (OFFICIAL) e2e 0.5918 ->
+  0.6305 (+0.0387, exactly the two intended completions); catch 1.0/1.0,
+  false 0, harm 0, interrupt 0.6875/1.5, recall 1.0 ALL exactly unchanged;
+  correct 0.7909 -> 0.8296. Default lane: e2e equal 0.6305 (shared plumbing,
+  disclosed), interrupt 0.625/1.0 at ratchet bests. Per-line decision diff
+  pre->post in BOTH lanes across 493 lines x 16 persona-days: EXACTLY the two
+  intended ask->act flips (dana d01 L38, kayla d01 L27), zero others; goal-state
+  diff: exactly those two goals waiting->done with labeled mock proof
+  ({"mock": true, url, screenshot}) and derived-site provenance. Suite 43/43
+  (new test_storesite.py battery in run_suite.sh).
+- Regression checks: test_storesite.py (accept/deny battery, 19 pins incl. the
+  disclosed eBay/IKEA misses); the F29 CART_CTX battery in test_harmline.py
+  (derived store -> act; spoken hostname -> act; storeless/unrelated-store/
+  non-product-memory/no-memory -> ask; money outranks the resolved cart) plus
+  three no-ctx deny pins (bare stick/throw cart-put and modifier anaphor
+  WITHOUT memory stay asks); test_memory_resolved_store_name_plan in
+  test_orchestrator.py (derived-site browse step with honest provenance,
+  storeless vague line plans NOTHING — never a whole-line dump — and the
+  resolved goal runs to done with proof, zero model calls).
+- RESIDUALS disclosed, NOT chased: (a) luis DeWalt / amara Hoka / rob IPEVO
+  cart items name NO store in memory — honest fail-safe (ask or failed goal);
+  completing them needs either richer remembered shopping context (owner-path
+  capture) or live planning, not a wider derivation; (b) kayla's resolved item
+  is the memory line's whole compound ("Anki Pro flashcard deck bundle ... and
+  a blue light desk lamp") — _line_item's pre-existing conjunction limitation;
+  live, the agent's item-identity bars gate any mutation; (c) pri's "buy ...
+  add it to the cart" stays behind the F23 fail-safe money stance (foreman
+  queue); (d) dana day02 "Book the Friday 9am one" still asks — the anaphoric
+  slot-choice booking shape (same-line appointment-noun anchor, travel-noun
+  deny) is the named next decision-layer slice; the plan layer would need a
+  grounded create_event for it (F27's "block X to Y" trigger is the sibling).

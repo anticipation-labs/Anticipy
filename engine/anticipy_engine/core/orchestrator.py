@@ -19,6 +19,7 @@ from .bus import Bus
 from .envelopes import Goal, GoalState, Job, JobStatus, Result, Risk, Step, StepState
 from .gateway import SMART, ModelGateway
 from .store import GoalStore
+from ..shared.storesite import derive_store_site
 
 
 class Approver:
@@ -100,11 +101,13 @@ _BROWSER_ACTION_RE = re.compile(
     r"https?://"
     r"|\b(?:on|at|from|using|via)\s+(?:[a-z0-9-]+\.)+[a-z]{2,}\b"
     r"|\b(?:add|put)\b[\w' ,.-]{0,120}\b(?:cart|basket|bag)\b"
-    r"|\b(?:get|grab)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:thing|one|item|product)\b",
+    # the spoken anaphor carries modifiers between determiner and head
+    # ("that water table thing", "the clamp one") — bounded, never open-ended
+    r"|\b(?:get|grab)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:[\w-]+\s+){0,3}(?:thing|one|item|product)\b",
     re.I,
 )
 _VAGUE_BROWSER_RE = re.compile(
-    r"\b(that|the)\s+(thing|one|item|product)\b"
+    r"\b(that|the)\s+(?:[\w-]+\s+){0,3}(thing|one|item|product)\b"
     r"|\b(earlier|last time|before|was looking at|looked at)\b",
     re.I,
 )
@@ -238,7 +241,10 @@ def _line_site(line: str) -> str:
             continue
         if domain and domain not in {"example.com", "localhost"} and "." in domain:
             return "https://" + _clean_link((m.group(1) or "") + (m.group(2) or ""))
-    return ""
+    # no spoken hostname: a product-shaped memory line that names a store the way
+    # people speak ("at Target", "on Amazon") still resolves (deny-bounded; see
+    # shared/storesite.py). Derivation provenance is recorded by the resolver.
+    return derive_store_site(line)
 
 
 def _source_ref(line: str) -> str:
@@ -324,6 +330,9 @@ def _memory_resolved_browser_step(text: str, context) -> Optional[Step]:
                 "site": site,
                 "item": item,
                 "source_ref": _source_ref(line),
+                # honest provenance: True when the URL was derived from a spoken
+                # store name (<brand>.com convention), not heard as a hostname
+                "site_derived_from_store_name": site == derive_store_site(line),
                 "matched_hints": sorted(hints & set(re.findall(r"[a-z0-9]+", line.lower()))),
                 "_score": score,
             })

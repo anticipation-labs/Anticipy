@@ -28,6 +28,8 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from ..shared.storesite import derive_store_site
+
 # --- hard detrimental (ASK; override everything). Money = SPENDING verbs, not price mentions. ---
 _HARD = [
     ("money", r"\b(pay|paid|buy|buys|buying|bought|purchase|purchasing|wire|transfer|transferring|"
@@ -106,12 +108,17 @@ _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t f
 _DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafted|drafting|prepare|prepares|preparing|compose|composes|composing|"
                           r"write up|writes up|outline|outlines|put together)\b")
 _VAGUE_CART = re.compile(
-    r"\b(?:get|grab|add|put)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:thing|one|item|product)\b",
+    # the spoken anaphor carries modifiers between determiner and head ("that
+    # water table thing", "the clamp one") — bounded {0,3}, never open-ended
+    r"\b(?:get|grab|add|put)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:[\w-]+\s+){0,3}(?:thing|one|item|product)\b",
     re.I,
 )
 _MEM_SITE = re.compile(r"https?://|(?:[a-z0-9-]+\.)+[a-z]{2,}", re.I)
+# same verb family as the orchestrator's _PRODUCT_HINT_RE (they had drifted —
+# "comparing" was missing here, so a compared-then-chosen memory never resolved)
 _MEM_PRODUCT = re.compile(
     r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for|"
+    r"compared|comparing|researched|researching|checked out|checking out|"
     r"product|item|thing|cart|kitchen)\b",
     re.I,
 )
@@ -262,7 +269,13 @@ class HarmLine:
                 vals.extend(line.strip() for line in value.splitlines() if line.strip())
             elif isinstance(value, list):
                 vals.extend(str(v) for v in value)
-        candidates = [line for line in vals if _MEM_SITE.search(line) and _MEM_PRODUCT.search(line)]
+        # a real site is a spoken hostname OR a store named the way people speak
+        # ("at Target", "on Amazon") in a product-shaped line — the same deny-bounded
+        # derivation the orchestrator's resolver uses (shared/storesite.py), so the
+        # ACT here is exactly the population the plan layer can complete
+        candidates = [line for line in vals
+                      if _MEM_PRODUCT.search(line)
+                      and (_MEM_SITE.search(line) or derive_store_site(line))]
         if not candidates:
             return False
         hints = {
