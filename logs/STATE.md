@@ -68,18 +68,32 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v6 STAGE B: the Owner Action Engine execution path
-- OWNER LANE IS NOW MEASURABLE (lap 20260611T043446Z, groundwork — STAGE B item 1):
+- OWNER CARDS NOW EXECUTE (lap 20260611T045035Z, build — STAGE B item 2): do-cards
+  run through the PROVEN proactive spine (feed -> triage -> harm-line ->
+  orchestrator/hands) with outcome+proof (artifact id, read-back) mirrored onto the
+  durable card record ("done" only when the goal finished with proof); ask-cards are
+  REAL pending asks (/pending + existing YES/NO; resolution writes state+proof back
+  onto the record); money/blocked cards can NEVER execute (state "blocked", never in
+  /pending, no goal — the harm-line is final); remember cards carry drawer read-back
+  proof. owner_event reports the POST-EXECUTION decision (spine may refuse ->
+  "ignore" or re-gate -> "ask") — no more paper acts. Owner-lane dev instrument:
+  false_action_count 15 -> 0, e2e 0.0 -> 0.0208, catch EXACTLY unchanged
+  0.5054 / worst 0.2222 (founder_jin), harm 0, interrupt 0.875/1.5. The catch
+  ceiling is now purely the weak card extractor (F17, foreman call: one brain).
+  NEW F18 (D16 family): the resolve write-back linkage is in-memory; item 3's
+  inbound resolver must route through ControlCore.resolve. C22 mechanical shingle
+  scan stays foreman-side OPEN.
+- OWNER LANE IS MEASURABLE (lap 20260611T043446Z, groundwork — STAGE B item 1):
   with ANTICIPY_OWNER_INGEST=1 the unchanged persona runner drives /event through the
   owner card path (decision mapping fails toward ask; goal-shaped card records under
   <data>/owner_cards/ harvested by the existing collector; default path verified
   bit-identical to ratchet bests without the env var). First honest dev-bank read,
   post-C22 literal removal: catch 0.5054 / worst 0.2222 (founder_jin), false 15,
-  harm 0, interrupt 0.6875/1.5, recall_worst 0.25, e2e 0.0 (cards do not execute yet)
+  harm 0, interrupt 0.6875/1.5, recall_worst 0.25, e2e 0.0 (cards did not execute yet)
   — versus 1.0/1.0/false-0 on the proactive path, same bank, same HEAD. Ledger F17:
   the owner doors ship a second, weaker brain; fix direction is the proven
   triage/decider spine or a hybrid extractor, not more regex. C22 product-side
-  literals deleted (catch unchanged, false 17->15); the mechanical shingle scan stays
-  foreman-side OPEN.
+  literals deleted (catch unchanged, false 17->15).
 - ACCOUNTING DESTRUCTION (2026-06-10, ledger D21): lap 083047Z's kept=False revert
   (`git reset --hard`) rolled the tracked-but-never-lap-committed scoreboard/RATCHET back
   to foreman snapshot ea08490 — erasing the P1 first-close record, six scoreboard rows

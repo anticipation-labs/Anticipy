@@ -544,3 +544,20 @@ same HEAD (default path verified bit-identical to ratchet bests at -pre and -pre
 Ledgered F17: the owner doors currently ship a second, weaker brain; fix direction is
 routing cards through the proven triage/decider spine or the hybrid extractor, not more
 regex. Zero spend, zero side effects, stub/mock throughout.
+
+2026-06-11 lap 20260611T045035Z (build, TARGET v6 STAGE B item 2 — card execution):
+Made owner cards real. do-cards now execute through the proven proactive spine
+(feed -> triage -> harm-line -> orchestrator/mock-or-real hands) with the outcome,
+goal state, steps and proof (artifact id + read-back) mirrored onto the durable card
+record; ask-cards become REAL pending asks (paused goal + /pending) resolved by the
+existing YES/NO flow with state+proof written back on resolution; money/blocked cards
+provably never execute (state "blocked", never in /pending, no goal file); remember
+cards carry drawer read-back proof. owner_event now reports the POST-EXECUTION
+decision — the spine may refuse ("ignore") or re-gate to "ask"; claiming "act" on a
+line nothing executed was the F17 lie this replaces. Results on the owner-lane dev
+instrument (unchanged runner+scorer, stub): false_action_count 15 -> 0, e2e 0.0 ->
+0.0208, catch exactly unchanged 0.5054/0.2222, harm 0, interrupt 0.6875->0.875 avg
+(worst 1.5). Default /event path verified inert: suite 39/39, full-bank stub run
+bit-identical to ratchet bests, per-line decision diff vs 043446Z-pre2 16/16
+persona-days identical. Ledgered F17 update + F18 (in-memory resolve linkage, D16
+family). Zero spend, zero real-world artifacts (mock hands/channels everywhere).

@@ -39,6 +39,9 @@ class OwnerTaskCard(BaseModel):
     reason: str = ""
     status: str = "open"
     proof: list[dict[str, Any]] = Field(default_factory=list)
+    # Execution outcome (STAGE B item 2): what the engine actually DID with this card —
+    # {decision, goal_id, ask_id, goal_state}. None until an execution path runs it.
+    execution: dict[str, Any] | None = None
 
 
 class OwnerIngestResult(BaseModel):

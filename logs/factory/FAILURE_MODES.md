@@ -913,3 +913,29 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   4-gram shingle bar C22 set is met.
   The C22-required shingle SCAN (mechanical, every diff) remains OPEN for the foreman —
   builders cannot extend factory/ scans.
+
+## Build lap 20260611T045035Z (card execution, TARGET v6 STAGE B item 2)
+- F17 UPDATE (still OPEN, now better instrumented): with execution landed, the owner
+  lane can no longer LIE about acting. Do-cards execute through the proven proactive
+  spine (feed -> triage -> harm-line -> orchestrator/hands) and owner_event reports the
+  post-spine decision; the spine refused every one of the 15 false acts item 1 measured
+  (acts-on-narration its triage correctly silences): owner-lane dev read moved
+  false_action_count 15 -> 0 and e2e_completion 0.0 -> 0.0208 with catch EXACTLY
+  unchanged (0.5054/worst 0.2222 founder_jin) — proving all 15 were on non-expected
+  lines and the card extractor's catch gap is the whole remaining F17 problem. Visible
+  consequence: a do-card the spine's triage refuses (e.g. the directive's own
+  "water-table ... put it in the cart" sample) is ledgered as an open loop but inert —
+  truthful "ignore", no paper "act". Interrupt avg rose 0.6875 -> 0.875 (worst 1.5
+  unchanged), the disclosed cost of fail-toward-ask re-gating. Fix direction unchanged
+  and foreman-owned: one brain (spine or hybrid extractor), not better regexes.
+  Regression check: the owner-lane instrument; false_action_count > 0 or an "act"
+  decision whose card record lacks goal-state/proof mirror = the lie returned.
+- F18 NEW, OPEN (D16 family): owner card records for pending asks update only through
+  ControlCore.resolve(); the goal_id -> card-record linkage is in-memory. Any resolver
+  that calls proactive.resolve_ask() directly (e.g. the future P3 inbound SMS worker,
+  STAGE B item 3) or an engine restart strands the record at "waiting" while the goal
+  itself resolves correctly. Durable linkage exists in the record's execution.goal_id
+  field — the fix is to derive the write-back from that (scan owner_cards/ on resolve
+  or persist the map like decider_deferred.json). Regression check:
+  test_owner_ingest_event pins the core.resolve() path; item 3's inbound worker MUST
+  route resolutions through ControlCore.resolve (or the durable linkage) and pin it.

@@ -13,7 +13,7 @@ from pathlib import Path
 from .browser_link import BrowserLink
 from .bus import Bus
 from .env import load_local_env
-from .envelopes import Event, EventSource
+from .envelopes import Event, EventSource, Goal, GoalState
 from .gateway import ModelGateway, PROVIDER_OPENROUTER
 from .glassbox import GlassBox
 from .native_bridge_link import NativeBridgeLink
@@ -102,6 +102,11 @@ class ControlCore:
             self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard,
             deferred_path=base / "decider_deferred.json",
         )
+        # Owner cards awaiting a YES/NO: goal_id -> {record_path, card_id}, so resolve()
+        # can write the resolved goal's outcome back onto the durable card record.
+        # In-memory like proactive.pending itself (D16 sibling, disclosed) — the durable
+        # linkage survives in the record's execution.goal_id field.
+        self._owner_card_goals: dict = {}
 
     async def start(self) -> None:
         await self.bus.start()
@@ -143,27 +148,33 @@ class ControlCore:
         the proactive path ({decision, goal_id, ask_id, ...}) so realday.sh and
         persona_score.py grade owner cards without modification.
 
-        Decision mapping fails toward ask: a confirmation-needed or blocked card outranks
-        a do card, which outranks a memory-only card; no card means silence. Cards do NOT
-        execute here — execution with proof write-back is the next slice — so the
-        instrument honestly shows e2e_completion 0 until execution is real.
+        STAGE B item 2: cards EXECUTE here, and the decision reported is what the
+        engine actually DID. A do card runs through the proven proactive spine
+        (triage -> harm-line -> orchestrator/hands); the spine may refuse ("ignore")
+        or re-gate to "ask" — reporting "act" on a line nothing executed was the F17
+        lie this replaces. An ask card becomes a REAL pending ask (/pending + YES/NO);
+        a blocked (money/wall) card surfaces as "ask" but can never execute; a
+        remember card is a memory write with read-back proof. No card means silence.
         """
-        out = await self.owner_ingest(source, text, meta, execute_actions=False)
+        out = await self.owner_ingest(source, text, meta, execute_actions=True)
         rank = {"ask": 3, "blocked": 3, "do": 2, "remember": 1}
         top = None
         for card in out.get("cards", []):
             if top is None or rank.get(card.get("disposition"), 0) > rank.get(top.get("disposition"), 0):
                 top = card
+        execution = (top or {}).get("execution") or {}
+        ask_id = execution.get("ask_id")
         if top is None:
             decision, goal_id, reason, category = "ignore", None, "owner: no actionable card in line", "noise"
         elif top["disposition"] in ("ask", "blocked"):
             decision, goal_id, reason, category = "ask", top["id"], top.get("reason", ""), top["disposition"]
         elif top["disposition"] == "do":
-            decision, goal_id, reason, category = "act", top["id"], top.get("reason", ""), "do"
+            decision = execution.get("decision") or "ignore"
+            goal_id, reason, category = top["id"], top.get("reason", ""), "do"
         else:
             decision, goal_id, reason, category = "remember", top["id"], top.get("reason", ""), "remember"
         return {"decision": decision, "category": category, "reason": reason,
-                "goal_id": goal_id, "ask_id": None, "owner_lane": True,
+                "goal_id": goal_id, "ask_id": ask_id, "owner_lane": True,
                 "cards": out.get("cards", [])}
 
     async def owner_ingest(self, source: str, text: str, meta: dict | None = None,
@@ -171,9 +182,12 @@ class ControlCore:
         """Shared owner path for transcript/MP3/listening/pay-to-try.
 
         It records the whole observed stream, extracts durable task cards, and writes
-        those cards into the real memory drawers. Optional execution feeds low-risk
-        cards into the existing proactive engine; confirmation/payment cards stay
-        ledgered until the app or voice line resolves them.
+        those cards into the real memory drawers. With execute_actions, the cards are
+        REAL: do cards run through the proven proactive spine (orchestrator + hands)
+        with the outcome and proof mirrored onto the durable card record; ask cards
+        become pending asks resolved by the existing YES/NO flow; money/blocked cards
+        can never execute (the harm-line is final); remember cards carry read-back
+        proof of their memory write.
         """
         meta = meta or {}
         result = self.owner_mode.ingest(text, source=source, meta=meta)
@@ -205,7 +219,8 @@ class ControlCore:
                     importance=0.7,
                     status="active",
                 )
-                drawer = "profile"
+                drawer = self.memory.profile
+                drawer_name = "profile"
             else:
                 item = self.memory.open_loops.write_text(
                     card.title,
@@ -215,30 +230,82 @@ class ControlCore:
                     importance=0.85,
                     status=("open" if card.disposition == "do" else "waiting"),
                 )
-                drawer = "open_loops"
-            card.proof.append({"type": "memory_write", "drawer": drawer, "memory_id": item.id})
+                drawer = self.memory.open_loops
+                drawer_name = "open_loops"
+            card.proof.append({"type": "memory_write", "drawer": drawer_name, "memory_id": item.id})
+            # read-back: a write only counts once the drawer returns it by id
+            back = drawer.get(item.id)
+            if back is not None:
+                card.proof.append({"type": "memory_read_back", "memory_id": back.id, "text": back.text})
 
-            if execute_actions and card.disposition == "do":
+            # ---- STAGE B item 2: execution with proof write-back onto the card ----
+            record_path = self.data_dir / "owner_cards" / f"{card.id}.json"
+            state, steps, goal_proof = "open", [], {}
+
+            if card.disposition == "remember" and back is not None:
+                # the card's action IS the memory write; the read-back makes it
+                # executed-with-proof (no orchestrator involved, nothing external)
+                state = "done"
+                goal_proof = {"memory_id": item.id, "read_back": back.text}
+            elif card.disposition == "blocked":
+                # money/wall: NEVER executes — and never enters proactive.pending,
+                # where a YES would start_goal it. The harm-line is final; the card
+                # stays a ledgered open loop prepared up to the wall.
+                card.execution = {"decision": "blocked", "goal_id": None, "ask_id": None,
+                                  "reason": "hard stop: money/wall cards never execute"}
+                state = "blocked" if execute_actions else "open"
+            elif execute_actions and card.disposition == "do":
+                # execute through the PROVEN spine (triage -> harm-line -> orchestrator/
+                # hands): the safety spine rules, and what it decides is what happened.
+                # The owner_ingest_execute guard keeps this feed on the proactive path.
                 out = await self.feed(
                     "app",
                     card.source_text,
                     {**meta, "owner_card_id": card.id, "owner_source": source, "owner_ingest_execute": True},
                 )
-                card.proof.append({"type": "engine_feed", "result": out})
+                goal = self.store.load(out["goal_id"]) if out.get("goal_id") else None
+                card.execution = {"decision": out.get("decision"), "goal_id": out.get("goal_id"),
+                                  "ask_id": out.get("ask_id"),
+                                  "goal_state": goal.state.value if goal else None}
+                card.proof.append({"type": "engine_execution", **card.execution})
+                if goal is not None:
+                    steps = [s.model_dump(mode="json") for s in goal.steps]
+                    goal_proof = goal.proof or {}
+                    state = goal.state.value  # done only when every step carried proof
+                    if out.get("ask_id") or out.get("decision") in ("ask", "held"):
+                        state = "waiting"
+                        self._owner_card_goals[goal.id] = {"record_path": record_path,
+                                                           "card_id": card.id}
+                # spine refusal (ignore/suppressed/deferred) leaves state "open": the
+                # card stays a durable open loop and the instrument shows no act
+            elif execute_actions and card.disposition == "ask":
+                # a REAL pending ask through the existing flow: paused goal + /pending;
+                # YES resumes the exact goal via resolve(), which writes proof back here
+                goal = Goal(intent=card.source_text,
+                            description=f"{card.title} — {card.source_text}",
+                            state=GoalState.waiting)
+                self.store.save(goal)
+                ask_id = self.proactive._send_ask(
+                    goal, card.source_text,
+                    card.reason or "owner card needs confirmation", card.disposition)
+                card.execution = {"decision": "ask", "goal_id": goal.id, "ask_id": ask_id}
+                card.proof.append({"type": "engine_execution", **card.execution})
+                state = "waiting"
+                self._owner_card_goals[goal.id] = {"record_path": record_path, "card_id": card.id}
 
+            card.status = state
             # Durable card record, shaped like a goal (id/intent/steps/state) so the
             # factory's existing run collector and scorer read owner cards unchanged.
-            # state stays "open" until execution writes real proof — a card that never
-            # ran must never look done.
-            record_path = self.data_dir / "owner_cards" / f"{card.id}.json"
+            # state mirrors REAL execution: done requires a goal that finished with
+            # proof (or a read-back memory write) — a card that never ran stays open.
             card.proof.append({"type": "card_record", "path": str(record_path)})
             record = {
                 "id": card.id,
                 "intent": card.action,
                 "description": f"{card.title} — {card.source_text}",
-                "state": "open",
-                "steps": [],
-                "proof": {},
+                "state": state,
+                "steps": steps,
+                "proof": goal_proof,
                 "owner_card": card.model_dump(mode="json"),
             }
             record_path.parent.mkdir(parents=True, exist_ok=True)
@@ -311,5 +378,30 @@ class ControlCore:
                 for aid, p in self.proactive.pending.items()]
 
     async def resolve(self, ask_id: str, approved: bool) -> dict:
-        """The app's approve/deny -> resolves the REAL paused goal (mirrors the text/call round-trip)."""
-        return await self.proactive.resolve_ask(ask_id, approved)
+        """The app's approve/deny -> resolves the REAL paused goal (mirrors the text/call round-trip).
+        If the goal came from an owner card, the resolution outcome (state + proof on
+        YES, declined on NO) is written back onto the durable card record."""
+        out = await self.proactive.resolve_ask(ask_id, approved)
+        link = self._owner_card_goals.pop(out.get("goal_id"), None) if isinstance(out, dict) else None
+        if link is not None:
+            goal = self.store.load(out["goal_id"])
+            try:
+                record = json.loads(Path(link["record_path"]).read_text(encoding="utf-8"))
+            except Exception:
+                record = None
+            if record is not None and goal is not None:
+                if approved:
+                    record["state"] = goal.state.value
+                    record["steps"] = [s.model_dump(mode="json") for s in goal.steps]
+                    record["proof"] = goal.proof or {}
+                else:
+                    record["state"] = "declined"
+                if isinstance(record.get("owner_card"), dict):
+                    record["owner_card"]["status"] = record["state"]
+                record["resolution"] = {"ask_id": ask_id, "approved": approved}
+                Path(link["record_path"]).write_text(
+                    json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+                self.glassbox.log("owner_card_resolved",
+                                  {"card_id": link["card_id"], "ask_id": ask_id,
+                                   "approved": approved, "state": record["state"]})
+        return out
