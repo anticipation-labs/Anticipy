@@ -1,5 +1,18 @@
 # STATE
 
+CERTIFIED 2026-06-11 (overnight): **P2-brain CLOSED, judge REAL** (lap 20260611T041654Z)
+— holdout catch_rate_worst 1.0 (14/14 tasks, 4 never-seen personas), false 0, harm 0.
+Then four kept Stage-B laps: owner lane is ONE BRAIN (F17 closed — every owner line
+through triage->decider->harm-line->orchestrator; regex only shapes cards + pre-gates
+money), cards execute with read-back proof (owner false actions 15->0), full Twilio
+voice/inbound plumbing mock-proven, F21 reported-promise catch fixed on main path.
+K=5 treadmill fired (metric saturated, not work dead) -> foreman re-aimed TARGET v7:
+official instrument = owner lane (eval_env ANTICIPY_OWNER_INGEST=1), primary metric
+e2e_completion_rate (baseline 0.3427). Twilio account verified in console ($17.85,
+pay-as-you-go, +1 619 658 4447, webhooks live); TWILIO_FROM env gap fixed in .env.local.
+P3 live gate awaits Omar's OWNER_PHONE confirmation (+1 604 724 5161 corroborated).
+Phases closed: P0, P1, P2 — gates remaining: P3 voice, P4 browser, P5 owner test.
+
 OWNER DIRECTIVE 2026-06-10: the immediate product priority is the Owner Action Engine,
 not another narrow loop around one brain metric. Durable directive:
 `.claude/OWNER_ACTION_ENGINE.md`. The required path is memory + proactive engine +

@@ -11,11 +11,12 @@
     "silent_harm_count": 0
   },
   "foreman_note": "C17/D23 foreman repair: false P2 closure voided because lap 20260611T000748Z had no trusted judge verdict; session-limit laps no longer count as treadmill work; TARGET v5 re-aims to P2 certification.",
-  "last_movement_lap": "20260610T091120Z",
+  "last_movement_lap": "20260611T041654Z",
   "phases_closed": {
     "P0-floor": "bootstrap-20260609",
-    "P1-closed-loop": "20260610T060701Z"
+    "P1-closed-loop": "20260610T060701Z",
+    "P2-brain": "20260611T041654Z"
   },
   "spend_since_movement": 0.0,
-  "treadmill_count": 0
+  "treadmill_count": 5
 }

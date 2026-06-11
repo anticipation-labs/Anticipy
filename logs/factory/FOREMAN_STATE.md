@@ -1,6 +1,31 @@
 # FOREMAN STATE — updated at the end of every foreman session
 
-Last updated: 2026-06-10 (session: Owner Action Engine directive + shared intake)
+Last updated: 2026-06-11 ~02:45 PDT (session: P2 closure night + K=5 re-aim to owner lane)
+
+## Overnight session (2026-06-10 22:00 -> 2026-06-11 02:45 PDT) — the P2 night
+- **P2-brain CLOSED with judge REAL** (lap 041654Z): holdout worst 1.0 (14/14), false 0,
+  harm 0, scorer selftest PASS. Push sent to Omar. Journey 0.33 -> 0.667 -> 1.0.
+- Four kept Stage-B laps followed: owner honesty wiring (9a68a0b), cards execute with
+  proof / false 15->0 (a047253), voice+inbound plumbing mock-proven (fa4db88),
+  one-brain F17 closed / owner lane at spine parity (031bb44), F21 reported-promise
+  fixed on main path (df0d1c9).
+- Session-limit wall ~22:53-01:22 (instant 429 skip-laps, handled honestly, no damage).
+- **K=5 treadmill fired 02:26** — diagnosis: instrument failure, not work failure
+  (catch saturated 1.0 dev+holdout; P3 human-gated). Resolved: TARGET v7 switches
+  primary_metric to e2e_completion_rate and points the official eval at the owner lane
+  (eval_env: ANTICIPY_OWNER_INGEST=1; verify_gate.sh gained the 3-line lever).
+  Archived: logs/factory/ESCALATIONS/ESCALATION-20260611T092602Z.md.
+- Twilio VERIFIED in console (Omar logged Chrome in): $17.85 pay-as-you-go,
+  +1 619 658 4447 active, webhooks -> anticipy.ai. Fixed TWILIO_FROM missing from
+  .env.local (engine reads TWILIO_FROM, not TWILIO_PHONE_NUMBER). OWNER_PHONE
+  +1 604 724 5161 corroborated by OpenClaw iMessage delivery — still needs Omar's word.
+- Loop inventory swept: only the Factory touches this repo; OpenClaw ("Amal") is a
+  separate personal assistant (morning brief 07:15 -> his iMessage); Codex 30-min
+  automation has NO schedule anywhere and no repo activity since ee77765; 11 old
+  com.anticipy.* LaunchAgents on disk all unloaded/inert.
+- Continuity layer landed: logs/factory/FOREMAN_HANDOFF.md (the instilled-principles
+  doc) + CLAUDE.md now points to it first; memory dir updated (continuity-ritual).
+- P3 live gate remains HARD-BANNED until Omar confirms OWNER_PHONE in PENDING.
 
 ## Current owner directive
 - Omar redirected the work away from narrow phase grinding and toward the real Owner

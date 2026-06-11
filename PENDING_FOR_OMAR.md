@@ -1,32 +1,38 @@
 # PENDING_FOR_OMAR
 
-Current directive: build the real Owner Action Engine, not a narrow brain-only loop.
-The durable handoff is `.claude/OWNER_ACTION_ENGINE.md`. First shared intake path is now
-`POST /owner/ingest`: pay-to-try, Start Listening, MP3 transcript, and pasted transcript
-all enter the same engine and produce durable memory/open-loop task cards from ugly daily
-speech. `POST /owner/onboard` now writes first-run owner identity, people, preferences,
-app connections, stores, and missing-connection loops into that same memory system.
+**Overnight headline (2026-06-11): P2-brain CLOSED, judge REAL.** The brain caught
+14/14 tasks across the 4 hidden strangers, zero vent-actions, zero harm (holdout worst
+1.0 — the score that was stuck at 0.667 for two nights). Then four more kept laps:
+your transcript doors now run through that same certified brain (one brain, F17 closed),
+cards execute with read-back proof, and the whole Twilio voice layer is built and
+mock-proven. The treadmill fired at K=5 exactly as designed (the old metric maxed out
+and couldn't see the new work) — re-aimed to TARGET v7: the official score is now
+end-to-end completion on the owner lane (baseline 0.3427; climbing = real doing).
 
-Nothing is blocking. The Factory is fully self-sufficient: nightly launchd at 22:30 from
-`~/Anticipy` (TCC solved by the move — no Full Disk Access needed), engine brain on
-Gemini free tier (no OpenRouter funding needed). Read `logs/factory/MORNING_REPORT.md`.
+Twilio is verified in the console: $17.85 funds, pay-as-you-go (no trial limits),
++1 619 658 4447 live, webhooks already pointed at anticipy.ai.
+
+## The ONE thing only you can do (unblocks the 2:45 call gate)
+1. **Confirm your cell number**: is **+1 604 724 5161** the right phone for Anticipy's
+   reminder calls and SMS? (It's what OWNER_PHONE is set to; your OpenClaw morning
+   brief already delivers there.) The whole voice/inbound plumbing — real Twilio call
+   channel, send_text/call worker, inbound YES/NO reply polling — landed mock-proven
+   at lap 20260611T051236Z and goes live once you confirm and ANTICIPY_CHANNELS_MODE=live
+   is set. Until then, live calls/SMS are hard-banned in TARGET (no 3am wrong-number
+   calls, ever). Say "phone confirmed" and P3-voice certification unblocks that night.
 
 ## When you have time (in order of leverage)
-1. **Red-pen the holdout persona keys** (~20 min, once):
+2. **Red-pen the holdout persona keys** (~20 min, once):
    `factory/personas/holdout/*/days/day01.expected.json` next to their `day01.txt` —
    mark anything you'd decide differently. Your marks are the honesty bar.
-2. **Confirm the phone number** for SMS/calls (the value in OWNER_PHONE) — now the ONLY
-   thing P3-voice closure waits on: the whole voice/inbound plumbing (real Twilio call
-   channel, send_text/call worker, inbound YES/NO reply polling) landed mock-proven at
-   lap 20260611T051236Z and goes live once OWNER_PHONE is confirmed and
-   ANTICIPY_CHANNELS_MODE=live is set. Also unlocks the live SMS leg of the P1 gate.
 3. Optional: say "push to origin" to enable off-site git backup of factory/build to your
    private GitHub (local bundles already run nightly to ~/Anticipy-backups).
 4. Optional, later: `gmail.compose` OAuth tap (drafts), Apple Developer ID (public
    download, next plan).
 
 ## Heads-up
-- The repo now lives at `~/Anticipy`; `~/Desktop/Anticipy-executor-working` is a symlink
-  to it. Open future Claude sessions in `~/Anticipy`.
-- Old `[Anticipy test]` calendar events (including the June-12 one previously flagged
-  here) were deleted with read-back confirmation; your calendar holds only real events.
+- Repo lives at `~/Anticipy`; `~/Desktop/Anticipy-executor-working` is a symlink.
+- The old Codex 30-min automation has no schedule anywhere (checked crontab, launchd,
+  OpenClaw) and hasn't touched the repo — if you formally stood it down, no action
+  needed; if not, please do.
+- Read `logs/factory/MORNING_REPORT.md` for the per-lap night tally.

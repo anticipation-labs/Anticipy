@@ -18,6 +18,9 @@ is the cardinal sin.
    `factory/TARGET.md` govern you completely. Ignore the foreman notes below.
 2. **Foreman / interactive session with Omar** (anything else): you are the architect.
    Read, in order:
+   - `logs/factory/FOREMAN_HANDOFF.md` — READ THIS FIRST AND COMPLETELY: the instilled-
+     principles document (startup ritual, who Omar is, the 10 laws, state snapshot).
+     It exists because compaction kills instincts; do not act before finishing it.
    - `.claude/OWNER_ACTION_ENGINE.md` — Omar's current product directive: build the real
      owner operating path across memory, proactive engine, onboarding, API/browser hands,
      and voice/text; do not collapse back to one narrow brain loop

@@ -15,6 +15,9 @@ START=$(date +%s)
 target_get() { grep -E "^$1:" factory/TARGET.md | head -1 | sed "s/^$1:[[:space:]]*//"; }
 PHASE_GATE="$(target_get phase_gate)"
 EVAL_TIER="$(target_get eval_tier)"; EVAL_TIER="${EVAL_TIER:-stub}"
+# optional space-separated KEY=VAL pairs from TARGET.md applied to the official eval run
+# (foreman lever: lets TARGET point the instrument at a lane, e.g. ANTICIPY_OWNER_INGEST=1)
+EVAL_ENV="$(target_get eval_env)"
 
 fail=0
 
@@ -30,7 +33,7 @@ else
 fi
 
 # ---- 3. persona evals -> metrics.json ----
-if "$PY" factory/bin/persona_run.py --bank factory/personas/dev --lap "$LAP" \
+if env $EVAL_ENV "$PY" factory/bin/persona_run.py --bank factory/personas/dev --lap "$LAP" \
      --tier "$EVAL_TIER" > "$LAPDIR/persona_run.out" 2>&1; then
   RUN=PASS
 else
