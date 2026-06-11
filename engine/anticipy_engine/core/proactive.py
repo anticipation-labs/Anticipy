@@ -296,7 +296,10 @@ class ProactiveEngine:
     def _send_ask(self, goal: Goal, action: str, reason: str, category: str = "") -> str:
         """Send the ask over the channel and register it pending a reply."""
         ask_id = goal.id
-        msg = (f"Anticipy wants to: {action}\nWhy it paused: {reason}\nReply YES to proceed, NO to skip.")
+        # The short code lets an SMS reply name THIS ask (channels/inbound.py matches
+        # it as an ask-id prefix); decision-inert — the body is never scored.
+        msg = (f"Anticipy wants to: {action}\nWhy it paused: {reason}\n"
+               f"Reply YES {ask_id[:6]} to proceed, NO {ask_id[:6]} to skip.")
         sent = self.channel.send(self.user_contact, msg)
         self.pending[ask_id] = {"goal_id": goal.id, "action": action, "reason": reason, "category": category}
         if self.glassbox is not None:

@@ -561,3 +561,27 @@ instrument (unchanged runner+scorer, stub): false_action_count 15 -> 0, e2e 0.0 
 bit-identical to ratchet bests, per-line decision diff vs 043446Z-pre2 16/16
 persona-days identical. Ledgered F17 update + F18 (in-memory resolve linkage, D16
 family). Zero spend, zero real-world artifacts (mock hands/channels everywhere).
+
+## 2026-06-11 — lap 20260611T051236Z (build/groundwork: P3-voice plumbing, TARGET v6 STAGE B item 3)
+Built the voice/inbound plumbing the P3 closure lap needs, everything mock-gated and
+testable without OWNER_PHONE. Researched the Twilio shapes first (Calls.json with inline
+Twiml=<Response><Say>, PascalCase form params, basic auth; Messages.json list with To= +
+PageSize= and client-side sid dedup — deliberately avoided the DateSent inequality params).
+CallChannel went from dead stub to the same mock/live/audit triad as text.py (XML-escaped,
+4000-char-bounded TwiML; explicit Authorization header instead of text.py's realm-dependent
+HTTPBasicAuthHandler — ledgered F19). A real ChannelWorker now owns send_text/call on the
+bus (ChannelStub keeps send_email); notify_user routes through it. channels/inbound.py
+polls Twilio for the owner's replies: YES/NO+code (the ask SMS now advertises the code)
+resolves pending asks THROUGH ControlCore.resolve per F18 — and resolve() gained the F18
+durable fallback (scan owner_cards/ by execution.goal_id when the in-memory map misses),
+pinned by clearing the map in the test. Non-reply inbound enters owner_ingest (source
+"sms"). Safety: no OWNER_PHONE -> refuse everything; non-owner senders, outbound echoes,
+pre-floor history, ambiguous codes all refused (F20 ledgered: the refusal is silent — live
+UX gap). Poller only constructs a transport when the live env triad is present; sids
+persist so restarts never replay an approval. Suite 42/42 (3 new tests). Default-path stub
+full bank BIT-IDENTICAL to ratchet bests (all 9 aggregates; per-line diff vs 045035Z-pre:
+16/16 persona-days identical on line/decision/category/reason/detrimental/decider).
+Owner-lane instrument exactly unchanged (catch 0.5054/0.2222, false 0, harm 0, interrupt
+0.875/1.5, e2e 0.0208, recall_worst 0.25). Zero model calls, zero spend, zero real-world
+artifacts. No official metric moved — pre-registered as groundwork enabling the P3 closure
+lap, which now waits only on OWNER_PHONE confirmation + live Twilio env.

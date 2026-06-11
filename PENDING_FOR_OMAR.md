@@ -15,8 +15,11 @@ Gemini free tier (no OpenRouter funding needed). Read `logs/factory/MORNING_REPO
 1. **Red-pen the holdout persona keys** (~20 min, once):
    `factory/personas/holdout/*/days/day01.expected.json` next to their `day01.txt` —
    mark anything you'd decide differently. Your marks are the honesty bar.
-2. **Confirm the phone number** for SMS/calls (the value in OWNER_PHONE) — unlocks the
-   live SMS leg of the P1 gate and P3 voice work.
+2. **Confirm the phone number** for SMS/calls (the value in OWNER_PHONE) — now the ONLY
+   thing P3-voice closure waits on: the whole voice/inbound plumbing (real Twilio call
+   channel, send_text/call worker, inbound YES/NO reply polling) landed mock-proven at
+   lap 20260611T051236Z and goes live once OWNER_PHONE is confirmed and
+   ANTICIPY_CHANNELS_MODE=live is set. Also unlocks the live SMS leg of the P1 gate.
 3. Optional: say "push to origin" to enable off-site git backup of factory/build to your
    private GitHub (local bundles already run nightly to ~/Anticipy-backups).
 4. Optional, later: `gmail.compose` OAuth tap (drafts), Apple Developer ID (public

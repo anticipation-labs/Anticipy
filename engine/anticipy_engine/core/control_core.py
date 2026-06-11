@@ -21,7 +21,9 @@ from .orchestrator import Approver, Orchestrator
 from .proactive import ProactiveEngine
 from .scorecard import Scorecard
 from .store import GoalStore
-from .workers import ChannelStub, MemoryWorker
+from .workers import ChannelStub, ChannelWorker, MemoryWorker
+from ..channels.call import CallChannel
+from ..channels.text import TextChannel
 from ..hands import ApiHand, BrowserHand, MODE_MOCK
 from ..live_memory.brain import LiveMemoryBrain
 from ..memory.store import Memory
@@ -84,10 +86,18 @@ class ControlCore:
             notifier=self.notify_user,
             fallback_link=native_bridge,
         )
-        self.channel = ChannelStub()  # reaching the user (text/call); delivery stubbed for now
+        self.channel = ChannelStub()  # send_email only — the real ChannelWorker owns text/call
+        # Real channels (mock by default; live only with ANTICIPY_CHANNELS_MODE=live +
+        # Twilio env). ONE TextChannel instance shared with the proactive ask path so
+        # there is a single .sent audit trail.
+        self.text_channel = TextChannel()
+        self.call_channel = CallChannel()
+        self.channel_worker = ChannelWorker(text=self.text_channel, call=self.call_channel,
+                                            contact=self._user_contact)
         # Real workers register LAST so they own any intent a stub also claims; the real
-        # MemoryWorker takes over read_context + write_memory.
-        for w in (self.channel, self.api_hand, self.browser_hand, self.memory_worker):
+        # MemoryWorker takes over read_context + write_memory, ChannelWorker send_text/call.
+        for w in (self.channel, self.api_hand, self.browser_hand, self.memory_worker,
+                  self.channel_worker):
             self.bus.register_worker(w)
 
         self.store = GoalStore(data_dir=base)
@@ -100,6 +110,7 @@ class ControlCore:
         )
         self.proactive = ProactiveEngine(
             self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard,
+            channel=self.text_channel, user_contact=self._user_contact(),
             deferred_path=base / "decider_deferred.json",
         )
         # Owner cards awaiting a YES/NO: goal_id -> {record_path, card_id}, so resolve()
@@ -124,6 +135,16 @@ class ControlCore:
             "history": [i.text for i in inj["history"]],
             "derived": [i.text for i in inj["derived"]],
         }
+
+    @staticmethod
+    def _user_contact() -> str:
+        """The owner's reachable number — ONLY in live channel mode. Everywhere else
+        (suite, stub/mock persona runs) the placeholder stands, so run artifacts and
+        glassbox dumps never carry the real number (B8 fixed engine-side, scoped)."""
+        if os.environ.get("ANTICIPY_CHANNELS_MODE") == "live":
+            return (os.environ.get("OWNER_PHONE") or os.environ.get("ALERT_PHONE")
+                    or os.environ.get("TWILIO_TO") or "+10000000000")
+        return "+10000000000"
 
     @staticmethod
     def _owner_event_enabled() -> bool:
@@ -354,14 +375,15 @@ class ControlCore:
 
     async def notify_user(self, text: str, recipient: str | None = None) -> dict:
         """Text the user — the 'ask' half of a wall handoff (pause -> ask -> resume).
-        Delivery is stubbed until the real channel lands; the seam + glass-box trail
-        are real, and it routes through the same send_text worker the product uses."""
+        Routes through the REAL send_text worker (mock by default, Twilio when the
+        channel env is live); the seam + glass-box trail are the same either way."""
         from .envelopes import Job
 
-        to = recipient or os.environ.get("ALERT_PHONE") or os.environ.get("TWILIO_TO") or "user"
+        to = (recipient or os.environ.get("ALERT_PHONE") or os.environ.get("TWILIO_TO")
+              or self._user_contact())
         self.glassbox.log("handoff", {"event": "notify_user", "to": to, "text": text})
         try:
-            res = await self.channel.handle(Job(intent="send_text", args={"recipient": to, "body": text}))
+            res = await self.channel_worker.handle(Job(intent="send_text", args={"recipient": to, "body": text}))
             return res.model_dump(mode="json")
         except Exception as e:  # a notify failure must never crash the agent run
             self.glassbox.log("handoff", {"event": "notify_failed", "error": str(e)})
@@ -377,12 +399,34 @@ class ControlCore:
                  "category": p.get("category", ""), "goal_id": p["goal_id"]}
                 for aid, p in self.proactive.pending.items()]
 
+    def _find_card_record(self, goal_id: str) -> dict | None:
+        """Scan the durable owner card records for one whose execution targeted
+        goal_id (ledger F18 fallback; only runs when the in-memory map missed)."""
+        cards_dir = self.data_dir / "owner_cards"
+        if not cards_dir.is_dir():
+            return None
+        for path in cards_dir.glob("*.json"):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            execution = ((record.get("owner_card") or {}).get("execution") or {})
+            if execution.get("goal_id") == goal_id:
+                return {"record_path": str(path), "card_id": record.get("id")}
+        return None
+
     async def resolve(self, ask_id: str, approved: bool) -> dict:
         """The app's approve/deny -> resolves the REAL paused goal (mirrors the text/call round-trip).
         If the goal came from an owner card, the resolution outcome (state + proof on
         YES, declined on NO) is written back onto the durable card record."""
         out = await self.proactive.resolve_ask(ask_id, approved)
         link = self._owner_card_goals.pop(out.get("goal_id"), None) if isinstance(out, dict) else None
+        if link is None and isinstance(out, dict) and out.get("goal_id"):
+            # F18 durable linkage: the in-memory map can be gone (restart, desync)
+            # while the card record's execution.goal_id survives on disk — derive
+            # the write-back from the record itself so a resolution NEVER strands
+            # an owner card at "waiting".
+            link = self._find_card_record(out["goal_id"])
         if link is not None:
             goal = self.store.load(out["goal_id"])
             try:

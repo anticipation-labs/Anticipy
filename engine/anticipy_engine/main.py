@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .agent import WebVoyagerAgent, judge
 from .brain import Brain
+from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
 from .core.envelopes import Job, new_id
 from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
@@ -51,19 +52,36 @@ async def _trigger_scheduler(interval_s: float) -> None:
             core.glassbox.log("trigger_tick_error", {"error": f"{type(e).__name__}: {e}"})
 
 
+async def _inbound_scheduler(poller: InboundPoller, interval_s: float) -> None:
+    """Poll Twilio for the owner's SMS replies (YES/NO resolves asks; speech ingests).
+    Live-env-gated at startup; a poll failure is logged and the loop lives on."""
+    while True:
+        await asyncio.sleep(interval_s)
+        try:
+            await poller.poll_once()
+        except Exception as e:  # noqa: BLE001 — the poller must outlive any one pass
+            core.glassbox.log("inbound_poll_error", {"error": f"{type(e).__name__}: {e}"})
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await core.start()
     # ANTICIPY_TICK_SECONDS=0 disables the scheduler (deterministic tests use POST /trigger/tick)
     interval_s = float(os.environ.get("ANTICIPY_TICK_SECONDS", "30") or 0)
     tick_task = asyncio.create_task(_trigger_scheduler(interval_s)) if interval_s > 0 else None
+    # Inbound SMS poll: ONLY with the live channel env (creds + mode) — suite, stub and
+    # mock runs never construct a transport. ANTICIPY_INBOUND_POLL_SECONDS=0 disables.
+    inbound_s = float(os.environ.get("ANTICIPY_INBOUND_POLL_SECONDS", "15") or 0)
+    inbound_task = (asyncio.create_task(_inbound_scheduler(InboundPoller(core), inbound_s))
+                    if inbound_s > 0 and InboundPoller.live_ready() else None)
     try:
         yield
     finally:
-        if tick_task is not None:
-            tick_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await tick_task
+        for task in (tick_task, inbound_task):
+            if task is not None:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
         await core.stop()
 
 

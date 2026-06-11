@@ -68,6 +68,28 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v6 STAGE B: the Owner Action Engine execution path
+- P3-VOICE PLUMBING IS BUILT, MOCK-PROVEN (lap 20260611T051236Z, groundwork —
+  STAGE B item 3): channels/call.py is a real Twilio Calls channel (mock/live/
+  audit triad like text.py; researched REST shape — POST Calls.json with
+  To/From/Twiml=<Response><Say>, escaped + 4000-char-bounded, explicit basic-auth
+  header per ledger F19; response sid/status = the gate_P3 read-back handle).
+  A real ChannelWorker owns send_text/call on the bus (failed live send -> failed
+  Result, never fake delivery; ChannelStub keeps send_email); notify_user routes
+  through it. channels/inbound.py polls Twilio Messages (To= + PageSize= +
+  persisted seen-sids + cold-start floor; owner-sender-only; OWNER_PHONE unset ->
+  refuse everything; mark-seen-before-act so approvals never replay): YES/NO+code
+  resolves asks THROUGH ControlCore.resolve — F18 CLOSED for the resolve path via
+  the durable execution.goal_id fallback (map-cleared pin in test_inbound) — and
+  other inbound is owner speech into owner_ingest (source "sms", spine rules).
+  The ask SMS now carries the reply code (decision-inert, proven). Poller runs in
+  the engine lifespan ONLY with live env (default poll 15s). Suite 42/42; default
+  path bit-identical to ratchet bests (9/9 aggregates; per-line 16/16 days
+  identical vs 045035Z-pre); owner-lane instrument exactly unchanged; zero spend.
+  P3 closure now waits ONLY on OWNER_PHONE confirmation + live Twilio env. NEW
+  ledger: F19 (text.py realm-dependent live auth, port header pattern if live SMS
+  fails), F20 (ambiguous inbound reply refused SILENTLY — needs a bounded
+  clarification reply). D16 sibling now binds live ops: an engine restart strands
+  pending asks themselves (the record linkage survives, the pending map doesn't).
 - OWNER CARDS NOW EXECUTE (lap 20260611T045035Z, build — STAGE B item 2): do-cards
   run through the PROVEN proactive spine (feed -> triage -> harm-line ->
   orchestrator/hands) with outcome+proof (artifact id, read-back) mirrored onto the

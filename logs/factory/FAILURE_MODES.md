@@ -939,3 +939,36 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   or persist the map like decider_deferred.json). Regression check:
   test_owner_ingest_event pins the core.resolve() path; item 3's inbound worker MUST
   route resolutions through ControlCore.resolve (or the durable linkage) and pin it.
+
+## Build lap 20260611T051236Z (P3-voice plumbing, TARGET v6 STAGE B item 3)
+- F18 UPDATE — CLOSED for the resolve path (was OPEN): ControlCore.resolve now falls
+  back to the DURABLE linkage when the in-memory goal->record map misses (restart,
+  desync): it scans <data>/owner_cards/*.json for execution.goal_id == resolved goal
+  and writes state/proof/resolution back onto that record. Pinned by
+  test_inbound.owner_card_check, which clears core._owner_card_goals before the
+  inbound YES and still requires the record to land "done" with proof + resolution
+  stamp. The item-3 inbound poller routes ALL resolutions through ControlCore.resolve
+  (never proactive.resolve_ask directly), as F18 required. RESIDUAL (= the already-
+  ledgered D16 sibling, not F18): proactive.pending itself is in-memory, so an engine
+  restart between ask-SMS and the owner's YES strands the ASK (nothing pending to
+  match) even though the record linkage now survives. For live P3 ops the pending map
+  needs the decider_deferred.json persistence pattern. Regression check: the
+  map-cleared pin in test_inbound.
+- F19 NEW, OPEN (live-unobserved risk, D-family): text.py's live Twilio send
+  authenticates via urllib HTTPBasicAuthHandler with realm "Twilio API" — a
+  401-challenge/realm-matching handshake that has NEVER been proven live (P1 S5 was
+  owner-blocked) and silently fails to attach credentials if the realm string ever
+  differs. The new call.py/_twilio_call and inbound.py/_twilio_fetch send an explicit
+  `Authorization: Basic` header instead (no challenge round-trip, no realm
+  dependence). If the first live SMS leg fails auth, port the explicit-header pattern
+  to text.py before debugging anything else. Regression check: the P3 closure lap's
+  live legs read back the Twilio sid for all three (text send, call create, inbound
+  list).
+- F20 NEW, OPEN (live-UX gap, fail-safe by design): an ambiguous inbound reply — bare
+  YES/NO with 2+ asks pending, or a code matching nothing — resolves NOTHING and
+  tells the owner NOTHING (glassbox inbound_ambiguous only). Correct for safety
+  (never guess an approval) but live the owner believes they answered. gate_P3's
+  single-ask leg is unaffected; multi-ask days will hit it. Fix direction: a bounded
+  clarification reply over the same channel listing the pending codes (counts as an
+  interruption; budget applies). Regression check: test_inbound pins the refusal
+  today; the fix lap must pin refusal + exactly-one clarification send.
