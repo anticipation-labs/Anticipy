@@ -46,6 +46,12 @@ banned_work: |
   self-owned, labeled, reversible, cleaned up. NEVER edit or commit while
   factory/.lock exists (applies to every actor).
 notes: |
+  v8.1 (foreman, 2026-06-11T14:45Z): treadmill sits at 5+ and ONLY metric movement
+  resets it — so the FIRST lap after any resume must be one that can count: a bank-v2
+  baseline measurement (first-measurement counts) or a Stage A P3 closure attempt.
+  Never start a pre-registered-dead Stage B lap while the counter is at the ceiling;
+  it re-halts instantly (proven by the 14:40Z echo escalation). Loop is currently
+  PAUSED by owner order (factory/.halt) — no actor restarts it until Omar says so.
   Night of 2026-06-10/11 in one line: P2-brain CLOSED judge-REAL (holdout worst 1.0),
   owner lane became the product (one brain, executing cards with proof, voice+inbound
   plumbing mock-proven, restart-safe asks and triggers), official e2e 0.3427 -> 0.6483,

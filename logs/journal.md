@@ -846,3 +846,28 @@ manifest: expected mechanically DEAD (moved=none) — e2e is at the F31 ceiling,
 items 1/2 exhausted, 3/4 judge/human-gated — and this is dead lap #5: the
 DESIGNED K=5 escalation should fire after this lap and hand the foreman the
 TARGET v8 re-aim. Zero spend, zero real-world artifacts, no live legs.
+
+2026-06-11 lap 20260611T135937Z (groundwork, P3-voice / TARGET v8 STAGE B item 1): moved
+webvoyager's three retailer host tables (35 hosts: search URL templates, cart URLs,
+product-URL regexes) out of code into data — new agent/site_hints.py (packaged seed at
+engine/anticipy_engine/data/site_hints_seed.json exported programmatically FROM the live
+module before deletion, so parity is byte-derived; per-engine learned overlay at
+<data>/site_hints.json wired explicitly by ControlCore like pending_path; learn write-back
+fires only at the two durable cart-proof chokepoints and stores verbatim verified facts —
+sanitized observed cart URL + visited product paths, never derived {q} templates; every
+failure direction is toward the seed: corrupt overlay set aside .corrupt, invalid fields
+dropped per-field, no path = no IO). agent/*.py is now hostname-free including docstrings
+(the P4 grep-gate target shape). Two traps found and dodged: factory scan 5 greps ADDED
+quoted hostnames under the WHOLE agent/ subtree (any file type), so the sanctioned seed
+export under agent/ would have voided the lap (placed in data/ instead — D24 in the
+ledger); and the hostname-free CART_URL_RE/SEARCH_RESULTS_URL_RE classifiers stay coupled
+to the per-host facts, so a LEARNED host with a non-classic cart path fails closed but the
+hint silently does nothing (F32 NEW OPEN, fix direction named for the P4 build lap).
+Proof: suite 46/46 (new 9-pin test_site_hints.py battery); full pre/post persona runs in
+BOTH lanes bit-identical at the ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt
+0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0; per-persona JSON equal); per-line
+decision diff ZERO (493 lines x 16 persona-days per lane) and full normalized-response
+diff ZERO (the only raw diffs were the run-dir name embedded in card paths); goal
+(intent,state) multisets identical; zero hint artifacts in any run dir. Disclosed up
+front as instrument-dead (e2e at the F31 ceiling, foreman-owned); zero spend, zero
+real-world artifacts.

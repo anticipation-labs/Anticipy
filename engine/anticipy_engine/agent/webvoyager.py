@@ -27,6 +27,7 @@ from typing import List, Optional
 from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
 from ..core.gateway import CHEAP, SMART, ModelGateway
+from . import site_hints
 from .handoff import ask_message, classify_wall
 
 PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes in sequence
@@ -66,80 +67,6 @@ COMMERCE_STOP = {
     "bag", "add", "added", "shipping", "pickup", "delivery", "cheapest", "lowest", "least",
     "expensive", "price", "priced", "budget", "affordable",
 }
-COMMERCE_SEARCH_URLS = {
-    "target.com": "https://www.target.com/s?searchTerm={q}",
-    "walmart.com": "https://www.walmart.com/search?q={q}",
-    "bestbuy.com": "https://www.bestbuy.com/site/searchpage.jsp?st={q}",
-    "homedepot.com": "https://www.homedepot.com/s/{q}",
-    "lowes.com": "https://www.lowes.com/search?searchTerm={q}",
-    "ikea.com": "https://www.ikea.com/us/en/search/?q={q}",
-    "officedepot.com": "https://www.officedepot.com/a/search/?q={q}",
-    "rei.com": "https://www.rei.com/search?q={q}",
-    "petsmart.com": "https://www.petsmart.com/search/?q={q}",
-    "containerstore.com": "https://www.containerstore.com/s?source=form&q={q}",
-    "bookshop.org": "https://bookshop.org/search?keywords={q}",
-    "chewy.com": "https://www.chewy.com/s?query={q}",
-    "michaels.com": "https://www.michaels.com/search?q={q}",
-    "bhphotovideo.com": "https://www.bhphotovideo.com/c/search?Ntt={q}&N=0&InitialSearch=yes",
-    "adorama.com": "https://www.adorama.com/l/?searchinfo={q}",
-    "sweetwater.com": "https://www.sweetwater.com/store/search?s={q}",
-    "lego.com": "https://www.lego.com/en-us/search?q={q}",
-    "guitarcenter.com": "https://www.guitarcenter.com/search?Ntt={q}",
-    "newegg.com": "https://www.newegg.com/p/pl?d={q}",
-    "harborfreight.com": "https://www.harborfreight.com/search?q={q}",
-    "surlatable.com": "https://www.surlatable.com/search?q={q}",
-    "gamestop.com": "https://www.gamestop.com/search/?q={q}",
-    "ulta.com": "https://www.ulta.com/search?search={q}",
-    "wayfair.com": "https://www.wayfair.com/keyword.php?keyword={q}",
-    "macys.com": "https://www.macys.com/shop/featured/{q}",
-    "dickssportinggoods.com": "https://www.dickssportinggoods.com/search/SearchDisplay?searchTerm={q}",
-    "kohls.com": "https://www.kohls.com/search.jsp?search={q}",
-    "qvc.com": "https://www.qvc.com/catalog/psearch.html?keyword={q}",
-    "worldmarket.com": "https://www.worldmarket.com/search?q={q}",
-    "acehardware.com": "https://www.acehardware.com/search?query={q}",
-    "thriftbooks.com": "https://www.thriftbooks.com/browse/?b.search={q}",
-    "vitaminshoppe.com": "https://www.vitaminshoppe.com/search?search={q}",
-    "crateandbarrel.com": "https://www.crateandbarrel.com/search?query={q}",
-    "fivebelow.com": "https://www.fivebelow.com/search?q={q}",
-    "dickblick.com": "https://www.dickblick.com/search/?q={q}",
-}
-COMMERCE_CART_URLS = {
-    "target.com": "https://www.target.com/cart",
-    "walmart.com": "https://www.walmart.com/cart",
-    "bestbuy.com": "https://www.bestbuy.com/cart",
-    "homedepot.com": "https://www.homedepot.com/mycart/home",
-    "lowes.com": "https://www.lowes.com/cart",
-    "ikea.com": "https://www.ikea.com/us/en/shoppingcart/",
-    "officedepot.com": "https://www.officedepot.com/cart/shoppingCart.do",
-    "rei.com": "https://www.rei.com/ShoppingCart",
-    "petsmart.com": "https://www.petsmart.com/cart/",
-    "containerstore.com": "https://www.containerstore.com/cart/list.htm",
-    "bookshop.org": "https://bookshop.org/cart",
-    "chewy.com": "https://www.chewy.com/app/cart",
-    "michaels.com": "https://www.michaels.com/cart",
-    "bhphotovideo.com": "https://www.bhphotovideo.com/find/cart.jsp",
-    "adorama.com": "https://www.adorama.com/cartview",
-    "sweetwater.com": "https://www.sweetwater.com/store/cart.php",
-    "lego.com": "https://www.lego.com/en-us/cart",
-    "guitarcenter.com": "https://www.guitarcenter.com/cart",
-    "newegg.com": "https://secure.newegg.com/shop/cart",
-    "harborfreight.com": "https://www.harborfreight.com/checkout/cart",
-    "surlatable.com": "https://www.surlatable.com/shopping-bag",
-    "gamestop.com": "https://www.gamestop.com/cart/",
-    "ulta.com": "https://www.ulta.com/bag",
-    "wayfair.com": "https://www.wayfair.com/v/checkout/basket/show",
-    "macys.com": "https://www.macys.com/my/bag",
-    "dickssportinggoods.com": "https://www.dickssportinggoods.com/OrderItemDisplay",
-    "kohls.com": "https://www.kohls.com/checkout/shopping_cart.jsp",
-    "qvc.com": "https://www.qvc.com/checkout/cart.html",
-    "worldmarket.com": "https://www.worldmarket.com/cart",
-    "acehardware.com": "https://www.acehardware.com/cart",
-    "thriftbooks.com": "https://www.thriftbooks.com/shopping-cart/",
-    "vitaminshoppe.com": "https://www.vitaminshoppe.com/cart/shopping-cart",
-    "crateandbarrel.com": "https://www.crateandbarrel.com/checkout/cart",
-    "fivebelow.com": "https://www.fivebelow.com/cart",
-    "dickblick.com": "https://www.dickblick.com/cart/",
-}
 ADD_TO_CART_RE = re.compile(
     r"\b(add|put)\b.{0,50}\b(cart|basket|bag)\b|"
     r"\badd\b.{0,30}\b(ship|shipping|pickup|delivery)\b|^\s*add\s+",
@@ -171,43 +98,6 @@ CONTENT_URL_RE = re.compile(
     r"/(?:rooms|ideas|how-to|inspiration|services|help|blog|article|articles|cat)/",
     re.I,
 )
-COMMERCE_PRODUCT_URL_RE = {
-    "target.com": re.compile(r"/(?:p/|-/A-)", re.I),
-    "walmart.com": re.compile(r"/ip/", re.I),
-    "bestbuy.com": re.compile(r"/(?:site/.+/\d+\.p|product/[^/?#]+/[^/?#]+(?:/sku/\d+)?)(?:[/?#]|$)", re.I),
-    "homedepot.com": re.compile(r"/p/", re.I),
-    "lowes.com": re.compile(r"/pd/", re.I),
-    "ikea.com": re.compile(r"/p/", re.I),
-    "officedepot.com": re.compile(r"/a/products/", re.I),
-    "rei.com": re.compile(r"/product/", re.I),
-    "petsmart.com": re.compile(r"/(?:dog|cat|fish|bird|reptile|small-pet)/.+\.html$", re.I),
-    "containerstore.com": re.compile(r"/\d+d$", re.I),
-    "bookshop.org": re.compile(r"/(?:p/books|a/)", re.I),
-    "chewy.com": re.compile(r"/(?:.+/dp/|api/event/p/sar/click)", re.I),
-    "michaels.com": re.compile(r"/product/", re.I),
-    "bhphotovideo.com": re.compile(r"/c/product/[^?#]+\.html$", re.I),
-    "adorama.com": re.compile(r"/p/[^/?#]+$", re.I),
-    "sweetwater.com": re.compile(r"/store/detail/[^/?#]+$", re.I),
-    "lego.com": re.compile(r"/[a-z]{2}-[a-z]{2}/product/[^/?#]+$", re.I),
-    "guitarcenter.com": re.compile(r"/[^/?#]+/[^/?#]*\d[^/?#]*\.gc$", re.I),
-    "newegg.com": re.compile(r"/p/N[0-9A-Z]+$", re.I),
-    "harborfreight.com": re.compile(r"/[^/?#]+-\d+\.html$", re.I),
-    "surlatable.com": re.compile(r"/product/[^/?#]+/\d+$", re.I),
-    "gamestop.com": re.compile(r"/products/[^/?#]+/\d+\.html$", re.I),
-    "ulta.com": re.compile(r"/p/[^/?#]+", re.I),
-    "wayfair.com": re.compile(r"/(?:[^/?#]+/)*pdp/[^/?#]+\.html$", re.I),
-    "macys.com": re.compile(r"/shop/product/(?!review/)[^/?#]+", re.I),
-    "dickssportinggoods.com": re.compile(r"/p/[^/?#]+/[^/?#]+", re.I),
-    "kohls.com": re.compile(r"/product/prd-\d+/[^/?#]+\.jsp$", re.I),
-    "qvc.com": re.compile(r"/(?:qvc\.product|[^/?#]+\.product)\.[A-Z0-9]+\.html$", re.I),
-    "worldmarket.com": re.compile(r"/p/[^/?#]+-\d+\.html$", re.I),
-    "acehardware.com": re.compile(r"/departments/[^?#]+/\d+$", re.I),
-    "thriftbooks.com": re.compile(r"/w/[^?#]+/\d+/?$", re.I),
-    "vitaminshoppe.com": re.compile(r"/p/[^?#]+/[a-z0-9-]+$", re.I),
-    "crateandbarrel.com": re.compile(r"/[^/?#]+/s\d+(?:[/?#]|$)", re.I),
-    "fivebelow.com": re.compile(r"/products/[^/?#]+", re.I),
-    "dickblick.com": re.compile(r"/products/[^/?#]+/?$", re.I),
-}
 PRODUCT_URL_RE = re.compile(r"/(?:product|products|p|ip|pd)(?:/|$)", re.I)
 NON_PRODUCT_RE = re.compile(
     r"\b(add to|cart|basket|bag|checkout|sponsored|ad|sign in|log in|create account|"
@@ -350,20 +240,11 @@ def _host(url: str) -> str:
 
 
 def _commerce_search_url(start_url: str, item: str) -> str:
-    host = _host(start_url)
-    q = urllib.parse.quote_plus(item)
-    for domain, template in COMMERCE_SEARCH_URLS.items():
-        if host == domain or host.endswith("." + domain):
-            return template.format(q=q)
-    return ""
+    return site_hints.store().search_url(start_url, item)
 
 
 def _commerce_cart_url(start_url: str) -> str:
-    host = _host(start_url)
-    for domain, url in COMMERCE_CART_URLS.items():
-        if host == domain or host.endswith("." + domain):
-            return url
-    return ""
+    return site_hints.store().cart_url(start_url)
 
 
 def _looks_search_results_url(url: str) -> bool:
@@ -387,11 +268,7 @@ def _same_site(start_url: str, candidate_url: str) -> bool:
 
 
 def _commerce_product_pattern(start_url: str) -> Optional[re.Pattern]:
-    start_host = _host(start_url)
-    for domain, pattern in COMMERCE_PRODUCT_URL_RE.items():
-        if start_host == domain or start_host.endswith("." + domain):
-            return pattern
-    return None
+    return site_hints.store().product_pattern(start_url)
 
 
 def _looks_buyable_product_url(url: str, start_url: str = "") -> bool:
@@ -1511,6 +1388,8 @@ class WebVoyagerAgent:
         durable = " durable" if durable_confirmed else ""
         history.append(f"recipe: {stage} navigated known cart url{durable} for {_host(start_url)}")
         states.append(_page_state(stage, out, item, history[-1], start_url=start_url))
+        if durable_confirmed:
+            self._learn_from_durable_proof(start_url, out, states)
         return out, steps + 2 if durable_confirmed else steps + 1
 
     async def _confirm_current_cart_page(self, out: dict, start_url: str, item: str,
@@ -1529,7 +1408,36 @@ class WebVoyagerAgent:
         status = "verified" if durable_confirmed else "rejected"
         history.append(f"recipe: {stage} fresh_probe {status} cart page for {_host(start_url)}")
         states.append(_page_state(stage, checked, item, history[-1], start_url=start_url))
+        if durable_confirmed:
+            self._learn_from_durable_proof(start_url, checked, states)
         return checked, steps + 1, durable_confirmed
+
+    def _learn_from_durable_proof(self, start_url: str, cart_out: dict, states: list[dict]) -> None:
+        """Write back facts VERIFIED by the durable cart proof that just passed:
+        the cart URL actually observed (sanitized to scheme+host+path — observed
+        query strings can carry session junk) and the product-page paths actually
+        visited this run. Verbatim facts only: deriving a {q} search template from
+        one observed URL is junk inference and stays future work. Mock runs never
+        reach this (the mock hand returns before the agent is constructed), and
+        learning is best-effort — the verified result stands whether or not the
+        hint store accepts the facts."""
+        try:
+            host = site_hints.host_of(start_url)
+            if not host:
+                return
+            parsed = urllib.parse.urlparse((cart_out or {}).get("url") or "")
+            cart_url = None
+            if parsed.scheme in ("http", "https") and parsed.netloc:
+                cart_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            examples = []
+            for state in states or []:
+                if (state or {}).get("surface_kind") == "product":
+                    path = urllib.parse.urlparse((state or {}).get("url") or "").path
+                    if path and path != "/":
+                        examples.append(path)
+            site_hints.store().learn(host, cart_url=cart_url, product_url_examples=examples)
+        except Exception:
+            pass  # hint learning must never disturb a verified run
 
     async def _notify(self, msg: str) -> None:
         if not self.notifier:

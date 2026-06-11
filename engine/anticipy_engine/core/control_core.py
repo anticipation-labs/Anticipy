@@ -23,6 +23,7 @@ from .scorecard import Scorecard
 from .store import GoalStore
 from .workers import ChannelStub, ChannelWorker, MemoryWorker
 from ..channels.call import CallChannel
+from ..agent import site_hints
 from ..channels.text import TextChannel
 from ..hands import ApiHand, BrowserHand, MODE_MOCK
 from ..live_memory.brain import LiveMemoryBrain
@@ -65,6 +66,12 @@ class ControlCore:
         self.live_memory = LiveMemoryBrain(self.memory, gateway=self.gateway, scorecard=self.scorecard)
         self.owner_mode = OwnerMode()
         self.memory_worker = MemoryWorker(self.live_memory)
+
+        # Browse hints: the agent's per-host facts are DATA (packaged seed + this
+        # engine's learned overlay). Explicit wiring like pending_path/deferred_path
+        # below — agent code never reads env or invents a path. The store is
+        # process-global, so the last constructed core owns it (env-var semantics).
+        site_hints.configure(base / "site_hints.json")
 
         # REAL hands replace connector_stub + browser_stub on the frozen contract.
         # channel_stub (reaching the user: call/text) stays (later chunk).

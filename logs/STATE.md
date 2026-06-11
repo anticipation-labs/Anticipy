@@ -80,7 +80,36 @@ its LESSONS.md still binds.
 - Possible stray artifact: `[Anticipy test] M2 typed smoke 20260607-continue` calendar
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
-## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate)
+## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate) -> TARGET v8 (second K=5 resolved): Stage A = P3 closure on OWNER_PHONE confirm, Stage B = P4-browser groundwork
+- THE AGENT'S PER-HOST FACTS ARE DATA, NOT CODE (lap 20260611T135937Z,
+  groundwork — TARGET v8 STAGE B item 1; honest DEAD lap by design, disclosed
+  in the manifest: e2e is at the F31 ceiling, foreman-owned). webvoyager's
+  three retailer host tables (35 hosts: search templates, cart URLs, product
+  URL regexes) were exported byte-faithfully to a packaged seed
+  (engine/anticipy_engine/data/site_hints_seed.json — placed OUTSIDE agent/
+  because factory scan 5 greps added quoted hostnames under the whole agent/
+  subtree, ledger D24) and DELETED from agent code; agent/*.py is now
+  hostname-free including docstrings — the P4 grep-gate target shape. New
+  agent/site_hints.py serves seed + per-engine learned overlay
+  (<data>/site_hints.json, wired by ControlCore like pending_path; agent code
+  never reads env): exact-then-longest-suffix host matching, per-field
+  overlay-wins, learn() only at the two durable cart-proof chokepoints with
+  verbatim verified facts (sanitized observed cart URL + visited product
+  paths; never derived {q} templates), every failure toward the seed (corrupt
+  overlay -> .corrupt set-aside; off-host/no-{q}/uncompilable fields dropped
+  per-field; no path -> no IO; mock proofs never learn — pinned). Verified:
+  suite 46/46 (new 9-pin test_site_hints.py); pre/post persona runs BOTH
+  lanes bit-identical at the ratchet bests (catch 1.0/1.0, false 0, harm 0,
+  interrupt 0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0; per-persona
+  equal), per-line decision diff ZERO (493 lines x 16 persona-days per lane),
+  normalized full-response diff ZERO, goal multisets identical, zero hint
+  artifacts in run dirs. F32 NEW OPEN: the hostname-free
+  CART_URL_RE/SEARCH_RESULTS_URL_RE classifiers stay coupled to the per-host
+  facts — a LEARNED host with a non-classic cart path fails CLOSED (no false
+  success) but its hint silently does nothing; fix direction = verified
+  learned cart paths extend recognition under the same verified-only law (the
+  P4 build lap). Stage B item 2 (agent/proof.py read-back generalization)
+  remains.
 - FIRED TRIGGERS NEVER RE-FIRE ACROSS RESTARTS (lap 20260611T133818Z,
   groundwork — D16 PROPER FIXED, the ledger's oldest open restart entry and
   the one with a NON-SILENT failure direction; TARGET v7 item 4 "mock-prove

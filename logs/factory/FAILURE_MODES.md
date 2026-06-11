@@ -1521,3 +1521,47 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   and the e2e pin (restarted ControlCore re-fires nothing, owner gets no
   duplicate). A second "Reminder:" send for the same loop id across a restart =
   the failure returned.
+
+## Groundwork lap 20260611T135937Z (site_hints extraction — TARGET v8 STAGE B item 1)
+- F32 NEW — OPEN (found while extracting the host tables): the agent's
+  hostname-FREE shape classifiers stay functionally coupled to the per-host
+  facts that just became data. CART_URL_RE hard-codes the seed's cart path
+  tokens (cartview, shopping_cart.jsp, OrderItemDisplay, shopping-bag, my/bag,
+  cart.php, ...) and SEARCH_RESULTS_URL_RE the seed's search shapes
+  (/site/searchpage.jsp, /keyword.php, /shop/featured, query keys
+  q/query/keyword/keywords/search/b.search/searchTerm/searchinfo/st). A host
+  LEARNED into the overlay whose observed cart path is outside CART_URL_RE
+  (e.g. /my-cart) can NEVER pass _cart_page_verified — fails CLOSED (no false
+  success, the durable-proof law holds) but the learned cart hint silently
+  does nothing for that host; a learned search shape outside
+  SEARCH_RESULTS_URL_RE degrades the search-results-gated recovery logic
+  (unactionable-surface scroll, query fallback, redirect handling) the same
+  silent way. Fix direction for the P4 build lap: the durable cart proof that
+  writes the learned fact is itself the validity anchor — let VERIFIED learned
+  cart paths extend the cart-URL recognition under the same verified-only law
+  (data-driven, junk-bounded), never by blindly widening the generic regexes.
+  Regression check when fixed: a learned host with a non-classic cart path
+  must pass _cart_page_verified end-to-end in the test battery; until then
+  test_site_hints.py pins that the learned facts are at least stored/served.
+- D24 NEW — DOCUMENTED (Factory near-miss, no product exposure): TARGET v8
+  Stage B item 1's "one-time export from webvoyager's host-literal tables"
+  would naturally land the seed JSON next to agent/site_hints.py — but
+  factory/bin/scans.sh scan 5 greps ADDED diff lines under the WHOLE
+  engine/anticipy_engine/agent/ subtree (any file type) for quoted hostname
+  literals and voids the lap on any hit, so committing the sanctioned export
+  under agent/ would have killed the sanctioned lap. The gate's true target
+  shape (PHASES.yaml P4: "zero retailer hostnames in agent/*.py") only
+  constrains *.py. Resolved builder-side: the seed lives at
+  engine/anticipy_engine/data/site_hints_seed.json (outside the scan subtree,
+  satisfying both the scan and the gate shape); agent/*.py is now
+  hostname-free including docstrings. Foreman item if it ever bites again:
+  make scan 5's glob and gate_P4's grep agree on what "agent code" means.
+- Design laws carried (and pinned in test_site_hints.py): learned write-back
+  fires ONLY at the durable cart-proof chokepoints and stores VERBATIM
+  verified facts (sanitized observed cart URL, visited product paths) — never
+  derived {q} templates (junk inference, future lap); mock proofs never learn
+  (the mock hand returns before the agent is constructed — pinned, not
+  assumed); no overlay path = no IO (the pending_asks law); corrupt overlay ->
+  .json.corrupt set-aside + seed-only; invalid fields (off-host URLs, no-{q}
+  templates, uncompilable regexes) drop per-field toward the seed, never
+  toward a wrong hint.

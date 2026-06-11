@@ -1,0 +1,180 @@
+{
+  "hosts": {
+    "acehardware.com": {
+      "cart_url": "https://www.acehardware.com/cart",
+      "product_url_re": "/departments/[^?#]+/\\d+$",
+      "search_url": "https://www.acehardware.com/search?query={q}"
+    },
+    "adorama.com": {
+      "cart_url": "https://www.adorama.com/cartview",
+      "product_url_re": "/p/[^/?#]+$",
+      "search_url": "https://www.adorama.com/l/?searchinfo={q}"
+    },
+    "bestbuy.com": {
+      "cart_url": "https://www.bestbuy.com/cart",
+      "product_url_re": "/(?:site/.+/\\d+\\.p|product/[^/?#]+/[^/?#]+(?:/sku/\\d+)?)(?:[/?#]|$)",
+      "search_url": "https://www.bestbuy.com/site/searchpage.jsp?st={q}"
+    },
+    "bhphotovideo.com": {
+      "cart_url": "https://www.bhphotovideo.com/find/cart.jsp",
+      "product_url_re": "/c/product/[^?#]+\\.html$",
+      "search_url": "https://www.bhphotovideo.com/c/search?Ntt={q}&N=0&InitialSearch=yes"
+    },
+    "bookshop.org": {
+      "cart_url": "https://bookshop.org/cart",
+      "product_url_re": "/(?:p/books|a/)",
+      "search_url": "https://bookshop.org/search?keywords={q}"
+    },
+    "chewy.com": {
+      "cart_url": "https://www.chewy.com/app/cart",
+      "product_url_re": "/(?:.+/dp/|api/event/p/sar/click)",
+      "search_url": "https://www.chewy.com/s?query={q}"
+    },
+    "containerstore.com": {
+      "cart_url": "https://www.containerstore.com/cart/list.htm",
+      "product_url_re": "/\\d+d$",
+      "search_url": "https://www.containerstore.com/s?source=form&q={q}"
+    },
+    "crateandbarrel.com": {
+      "cart_url": "https://www.crateandbarrel.com/checkout/cart",
+      "product_url_re": "/[^/?#]+/s\\d+(?:[/?#]|$)",
+      "search_url": "https://www.crateandbarrel.com/search?query={q}"
+    },
+    "dickblick.com": {
+      "cart_url": "https://www.dickblick.com/cart/",
+      "product_url_re": "/products/[^/?#]+/?$",
+      "search_url": "https://www.dickblick.com/search/?q={q}"
+    },
+    "dickssportinggoods.com": {
+      "cart_url": "https://www.dickssportinggoods.com/OrderItemDisplay",
+      "product_url_re": "/p/[^/?#]+/[^/?#]+",
+      "search_url": "https://www.dickssportinggoods.com/search/SearchDisplay?searchTerm={q}"
+    },
+    "fivebelow.com": {
+      "cart_url": "https://www.fivebelow.com/cart",
+      "product_url_re": "/products/[^/?#]+",
+      "search_url": "https://www.fivebelow.com/search?q={q}"
+    },
+    "gamestop.com": {
+      "cart_url": "https://www.gamestop.com/cart/",
+      "product_url_re": "/products/[^/?#]+/\\d+\\.html$",
+      "search_url": "https://www.gamestop.com/search/?q={q}"
+    },
+    "guitarcenter.com": {
+      "cart_url": "https://www.guitarcenter.com/cart",
+      "product_url_re": "/[^/?#]+/[^/?#]*\\d[^/?#]*\\.gc$",
+      "search_url": "https://www.guitarcenter.com/search?Ntt={q}"
+    },
+    "harborfreight.com": {
+      "cart_url": "https://www.harborfreight.com/checkout/cart",
+      "product_url_re": "/[^/?#]+-\\d+\\.html$",
+      "search_url": "https://www.harborfreight.com/search?q={q}"
+    },
+    "homedepot.com": {
+      "cart_url": "https://www.homedepot.com/mycart/home",
+      "product_url_re": "/p/",
+      "search_url": "https://www.homedepot.com/s/{q}"
+    },
+    "ikea.com": {
+      "cart_url": "https://www.ikea.com/us/en/shoppingcart/",
+      "product_url_re": "/p/",
+      "search_url": "https://www.ikea.com/us/en/search/?q={q}"
+    },
+    "kohls.com": {
+      "cart_url": "https://www.kohls.com/checkout/shopping_cart.jsp",
+      "product_url_re": "/product/prd-\\d+/[^/?#]+\\.jsp$",
+      "search_url": "https://www.kohls.com/search.jsp?search={q}"
+    },
+    "lego.com": {
+      "cart_url": "https://www.lego.com/en-us/cart",
+      "product_url_re": "/[a-z]{2}-[a-z]{2}/product/[^/?#]+$",
+      "search_url": "https://www.lego.com/en-us/search?q={q}"
+    },
+    "lowes.com": {
+      "cart_url": "https://www.lowes.com/cart",
+      "product_url_re": "/pd/",
+      "search_url": "https://www.lowes.com/search?searchTerm={q}"
+    },
+    "macys.com": {
+      "cart_url": "https://www.macys.com/my/bag",
+      "product_url_re": "/shop/product/(?!review/)[^/?#]+",
+      "search_url": "https://www.macys.com/shop/featured/{q}"
+    },
+    "michaels.com": {
+      "cart_url": "https://www.michaels.com/cart",
+      "product_url_re": "/product/",
+      "search_url": "https://www.michaels.com/search?q={q}"
+    },
+    "newegg.com": {
+      "cart_url": "https://secure.newegg.com/shop/cart",
+      "product_url_re": "/p/N[0-9A-Z]+$",
+      "search_url": "https://www.newegg.com/p/pl?d={q}"
+    },
+    "officedepot.com": {
+      "cart_url": "https://www.officedepot.com/cart/shoppingCart.do",
+      "product_url_re": "/a/products/",
+      "search_url": "https://www.officedepot.com/a/search/?q={q}"
+    },
+    "petsmart.com": {
+      "cart_url": "https://www.petsmart.com/cart/",
+      "product_url_re": "/(?:dog|cat|fish|bird|reptile|small-pet)/.+\\.html$",
+      "search_url": "https://www.petsmart.com/search/?q={q}"
+    },
+    "qvc.com": {
+      "cart_url": "https://www.qvc.com/checkout/cart.html",
+      "product_url_re": "/(?:qvc\\.product|[^/?#]+\\.product)\\.[A-Z0-9]+\\.html$",
+      "search_url": "https://www.qvc.com/catalog/psearch.html?keyword={q}"
+    },
+    "rei.com": {
+      "cart_url": "https://www.rei.com/ShoppingCart",
+      "product_url_re": "/product/",
+      "search_url": "https://www.rei.com/search?q={q}"
+    },
+    "surlatable.com": {
+      "cart_url": "https://www.surlatable.com/shopping-bag",
+      "product_url_re": "/product/[^/?#]+/\\d+$",
+      "search_url": "https://www.surlatable.com/search?q={q}"
+    },
+    "sweetwater.com": {
+      "cart_url": "https://www.sweetwater.com/store/cart.php",
+      "product_url_re": "/store/detail/[^/?#]+$",
+      "search_url": "https://www.sweetwater.com/store/search?s={q}"
+    },
+    "target.com": {
+      "cart_url": "https://www.target.com/cart",
+      "product_url_re": "/(?:p/|-/A-)",
+      "search_url": "https://www.target.com/s?searchTerm={q}"
+    },
+    "thriftbooks.com": {
+      "cart_url": "https://www.thriftbooks.com/shopping-cart/",
+      "product_url_re": "/w/[^?#]+/\\d+/?$",
+      "search_url": "https://www.thriftbooks.com/browse/?b.search={q}"
+    },
+    "ulta.com": {
+      "cart_url": "https://www.ulta.com/bag",
+      "product_url_re": "/p/[^/?#]+",
+      "search_url": "https://www.ulta.com/search?search={q}"
+    },
+    "vitaminshoppe.com": {
+      "cart_url": "https://www.vitaminshoppe.com/cart/shopping-cart",
+      "product_url_re": "/p/[^?#]+/[a-z0-9-]+$",
+      "search_url": "https://www.vitaminshoppe.com/search?search={q}"
+    },
+    "walmart.com": {
+      "cart_url": "https://www.walmart.com/cart",
+      "product_url_re": "/ip/",
+      "search_url": "https://www.walmart.com/search?q={q}"
+    },
+    "wayfair.com": {
+      "cart_url": "https://www.wayfair.com/v/checkout/basket/show",
+      "product_url_re": "/(?:[^/?#]+/)*pdp/[^/?#]+\\.html$",
+      "search_url": "https://www.wayfair.com/keyword.php?keyword={q}"
+    },
+    "worldmarket.com": {
+      "cart_url": "https://www.worldmarket.com/cart",
+      "product_url_re": "/p/[^/?#]+-\\d+\\.html$",
+      "search_url": "https://www.worldmarket.com/search?q={q}"
+    }
+  },
+  "version": 1
+}
