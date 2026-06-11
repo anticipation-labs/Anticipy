@@ -68,6 +68,29 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v6 STAGE B: the Owner Action Engine execution path
+- THE OWNER LANE IS ONE BRAIN (lap 20260611T082216Z, build — ledger F17 CLOSED on
+  the dev instrument): ControlCore._spine_card feeds every observed owner line
+  through the proven spine (triage -> decider -> harm-line -> orchestrator/hands,
+  recursion-guarded); owner_mode regex only shapes cards, pre-gates money (blocked:
+  never the spine, never /pending, never executes — pin held), and adds silent
+  memory. owner_event reports the spine's verdict verbatim; spine-silent shaped
+  cards stay durable open loops, never paper asks. Owner instrument (dev, stub):
+  catch 0.5054/0.2222 -> 1.0/1.0, false 0, harm 0, recall_worst 0.25 -> 1.0,
+  e2e 0.0208 -> 0.3427 — SPINE PARITY on every brain metric (parity shares the
+  spine's C13 bank-fit; holdout still rules gate-grade claims). Interrupt 1.125/1.5:
+  the entire delta vs the spine is the money pre-gate asking on money-flavored
+  vents (F23 OPEN, fail-safe direction, foreman call queued). F22 FIXED (synthetic
+  card titles in open_loops polluted planner inject and stranded act goals waiting
+  -> drawer now stores spoken source_text). F21 NEW OPEN: the spine itself silently
+  drops the bare reported-promise shape ("X needs Y; I told him I'd send it") —
+  surfaced when the one-brain change removed the regex paper-ask that masked it;
+  pinned as-is in test_owner_ingest_event (PROMISE_SILENT), triage-shape fix is a
+  future main-path lap and the likely next holdout lever. Default path provably
+  inert: full-bank stub bit-identical to ratchet bests (9/9 aggregates) and 16/16
+  persona-days per-line identical at final HEAD. Suite 42/42. Residual: the
+  /owner/ingest execute_actions=false preview door still uses the regex-only
+  extractor (side-effect-free by design; needs the one-brain treatment before any
+  non-executing door ships).
 - P3-VOICE PLUMBING IS BUILT, MOCK-PROVEN (lap 20260611T051236Z, groundwork —
   STAGE B item 3): channels/call.py is a real Twilio Calls channel (mock/live/
   audit triad like text.py; researched REST shape — POST Calls.json with

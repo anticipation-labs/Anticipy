@@ -13,7 +13,7 @@ from pathlib import Path
 from .browser_link import BrowserLink
 from .bus import Bus
 from .env import load_local_env
-from .envelopes import Event, EventSource, Goal, GoalState
+from .envelopes import Event, EventSource
 from .gateway import ModelGateway, PROVIDER_OPENROUTER
 from .glassbox import GlassBox
 from .native_bridge_link import NativeBridgeLink
@@ -27,7 +27,7 @@ from ..channels.text import TextChannel
 from ..hands import ApiHand, BrowserHand, MODE_MOCK
 from ..live_memory.brain import LiveMemoryBrain
 from ..memory.store import Memory
-from ..owner_mode import OwnerMode
+from ..owner_mode import OwnerIngestResult, OwnerMode, OwnerObservedLine, OwnerTaskCard
 from ..owner_onboarding import OwnerOnboardingIn, build_onboarding_plan
 
 
@@ -159,7 +159,10 @@ class ControlCore:
         # path (no recursion back into the owner lane).
         if self._owner_event_enabled() and not meta.get("owner_ingest_execute"):
             return await self.owner_event(source, text, meta)
-        self.live_memory.capturer.capture(text, source=source, meta=meta)  # CAPTURE before anything acts
+        if not meta.get("owner_ingest_execute"):
+            # owner-lane lines were already captured (with owner metadata) by
+            # owner_ingest before the spine ran them (F17) — never capture twice
+            self.live_memory.capturer.capture(text, source=source, meta=meta)  # CAPTURE before anything acts
         ev = Event(source=EventSource(source), text=text, meta=meta)
         await self.bus.publish(ev)                 # log the event to the glass-box
         return await self.proactive.on_event(ev)   # triage -> gate -> act/ask (gate reads memory)
@@ -169,13 +172,10 @@ class ControlCore:
         the proactive path ({decision, goal_id, ask_id, ...}) so realday.sh and
         persona_score.py grade owner cards without modification.
 
-        STAGE B item 2: cards EXECUTE here, and the decision reported is what the
-        engine actually DID. A do card runs through the proven proactive spine
-        (triage -> harm-line -> orchestrator/hands); the spine may refuse ("ignore")
-        or re-gate to "ask" — reporting "act" on a line nothing executed was the F17
-        lie this replaces. An ask card becomes a REAL pending ask (/pending + YES/NO);
-        a blocked (money/wall) card surfaces as "ask" but can never execute; a
-        remember card is a memory write with read-back proof. No card means silence.
+        F17 'one brain': the decision reported is the SPINE's verdict verbatim for
+        spine-judged cards (act / ask / held / ignore — never a paper act or ask),
+        "ask" for pre-gated blocked money cards (which never execute and never enter
+        /pending), and "remember" for silent memory cards. No card means silence.
         """
         out = await self.owner_ingest(source, text, meta, execute_actions=True)
         rank = {"ask": 3, "blocked": 3, "do": 2, "remember": 1}
@@ -184,19 +184,68 @@ class ControlCore:
             if top is None or rank.get(card.get("disposition"), 0) > rank.get(top.get("disposition"), 0):
                 top = card
         execution = (top or {}).get("execution") or {}
-        ask_id = execution.get("ask_id")
         if top is None:
-            decision, goal_id, reason, category = "ignore", None, "owner: no actionable card in line", "noise"
-        elif top["disposition"] in ("ask", "blocked"):
-            decision, goal_id, reason, category = "ask", top["id"], top.get("reason", ""), top["disposition"]
-        elif top["disposition"] == "do":
-            decision = execution.get("decision") or "ignore"
-            goal_id, reason, category = top["id"], top.get("reason", ""), "do"
+            decision, goal_id, reason, category, ask_id = (
+                "ignore", None, "owner: no actionable card in line", "noise", None)
+        elif top["disposition"] == "blocked":
+            decision, goal_id, reason, category, ask_id = (
+                "ask", top["id"], top.get("reason", ""), "blocked", None)
+        elif top["disposition"] == "remember":
+            decision, goal_id, reason, category, ask_id = (
+                "remember", top["id"], top.get("reason", ""), "remember", None)
         else:
-            decision, goal_id, reason, category = "remember", top["id"], top.get("reason", ""), "remember"
+            # do/ask cards carry the spine's verdict — a card whose execution the
+            # spine refused reports that refusal, never a paper act/ask (F17)
+            decision = execution.get("decision") or "ignore"
+            goal_id, reason = top["id"], top.get("reason", "")
+            category, ask_id = top["disposition"], execution.get("ask_id")
         return {"decision": decision, "category": category, "reason": reason,
                 "goal_id": goal_id, "ask_id": ask_id, "owner_lane": True,
                 "cards": out.get("cards", [])}
+
+    async def _spine_card(self, line: OwnerObservedLine, source: str, meta: dict) -> OwnerTaskCard | None:
+        """F17 'one brain': the proven spine (triage -> decider -> harm-line ->
+        orchestrator/hands) is the ONLY act/ask/silent decision-maker for owner
+        lines. The regex classifier only shapes the durable card (title/route/args)
+        and adds silent memory; it can no longer act or ask on its own. Money-shaped
+        browser lines stay pre-gated blocked: never the spine, never /pending,
+        never executed (the harm-line stance is final)."""
+        shaped = self.owner_mode.card_for_line(line, source)
+        if shaped is not None and shaped.disposition == "blocked":
+            return shaped
+        out = await self.feed("app", line.text,
+                              {**meta, "owner_source": source, "owner_ingest_execute": True})
+        decision = out.get("decision") or "ignore"
+        execution = {"decision": decision, "goal_id": out.get("goal_id"),
+                     "ask_id": out.get("ask_id"), "goal_state": None}
+        if decision == "act" or decision in ("ask", "held") or out.get("ask_id"):
+            if shaped is not None and shaped.disposition in ("do", "ask"):
+                card = shaped
+            else:
+                # the spine caught a line the regex could not shape: the card
+                # mirrors the spine's verdict with a generic shape
+                card = OwnerTaskCard(
+                    source=source,
+                    line_no=line.line_no,
+                    source_text=line.text,
+                    title=f"Owner task: {line.text[:80]}",
+                    disposition="do",
+                    route="api",
+                    action="execute_owner_task",
+                    args={"task_text": line.text},
+                    confidence=0.8,
+                )
+            card.disposition = "do" if decision == "act" else "ask"
+            card.reason = out.get("reason") or card.reason or "proven spine verdict"
+            card.execution = execution
+            return card
+        # spine says silent: regex shaping may still add SILENT memory (a remember
+        # card or a durable open-loop record) — never a paper act or ask
+        if shaped is None:
+            return None
+        if shaped.disposition != "remember":
+            shaped.execution = execution
+        return shaped
 
     async def owner_ingest(self, source: str, text: str, meta: dict | None = None,
                            execute_actions: bool = False) -> dict:
@@ -211,133 +260,130 @@ class ControlCore:
         proof of their memory write.
         """
         meta = meta or {}
-        result = self.owner_mode.ingest(text, source=source, meta=meta)
-        for line in result.observed_lines:
+        observed = self.owner_mode.observe(text)
+        for line in observed:
             self.live_memory.capturer.capture(
                 line.text,
                 source=source,
                 meta={**meta, "owner_ingest": True, "line_no": line.line_no},
             )
 
-        for card in result.cards:
-            fields = {
-                "owner_card_id": card.id,
-                "source": source,
-                "line_no": card.line_no,
-                "source_text": card.source_text,
-                "disposition": card.disposition,
-                "route": card.route,
-                "action": card.action,
-                "args": card.args,
-                "reason": card.reason,
-            }
-            if card.disposition == "remember":
-                item = self.memory.profile.write_text(
-                    card.source_text,
-                    fields=fields,
-                    provenance=f"owner:{source}",
-                    confidence=card.confidence,
-                    importance=0.7,
-                    status="active",
-                )
-                drawer = self.memory.profile
-                drawer_name = "profile"
+        cards: list[OwnerTaskCard] = []
+        ignored = 0
+        for line in observed:
+            if execute_actions:
+                card = await self._spine_card(line, source, meta)
             else:
-                item = self.memory.open_loops.write_text(
-                    card.title,
-                    fields=fields,
-                    provenance=f"owner:{source}",
-                    confidence=card.confidence,
-                    importance=0.85,
-                    status=("open" if card.disposition == "do" else "waiting"),
-                )
-                drawer = self.memory.open_loops
-                drawer_name = "open_loops"
-            card.proof.append({"type": "memory_write", "drawer": drawer_name, "memory_id": item.id})
-            # read-back: a write only counts once the drawer returns it by id
-            back = drawer.get(item.id)
-            if back is not None:
-                card.proof.append({"type": "memory_read_back", "memory_id": back.id, "text": back.text})
-
-            # ---- STAGE B item 2: execution with proof write-back onto the card ----
-            record_path = self.data_dir / "owner_cards" / f"{card.id}.json"
-            state, steps, goal_proof = "open", [], {}
-
-            if card.disposition == "remember" and back is not None:
-                # the card's action IS the memory write; the read-back makes it
-                # executed-with-proof (no orchestrator involved, nothing external)
-                state = "done"
-                goal_proof = {"memory_id": item.id, "read_back": back.text}
-            elif card.disposition == "blocked":
-                # money/wall: NEVER executes — and never enters proactive.pending,
-                # where a YES would start_goal it. The harm-line is final; the card
-                # stays a ledgered open loop prepared up to the wall.
-                card.execution = {"decision": "blocked", "goal_id": None, "ask_id": None,
-                                  "reason": "hard stop: money/wall cards never execute"}
-                state = "blocked" if execute_actions else "open"
-            elif execute_actions and card.disposition == "do":
-                # execute through the PROVEN spine (triage -> harm-line -> orchestrator/
-                # hands): the safety spine rules, and what it decides is what happened.
-                # The owner_ingest_execute guard keeps this feed on the proactive path.
-                out = await self.feed(
-                    "app",
-                    card.source_text,
-                    {**meta, "owner_card_id": card.id, "owner_source": source, "owner_ingest_execute": True},
-                )
-                goal = self.store.load(out["goal_id"]) if out.get("goal_id") else None
-                card.execution = {"decision": out.get("decision"), "goal_id": out.get("goal_id"),
-                                  "ask_id": out.get("ask_id"),
-                                  "goal_state": goal.state.value if goal else None}
-                card.proof.append({"type": "engine_execution", **card.execution})
-                if goal is not None:
-                    steps = [s.model_dump(mode="json") for s in goal.steps]
-                    goal_proof = goal.proof or {}
-                    state = goal.state.value  # done only when every step carried proof
-                    if out.get("ask_id") or out.get("decision") in ("ask", "held"):
-                        state = "waiting"
-                        self._owner_card_goals[goal.id] = {"record_path": record_path,
-                                                           "card_id": card.id}
-                # spine refusal (ignore/suppressed/deferred) leaves state "open": the
-                # card stays a durable open loop and the instrument shows no act
-            elif execute_actions and card.disposition == "ask":
-                # a REAL pending ask through the existing flow: paused goal + /pending;
-                # YES resumes the exact goal via resolve(), which writes proof back here
-                goal = Goal(intent=card.source_text,
-                            description=f"{card.title} — {card.source_text}",
-                            state=GoalState.waiting)
-                self.store.save(goal)
-                ask_id = self.proactive._send_ask(
-                    goal, card.source_text,
-                    card.reason or "owner card needs confirmation", card.disposition)
-                card.execution = {"decision": "ask", "goal_id": goal.id, "ask_id": ask_id}
-                card.proof.append({"type": "engine_execution", **card.execution})
-                state = "waiting"
-                self._owner_card_goals[goal.id] = {"record_path": record_path, "card_id": card.id}
-
-            card.status = state
-            # Durable card record, shaped like a goal (id/intent/steps/state) so the
-            # factory's existing run collector and scorer read owner cards unchanged.
-            # state mirrors REAL execution: done requires a goal that finished with
-            # proof (or a read-back memory write) — a card that never ran stays open.
-            card.proof.append({"type": "card_record", "path": str(record_path)})
-            record = {
-                "id": card.id,
-                "intent": card.action,
-                "description": f"{card.title} — {card.source_text}",
-                "state": state,
-                "steps": steps,
-                "proof": goal_proof,
-                "owner_card": card.model_dump(mode="json"),
-            }
-            record_path.parent.mkdir(parents=True, exist_ok=True)
-            record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+                card = self.owner_mode.card_for_line(line, source)
+            if card is None:
+                ignored += 1
+                continue
+            cards.append(card)
+            self._persist_card(card, source, execute_actions)
 
         self.glassbox.log(
             "owner_ingest",
-            {"source": source, "lines": len(result.observed_lines), "cards": len(result.cards),
-             "ignored": result.ignored_line_count, "execute_actions": execute_actions},
+            {"source": source, "lines": len(observed), "cards": len(cards),
+             "ignored": ignored, "execute_actions": execute_actions},
         )
+        result = OwnerIngestResult(source=source, observed_lines=observed, cards=cards,
+                                   ignored_line_count=ignored)
         return result.model_dump(mode="json")
+
+    def _persist_card(self, card: OwnerTaskCard, source: str, execute_actions: bool) -> None:
+        """Write one card into the real memory drawers and its durable goal-shaped
+        record, mirroring REAL execution: done requires a goal that finished with
+        proof (or a read-back memory write) — a card that never ran stays open."""
+        fields = {
+            "owner_card_id": card.id,
+            "source": source,
+            "line_no": card.line_no,
+            "source_text": card.source_text,
+            "disposition": card.disposition,
+            "route": card.route,
+            "action": card.action,
+            "args": card.args,
+            "reason": card.reason,
+        }
+        if card.disposition == "remember":
+            item = self.memory.profile.write_text(
+                card.source_text,
+                fields=fields,
+                provenance=f"owner:{source}",
+                confidence=card.confidence,
+                importance=0.7,
+                status="active",
+            )
+            drawer = self.memory.profile
+            drawer_name = "profile"
+        else:
+            # the drawer remembers the person's actual words — synthetic card titles
+            # ("Owner task: ...") in open loops polluted the planner's inject context
+            # with tokens the speaker never said (browse steps grew on unrelated goals)
+            item = self.memory.open_loops.write_text(
+                card.source_text,
+                fields={**fields, "title": card.title},
+                provenance=f"owner:{source}",
+                confidence=card.confidence,
+                importance=0.85,
+                status=("open" if card.disposition == "do" else "waiting"),
+            )
+            drawer = self.memory.open_loops
+            drawer_name = "open_loops"
+        card.proof.append({"type": "memory_write", "drawer": drawer_name, "memory_id": item.id})
+        # read-back: a write only counts once the drawer returns it by id
+        back = drawer.get(item.id)
+        if back is not None:
+            card.proof.append({"type": "memory_read_back", "memory_id": back.id, "text": back.text})
+
+        record_path = self.data_dir / "owner_cards" / f"{card.id}.json"
+        state, steps, goal_proof = "open", [], {}
+        execution = card.execution or {}
+
+        if card.disposition == "remember" and back is not None:
+            # the card's action IS the memory write; the read-back makes it
+            # executed-with-proof (no orchestrator involved, nothing external)
+            state = "done"
+            goal_proof = {"memory_id": item.id, "read_back": back.text}
+        elif card.disposition == "blocked":
+            # money/wall: NEVER executes — and never enters proactive.pending,
+            # where a YES would start_goal it. The harm-line is final; the card
+            # stays a ledgered open loop prepared up to the wall.
+            card.execution = {"decision": "blocked", "goal_id": None, "ask_id": None,
+                              "reason": "hard stop: money/wall cards never execute"}
+            state = "blocked" if execute_actions else "open"
+        elif execution:
+            # the spine already ran this line (F17 one brain, _spine_card): the
+            # record mirrors what it actually DID. Spine refusal (ignore/suppressed/
+            # deferred) has no goal -> the card stays a durable open loop and the
+            # instrument shows no act.
+            goal = self.store.load(execution["goal_id"]) if execution.get("goal_id") else None
+            if goal is not None:
+                execution["goal_state"] = goal.state.value
+                steps = [s.model_dump(mode="json") for s in goal.steps]
+                goal_proof = goal.proof or {}
+                state = goal.state.value  # done only when every step carried proof
+                if execution.get("ask_id") or execution.get("decision") in ("ask", "held"):
+                    state = "waiting"
+                    self._owner_card_goals[goal.id] = {"record_path": record_path,
+                                                       "card_id": card.id}
+            card.proof.append({"type": "engine_execution", **execution})
+
+        card.status = state
+        # Durable card record, shaped like a goal (id/intent/steps/state) so the
+        # factory's existing run collector and scorer read owner cards unchanged.
+        card.proof.append({"type": "card_record", "path": str(record_path)})
+        record = {
+            "id": card.id,
+            "intent": card.action,
+            "description": f"{card.title} — {card.source_text}",
+            "state": state,
+            "steps": steps,
+            "proof": goal_proof,
+            "owner_card": card.model_dump(mode="json"),
+        }
+        record_path.parent.mkdir(parents=True, exist_ok=True)
+        record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
 
     async def owner_onboard(self, body: OwnerOnboardingIn) -> dict:
         """Write first-run onboarding into the same memory ledger the engine uses."""

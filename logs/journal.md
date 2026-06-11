@@ -585,3 +585,27 @@ Owner-lane instrument exactly unchanged (catch 0.5054/0.2222, false 0, harm 0, i
 0.875/1.5, e2e 0.0208, recall_worst 0.25). Zero model calls, zero spend, zero real-world
 artifacts. No official metric moved — pre-registered as groundwork enabling the P3 closure
 lap, which now waits only on OWNER_PHONE confirmation + live Twilio env.
+
+2026-06-11 (lap 20260611T082216Z, builder, FULL/P2-brain closed -> TARGET v6 STAGE B):
+ONE BRAIN for the owner lane (F17). Evidence first: every founder_jin owner-lane miss
+(7 of 9 expected items, worst 0.2222) was a regex-extractor "ignore" on a line the
+default path decides act/ask on (verified line-by-line, runs/20260611T051236Z-owner
+vs -pre). Change: ControlCore._spine_card now feeds every observed owner line through
+the proven spine (triage -> decider -> harm-line -> orchestrator/hands, recursion-
+guarded); owner_mode regex only shapes cards, pre-gates money (blocked: never spine,
+never /pending, never executes), and adds silent memory — it can no longer act, ask,
+or drop what the brain caught. owner_event reports the spine's verdict verbatim;
+spine-silent shaped cards stay durable open loops, never paper asks. Result on the
+owner instrument (dev bank, stub): catch 0.5054/0.2222 -> 1.0/1.0, false 0, harm 0,
+recall_worst 0.25 -> 1.0, e2e 0.0208 -> 0.3427 (after fixing F22: synthetic card
+titles in open_loops polluted the planner's inject context and stranded act goals
+waiting on mock browse steps; drawer now stores the spoken source_text). Interrupt
+1.125/1.5 — the +0.5 avg vs the spine is entirely the money pre-gate asking on
+money-flavored vents (F23 OPEN, fail-safe direction, foreman call queued). Default
+path provably inert: fresh full-bank stub run bit-identical to ratchet bests on all
+9 aggregates AND 16/16 persona-days per-line identical (-pre and -pre2 at final
+HEAD). Suite 42/42. Surfaced F21: the spine itself silently drops the bare
+reported-promise shape ("X needs Y; I told him I'd send it") — previously masked by
+the regex paper-ask; pinned as-is, triage fix is a future main-path lap. Zero model
+calls, zero spend, zero real-world artifacts. No gate close attempted (P2 already
+closed); scoreboard/RATCHET untouched (loop's sole writers).

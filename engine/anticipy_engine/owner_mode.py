@@ -137,11 +137,27 @@ def _person_hint(text: str) -> str | None:
 
 
 class OwnerMode:
-    """Deterministic first pass for messy owner transcript -> task cards."""
+    """Deterministic first pass for messy owner transcript -> task cards.
+
+    F17 (one brain): on the EXECUTING owner path the proven proactive spine
+    (triage -> decider -> harm-line) is the only act/ask/silent decision-maker;
+    this regex pass only SHAPES durable cards (title/route/args), pre-gates
+    money-shaped browser lines as blocked, and adds silent memory. The seams
+    `observe()` and `card_for_line()` exist so ControlCore can interleave the
+    spine per line; `ingest()` remains the side-effect-free regex preview.
+    """
+
+    def observe(self, text: str) -> list[OwnerObservedLine]:
+        """Split a messy transcript into cleaned observed lines (no decisions)."""
+        return _split_transcript(text)
+
+    def card_for_line(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard | None:
+        """Regex shaping for one observed line (no side effects)."""
+        return self._card_for_line(line, source)
 
     def ingest(self, text: str, source: str = "transcript", meta: dict[str, Any] | None = None) -> OwnerIngestResult:
         del meta  # reserved for clock/device context; kept out of rules for determinism.
-        observed = _split_transcript(text)
+        observed = self.observe(text)
         cards: list[OwnerTaskCard] = []
         ignored = 0
         for line in observed:

@@ -1,20 +1,24 @@
-"""Owner-lane honesty seam + card execution test (TARGET STAGE B items 1+2).
+"""Owner-lane honesty seam + ONE-BRAIN card execution test (TARGET STAGE B; F17).
 
 With ANTICIPY_OWNER_INGEST=1 the same POST /event pipe the persona runner drives
 routes through the owner card path and answers in the proactive shape
 ({decision, goal_id, ask_id}), so the UNCHANGED factory runner+scorer measure
-owner cards with worst-persona honesty. Since STAGE B item 2 the cards EXECUTE,
-and the decision reported is what the engine actually DID. This pins:
-  - a do card executes through the proven proactive spine (orchestrator + mock
-    hands) and the durable card record mirrors the REAL goal state with proof
+owner cards with worst-persona honesty. Since F17 the proven proactive spine
+(triage -> decider -> harm-line) is the ONLY act/ask/silent decision-maker:
+the regex classifier only shapes records, pre-gates money, and adds silent
+memory. This pins:
+  - a spine-caught line becomes a card that EXECUTED through the orchestrator +
+    mock hands; the durable record mirrors the REAL goal state with proof
     (artifact id) — done only when the goal finished with proof
-  - a do card the spine refuses reports "ignore" (never a paper "act") and stays
-    a durable open record
-  - an ask card becomes a REAL pending ask: it appears in /pending, YES resumes
-    the exact paused goal to done and writes state+proof back onto the record,
+  - a line the spine catches but the regex cannot shape STILL becomes a card
+    (the F17 catch fix: the regex can no longer drop what the brain caught)
+  - a line the spine judges silent reports that verdict verbatim even when the
+    regex shaped a card — the card stays a durable open loop, NEVER a paper ask
+  - an ask card is a REAL pending ask: it appears in /pending, YES resumes the
+    exact paused goal to done and writes state+proof back onto the record,
     NO marks the record declined
   - a money/blocked card NEVER executes: state "blocked", never in /pending,
-    no goal — even with execution on (the harm-line is final)
+    no goal — even with execution on (the pre-gate + harm-line are final)
   - a remember card carries drawer read-back proof of its memory write
   - the default path is untouched when the env var is absent
   - the execute_actions recursion guard keeps card feeds on the proactive path
@@ -34,7 +38,13 @@ from anticipy_engine.core.control_core import ControlCore  # noqa: E402
 
 NOISE = "oh sure, I'll just clone myself, that'll fix the schedule."
 PICKUP = "school moved pickup to 3 today, please remind me before I forget."
-SEND_SAM = "Sam needs the revised decking before Friday; I told him I'd send it."
+SEND_SAM = "okay just send Sam the revised decking file before Friday."
+# a reported promise the spine's triage currently judges silent (ledger F21): the
+# one-brain contract is that the owner lane reports that verdict truthfully even
+# though the regex shapes an ask card — silence, durable open loop, no paper ask
+PROMISE_SILENT = "Sam needs the revised decking before Friday; I told him I'd send it."
+# an imperative the spine catches but the regex cannot shape (the F17 catch fix)
+UNSHAPED_ACT = "Set up a quick review with the roofing vendor for Thursday 2pm, 30 minutes."
 CART_NO_BUY = "that water-table thing for the birthday, put it in the cart if you find it, don't buy it."
 MONEY = "order the replacement filter today and just pay whatever it costs."
 PROFILE = "My wife Maya prefers texts after lunch."
@@ -68,6 +78,8 @@ async def owner_lane_check():
         noise = await core.feed("app", NOISE, {})
         act = await core.feed("app", PICKUP, {})
         ask = await core.feed("app", SEND_SAM, {})
+        promise = await core.feed("app", PROMISE_SILENT, {})
+        unshaped = await core.feed("app", UNSHAPED_ACT, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
         remember = await core.feed("app", PROFILE, {})
@@ -82,7 +94,7 @@ async def owner_lane_check():
         await core.stop()
 
     # the realday/scorer contract: decision + goal_id + ask_id on every response
-    for out in (noise, act, ask, cart, money, remember, clarify):
+    for out in (noise, act, ask, promise, unshaped, cart, money, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
 
@@ -105,12 +117,27 @@ async def owner_lane_check():
     assert any(p["type"] == "engine_execution" for p in card_proof), rec
     assert any(p["type"] == "card_record" for p in card_proof), rec
 
+    # a line the spine catches but the regex cannot shape STILL becomes a card —
+    # the F17 catch fix: the weak shaper can no longer drop what the brain caught
+    assert unshaped["decision"] == "act", unshaped
+    un_rec = _record(tmp, unshaped["goal_id"])
+    assert un_rec["state"] == "done" and un_rec["proof"], un_rec
+    assert un_rec["owner_card"]["action"] == "execute_owner_task", un_rec
+    assert any(p["type"] == "engine_execution" for p in un_rec["owner_card"]["proof"]), un_rec
+
     # do card the spine refuses: the truthful decision is ignore, never a paper act
     assert cart["decision"] == "ignore", cart
     assert cart["cards"][0]["args"].get("payment_allowed") is False, cart
     cart_rec = _record(tmp, cart["goal_id"])
     assert cart_rec["state"] == "open", "a card that never executed must never look done"
     assert not cart_rec["proof"], cart_rec
+
+    # a shaped ask card the spine judges silent reports that verdict verbatim:
+    # durable open loop, NO pending ask, NEVER a paper ask (F17; residual F21)
+    assert promise["decision"] == "ignore" and promise["ask_id"] is None, promise
+    pr_rec = _record(tmp, promise["goal_id"])
+    assert pr_rec["state"] == "open" and not pr_rec["proof"], pr_rec
+    assert pr_rec["owner_card"]["execution"]["decision"] == "ignore", pr_rec
 
     # ask card: a REAL pending ask in /pending, resolvable by the existing flow
     assert ask["decision"] == "ask" and ask["ask_id"], ask
@@ -171,8 +198,9 @@ def main():
     asyncio.run(default_path_check())
     asyncio.run(owner_lane_check())
     asyncio.run(yes_roundtrip_check())
-    print("PASS owner_ingest_event: owner cards EXECUTE (spine-gated, proof write-back, "
-          "real /pending YES/NO, money never executes); default path untouched")
+    print("PASS owner_ingest_event: ONE BRAIN (F17) — the proven spine rules every owner "
+          "line (catches the regex-unshapeable, never a paper act/ask), cards EXECUTE with "
+          "proof write-back, real /pending YES/NO, money never executes; default path untouched")
 
 
 if __name__ == "__main__":

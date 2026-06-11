@@ -972,3 +972,51 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   clarification reply over the same channel listing the pending codes (counts as an
   interruption; budget applies). Regression check: test_inbound pins the refusal
   today; the fix lap must pin refusal + exactly-one clarification send.
+
+## Build lap 20260611T082216Z (one brain for the owner lane, TARGET v6 STAGE B / F17)
+- F17 UPDATE — CLOSED on the dev instrument (was OPEN: "the owner doors ship a second
+  weaker brain"): the proven proactive spine (triage -> decider -> harm-line ->
+  orchestrator/hands) is now the ONLY act/ask/silent decision-maker on the executing
+  owner path. ControlCore._spine_card feeds every observed line through the spine
+  (recursion-guarded); the regex classifier in owner_mode.py only SHAPES the durable
+  card (title/route/args), pre-gates money, and adds silent memory — it can no longer
+  act, ask, or DROP a line the brain caught. Owner-lane dev instrument moved: catch
+  0.5054/worst 0.2222 (founder_jin) -> 1.0/1.0, recall_worst 0.25 -> 1.0, e2e 0.0208
+  -> 0.3427, false 0 and harm 0 held — every brain metric now AT SPINE PARITY on the
+  same bank, same runner, same scorer. Dev-bank parity is bank-fit-shared with the
+  spine (C13): gate-grade claims still belong to the judge's holdout only.
+  Regression check: the owner-lane instrument (ANTICIPY_OWNER_INGEST=1 persona_run);
+  any owner-lane catch below the default path's on the same bank = a second brain
+  grew back. Pinned: test_owner_ingest_event (UNSHAPED_ACT caught generically,
+  PROMISE_SILENT never paper-asked).
+- F21 NEW, OPEN (spine triage residual, surfaced BY the one-brain change): the spine
+  silently drops the bare reported-promise/third-person-need shape — "Sam needs the
+  revised decking before Friday; I told him I'd send it." -> ignore. The old regex
+  lane paper-asked on it (person+send tokens), which MASKED the gap in the owner
+  pins; the one-brain lane now truthfully reports the spine's silence. Invisible on
+  the dev bank (catch 1.0 — the shape isn't keyed there); plausible holdout/owner-day
+  cost. Fix direction: triage shape work on the main path (clause-scoped reported
+  promise), NEVER a regex side-door. Regression check: the PROMISE_SILENT pin in
+  test_owner_ingest_event pins today's verdict; the triage fix lap must flip it to ask.
+- F22 NEW, FIXED THIS LAP: owner card drawer writes stored the SYNTHETIC card title
+  ("Owner task: ...", "Resolve browser task") as the open-loop text, injecting tokens
+  the speaker never said into the planner's memory context — plans for unrelated act
+  goals grew browse_task steps that dead-end needs_human in mock, stranding the goals
+  "waiting" (owner e2e 0.0722 vs spine 0.3427; founder_jin act goals: default 3-step
+  done, owner 4-step waiting, verified in runs/20260611T082216Z-owner vs -pre).
+  Fixed: the drawer stores card.source_text (title preserved in fields.title); owner
+  e2e snapped to exact spine parity 0.3427. Regression check: owner-lane
+  e2e_completion_rate == default-path e2e on the same bank; a reopening gap = drawer
+  pollution returned.
+- F23 NEW, OPEN (last regex outranking the spine, fail-safe direction): the blocked
+  money pre-gate (_BROWSER & _MONEY & no no-buy) cards money-SHAPED lines without
+  consulting the spine, so sarcastic/vent money lines the spine judges silent draw an
+  unnecessary ask — the ENTIRE owner-lane interrupt delta vs the spine (avg 1.125 vs
+  0.625, worst 1.5 unchanged, guard <=3.0 held) is these 9 pre-gated asks (8 on
+  bank-keyed-silence lines; contractor_luis 3). Kept deliberately this lap: the
+  pre-gate is what guarantees money cards NEVER enter /pending and can NEVER be
+  YES-started (test pin), and on money the product fails toward ask, never act.
+  Foreman call queued: let the spine make the ask/silent call on money-shaped lines
+  while keeping never-pending/never-execute (the harm-line already makes money lines
+  un-actable), or vent-deny the pre-gate. Regression check: owner-lane
+  interrupt_cost vs the default path on the same bank; the delta should only shrink.

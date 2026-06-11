@@ -38,7 +38,9 @@ WIRE = "Wire money to the contractor."
 # detrimental (money) -> ask; approved, it stub-plans into write_memory -> done
 # (a browse_task plan would dead-end needs_human in mock: no browser link)
 WIRE2 = "Remind me Friday to wire the deposit."
-SEND_SAM = "Sam needs the revised decking before Friday; I told him I'd send it."
+# a direct send the spine asks on (F17 one brain: the spine, not the regex,
+# decides every owner-lane ask — this line must keep drawing a REAL pending ask)
+SEND_SAM = "okay just send Sam the revised decking file before Friday."
 PICKUP = "school moved pickup to 3 today, please remind me before I forget."
 
 
