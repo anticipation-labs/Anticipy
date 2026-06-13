@@ -50,6 +50,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 20px;
   padding: 18px 28px;
   border-bottom: 1px solid var(--line);
@@ -104,6 +105,58 @@ button {
   flex-wrap: wrap;
   justify-content: flex-end;
   white-space: normal;
+}
+
+.readiness-grid {
+  flex: 1 0 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 7px;
+  width: 100%;
+}
+
+.readiness-pill {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  background: #fffefa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  min-width: 0;
+}
+
+.readiness-pill strong,
+.readiness-pill small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readiness-pill strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.readiness-pill small {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.readiness-pill.ok {
+  border-color: rgba(23, 107, 77, 0.34);
+  background: #f2fbf6;
+}
+
+.readiness-pill.warn {
+  border-color: rgba(138, 90, 0, 0.42);
+  background: #fff8e6;
+}
+
+.readiness-pill.muted {
+  background: var(--panel-2);
 }
 
 .dot {

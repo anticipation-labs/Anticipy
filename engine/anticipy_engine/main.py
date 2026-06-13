@@ -204,6 +204,60 @@ def _cleanup_upload(path: Path) -> None:
             parent.rmdir()
 
 
+def _readiness(channels: dict) -> dict:
+    browser_connected = bool(core.browser_link.connected or getattr(core.native_bridge_link, "connected", False))
+    api_live = core.api_hand.mode == "live"
+    channels_ready = channels.get("status") == "live_ready"
+    memory_recovered = bool(getattr(core.memory.db, "recovered_corruption", False))
+    owner_token_set = bool(_owner_api_token())
+    items = {
+        "app_input": {
+            "state": "ready",
+            "label": "Go, typed transcript, upload, and listening intake are wired",
+        },
+        "proactive_engine": {
+            "state": "ready",
+            "label": "Messy-life input routes through the proactive engine",
+        },
+        "memory": {
+            "state": "warning" if memory_recovered else "ready",
+            "label": "Memory recovered from corruption" if memory_recovered else "Memory ledger ready",
+        },
+        "browser": {
+            "state": "ready" if browser_connected else "setup",
+            "label": "Browser hand linked" if browser_connected else "Browser hand needs Chrome helper link",
+        },
+        "api_hands": {
+            "state": "ready" if api_live else "mock",
+            "label": "API hands live" if api_live else "API hands in mock mode",
+        },
+        "voice_text": {
+            "state": "ready" if channels_ready else ("setup" if channels.get("mode") == "live" else "mock"),
+            "label": channels.get("status", "mock"),
+        },
+        "approvals": {
+            "state": "ready",
+            "label": f"{len(core.pending_asks())} human-impacting action(s) waiting",
+        },
+        "money_wall": {
+            "state": "ready",
+            "label": "Money never executes automatically",
+        },
+        "owner_api": {
+            "state": "protected" if owner_token_set else "local",
+            "label": "Owner API token gate enabled" if owner_token_set else "Owner API token gate not set",
+        },
+    }
+    blocking_setup = [key for key, item in items.items() if item["state"] == "setup"]
+    mock_setup = [key for key, item in items.items() if item["state"] in {"mock", "local"}]
+    overall = (
+        "ready" if not blocking_setup and not mock_setup
+        else "needs_setup" if blocking_setup
+        else "local_mock"
+    )
+    return {"overall": overall, "items": items}
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": ENGINE_NAME, "version": __version__}
@@ -211,6 +265,7 @@ def health() -> dict:
 
 @app.get("/status")
 def status() -> dict:
+    channels = core.channel_status()
     return {
         "engine": "ok",
         "core": "control_core",
@@ -219,7 +274,8 @@ def status() -> dict:
         "open_loop_count": core.memory_open_loops(limit=0)["count"],
         "pending_count": len(core.pending_asks()),
         "memory_recovered": bool(getattr(core.memory.db, "recovered_corruption", False)),
-        "channels": core.channel_status(),
+        "channels": channels,
+        "readiness": _readiness(channels),
     }
 
 

@@ -118,12 +118,42 @@ function firedLoopText(item) {
   return pieces.join(" / ");
 }
 
-function channelLabel(channels) {
-  const status = channels?.status || "mock";
-  if (status === "live_ready") return "text/call live-ready";
-  if (status === "missing_owner_contact") return "text/call need owner number";
-  if (status === "missing_twilio") return "text/call need Twilio";
-  return "text/call mock";
+const readinessOrder = [
+  "app_input",
+  "proactive_engine",
+  "memory",
+  "browser",
+  "api_hands",
+  "voice_text",
+  "approvals",
+  "money_wall",
+  "owner_api",
+];
+
+const readinessNames = {
+  app_input: "Input",
+  proactive_engine: "Engine",
+  memory: "Memory",
+  browser: "Browser",
+  api_hands: "APIs",
+  voice_text: "Text/Call",
+  approvals: "Approvals",
+  money_wall: "Money",
+  owner_api: "Access",
+};
+
+function readinessEntries(readiness) {
+  const items = readiness?.items || {};
+  return readinessOrder
+    .map((key) => (items[key] ? { key, name: readinessNames[key] || key, ...items[key] } : null))
+    .filter(Boolean);
+}
+
+function readinessTone(state) {
+  if (state === "ready" || state === "protected") return "ok";
+  if (state === "setup" || state === "warning") return "warn";
+  if (state === "mock" || state === "local") return "muted";
+  return "muted";
 }
 
 function loopMeta(loop) {
@@ -257,6 +287,7 @@ export default function Home() {
     extensionConnected: false,
     memoryRecovered: false,
     channels: { status: "mock" },
+    readiness: null,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -304,6 +335,7 @@ export default function Home() {
         extensionConnected: Boolean(data.extension_connected),
         memoryRecovered: Boolean(data.memory_recovered),
         channels: data.channels || { status: "mock" },
+        readiness: data.readiness || null,
       });
     } else {
       setEngine({
@@ -314,6 +346,7 @@ export default function Home() {
         extensionConnected: false,
         memoryRecovered: false,
         channels: { status: "mock" },
+        readiness: null,
       });
     }
     if (pendingRes.status === "fulfilled") setPending(pendingRes.value.pending || []);
@@ -563,10 +596,18 @@ export default function Home() {
           <span>{engine.label}</span>
           {typeof engine.openLoops === "number" ? <span>{engine.openLoops} active loops</span> : null}
           {typeof engine.pendingCount === "number" ? <span>{engine.pendingCount} waiting</span> : null}
-          {engine.extensionConnected ? <span>browser linked</span> : null}
           {engine.memoryRecovered ? <span>memory recovered</span> : null}
-          <span>{channelLabel(engine.channels)}</span>
         </div>
+        {engine.readiness ? (
+          <div className="readiness-grid" aria-label="System readiness">
+            {readinessEntries(engine.readiness).map((item) => (
+              <span className={`readiness-pill ${readinessTone(item.state)}`} key={item.key} title={item.label}>
+                <strong>{item.name}</strong>
+                <small>{item.state}</small>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </header>
 
       <section className="workspace">
