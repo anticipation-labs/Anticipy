@@ -111,6 +111,13 @@ function receiptText(entry) {
   return entry.summary || entry.message || JSON.stringify(entry.data || entry);
 }
 
+function loopMeta(loop) {
+  const fields = loop.fields || {};
+  return [fields.route, fields.action, fields.disposition || fields.kind]
+    .filter(Boolean)
+    .join(" / ");
+}
+
 function MemoryField({ label, value, onChange, multiline = false, placeholder = "" }) {
   const props = {
     value,
@@ -184,6 +191,19 @@ function PendingAsk({ ask, onResolve }) {
   );
 }
 
+function MemoryLoop({ loop }) {
+  const meta = loopMeta(loop);
+  return (
+    <article className={`loop-item ${loop.status || "open"}`}>
+      <div className="loop-head">
+        <strong>{loop.text}</strong>
+        <span className="tag ask">{loop.status || "open"}</span>
+      </div>
+      {meta ? <span className="loop-meta">{meta}</span> : null}
+    </article>
+  );
+}
+
 export default function Home() {
   const [text, setText] = useState(SAMPLE);
   const [source, setSource] = useState("typed");
@@ -193,6 +213,7 @@ export default function Home() {
   const [observed, setObserved] = useState([]);
   const [ignored, setIgnored] = useState(0);
   const [pending, setPending] = useState([]);
+  const [loops, setLoops] = useState([]);
   const [events, setEvents] = useState([]);
   const [memoryForm, setMemoryForm] = useState(DEFAULT_MEMORY);
   const [memoryBusy, setMemoryBusy] = useState(false);
@@ -234,11 +255,12 @@ export default function Home() {
   const hasLatestRunStats = observed.length > 0 || ignored > 0;
 
   async function loadStatus() {
-    const [engineStatus, pendingRes, glassbox, durableCards] = await Promise.allSettled([
+    const [engineStatus, pendingRes, glassbox, durableCards, activeLoops] = await Promise.allSettled([
       fetch("/api/status", { cache: "no-store" }).then((r) => r.json().then((data) => ({ ok: r.ok, data }))),
       fetch("/api/pending", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/glassbox?limit=20", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/owner/cards?limit=50", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/memory/open-loops?limit=50", { cache: "no-store" }).then((r) => r.json()),
     ]);
     if (engineStatus.status === "fulfilled" && engineStatus.value.ok) {
       const data = engineStatus.value.data || {};
@@ -254,6 +276,7 @@ export default function Home() {
     }
     if (pendingRes.status === "fulfilled") setPending(pendingRes.value.pending || []);
     if (glassbox.status === "fulfilled") setEvents(glassbox.value.entries || []);
+    if (activeLoops.status === "fulfilled") setLoops(activeLoops.value.loops || []);
     if (durableCards.status === "fulfilled") {
       const loadedCards = durableCards.value.cards || [];
       setCards((current) => {
@@ -660,6 +683,18 @@ export default function Home() {
               )}
             </div>
           </div>
+
+          <section className="ledger">
+            <div className="ledger-head">
+              <h2>Active Loops</h2>
+              <span className="status-strip">{loops.length} visible</span>
+            </div>
+            <div className="loop-list">
+              {loops.length ? loops.map((loop) => (
+                <MemoryLoop loop={loop} key={loop.id} />
+              )) : <div className="empty">No active memory loops.</div>}
+            </div>
+          </section>
 
           <section className="ledger">
             <div className="ledger-head">

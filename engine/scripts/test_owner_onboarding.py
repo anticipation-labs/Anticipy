@@ -56,6 +56,12 @@ async def main():
     assert "Connect Target for Owner Action Engine" in loop_text
     assert all(i.status == "waiting" for i in loops)
     assert all(i.fields.get("action") == "connect_account" for i in loops)
+    visible = core.memory_open_loops()
+    visible_text = "\n".join(i["text"] for i in visible["loops"])
+    assert visible["count"] == 2, visible
+    assert "Connect Gmail for Owner Action Engine" in visible_text, visible
+    assert "Connect Target for Owner Action Engine" in visible_text, visible
+    assert all(i["status"] == "waiting" for i in visible["loops"]), visible
     assert "handoff" not in serialized
     assert len(out["written"]) == len(profile) + len(loops)
     print("PASS owner_onboarding: first-run setup writes profile mesh and connection loops")

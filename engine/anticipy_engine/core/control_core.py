@@ -616,6 +616,13 @@ class ControlCore:
                  "category": p.get("category", ""), "goal_id": p["goal_id"]}
                 for aid, p in self.proactive.pending.items()]
 
+    def memory_open_loops(self, limit: int = 50) -> dict:
+        """Visible memory backlog: open/waiting loops the owner should be able to inspect."""
+        active = [i for i in self.memory.open_loops.all() if i.status in ("open", "waiting")]
+        active.sort(key=lambda i: i.updated_at or i.timestamp, reverse=True)
+        loops = [i.model_dump(mode="json") for i in active[:max(0, limit)]]
+        return {"loops": loops, "count": len(active)}
+
     def owner_cards(self, limit: int = 50) -> dict:
         """Return recent durable owner cards for the app board.
 

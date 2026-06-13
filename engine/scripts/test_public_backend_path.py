@@ -163,6 +163,14 @@ def main():
         assert raw_loop_status.get(message["source_text"]) == "done", raw_loop_status
         assert raw_loop_status.get(blocked["source_text"]) == "blocked", raw_loop_status
 
+        active_loops = client.get("/memory/open-loops?limit=20")
+        assert active_loops.status_code == 200, active_loops.text
+        visible_loops = active_loops.json()["loops"]
+        visible_text = "\n".join(i["text"] for i in visible_loops)
+        assert pickup["source_text"] in visible_text, visible_loops
+        assert message["source_text"] not in visible_text, visible_loops
+        assert blocked["source_text"] not in visible_text, visible_loops
+
         receipt_feed = client.get("/glassbox?limit=80")
         assert receipt_feed.status_code == 200, receipt_feed.text
         summaries = [e["summary"] for e in receipt_feed.json()["entries"]]

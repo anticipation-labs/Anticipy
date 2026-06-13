@@ -582,6 +582,47 @@ button {
   padding-right: 4px;
 }
 
+.loop-list {
+  display: grid;
+  gap: 8px;
+  max-height: 230px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.loop-item {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+  font-size: 12px;
+}
+
+.loop-item:first-child {
+  border-top: 0;
+}
+
+.loop-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.loop-head strong {
+  min-width: 0;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.loop-meta {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .event {
   display: grid;
   grid-template-columns: 120px 1fr;

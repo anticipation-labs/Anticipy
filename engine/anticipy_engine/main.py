@@ -159,6 +159,11 @@ def history() -> dict:
     return {"items": [i.model_dump() for i in core.memory.history.all()]}
 
 
+@app.get("/memory/open-loops")
+def memory_open_loops(limit: int = 50) -> dict:
+    return core.memory_open_loops(limit=limit)
+
+
 @app.post("/extension/hello")
 def extension_hello(body: ExtensionHello) -> dict:
     global extension_hello_seen
