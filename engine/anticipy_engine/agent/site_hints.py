@@ -222,6 +222,9 @@ class SiteHints:
     def product_pattern(self, url: str) -> Optional[re.Pattern]:
         return self._entry(url).get("_product_pattern")
 
+    def product_examples(self, url: str) -> list[str]:
+        return list(self._entry(url).get("product_url_examples") or [])
+
     # ---- learned write-back ------------------------------------------------------
     def learn(self, host: str, *, cart_url=None, search_url=None,
               product_url_examples=None) -> bool:

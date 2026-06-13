@@ -220,6 +220,13 @@ def test_overlay_learn_and_merge(tmp: Path):
     on_disk = json.loads((tmp / "site_hints.json").read_text())
     assert on_disk["hosts"]["store.test"]["cart_url"] == "https://www.store.test/cart"
     assert hints.cart_url("https://www.store.test/x") == "https://www.store.test/cart"
+    assert hints.product_examples("https://www.store.test/x") == ["/products/wide-shoes-9"]
+    site_hints.configure(tmp / "site_hints.json")
+    try:
+        assert wv._looks_buyable_product_url("https://www.store.test/products/wide-shoes-9",
+                                             "https://www.store.test")
+    finally:
+        site_hints.configure(None)
     # per-field overlay-wins: learned cart_url overrides seed; seed search_url stays
     assert hints.learn("target.com", cart_url="https://www.target.com/cart/list") is True
     assert hints.cart_url("https://www.target.com/x") == "https://www.target.com/cart/list"

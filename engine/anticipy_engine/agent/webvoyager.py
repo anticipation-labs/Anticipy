@@ -272,6 +272,10 @@ def _commerce_product_pattern(start_url: str) -> Optional[re.Pattern]:
     return site_hints.store().product_pattern(start_url)
 
 
+def _commerce_product_examples(start_url: str) -> list[str]:
+    return site_hints.store().product_examples(start_url)
+
+
 def _looks_buyable_product_url(url: str, start_url: str = "") -> bool:
     absolute = _absolute_site_url(start_url, url) if start_url else (url or "")
     if not absolute or not _same_site(start_url, absolute):
@@ -286,6 +290,11 @@ def _looks_buyable_product_url(url: str, start_url: str = "") -> bool:
         if pattern.search(parsed.path) is not None:
             return True
         return False
+    path = (parsed.path or "").rstrip("/") or "/"
+    for example in _commerce_product_examples(start_url or absolute):
+        ex_path = (example or "").rstrip("/") or "/"
+        if path == ex_path:
+            return True
     if _looks_search_results_url(absolute) or _looks_content_url(absolute):
         return False
     return PRODUCT_URL_RE.search(parsed.path) is not None
@@ -1482,6 +1491,7 @@ class WebVoyagerAgent:
                 )
 
         search_url = _commerce_search_url(start_url, item)
+        start_on_matching_product = False
         if search_url:
             out, shot = await self._observe_ready(search_url)
             self._cur_shot = shot
@@ -1490,13 +1500,20 @@ class WebVoyagerAgent:
             out, shot = await self._observe_ready(start_url)
             self._cur_shot = shot
             history.append("recipe: observe start page")
-            search_box = _pick_button(out.get("elements") or [], re.compile(r"\bsearch\b", re.I))
-            if search_box:
-                await self._act({"action": "type", "index": search_box.get("idx"), "text": item, "enter": True})
-                out, shot = await self._observe_ready()
-                self._cur_shot = shot
-                history.append(f"recipe: typed item into site search idx={search_box.get('idx')}")
-                steps += 1
+            start_on_matching_product = (
+                _looks_buyable_product_url((out or {}).get("url") or start_url, start_url)
+                and _product_item_evidence(out, item, start_url)["matched"]
+            )
+            if start_on_matching_product:
+                history.append("recipe: start url is matching product page")
+            else:
+                search_box = _pick_button(out.get("elements") or [], re.compile(r"\bsearch\b", re.I))
+                if search_box:
+                    await self._act({"action": "type", "index": search_box.get("idx"), "text": item, "enter": True})
+                    out, shot = await self._observe_ready()
+                    self._cur_shot = shot
+                    history.append(f"recipe: typed item into site search idx={search_box.get('idx')}")
+                    steps += 1
 
         if self._unactionable_obs(out):
             for attempt in range(3):
@@ -1524,7 +1541,13 @@ class WebVoyagerAgent:
                               reason="commerce recipe found no actionable browser elements",
                               page_states=states, commerce_recipe=True)
 
-        states.append(_page_state("search_results", out, item, history[-1], start_url=start_url))
+        states.append(_page_state(
+            "product_page_from_start_url" if start_on_matching_product else "search_results",
+            out,
+            item,
+            history[-1],
+            start_url=start_url,
+        ))
         prefer_lowest = _wants_lowest_price(task)
         wall_kind = _commerce_wall_kind(out)
         if wall_kind:
@@ -1565,7 +1588,9 @@ class WebVoyagerAgent:
                     steps += 1
 
         opened_product_from_results_add = False
-        if (_looks_buyable_product_url(out.get("url") or "", start_url)
+        if start_on_matching_product:
+            opened_product_from_results_add = True
+        elif (_looks_buyable_product_url(out.get("url") or "", start_url)
                 and _product_item_evidence(out, item, start_url)["matched"]):
             opened_product_from_results_add = True
             history.append("recipe: search landed on matching product page")
