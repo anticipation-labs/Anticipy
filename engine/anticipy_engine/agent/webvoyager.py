@@ -79,7 +79,11 @@ GENERIC_ADD_LABEL_RE = re.compile(
     r"^\s*add\s+for\s+(?:ship|shipping|pickup|delivery)\s*$",
     re.I,
 )
-VIEW_CART_RE = re.compile(r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|^\s*(cart|basket|bag)\s*$", re.I)
+VIEW_CART_RE = re.compile(
+    r"\b(view|go to|open)\b.{0,30}\b(cart|basket|bag)\b|"
+    r"^\s*(?:shopping\s+)?(?:cart|basket|bag)(?:\s*\(\d+\))?\s*$",
+    re.I,
+)
 CART_URL_RE = re.compile(
     r"/(?:(?:checkout/)?cart(?:\.(?:php|html))?|cartview|shoppingcart|shopping-cart|shopping_cart\.jsp|shopping-bag|basket|bag|my/bag|"
     r"OrderItemDisplay)(?:[/?#]|$)",
@@ -1091,6 +1095,30 @@ def _product_item_evidence(out: dict, item: str, start_url: str = "") -> dict:
     }
 
 
+def _start_page_product_identity_match(out: dict, item: str, start_url: str = "") -> bool:
+    """Fallback for a memory-resolved product URL whose path is not in site hints.
+
+    The page itself must prove product identity and expose an add-to-cart control.
+    This only decides whether it is safe to try the add flow; done still requires
+    the independent cart read-back proof.
+    """
+    url = (out or {}).get("url") or start_url
+    if not url or _is_cart_url(out) or _looks_search_results_url(url) or _looks_content_url(url):
+        return False
+    if not _pick_add_button((out or {}).get("elements") or [], item, start_url=start_url):
+        return False
+    tokens = _item_tokens(item)
+    if not tokens:
+        return False
+    required = _required_product_hits(tokens)
+    visible_identity, total_identity = _product_identity_segments(out)
+    return bool(
+        _numbers_match(total_identity, item)
+        and _has_distinctive_required_tokens(visible_identity, tokens)
+        and _token_hits(visible_identity, tokens) >= required
+    )
+
+
 def _state_digest(out: dict) -> str:
     o = out or {}
     text = re.sub(r"\s+", " ", (o.get("text") or "").lower())[:3000]
@@ -1501,8 +1529,11 @@ class WebVoyagerAgent:
             self._cur_shot = shot
             history.append("recipe: observe start page")
             start_on_matching_product = (
-                _looks_buyable_product_url((out or {}).get("url") or start_url, start_url)
-                and _product_item_evidence(out, item, start_url)["matched"]
+                (
+                    _looks_buyable_product_url((out or {}).get("url") or start_url, start_url)
+                    and _product_item_evidence(out, item, start_url)["matched"]
+                )
+                or _start_page_product_identity_match(out, item, start_url)
             )
             if start_on_matching_product:
                 history.append("recipe: start url is matching product page")
@@ -1803,7 +1834,10 @@ class WebVoyagerAgent:
                 return self._done(out, steps + 1, history, answer=f"Verified cart contains {item}.",
                                   page_states=states, commerce_recipe=True)
             product_evidence = _product_item_evidence(out, item, start_url)
-            if not product_evidence["matched"]:
+            product_identity_matched = product_evidence["matched"] or (
+                start_on_matching_product and _start_page_product_identity_match(out, item, start_url)
+            )
+            if not product_identity_matched:
                 if not refreshed_product_identity:
                     out, shot = await self._observe_ready()
                     self._cur_shot = shot

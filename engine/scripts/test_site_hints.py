@@ -212,6 +212,39 @@ def test_helper_parity():
     print("PASS helper parity: identical lookups through the store, unknown hosts unchanged")
 
 
+def test_memory_resolved_start_page_identity():
+    out = {
+        "url": "https://demowebshop.tricentis.com/computing-and-internet",
+        "title": "Demo Web Shop. Computing and Internet",
+        "text": "Computing and Internet Price: 10.00 Add to cart",
+        "elements": [
+            {"idx": 0, "name": "Add to cart", "role": "input", "inView": True, "href": ""},
+        ],
+    }
+    assert not wv._looks_buyable_product_url(out["url"], "https://demowebshop.tricentis.com"), \
+        "unknown product paths should not become generally buyable URL patterns"
+    assert wv._start_page_product_identity_match(out, "Computing and Internet",
+                                                 "https://demowebshop.tricentis.com/computing-and-internet")
+    assert not wv._start_page_product_identity_match(
+        {**out, "url": "https://demowebshop.tricentis.com/search?q=Computing+and+Internet"},
+        "Computing and Internet",
+        "https://demowebshop.tricentis.com/computing-and-internet",
+    )
+    print("PASS start-page identity: memory-resolved product URL can proceed without widening URL hints")
+
+
+def test_cart_link_labels():
+    elements = [
+        {"idx": 6, "name": "shopping cart", "role": "a", "inView": True},
+        {"idx": 10, "name": "Shopping cart (2)", "role": "a", "inView": True},
+    ]
+    assert wv._pick_button(elements, wv.VIEW_CART_RE)["idx"] == 6
+    assert wv._pick_button(elements[1:], wv.VIEW_CART_RE)["idx"] == 10
+    assert wv._pick_button([{"idx": 11, "name": "Checkout", "role": "a", "inView": True}],
+                           wv.VIEW_CART_RE) is None
+    print("PASS cart labels: simple shopping-cart links are navigation targets, checkout is not")
+
+
 def test_overlay_learn_and_merge(tmp: Path):
     hints = fresh_store(tmp)
     # learn a brand-new host (the P4 no-hints direction)
@@ -355,6 +388,8 @@ def main():
     tmp = lambda: Path(tempfile.mkdtemp(prefix="anticipy-sitehints-"))
     test_seed_parity()
     test_helper_parity()
+    test_memory_resolved_start_page_identity()
+    test_cart_link_labels()
     test_overlay_learn_and_merge(tmp())
     test_learn_bounds(tmp())
     test_overlay_validation_drops_toward_seed(tmp())
