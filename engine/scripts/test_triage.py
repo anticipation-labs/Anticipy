@@ -127,5 +127,66 @@ def main():
     print("==== PASS ====")
 
 
+def _tiebreak_check():
+    """J1 — the live ambiguity tiebreak must ACTUALLY consult the model from INSIDE a
+    running event loop (the bug: it silently fail-opened and never called the brain),
+    and must fail OPEN *fast* when the brain is slow/errors — never hang the gate."""
+    import asyncio
+    import os
+    import time
+
+    class _StubGW:
+        def __init__(self, reply=None, err=None, delay=0.0):
+            self.reply, self.err, self.delay = reply, err, delay
+            self.calls = 0
+
+        async def think(self, task, tier, caller, image=None):
+            self.calls += 1
+            if self.delay:
+                await asyncio.sleep(self.delay)
+            if self.err:
+                raise self.err
+            return self.reply
+
+    fails = []
+
+    async def body():
+        yes = Triage(gateway=_StubGW(reply="yes"), mode="live")
+        if yes._tiebreak("hmm that thing") is not True:
+            fails.append("'yes' verdict should pass (the dead disambiguator is now live)")
+        if yes.smart_calls != 1:
+            fails.append("'yes' should have consulted the model (smart_calls=1)")
+        no = Triage(gateway=_StubGW(reply="no"), mode="live")
+        if no._tiebreak("hmm that thing") is not False:
+            fails.append("'no' verdict should drop")
+        err = Triage(gateway=_StubGW(err=RuntimeError("boom")), mode="live")
+        if err._tiebreak("hmm") is not True:
+            fails.append("model error must fail OPEN (high recall)")
+        os.environ["ANTICIPY_TIEBREAK_TIMEOUT_S"] = "0.3"
+        slow = Triage(gateway=_StubGW(reply="no", delay=5.0), mode="live")
+        t0 = time.time()
+        r = slow._tiebreak("hmm")
+        dt = time.time() - t0
+        os.environ.pop("ANTICIPY_TIEBREAK_TIMEOUT_S", None)
+        if r is not True:
+            fails.append("a slow/starved brain must fail OPEN")
+        if dt > 2.0:
+            fails.append(f"slow brain hung {dt:.1f}s — must fail fast under the wall, not block the gate")
+        if slow.smart_calls != 0:
+            fails.append("a timed-out call must not count as a real verdict")
+        stub = Triage(gateway=_StubGW(reply="yes"), mode="stub")
+        stub.actionable("hmm that thing")
+        if stub.gateway.calls != 0:
+            fails.append("stub mode must NEVER touch the model (cost spine)")
+
+    asyncio.run(body())   # production condition: _tiebreak is reached from a RUNNING loop
+    print("==== TIEBREAK (J1 — the disambiguator) ====")
+    if fails:
+        print("==== FAIL ===="); [print("   -", f) for f in fails]; sys.exit(1)
+    print("  live tiebreak consults the model from inside a running loop; fails OPEN fast on slow/error; stub untouched")
+    print("==== PASS ====")
+
+
 if __name__ == "__main__":
     main()
+    _tiebreak_check()

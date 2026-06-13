@@ -814,16 +814,28 @@ class Triage:
             return self._tiebreak(text)
         return False
 
-    def _tiebreak(self, text: str) -> bool:  # pragma: no cover (live-only; never in the free suite)
+    def _tiebreak(self, text: str) -> bool:  # live-only; never in the free (stub) suite
+        # actionable() is called synchronously from INSIDE a running event loop
+        # (proactive.on_event is async), where asyncio.run()/get_event_loop().run_until_complete()
+        # both raise "event loop is already running" -> the old code silently fell into the
+        # except below and NEVER consulted the model (dead disambiguator). Run the coroutine
+        # on a private loop in a worker thread (asyncio.run is valid there) with a HARD wall,
+        # so a rate-limited/slow brain fails OPEN *fast* rather than hanging the decision gate.
+        import asyncio
+        import concurrent.futures
+        from ..core.gateway import CHEAP
+        timeout_s = float(os.environ.get("ANTICIPY_TIEBREAK_TIMEOUT_S", "7") or 7)
+        prompt = ("Is the user's utterance an actionable task/request/commitment (something an "
+                  "assistant could act on), vs ambient chatter/observation? Answer yes or no only.\n"
+                  f"Utterance: {text}")
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            from ..core.gateway import CHEAP
-            import asyncio
-            prompt = ("Is the user's utterance an actionable task/request/commitment (something an "
-                      "assistant could act on), vs ambient chatter/observation? Answer yes or no only.\n"
-                      f"Utterance: {text}")
-            raw = (asyncio.get_event_loop().run_until_complete(
-                self.gateway.think(prompt, tier=CHEAP, caller="triage")) or "").lower()
+            fut = pool.submit(lambda: asyncio.run(
+                self.gateway.think(prompt, tier=CHEAP, caller="triage")))
+            raw = (fut.result(timeout=timeout_s) or "").lower()
             self.smart_calls += 1
             return "yes" in raw and "no" not in raw.split()  # bias handled by the harm-line downstream
         except Exception:
-            return True  # fail OPEN (high recall): on any tiebreak error, pass it down
+            return True  # fail OPEN (high recall): timeout / outage / error -> pass it down
+        finally:
+            pool.shutdown(wait=False)  # never block the gate on a lingering slow worker
