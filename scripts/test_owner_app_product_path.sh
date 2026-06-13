@@ -17,6 +17,7 @@ DATA_DIR="$(mktemp -d -t anticipy-owner-product-XXXXXX)"
 COOKIE_JAR="$(mktemp -t anticipy-owner-product-cookie-XXXXXX)"
 PAYLOAD="$(mktemp -t anticipy-owner-product-payload-XXXXXX.json)"
 BODY="$(mktemp -t anticipy-owner-product-body-XXXXXX.json)"
+ASKS="$(mktemp -t anticipy-owner-product-asks-XXXXXX.json)"
 UPLOAD_ROOT="$(mktemp -d -t anticipy-owner-product-upload-XXXXXX)"
 UPLOAD_FILE="$(mktemp -t anticipy-owner-product-upload-XXXXXX.txt)"
 ENGINE_LOG="$(mktemp -t anticipy-owner-product-engine-XXXXXX.log)"
@@ -33,7 +34,7 @@ cleanup() {
     kill "$ENGINE_PID" >/dev/null 2>&1 || true
     wait "$ENGINE_PID" >/dev/null 2>&1 || true
   fi
-  rm -f "$COOKIE_JAR" "$PAYLOAD" "$BODY" "$UPLOAD_FILE" "$ENGINE_LOG" "$NEXT_LOG"
+  rm -f "$COOKIE_JAR" "$PAYLOAD" "$BODY" "$ASKS" "$UPLOAD_FILE" "$ENGINE_LOG" "$NEXT_LOG"
   rm -rf "$UPLOAD_ROOT"
 }
 trap cleanup EXIT
@@ -124,11 +125,12 @@ code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" \
   "$NEXT_BASE/api/owner/ingest")"
 test "$code" = "200"
 
-"$PY" - "$BODY" <<'PY'
+"$PY" - "$BODY" "$ASKS" <<'PY'
 import json
 import sys
 
 body = json.load(open(sys.argv[1], encoding="utf-8"))
+ask_path = sys.argv[2]
 cards = body["cards"]
 
 def one(needle):
@@ -149,6 +151,7 @@ assert any(p.get("type") == "memory_resolution" for p in resolved_cart["proof"])
 unresolved_cart = one("random gadget")
 assert unresolved_cart["status"] == "waiting", unresolved_cart
 assert unresolved_cart["execution"]["decision"] == "ask", unresolved_cart
+assert unresolved_cart["execution"]["ask_id"], unresolved_cart
 
 money = one("pay whatever")
 assert money["status"] == "blocked", money
@@ -158,19 +161,93 @@ profile = one("prefers texts")
 assert profile["status"] == "done", profile
 
 assert body["ignored_line_count"] >= 3, body
+
+json.dump(
+    {
+        "send_ask": send["execution"]["ask_id"],
+        "cart_ask": unresolved_cart["execution"]["ask_id"],
+        "send_card": send["id"],
+        "cart_card": unresolved_cart["id"],
+    },
+    open(ask_path, "w", encoding="utf-8"),
+)
+PY
+
+SEND_ASK="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["send_ask"])' "$ASKS")"
+CART_ASK="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["cart_ask"])' "$ASKS")"
+SEND_CARD="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["send_card"])' "$ASKS")"
+CART_CARD="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["cart_card"])' "$ASKS")"
+
+code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" "$NEXT_BASE/api/pending")"
+test "$code" = "200"
+"$PY" - "$BODY" "$SEND_ASK" "$CART_ASK" <<'PY'
+import json
+import sys
+
+pending = json.load(open(sys.argv[1], encoding="utf-8"))["pending"]
+ask_ids = {item["ask_id"] for item in pending}
+assert sys.argv[2] in ask_ids, pending
+assert sys.argv[3] in ask_ids, pending
+PY
+
+code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" \
+  -H "content-type: application/json" \
+  -d "{\"ask_id\":\"$SEND_ASK\",\"approved\":true}" \
+  "$NEXT_BASE/api/resolve")"
+test "$code" = "200"
+"$PY" - "$BODY" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["approved"] is True and body["state"] == "done", body
+PY
+
+code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" \
+  -H "content-type: application/json" \
+  -d "{\"ask_id\":\"$CART_ASK\",\"approved\":false}" \
+  "$NEXT_BASE/api/resolve")"
+test "$code" = "200"
+"$PY" - "$BODY" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["approved"] is False and body["declined_action"], body
+PY
+
+code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" "$NEXT_BASE/api/pending")"
+test "$code" = "200"
+"$PY" - "$BODY" "$SEND_ASK" "$CART_ASK" <<'PY'
+import json
+import sys
+
+pending = json.load(open(sys.argv[1], encoding="utf-8"))["pending"]
+ask_ids = {item["ask_id"] for item in pending}
+assert sys.argv[2] not in ask_ids, pending
+assert sys.argv[3] not in ask_ids, pending
 PY
 
 code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" "$NEXT_BASE/api/owner/cards?limit=20")"
 test "$code" = "200"
-"$PY" - "$BODY" <<'PY'
+"$PY" - "$BODY" "$SEND_CARD" "$CART_CARD" <<'PY'
 import json
 import sys
 
 cards = json.load(open(sys.argv[1], encoding="utf-8"))["cards"]
 statuses = {c["source_text"]: c["status"] for c in cards}
 assert any("label thing" in text and status == "done" for text, status in statuses.items()), statuses
-assert any("random gadget" in text and status == "waiting" for text, status in statuses.items()), statuses
+assert any("random gadget" in text and status == "declined" for text, status in statuses.items()), statuses
 assert any("pay whatever" in text and status == "blocked" for text, status in statuses.items()), statuses
+by_id = {card["id"]: card for card in cards}
+send = by_id[sys.argv[2]]
+assert send["status"] == "done", send
+assert send["execution"]["ask_id"] is None and send["execution"]["goal_state"] == "done", send
+assert any(p.get("type") == "resolution" and p.get("decision") == "approved" for p in send["proof"]), send
+cart = by_id[sys.argv[3]]
+assert cart["status"] == "declined", cart
+assert cart["execution"]["ask_id"] is None and cart["execution"]["goal_state"] == "declined", cart
+assert any(p.get("type") == "resolution" and p.get("decision") == "declined" for p in cart["proof"]), cart
 PY
 
 code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" "$NEXT_BASE/api/status")"
