@@ -59,6 +59,8 @@ def _summarize(entry: dict) -> str:
     if kind == "connection_checked":
         detail = d.get("message") or d.get("connect_url") or d.get("tool") or ""
         return f"connection {d.get('name', 'app')}: {d.get('status', '')} — {detail}"
+    if kind == "trigger_fired":
+        return f"proactive scan fired: {d.get('task', '')} -> {d.get('decision', '')}"
     if kind == "decision":
         return f"decided {d.get('decision')} — {d.get('text', '')}"
     if kind == "ask_human":
