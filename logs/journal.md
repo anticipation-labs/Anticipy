@@ -916,3 +916,16 @@ catch stayed 0.8413, false stayed 0, harm stayed 0, interrupt stayed 1.0/2.0, an
 recall_worst stayed 0.5. Legacy dev-bank smoke stayed at catch 1.0/1.0, e2e 0.6483,
 false 0, harm 0. `bash scripts/run_suite.sh` stayed green at 46/46. P3 live gate was
 not attempted because `factory/config/owner_phone.confirmed` is still absent.
+
+2026-06-13 lap 20260613T020216Z (build, TARGET v9 dev_v2 context-backed slot-choice
+booking): inspected the official dev_v2 run dirs and first tried a no-clock pickup-alarm
+auto-hold; the official scorer caught it as a false action, so that attempt was removed
+and logged as F37. The kept slice fixes a memory-to-intent gap: when memory says a named
+person has an availability slot, a later "book the <slot> one with <person>" line now
+resolves the anaphor through the shared slotbooking helper, passes Room 2 only with that
+context, and deterministically plans one calendar hold with proof. Official dev_v2
+owner-ingest stub score moved e2e 0.6389 -> 0.6945 and correct 0.75 -> 0.8055 while
+false stayed 0, harm stayed 0, catch stayed 0.8413, interrupt stayed 1.0/2.0, and
+recall_worst stayed 0.5. Legacy dev-bank smoke stayed at catch 1.0/1.0, e2e 0.6483,
+false 0, harm 0. `bash scripts/run_suite.sh` stayed green at 46/46. P3 live gate was
+not attempted because `factory/config/owner_phone.confirmed` is still absent.

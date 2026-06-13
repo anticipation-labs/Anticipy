@@ -165,6 +165,25 @@ CART_CTX_BATTERY = [
      True),
 ]
 
+# ---- F36: a slot-choice booking can use memory to resolve "one" only when the
+# same person and offered slot appear in an availability-shaped memory line.
+SLOT_LINE = "Book the Tuesday morning one with Marta before she fills up."
+SLOT_CTX_BATTERY = [
+    ("person+slot availability -> act", SLOT_LINE,
+     {"context": {"history": ["Marta texted that she can look at the furnace Tuesday morning."]}},
+     False),
+    ("no context -> ask", SLOT_LINE, None, True),
+    ("same person, no slot -> ask", SLOT_LINE,
+     {"context": {"history": ["Marta texted that she can look at the furnace."]}},
+     True),
+    ("same slot, different person -> ask", SLOT_LINE,
+     {"context": {"history": ["Nora texted that she can look at the furnace Tuesday morning."]}},
+     True),
+    ("commerce context stays ask", SLOT_LINE,
+     {"context": {"history": ["Marta has tickets open Tuesday morning."]}},
+     True),
+]
+
 
 def main():
     harm = HarmLine()
@@ -226,6 +245,14 @@ def main():
         print(f"  {'ok  ' if ok else 'FAIL'} {label}: detrimental={v.detrimental} ({v.category})")
         if not ok:
             fails.append(f"F29 cart-ctx pin failed: {label} -> {v.category}")
+
+    print("---- F36 memory-resolved slot-choice scope (ctx-dependent) ----")
+    for label, text, ctx, should_ask in SLOT_CTX_BATTERY:
+        v = harm.assess(text, ctx)
+        ok = v.detrimental == should_ask
+        print(f"  {'ok  ' if ok else 'FAIL'} {label}: detrimental={v.detrimental} ({v.category})")
+        if not ok:
+            fails.append(f"F36 slot-ctx pin failed: {label} -> {v.category}")
 
     if fails:
         print("==== FAIL ===="); [print("   -", f) for f in fails]; sys.exit(1)

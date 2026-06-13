@@ -1605,3 +1605,24 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   official dev_v2 owner-ingest score must keep `false_action_count==0`; there
   must be no generic capture-to-visibility helper that acts on arbitrary note or
   visibility wording.
+
+## Build lap 20260613T020216Z (context-backed slot-choice bookings)
+- F36 FIXED: owner lines that choose an offered appointment-like slot by anaphor
+  can be caught but over-asked when the appointment noun lives in memory instead
+  of the same line. The concrete observed shape was: prior memory says a named
+  person can do a thing at a named slot, then the user says to book "the <slot>
+  one with <person>". Fix: `shared/slotbooking.py` now has one context-backed
+  resolver requiring the booked slot, the named person, and an availability cue
+  in memory, with commerce/travel deny bounds. Room 2 uses that resolver before
+  fail-safe ask, and the deterministic orchestrator uses the same resolver to
+  produce one `create_event` step, so act and proof populations stay aligned.
+  Regression checks: `test_harmline.py` pins act/no-context/wrong-person/no-slot
+  and commerce-deny cases; `test_owner_ingest_event.py` pins the full owner path
+  from silent context capture to done calendar proof.
+- F37 AVOIDED/DO-NOT-RETRY-BROADLY: an initial hypothesis treated no-clock
+  pickup/dropoff alarm adjustments with "earlier/later/usual" wording as safe
+  open-loop holds. Official dev_v2 scoring produced `false_action_count=1` on
+  that shape, so the code and tests were ripped out before the kept run. Do not
+  retry no-clock pickup-alarm auto-holds without a new product law that explains
+  why the line is safe to act instead of ask. Regression check: official dev_v2
+  owner-ingest score must keep `false_action_count==0`.

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from ..shared.schedule_change import match_schedule_change_hold
-from ..shared.slotbooking import match_slot_choice_booking
+from ..shared.slotbooking import match_context_slot_choice_booking, match_slot_choice_booking
 from ..shared.storesite import derive_store_site
 
 # --- hard detrimental (ASK; override everything). Money = SPENDING verbs, not price mentions. ---
@@ -218,6 +218,9 @@ class HarmLine:
         if match_schedule_change_hold(action_text or "") is not None:
             return HarmVerdict(False, "calendar_hold",
                                "reversible:schedule-change hold -> act (re-gated on fire)")
+        if match_context_slot_choice_booking(action_text or "", ctx) is not None:
+            return HarmVerdict(False, "calendar_hold",
+                               "reversible:memory-resolved slot-choice hold -> act")
         if _FORGET_HOLD.search(t) and _REMINDER_TIME_ANCHOR.search(t):
             return HarmVerdict(False, "calendar_hold",
                                "reversible:time-anchored forget-hold -> act (re-gated on fire)")

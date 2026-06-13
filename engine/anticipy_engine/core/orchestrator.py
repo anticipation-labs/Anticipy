@@ -19,6 +19,7 @@ from .bus import Bus
 from .envelopes import Goal, GoalState, Job, JobStatus, Result, Risk, Step, StepState
 from .gateway import SMART, ModelGateway
 from .store import GoalStore
+from ..shared.slotbooking import match_context_slot_choice_booking
 from ..shared.storesite import derive_store_site
 
 
@@ -524,6 +525,11 @@ class Orchestrator:
     @staticmethod
     def _deterministic_plan(goal: Goal, context=None) -> list:
         text = goal.description or goal.intent
+        slot = match_context_slot_choice_booking(text, context)
+        if slot is not None:
+            return [Step(intent="create_event",
+                         args={"title": slot.title, "when": slot.when},
+                         risk=Risk.low)]
         calendar = _calendar_event_step(text)
         if calendar is not None:
             return [calendar]

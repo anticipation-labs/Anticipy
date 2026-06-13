@@ -25,6 +25,7 @@ the population the plan layer can complete — the F29 anti-drift lesson
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from typing import Optional
 
@@ -54,6 +55,22 @@ _APPT_TITLE_RE = re.compile(
     r"\b(?:[\w']+'s\s+)?(?:appointment|checkup|check-up|cleaning|visit)s?\b",
     re.I,
 )
+_SLOT_WITH_PERSON_RE = re.compile(
+    r"\bbook(?:s|ing)?\b(?:\s+\w+){0,4}?\s+(?:that|the)\s+"
+    r"(?P<slot>(?:[\w:-]+\s+){0,4})one\s+with\s+(?P<person>[A-Z][\w'\-]+)\b",
+    re.I,
+)
+_AVAILABILITY_CUE_RE = re.compile(
+    r"\b(?:can|could|available|availability|free|open|offered|has|have)\b",
+    re.I,
+)
+_LOOK_AT_TITLE_RE = re.compile(r"\blook at\s+(?:the\s+)?(?P<title>[^.;,]{3,50})$", re.I)
+
+
+@dataclass(frozen=True)
+class SlotChoice:
+    title: str
+    when: str
 
 
 def match_slot_choice_booking(text: str) -> Optional[str]:
@@ -77,3 +94,60 @@ def appointment_title(text: str) -> str:
     """Verbatim possessive+appointment-noun span ("Maya's checkup") or ""."""
     m = _APPT_TITLE_RE.search(text or "")
     return re.sub(r"\s+", " ", m.group(0)).strip() if m else ""
+
+
+def match_context_slot_choice_booking(text: str, context=None) -> Optional[SlotChoice]:
+    """Resolve "book the Friday afternoon one with <person>" only when memory contains
+    the same person and slot in an availability-shaped line.
+
+    This is intentionally narrower than same-line slot booking. Without context
+    proving what "one" refers to, it fails toward None and the harm-line asks.
+    """
+    t = text or ""
+    m = _SLOT_WITH_PERSON_RE.search(t)
+    if m is None:
+        return None
+    slot = re.sub(r"\s+", " ", m.group("slot") or "").strip(" ,.-")
+    person = (m.group("person") or "").strip()
+    if not slot or not person or not _SLOT_TIME_RE.search(slot):
+        return None
+    if _COMMERCE_DENY_RE.search(t):
+        return None
+
+    slot_l = slot.lower()
+    person_re = re.compile(r"\b" + re.escape(person) + r"\b", re.I)
+    for line in _context_lines(context):
+        line_clean = re.sub(r"^\[[^\]]+\]\s*", "", line).strip()
+        line_l = line_clean.lower()
+        if slot_l not in line_l or person_re.search(line_clean) is None:
+            continue
+        if _COMMERCE_DENY_RE.search(line_clean) or not _AVAILABILITY_CUE_RE.search(line_clean):
+            continue
+        return SlotChoice(title=_context_title(line_clean, person, slot), when=slot)
+    return None
+
+
+def _context_lines(context) -> list[str]:
+    if isinstance(context, dict) and isinstance(context.get("context"), dict):
+        context = context["context"]
+    if not isinstance(context, dict):
+        return []
+    lines: list[str] = []
+    for key in ("notes", "open_loops", "history", "profile", "derived"):
+        value = context.get(key)
+        if isinstance(value, str):
+            lines.extend(line.strip() for line in value.splitlines() if line.strip())
+        elif isinstance(value, list):
+            lines.extend(str(line).strip() for line in value if str(line).strip())
+    return lines
+
+
+def _context_title(line: str, person: str, slot: str) -> str:
+    idx = line.lower().find(slot.lower())
+    before = line[:idx].strip() if idx >= 0 else line
+    m = _LOOK_AT_TITLE_RE.search(before)
+    if m:
+        title = re.sub(r"\s+", " ", m.group("title")).strip(" .,!?:;\"'")
+        if title:
+            return f"{title} with {person}"
+    return f"{person} appointment"

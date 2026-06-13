@@ -47,6 +47,8 @@ REPORTED_PROMISE = "Sam needs the revised decking before Friday; I told him I'd 
 UNSHAPED_ACT = "Set up a quick review with the roofing vendor for Thursday 2pm, 30 minutes."
 SCHEDULE_CHANGE = "The vendor call moved from Thursday to Friday at 9, block that so I stop double-booking."
 FORGET_HOLD = "Renew the patio permit tomorrow morning before I forget again."
+SLOT_CONTEXT = "Marta texted that she can look at the furnace Tuesday morning."
+SLOT_BOOKING = "Book the Tuesday morning one with Marta before she fills up."
 # F28 requested-action scope: a draft request whose line carries work vocabulary
 # ("supply order", "purchasing window", "ready to send") is NOT money, NOT a send —
 # the pre-gate must not block it, the spine must act, and the plan is the DRAFT
@@ -94,6 +96,8 @@ async def owner_lane_check():
         unshaped = await core.feed("app", UNSHAPED_ACT, {})
         schedule_change = await core.feed("app", SCHEDULE_CHANGE, {})
         forget_hold = await core.feed("app", FORGET_HOLD, {})
+        slot_context = await core.feed("app", SLOT_CONTEXT, {})
+        slot_booking = await core.feed("app", SLOT_BOOKING, {})
         draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
@@ -110,8 +114,8 @@ async def owner_lane_check():
         await core.stop()
 
     # the realday/scorer contract: decision + goal_id + ask_id on every response
-    for out in (noise, act, ask, promise, unshaped, schedule_change, forget_hold, draft_order,
-                cart, money, money_vent, remember, clarify):
+    for out in (noise, act, ask, promise, unshaped, schedule_change, forget_hold,
+                slot_context, slot_booking, draft_order, cart, money, money_vent, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
 
@@ -164,6 +168,17 @@ async def owner_lane_check():
     fh_steps = [s.get("intent") for s in fh_rec["steps"]]
     assert fh_steps == ["write_memory"], fh_rec
     assert fh_rec["steps"][0]["args"] == {"kind": "open_loop", "text": FORGET_HOLD}, fh_rec
+
+    # Context-backed slot anaphor: the memory line names Cal and Friday afternoon,
+    # so "the Friday afternoon one" can be held on the calendar without asking.
+    assert slot_context["decision"] == "ignore", slot_context
+    assert slot_booking["decision"] == "act", slot_booking
+    sb_rec = _record(tmp, slot_booking["goal_id"])
+    assert sb_rec["state"] == "done" and sb_rec["proof"], sb_rec
+    sb_steps = [s.get("intent") for s in sb_rec["steps"]]
+    assert sb_steps == ["create_event"], sb_rec
+    assert sb_rec["steps"][0]["args"]["when"] == "Tuesday morning", sb_rec
+    assert sb_rec["steps"][0]["args"]["title"] == "furnace with Marta", sb_rec
 
     # F28: the draft request acts (no money pre-gate on the noun "order"; no send
     # reading on the purpose tail) and the executed plan is the DRAFT — never a send

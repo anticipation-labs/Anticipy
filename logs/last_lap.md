@@ -1,29 +1,29 @@
-# Last lap: 20260613T014006Z (build - dev_v2 time-anchored forget holds)
+# Last lap: 20260613T020216Z (build - dev_v2 context-backed slot-choice booking)
 
 ## What changed
-- Added a narrow Room 2 safe-hold rule for time-anchored `before I forget` lines,
-  after hard money/send/delete/auth checks.
-- Taught the stub planner to turn that same shape into one exact `write_memory`
-  open-loop step, preserving the spoken goal text as proof-bearing memory.
-- Added regression pins in `test_triage.py`, `test_harmline.py`, `test_gateway.py`,
-  and `test_owner_ingest_event.py`.
-- Logged F34 and F35 in `logs/factory/FAILURE_MODES.md`.
+- Added a shared context-backed slot-choice resolver in `shared/slotbooking.py`.
+- Room 2 now treats "book the <slot> one with <person>" as a safe calendar hold only
+  when memory names the same person, slot, and an availability cue.
+- The deterministic orchestrator uses the same resolver to plan one `create_event`
+  step, keeping the act population aligned with proof-bearing execution.
+- Added regression pins in `test_harmline.py` and `test_owner_ingest_event.py`.
+- Logged F36 and F37 in `logs/factory/FAILURE_MODES.md`.
 
 ## Failed attempt ripped out
-- A broader capture-to-visibility matcher was tried first and failed honestly:
-  official dev_v2 scoring produced `false_action_count=2` with no aggregate e2e
-  movement. That matcher and its pins were removed before the kept run.
+- A no-clock pickup/dropoff alarm adjustment auto-hold was tried first and failed:
+  official dev_v2 scoring produced `false_action_count=1`. The code and tests for
+  that attempt were removed before the kept run.
 
 ## Eval numbers seen
 - Official TARGET v9 lane: `ANTICIPY_OWNER_INGEST=1`, bank `factory/personas/dev_v2`,
-  tier `stub`, lap `20260613T014006Z-pre`.
+  tier `stub`, lap `20260613T020216Z-pre`.
 - dev_v2 score: catch 0.8413, catch_worst 0.6667, false 0, harm 0, interrupt
-  1.0/2.0, e2e 0.6389, correct 0.75, recall_worst 0.5, worst_persona
+  1.0/2.0, e2e 0.6945, correct 0.8055, recall_worst 0.5, worst_persona
   `freelancer_nora`.
-- Previous kept score from lap `20260613T012751Z-pre`: catch 0.8413,
-  catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.5833,
-  correct 0.6945, recall_worst 0.5.
-- Legacy contract smoke, bank `factory/personas/dev`, lap `20260613T014006Z-pre-dev`:
+- Previous kept score from lap `20260613T014006Z-pre`: catch 0.8413,
+  catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.6389,
+  correct 0.75, recall_worst 0.5.
+- Legacy contract smoke, bank `factory/personas/dev`, lap `20260613T020216Z-pre-dev`:
   catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483, correct 0.8475,
   recall 1.0.
 - `bash scripts/run_suite.sh`: 46/46 GREEN.
@@ -36,6 +36,6 @@
 
 ## What's next
 - The remaining official v2 floor is still `freelancer_nora`. The largest honest
-  gap remains memory-resolved cart execution for named-but-not-derivable stores and
-  ask-first communication boundaries. Do not invent store hostnames or weaken send,
-  money, or no-purchase rules to move the score.
+  gaps remain memory-resolved cart execution and communication boundaries. Do not
+  invent stores, weaken send/money/no-purchase rules, or retry no-clock pickup-alarm
+  holds without a new product law and a zero-false eval.
