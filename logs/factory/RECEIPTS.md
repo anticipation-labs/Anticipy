@@ -26,6 +26,20 @@ Each entry: date · slice · the RECEIPT (a real artifact a human can independen
   (2) Sandbox single-process flags broke chromium-1223; chromium-1161 worked — a non-issue on the user's machine
   (multi-process Chrome allowed).
 
+### ✅ Slice 6 step 2 — browser-arm onboarding-scrape reliability MEASURED · 2026-06-13
+**Honest, skeptic-verified reliability of the open-source browser arm on the onboarding-scrape READ job:
+4/6 diverse public pages fully correct (independently confirmed) — strict 67% / credit 75%.**
+- ✅ Reliable: static/server-rendered/semantic pages — Wikipedia infobox (Stripe founders/year/HQ), GitHub
+  profile (Linus, pinned repos; correctly returned null for an absent bio — no fabrication), S&P 500 table
+  (first 5 + headers), HN item (title/submitter/url). 25–54s each.
+- ❌ JS-heavy SPA (Claude pricing): failed LOUDLY — returned empty + "could not extract", no hallucinated
+  prices. The safe failure direction; onboarding will hit many of these.
+- ⚠️ Fine-grained fact (Python docs json separators): confidently WRONG on one field while right on neighbors —
+  the dangerous mode for profile-building. **Implication: browser reads of precise facts must be cross-checked
+  (read-back / second source) before they're written to a profile.**
+- Read-only compliance audited (navigate/extract/evaluate/scroll/benign-click only; no login/write/money);
+  own throwaway browser; engine venv untouched. Skeptic: refuted=false (honest failures, not fabrication).
+
 ## KEY FINDING — the moat's real wall (2026-06-13)
 **You cannot raise interrupt-catch (decider→ASK) on uncertain commitments without reintroducing the cardinal
 sin.** Two attempts, both adversarially broken:
