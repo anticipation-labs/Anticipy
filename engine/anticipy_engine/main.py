@@ -303,6 +303,17 @@ def memory_open_loops(limit: int = 50) -> dict:
     return core.memory_open_loops(limit=limit)
 
 
+@app.get("/memory/remembered")
+def memory_remembered(limit: int = 50) -> dict:
+    """The explicit PULL surface for the INERT remember-list ("show me my remembered
+    commitments"). Strictly read-only: it returns rows from a SEPARATE table that no
+    proactive loop, decider, harm-line, or TriggerWatcher reads, and that carries no
+    due/remind/trigger field — so surfacing it can never fire an action or interrupt.
+    This endpoint is on NO background loop; it only answers an explicit request."""
+    rows = core.live_memory.capturer.remember.recent(limit)
+    return {"remembered": rows, "count": len(rows)}
+
+
 @app.post("/memory/open-loops/resolve")
 def memory_loop_resolve(body: MemoryLoopResolveIn) -> dict:
     out = core.resolve_memory_loop(body.id, body.status)

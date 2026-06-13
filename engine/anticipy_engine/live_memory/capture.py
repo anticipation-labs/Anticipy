@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from ..memory.store import Memory
 from ..shared.schema import MemoryItem
 from .duetime import REMIND_LEAD_S, anchor_from_meta, parse_due
+from .remember import RememberList
 
 _FILLER = {"um", "uh", "ok", "okay", "yeah", "yep", "yup", "nope", "no", "yes", "thanks",
            "thank", "hi", "hey", "hello", "bye", "cool", "nice", "sure", "right", "mhm",
@@ -52,6 +53,24 @@ def should_keep(text: str) -> bool:
     return True
 
 
+def should_remember(text: str) -> bool:
+    """The GENEROUS gate for the inert remember-list (separate from should_keep).
+
+    Over-capture is HARMLESS here because the remember-list is pull-only and can never
+    fire, so this is biased to high recall: keep anything that is not pure empty/filler.
+    Critically this is LOOSER than should_keep — it has no effect on any drawer, classify,
+    dedupe, or decision path; it only decides what lands in the inert remembered table.
+    """
+    t = (text or "").strip()
+    if len(t) < 2:
+        return False
+    words = [w.strip(".,!?;:'\"").lower() for w in t.split()]
+    # drop ONLY a 1-2 word pure-filler grunt ("um", "ok thanks"); keep everything else.
+    if len(words) <= 2 and all(w in _FILLER or not w for w in words):
+        return False
+    return True
+
+
 def classify(text: str) -> Tuple[str, Dict[str, object]]:
     """Route a kept utterance to a drawer (rules; cheap model in live mode)."""
     if _COMMIT.search(text):
@@ -83,10 +102,31 @@ def _norm(s: str) -> str:
 
 
 class Capturer:
-    def __init__(self, memory: Memory, gateway=None, mode: Optional[str] = None) -> None:
+    def __init__(self, memory: Memory, gateway=None, mode: Optional[str] = None,
+                 remember: Optional[RememberList] = None) -> None:
         self.memory = memory
         self.gateway = gateway
         self.mode = mode or os.environ.get("ANTICIPY_MEMORY_MODE", "stub")
+        # The inert, pull-only remember-list (the SAFE half of the inference core).
+        # It is a SEPARATE table — never a drawer, never an open_loop, no due/remind/
+        # trigger fields — so nothing it holds can ever fire an action or an interrupt.
+        # Constructed here so both capture call sites (feed + owner_ingest) write to it
+        # through the single capture chokepoint with no control_core change.
+        self.remember = remember if remember is not None else RememberList(memory.db)
+
+    def _remember_side_write(self, text: str, source: str,
+                             people: List[str], meta: Optional[Dict[str, object]]) -> None:
+        """Fire-and-forget parallel write into the inert remember-list.
+
+        GENEROUS (should_remember) and fully isolated: any failure is swallowed so it can
+        NEVER alter the capture decision dict (kept/kind/reason/smart_calls) or raise into
+        the always-listening / act/ask path. Returns nothing into the decision flow.
+        """
+        try:
+            if should_remember(text):
+                self.remember.remember(text, source=source, meta=meta, people=people)
+        except Exception:  # noqa: BLE001 — the remember-write must never disturb capture
+            pass
 
     def _dup(self, text: str, kind: str) -> Optional[MemoryItem]:
         n = _norm(text)
@@ -100,6 +140,12 @@ class Capturer:
         if self.mode == "live":
             # TODO(live): cheap-model gate+extraction via self.gateway; never hit in tests.
             pass
+        # ADDITIVE parallel write to the INERT remember-list — generous + isolated.
+        # Runs BEFORE the keep/drop gate so over-capture is high-recall, but it is a
+        # side effect only: it never feeds the returned decision dict and never raises
+        # into the act/ask/trigger path. The existing classify/dedupe/drawer.write path
+        # below is left byte-for-byte unchanged.
+        self._remember_side_write(text, source=source, people=extract_people(text), meta=meta)
         if not force and not should_keep(text):
             return {"kept": False, "reason": "noise", "smart_calls": 0}
         kind, fields = classify(text)

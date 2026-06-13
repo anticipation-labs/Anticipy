@@ -5,9 +5,10 @@ Each entry: date · slice · the RECEIPT (a real artifact a human can independen
 
 ## Slice status
 - **Slice 0 — real read-back completion gate:** ✅ DONE & PROVEN (2026-06-13). See receipt below.
-- **Slice 1 — inference core (catch unspoken commitments):** BLOCKED ON A PRODUCT DECISION (Omar). Two
-  engineering attempts (1, 1b) both hit the cardinal-sin wall — see the finding below. Safe baseline restored
-  (11/16 catch, 0 false-actions). The fork is Omar's to call.
+- **Slice 1 — inference core (catch unspoken commitments):** DECISION MADE by Omar (2026-06-13): the action
+  model is *prepare generously → park as "awaiting approval" → ask only at the irreversible press-go*
+  (Constitution updated). The SAFE "remember everything" half is now ✅ BUILT & PROVEN (see receipt). The two
+  earlier interrupt-catch attempts that broke the no-vent rule stay reverted (finding below).
 - **Slice 6 — browser arm (open-source + our model):** ✅ READ ARM PROVEN + ENGINE-INTEGRATED. Harness +
   reliability + engine bridge all done & committed. Remaining: WRITE prepare-then-handoff (needs the user's
   accounts → not autonomously provable) and deeper onboarding-scrape (deferred per research until the core holds).
@@ -77,6 +78,23 @@ up without some adversarial sarcasm slipping to a false interrupt. Chasing it fu
 **THE DECISION FOR OMAR:** for a borderline "I owe Sam the deck by 4" — interrupt-ASK now (risks asking on
 sarcasm too), or quietly remember it for your daily review (safe, but no live nudge)? This choice sets the whole
 act/ask/remember boundary. Recommend: conservative interrupt + generous pull-surfaced memory.
+
+### ✅ Remember-list — the safe half of the core (Omar's action model) · 2026-06-13
+**Commitments are now never *forgotten*, with zero risk of ever firing.** A generous capture writes every
+non-filler line into a SEPARATE, INERT, pull-only store (`remembered_lines` table) — distinct from the
+actionable open_loops, with NO due/remind/trigger fields, read by NOTHING in the decision pipeline.
+- New `engine/anticipy_engine/live_memory/remember.py` (RememberList: own table, `remember()`/`recent()`/`all()`,
+  no trigger fields possible); `capture.py` += a try/except-isolated generous side-write at the single capture
+  chokepoint (covers both feed + owner_ingest); `main.py` += read-only `GET /memory/remembered` (the pull/review
+  surface); new `test_memory_remembered.py`.
+- **RECEIPT:** 3/3 skeptics `refuted:false`. The 8 decision/trigger files (decider/harm/trigger/proactive/triage/
+  schema/store/inject) are **byte-for-byte unchanged** (sha256 + empty git diff, foreman-verified). The 5 prior
+  misses ("I told Sam I'd send the deck", etc.) all land in the list and pull back; filler dropped. `TriggerWatcher`
+  forced to evaluate remember rows at **now+100 years fired 0** — the delayed-cardinal-sin vector is closed.
+  Suite **57/57 green**. Committed.
+- This is exactly Omar's model: over-catching is now SAFE because a wrongly-remembered vent just sits parked in
+  the review and can never interrupt or fire. The "prepare the action + park for approval" half + the review UI
+  are next; real execution waits on Omar connecting his accounts.
 
 ## Honest negatives (reverted; kept so we never repeat them)
 
