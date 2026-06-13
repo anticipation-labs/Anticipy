@@ -50,6 +50,13 @@ def _cards_by_action(cards: list[dict]) -> dict[str, list[dict]]:
 
 def main():
     with TestClient(app) as client:
+        status = client.get("/status")
+        assert status.status_code == 200, status.text
+        channels = status.json()["channels"]
+        assert channels["mode"] in {"mock", "live"}, channels
+        assert channels["status"] in {"mock", "missing_twilio", "missing_owner_contact", "live_ready"}, channels
+        assert "TWILIO_AUTH_TOKEN" not in json.dumps(channels), channels
+
         res = client.post(
             "/owner/ingest",
             json={

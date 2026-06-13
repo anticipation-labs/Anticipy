@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -39,16 +41,59 @@ class MemoryDB:
     def __init__(self, data_dir: Path) -> None:
         data_dir.mkdir(parents=True, exist_ok=True)
         self.path = data_dir / "memory.db"
-        self.conn = sqlite3.connect(str(self.path), check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute(
-            "CREATE TABLE IF NOT EXISTS items("
-            "id TEXT PRIMARY KEY, kind TEXT, text TEXT, fields TEXT, people TEXT, "
-            "timestamp REAL, updated_at REAL, provenance TEXT, confidence REAL, "
-            "importance REAL, status TEXT, embedding TEXT)"
-        )
-        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON items(kind)")
-        self.conn.commit()
+        self.recovered_corruption = False
+        self._lock = threading.RLock()
+        self.conn = self._connect()
+        try:
+            self._ensure_schema()
+            self._verify_integrity()
+        except sqlite3.DatabaseError:
+            self._quarantine_corrupt_db()
+            self.conn = self._connect()
+            self._ensure_schema()
+
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(str(self.path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _ensure_schema(self) -> None:
+        with self._lock:
+            self.conn.execute(
+                "CREATE TABLE IF NOT EXISTS items("
+                "id TEXT PRIMARY KEY, kind TEXT, text TEXT, fields TEXT, people TEXT, "
+                "timestamp REAL, updated_at REAL, provenance TEXT, confidence REAL, "
+                "importance REAL, status TEXT, embedding TEXT)"
+            )
+            self.conn.execute("CREATE INDEX IF NOT EXISTS idx_kind ON items(kind)")
+            self.conn.commit()
+
+    def _verify_integrity(self) -> None:
+        with self._lock:
+            row = self.conn.execute("PRAGMA integrity_check").fetchone()
+        verdict = row[0] if row else "missing integrity_check result"
+        if verdict != "ok":
+            raise sqlite3.DatabaseError(f"memory db integrity_check failed: {verdict}")
+
+    def _quarantine_corrupt_db(self) -> None:
+        self.recovered_corruption = True
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+        if not self.path.exists():
+            return
+        suffix = f".corrupt-{int(time.time())}"
+        for path in (self.path, self.path.with_suffix(self.path.suffix + "-wal"),
+                     self.path.with_suffix(self.path.suffix + "-shm")):
+            if not path.exists():
+                continue
+            target = path.with_name(path.name + suffix)
+            i = 1
+            while target.exists():
+                target = path.with_name(f"{path.name}{suffix}.{i}")
+                i += 1
+            path.rename(target)
 
     @staticmethod
     def _row_to_item(r: sqlite3.Row) -> MemoryItem:
@@ -60,28 +105,32 @@ class MemoryDB:
         )
 
     def upsert(self, item: MemoryItem, embedding: List[float]) -> None:
-        self.conn.execute(
-            f"INSERT OR REPLACE INTO items({','.join(_COLS)}) VALUES ({','.join('?' * len(_COLS))})",
-            (item.id, item.kind, item.text, json.dumps(item.fields), json.dumps(item.people),
-             item.timestamp, item.updated_at, item.provenance, item.confidence, item.importance,
-             item.status, json.dumps(embedding)),
-        )
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute(
+                f"INSERT OR REPLACE INTO items({','.join(_COLS)}) VALUES ({','.join('?' * len(_COLS))})",
+                (item.id, item.kind, item.text, json.dumps(item.fields), json.dumps(item.people),
+                 item.timestamp, item.updated_at, item.provenance, item.confidence, item.importance,
+                 item.status, json.dumps(embedding)),
+            )
+            self.conn.commit()
 
     def get(self, item_id: str) -> Optional[MemoryItem]:
-        r = self.conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+        with self._lock:
+            r = self.conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
         return self._row_to_item(r) if r else None
 
     def by_kind(self, kind: MemoryKind) -> List[MemoryItem]:
-        rows = self.conn.execute("SELECT * FROM items WHERE kind=? ORDER BY timestamp", (kind,))
+        with self._lock:
+            rows = self.conn.execute("SELECT * FROM items WHERE kind=? ORDER BY timestamp", (kind,)).fetchall()
         return [self._row_to_item(r) for r in rows]
 
     def clear(self, kind: Optional[MemoryKind] = None) -> None:
-        if kind is None:
-            self.conn.execute("DELETE FROM items")
-        else:
-            self.conn.execute("DELETE FROM items WHERE kind=?", (kind,))
-        self.conn.commit()
+        with self._lock:
+            if kind is None:
+                self.conn.execute("DELETE FROM items")
+            else:
+                self.conn.execute("DELETE FROM items WHERE kind=?", (kind,))
+            self.conn.commit()
 
     def scored(self, query_vec: List[float], kinds: List[str]):
         """(id, cosine) for every embedded item in the given kinds, best first."""
@@ -89,7 +138,9 @@ class MemoryDB:
             return []
         q = "SELECT id, embedding FROM items WHERE kind IN (%s)" % ",".join("?" * len(kinds))
         out = []
-        for r in self.conn.execute(q, tuple(kinds)):
+        with self._lock:
+            rows = self.conn.execute(q, tuple(kinds)).fetchall()
+        for r in rows:
             emb = json.loads(r["embedding"] or "[]")
             if emb:
                 out.append((r["id"], cosine(query_vec, emb)))
@@ -102,11 +153,12 @@ class MemoryDB:
     def reindex(self) -> int:
         """One-shot: re-embed every stored row under the CURRENT embed() (e.g. after
         flipping ANTICIPY_MEMORY_MODE stub->live, or swapping models). Returns row count."""
-        rows = self.conn.execute("SELECT id, text FROM items").fetchall()
-        for r in rows:
-            self.conn.execute("UPDATE items SET embedding=? WHERE id=?",
-                              (json.dumps(embed(r["text"])), r["id"]))
-        self.conn.commit()
+        with self._lock:
+            rows = self.conn.execute("SELECT id, text FROM items").fetchall()
+            for r in rows:
+                self.conn.execute("UPDATE items SET embedding=? WHERE id=?",
+                                  (json.dumps(embed(r["text"])), r["id"]))
+            self.conn.commit()
         return len(rows)
 
 

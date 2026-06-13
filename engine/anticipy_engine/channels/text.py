@@ -21,11 +21,14 @@ class TextChannel(Channel):
     def __init__(self) -> None:
         self.sent: List[dict] = []   # audit log of every send (real or mock)
 
+    @staticmethod
+    def configured() -> bool:
+        return bool(os.environ.get("TWILIO_ACCOUNT_SID")
+                    and os.environ.get("TWILIO_AUTH_TOKEN")
+                    and os.environ.get("TWILIO_FROM"))
+
     def _live(self) -> bool:
-        return (os.environ.get("ANTICIPY_CHANNELS_MODE") == "live"
-                and bool(os.environ.get("TWILIO_ACCOUNT_SID"))
-                and bool(os.environ.get("TWILIO_AUTH_TOKEN"))
-                and bool(os.environ.get("TWILIO_FROM")))
+        return os.environ.get("ANTICIPY_CHANNELS_MODE") == "live" and self.configured()
 
     def send(self, to: str, message: str) -> dict:
         if not self._live():

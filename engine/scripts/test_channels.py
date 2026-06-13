@@ -15,6 +15,7 @@ os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
 from anticipy_engine.channels import Channels  # noqa: E402
 from anticipy_engine.channels.base import Channel  # noqa: E402
 from anticipy_engine.channels.call import CallChannel  # noqa: E402
+from anticipy_engine.channels.text import TextChannel  # noqa: E402
 
 ch = Channels()
 assert {ch.call.name, ch.text.name, ch.app.name} == {"call", "text", "app"}
@@ -39,4 +40,24 @@ assert twiml.startswith("<Response><Say>") and twiml.endswith("</Say></Response>
 assert "<YES>" not in twiml and "&amp;" in twiml and "&lt;YES&gt;" in twiml, twiml
 assert len(CallChannel.twiml("x" * 10000)) < 4000, "Twiml parameter bound violated"
 
-print("PASS channels: text/call real (mock mode, audited), app stubbed, TwiML escaped+bounded")
+# Readiness: status surfaces can detect live-ready configuration without sending.
+prev = {k: os.environ.get(k) for k in (
+    "ANTICIPY_CHANNELS_MODE", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM"
+)}
+try:
+    os.environ["TWILIO_ACCOUNT_SID"] = "AC_test"
+    os.environ["TWILIO_AUTH_TOKEN"] = "token"
+    os.environ["TWILIO_FROM"] = "+15550000000"
+    os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
+    assert TextChannel.configured() and CallChannel.configured()
+    assert not TextChannel()._live() and not CallChannel()._live()
+    os.environ["ANTICIPY_CHANNELS_MODE"] = "live"
+    assert TextChannel()._live() and CallChannel()._live()
+finally:
+    for k, v in prev.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+print("PASS channels: text/call real (mock mode, audited), readiness detected, app stubbed, TwiML escaped+bounded")

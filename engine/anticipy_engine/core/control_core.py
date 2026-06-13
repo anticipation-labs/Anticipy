@@ -224,6 +224,34 @@ class ControlCore:
     def _owner_event_enabled() -> bool:
         return (os.environ.get("ANTICIPY_OWNER_INGEST", "") or "").strip().lower() in {"1", "true", "yes", "on"}
 
+    def channel_status(self) -> dict:
+        """Public-safe readiness for owner text/call channels.
+
+        This exposes mode and missing setup only; never the phone number or Twilio
+        secrets. The send path itself still decides live/mock at call time.
+        """
+        mode = (os.environ.get("ANTICIPY_CHANNELS_MODE") or "mock").strip().lower()
+        twilio_configured = self.text_channel.configured() and self.call_channel.configured()
+        owner_contact_configured = bool(
+            os.environ.get("OWNER_PHONE") or os.environ.get("ALERT_PHONE") or os.environ.get("TWILIO_TO")
+        )
+        if mode != "live":
+            status = "mock"
+        elif not twilio_configured:
+            status = "missing_twilio"
+        elif not owner_contact_configured:
+            status = "missing_owner_contact"
+        else:
+            status = "live_ready"
+        return {
+            "mode": "live" if mode == "live" else "mock",
+            "status": status,
+            "twilio_configured": twilio_configured,
+            "owner_contact_configured": owner_contact_configured,
+            "text": status,
+            "call": status,
+        }
+
     def _sync_owner_loop_status(self, card_id: str, state: str) -> None:
         """Keep the memory ledger aligned with the visible owner card state."""
         status = _status_for_open_loop(state)

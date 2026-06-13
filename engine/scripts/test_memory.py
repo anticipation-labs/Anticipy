@@ -5,6 +5,7 @@ restart durability, deterministic embedder + local vector recall.
 
 Run:  PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_memory.py
 """
+from concurrent.futures import ThreadPoolExecutor
 import tempfile
 from pathlib import Path
 
@@ -60,8 +61,36 @@ def main():
     assert top2 and top2[0].id == b.id, (top2 and top2[0].text)
     assert c.id not in [i.id for i in m2.search_vec("ergonomic office desk chairs", ["history"], k=2)]
 
+    # SELF-HEAL: a corrupt local db must not brick the public app. Preserve it
+    # aside and boot a clean memory db.
+    bad = Path(tempfile.mkdtemp(prefix="anticipy-mem-corrupt-"))
+    (bad / "memory.db").write_bytes(b"not a sqlite database")
+    recovered = Memory(data_dir=bad)
+    assert recovered.db.recovered_corruption is True
+    assert recovered.profile.all() == []
+    assert list(bad.glob("memory.db.corrupt-*")), "corrupt db should be preserved aside"
+    recovered.open_loops.write_text("Recovered engine can still write loops", status="open")
+    assert len(recovered.open_loops.all()) == 1
+
+    # SHARED APP INSTANCE: dashboard endpoints can read/write memory concurrently.
+    # The SQLite boundary must serialize access instead of sharing an unsafe cursor.
+    def churn(i: int) -> int:
+        if i % 7 == 0:
+            m2.history.write_text(f"threaded status note {i}")
+        return (
+            len(m2.profile.all())
+            + len(m2.open_loops.all())
+            + len(m2.history.all())
+            + len(m2.search_vec("office chairs", ["history"], k=2))
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(churn, range(80)))
+    assert len(results) == 80 and all(isinstance(r, int) for r in results)
+
     print("PASS piece 1: 4 SQLite drawers, isolation, open_loops exact+stateful, "
-          "restart-durable, deterministic embed + vector recall")
+          "restart-durable, deterministic embed + vector recall, corrupt-db recovery, "
+          "thread-safe access")
     print("  data dir:", tmp)
 
 

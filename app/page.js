@@ -118,6 +118,14 @@ function firedLoopText(item) {
   return pieces.join(" / ");
 }
 
+function channelLabel(channels) {
+  const status = channels?.status || "mock";
+  if (status === "live_ready") return "text/call live-ready";
+  if (status === "missing_owner_contact") return "text/call need owner number";
+  if (status === "missing_twilio") return "text/call need Twilio";
+  return "text/call mock";
+}
+
 function loopMeta(loop) {
   const fields = loop.fields || {};
   return [fields.route, fields.action, fields.disposition || fields.kind]
@@ -247,6 +255,8 @@ export default function Home() {
     openLoops: null,
     pendingCount: null,
     extensionConnected: false,
+    memoryRecovered: false,
+    channels: { status: "mock" },
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -292,9 +302,19 @@ export default function Home() {
         openLoops: typeof data.open_loop_count === "number" ? data.open_loop_count : null,
         pendingCount: typeof data.pending_count === "number" ? data.pending_count : null,
         extensionConnected: Boolean(data.extension_connected),
+        memoryRecovered: Boolean(data.memory_recovered),
+        channels: data.channels || { status: "mock" },
       });
     } else {
-      setEngine({ ok: false, label: "engine offline", openLoops: null, pendingCount: null, extensionConnected: false });
+      setEngine({
+        ok: false,
+        label: "engine offline",
+        openLoops: null,
+        pendingCount: null,
+        extensionConnected: false,
+        memoryRecovered: false,
+        channels: { status: "mock" },
+      });
     }
     if (pendingRes.status === "fulfilled") setPending(pendingRes.value.pending || []);
     if (glassbox.status === "fulfilled") setEvents(glassbox.value.entries || []);
@@ -544,6 +564,8 @@ export default function Home() {
           {typeof engine.openLoops === "number" ? <span>{engine.openLoops} active loops</span> : null}
           {typeof engine.pendingCount === "number" ? <span>{engine.pendingCount} waiting</span> : null}
           {engine.extensionConnected ? <span>browser linked</span> : null}
+          {engine.memoryRecovered ? <span>memory recovered</span> : null}
+          <span>{channelLabel(engine.channels)}</span>
         </div>
       </header>
 
