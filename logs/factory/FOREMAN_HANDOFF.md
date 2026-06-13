@@ -110,6 +110,12 @@ product. Money/payment is the ONLY hard action stop. Acting on a vent is the car
   com.anticipy.factory nightly 22:30 (caffeinate-wrapped, PATH includes ~/.local/bin);
   engine brain on Gemini free tier (ANTICIPY_OPENAI_BASE_URL in .env.local); claude
   project memory at ~/.claude/projects/-Users-omarebrahim-Anticipy/memory/.
+- Backend note (2026-06-12): Claude credits are unavailable. The Factory now defaults to
+  `FACTORY_AGENT=codex`, which runs builder and judge laps through `codex exec --json`
+  while preserving the same BUILD/JUDGE prompts, manifest, gates, judge, scoreboard,
+  ratchet, treadmill, lock discipline, and holdout rules. The backend is replaceable;
+  the control laws are not. The loop remains paused by Omar's `.halt`; first resume must
+  be countable per TARGET v8.1 (phone-confirmed P3 closure or bank-v2 baseline).
 - LOOP INVENTORY (verified 2026-06-10 ~20:55 PDT — every scheduler on this Mac):
   (1) Factory loop: the ONLY live launchd actor on the repo. Tonight's laps are hitting
   the Claude builder session limit → honest SKIPPED_LIMIT, 180s backoff, MAX_LAPS

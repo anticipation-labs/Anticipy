@@ -28,13 +28,23 @@ done
 journal() { printf '\n- %s %s\n' "$(date -u +%FT%TZ)" "$1" >> "$JOURNAL"; }
 notify() { osascript -e "display notification \"$1\" with title \"Anticipy Factory\"" >/dev/null 2>&1 || true; }
 
-# resolve the claude binary once so launchd/cron contexts can't lose it (ledger D1)
-CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || true)}"
-[[ -x "$CLAUDE_BIN" ]] || CLAUDE_BIN="$HOME/.local/bin/claude"
-if [[ ! -x "$CLAUDE_BIN" && -z "${FACTORY_BUILD_CMD:-}" ]]; then
-  journal "loop abort: claude binary not found (CLAUDE_BIN)"; notify "Factory: claude binary not found"; exit 1
+# resolve the model-agent binary once so launchd/cron contexts can't lose it (ledger D1)
+FACTORY_AGENT="${FACTORY_AGENT:-claude}"
+if [[ "$FACTORY_AGENT" == "codex" ]]; then
+  CODEX_BIN="${CODEX_BIN:-$(command -v codex || true)}"
+  [[ -x "$CODEX_BIN" ]] || CODEX_BIN="$HOME/.local/bin/codex"
+  if [[ ! -x "$CODEX_BIN" && -z "${FACTORY_BUILD_CMD:-}" ]]; then
+    journal "loop abort: codex binary not found (CODEX_BIN)"; notify "Factory: codex binary not found"; exit 1
+  fi
+  export CODEX_BIN
+else
+  CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || true)}"
+  [[ -x "$CLAUDE_BIN" ]] || CLAUDE_BIN="$HOME/.local/bin/claude"
+  if [[ ! -x "$CLAUDE_BIN" && -z "${FACTORY_BUILD_CMD:-}" ]]; then
+    journal "loop abort: claude binary not found (CLAUDE_BIN)"; notify "Factory: claude binary not found"; exit 1
+  fi
+  export CLAUDE_BIN
 fi
-export CLAUDE_BIN
 
 # ---- lock (stale if PID dead OR lock older than 24h — PID reuse guard, ledger D8) ----
 if ! mkdir factory/.lock 2>/dev/null; then

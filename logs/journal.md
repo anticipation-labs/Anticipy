@@ -871,3 +871,12 @@ diff ZERO (the only raw diffs were the run-dir name embedded in card paths); goa
 (intent,state) multisets identical; zero hint artifacts in any run dir. Disclosed up
 front as instrument-dead (e2e at the F31 ceiling, foreman-owned); zero spend, zero
 real-world artifacts.
+2026-06-12 foreman session (Codex backend takeover prep): Omar reported Claude credits
+are unavailable and asked Codex to take over without losing the successful Factory laws.
+Added a backend switch and made Codex the default so `FACTORY_AGENT=codex` runs builder
+and judge laps through `codex exec --json`, while keeping the same BUILD/JUDGE prompts,
+manifest, gates,
+judge, scoreboard, ratchet, treadmill, and lock discipline. Verified Codex CLI with a
+read-only ephemeral smoke (`CODEX_OK`), syntax-checked the touched shell scripts, and
+ran the deterministic suite green (46/46). The loop remains paused by owner order; first
+resume must be countable: phone-confirmed P3 closure or bank-v2 baseline.

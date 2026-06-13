@@ -595,3 +595,18 @@ only hard action stop. Real artifact read-back is the only completion proof. Bui
 grade themselves, never touch factory//personas//scoreboard, never read holdout. Honest
 labels: UNPROVEN until a gate or judge says otherwise. Strategy changes are legal and go
 through ESCALATION -> foreman -> TARGET.md, never silently.
+
+## Codex backend takeover prep (2026-06-12)
+Owner reports Claude credits are unavailable. The successful part of the prior system was
+NOT the Claude backend; it was the Factory's control law: one locked workshop, pre-
+registered hypotheses, research-before-editing, mechanical gates, adversarial judge,
+holdout secrecy, read-back proof, scoreboard ratchet, treadmill escalation, and durable
+handoffs. Those laws now survive a backend swap: the Factory defaults to
+`FACTORY_AGENT=codex`, which runs builder and judge laps through `codex exec --json`;
+Claude is now only an explicit override. Codex smoke test passed from this repo, shell
+syntax passed, and the suite is green at 46/46.
+
+The product remains paused by Omar's `.halt`. First resume must be countable per TARGET
+v8.1: either supervised P3 voice closure after explicit phone confirmation, or a bank-v2
+baseline measurement that creates real instrument headroom. Do not resume into dead-by-
+design P4 groundwork while treadmill_count is 6.

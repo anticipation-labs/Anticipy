@@ -39,11 +39,26 @@ MODEL_ARGS=()
 [[ -n "${JUDGE_MODEL:-}" ]] && MODEL_ARGS+=(--model "$JUDGE_MODEL")
 CLAUDE="${CLAUDE_BIN:-claude}"
 
-"$CLAUDE" -p "$PROMPT" \
-  --dangerously-skip-permissions \
-  --output-format stream-json --verbose \
-  ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
-  > "$STREAM" 2> "$LAPDIR/judge.err" &
+if [[ "${FACTORY_AGENT:-claude}" == "codex" ]]; then
+  CODEX="${CODEX_BIN:-codex}"
+  CODEX_MODEL_ARG=()
+  if [[ -n "${CODEX_MODEL:-${JUDGE_MODEL:-}}" ]]; then
+    CODEX_MODEL_ARG=(--model "${CODEX_MODEL:-${JUDGE_MODEL:-}}")
+  fi
+  "$CODEX" exec \
+    --cd "$REPO" \
+    --json \
+    --sandbox "${CODEX_SANDBOX:-danger-full-access}" \
+    ${CODEX_MODEL_ARG[@]+"${CODEX_MODEL_ARG[@]}"} \
+    - \
+    > "$STREAM" 2> "$LAPDIR/judge.err" <<<"$PROMPT" &
+else
+  "$CLAUDE" -p "$PROMPT" \
+    --dangerously-skip-permissions \
+    --output-format stream-json --verbose \
+    ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+    > "$STREAM" 2> "$LAPDIR/judge.err" &
+fi
 CPID=$!
 (
   sleep "${JUDGE_WALL_CAP_SECONDS:-1200}"

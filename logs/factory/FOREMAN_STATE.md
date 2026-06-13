@@ -1,6 +1,27 @@
 # FOREMAN STATE — updated at the end of every foreman session
 
-Last updated: 2026-06-11 ~02:45 PDT (session: P2 closure night + K=5 re-aim to owner lane)
+Last updated: 2026-06-12 ~18:00 PDT (session: Codex backend takeover prep)
+
+## Codex takeover prep (2026-06-12, owner requested no-Claude-credit path)
+- The loop is still PAUSED by owner order: `factory/.halt` present, no lock, no open
+  escalation. Do not kickstart until Omar explicitly resumes.
+- Claude subscription/weekly limits are no longer allowed to be the execution dependency.
+  The Factory now defaults to `FACTORY_AGENT=codex`: builder and judge
+  laps run through `codex exec --json` while preserving the same BUILD/JUDGE prompts,
+  manifest contract, mechanical gates, scoreboard, ratchet, treadmill, lock discipline,
+  and holdout rules. `FACTORY_AGENT=claude` remains an explicit override, not the default.
+- Verified locally: `codex exec --cd /Users/omarebrahim/Anticipy --sandbox read-only
+  --json --ephemeral 'Reply exactly: CODEX_OK'` exited 0 and returned `CODEX_OK`.
+  Nonfatal plugin/MCP auth noise appeared on stderr; it did not fail the command.
+- Control-plane change is syntax-checked and the deterministic suite is green:
+  `bash scripts/run_suite.sh` -> 46 passed, 0 failed.
+- Critical resume rule from TARGET v8.1 still governs: because treadmill_count is 6 and
+  only movement may reset it, the first real resumed lap must be countable. Legal first
+  resumes are: (a) Omar says "phone confirmed", foreman creates
+  `factory/config/owner_phone.confirmed`, then a supervised P3 voice closure attempt;
+  or (b) foreman authors/measures persona bank v2 as a first-measurement baseline.
+  Do not resume with Stage-B P4 groundwork while the treadmill is at ceiling; it will
+  immediately re-halt and teach nothing.
 
 ## Overnight session (2026-06-10 22:00 -> 2026-06-11 02:45 PDT) — the P2 night
 - **P2-brain CLOSED with judge REAL** (lap 041654Z): holdout worst 1.0 (14/14), false 0,

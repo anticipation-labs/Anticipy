@@ -35,12 +35,27 @@ MODEL_ARGS=()
 [[ -n "${BUILD_MODEL:-}" ]] && MODEL_ARGS+=(--model "$BUILD_MODEL")
 CLAUDE="${CLAUDE_BIN:-claude}"
 
-# run claude in background so the watchdog can kill the exact PID + its subtree (ledger D3)
-"$CLAUDE" -p "$PROMPT" \
-  --dangerously-skip-permissions \
-  --output-format stream-json --verbose \
-  ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
-  > "$STREAM" 2> "$LAPDIR/build.err" &
+# run the agent in background so the watchdog can kill the exact PID + its subtree (ledger D3)
+if [[ "${FACTORY_AGENT:-claude}" == "codex" ]]; then
+  CODEX="${CODEX_BIN:-codex}"
+  CODEX_MODEL_ARG=()
+  if [[ -n "${CODEX_MODEL:-${BUILD_MODEL:-}}" ]]; then
+    CODEX_MODEL_ARG=(--model "${CODEX_MODEL:-${BUILD_MODEL:-}}")
+  fi
+  "$CODEX" exec \
+    --cd "$REPO" \
+    --json \
+    --sandbox "${CODEX_SANDBOX:-danger-full-access}" \
+    ${CODEX_MODEL_ARG[@]+"${CODEX_MODEL_ARG[@]}"} \
+    - \
+    > "$STREAM" 2> "$LAPDIR/build.err" <<<"$PROMPT" &
+else
+  "$CLAUDE" -p "$PROMPT" \
+    --dangerously-skip-permissions \
+    --output-format stream-json --verbose \
+    ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+    > "$STREAM" 2> "$LAPDIR/build.err" &
+fi
 CPID=$!
 (
   sleep "${BUILD_WALL_CAP_SECONDS:-2400}"
@@ -52,10 +67,10 @@ wait "$WATCHDOG" 2>/dev/null
 pkill -P "$CPID" 2>/dev/null || true
 
 # extract the final result envelope for spend tracking
-engine/.venv/bin/python - "$STREAM" "$LAPDIR/build.json" <<'PY'
+engine/.venv/bin/python - "$STREAM" "$LAPDIR/build.json" "${FACTORY_AGENT:-claude}" <<'PY'
 import json, sys
-stream, out = sys.argv[1], sys.argv[2]
-result = {}
+stream, out, backend = sys.argv[1], sys.argv[2], sys.argv[3]
+result = {"backend": backend}
 try:
     with open(stream) as f:
         for line in f:
@@ -68,6 +83,21 @@ try:
                 continue
             if obj.get("type") == "result" or "total_cost_usd" in obj:
                 result = obj
+                result.setdefault("backend", backend)
+            elif obj.get("type") == "turn.completed":
+                result.update({
+                    "type": "turn.completed",
+                    "backend": backend,
+                    "usage": obj.get("usage", {}),
+                    "total_cost_usd": 0.0,
+                })
+            elif obj.get("type") in ("turn.failed", "error"):
+                result.update({
+                    "type": obj.get("type"),
+                    "backend": backend,
+                    "result": obj.get("message") or obj.get("error") or obj,
+                    "total_cost_usd": 0.0,
+                })
 except FileNotFoundError:
     pass
 json.dump(result, open(out, "w"), indent=2)
