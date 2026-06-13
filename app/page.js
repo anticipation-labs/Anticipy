@@ -191,8 +191,9 @@ function PendingAsk({ ask, onResolve }) {
   );
 }
 
-function MemoryLoop({ loop }) {
+function MemoryLoop({ loop, onResolve }) {
   const meta = loopMeta(loop);
+  const canResolve = !loop.fields?.owner_card_id;
   return (
     <article className={`loop-item ${loop.status || "open"}`}>
       <div className="loop-head">
@@ -200,6 +201,11 @@ function MemoryLoop({ loop }) {
         <span className="tag ask">{loop.status || "open"}</span>
       </div>
       {meta ? <span className="loop-meta">{meta}</span> : null}
+      {canResolve ? (
+        <div className="loop-actions">
+          <button type="button" onClick={() => onResolve(loop.id)}>Done</button>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -323,6 +329,26 @@ export default function Home() {
       setMemoryError(err instanceof Error ? err.message : String(err));
     } finally {
       setMemoryBusy(false);
+    }
+  }
+
+  async function resolveLoop(loopId) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/memory/resolve-loop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: loopId, status: "done" }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || data.detail || data.error || "Loop resolve failed");
+      setLoops((current) => current.filter((loop) => loop.id !== data.id));
+      await loadStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -691,7 +717,7 @@ export default function Home() {
             </div>
             <div className="loop-list">
               {loops.length ? loops.map((loop) => (
-                <MemoryLoop loop={loop} key={loop.id} />
+                <MemoryLoop loop={loop} key={loop.id} onResolve={resolveLoop} />
               )) : <div className="empty">No active memory loops.</div>}
             </div>
           </section>

@@ -623,6 +623,19 @@ button {
   white-space: nowrap;
 }
 
+.loop-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.loop-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: #fffefa;
+  cursor: pointer;
+}
+
 .event {
   display: grid;
   grid-template-columns: 120px 1fr;

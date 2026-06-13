@@ -623,6 +623,36 @@ class ControlCore:
         loops = [i.model_dump(mode="json") for i in active[:max(0, limit)]]
         return {"loops": loops, "count": len(active)}
 
+    def resolve_memory_loop(self, loop_id: str, status: str = "done") -> dict:
+        """Owner closes a memory/setup loop. Owner-card loops must resolve through cards."""
+        if status not in {"done", "blocked", "waiting", "open"}:
+            return {"resolved": False, "reason": f"unsupported status: {status}"}
+        item = self.memory.open_loops.get(loop_id)
+        if item is None:
+            return {"resolved": False, "reason": "unknown open loop"}
+        if item.fields.get("owner_card_id"):
+            return {
+                "resolved": False,
+                "reason": "owner-card loops must be resolved from the task card",
+                "id": item.id,
+                "status": item.status,
+            }
+        before = item.status
+        item.status = status
+        item.fields = {**item.fields, "resolved_from": "owner_mode", "previous_status": before}
+        self.memory.open_loops.update(item)
+        self.glassbox.log(
+            "memory_loop_resolved",
+            {"loop_id": item.id, "status": status, "previous_status": before, "text": item.text},
+        )
+        return {
+            "resolved": True,
+            "id": item.id,
+            "status": item.status,
+            "previous_status": before,
+            "text": item.text,
+        }
+
     def owner_cards(self, limit: int = 50) -> dict:
         """Return recent durable owner cards for the app board.
 

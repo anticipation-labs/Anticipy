@@ -54,6 +54,8 @@ def _summarize(entry: dict) -> str:
     if kind == "owner_card_resolved":
         decision = "approved" if d.get("approved") else "declined"
         return f"{decision} card {str(d.get('card_id', ''))[:8]} -> {d.get('state', '')}"
+    if kind == "memory_loop_resolved":
+        return f"closed loop: {d.get('text', '')} -> {d.get('status', '')}"
     if kind == "decision":
         return f"decided {d.get('decision')} — {d.get('text', '')}"
     if kind == "ask_human":

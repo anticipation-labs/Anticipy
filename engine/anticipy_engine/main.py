@@ -130,6 +130,11 @@ class ResolveIn(BaseModel):
     approved: bool
 
 
+class MemoryLoopResolveIn(BaseModel):
+    id: str
+    status: str = "done"
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": ENGINE_NAME, "version": __version__}
@@ -162,6 +167,14 @@ def history() -> dict:
 @app.get("/memory/open-loops")
 def memory_open_loops(limit: int = 50) -> dict:
     return core.memory_open_loops(limit=limit)
+
+
+@app.post("/memory/open-loops/resolve")
+def memory_loop_resolve(body: MemoryLoopResolveIn) -> dict:
+    out = core.resolve_memory_loop(body.id, body.status)
+    if not out.get("resolved"):
+        raise HTTPException(status_code=400, detail=out.get("reason") or "could not resolve memory loop")
+    return out
 
 
 @app.post("/extension/hello")

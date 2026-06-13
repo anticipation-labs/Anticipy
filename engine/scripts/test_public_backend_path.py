@@ -102,6 +102,14 @@ def main():
         pending_items = pending.json()["pending"]
         assert any(p["ask_id"] == ask_id and p["goal_id"] == message["execution"]["goal_id"]
                    for p in pending_items), pending_items
+        protected_loops = client.get("/memory/open-loops?limit=20")
+        assert protected_loops.status_code == 200, protected_loops.text
+        protected_loop = next(
+            i for i in protected_loops.json()["loops"]
+            if i["fields"].get("owner_card_id") == message["id"]
+        )
+        refused = client.post("/memory/open-loops/resolve", json={"id": protected_loop["id"], "status": "done"})
+        assert refused.status_code == 400, refused.text
 
         approved = client.post("/resolve", json={"ask_id": ask_id, "approved": True})
         assert approved.status_code == 200, approved.text
@@ -170,6 +178,21 @@ def main():
         assert pickup["source_text"] in visible_text, visible_loops
         assert message["source_text"] not in visible_text, visible_loops
         assert blocked["source_text"] not in visible_text, visible_loops
+
+        onboarding = client.post("/owner/onboard", json={
+            "source": "public_backend_path",
+            "connections": [
+                {"name": "Gmail", "status": "needs_auth", "route": "api"},
+            ],
+        })
+        assert onboarding.status_code == 200, onboarding.text
+        setup_loop = next(i for i in client.get("/memory/open-loops?limit=20").json()["loops"]
+                          if i["text"] == "Connect Gmail for Owner Action Engine")
+        closed = client.post("/memory/open-loops/resolve", json={"id": setup_loop["id"], "status": "done"})
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["resolved"] is True, closed.text
+        after_closed = client.get("/memory/open-loops?limit=20").json()["loops"]
+        assert not any(i["id"] == setup_loop["id"] for i in after_closed), after_closed
 
         receipt_feed = client.get("/glassbox?limit=80")
         assert receipt_feed.status_code == 200, receipt_feed.text
