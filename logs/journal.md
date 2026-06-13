@@ -931,6 +931,22 @@ smoke stayed at catch 1.0/1.0, e2e 0.6483, false 0, harm 0. `bash scripts/run_su
 stayed green at 46/46. P3 live gate was not attempted because
 `factory/config/owner_phone.confirmed` is still absent.
 
+2026-06-13 lap 20260613T032644Z (build, TARGET v9 dev_v2 seeded ampersand-store cart
+resolution): inspected Nora's fresh dev_v2 run and confirmed the remaining primary-metric
+act gap was the memory-resolved B&H cart task; the Northstar follow-up note and no-clock
+pickup alarm families were left alone because recent laps proved them unsafe. First
+attempt, seed-host alias resolution only, did not move the score because Room 1 still
+silenced the line on the `don't buy it` safety bound. The kept slice fixes both links:
+spoken ampersand store aliases resolve only when they uniquely prefix an existing
+site-hints seed host, and cart-only no-purchase lines reach the harm-line while bare
+`do not buy` countermand lines stay silent. Official dev_v2 owner-ingest score moved
+catch 0.8889 -> 0.9444, catch_worst 0.6667 -> 0.8333, e2e 0.8135 -> 0.8301,
+correct 0.9167 -> 0.9333, recall_worst 0.5 -> 1.0, with false 0, harm 0, and
+interrupt 1.0/2.0 unchanged. Legacy dev-bank smoke stayed catch 1.0/1.0, e2e
+0.6483, false 0, harm 0, interrupt 0.625/1.0. `bash scripts/run_suite.sh` stayed
+green at 46/46. P3 live gate was not attempted because
+`factory/config/owner_phone.confirmed` is still absent.
+
 2026-06-13 lap 20260613T020216Z (build, TARGET v9 dev_v2 context-backed slot-choice
 booking): inspected the official dev_v2 run dirs and first tried a no-clock pickup-alarm
 auto-hold; the official scorer caught it as a false action, so that attempt was removed

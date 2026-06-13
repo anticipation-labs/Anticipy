@@ -31,6 +31,10 @@ BATTERY = [
     # packaged site-hints seed
     ("Was comparing shower grab bars at Lowe's for the downstairs bath.",
      "https://www.lowes.com"),
+    # seeded ampersand alias: not guessed; the normalized spoken alias uniquely
+    # prefixes a host already present in the packaged site-hints seed
+    ("Was comparing portable projector stands at B&H Photo; liked the folding stand best.",
+     "https://www.bhphotovideo.com"),
     # ---- deny: not a product-shaped line (no shopping context verb/noun) ----
     ("Stopped at Walmart on the way home.", ""),
     ("Dropped the kids at Riverside this morning.", ""),
@@ -40,6 +44,9 @@ BATTERY = [
     ("Was looking at gift cards from Best Buy last week.", ""),
     # ---- deny: unseeded possessive = a person's place, not a storefront ----
     ("Was looking at rings at Bob's last weekend.", ""),
+    # ---- deny: unseeded or too-thin ampersand aliases stay unresolvable ----
+    ("Was comparing portable projector stands at A&B Photo; liked the folding stand best.", ""),
+    ("Was comparing portable projector stands at B&H; liked the folding stand best.", ""),
     # ---- deny: closed-class non-store capitalized words ----
     ("Was comparing flights on Friday morning.", ""),
     ("Was comparing decorations at Christmas last year.", ""),
@@ -47,7 +54,7 @@ BATTERY = [
     # ---- deny: brand follows a lowercase determiner, not the preposition ----
     ("Was looking at the DeWalt 20V kit with two batteries last week.", ""),
     ("Was comparing document cameras; settled on the IPEVO V4K as the one.", ""),
-    # ---- disclosed residual: mixed/upper-case brands miss by design ----
+    # ---- disclosed residual: mixed/upper-case non-ampersand brands miss by design ----
     ("Was checking out jackets on eBay last night.", ""),
     ("Was looking at bookshelves from IKEA last week.", ""),
     # ---- never fires on empty/None-ish input ----

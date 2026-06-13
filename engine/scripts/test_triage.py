@@ -47,6 +47,7 @@ STREAM = [
     ("Get the signed forms over to the front office today.", True),      # causative hand-off
     ("Those wide trail shoes I picked out - put them in the cart.", True),  # cart idiom
     ("That notebook size I liked at Staples, cart one pack so I can check shipping later, no buying.", True),
+    ("That camera strap I liked, put it in the cart if it is still there, don't buy it.", True),
     # --- ambient noise (SHOULD drop: filler / greeting / bare observation) ---
     ("um", False), ("ok thanks", False), ("hey", False), ("yeah", False), ("hmm", False),
     ("Cool, sounds good.", False),
@@ -75,6 +76,7 @@ STREAM = [
     ("Tomorrow: inspection prep, estimate review, then sleep.", False),  # recap list
     # --- retractions / conditional vents / trailing hedges: explicitly nothing to do ---
     ("Hold it - that goes through the job account, don't send anything.", False),
+    ("Do not buy the camera strap; the old one is fine.", False),
     ("If this settles before the 19th I'll do a backflip.", False),
     ("I'll read it on the bike. Probably.", False),
     # --- vents: hedge-NONSPECIFIC commitments (positive cues present, no time anchor) must drop.

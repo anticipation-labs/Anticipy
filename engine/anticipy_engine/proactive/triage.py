@@ -267,6 +267,9 @@ _CART_PUT = re.compile(
     r"\b(?:in|into|to)\s+(?:my\s+|the\s+)?(?:cart|basket|bag)\b"
     r"|\bcart\s+(?:one|a|an|the|\d)\b",
     re.I)
+_CART_ONLY_NO_PURCHASE = re.compile(
+    r"\b(?:don'?t buy|do not buy|don'?t checkout|do not checkout|no buying|no checkout)\b",
+    re.I)
 # "put/add/jot ... on the (grocery/shopping/to-do) list", "jot that down" — THE spoken
 # list command. "bucket list" is excluded: putting something on the bucket list is a
 # someday-vent, the exact shape the hedge rule exists to keep silent.
@@ -749,7 +752,9 @@ class Triage:
             return False
         # utterance-absolute negatives: a countermand calls off whatever was said around
         # it, and a trailing hedge self-cancels everything before it — both span clauses
-        if _COUNTERMAND.search(t):
+        if _COUNTERMAND.search(t) and not (
+            _CART_PUT.search(t) and _CART_ONLY_NO_PURCHASE.search(t)
+        ):
             return False
         if _TRAILING_HEDGE.search(t):
             return False

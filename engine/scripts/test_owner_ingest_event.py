@@ -54,6 +54,8 @@ CART_CONTEXT = "Was comparing spiral notebooks at Staples; liked the 5x8 recycle
 CART_DERIVED_NO_BUY = "That notebook size I liked at Staples, cart one pack so I can check shipping later, no buying."
 LOWES_CONTEXT = "Was comparing shower grab bars at Lowe's for Dad's bathroom; preferred the Moen 24-inch bar."
 LOWES_CART_NO_CHECKOUT = "That grab bar I was looking at for Dad's shower, put it in the cart at Lowe's, no checkout."
+BH_CONTEXT = "Was comparing compact light stands at B&H Photo; liked the travel stand best."
+BH_CART_NO_BUY = "That light stand thing, put it in the cart if the same one is still at B&H, don't buy it."
 # F28 requested-action scope: a draft request whose line carries work vocabulary
 # ("supply order", "purchasing window", "ready to send") is NOT money, NOT a send —
 # the pre-gate must not block it, the spine must act, and the plan is the DRAFT
@@ -108,6 +110,8 @@ async def owner_lane_check():
         cart_derived = await core.feed("app", CART_DERIVED_NO_BUY, {})
         lowes_context = await core.feed("app", LOWES_CONTEXT, {})
         lowes_cart = await core.feed("app", LOWES_CART_NO_CHECKOUT, {})
+        bh_context = await core.feed("app", BH_CONTEXT, {})
+        bh_cart = await core.feed("app", BH_CART_NO_BUY, {})
         draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
@@ -126,8 +130,8 @@ async def owner_lane_check():
     # the realday/scorer contract: decision + goal_id + ask_id on every response
     for out in (noise, act, ask, promise, unshaped, schedule_change, forget_hold,
                 slot_context, slot_booking, note_to_customers, cart_context,
-                cart_derived, lowes_context, lowes_cart, draft_order, cart,
-                money, money_vent, remember, clarify):
+                cart_derived, lowes_context, lowes_cart, bh_context, bh_cart,
+                draft_order, cart, money, money_vent, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
 
@@ -221,6 +225,15 @@ async def owner_lane_check():
     assert lw_rec["steps"][0]["args"]["url"] == "https://www.lowes.com", lw_rec
     assert lw_rec["steps"][0]["args"]["memory_resolution"]["item"] == "Moen 24-inch bar", lw_rec
 
+    assert bh_context["decision"] == "ignore", bh_context
+    assert bh_cart["decision"] == "act", bh_cart
+    bh_rec = _record(tmp, bh_cart["goal_id"])
+    assert bh_rec["state"] == "done" and bh_rec["proof"], bh_rec
+    bh_steps = [s.get("intent") for s in bh_rec["steps"]]
+    assert bh_steps == ["browse_task"], bh_rec
+    assert bh_rec["steps"][0]["args"]["url"] == "https://www.bhphotovideo.com", bh_rec
+    assert bh_rec["steps"][0]["args"]["memory_resolution"]["item"] == "travel stand", bh_rec
+
     # F28: the draft request acts (no money pre-gate on the noun "order"; no send
     # reading on the purpose tail) and the executed plan is the DRAFT — never a send
     assert draft_order["decision"] == "act", draft_order
@@ -229,12 +242,14 @@ async def owner_lane_check():
     do_steps = [s.get("intent") for s in do_rec["steps"]]
     assert "send_email_draft" in do_steps and "send_email" not in do_steps, do_steps
 
-    # do card the spine refuses: the truthful decision is ignore, never a paper act
-    assert cart["decision"] == "ignore", cart
+    # no-memory cart card: the truthful decision is ask, never a paper act or
+    # fake browse proof. The no-buy phrase is a safety bound, not purchase intent.
+    assert cart["decision"] == "ask" and cart["ask_id"], cart
     assert cart["cards"][0]["args"].get("payment_allowed") is False, cart
     cart_rec = _record(tmp, cart["goal_id"])
-    assert cart_rec["state"] == "open", "a card that never executed must never look done"
+    assert cart_rec["state"] == "waiting", "an unresolved cart card must never look done"
     assert not cart_rec["proof"], cart_rec
+    assert cart_rec["owner_card"]["execution"]["decision"] == "ask", cart_rec
 
     # the bare reported promise is a real commitment (F21 FIXED): the spine catches
     # it, the harm-line re-gates the send, and the card is a REAL pending ask (the
@@ -267,8 +282,8 @@ async def owner_lane_check():
     # /pending carries exactly the ask cards — the blocked money card is NOT resolvable
     pending_ids = {p["ask_id"] for p in pending}
     assert ask["ask_id"] in pending_ids and clarify["ask_id"] in pending_ids, pending
-    assert promise["ask_id"] in pending_ids, pending
-    assert money["goal_id"] not in pending_ids and len(pending) == 3, pending
+    assert promise["ask_id"] in pending_ids and cart["ask_id"] in pending_ids, pending
+    assert money["goal_id"] not in pending_ids and len(pending) == 4, pending
 
     # NO declines: record marked, ask gone from /pending
     assert declined["approved"] is False, declined

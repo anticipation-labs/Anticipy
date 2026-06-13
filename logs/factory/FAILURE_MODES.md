@@ -1705,3 +1705,18 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   regression check remains official dev_v2 owner-ingest score with
   `false_action_count==0`, plus `test_harmline.py` keeping that shape on the ask
   side.
+
+## Build lap 20260613T032644Z (seeded ampersand-store cart resolution)
+- F46 FIXED: a memory-resolved cart-only task could still fail closed when the
+  remembered store was spoken as an ampersand brand. The shared store resolver
+  refused mixed/upper-case names, so `B&H Photo` could not map to the already
+  packaged `bhphotovideo.com` site hint, and Room 1 treated the same line's
+  `don't buy it` safety bound as an utterance-wide countermand before Room 2 could
+  apply the cart-only/no-purchase law. Fix: `shared/storesite.py` resolves
+  ampersand aliases only when their normalized spoken form uniquely prefixes an
+  existing verified site-hints seed host, and triage lets cart-only no-purchase
+  lines reach the harm-line while bare `do not buy` countermand lines stay silent.
+  Regression checks: `test_storesite.py`, `test_triage.py`, `test_harmline.py`,
+  `test_orchestrator.py`, and `test_owner_ingest_event.py`; official dev_v2
+  owner-ingest score must keep false 0 and complete the memory-resolved seeded
+  ampersand cart task with browser proof.

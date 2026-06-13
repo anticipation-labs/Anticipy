@@ -196,9 +196,21 @@ async def test_memory_resolved_store_name_plan():
     mixed_brand = {
         "history": ["Was comparing portable projector stands at B&H Photo; liked the folding stand best."]
     }
-    assert _memory_resolved_browser_step(
+    step5 = _memory_resolved_browser_step(
         "That projector stand thing, put it in the cart if the same one is still at B&H, don't buy it.",
         mixed_brand,
+    )
+    assert step5 is not None and step5.intent == "browse_task", step5
+    assert step5.args["url"] == "https://www.bhphotovideo.com", step5.args
+    assert step5.args["memory_resolution"]["item"] == "folding stand", step5.args
+    assert step5.args["memory_resolution"]["site_derived_from_store_name"] is True, step5.args
+
+    unseeded_ampersand = {
+        "history": ["Was comparing portable tripod stands at A&B Photo; liked the folding stand best."]
+    }
+    assert _memory_resolved_browser_step(
+        "That tripod stand thing, put it in the cart if the same one is still at A&B Photo, don't buy it.",
+        unseeded_ampersand,
     ) is None
 
     # end-to-end: the resolved plan drives the goal to done with proof, zero model calls

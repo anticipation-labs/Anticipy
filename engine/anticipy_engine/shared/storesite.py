@@ -23,8 +23,8 @@ every bound fails toward ""):
   - possessives refuse ("at Bob's" is a person's place, not <bobs>.com);
   - closed-class non-store capitalized words refuse (weekdays, months, holidays,
     generic places people shop "at" figuratively);
-  - mixed/upper-case brands (eBay, IKEA) miss by design — disclosed residual,
-    not worth loosening the capitalization anchor for.
+  - mixed/upper-case brands (eBay, IKEA) miss by design; ampersand aliases only
+    resolve when they uniquely prefix an already-packaged verified seed host.
 """
 from __future__ import annotations
 
@@ -47,6 +47,13 @@ _STORE_AFTER_PREP_RE = re.compile(
 )
 _POSSESSIVE_STORE_AFTER_PREP_RE = re.compile(
     r"\b(?:at|on|from)\s+([A-Z][a-z0-9&-]{2,})['’]s\b(?!\s+[A-Z0-9])"
+)
+_AMPERSAND_STORE_AFTER_PREP_RE = re.compile(
+    r"\b(?:at|on|from)\s+("
+    r"(?:[A-Z][A-Z0-9]?|[A-Z][a-z0-9-]{2,})\s*&\s*"
+    r"(?:[A-Z][A-Z0-9]?|[A-Z][a-z0-9-]{2,})"
+    r"(?:\s+[A-Z][a-z0-9-]{2,})?"
+    r")\b(?!['’]s?\b)(?!\s+[A-Z0-9])"
 )
 
 _NOT_A_STORE = frozenset({
@@ -84,6 +91,18 @@ def _seed_hosts_by_stem() -> dict[str, str]:
     return out
 
 
+def _seed_host_for_alias(alias: str) -> str:
+    key = re.sub(r"[^a-z0-9]+", "", (alias or "").lower())
+    if len(key) < 4:
+        return ""
+    matches = {
+        host
+        for stem, host in _seed_hosts_by_stem().items()
+        if stem.startswith(key)
+    }
+    return next(iter(matches)) if len(matches) == 1 else ""
+
+
 def derive_store_site(line: str) -> str:
     """The https://www.<store>.com a product-shaped memory line names by store
     name, or "" when nothing survives the deny bounds (never guesses past them)."""
@@ -105,6 +124,13 @@ def derive_store_site(line: str) -> str:
         if token in _NOT_A_STORE:
             continue
         host = hosts_by_stem.get((token + "s").lower())
+        if host:
+            return "https://www." + host
+    # Spoken ampersand brands such as "B&H Photo" are not safe to guess as
+    # <brand>.com. They are safe only when the spoken alias uniquely maps to a
+    # host already present in the verified site-hints seed.
+    for m in _AMPERSAND_STORE_AFTER_PREP_RE.finditer(line):
+        host = _seed_host_for_alias(m.group(1))
         if host:
             return "https://www." + host
     return ""
