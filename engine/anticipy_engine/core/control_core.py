@@ -57,6 +57,18 @@ def _card_step_receipts(steps: list[dict]) -> list[dict]:
                 "source_ref": resolution.get("source_ref"),
                 "matched_hints": resolution.get("matched_hints") or [],
             })
+        if step.get("intent") == "browse_task":
+            result = step.get("result") or {}
+            proof = result.get("proof") or {}
+            output = result.get("output") or {}
+            if isinstance(result, dict) and result.get("status") == "success" and isinstance(proof, dict):
+                receipts.append({
+                    "type": "browser_receipt",
+                    "url": output.get("final_url") or proof.get("url") or args.get("url"),
+                    "answer": output.get("answer") or "",
+                    "screenshot": bool(proof.get("screenshot")),
+                    "commerce_recipe": bool(proof.get("commerce_recipe") or output.get("commerce_recipe")),
+                })
     return receipts
 
 
@@ -533,6 +545,7 @@ class ControlCore:
 
         cards: list[OwnerTaskCard] = []
         ignored = 0
+        ignored_captures: list[tuple[dict | None, int]] = []
         for line in observed:
             preview = self.owner_mode.card_for_line(line, source)
             if preview is not None:
@@ -547,7 +560,7 @@ class ControlCore:
             if card is None:
                 ignored += 1
                 if execute_actions:
-                    self._sync_capture_result_status(captured_by_line.get(line.line_no), "ignored")
+                    ignored_captures.append((captured_by_line.get(line.line_no), line.line_no))
                 continue
             existing = self._existing_owner_card(card)
             if existing is not None:
@@ -555,6 +568,14 @@ class ControlCore:
                 continue
             cards.append(card)
             self._persist_card(card, source, execute_actions, captured_by_line.get(line.line_no))
+
+        # Do not close "ignored" captures while later lines in the same messy
+        # transcript may still need them as memory context. A line like "I was
+        # looking at X" is not a card by itself, but it can be the grounding for
+        # "cart that thing" ten seconds later.
+        if execute_actions:
+            for capture_result, _line_no in ignored_captures:
+                self._sync_capture_result_status(capture_result, "ignored")
 
         self.glassbox.log(
             "owner_ingest",

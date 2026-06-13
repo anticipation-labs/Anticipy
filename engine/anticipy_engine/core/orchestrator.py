@@ -105,12 +105,13 @@ _BROWSER_ACTION_RE = re.compile(
     r"|\b(?:add|put)\b[\w' ,.-]{0,120}\b(?:cart|basket|bag)\b"
     r"|\bcart\s+(?:it|that|this|them|these|those|one|a|an|the|\d)\b"
     # the spoken anaphor carries modifiers between determiner and head
-    # ("that water table thing", "the clamp one") — bounded, never open-ended
-    r"|\b(?:get|grab)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:[\w-]+\s+){0,3}(?:thing|one|item|product)\b",
+    # ("that water table thing", "the computing and internet book thing") —
+    # bounded, never open-ended
+    r"|\b(?:get|grab)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:[\w-]+\s+){0,5}(?:thing|one|item|product)\b",
     re.I,
 )
 _VAGUE_BROWSER_RE = re.compile(
-    r"\b(that|the)\s+(?:[\w-]+\s+){0,3}(thing|one|item|product)\b"
+    r"\b(that|the)\s+(?:[\w-]+\s+){0,5}(thing|one|item|product)\b"
     r"|\b(earlier|last time|before|was looking at|looked at)\b"
     r"|\bcart\s+(?:it|that|this|them|one|a|an|the|\d)\b"
     r"|\b(?:liked|preferred)\b[\w' ,.-]{0,80}\b(?:at|on|from)\s+[A-Z]",

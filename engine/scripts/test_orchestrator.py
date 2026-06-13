@@ -178,6 +178,21 @@ async def test_memory_resolved_store_name_plan():
     assert step3.args["memory_resolution"]["item"] == "5x8 recycled notebook pack", step3.args
     assert "Do not checkout" in step3.args["task"], step3.args
 
+    product_page_ctx = {
+        "history": [
+            "I was looking at the Computing and Internet book at "
+            "https://demowebshop.tricentis.com/computing-and-internet and liked Computing and Internet."
+        ]
+    }
+    product_page_step = _memory_resolved_browser_step(
+        "That Computing and Internet book thing, put it in the cart so I can check it later.",
+        product_page_ctx,
+    )
+    assert product_page_step is not None and product_page_step.intent == "browse_task", product_page_step
+    assert product_page_step.args["url"] == "https://demowebshop.tricentis.com/computing-and-internet", \
+        product_page_step.args
+    assert product_page_step.args["memory_resolution"]["item"] == "Computing and Internet", product_page_step.args
+
     lowes_cart = (
         "That grab bar I was looking at for Dad's shower, put it in the cart at Lowe's, no checkout."
     )

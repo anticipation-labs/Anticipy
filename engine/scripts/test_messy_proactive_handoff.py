@@ -38,6 +38,11 @@ MESSY_DAY = """
 [13:00] My wife Maya prefers texts after lunch.
 """
 
+URL_CONTEXT_DAY = """
+[09:12] I was looking at the Computing and Internet book at https://demowebshop.tricentis.com/computing-and-internet and liked Computing and Internet.
+[09:18] That Computing and Internet book thing, put it in the cart so I can check it later, no buying.
+"""
+
 
 def _record(data_dir: Path, card_id: str) -> dict:
     return json.loads((data_dir / "owner_cards" / f"{card_id}.json").read_text(encoding="utf-8"))
@@ -110,6 +115,27 @@ async def main():
 
     profile = _by_source(cards, "prefers texts")
     assert profile["status"] == "done", profile
+
+    url_data_dir = Path(tempfile.mkdtemp(prefix="anticipy-url-context-handoff-"))
+    url_core = ControlCore(data_dir=url_data_dir)
+    await url_core.start()
+    try:
+        url_out = await url_core.owner_ingest(
+            "typed",
+            URL_CONTEXT_DAY,
+            {"test": "url_context_handoff"},
+            execute_actions=True,
+        )
+    finally:
+        await url_core.stop()
+    url_cart = _by_source(url_out["cards"], "Computing and Internet book thing")
+    assert url_cart["status"] == "done", url_cart
+    url_record = _record(url_data_dir, url_cart["id"])
+    url_step = url_record["steps"][0]
+    assert url_step["intent"] == "browse_task", url_record
+    assert url_step["args"]["url"] == "https://demowebshop.tricentis.com/computing-and-internet", url_step
+    assert any(p.get("type") == "memory_resolution" for p in url_cart["proof"]), url_cart
+    assert any(p.get("type") == "browser_receipt" for p in url_cart["proof"]), url_cart
 
     print("PASS messy_proactive_handoff: messy transcript -> memory-aware cards, safe asks, money wall")
 
