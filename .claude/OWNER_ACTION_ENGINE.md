@@ -1,6 +1,6 @@
 # Owner Action Engine Directive
 
-Last updated: 2026-06-10.
+Last updated: 2026-06-12.
 
 This file is the current owner-facing product directive. Read it before `factory/TARGET.md`
 in any interactive/foreman/product session.
@@ -66,12 +66,18 @@ POST /owner/onboard
 
 Implemented files:
 
+- `app/page.js`
+- `app/api/owner/ingest/route.js`
+- `app/api/owner/upload/route.js`
 - `engine/anticipy_engine/owner_mode.py`
 - `engine/anticipy_engine/owner_onboarding.py`
 - `engine/anticipy_engine/core/control_core.py`
 - `engine/anticipy_engine/main.py`
 - `engine/scripts/test_owner_mode.py`
 - `engine/scripts/test_owner_onboarding.py`
+- `engine/scripts/test_owner_ingest_event.py`
+- `engine/scripts/test_owner_upload_ingest.py`
+- `engine/scripts/test_public_backend_path.py`
 
 The contract is: ugly daily speech in, observed lines plus durable task cards out. Cards
 are written into the real memory drawers, especially `open_loops`, with route,
@@ -135,14 +141,21 @@ Existing real pieces:
 New owner path:
 
 - `OwnerMode.ingest(...)` parses noisy transcript into task cards.
-- `ControlCore.owner_ingest(...)` captures every observed line and writes every task card
-  to memory/open loops with proof.
+- `ControlCore.owner_ingest(...)` captures every observed line, writes every task card
+  to memory/open loops with proof, and with `execute_actions=true` runs cards through
+  the same proactive act/ask/silent engine used by `/event`.
 - `POST /owner/ingest` exposes this path.
+- `POST /owner/ingest-file` reads uploaded text or transcribed audio and feeds the same
+  owner path.
+- The local Owner Mode UI posts typed text and uploads through the frontend API proxies.
 - `test_owner_mode.py` pins that pay-to-try, Start Listening, MP3, and transcript sources
-  produce the same cards from the same ugly transcript, and now pins execution policy:
-  safe API cards can run through the existing proactive engine, ask cards become pending
-  approvals only in execution mode, browser cards without a resolved site wait for memory
-  resolution, and checkout/payment cards stay blocked.
+  produce the same cards from the same ugly transcript.
+- `test_owner_ingest_event.py` pins execution policy: safe API cards run through the
+  existing proactive engine, ask cards become real pending approvals, browser cards need
+  memory-resolved site/item proof, and checkout/payment cards stay blocked.
+- `test_public_backend_path.py` pins the product story in one HTTP pass: messy transcript
+  -> memory handoff -> safe execution -> pending approval -> resolve -> durable receipts
+  -> money wall.
 - `OwnerOnboardingIn` + `POST /owner/onboard` write identity, people, preferences,
   app-connection state, common stores/accounts, and missing-connection open loops into
   the same memory drawers.
@@ -152,18 +165,21 @@ New owner path:
 
 Next work should move across the whole operating path, not one isolated brain score:
 
-1. Wire the frontend input doors to `POST /owner/ingest`.
-2. Wire the onboarding UI to `POST /owner/onboard`, then connect live authorization checks
-   to the stored connection records.
-3. Wire live proof expansion for execution policy: API read-back, browser read-back, and
-   voice/text confirmation proof on the same card/open-loop record.
-4. Replace narrow regex extraction with a cheap model or hybrid extractor, but keep the
-   current card contract and tests.
-5. Add a real messy owner-day eval, with hundreds/thousands of useless lines and a tiny
+1. Replace the narrow regex shaper with a cheap model or hybrid extractor, but keep the
+   current card contract, safety gates, and product-path tests.
+2. Add a real messy owner-day eval with hundreds/thousands of useless lines and a tiny
    answer key. Do not use clean command prompts as the main grade.
-6. Connect voice/text delivery to the `voice_text` route so confirmation and reminders
-   leave the machine and return decisions.
-7. Connect browser tasks to real memory-resolved item/site selection before browser action.
+3. Wire the onboarding UI to `POST /owner/onboard`, then connect live authorization checks
+   to the stored connection records.
+4. Expand live proof for public actions: API read-back, browser read-back, and voice/text
+   confirmation proof should all land on the same durable card/open-loop record.
+5. Run the guarded live voice/text confirmation path only with owner phone confirmation;
+   credentials may exist, but live calls/SMS are still an explicit human-gated operation.
+6. Harden real browser execution against hostile sites: signed-in session availability,
+   captcha/2FA handoff, no-purchase wall, and honest one-tap handoff when automation
+   cannot finish.
+7. Production work: data retention/deletion, auth, packaging/deployment, observability,
+   and recovery from interrupted local app/browser sessions.
 
 ## Verification
 
@@ -177,10 +193,12 @@ Focused owner test:
 
 ```bash
 PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_owner_mode.py
+PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_public_backend_path.py
 ```
 
-Do not claim a product phase is done from this alone. This proves the shared owner intake
-and durable card ledger are alive.
+Do not claim the public product is done from this alone. This proves the shared owner
+intake, real memory handoff, proactive execution policy, pending approval, durable
+receipts, upload path, and money wall are alive under deterministic mock/live-gated hands.
 
 ## Current Worktree Warning
 

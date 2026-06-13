@@ -1,7 +1,7 @@
-"""The control core — the brain and the nervous system.
+"""The control core — the proactive engine, memory, hands, and receipts.
 
-Built against stub workers so the hardest part of the product (deciding,
-planning, running, verifying) is proven end to end before any real hand, memory,
-or channel exists. The bus + the frozen worker contract are the scalability
-design: real workers swap in for stubs with zero orchestrator change.
+The bus + frozen worker contract let the same product path run with deterministic
+mock hands in tests and live workers in production. Real memory is always wired;
+API/browser/text/call workers are mode-gated so tests stay free and live runs are
+explicit.
 """
