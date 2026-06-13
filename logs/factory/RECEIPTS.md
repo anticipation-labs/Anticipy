@@ -8,7 +8,23 @@ Each entry: date · slice · the RECEIPT (a real artifact a human can independen
 - **Slice 1 — inference core (catch unspoken commitments):** BLOCKED ON A PRODUCT DECISION (Omar). Two
   engineering attempts (1, 1b) both hit the cardinal-sin wall — see the finding below. Safe baseline restored
   (11/16 catch, 0 false-actions). The fork is Omar's to call.
-- Slices 2–7: Slice 2 (voice transport) BUILD started in parallel (unblocked); rest NOT STARTED.
+- **Slice 6 — browser arm (open-source + our model):** ✅ HARNESS PROVEN (spike). See receipt below. Full
+  engine integration (Python 3.11 boundary) + write prepare-then-handoff still to build.
+- Slices 2–5, 7: NOT STARTED.
+
+### ✅ Slice 6 spike — open-source browser arm proven · 2026-06-13
+**browser-use 0.13.1 (MIT) + our OpenRouter model (`google/gemini-2.5-flash`) did a REAL read-only browser action.**
+- Navigated https://news.ycombinator.com and read back the #1 story title + comment count.
+- **RECEIPT:** skeptic independently re-fetched HN via curl → title matched character-for-character
+  ("Noise infusion banned from statistical products published by Census Bureau"); comment count 325→328 (live
+  drift, not hallucination). Actions were exactly `[navigate, done]` — no login/write/purchase. Its own throwaway
+  Chromium + temp profile (never the user's real Chrome). **Skeptic verdict: refuted=false.**
+- **Isolation held:** browser-use lives only in `/tmp/bu-spike/venv` (Python 3.11.12); `engine/.venv` untouched
+  (still 3.10.14, cannot import browser_use); suite unaffected; no repo files changed; no leftover processes.
+- **Honest obstacles for the real arm (recorded):** (1) browser-use needs Python ≥3.11 but the engine is 3.10
+  → the real arm runs browser-use as a separate-process service the 3.10 engine calls (not an in-venv import).
+  (2) Sandbox single-process flags broke chromium-1223; chromium-1161 worked — a non-issue on the user's machine
+  (multi-process Chrome allowed).
 
 ## KEY FINDING — the moat's real wall (2026-06-13)
 **You cannot raise interrupt-catch (decider→ASK) on uncertain commitments without reintroducing the cardinal
