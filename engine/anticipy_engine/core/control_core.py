@@ -29,7 +29,7 @@ from ..channels.text import TextChannel
 from ..hands import ApiHand, BrowserHand, MODE_LIVE, MODE_MOCK, NotFundedError
 from ..hands.api_hand import INTENT_MAP
 from ..live_memory.brain import LiveMemoryBrain
-from ..memory.store import Memory
+from ..memory.store import Memory, is_active_open_loop
 from ..owner_mode import OwnerIngestResult, OwnerMode, OwnerObservedLine, OwnerTaskCard
 from ..owner_onboarding import OwnerOnboardingIn, build_onboarding_plan
 
@@ -671,7 +671,7 @@ class ControlCore:
 
     def memory_open_loops(self, limit: int = 50) -> dict:
         """Visible memory backlog: open/waiting loops the owner should be able to inspect."""
-        active = [i for i in self.memory.open_loops.all() if i.status in ("open", "waiting")]
+        active = [i for i in self.memory.open_loops.all() if is_active_open_loop(i)]
         active.sort(key=lambda i: i.updated_at or i.timestamp, reverse=True)
         loops = [i.model_dump(mode="json") for i in active[:max(0, limit)]]
         return {"loops": loops, "count": len(active)}

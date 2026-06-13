@@ -12,6 +12,7 @@ from typing import List
 
 from ..envelopes import Job, JobStatus, Result
 from ..worker import Worker
+from ...memory.store import is_active_open_loop
 from .scriptable import ScriptableStub
 
 
@@ -27,7 +28,7 @@ class MemoryWorker(Worker):
     async def handle(self, job: Job) -> Result:
         if job.intent == "list_open_loops":
             # the trigger watcher's condition source (Room 3): the commitment ledger, structured.
-            loops = [l for l in self.lm.memory.open_loops.all() if l.status in ("open", "waiting")]
+            loops = [l for l in self.lm.memory.open_loops.all() if is_active_open_loop(l)]
             out = [{"id": l.id, "task": l.fields.get("task", l.text), "due": l.fields.get("due", ""),
                     "due_ts": l.fields.get("due_ts"), "remind_ts": l.fields.get("remind_ts"),
                     "created_ts": l.timestamp, "text": l.text,

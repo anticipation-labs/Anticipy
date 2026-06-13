@@ -35,6 +35,18 @@ def _default_data_dir() -> Path:
     return Path(os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
 
 
+def is_active_open_loop(item: MemoryItem) -> bool:
+    """True when an open-loop item still belongs on active work surfaces.
+
+    A fired open loop with no waiting status is already transferred to a result,
+    ask, or receipt path. Keep it durably stored for audit/restart safety, but do
+    not keep showing it as unfinished work or injecting it as live context.
+    """
+    if item.status not in ("open", "waiting"):
+        return False
+    return not (item.status == "open" and item.fields.get("fired_at") is not None)
+
+
 class MemoryDB:
     """One SQLite db holding every drawer's rows + their embeddings."""
 

@@ -500,11 +500,26 @@ class ProactiveEngine:
             else:
                 ev = Event(source=EventSource.system, text=f"{FOLLOWUP_PREFIX} {task}")
                 decision = await self.on_event(ev, now=now)   # SAME triage -> harm-line -> act/ask; budget applies
+            final_status = self._fired_loop_status(decision)
+            if final_status:
+                await self.bus.submit_job(Job(intent="mark_loop",
+                                              args={"id": loop.get("id"), "status": final_status}))
             if self.glassbox is not None:
                 self.glassbox.log("trigger_fired", {"loop_id": loop.get("id"), "task": task,
                                                      "decision": decision["decision"]})
             out.append({"loop_id": loop.get("id"), "task": task, **decision})
         return out
+
+    @staticmethod
+    def _fired_loop_status(decision: dict) -> str | None:
+        d = decision.get("decision")
+        if d in {"ask", "held", "notify"}:
+            return "waiting"
+        if d == "blocked":
+            return "blocked"
+        if d in {"act", "ignore", "suppressed", "deferred"}:
+            return "done"
+        return None
 
     async def _fire_reminder(self, loop: dict, task: str, now: float) -> dict:
         """A due reminder fires as a NOTIFY: re-gate the loop text on the harm-line; only a

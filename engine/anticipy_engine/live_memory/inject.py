@@ -14,7 +14,7 @@ import re
 from typing import Dict, List, Optional
 
 from ..memory.embed import embed
-from ..memory.store import Memory
+from ..memory.store import Memory, is_active_open_loop
 from ..shared.schema import MemoryItem, now_ts
 
 _TOK = re.compile(r"[a-z0-9]+")
@@ -61,7 +61,7 @@ class Injector:
         qtok = _toks(context)
 
         # the deterministic ledger: ALL open/waiting loops, always (importance, recent first)
-        loops = [i for i in self.memory.open_loops.all() if i.status in ("open", "waiting")]
+        loops = [i for i in self.memory.open_loops.all() if is_active_open_loop(i)]
         loops.sort(key=lambda i: (-i.importance, -i.timestamp))
 
         cos = dict(self.memory.db.scored(qv, _FUZZY))   # id -> cosine (stored embeddings)

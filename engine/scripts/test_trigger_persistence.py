@@ -123,6 +123,7 @@ async def main():
     stamped = lm.memory.open_loops.get(safe.id)
     assert stamped.fields.get("fired_at") == now, \
         "the fire must stamp fired_at on the DURABLE loop record"
+    assert stamped.status == "waiting", "a notified reminder should stay visible as waiting"
     pro2, lm2, _, _ = await engine_in(tmp)   # restart: fresh _fired set, same ledger
     again = await pro2.trigger_tick(now=now + 60)
     assert again == [], f"restart re-fired an already-fired reminder: {again}"
@@ -139,6 +140,8 @@ async def main():
     assert [f["loop_id"] for f in fired] == [due.id] and fired[0]["decision"] == "act", fired
     goals_after_fire = len(store_a.all())
     assert goals_after_fire >= 1, "the act path must have created a goal"
+    assert lm_a.memory.open_loops.get(due.id).status == "done", \
+        "an acted fired loop should leave the active backlog"
     pro_b, _, store_b, glass_b = await engine_in(tmp)
     again = await pro_b.trigger_tick(now=now + 60)
     assert again == [], f"restart re-fired a due follow-up loop: {again}"
@@ -161,6 +164,8 @@ async def main():
     assert died, "the crash stand-in must fire inside the send"
     assert lm_c.memory.open_loops.get(rem.id).fields.get("fired_at") == now, \
         "the stamp must land BEFORE the send (mark-before-act)"
+    assert lm_c.memory.open_loops.get(rem.id).status == "open", \
+        "crash after stamp but before decision keeps raw status; active surfaces hide fired-open loops"
     pro_d, _, _, _ = await engine_in(tmp)
     assert await pro_d.trigger_tick(now=now + 60) == [], \
         "a firing lost to a crash must stay lost (silence), never replay as a late send"

@@ -185,6 +185,13 @@ def main():
         assert pickup["source_text"] in visible_text, visible_loops
         assert message["source_text"] not in visible_text, visible_loops
         assert blocked["source_text"] not in visible_text, visible_loops
+        stale = core.memory.open_loops.write_text(
+            "Already-fired transcript noise should not look active",
+            fields={"task": "Already-fired transcript noise should not look active", "fired_at": 123.0},
+            status="open",
+        )
+        visible_after_stale = client.get("/memory/open-loops?limit=100").json()["loops"]
+        assert all(i["id"] != stale.id for i in visible_after_stale), visible_after_stale
 
         onboarding = client.post("/owner/onboard", json={
             "source": "public_backend_path",
