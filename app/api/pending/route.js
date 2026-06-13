@@ -1,5 +1,5 @@
-import { engineRequest } from "../_engine";
+import { privateEngineRequest } from "../_engine";
 
-export async function GET() {
-  return engineRequest("/pending");
+export async function GET(request) {
+  return privateEngineRequest(request, "/pending");
 }

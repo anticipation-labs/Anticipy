@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { ENGINE_URL, engineHeaders } from "../../_engine";
+import { ENGINE_URL, engineHeaders, requireOwnerRequest } from "../../_engine";
 
 const UPLOAD_ROOT = process.env.ANTICIPY_UPLOAD_ROOT || path.join(os.tmpdir(), "anticipy-owner-uploads");
 const MAX_UPLOAD_BYTES = Number(process.env.ANTICIPY_MAX_UPLOAD_BYTES || 100 * 1024 * 1024);
@@ -14,6 +14,9 @@ function safeFilename(name) {
 export async function POST(request) {
   let uploadDir = "";
   try {
+    const denied = requireOwnerRequest(request);
+    if (denied) return denied;
+
     const form = await request.formData();
     const file = form.get("file");
     if (!file || typeof file.arrayBuffer !== "function") {

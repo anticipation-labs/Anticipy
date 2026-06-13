@@ -1,4 +1,13 @@
 export const ENGINE_URL = process.env.ANTICIPY_ENGINE_URL || "http://127.0.0.1:8787";
+export const OWNER_SESSION_COOKIE = "anticipy_owner_session";
+
+export function configuredOwnerToken() {
+  return process.env.ANTICIPY_APP_OWNER_TOKEN || process.env.ANTICIPY_OWNER_API_TOKEN || "";
+}
+
+export function ownerAccessRequired() {
+  return Boolean(configuredOwnerToken());
+}
 
 export function engineHeaders(headers = {}) {
   const token = process.env.ANTICIPY_OWNER_API_TOKEN;
@@ -6,6 +15,63 @@ export function engineHeaders(headers = {}) {
     ...headers,
     ...(token ? { "x-anticipy-owner-token": token } : {}),
   };
+}
+
+function bearerToken(value) {
+  const match = /^Bearer\s+(.+)$/i.exec(value || "");
+  return match ? match[1].trim() : "";
+}
+
+function cookieValue(request, name) {
+  const nextCookie = request?.cookies?.get?.(name)?.value;
+  if (nextCookie) return nextCookie;
+  const raw = request?.headers?.get?.("cookie") || "";
+  for (const part of raw.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return decodeURIComponent(rest.join("="));
+  }
+  return "";
+}
+
+export function ownerTokenMatches(value) {
+  const token = configuredOwnerToken();
+  return Boolean(token) && value === token;
+}
+
+export function ownerAccessGranted(request) {
+  const token = configuredOwnerToken();
+  if (!token) return true;
+  const headerToken = request?.headers?.get?.("x-anticipy-app-token") || bearerToken(request?.headers?.get?.("authorization"));
+  return headerToken === token || cookieValue(request, OWNER_SESSION_COOKIE) === token;
+}
+
+export function ownerAccessStatus(request) {
+  const required = ownerAccessRequired();
+  return {
+    required,
+    authenticated: !required || ownerAccessGranted(request),
+  };
+}
+
+export function requireOwnerRequest(request) {
+  if (ownerAccessGranted(request)) return null;
+  return Response.json(
+    {
+      error: "owner_auth_required",
+      message: "Owner access is required for this Anticipy app.",
+    },
+    { status: 401 },
+  );
+}
+
+export function ownerSessionCookie(value, maxAge = 60 * 60 * 24 * 7) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${OWNER_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
+}
+
+export function clearOwnerSessionCookie() {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${OWNER_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure}`;
 }
 
 export async function engineRequest(path, options = {}) {
@@ -32,4 +98,10 @@ export async function engineRequest(path, options = {}) {
       { status: 503 },
     );
   }
+}
+
+export async function privateEngineRequest(request, path, options = {}) {
+  const denied = requireOwnerRequest(request);
+  if (denied) return denied;
+  return engineRequest(path, options);
 }

@@ -279,6 +279,10 @@ export default function Home() {
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryResult, setMemoryResult] = useState(null);
   const [memoryError, setMemoryError] = useState("");
+  const [access, setAccess] = useState({ checked: false, required: false, authenticated: true });
+  const [accessToken, setAccessToken] = useState("");
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState("");
   const [engine, setEngine] = useState({
     ok: false,
     label: "checking",
@@ -317,14 +321,84 @@ export default function Home() {
   const unmatchedPending = pending.filter((ask) => !matchedPendingIds.has(ask.ask_id));
   const hasLatestRunStats = observed.length > 0 || ignored > 0;
 
+  function ownerFetch(url, options = {}) {
+    return fetch(url, { ...options, credentials: "same-origin" });
+  }
+
+  async function requestJson(url, options = {}) {
+    const response = await ownerFetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    handleOwnerAuthFailure(response, data);
+    return { ok: response.ok, status: response.status, data };
+  }
+
+  function handleOwnerAuthFailure(response, data) {
+    if (response.status === 401 && data?.error === "owner_auth_required") {
+      setAccess({ checked: true, required: true, authenticated: false });
+    }
+  }
+
+  async function refreshAccess() {
+    const response = await fetch("/api/owner/session", { cache: "no-store", credentials: "same-origin" });
+    const data = await response.json().catch(() => ({}));
+    const next = {
+      checked: true,
+      required: Boolean(data.required),
+      authenticated: !data.required || Boolean(data.authenticated),
+    };
+    setAccess(next);
+    return next.authenticated;
+  }
+
+  async function unlockOwner(event) {
+    event.preventDefault();
+    setAccessBusy(true);
+    setAccessError("");
+    try {
+      const response = await fetch("/api/owner/session", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: accessToken }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || data.error || "Owner unlock failed");
+      setAccessToken("");
+      setAccess({
+        checked: true,
+        required: Boolean(data.required),
+        authenticated: !data.required || Boolean(data.authenticated),
+      });
+      await loadStatus();
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function lockOwner() {
+    await fetch("/api/owner/session", { method: "DELETE", credentials: "same-origin" });
+    setAccess({ checked: true, required: true, authenticated: false });
+    setCards([]);
+    setPending([]);
+    setLoops([]);
+    setEvents([]);
+  }
+
   async function loadStatus() {
     const [engineStatus, pendingRes, glassbox, durableCards, activeLoops] = await Promise.allSettled([
-      fetch("/api/status", { cache: "no-store" }).then((r) => r.json().then((data) => ({ ok: r.ok, data }))),
-      fetch("/api/pending", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/glassbox?limit=20", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/owner/cards?limit=50", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/memory/open-loops?limit=50", { cache: "no-store" }).then((r) => r.json()),
+      requestJson("/api/status", { cache: "no-store" }),
+      requestJson("/api/pending", { cache: "no-store" }),
+      requestJson("/api/glassbox?limit=20", { cache: "no-store" }),
+      requestJson("/api/owner/cards?limit=50", { cache: "no-store" }),
+      requestJson("/api/memory/open-loops?limit=50", { cache: "no-store" }),
     ]);
+    const authBlocked = [engineStatus, pendingRes, glassbox, durableCards, activeLoops].some(
+      (result) => result.status === "fulfilled" && result.value.status === 401,
+    );
+    if (authBlocked) return;
+
     if (engineStatus.status === "fulfilled" && engineStatus.value.ok) {
       const data = engineStatus.value.data || {};
       setEngine({
@@ -349,11 +423,11 @@ export default function Home() {
         readiness: null,
       });
     }
-    if (pendingRes.status === "fulfilled") setPending(pendingRes.value.pending || []);
-    if (glassbox.status === "fulfilled") setEvents(glassbox.value.entries || []);
-    if (activeLoops.status === "fulfilled") setLoops(activeLoops.value.loops || []);
+    if (pendingRes.status === "fulfilled") setPending(pendingRes.value.data.pending || []);
+    if (glassbox.status === "fulfilled") setEvents(glassbox.value.data.entries || []);
+    if (activeLoops.status === "fulfilled") setLoops(activeLoops.value.data.loops || []);
     if (durableCards.status === "fulfilled") {
-      const loadedCards = durableCards.value.cards || [];
+      const loadedCards = durableCards.value.data.cards || [];
       setCards((current) => {
         if (!current.length) return loadedCards;
         const loadedById = new Map(loadedCards.map((card) => [card.id, card]));
@@ -366,9 +440,19 @@ export default function Home() {
   }
 
   useEffect(() => {
-    loadStatus();
-    const id = setInterval(loadStatus, 5000);
-    return () => clearInterval(id);
+    let stopped = false;
+    let intervalId = null;
+    async function boot() {
+      const allowed = await refreshAccess();
+      if (stopped || !allowed) return;
+      await loadStatus();
+      if (!stopped) intervalId = setInterval(loadStatus, 5000);
+    }
+    boot();
+    return () => {
+      stopped = true;
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   function applyIngestResult(data) {
@@ -385,12 +469,13 @@ export default function Home() {
     setMemoryBusy(true);
     setMemoryError("");
     try {
-      const response = await fetch("/api/owner/onboard", {
+      const response = await ownerFetch("/api/owner/onboard", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(onboardingPayload(memoryForm)),
       });
       const data = await response.json();
+      handleOwnerAuthFailure(response, data);
       if (!response.ok) throw new Error(data.message || data.detail || data.error || "Memory save failed");
       setMemoryResult(data);
       await loadStatus();
@@ -405,12 +490,13 @@ export default function Home() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/memory/resolve-loop", {
+      const response = await ownerFetch("/api/memory/resolve-loop", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: loopId, status: "done" }),
       });
       const data = await response.json();
+      handleOwnerAuthFailure(response, data);
       if (!response.ok) throw new Error(data.message || data.detail || data.error || "Loop resolve failed");
       setLoops((current) => current.filter((loop) => loop.id !== data.id));
       await loadStatus();
@@ -425,12 +511,13 @@ export default function Home() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/connections/authorize", {
+      const response = await ownerFetch("/api/connections/authorize", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: loopId }),
       });
       const data = await response.json();
+      handleOwnerAuthFailure(response, data);
       if (!response.ok) throw new Error(data.message || data.detail || data.error || "Connection setup failed");
       setConnections((current) => ({ ...current, [loopId]: data }));
       if (data.connect_url) window.open(data.connect_url, "_blank", "noopener,noreferrer");
@@ -446,8 +533,9 @@ export default function Home() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/trigger/tick", { method: "POST" });
+      const response = await ownerFetch("/api/trigger/tick", { method: "POST" });
       const data = await response.json();
+      handleOwnerAuthFailure(response, data);
       if (!response.ok) throw new Error(data.message || data.detail || data.error || "Proactive scan failed");
       setTickResult(data);
       await loadStatus();
@@ -463,7 +551,7 @@ export default function Home() {
     form.append("file", uploadedFile);
     form.append("source", source);
     form.append("execute_actions", String(executeActions));
-    return fetch("/api/owner/upload", {
+    return ownerFetch("/api/owner/upload", {
       method: "POST",
       body: form,
     });
@@ -473,7 +561,7 @@ export default function Home() {
     setBusy(true);
     setError("");
     try {
-      const response = uploadedFile ? await runUpload() : await fetch("/api/owner/ingest", {
+      const response = uploadedFile ? await runUpload() : await ownerFetch("/api/owner/ingest", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -484,6 +572,7 @@ export default function Home() {
         }),
       });
       const data = await response.json();
+      handleOwnerAuthFailure(response, data);
       if (!response.ok) {
         throw new Error(data.message || data.detail || data.error || "Owner ingest failed");
       }
@@ -500,12 +589,13 @@ export default function Home() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/resolve", {
+      const response = await ownerFetch("/api/resolve", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ask_id: askId, approved }),
       });
       const data = await response.json();
+      handleOwnerAuthFailure(response, data);
       if (!response.ok) throw new Error(data.message || data.error || "Resolve failed");
       setPending((current) => current.filter((ask) => ask.ask_id !== askId));
       setCards((current) => current.map((card) => {
@@ -581,6 +671,43 @@ export default function Home() {
     recognition.start();
   }
 
+  if (!access.checked) {
+    return (
+      <main className="shell owner-locked">
+        <section className="owner-gate">
+          <div className="mark">A</div>
+          <h1>Anticipy Owner Mode</h1>
+          <p>Checking owner access.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (access.required && !access.authenticated) {
+    return (
+      <main className="shell owner-locked">
+        <form className="owner-gate" onSubmit={unlockOwner}>
+          <div className="mark">A</div>
+          <h1>Anticipy Owner Mode</h1>
+          <label className="owner-token-field">
+            <span>Owner token</span>
+            <input
+              autoComplete="current-password"
+              autoFocus
+              onChange={(event) => setAccessToken(event.target.value)}
+              type="password"
+              value={accessToken}
+            />
+          </label>
+          <button className="primary" disabled={accessBusy || !accessToken.trim()} type="submit">
+            {accessBusy ? "Unlocking" : "Unlock"}
+          </button>
+          {accessError ? <div className="error">{accessError}</div> : null}
+        </form>
+      </main>
+    );
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -597,6 +724,11 @@ export default function Home() {
           {typeof engine.openLoops === "number" ? <span>{engine.openLoops} active loops</span> : null}
           {typeof engine.pendingCount === "number" ? <span>{engine.pendingCount} waiting</span> : null}
           {engine.memoryRecovered ? <span>memory recovered</span> : null}
+          {access.required ? (
+            <button className="quiet-link" onClick={lockOwner} type="button">
+              Lock
+            </button>
+          ) : null}
         </div>
         {engine.readiness ? (
           <div className="readiness-grid" aria-label="System readiness">

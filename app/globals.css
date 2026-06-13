@@ -46,6 +46,53 @@ button {
   grid-template-rows: auto 1fr;
 }
 
+.owner-locked {
+  place-items: center;
+  padding: 24px;
+}
+
+.owner-gate {
+  width: min(100%, 380px);
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.owner-gate h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.owner-gate p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.owner-token-field {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.owner-token-field input {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  background: #fffefa;
+  color: var(--ink);
+  padding: 0 12px;
+  outline: none;
+}
+
+.owner-token-field input:focus {
+  border-color: #2f6d91;
+  box-shadow: 0 0 0 3px rgba(47, 109, 145, 0.14);
+}
+
 .topbar {
   display: flex;
   align-items: center;

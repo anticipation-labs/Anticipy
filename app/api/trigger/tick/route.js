@@ -1,5 +1,5 @@
-import { engineRequest } from "../../_engine";
+import { privateEngineRequest } from "../../_engine";
 
-export async function POST() {
-  return engineRequest("/trigger/tick", { method: "POST" });
+export async function POST(request) {
+  return privateEngineRequest(request, "/trigger/tick", { method: "POST" });
 }

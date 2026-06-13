@@ -27,6 +27,8 @@ for t in bus workers gateway gateway_retry orchestrator proactive triage triage_
   run "$t" "$PY" "$REPO/engine/scripts/test_$t.py"
 done
 
+run owner_app_auth bash "$REPO/scripts/test_owner_app_auth.sh"
+
 run memory_eval_selftest "$PY" "$REPO/engine/scripts/memory_eval.py" --selftest  # instrument soundness (zero model calls)
 run proactive_eval_selftest "$PY" "$REPO/engine/scripts/proactive_eval.py" --selftest  # proactive report-card instrument (zero model calls)
 run journey_eval_selftest "$PY" "$REPO/engine/scripts/journey_eval.py" --selftest  # journey gauge soundness (zero model calls)
