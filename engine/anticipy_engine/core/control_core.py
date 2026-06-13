@@ -682,26 +682,10 @@ class ControlCore:
         plan = build_onboarding_plan(body)
         written = []
         for mem in plan.memories:
-            if mem.drawer == "profile":
-                item = self.memory.profile.write_text(
-                    mem.text,
-                    fields=mem.fields,
-                    provenance=f"owner:{plan.source}",
-                    confidence=mem.confidence,
-                    importance=mem.importance,
-                    status=mem.status,
-                )
-            else:
-                item = self.memory.open_loops.write_text(
-                    mem.text,
-                    fields=mem.fields,
-                    provenance=f"owner:{plan.source}",
-                    confidence=mem.confidence,
-                    importance=mem.importance,
-                    status=mem.status,
-                )
+            item = self._upsert_onboarding_memory(mem, plan.source)
             written.append({"drawer": mem.drawer, "memory_id": item.id, "text": item.text,
                             "status": item.status, "fields": item.fields})
+        self._close_connected_setup_loops(plan.memories)
 
         self.glassbox.log(
             "owner_onboarding",
@@ -710,6 +694,84 @@ class ControlCore:
         )
         return {"source": plan.source, "written": written,
                 "missing_connections": plan.missing_connections}
+
+    @staticmethod
+    def _onboarding_key(fields: dict) -> str:
+        kind = str(fields.get("kind") or "").strip().lower()
+        source = "owner_onboarding"
+        if kind == "owner_identity":
+            return f"{source}:owner_identity"
+        if kind == "preference":
+            return f"{source}:preference:{str(fields.get('preference') or '').strip().lower()}"
+        if kind == "person":
+            return f"{source}:person:{str(fields.get('name') or '').strip().lower()}"
+        if kind == "app_connection":
+            identifier = str(fields.get("identifier") or "").strip().lower()
+            name = str(fields.get("name") or "").strip().lower()
+            return f"{source}:app_connection:{identifier or name}"
+        if kind == "store_account":
+            url = str(fields.get("url") or "").strip().lower()
+            name = str(fields.get("name") or "").strip().lower()
+            return f"{source}:store_account:{url or name}"
+        if kind == "raw_onboarding_notes":
+            return f"{source}:raw_notes"
+        return f"{source}:{kind}:{str(fields).strip().lower()}"
+
+    def _find_onboarding_item(self, drawer, key: str, fields: dict):
+        for item in drawer.all():
+            item_key = item.fields.get("onboarding_key") or self._onboarding_key(item.fields)
+            if item_key == key:
+                return item
+            if fields.get("action") == "connect_account" and item.fields.get("action") == "connect_account":
+                if str(item.fields.get("name") or "").strip().lower() == str(fields.get("name") or "").strip().lower():
+                    return item
+        return None
+
+    def _upsert_onboarding_memory(self, mem, source: str):
+        drawer = self.memory.profile if mem.drawer == "profile" else self.memory.open_loops
+        key = self._onboarding_key(mem.fields)
+        fields = {**mem.fields, "onboarding_key": key}
+        item = self._find_onboarding_item(drawer, key, fields)
+        if item is None:
+            return drawer.write_text(
+                mem.text,
+                fields=fields,
+                provenance=f"owner:{source}",
+                confidence=mem.confidence,
+                importance=mem.importance,
+                status=mem.status,
+            )
+        item.text = mem.text
+        item.fields = fields
+        item.provenance = f"owner:{source}"
+        item.confidence = mem.confidence
+        item.importance = mem.importance
+        item.status = mem.status
+        return drawer.update(item)
+
+    def _close_connected_setup_loops(self, memories) -> None:
+        active_missing = {
+            self._onboarding_key(mem.fields)
+            for mem in memories
+            if mem.drawer == "open_loops" and mem.fields.get("action") == "connect_account"
+        }
+        connection_keys = {
+            self._onboarding_key(mem.fields): mem
+            for mem in memories
+            if mem.drawer == "profile" and mem.fields.get("kind") == "app_connection"
+        }
+        for item in self.memory.open_loops.all():
+            if item.fields.get("action") != "connect_account":
+                continue
+            key = item.fields.get("onboarding_key") or self._onboarding_key(item.fields)
+            if key in active_missing:
+                continue
+            conn = connection_keys.get(key)
+            if conn is None or conn.fields.get("status") != "connected":
+                continue
+            item.status = "done"
+            item.fields = {**item.fields, "onboarding_key": key, "resolved_from": "owner_onboarding_connected"}
+            self.memory.open_loops.update(item)
 
     async def notify_user(self, text: str, recipient: str | None = None) -> dict:
         """Text the user — the 'ask' half of a wall handoff (pause -> ask -> resume).
