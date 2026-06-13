@@ -1,44 +1,35 @@
-# Last lap: 20260613T032644Z (build - seeded ampersand-store cart resolution)
+# Last lap: 20260613T033946Z (groundwork - dev_v2 metric/gate mismatch)
 
 ## What changed
-- Inspected the latest official dev_v2 run for `freelancer_nora`. The only
-  remaining expected act that was not a do-not-retry family was the B&H cart-prep
-  task; the Northstar follow-up note and no-clock pickup alarm families were not
-  retried.
-- Added seed-host-only ampersand alias resolution in `shared/storesite.py`.
-  A spoken alias such as `B&H Photo` now resolves only when its normalized form
-  uniquely prefixes an already-packaged verified `site_hints_seed.json` host.
-  Bare `B&H` and unseeded aliases still fail closed.
-- Narrowed Room 1's countermand rule so cart-only no-purchase phrases like
-  `put it in the cart ... don't buy it` reach the harm-line, while bare
-  `do not buy` lines still stay silent.
-- Updated focused regression coverage in storesite, triage, harm-line,
-  orchestrator, and owner-ingest tests. Logged F46 in
+- Inspected the latest official dev_v2 run dirs, especially
+  `freelancer_nora`, before making any product-code edits.
+- Confirmed P3 cannot be attempted because `factory/config/owner_phone.confirmed`
+  is absent and `gate_P3.sh` correctly bans live calls/SMS without it.
+- Confirmed the remaining Nora miss is the Northstar invoice-draft ASK. Catching
+  it honestly would improve catch/correctness but lower the selected
+  `v2_e2e_completion_rate`, because caught asks increase the denominator while
+  only proof-bearing acts increase the numerator.
+- Kept no product-code changes. Logged the metric/gate mismatch as F47 in
   `logs/factory/FAILURE_MODES.md`.
 
 ## Eval numbers seen
 - Official TARGET v9 lane: `ANTICIPY_OWNER_INGEST=1`, bank
-  `factory/personas/dev_v2`, tier `stub`, lap `20260613T032644Z-pre`.
-- First attempt, resolver only, was unchanged at e2e 0.8135 because triage still
-  silenced the no-buy cart line.
-- Final dev_v2 score: catch 0.9444, catch_worst 0.8333, false 0, harm 0,
-  interrupt 1.0/2.0, e2e 0.8301, correct 0.9333, recall_worst 1.0,
-  worst_persona `freelancer_nora`.
-- Previous kept score from lap `20260613T031441Z-pre`: catch 0.8889,
-  catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.8135,
-  correct 0.9167, recall_worst 0.5.
+  `factory/personas/dev_v2`, tier `stub`, lap `20260613T033946Z-pre`.
+- dev_v2 score reproduced the prior kept lap exactly: catch 0.9444,
+  catch_worst 0.8333, false 0, harm 0, interrupt 1.0/2.0, e2e 0.8301,
+  correct 0.9333, recall_worst 1.0, worst_persona `freelancer_nora`.
 - Legacy contract smoke, bank `factory/personas/dev`, lap
-  `20260613T032644Z-pre-dev`: catch 1.0/1.0, false 0, harm 0, interrupt
+  `20260613T033946Z-pre-dev`: catch 1.0/1.0, false 0, harm 0, interrupt
   0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0.
 - `bash scripts/run_suite.sh`: 46/46 GREEN.
 
 ## Gate status
 - `factory/config/owner_phone.confirmed` is absent, so `gate_P3.sh` live calls/SMS
-  are still banned and were not attempted.
+  remain banned and were not attempted.
 
 ## What's next
-- Nora still has one expected ask gap, the Northstar invoice draft ask. A pure
-  ask catch may lower the primary e2e denominator, so do not chase it unless the
-  product change also completes another act or the foreman changes the metric.
+- Foreman should either unlock P3 with the owner phone confirmation or retarget the
+  instrument so catching required ASK work, such as Nora's Northstar invoice draft,
+  is not punished by the primary metric.
 - Do not retry first-person follow-up note auto-capture or no-clock pickup/dropoff
   alarm adjustment without a new owner/foreman product law.

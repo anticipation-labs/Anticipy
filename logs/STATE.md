@@ -1,25 +1,26 @@
 # STATE
 
-LATEST LAP 20260613T032644Z (build, TARGET v9 dev_v2): the pre-registered
-seeded ampersand-store cart hypothesis moved the official primary metric. The
-first attempt, seed-host alias resolution only, did not move scoring because
-Room 1 still silenced the no-buy cart line as an utterance-wide countermand.
-The kept slice closes F46: `shared/storesite.py` now resolves spoken ampersand
-store aliases only when their normalized form uniquely prefixes an existing
-verified `site_hints_seed.json` host, and Room 1 lets cart-only no-purchase
-phrases reach the harm-line while bare `do not buy` countermand lines stay
-silent. Nora's B&H cart-prep line now completes through the existing browser
-mock proof with memory-resolved `bhphotovideo.com` and `Kupo folding stand`;
-unseeded ampersand aliases and bare `B&H` still fail closed. Official TARGET v9
-lane (`ANTICIPY_OWNER_INGEST=1`, `factory/personas/dev_v2`, stub) moved catch
-0.8889 -> 0.9444, catch_worst 0.6667 -> 0.8333, e2e 0.8135 -> 0.8301,
-correct 0.9167 -> 0.9333, recall_worst 0.5 -> 1.0, with false 0, harm 0,
-interrupt 1.0/2.0 unchanged, worst_persona `freelancer_nora`. Legacy dev-bank
-smoke stayed at catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e
-0.6483, correct 0.8475, recall 1.0. Suite stayed 46/46 green. P3 live gate
-still waits on `factory/config/owner_phone.confirmed`. Do not retry first-person
-follow-up note auto-capture or no-clock pickup/dropoff alarm adjustment without
-a new owner/foreman law.
+LATEST LAP 20260613T033946Z (groundwork, TARGET v9 dev_v2): no product-code
+change was kept. The lap inspected the latest official dev_v2 run dirs before
+editing and found that the remaining honest gap is a metric/gate mismatch, not a
+safe build slice. Nora's only non-dead-end miss is the Northstar invoice-draft
+ASK; catching it would improve catch/correctness but lower the selected
+`v2_e2e_completion_rate`, because caught asks increase the scorer denominator
+while only proof-bearing acts increase the numerator. P3 closure is still
+correctly blocked by absent `factory/config/owner_phone.confirmed`, so live
+calls/SMS were not attempted. F47 is OPEN-FOREMAN in
+`logs/factory/FAILURE_MODES.md`: either unlock P3 with the owner phone
+confirmation or retarget the instrument so required ASK work is not punished by
+the primary metric. Official TARGET v9 lane (`ANTICIPY_OWNER_INGEST=1`,
+`factory/personas/dev_v2`, stub) reproduced the prior kept score exactly: catch
+0.9444, catch_worst 0.8333, e2e 0.8301, correct 0.9333, false 0, harm 0,
+interrupt 1.0/2.0, recall_worst 1.0, worst_persona `freelancer_nora`. Legacy
+dev-bank smoke stayed at catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0,
+e2e 0.6483, correct 0.8475, recall 1.0. Suite stayed 46/46 green. Do not retry
+first-person follow-up note auto-capture or no-clock pickup/dropoff alarm
+adjustment without a new owner/foreman law. Law digest: never fake or shrink the
+goal; judge proves reality; if a metric blocks honest product work, log it and
+retarget rather than gaming it.
 
 CERTIFIED 2026-06-11 (overnight): **P2-brain CLOSED, judge REAL** (lap 20260611T041654Z)
 — holdout catch_rate_worst 1.0 (14/14 tasks, 4 never-seen personas), false 0, harm 0.

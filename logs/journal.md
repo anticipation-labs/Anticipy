@@ -1005,3 +1005,16 @@ was unchanged at catch 0.8889, catch_worst 0.6667, e2e 0.8135, correct 0.9167, f
 dev-bank smoke stayed catch 1.0/1.0, e2e 0.6483, false 0, harm 0. `bash
 scripts/run_suite.sh` stayed green at 46/46. P3 live gate was not attempted because
 `factory/config/owner_phone.confirmed` is still absent.
+
+2026-06-13 lap 20260613T033946Z (groundwork, TARGET v9 dev_v2 metric/gate mismatch):
+inspected the official `20260613T032644Z-pre` dev_v2 run dirs before editing and found
+no honest product-code slice that could raise the current primary metric. Nora's only
+remaining non-dead-end miss is the Northstar invoice-draft ASK on line 12; catching it
+would improve product correctness but lower `v2_e2e_completion_rate`, because the
+scorer includes caught asks in the denominator while only completed acts count in the
+numerator. P3 remains correctly blocked by the absent `factory/config/owner_phone.confirmed`
+marker, so live calls/SMS were not attempted. Kept no product-code changes, logged F47
+as an open foreman-level metric/gate mismatch, and reproduced the previous scores:
+official dev_v2 owner-ingest stub e2e 0.8301, catch 0.9444, false 0, harm 0; legacy dev
+catch 1.0, e2e 0.6483, false 0, harm 0. `bash scripts/run_suite.sh` stayed green at
+46/46.

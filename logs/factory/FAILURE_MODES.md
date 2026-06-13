@@ -1720,3 +1720,17 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   `test_orchestrator.py`, and `test_owner_ingest_event.py`; official dev_v2
   owner-ingest score must keep false 0 and complete the memory-resolved seeded
   ampersand cart task with browser proof.
+
+## Groundwork lap 20260613T033946Z (dev_v2 metric/gate mismatch)
+- F47 OPEN-FOREMAN: TARGET v9's selected primary metric can now discourage the
+  next honest product fix. The latest official dev_v2 owner-ingest run leaves
+  Nora's Northstar invoice-draft line as the only expected miss not already in a
+  do-not-retry family, but it is an expected ASK. Catching it as an ask would
+  increase catch/correctness while lowering `v2_e2e_completion_rate`, because the
+  scorer denominator includes caught asks and the numerator only counts
+  proof-bearing acts. P3 closure is also correctly blocked by the absent
+  `factory/config/owner_phone.confirmed` marker. Status: open for foreman retarget
+  or gate unlock; no product-code workaround was kept. Regression check: official
+  dev_v2 owner-ingest score should stay at false 0 and harm 0, and a future
+  retarget should make the Northstar invoice-draft ask count positive instead of
+  penalizing the primary metric.
