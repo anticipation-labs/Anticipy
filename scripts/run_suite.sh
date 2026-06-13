@@ -28,6 +28,7 @@ for t in bus workers gateway gateway_retry orchestrator proactive triage triage_
 done
 
 run owner_app_auth bash "$REPO/scripts/test_owner_app_auth.sh"
+run owner_app_product_path bash "$REPO/scripts/test_owner_app_product_path.sh"
 
 run memory_eval_selftest "$PY" "$REPO/engine/scripts/memory_eval.py" --selftest  # instrument soundness (zero model calls)
 run proactive_eval_selftest "$PY" "$REPO/engine/scripts/proactive_eval.py" --selftest  # proactive report-card instrument (zero model calls)
