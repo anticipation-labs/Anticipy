@@ -265,6 +265,20 @@ class OwnerMode:
                 reason=reason,
             )
 
+        if _MONEY.search(text):
+            return OwnerTaskCard(
+                source=source,
+                line_no=line.line_no,
+                source_text=text,
+                title="Block money action",
+                disposition="blocked",
+                route="browser",
+                action="prepare_purchase_path_without_payment",
+                args={"task_text": text, "payment_allowed": False},
+                confidence=0.78,
+                reason="money or checkout is a hard stop; prepare but do not pay",
+            )
+
         if _REMEMBER.search(text) and not _VENT_OR_JOKE.search(text):
             return OwnerTaskCard(
                 source=source,

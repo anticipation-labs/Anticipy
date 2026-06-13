@@ -17,6 +17,8 @@ DATA_DIR="$(mktemp -d -t anticipy-owner-product-XXXXXX)"
 COOKIE_JAR="$(mktemp -t anticipy-owner-product-cookie-XXXXXX)"
 PAYLOAD="$(mktemp -t anticipy-owner-product-payload-XXXXXX.json)"
 BODY="$(mktemp -t anticipy-owner-product-body-XXXXXX.json)"
+UPLOAD_ROOT="$(mktemp -d -t anticipy-owner-product-upload-XXXXXX)"
+UPLOAD_FILE="$(mktemp -t anticipy-owner-product-upload-XXXXXX.txt)"
 ENGINE_LOG="$(mktemp -t anticipy-owner-product-engine-XXXXXX.log)"
 NEXT_LOG="$(mktemp -t anticipy-owner-product-next-XXXXXX.log)"
 ENGINE_PID=""
@@ -31,7 +33,8 @@ cleanup() {
     kill "$ENGINE_PID" >/dev/null 2>&1 || true
     wait "$ENGINE_PID" >/dev/null 2>&1 || true
   fi
-  rm -f "$COOKIE_JAR" "$PAYLOAD" "$BODY" "$ENGINE_LOG" "$NEXT_LOG"
+  rm -f "$COOKIE_JAR" "$PAYLOAD" "$BODY" "$UPLOAD_FILE" "$ENGINE_LOG" "$NEXT_LOG"
+  rm -rf "$UPLOAD_ROOT"
 }
 trap cleanup EXIT
 
@@ -52,6 +55,7 @@ ANTICIPY_NATIVE_BRIDGE_FALLBACK=0 \
 ANTICIPY_TICK_SECONDS=0 \
 ANTICIPY_INBOUND_POLL_SECONDS=0 \
 ANTICIPY_OWNER_API_TOKEN="$ENGINE_TOKEN" \
+ANTICIPY_UPLOAD_ROOT="$UPLOAD_ROOT" \
 "$PY" -m uvicorn --app-dir "$REPO/engine" anticipy_engine.main:app \
   --host "$HOST" --port "$ENGINE_PORT" --log-level warning >"$ENGINE_LOG" 2>&1 &
 ENGINE_PID="$!"
@@ -73,6 +77,7 @@ fi
 ANTICIPY_APP_OWNER_TOKEN="$APP_TOKEN" \
 ANTICIPY_OWNER_API_TOKEN="$ENGINE_TOKEN" \
 ANTICIPY_ENGINE_URL="$ENGINE_BASE" \
+ANTICIPY_UPLOAD_ROOT="$UPLOAD_ROOT" \
 npm run dev -- --hostname "$HOST" --port "$NEXT_PORT" >"$NEXT_LOG" 2>&1 &
 NEXT_PID="$!"
 
@@ -172,4 +177,48 @@ code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" "$NEXT_BASE/api/s
 test "$code" = "200"
 grep -q '"owner_api":{"state":"protected"' "$BODY"
 
-echo "PASS owner_app_product_path: owner unlock -> Next Press Go route -> protected engine -> messy cards"
+cat >"$UPLOAD_FILE" <<'TEXT'
+[14:00] Omar: was comparing travel umbrellas at Target; liked the black compact travel umbrella.
+[14:05] That umbrella thing at Target, cart it so I can compare shipping later, no checkout.
+[15:00] Nora needs the launch notes before Monday; I told her I would send them.
+[15:20] pay the overdue thing now with card.
+TEXT
+
+code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" \
+  -F "file=@$UPLOAD_FILE;filename=uploaded-day.txt" \
+  -F "source=upload" \
+  -F "execute_actions=true" \
+  "$NEXT_BASE/api/owner/upload")"
+test "$code" = "200"
+
+"$PY" - "$BODY" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+cards = body["cards"]
+
+def one(needle):
+    matches = [c for c in cards if needle.lower() in c["source_text"].lower()]
+    assert len(matches) == 1, (needle, matches, cards)
+    return matches[0]
+
+umbrella = one("umbrella thing")
+assert umbrella["status"] == "done", umbrella
+assert any(p.get("type") == "memory_resolution" for p in umbrella["proof"]), umbrella
+
+nora = one("Nora needs")
+assert nora["status"] == "waiting" and nora["execution"]["ask_id"], nora
+
+money = one("overdue thing")
+assert money["status"] == "blocked", money
+assert money["execution"]["goal_id"] is None and money["execution"]["ask_id"] is None, money
+PY
+
+if find "$UPLOAD_ROOT" -mindepth 1 -print -quit | grep -q .; then
+  echo "upload staging root was not cleaned" >&2
+  find "$UPLOAD_ROOT" -mindepth 1 -maxdepth 3 -print >&2
+  exit 1
+fi
+
+echo "PASS owner_app_product_path: owner unlock -> Next Press Go/upload routes -> protected engine -> messy cards"

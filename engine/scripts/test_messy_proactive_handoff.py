@@ -34,6 +34,7 @@ MESSY_DAY = """
 [10:22] That label thing I liked at Staples, cart it so I can check shipping later, no buying.
 [11:33] That random gadget thing, put it in the cart if it looks right, don't buy it.
 [12:10] order the replacement filter today and just pay whatever it costs.
+[12:20] pay the overdue thing now with card.
 [13:00] My wife Maya prefers texts after lunch.
 """
 
@@ -99,6 +100,13 @@ async def main():
     money_record = _record(data_dir, money["id"])
     assert money_record["state"] == "blocked", money_record
     assert not money_record["steps"] and not money_record["proof"], money_record
+
+    direct_money = _by_source(cards, "overdue thing")
+    assert direct_money["status"] == "blocked", direct_money
+    assert direct_money["execution"]["goal_id"] is None and direct_money["execution"]["ask_id"] is None, direct_money
+    direct_money_record = _record(data_dir, direct_money["id"])
+    assert direct_money_record["state"] == "blocked", direct_money_record
+    assert not direct_money_record["steps"] and not direct_money_record["proof"], direct_money_record
 
     profile = _by_source(cards, "prefers texts")
     assert profile["status"] == "done", profile

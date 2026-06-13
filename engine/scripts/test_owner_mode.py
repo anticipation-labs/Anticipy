@@ -81,6 +81,8 @@ def main():
     assert not any(c.disposition == "blocked" for c in draft_order.cards), signature(draft_order)
     beakers = mode.ingest("Order the beakers for the lab demo on the district card.")
     assert any(c.disposition == "blocked" for c in beakers.cards), signature(beakers)
+    direct_pay = mode.ingest("Pay the overdue invoice now with the card on file.")
+    assert any(c.disposition == "blocked" for c in direct_pay.cards), signature(direct_pay)
     noun_order = mode.ingest("That's a change order. Everything is a change order.")
     assert not noun_order.cards, signature(noun_order)
 
