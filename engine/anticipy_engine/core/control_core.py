@@ -258,6 +258,10 @@ class ControlCore:
         owner_contact_configured = bool(
             os.environ.get("OWNER_PHONE") or os.environ.get("ALERT_PHONE") or os.environ.get("TWILIO_TO")
         )
+        try:
+            inbound_poll_seconds = float(os.environ.get("ANTICIPY_INBOUND_POLL_SECONDS", "15") or 0)
+        except ValueError:
+            inbound_poll_seconds = 0.0
         if mode != "live":
             status = "ready_to_enable" if twilio_configured and owner_contact_configured else "mock"
             label = (
@@ -274,6 +278,23 @@ class ControlCore:
         else:
             status = "live_ready"
             label = "live text/call ready"
+        if mode != "live":
+            inbound_status = status
+            inbound_label = label
+        elif not twilio_configured:
+            inbound_status = "missing_twilio"
+            inbound_label = "missing Twilio credentials"
+        elif not owner_contact_configured:
+            inbound_status = "missing_owner_contact"
+            inbound_label = "missing owner phone"
+        elif inbound_poll_seconds <= 0:
+            inbound_status = "disabled"
+            inbound_label = "inbound reply polling disabled"
+        else:
+            inbound_status = "live_ready"
+            inbound_label = "inbound YES/NO replies active"
+        if status == "live_ready" and inbound_status != "live_ready":
+            label = f"{label}; {inbound_label}"
         return {
             "mode": "live" if mode == "live" else "mock",
             "status": status,
@@ -282,6 +303,11 @@ class ControlCore:
             "owner_contact_configured": owner_contact_configured,
             "text": status,
             "call": status,
+            "inbound": {
+                "status": inbound_status,
+                "label": inbound_label,
+                "poll_seconds": inbound_poll_seconds if inbound_poll_seconds > 0 else 0,
+            },
         }
 
     def _sync_owner_loop_status(self, card_id: str, state: str) -> None:

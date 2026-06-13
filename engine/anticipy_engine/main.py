@@ -207,8 +207,9 @@ def _cleanup_upload(path: Path) -> None:
 def _readiness(channels: dict) -> dict:
     browser_connected = bool(core.browser_link.connected or getattr(core.native_bridge_link, "connected", False))
     api_live = core.api_hand.mode == "live"
-    channels_ready = channels.get("status") == "live_ready"
-    channels_armed = channels.get("status") == "ready_to_enable"
+    inbound_status = (channels.get("inbound") or {}).get("status")
+    channels_ready = channels.get("status") == "live_ready" and inbound_status == "live_ready"
+    channels_armed = channels.get("status") == "ready_to_enable" or inbound_status == "ready_to_enable"
     memory_recovered = bool(getattr(core.memory.db, "recovered_corruption", False))
     owner_token_set = bool(_owner_api_token())
     items = {

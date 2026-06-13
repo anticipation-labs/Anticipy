@@ -67,7 +67,7 @@ finally:
 # the app should say "ready to enable", not "missing" and not "live".
 prev = {k: os.environ.get(k) for k in (
     "ANTICIPY_CHANNELS_MODE", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
-    "TWILIO_FROM", "OWNER_PHONE",
+    "TWILIO_FROM", "OWNER_PHONE", "ANTICIPY_INBOUND_POLL_SECONDS",
 )}
 try:
     os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
@@ -79,8 +79,17 @@ try:
     status = core.channel_status()
     assert status["mode"] == "mock", status
     assert status["status"] == "ready_to_enable", status
+    assert status["inbound"]["status"] == "ready_to_enable", status
     assert status["twilio_configured"] is True and status["owner_contact_configured"] is True, status
     assert "token" not in str(status).lower(), status
+
+    os.environ["ANTICIPY_CHANNELS_MODE"] = "live"
+    os.environ["ANTICIPY_INBOUND_POLL_SECONDS"] = "0"
+    live_outbound = ControlCore(data_dir=Path(tempfile.mkdtemp(prefix="anticipy-channel-status-live-")))
+    live_status = live_outbound.channel_status()
+    assert live_status["status"] == "live_ready", live_status
+    assert live_status["inbound"]["status"] == "disabled", live_status
+    assert "disabled" in live_status["label"], live_status
 finally:
     for k, v in prev.items():
         if v is None:

@@ -61,6 +61,15 @@ def main():
             "missing_owner_contact",
             "live_ready",
         }, channels
+        assert channels["inbound"]["status"] in {
+            "mock",
+            "ready_to_enable",
+            "missing_twilio",
+            "missing_owner_contact",
+            "disabled",
+            "live_ready",
+        }, channels
+        assert channels["inbound"]["label"], channels
         assert "TWILIO_AUTH_TOKEN" not in json.dumps(channels), channels
         readiness = status.json()["readiness"]
         assert readiness["overall"] in {"ready", "needs_setup", "local_mock"}, readiness
