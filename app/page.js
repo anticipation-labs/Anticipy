@@ -163,7 +163,10 @@ export default function Home() {
       setCards((current) => {
         if (!current.length) return loadedCards;
         const loadedById = new Map(loadedCards.map((card) => [card.id, card]));
-        return current.map((card) => loadedById.get(card.id) || card);
+        const seen = new Set(current.map((card) => card.id));
+        const refreshed = current.map((card) => loadedById.get(card.id) || card);
+        const newDurableCards = loadedCards.filter((card) => !seen.has(card.id));
+        return [...refreshed, ...newDurableCards];
       });
     }
   }
