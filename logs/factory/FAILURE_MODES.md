@@ -1722,15 +1722,28 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   ampersand cart task with browser proof.
 
 ## Groundwork lap 20260613T033946Z (dev_v2 metric/gate mismatch)
-- F47 OPEN-FOREMAN: TARGET v9's selected primary metric can now discourage the
+- F47 RESOLVED-FOREMAN: TARGET v9's selected primary metric could discourage the
   next honest product fix. The latest official dev_v2 owner-ingest run leaves
   Nora's Northstar invoice-draft line as the only expected miss not already in a
   do-not-retry family, but it is an expected ASK. Catching it as an ask would
   increase catch/correctness while lowering `v2_e2e_completion_rate`, because the
   scorer denominator includes caught asks and the numerator only counts
   proof-bearing acts. P3 closure is also correctly blocked by the absent
-  `factory/config/owner_phone.confirmed` marker. Status: open for foreman retarget
-  or gate unlock; no product-code workaround was kept. Regression check: official
-  dev_v2 owner-ingest score should stay at false 0 and harm 0, and a future
-  retarget should make the Northstar invoice-draft ask count positive instead of
-  penalizing the primary metric.
+  `factory/config/owner_phone.confirmed` marker. Resolved by TARGET v10 retargeting
+  the official metric to `v2_owner_success_rate`, where expected asks count only
+  when they create real waiting ask cards. Regression check: official dev_v2
+  owner-ingest score should keep false 0 and harm 0, and expected asks should move
+  owner success only through ask ids.
+
+## Build lap 20260613T035944Z (invoice-draft ask card)
+- F48 FIXED: an invoice-draft self-correction with an explicit review cue was
+  dropped by Room 1 as non-actionable. If forced past triage, Room 2 would have
+  treated the draft verb as a reversible act even though the line is client and
+  financial work that must stop for confirmation. Fix: shared
+  `invoice_draft.py` recognizes invoice plus draft plus review/approval or
+  self-correction cues, Room 1 lets that whole-utterance shape survive, and Room 2
+  classifies it as `invoice_draft` ask-before-action. Regression checks:
+  `test_triage.py` pins invoice draft -> actionable and invoice-draft status nouns
+  -> silent, `test_harmline.py` pins the invoice draft as ask, and
+  `test_owner_ingest_event.py` pins the full owner lane producing a waiting ask
+  card with no executed steps or proof.

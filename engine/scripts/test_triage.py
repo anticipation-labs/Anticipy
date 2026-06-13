@@ -44,6 +44,7 @@ STREAM = [
     ("Update my calendar so I don't double-book.", True),                # repair-verb imperative
     ("Renew the patio permit tomorrow morning before I forget again.", True),
     ("Someone needs to chase the unpaid invoice.", True),                # delegation
+    ("Invoice the client today? No, draft it and let Jordan sanity-check the hours first.", True),
     ("Get the signed forms over to the front office today.", True),      # causative hand-off
     ("Those wide trail shoes I picked out - put them in the cart.", True),  # cart idiom
     ("That notebook size I liked at Staples, cart one pack so I can check shipping later, no buying.", True),
@@ -73,6 +74,7 @@ STREAM = [
     #     false-action source before lap 20260610T062952Z) ---
     ("Quarterly review. Two real deals, three zombies.", False),   # noun-phrase status header
     ("Lab report draft is at 60%.", False),                        # progress narration
+    ("The invoice draft is in the shared folder.", False),          # invoice nouns are not tasks
     ("Tomorrow: inspection prep, estimate review, then sleep.", False),  # recap list
     # --- retractions / conditional vents / trailing hedges: explicitly nothing to do ---
     ("Hold it - that goes through the job account, don't send anything.", False),

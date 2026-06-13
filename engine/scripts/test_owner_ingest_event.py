@@ -56,6 +56,7 @@ LOWES_CONTEXT = "Was comparing shower grab bars at Lowe's for Dad's bathroom; pr
 LOWES_CART_NO_CHECKOUT = "That grab bar I was looking at for Dad's shower, put it in the cart at Lowe's, no checkout."
 BH_CONTEXT = "Was comparing compact light stands at B&H Photo; liked the travel stand best."
 BH_CART_NO_BUY = "That light stand thing, put it in the cart if the same one is still at B&H, don't buy it."
+INVOICE_DRAFT = "Invoice the client today? No, draft it and let Jordan sanity-check the hours first."
 # F28 requested-action scope: a draft request whose line carries work vocabulary
 # ("supply order", "purchasing window", "ready to send") is NOT money, NOT a send —
 # the pre-gate must not block it, the spine must act, and the plan is the DRAFT
@@ -112,6 +113,7 @@ async def owner_lane_check():
         lowes_cart = await core.feed("app", LOWES_CART_NO_CHECKOUT, {})
         bh_context = await core.feed("app", BH_CONTEXT, {})
         bh_cart = await core.feed("app", BH_CART_NO_BUY, {})
+        invoice_draft = await core.feed("app", INVOICE_DRAFT, {})
         draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
@@ -131,7 +133,7 @@ async def owner_lane_check():
     for out in (noise, act, ask, promise, unshaped, schedule_change, forget_hold,
                 slot_context, slot_booking, note_to_customers, cart_context,
                 cart_derived, lowes_context, lowes_cart, bh_context, bh_cart,
-                draft_order, cart, money, money_vent, remember, clarify):
+                invoice_draft, draft_order, cart, money, money_vent, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
 
@@ -234,6 +236,14 @@ async def owner_lane_check():
     assert bh_rec["steps"][0]["args"]["url"] == "https://www.bhphotovideo.com", bh_rec
     assert bh_rec["steps"][0]["args"]["memory_resolution"]["item"] == "travel stand", bh_rec
 
+    # Money-adjacent invoice drafting is not silent and not executed. It becomes
+    # a real waiting ask card with a pending ask id.
+    assert invoice_draft["decision"] == "ask" and invoice_draft["ask_id"], invoice_draft
+    inv_rec = _record(tmp, invoice_draft["goal_id"])
+    assert inv_rec["state"] == "waiting", inv_rec
+    assert not inv_rec["steps"] and not inv_rec["proof"], inv_rec
+    assert inv_rec["owner_card"]["execution"]["decision"] == "ask", inv_rec
+
     # F28: the draft request acts (no money pre-gate on the noun "order"; no send
     # reading on the purpose tail) and the executed plan is the DRAFT — never a send
     assert draft_order["decision"] == "act", draft_order
@@ -283,7 +293,8 @@ async def owner_lane_check():
     pending_ids = {p["ask_id"] for p in pending}
     assert ask["ask_id"] in pending_ids and clarify["ask_id"] in pending_ids, pending
     assert promise["ask_id"] in pending_ids and cart["ask_id"] in pending_ids, pending
-    assert money["goal_id"] not in pending_ids and len(pending) == 4, pending
+    assert invoice_draft["ask_id"] in pending_ids, pending
+    assert money["goal_id"] not in pending_ids and len(pending) == 5, pending
 
     # NO declines: record marked, ask gone from /pending
     assert declined["approved"] is False, declined

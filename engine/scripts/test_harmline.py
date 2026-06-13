@@ -43,6 +43,7 @@ BATTERY = [
     ("Create a calendar event and invite the client.", True),
     ("Email the recruiter back with my decision.", True),
     ("Reply to the board about the budget.", True),
+    ("Invoice the client today? No, draft it and let Jordan sanity-check the hours first.", True),
     # ---- DETRIMENTAL: delegated work / hand-off to a person (never a casual send) ----
     ("Have someone look into the hosting spike this week.", True),
     ("Someone should ping the customer success team about a reference.", True),

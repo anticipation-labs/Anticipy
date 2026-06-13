@@ -931,6 +931,20 @@ smoke stayed at catch 1.0/1.0, e2e 0.6483, false 0, harm 0. `bash scripts/run_su
 stayed green at 46/46. P3 live gate was not attempted because
 `factory/config/owner_phone.confirmed` is still absent.
 
+2026-06-13 lap 20260613T035944Z (build, TARGET v10 invoice-draft ask card):
+read the latest dev_v2 Nora run before editing and targeted the remaining Northstar
+invoice-draft expected ask. The miss was real: triage dropped the line as
+non-actionable, and the harm-line would have treated a draft verb as safe if it
+had survived. Added shared invoice-draft ask classification requiring invoice plus
+draft plus review/approval or self-correction cues, wired it through triage and
+harm, and pinned the full owner-lane waiting ask receipt. Official v10 owner-ingest
+dev_v2 moved to owner_success 1.0, catch 1.0/1.0, correct 0.9444, e2e 0.7857,
+false 0, harm 0, interrupt 1.0/2.0, recall_worst 1.0. Legacy dev-bank smoke stayed
+stable at owner_success 0.9226, catch 1.0/1.0, e2e 0.6483, correct 0.8475,
+false 0, harm 0. `bash scripts/run_suite.sh` stayed green at 46/46. P3 live
+calls/SMS were not attempted because `factory/config/owner_phone.confirmed` is
+still absent.
+
 2026-06-13 lap 20260613T032644Z (build, TARGET v9 dev_v2 seeded ampersand-store cart
 resolution): inspected Nora's fresh dev_v2 run and confirmed the remaining primary-metric
 act gap was the memory-resolved B&H cart task; the Northstar follow-up note and no-clock

@@ -28,6 +28,7 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from ..shared.invoice_draft import match_invoice_draft_ask
 from ..shared.note_task import match_note_task
 from ..shared.schedule_change import match_schedule_change_hold
 from ..shared.slotbooking import match_context_slot_choice_booking, match_slot_choice_booking
@@ -241,6 +242,9 @@ class HarmLine:
                                "reversible:time-anchored forget-hold -> act (re-gated on fire)")
         if match_note_task(action_text or "") is not None:
             return HarmVerdict(False, "note", "reversible:note capture -> act")
+        if match_invoice_draft_ask(action_text or ""):
+            return HarmVerdict(True, "invoice_draft",
+                               "invoice/client financial draft needs confirmation -> ask")
         # 4) soft send WITHOUT a draft frame — binding, gray via memory
         if _SOFT_SEND.search(t) and not _DRAFT_FRAME.search(t):
             return self._assess_send(t, ctx)

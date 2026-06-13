@@ -37,6 +37,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from ..shared.invoice_draft import match_invoice_draft_ask
 from ..shared.schedule_change import match_schedule_change_hold
 
 # Actionable VERBS / task intents — general task language. These no longer match
@@ -752,12 +753,16 @@ class Triage:
             return False
         # utterance-absolute negatives: a countermand calls off whatever was said around
         # it, and a trailing hedge self-cancels everything before it — both span clauses
+        invoice_draft_ask = match_invoice_draft_ask(raw)
         if _COUNTERMAND.search(t) and not (
             _CART_PUT.search(t) and _CART_ONLY_NO_PURCHASE.search(t)
+            or invoice_draft_ask
         ):
             return False
         if _TRAILING_HEDGE.search(t):
             return False
+        if invoice_draft_ask:
+            return True
         # clause-scoped pass (ledger F8): each clause is judged on its own — confident
         # negatives first (like the hedge rule, ledger gate-S3), then positive cues.
         # A vent clause silences itself, never the command standing beside it.

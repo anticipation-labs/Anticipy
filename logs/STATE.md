@@ -1,21 +1,24 @@
 # STATE
 
-LATEST LAP 20260613T035356Z (groundwork, TARGET v10 owner-success baseline):
-no product-code change was kept. TARGET v10 resolved F47 by retargeting the
-official metric to `v2_owner_success_rate`, where expected actions count only
-with proof and expected asks count only with real waiting ask cards. The lap
-pre-registered a baseline-only measurement and ran the official owner-ingest
-dev_v2 stub lane: owner_success 0.9444, catch 0.9444, catch_worst 0.8333, e2e
-0.8301, correct 0.9333, false 0, harm 0, interrupt 1.0/2.0, recall_worst 1.0,
-worst_persona `freelancer_nora`. Legacy dev-bank smoke stayed stable:
-owner_success 0.9226, catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e
-0.6483, correct 0.8475, recall 1.0. Suite stayed 46/46 green. P3 closure is
-still correctly blocked by absent `factory/config/owner_phone.confirmed`, so
-live calls/SMS were not attempted. After verify/scoreboard records the v10 first
-measurement, the next build lap should use actual dev_v2 run evidence and target
-the largest owner-success gap, with TARGET naming Nora's Northstar invoice-draft
-ask card as the expected first build target. Do not retry first-person follow-up
-note auto-capture or no-clock pickup/dropoff alarm adjustment without a new
+LATEST LAP 20260613T035944Z (build, TARGET v10 invoice-draft ask card):
+F48 fixed. The latest dev_v2 Nora run showed the Northstar invoice-draft line
+was ignored by triage, while the harm-line would have treated the draft verb as
+safe if it had survived. Added shared `invoice_draft.py` recognition for invoice
+plus draft plus review/approval or self-correction cues, let that shape survive
+Room 1, and made Room 2 classify it as an ask-before-action `invoice_draft`.
+The owner lane now creates a real waiting ask card for the Northstar line with
+ask id present and no executed steps. Official v10 owner-ingest dev_v2 stub lane:
+owner_success 1.0, catch 1.0, catch_worst 1.0, e2e 0.7857, correct 0.9444,
+false 0, harm 0, interrupt 1.0/2.0, recall_worst 1.0, worst_persona
+`caregiver_mina`. Legacy dev-bank smoke stayed stable: owner_success 0.9226,
+catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483, correct
+0.8475, recall 1.0. Suite stayed 46/46 green. P3 closure is still correctly
+blocked by absent `factory/config/owner_phone.confirmed`, so live calls/SMS were
+not attempted. After verify/scoreboard records this lap, if the owner phone
+marker appears, attempt P3. If it remains absent, dev_v2 owner-success is
+saturated locally and the next honest Stage B slice needs a new foreman target
+or a broader integrated-product gap. Do not retry first-person follow-up note
+auto-capture or no-clock pickup/dropoff alarm adjustment without a new
 owner/foreman law. Law digest: never fake or shrink the goal; judge proves
 reality; owner success counts proof-bearing actions and real waiting asks, not
 metric games.
