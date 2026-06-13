@@ -1,26 +1,24 @@
 # STATE
 
-LATEST LAP 20260613T033946Z (groundwork, TARGET v9 dev_v2): no product-code
-change was kept. The lap inspected the latest official dev_v2 run dirs before
-editing and found that the remaining honest gap is a metric/gate mismatch, not a
-safe build slice. Nora's only non-dead-end miss is the Northstar invoice-draft
-ASK; catching it would improve catch/correctness but lower the selected
-`v2_e2e_completion_rate`, because caught asks increase the scorer denominator
-while only proof-bearing acts increase the numerator. P3 closure is still
-correctly blocked by absent `factory/config/owner_phone.confirmed`, so live
-calls/SMS were not attempted. F47 is OPEN-FOREMAN in
-`logs/factory/FAILURE_MODES.md`: either unlock P3 with the owner phone
-confirmation or retarget the instrument so required ASK work is not punished by
-the primary metric. Official TARGET v9 lane (`ANTICIPY_OWNER_INGEST=1`,
-`factory/personas/dev_v2`, stub) reproduced the prior kept score exactly: catch
-0.9444, catch_worst 0.8333, e2e 0.8301, correct 0.9333, false 0, harm 0,
-interrupt 1.0/2.0, recall_worst 1.0, worst_persona `freelancer_nora`. Legacy
-dev-bank smoke stayed at catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0,
-e2e 0.6483, correct 0.8475, recall 1.0. Suite stayed 46/46 green. Do not retry
-first-person follow-up note auto-capture or no-clock pickup/dropoff alarm
-adjustment without a new owner/foreman law. Law digest: never fake or shrink the
-goal; judge proves reality; if a metric blocks honest product work, log it and
-retarget rather than gaming it.
+LATEST LAP 20260613T035356Z (groundwork, TARGET v10 owner-success baseline):
+no product-code change was kept. TARGET v10 resolved F47 by retargeting the
+official metric to `v2_owner_success_rate`, where expected actions count only
+with proof and expected asks count only with real waiting ask cards. The lap
+pre-registered a baseline-only measurement and ran the official owner-ingest
+dev_v2 stub lane: owner_success 0.9444, catch 0.9444, catch_worst 0.8333, e2e
+0.8301, correct 0.9333, false 0, harm 0, interrupt 1.0/2.0, recall_worst 1.0,
+worst_persona `freelancer_nora`. Legacy dev-bank smoke stayed stable:
+owner_success 0.9226, catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e
+0.6483, correct 0.8475, recall 1.0. Suite stayed 46/46 green. P3 closure is
+still correctly blocked by absent `factory/config/owner_phone.confirmed`, so
+live calls/SMS were not attempted. After verify/scoreboard records the v10 first
+measurement, the next build lap should use actual dev_v2 run evidence and target
+the largest owner-success gap, with TARGET naming Nora's Northstar invoice-draft
+ask card as the expected first build target. Do not retry first-person follow-up
+note auto-capture or no-clock pickup/dropoff alarm adjustment without a new
+owner/foreman law. Law digest: never fake or shrink the goal; judge proves
+reality; owner success counts proof-bearing actions and real waiting asks, not
+metric games.
 
 CERTIFIED 2026-06-11 (overnight): **P2-brain CLOSED, judge REAL** (lap 20260611T041654Z)
 — holdout catch_rate_worst 1.0 (14/14 tasks, 4 never-seen personas), false 0, harm 0.
@@ -82,7 +80,7 @@ door are the NEXT plan; pendant and iPhone after that. autopilot/ remains read-o
 its LESSONS.md still binds.
 
 ## The Factory (how work happens now)
-- Steering: `factory/TARGET.md` (foreman-owned, currently v9 / phase P3-voice).
+- Steering: `factory/TARGET.md` (foreman-owned, currently v10 / phase P3-voice).
 - Phases and gates: `factory/PHASES.yaml`, gates in `factory/gates/`.
 - Nightly: launchd `com.anticipy.factory` starts `factory/bin/loop.sh --nightly` at 22:30,
   stops by 07:00. Manual: `factory/bin/loop.sh --once|--max-laps N`.

@@ -1018,3 +1018,15 @@ as an open foreman-level metric/gate mismatch, and reproduced the previous score
 official dev_v2 owner-ingest stub e2e 0.8301, catch 0.9444, false 0, harm 0; legacy dev
 catch 1.0, e2e 0.6483, false 0, harm 0. `bash scripts/run_suite.sh` stayed green at
 46/46.
+
+2026-06-13 lap 20260613T035356Z (groundwork, TARGET v10 owner-success baseline):
+pre-registered the first v10 lap as a baseline-only measurement after reading the
+retargeted TARGET. Kept no product-code changes. Ran the required legacy dev smoke
+(`20260613T035356Z-pre`), which stayed stable at owner_success 0.9226, catch
+1.0/1.0, e2e 0.6483, correct 0.8475, false 0, harm 0. Ran the official v10 owner
+lane (`ANTICIPY_OWNER_INGEST=1`, `factory/personas/dev_v2`, stub,
+`20260613T035356Z-pre-v10`), which measured owner_success 0.9444, catch 0.9444,
+catch_worst 0.8333, e2e 0.8301, correct 0.9333, false 0, harm 0, interrupt 1.0/2.0,
+recall_worst 1.0, worst_persona freelancer_nora. `bash scripts/run_suite.sh` stayed
+green at 46/46. P3 live calls/SMS were not attempted because
+`factory/config/owner_phone.confirmed` is still absent.
