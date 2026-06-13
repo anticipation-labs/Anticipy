@@ -48,6 +48,10 @@ function outcomeText(card, pendingAsk) {
   return "Ready";
 }
 
+function receiptText(entry) {
+  return entry.summary || entry.message || JSON.stringify(entry.data || entry);
+}
+
 function TaskCard({ card, pendingAsk, onResolve }) {
   const bucket = cardBucket(card);
   return (
@@ -477,7 +481,7 @@ export default function Home() {
               {events.length ? events.map((entry, index) => (
                 <div className="event" key={`${entry.ts || index}-${entry.kind || "event"}`}>
                   <strong>{entry.kind || "event"}</strong>
-                  <span>{JSON.stringify(entry.data || entry)}</span>
+                  <span title={JSON.stringify(entry)}>{receiptText(entry)}</span>
                 </div>
               )) : <div className="empty">No engine events loaded.</div>}
             </div>
