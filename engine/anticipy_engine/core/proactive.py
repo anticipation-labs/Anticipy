@@ -418,7 +418,8 @@ class ProactiveEngine:
         self._persist_pending()
         if self.glassbox is not None:
             self.glassbox.log("ask_sent", {"ask_id": ask_id, "goal_id": goal.id, "channel": self.channel.name,
-                                           "to": self.user_contact, "sent": bool(sent.get("sent"))})
+                                           "to": self.user_contact, "sent": bool(sent.get("sent")),
+                                           "action": action, "reason": reason, "category": category})
         return ask_id
 
     async def resolve_ask(self, ask_id: str, approved: bool) -> dict:

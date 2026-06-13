@@ -163,6 +163,13 @@ def main():
         assert raw_loop_status.get(message["source_text"]) == "done", raw_loop_status
         assert raw_loop_status.get(blocked["source_text"]) == "blocked", raw_loop_status
 
+        receipt_feed = client.get("/glassbox?limit=80")
+        assert receipt_feed.status_code == 200, receipt_feed.text
+        summaries = [e["summary"] for e in receipt_feed.json()["entries"]]
+        assert any("processed" in s and "cards" in s for s in summaries), summaries
+        assert any("waiting for you" in s and "Sam" in s for s in summaries), summaries
+        assert any("hard wall: money" in s for s in summaries), summaries
+
     print("PASS public_backend_path: messy input -> memory -> safe actions, pending approval, receipts, money wall")
 
 

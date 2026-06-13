@@ -507,6 +507,9 @@ class ControlCore:
             card.execution = {"decision": "blocked", "goal_id": None, "ask_id": None,
                               "reason": "hard stop: money/wall cards never execute"}
             state = "blocked" if execute_actions else "open"
+            if execute_actions:
+                self.glassbox.log("blocked", {"goal_id": card.id, "category": "money",
+                                              "reason": card.reason, "action": card.source_text})
         elif execution:
             # the spine already ran this line (F17 one brain, _spine_card): the
             # record mirrors what it actually DID. Spine refusal (ignore/suppressed/

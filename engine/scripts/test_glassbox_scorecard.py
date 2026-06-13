@@ -16,9 +16,17 @@ def test_units():
     gb = GlassBox(tmp / "glassbox.jsonl")
     gb.log("event", {"text": "hello"})
     gb.log("decision", {"decision": "do_and_notify", "text": "hello"})
-    assert len(gb.entries()) == 2
+    gb.log("owner_ingest", {"source": "typed", "lines": 6, "cards": 4, "ignored": 2, "execute_actions": True})
+    gb.log("ask_sent", {"ask_id": "abcdef123", "action": "send Sam the deck"})
+    gb.log("blocked", {"category": "money", "action": "pay the invoice"})
+    gb.log("owner_card_resolved", {"card_id": "card123456", "approved": True, "state": "done"})
+    assert len(gb.entries()) == 6
     sums = gb.summaries()
     assert any(s["kind"] == "decision" and "do_and_notify" in s["summary"] for s in sums)
+    assert any(s["kind"] == "owner_ingest" and "processed 6 lines -> 4 cards" in s["summary"] for s in sums)
+    assert any(s["kind"] == "ask_sent" and "send Sam the deck" in s["summary"] for s in sums)
+    assert any(s["kind"] == "blocked" and "hard wall: money" in s["summary"] for s in sums)
+    assert any(s["kind"] == "owner_card_resolved" and "approved card" in s["summary"] for s in sums)
 
     sc = Scorecard(tmp / "scorecard.jsonl")
     sc.record_decision("do_and_notify", "ev1")
@@ -34,7 +42,7 @@ async def test_control_core():
     core = ControlCore(data_dir=tmp)
     await core.start()
     try:
-        out = await core.feed("mac_mic", "Draft the Q3 deck and remind me to follow up on Friday.")
+        out = await core.feed("mac_mic", "Remind me to follow up with Sam on Friday.")
     finally:
         await core.stop()
     assert out["decision"] == "act" and out["goal_id"]   # act-first: safe/reversible -> just do it
