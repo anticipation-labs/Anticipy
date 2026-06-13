@@ -23,7 +23,7 @@ os.environ["ANTICIPY_DATA_DIR"] = tempfile.mkdtemp(prefix="anticipy-public-backe
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from anticipy_engine.main import app  # noqa: E402
+from anticipy_engine.main import app, core  # noqa: E402
 
 
 TRANSCRIPT = """
@@ -144,6 +144,24 @@ def main():
         assert blocked_record["state"] == "blocked", blocked_record
         assert not blocked_record["steps"] and not blocked_record["proof"], blocked_record
         assert not (Path(os.environ["ANTICIPY_DATA_DIR"]) / "goals" / f"{blocked['id']}.json").exists()
+
+        owner_loop_status = {
+            i.fields["owner_card_id"]: i.status
+            for i in core.memory.open_loops.all()
+            if i.fields.get("owner_card_id")
+        }
+        assert owner_loop_status[pickup["id"]] == "done", owner_loop_status
+        assert owner_loop_status[browser["id"]] == "done", owner_loop_status
+        assert owner_loop_status[message["id"]] == "done", owner_loop_status
+        assert owner_loop_status[blocked["id"]] == "blocked", owner_loop_status
+        raw_loop_status = {
+            i.text: i.status
+            for i in core.memory.open_loops.all()
+            if not i.fields.get("owner_card_id")
+        }
+        assert raw_loop_status.get(pickup["source_text"]) == "open", raw_loop_status
+        assert raw_loop_status.get(message["source_text"]) == "done", raw_loop_status
+        assert raw_loop_status.get(blocked["source_text"]) == "blocked", raw_loop_status
 
     print("PASS public_backend_path: messy input -> memory -> safe actions, pending approval, receipts, money wall")
 

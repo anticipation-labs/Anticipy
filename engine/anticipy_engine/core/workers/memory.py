@@ -69,13 +69,40 @@ class MemoryWorker(Worker):
                                   "top_relevance": inj.get("top_relevance", 0.0),   # for the harm-line gray middle
                                   "abstain": inj.get("abstain", True)},
                           proof={"injected": len(inj["items"]), "open_loops": len(inj["open_loops"])}, cost=0.0)
-        # write_memory: an explicit write — force-keep into the right drawer
+        # write_memory: an explicit write — force-keep into the requested drawer
         text = job.args.get("text") or job.args.get("note") or job.args.get("about") or ""
-        res = self.lm.capturer.capture(text, source="write_memory", force=True)
-        item = res.get("item")
+        requested = str(job.args.get("kind") or "").strip().lower()
+        drawer_by_kind = {
+            "profile": self.lm.memory.profile,
+            "profile_fact": self.lm.memory.profile,
+            "history": self.lm.memory.history,
+            "derived": self.lm.memory.derived,
+            "open_loop": self.lm.memory.open_loops,
+            "open_loops": self.lm.memory.open_loops,
+        }
+        drawer = drawer_by_kind.get(requested)
+        if drawer is not None and text:
+            status = "open" if drawer.name == "open_loops" else "active"
+            if drawer.name == "open_loops":
+                norm = " ".join(text.split()).lower()
+                item = next((
+                    loop for loop in drawer.all()
+                    if " ".join(loop.text.split()).lower() == norm
+                ), None)
+                if item is None:
+                    item = drawer.write_text(text, fields={"task": text}, provenance="write_memory", status=status)
+            else:
+                item = drawer.write_text(text, provenance="write_memory", status=status)
+            kind = drawer.kind
+            written = True
+        else:
+            res = self.lm.capturer.capture(text, source="write_memory", force=True)
+            item = res.get("item")
+            kind = res.get("kind")
+            written = bool(res.get("kept"))
         return Result(job_id=job.id, status=JobStatus.success,
-                      output={"written": bool(res.get("kept"))},
-                      proof={"memory_id": item.id if item else "none", "kind": res.get("kind")}, cost=0.0)
+                      output={"written": written},
+                      proof={"memory_id": item.id if item else "none", "kind": kind}, cost=0.0)
 
 CANNED_CONTEXT = {
     "profile": {"name": "Omar", "role": "founder"},

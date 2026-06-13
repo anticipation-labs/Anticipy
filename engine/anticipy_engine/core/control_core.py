@@ -58,6 +58,20 @@ def _card_step_receipts(steps: list[dict]) -> list[dict]:
     return receipts
 
 
+def _steps_create_open_loop(steps: list[dict]) -> bool:
+    for step in steps:
+        if not isinstance(step, dict) or step.get("intent") != "write_memory":
+            continue
+        args = step.get("args") or {}
+        if isinstance(args, dict) and args.get("kind") == "open_loop":
+            return True
+    return False
+
+
+def _status_for_open_loop(state: str) -> str:
+    return "waiting" if state == "waiting" else "open" if state == "open" else state
+
+
 class GatedApprover(Approver):
     """Human-path stub that also propagates the gate's approval flag onto the
     step args, so the hand's defense-in-depth (refuse high-risk without the flag)
@@ -184,6 +198,51 @@ class ControlCore:
     @staticmethod
     def _owner_event_enabled() -> bool:
         return (os.environ.get("ANTICIPY_OWNER_INGEST", "") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _sync_owner_loop_status(self, card_id: str, state: str) -> None:
+        """Keep the memory ledger aligned with the visible owner card state."""
+        status = _status_for_open_loop(state)
+        for item in self.memory.open_loops.all():
+            if item.fields.get("owner_card_id") != card_id:
+                continue
+            if item.status == status and item.fields.get("owner_card_state") == state:
+                return
+            item.status = status
+            item.fields = {**item.fields, "owner_card_state": state}
+            self.memory.open_loops.update(item)
+            return
+
+    def _sync_open_loop_item_status(self, item_id: str, state: str, *, card_id: str | None = None) -> bool:
+        item = self.memory.open_loops.get(item_id)
+        if item is None:
+            return False
+        status = _status_for_open_loop(state)
+        if item.status == status and item.fields.get("owner_card_state") == state:
+            return True
+        fields = {**item.fields, "owner_card_state": state}
+        if card_id:
+            fields["resolved_by_owner_card_id"] = card_id
+        item.status = status
+        item.fields = fields
+        self.memory.open_loops.update(item)
+        return True
+
+    def _sync_captured_loop_from_record(self, record: dict, state: str) -> None:
+        owner_card = record.get("owner_card") if isinstance(record, dict) else None
+        if not isinstance(owner_card, dict):
+            return
+        for proof in owner_card.get("proof") or []:
+            if not isinstance(proof, dict) or proof.get("type") != "capture_memory_status":
+                continue
+            memory_id = proof.get("memory_id")
+            if memory_id and self._sync_open_loop_item_status(memory_id, state, card_id=record.get("id")):
+                proof["status"] = _status_for_open_loop(state)
+
+    def _sync_capture_result_status(self, capture_result: dict | None, state: str,
+                                    *, card_id: str | None = None) -> None:
+        item = (capture_result or {}).get("item")
+        if getattr(item, "kind", None) == "open_loop":
+            self._sync_open_loop_item_status(item.id, state, card_id=card_id)
 
     @staticmethod
     def _has_external_context(ctx_output: dict | None, source_text: str) -> bool:
@@ -353,8 +412,9 @@ class ControlCore:
         """
         meta = meta or {}
         observed = self.owner_mode.observe(text)
+        captured_by_line: dict[int, dict] = {}
         for line in observed:
-            self.live_memory.capturer.capture(
+            captured_by_line[line.line_no] = self.live_memory.capturer.capture(
                 line.text,
                 source=source,
                 meta={**meta, "owner_ingest": True, "line_no": line.line_no},
@@ -369,9 +429,11 @@ class ControlCore:
                 card = self.owner_mode.card_for_line(line, source)
             if card is None:
                 ignored += 1
+                if execute_actions:
+                    self._sync_capture_result_status(captured_by_line.get(line.line_no), "ignored")
                 continue
             cards.append(card)
-            self._persist_card(card, source, execute_actions)
+            self._persist_card(card, source, execute_actions, captured_by_line.get(line.line_no))
 
         self.glassbox.log(
             "owner_ingest",
@@ -382,7 +444,8 @@ class ControlCore:
                                    ignored_line_count=ignored)
         return result.model_dump(mode="json")
 
-    def _persist_card(self, card: OwnerTaskCard, source: str, execute_actions: bool) -> None:
+    def _persist_card(self, card: OwnerTaskCard, source: str, execute_actions: bool,
+                      capture_result: dict | None = None) -> None:
         """Write one card into the real memory drawers and its durable goal-shaped
         record, mirroring REAL execution: done requires a goal that finished with
         proof (or a read-back memory write) — a card that never ran stays open."""
@@ -463,6 +526,18 @@ class ControlCore:
             card.proof.append({"type": "engine_execution", **execution})
 
         card.status = state
+        if drawer_name == "open_loops":
+            self._sync_owner_loop_status(card.id, state)
+        captured_item = (capture_result or {}).get("item")
+        if getattr(captured_item, "kind", None) == "open_loop":
+            status = _status_for_open_loop(state)
+            should_sync_capture = state != "done" or not _steps_create_open_loop(steps)
+            if should_sync_capture and self._sync_open_loop_item_status(captured_item.id, state, card_id=card.id):
+                card.proof.append({
+                    "type": "capture_memory_status",
+                    "memory_id": captured_item.id,
+                    "status": status,
+                })
         # Durable card record, shaped like a goal (id/intent/steps/state) so the
         # factory's existing run collector and scorer read owner cards unchanged.
         card.proof.append({"type": "card_record", "path": str(record_path)})
@@ -624,8 +699,10 @@ class ControlCore:
                 if isinstance(record.get("owner_card"), dict):
                     record["owner_card"]["status"] = record["state"]
                 record["resolution"] = {"ask_id": ask_id, "approved": approved}
+                self._sync_captured_loop_from_record(record, record["state"])
                 Path(link["record_path"]).write_text(
                     json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+                self._sync_owner_loop_status(link["card_id"], record["state"])
                 self.glassbox.log("owner_card_resolved",
                                   {"card_id": link["card_id"], "ask_id": ask_id,
                                    "approved": approved, "state": record["state"]})

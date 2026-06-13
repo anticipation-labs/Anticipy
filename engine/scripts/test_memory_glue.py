@@ -40,6 +40,14 @@ async def main():
         assert w.output.get("written") and w.proof.get("memory_id") != "none", (w.output, w.proof)
         assert any("tea" in p.text for p in core.memory.profile.all())
 
+        h = await core.bus.submit_job(Job(intent="write_memory", args={
+            "text": "User declined to: send the incident summary publicly.",
+            "kind": "history",
+        }))
+        assert h.output.get("written") and h.proof.get("kind") == "history", (h.output, h.proof)
+        assert any("declined" in p.text for p in core.memory.history.all())
+        assert not any("declined" in p.text for p in core.memory.open_loops.all())
+
         # CAPTURE-before-act through feed(): a stated fact is in memory even when triaged out (no goal)
         await core.feed("app", "My dentist is Dr. Lee, I see her on Tuesdays.")
         assert any("Lee" in p.text for p in core.memory.profile.all())

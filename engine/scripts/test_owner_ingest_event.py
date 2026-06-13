@@ -310,6 +310,23 @@ async def owner_lane_check():
     # cards landed in the real memory drawers too (one ledger, both doors)
     owner_loops = [i for i in core.memory.open_loops.all() if i.fields.get("owner_card_id")]
     assert len(owner_loops) >= 4, [i.text for i in owner_loops]
+    loop_status = {i.fields["owner_card_id"]: i.status for i in owner_loops}
+    assert loop_status[act["goal_id"]] == "done", loop_status
+    assert loop_status[cart["goal_id"]] == "waiting", loop_status
+    assert loop_status[money["goal_id"]] == "blocked", loop_status
+    assert loop_status[clarify["goal_id"]] == "declined", loop_status
+    raw_loop_status = {
+        i.text: i.status
+        for i in core.memory.open_loops.all()
+        if not i.fields.get("owner_card_id")
+    }
+    assert raw_loop_status.get(NOISE) == "ignored", raw_loop_status
+    assert raw_loop_status.get(PICKUP) == "open", raw_loop_status
+    assert raw_loop_status.get(MONEY) == "blocked", raw_loop_status
+    assert raw_loop_status.get(CLARIFY) == "declined", raw_loop_status
+    assert raw_loop_status.get(SCHEDULE_CHANGE) == "done", raw_loop_status
+    assert not any(i.text.startswith("User declined to:") for i in core.memory.open_loops.all())
+    assert any(i.text == f"User declined to: {CLARIFY}" for i in core.memory.history.all())
 
 
 async def yes_roundtrip_check():
@@ -331,6 +348,10 @@ async def yes_roundtrip_check():
     assert rec["resolution"] == {"ask_id": ask["ask_id"], "approved": True}, rec
     assert any((p or {}).get("id") for p in rec["proof"].values()), rec["proof"]
     assert rec["owner_card"]["status"] == "done", rec
+    owner_loops = [i for i in core.memory.open_loops.all() if i.fields.get("owner_card_id") == ask["goal_id"]]
+    assert owner_loops and owner_loops[0].status == "done", [i.model_dump(mode="json") for i in owner_loops]
+    raw_loops = [i for i in core.memory.open_loops.all() if i.text == SEND_SAM and not i.fields.get("owner_card_id")]
+    assert raw_loops and raw_loops[0].status == "done", [i.model_dump(mode="json") for i in raw_loops]
 
 
 def main():
