@@ -100,6 +100,18 @@ function proofLabel(proof) {
   return type.replaceAll("_", " ");
 }
 
+function visibleProofs(proofs = []) {
+  if (!Array.isArray(proofs)) return [];
+  const userProof = new Set(["memory_resolution", "browser_receipt", "resolution"]);
+  const humanReceipts = proofs.filter((proof) => userProof.has(proof?.type));
+  const execution = proofs.filter((proof) => proof?.type === "engine_execution");
+  const fallback = proofs.filter((proof) => {
+    const type = proof?.type;
+    return !userProof.has(type) && type !== "engine_execution" && type !== "card_record";
+  });
+  return [...humanReceipts, ...execution, ...fallback].slice(0, 4);
+}
+
 function outcomeText(card, pendingAsk) {
   const bucket = cardBucket(card);
   if (card.status === "declined") return "Declined by Omar";
@@ -182,6 +194,7 @@ function MemoryField({ label, value, onChange, multiline = false, placeholder = 
 
 function TaskCard({ card, pendingAsk, onResolve }) {
   const bucket = cardBucket(card);
+  const proofs = visibleProofs(card.proof);
   return (
     <article className={`card ${bucket}`}>
       <div className="card-head">
@@ -197,9 +210,9 @@ function TaskCard({ card, pendingAsk, onResolve }) {
         {card.execution?.goal_state ? <span className={`tag ${bucket}`}>{card.execution.goal_state}</span> : null}
       </div>
       {card.reason ? <p>{card.reason}</p> : null}
-      {card.proof?.length ? (
+      {proofs.length ? (
         <div className="proof">
-          {card.proof.slice(-4).map((proof, index) => (
+          {proofs.map((proof, index) => (
             <div className="proof-row" key={`${card.id}-proof-${index}`}>
               <span>{proofLabel(proof)}</span>
               <code title={proofValue(proof)}>{proofValue(proof)}</code>

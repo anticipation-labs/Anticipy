@@ -25,15 +25,15 @@ Done means this works together as one product, not as isolated demos.
 - The live browser hand can now execute a safe cart-only browser action when memory/context supplies the product page: on Demo Web Shop it opened the known product page, clicked only `Add to cart`, navigated to the cart, and verified `Computing and Internet` was present with screenshot proof. It did not checkout, pay, log in, or place an order.
 - The owner engine path can now carry that live browser proof back onto a task card: a messy transcript line supplied the product memory, a later "cart that thing" line executed through the browser hand, and the card showed a `browser_receipt` with cart URL, answer, and screenshot flag.
 - The protected Next owner ingest route has now been run with live browser mode enabled: the same HTTP route behind Press Go accepted a messy transcript, resolved "that Fiction book thing" from same-transcript memory, executed the cart-only browser hand, and returned a done card with `memory_resolution` plus `browser_receipt` proof for the cart URL and screenshot.
-- Focused verification is green after the latest product change: Python compile, orchestrator regression, messy proactive handoff regression, browser-hand unit test, JS syntax check, owner app product-path smoke, and live owner-engine browser receipt proof.
+- The actual browser-rendered UI has now been clicked through in live browser mode: owner unlock, transcript entry, Go, live cart-only browser execution, and the visible done card showed `used memory`, `browser receipt`, and `Verified cart contains Fiction` with no console errors or framework overlay.
+- Focused verification is green after the latest product change: Python compile, orchestrator regression, messy proactive handoff regression, browser-hand unit test, JS syntax check, owner app product-path smoke, live owner-engine browser receipt proof, and live UI receipt smoke.
 
 ## What Is Not Done Yet
 
 - The public product has not been proven with a real live Twilio call/SMS round trip in this direct Codex lane. The app can now tell when the system is ready to enable it, but live sending remains explicitly gated.
-- The actual browser-rendered UI button has not yet been pixel-clicked against live browser mode. The protected Press Go API route is proven; the remaining proof is the visible UI card rendering the live browser receipt in a browser smoke.
 - Real signed-in retailer/browser actions remain unproven. The safe boundary is clear: cart-only or lookup only, no checkout, no payment, no order.
 - API hands beyond the mocked owner path still need live public-product proof in the app flow. Calendar had earlier real proof; Gmail draft auth still depends on `gmail.compose`.
-- The frontend visual smoke is proven in protected mock mode, but not yet against live connectors, a real browser hand, or live text/call delivery.
+- The frontend visual smoke is now proven against a real browser hand, but not yet against live text/call delivery or live API connectors beyond the already-proven calendar path.
 - A real multi-day owner trial has not happened. Until Omar can use the app for real days with no false actions, no money execution, and useful closed loops, the product is not finished.
 
 ## Why This Attempt Is Working Better
@@ -47,6 +47,6 @@ Done means this works together as one product, not as isolated demos.
 ## Next Highest-Leverage Steps
 
 1. Prove live text/call loop closure with Omar-confirmed owner phone: app asks, SMS/code round trip resolves, call/text receipt appears, no third-party impact.
-2. Pixel-click the actual app UI in live browser mode and verify the visible card renders the browser receipt.
+2. Prove a real signed-in browser action on Omar's actual Chrome profile with the same no-checkout/no-payment boundary.
 3. Prove live API connector readiness from the app path: Calendar read/write remains real; Gmail draft path needs `gmail.compose` authorization before it can be counted.
 4. Run a real-day trial only after the above are true.
