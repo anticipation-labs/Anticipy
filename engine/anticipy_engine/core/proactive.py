@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from ..channels.text import TextChannel
-from ..proactive.budget import AnnoyanceBudget
+from ..proactive.budget import AnnoyanceBudget, InterruptGuard
 from ..proactive.debounce import AskDebounce
 from ..proactive.decider import (
     ASK as DECIDER_ASK,
@@ -99,6 +99,7 @@ class ProactiveEngine:
         self.user_contact = user_contact        # the user's number/handle for asks (set in prod)
         self.pending = {}                       # ask_id -> {goal_id, action, reason, category} (awaiting reply)
         self.budget = AnnoyanceBudget()         # Room 5: cap proactive interruptions; learn from declines
+        self.guard = InterruptGuard()           # Room 5: HARD global cap — a cold-boot backlog never floods
         self.debounce = AskDebounce()           # Room 2.6: ambient money transfers wait out the retraction
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
         self.decider_deferred = []              # Room 1.5 outage queue: [{event, due}] awaiting a retry tick
@@ -217,6 +218,7 @@ class ProactiveEngine:
                 self._raise_to_human(event, reason)
                 if event.source == EventSource.system:
                     self.budget.record_interruption(now)
+                    self.guard.record(now)
             else:
                 decision = "act"
         else:
@@ -227,6 +229,10 @@ class ProactiveEngine:
             # User-initiated asks are never suppressed (the user is present and asked).
             proactive = event.source == EventSource.system
             suppress = self.budget.suppressed(event.text, verdict.category, now) if proactive else None
+            if proactive and not suppress and not terminal_block:
+                # HARD global cap on proactive interrupts (cold-boot flood guard). Checked AFTER
+                # terminal_block so a money/hard-stop is never demoted to a mere "suppressed".
+                suppress = self.guard.blocked(now)
             if suppress:
                 decision = "suppressed"   # not executed AND not asked -> no silent harm, no annoyance
                 if self.glassbox is not None:
@@ -250,6 +256,7 @@ class ProactiveEngine:
                 self._raise_to_human(event, reason)
                 if proactive:
                     self.budget.record_interruption(now)
+                    self.guard.record(now)
             # HARD SUB-GATE: a paused goal is WAITING — no step executed until approved (no silent harm).
             if decision in ("ask", "held", "suppressed"):
                 assert self.orchestrator.store.load(goal_id).state == GoalState.waiting, "paused action must not execute"
@@ -581,6 +588,8 @@ class ProactiveEngine:
             ev = Event(source=EventSource.system, text=f"{FOLLOWUP_PREFIX} {task}")
             return await self.on_event(ev, now=now)
         suppress = self.budget.suppressed(task, verdict.category, now)
+        if not suppress:
+            suppress = self.guard.blocked(now)   # HARD global cap (cold-boot flood guard); safe reminders only
         if suppress:
             if self.glassbox is not None:
                 self.glassbox.log("suppressed", {"loop_id": loop.get("id"), "category": verdict.category,
@@ -589,6 +598,7 @@ class ProactiveEngine:
                     "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None}
         sent = self.channel.send(self.user_contact, f"Reminder: {task}")
         self.budget.record_interruption(now)
+        self.guard.record(now)
         await self.bus.submit_job(Job(intent="mark_loop",
                                       args={"id": loop.get("id"), "status": "waiting"}))
         if self.glassbox is not None:
