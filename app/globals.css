@@ -100,6 +100,12 @@ button {
   white-space: nowrap;
 }
 
+.topbar .status-strip {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  white-space: normal;
+}
+
 .dot {
   width: 9px;
   height: 9px;

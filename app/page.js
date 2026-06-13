@@ -122,7 +122,13 @@ export default function Home() {
   const [ignored, setIgnored] = useState(0);
   const [pending, setPending] = useState([]);
   const [events, setEvents] = useState([]);
-  const [engine, setEngine] = useState({ ok: false, label: "checking" });
+  const [engine, setEngine] = useState({
+    ok: false,
+    label: "checking",
+    openLoops: null,
+    pendingCount: null,
+    extensionConnected: false,
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const recognitionRef = useRef(null);
@@ -152,16 +158,23 @@ export default function Home() {
   const hasLatestRunStats = observed.length > 0 || ignored > 0;
 
   async function loadStatus() {
-    const [health, pendingRes, glassbox, durableCards] = await Promise.allSettled([
-      fetch("/api/health", { cache: "no-store" }).then((r) => r.json().then((data) => ({ ok: r.ok, data }))),
+    const [engineStatus, pendingRes, glassbox, durableCards] = await Promise.allSettled([
+      fetch("/api/status", { cache: "no-store" }).then((r) => r.json().then((data) => ({ ok: r.ok, data }))),
       fetch("/api/pending", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/glassbox?limit=20", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/owner/cards?limit=50", { cache: "no-store" }).then((r) => r.json()),
     ]);
-    if (health.status === "fulfilled" && health.value.ok) {
-      setEngine({ ok: true, label: health.value.data.service || "engine online" });
+    if (engineStatus.status === "fulfilled" && engineStatus.value.ok) {
+      const data = engineStatus.value.data || {};
+      setEngine({
+        ok: data.engine === "ok",
+        label: data.engine === "ok" ? "engine online" : "engine degraded",
+        openLoops: typeof data.open_loop_count === "number" ? data.open_loop_count : null,
+        pendingCount: typeof data.pending_count === "number" ? data.pending_count : null,
+        extensionConnected: Boolean(data.extension_connected),
+      });
     } else {
-      setEngine({ ok: false, label: "engine offline" });
+      setEngine({ ok: false, label: "engine offline", openLoops: null, pendingCount: null, extensionConnected: false });
     }
     if (pendingRes.status === "fulfilled") setPending(pendingRes.value.pending || []);
     if (glassbox.status === "fulfilled") setEvents(glassbox.value.entries || []);
@@ -326,6 +339,9 @@ export default function Home() {
         <div className="status-strip">
           <span className={`dot ${engine.ok ? "ok" : "bad"}`} />
           <span>{engine.label}</span>
+          {typeof engine.openLoops === "number" ? <span>{engine.openLoops} active loops</span> : null}
+          {typeof engine.pendingCount === "number" ? <span>{engine.pendingCount} waiting</span> : null}
+          {engine.extensionConnected ? <span>browser linked</span> : null}
         </div>
       </header>
 
