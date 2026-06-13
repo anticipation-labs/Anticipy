@@ -5,8 +5,32 @@ Each entry: date · slice · the RECEIPT (a real artifact a human can independen
 
 ## Slice status
 - **Slice 0 — real read-back completion gate:** ✅ DONE & PROVEN (2026-06-13). See receipt below.
-- **Slice 1 — inference core (catch unspoken commitments):** IN PROGRESS. Attempt 1 REVERTED (see below). Attempt 2 (1b) running.
-- Slices 2–7: NOT STARTED.
+- **Slice 1 — inference core (catch unspoken commitments):** BLOCKED ON A PRODUCT DECISION (Omar). Two
+  engineering attempts (1, 1b) both hit the cardinal-sin wall — see the finding below. Safe baseline restored
+  (11/16 catch, 0 false-actions). The fork is Omar's to call.
+- Slices 2–7: Slice 2 (voice transport) BUILD started in parallel (unblocked); rest NOT STARTED.
+
+## KEY FINDING — the moat's real wall (2026-06-13)
+**You cannot raise interrupt-catch (decider→ASK) on uncertain commitments without reintroducing the cardinal
+sin.** Two attempts, both adversarially broken:
+- Attempt 1 (cheap decider + owed-commitment carve-out): caught 16/16 but false-fired on absurd obligations
+  ("unicorn delivered by Monday", "clone the codebase in my head"). Reverted.
+- Attempt 1b (SMART decider + dominant reality-test veto): caught 14/16, held 22/24 adversarial killers — but a
+  skeptic found 2 STABLE false ASKs on *impossible-scale-but-real-sounding* obligations ("I owe Sam a fully
+  shipped product by tonight, should be quick"). Reverted.
+**Why it's irreducible:** the boundary between a stressed-real commitment and sarcastic hyperbole is genuinely
+fuzzy even for humans (research: agreement on "is this a task" κ≈0.36). No prompt/model can push interrupt-catch
+up without some adversarial sarcasm slipping to a false interrupt. Chasing it further is whack-a-mole.
+**The architectural answer (needs Omar's product call): DECOUPLE "remember" from "interrupt."**
+- INTERRUPT (push ASK/ACT): stay conservative — only the clearly-real commitments (the safe baseline). An
+  uncertain line is NEVER pushed (so sarcasm can't trigger the cardinal sin).
+- REMEMBER (pull): capture every candidate commitment to memory and surface it only when Omar *pulls up* a
+  daily review/digest — where a wrongly-remembered sarcastic line costs nothing (it's skimmed, not acted).
+- ⚠️ Capturing to an open_loop with a due_ts is NOT free of cardinal-sin risk — a remembered sarcastic line
+  could later TRIGGER a reminder. So "remember" must be pull-surfaced, never auto-triggered, for uncertain lines.
+**THE DECISION FOR OMAR:** for a borderline "I owe Sam the deck by 4" — interrupt-ASK now (risks asking on
+sarcasm too), or quietly remember it for your daily review (safe, but no live nudge)? This choice sets the whole
+act/ask/remember boundary. Recommend: conservative interrupt + generous pull-surfaced memory.
 
 ## Honest negatives (reverted; kept so we never repeat them)
 
