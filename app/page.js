@@ -132,6 +132,15 @@ function firedLoopText(item) {
   return pieces.join(" / ");
 }
 
+// The remember-list ts is a unix epoch in seconds (RememberList writes time.time()).
+function formatRememberTs(ts) {
+  const seconds = Number(ts);
+  if (!Number.isFinite(seconds)) return "";
+  const date = new Date(seconds * 1000);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString();
+}
+
 const readinessOrder = [
   "app_input",
   "proactive_engine",
@@ -287,6 +296,7 @@ export default function Home() {
   const [ignored, setIgnored] = useState(0);
   const [pending, setPending] = useState([]);
   const [loops, setLoops] = useState([]);
+  const [remembered, setRemembered] = useState([]);
   const [connections, setConnections] = useState({});
   const [tickResult, setTickResult] = useState(null);
   const [events, setEvents] = useState([]);
@@ -402,14 +412,15 @@ export default function Home() {
   }
 
   async function loadStatus() {
-    const [engineStatus, pendingRes, glassbox, durableCards, activeLoops] = await Promise.allSettled([
+    const [engineStatus, pendingRes, glassbox, durableCards, activeLoops, rememberedRes] = await Promise.allSettled([
       requestJson("/api/status", { cache: "no-store" }),
       requestJson("/api/pending", { cache: "no-store" }),
       requestJson("/api/glassbox?limit=20", { cache: "no-store" }),
       requestJson("/api/owner/cards?limit=50", { cache: "no-store" }),
       requestJson("/api/memory/open-loops?limit=50", { cache: "no-store" }),
+      requestJson("/api/memory/remembered?limit=50", { cache: "no-store" }),
     ]);
-    const authBlocked = [engineStatus, pendingRes, glassbox, durableCards, activeLoops].some(
+    const authBlocked = [engineStatus, pendingRes, glassbox, durableCards, activeLoops, rememberedRes].some(
       (result) => result.status === "fulfilled" && result.value.status === 401,
     );
     if (authBlocked) return;
@@ -441,6 +452,7 @@ export default function Home() {
     if (pendingRes.status === "fulfilled") setPending(pendingRes.value.data.pending || []);
     if (glassbox.status === "fulfilled") setEvents(glassbox.value.data.entries || []);
     if (activeLoops.status === "fulfilled") setLoops(activeLoops.value.data.loops || []);
+    if (rememberedRes.status === "fulfilled") setRemembered(rememberedRes.value.data.remembered || []);
     if (durableCards.status === "fulfilled") {
       const loadedCards = durableCards.value.data.cards || [];
       setCards((current) => {
@@ -1009,6 +1021,28 @@ export default function Home() {
                   connection={connections[loop.id]}
                 />
               )) : <div className="empty">No active memory loops.</div>}
+            </div>
+          </section>
+
+          <section className="ledger">
+            <div className="ledger-head">
+              <h2>Review — what you said you&apos;d do</h2>
+              <span className="status-strip">{remembered.length} remembered</span>
+            </div>
+            <div className="loop-list">
+              {remembered.length ? remembered.map((row, index) => (
+                <article className="card" key={row.id || `${row.ts || "remembered"}-${index}`}>
+                  <div className="card-head">
+                    <h4>{row.text}</h4>
+                    {row.ts ? <span className="status-strip">{formatRememberTs(row.ts)}</span> : null}
+                  </div>
+                  {(row.source || (row.people && row.people.length)) ? (
+                    <div className="loop-meta">
+                      {[row.source, (row.people || []).join(", ")].filter(Boolean).join(" / ")}
+                    </div>
+                  ) : null}
+                </article>
+              )) : <div className="empty">Nothing remembered yet.</div>}
             </div>
           </section>
 
