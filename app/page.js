@@ -228,6 +228,7 @@ export default function Home() {
   const [pending, setPending] = useState([]);
   const [loops, setLoops] = useState([]);
   const [connections, setConnections] = useState({});
+  const [tickResult, setTickResult] = useState(null);
   const [events, setEvents] = useState([]);
   const [memoryForm, setMemoryForm] = useState(DEFAULT_MEMORY);
   const [memoryBusy, setMemoryBusy] = useState(false);
@@ -373,6 +374,22 @@ export default function Home() {
       if (!response.ok) throw new Error(data.message || data.detail || data.error || "Connection setup failed");
       setConnections((current) => ({ ...current, [loopId]: data }));
       if (data.connect_url) window.open(data.connect_url, "_blank", "noopener,noreferrer");
+      await loadStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function scanLoops() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/trigger/tick", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || data.detail || data.error || "Proactive scan failed");
+      setTickResult(data);
       await loadStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -742,8 +759,18 @@ export default function Home() {
           <section className="ledger">
             <div className="ledger-head">
               <h2>Active Loops</h2>
-              <span className="status-strip">{loops.length} visible</span>
+              <div className="ledger-actions">
+                <span className="status-strip">{loops.length} visible</span>
+                <button className="secondary" type="button" onClick={scanLoops} disabled={busy}>
+                  Scan
+                </button>
+              </div>
             </div>
+            {tickResult ? (
+              <div className="loop-meta">
+                Proactive scan: {(tickResult.fired || []).length} loop{(tickResult.fired || []).length === 1 ? "" : "s"} fired.
+              </div>
+            ) : null}
             <div className="loop-list">
               {loops.length ? loops.map((loop) => (
                 <MemoryLoop

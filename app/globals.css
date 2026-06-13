@@ -161,6 +161,12 @@ button {
   margin-bottom: 14px;
 }
 
+.ledger-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .source-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
