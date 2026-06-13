@@ -54,7 +54,13 @@ def main():
         assert status.status_code == 200, status.text
         channels = status.json()["channels"]
         assert channels["mode"] in {"mock", "live"}, channels
-        assert channels["status"] in {"mock", "missing_twilio", "missing_owner_contact", "live_ready"}, channels
+        assert channels["status"] in {
+            "mock",
+            "ready_to_enable",
+            "missing_twilio",
+            "missing_owner_contact",
+            "live_ready",
+        }, channels
         assert "TWILIO_AUTH_TOKEN" not in json.dumps(channels), channels
         readiness = status.json()["readiness"]
         assert readiness["overall"] in {"ready", "needs_setup", "local_mock"}, readiness
@@ -64,6 +70,12 @@ def main():
             assert readiness["items"][key]["state"], readiness["items"][key]
             assert readiness["items"][key]["label"], readiness["items"][key]
         assert readiness["items"]["money_wall"]["state"] == "ready", readiness
+        assert readiness["items"]["voice_text"]["state"] in {
+            "mock",
+            "ready_to_enable",
+            "setup",
+            "ready",
+        }, readiness
         assert "TWILIO_AUTH_TOKEN" not in json.dumps(readiness), readiness
 
         res = client.post(

@@ -259,16 +259,25 @@ class ControlCore:
             os.environ.get("OWNER_PHONE") or os.environ.get("ALERT_PHONE") or os.environ.get("TWILIO_TO")
         )
         if mode != "live":
-            status = "mock"
+            status = "ready_to_enable" if twilio_configured and owner_contact_configured else "mock"
+            label = (
+                "Twilio and owner phone configured; live mode is off"
+                if status == "ready_to_enable"
+                else "mock"
+            )
         elif not twilio_configured:
             status = "missing_twilio"
+            label = "missing Twilio credentials"
         elif not owner_contact_configured:
             status = "missing_owner_contact"
+            label = "missing owner phone"
         else:
             status = "live_ready"
+            label = "live text/call ready"
         return {
             "mode": "live" if mode == "live" else "mock",
             "status": status,
+            "label": label,
             "twilio_configured": twilio_configured,
             "owner_contact_configured": owner_contact_configured,
             "text": status,

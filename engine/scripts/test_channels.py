@@ -8,6 +8,8 @@ are env-gated off here. CallChannel's TwiML builder is pinned (XML escaping + th
 Run:  PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_channels.py
 """
 import os
+import tempfile
+from pathlib import Path
 
 # force mock: the suite must never construct a Twilio transport
 os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
@@ -16,6 +18,7 @@ from anticipy_engine.channels import Channels  # noqa: E402
 from anticipy_engine.channels.base import Channel  # noqa: E402
 from anticipy_engine.channels.call import CallChannel  # noqa: E402
 from anticipy_engine.channels.text import TextChannel  # noqa: E402
+from anticipy_engine.core.control_core import ControlCore  # noqa: E402
 
 ch = Channels()
 assert {ch.call.name, ch.text.name, ch.app.name} == {"call", "text", "app"}
@@ -53,6 +56,31 @@ try:
     assert not TextChannel()._live() and not CallChannel()._live()
     os.environ["ANTICIPY_CHANNELS_MODE"] = "live"
     assert TextChannel()._live() and CallChannel()._live()
+finally:
+    for k, v in prev.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+
+# Product readiness: if Twilio + owner phone are configured but live mode is off,
+# the app should say "ready to enable", not "missing" and not "live".
+prev = {k: os.environ.get(k) for k in (
+    "ANTICIPY_CHANNELS_MODE", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+    "TWILIO_FROM", "OWNER_PHONE",
+)}
+try:
+    os.environ.pop("ANTICIPY_CHANNELS_MODE", None)
+    os.environ["TWILIO_ACCOUNT_SID"] = "AC_test"
+    os.environ["TWILIO_AUTH_TOKEN"] = "token"
+    os.environ["TWILIO_FROM"] = "+15550000000"
+    os.environ["OWNER_PHONE"] = "+15550001111"
+    core = ControlCore(data_dir=Path(tempfile.mkdtemp(prefix="anticipy-channel-status-")))
+    status = core.channel_status()
+    assert status["mode"] == "mock", status
+    assert status["status"] == "ready_to_enable", status
+    assert status["twilio_configured"] is True and status["owner_contact_configured"] is True, status
+    assert "token" not in str(status).lower(), status
 finally:
     for k, v in prev.items():
         if v is None:

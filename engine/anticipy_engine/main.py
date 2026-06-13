@@ -208,6 +208,7 @@ def _readiness(channels: dict) -> dict:
     browser_connected = bool(core.browser_link.connected or getattr(core.native_bridge_link, "connected", False))
     api_live = core.api_hand.mode == "live"
     channels_ready = channels.get("status") == "live_ready"
+    channels_armed = channels.get("status") == "ready_to_enable"
     memory_recovered = bool(getattr(core.memory.db, "recovered_corruption", False))
     owner_token_set = bool(_owner_api_token())
     items = {
@@ -232,8 +233,13 @@ def _readiness(channels: dict) -> dict:
             "label": "API hands live" if api_live else "API hands in mock mode",
         },
         "voice_text": {
-            "state": "ready" if channels_ready else ("setup" if channels.get("mode") == "live" else "mock"),
-            "label": channels.get("status", "mock"),
+            "state": (
+                "ready" if channels_ready
+                else "ready_to_enable" if channels_armed
+                else "setup" if channels.get("mode") == "live"
+                else "mock"
+            ),
+            "label": channels.get("label") or channels.get("status", "mock"),
         },
         "approvals": {
             "state": "ready",
@@ -249,7 +255,7 @@ def _readiness(channels: dict) -> dict:
         },
     }
     blocking_setup = [key for key, item in items.items() if item["state"] == "setup"]
-    mock_setup = [key for key, item in items.items() if item["state"] in {"mock", "local"}]
+    mock_setup = [key for key, item in items.items() if item["state"] in {"mock", "local", "ready_to_enable"}]
     overall = (
         "ready" if not blocking_setup and not mock_setup
         else "needs_setup" if blocking_setup

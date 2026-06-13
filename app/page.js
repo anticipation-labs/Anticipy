@@ -151,7 +151,7 @@ function readinessEntries(readiness) {
 
 function readinessTone(state) {
   if (state === "ready" || state === "protected") return "ok";
-  if (state === "setup" || state === "warning") return "warn";
+  if (state === "setup" || state === "warning" || state === "ready_to_enable") return "warn";
   if (state === "mock" || state === "local") return "muted";
   return "muted";
 }
