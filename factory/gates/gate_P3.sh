@@ -91,7 +91,7 @@ for i in $(seq 1 12); do
 import json
 d = json.load(open("'"$OUT"'/p3_pending.json"))
 items = d.get("pending", d if isinstance(d, list) else [])
-print(items[0].get("id", "") if items else "")' 2>/dev/null)
+print((items[0].get("ask_id") or items[0].get("id", "")) if items else "")' 2>/dev/null)
   [ -n "$ASK_ID" ] && break
 done
 [ -n "$ASK_ID" ] || ASK_ID=""
@@ -113,7 +113,7 @@ if [ -n "$ASK_ID" ]; then
 import json, sys
 d = json.load(open("'"$OUT"'/p3_pending_now.json"))
 items = d.get("pending", d if isinstance(d, list) else [])
-sys.exit(1 if any(x.get("id") == "'"$ASK_ID"'" for x in items) else 0)'; then S3=PASS; break; fi
+sys.exit(1 if any((x.get("ask_id") or x.get("id")) == "'"$ASK_ID"'" for x in items) else 0)'; then S3=PASS; break; fi
   done
 fi
 
