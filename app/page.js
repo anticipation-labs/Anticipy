@@ -147,6 +147,7 @@ export default function Home() {
     return ids;
   }, [cards, pendingByGoal]);
   const unmatchedPending = pending.filter((ask) => !matchedPendingIds.has(ask.ask_id));
+  const hasLatestRunStats = observed.length > 0 || ignored > 0;
 
   async function loadStatus() {
     const [health, pendingRes, glassbox, durableCards] = await Promise.allSettled([
@@ -415,12 +416,12 @@ export default function Home() {
 
           <div className="metrics">
             <div className="metric">
-              <strong>{observed.length}</strong>
-              <span>lines observed</span>
+              <strong>{hasLatestRunStats ? observed.length : "—"}</strong>
+              <span>latest run lines</span>
             </div>
             <div className="metric">
               <strong>{cards.length}</strong>
-              <span>cards created</span>
+              <span>visible cards</span>
             </div>
             <div className="metric">
               <strong>{pending.length}</strong>
@@ -431,8 +432,8 @@ export default function Home() {
               <span>hard walls</span>
             </div>
             <div className="metric">
-              <strong>{ignored}</strong>
-              <span>ignored lines</span>
+              <strong>{hasLatestRunStats ? ignored : "—"}</strong>
+              <span>latest ignored</span>
             </div>
           </div>
 
