@@ -40,9 +40,9 @@ from anticipy_engine.core.control_core import ControlCore  # noqa: E402
 from anticipy_engine.core.envelopes import GoalState  # noqa: E402
 
 WIRE = "Wire money to the contractor."
-# detrimental (money) -> ask; approved, it stub-plans into write_memory -> done
-# (a browse_task plan would dead-end needs_human in mock: no browser link)
 WIRE2 = "Remind me Friday to wire the deposit."
+SEND_INVESTOR = "Email the investor the signed contract."
+SEND_PRIYA = "Text Priya the revised deck before Friday."
 # a direct send the spine asks on (F17 one brain: the spine, not the regex,
 # decides every owner-lane ask — this line must keep drawing a REAL pending ask)
 SEND_SAM = "okay just send Sam the revised decking file before Friday."
@@ -60,8 +60,8 @@ async def code_roundtrip_check():
     core = ControlCore(data_dir=tmp)
     await core.start()
     try:
-        ask1 = await core.feed("app", WIRE, {})
-        ask2 = await core.feed("app", WIRE2, {})
+        ask1 = await core.feed("app", SEND_INVESTOR, {})
+        ask2 = await core.feed("app", SEND_PRIYA, {})
         assert ask1["decision"] == "ask" and ask2["decision"] == "ask"
         code1, code2 = ask1["ask_id"][:6], ask2["ask_id"][:6]
 
@@ -178,7 +178,7 @@ async def safety_check():
     core = ControlCore(data_dir=tmp)
     await core.start()
     try:
-        ask = await core.feed("app", WIRE2, {})
+        ask = await core.feed("app", SEND_PRIYA, {})
         code = ask["ask_id"][:6]
         valid = f"yes {code}"
 
@@ -231,7 +231,7 @@ async def budget_clarify_check():
     core = ControlCore(data_dir=tmp)
     await core.start()
     try:
-        ask = await core.feed("app", WIRE2, {})
+        ask = await core.feed("app", SEND_PRIYA, {})
         assert ask["decision"] == "ask"
         budget = core.proactive.budget
         now = time.time()
@@ -255,6 +255,35 @@ async def budget_clarify_check():
         await core.stop()
 
 
+async def money_wall_check():
+    """Money never becomes an approvable pending ask. A stale money ask code also
+    fails closed if it somehow exists from an old pending file."""
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-inb-money-"))
+    core = ControlCore(data_dir=tmp)
+    await core.start()
+    try:
+        blocked = await core.feed("app", WIRE, {})
+        assert blocked["decision"] == "blocked" and blocked["category"] == "money", blocked
+        assert blocked["ask_id"] is None and not core.pending_asks(), blocked
+        assert core.store.load(blocked["goal_id"]).state == GoalState.failed
+        assert core.store.load(blocked["goal_id"]).proof.get("blocked", {}).get("category") == "money"
+
+        old = await core.feed("app", SEND_INVESTOR, {})
+        assert old["decision"] == "ask" and old["ask_id"], old
+        core.proactive.pending[old["ask_id"]]["action"] = WIRE2
+        core.proactive.pending[old["ask_id"]]["category"] = "money"
+        core.proactive._persist_pending()
+
+        poller = InboundPoller(core, fetch=lambda: [sms("SM40", f"yes {old['ask_id'][:6]}")])
+        out = await poller.poll_once()
+        assert [r["ask_id"] for r in out["resolved"]] == [old["ask_id"]], out
+        assert core.store.load(old["goal_id"]).state == GoalState.failed
+        assert core.store.load(old["goal_id"]).proof.get("blocked", {}).get("category") == "money"
+        assert not core.pending_asks()
+    finally:
+        await core.stop()
+
+
 def main():
     # live_ready stays false throughout (no ANTICIPY_CHANNELS_MODE): this test
     # must never construct a Twilio transport
@@ -263,6 +292,7 @@ def main():
     asyncio.run(owner_card_check())
     asyncio.run(safety_check())
     asyncio.run(budget_clarify_check())
+    asyncio.run(money_wall_check())
     print("PASS inbound: YES/NO+code -> ControlCore.resolve (F18 durable write-back), "
           "speech -> owner_ingest, ambiguity/sender/stale/replay all refused, "
           "ambiguous owner replies draw ONE bounded budget-capped clarification (F20)")

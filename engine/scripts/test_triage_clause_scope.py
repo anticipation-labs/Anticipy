@@ -456,12 +456,12 @@ def debounce_pins() -> list:
     checks = [
         # F9: binding_send WITH a transfer rail, ambient -> held
         (("Send Yusuf the forty over zelle so he can cover the permit", "binding_send", AMBIENT), True),
-        # typed/API stays deliberate -> immediate ask
+        # typed/API stays deliberate -> no debounce hold (the engine blocks money rails immediately)
         (("Send Yusuf the forty over zelle so he can cover the permit", "binding_send", None), False),
         # an ordinary send (no rail) must NOT be debounced
         (("Send the signed lease over to the landlord tonight", "binding_send", AMBIENT), False),
         (("Email the team the new schedule", "binding_send", AMBIENT), False),
-        # the original money path is unchanged
+        # the original ambient money-transfer hold path is unchanged
         (("Just wire the mason her retainer tonight", "money", AMBIENT), True),
         # any other category never holds, rail or not
         (("Wire the refund over paypal", "calendar_hold", AMBIENT), False),
@@ -498,8 +498,8 @@ async def replay_pins() -> list:
             fails.append("  retracted goal must end failed (silence), never executed")
     finally:
         await bus.stop()
-    # B) no retraction -> the SAME ask flushes late (one-way safety: held can only
-    #    become silence or the identical ask, never an act)
+    # B) no retraction -> the same held money transfer hits the terminal block late
+    #    (one-way safety: held can only become silence or a block, never an act)
     bus, glass, orch, pro, score = make()
     await bus.start()
     try:
@@ -508,10 +508,10 @@ async def replay_pins() -> list:
                                  meta=dict(AMBIENT)))
         await pro.on_event(Event(source=EventSource.app, text="Bram's desk fan squeaks on every turn.",
                                  meta=dict(AMBIENT)))
-        if "ask_flushed" not in glass.kinds() or not pro.pending:
-            fails.append("  surviving binding_send hold must flush the same ask late")
-        if out["goal_id"] and orch.store.load(out["goal_id"]).state != GoalState.waiting:
-            fails.append("  flushed goal must still be paused awaiting the reply")
+        if "ask_blocked" not in glass.kinds() or pro.pending:
+            fails.append("  surviving binding_send hold must hit the money wall late")
+        if out["goal_id"] and orch.store.load(out["goal_id"]).state != GoalState.failed:
+            fails.append("  blocked goal must end failed, never awaiting approval")
     finally:
         await bus.stop()
     return fails

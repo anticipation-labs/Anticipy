@@ -58,7 +58,8 @@ async def main():
     try:
         # PART 1 — interruption budget caps proactive asks
         pro.budget = AnnoyanceBudget(max_per_day=3)   # small cap for the test (DECISIONS-ONLY-OMAR)
-        outs = [await pro.on_event(Event(source=EventSource.system, text=f"Wire payment {i} to a vendor."), now=now)
+        outs = [await pro.on_event(Event(source=EventSource.system,
+                                         text=f"Send the signed contract to vendor {i}."), now=now)
                 for i in range(6)]
         asks = [o for o in outs if o["decision"] == "ask"]
         supp = [o for o in outs if o["decision"] == "suppressed"]
@@ -82,10 +83,12 @@ async def main():
 
         # PART 3 — a USER-initiated ask is never suppressed (even at cap 0)
         pro.budget = AnnoyanceBudget(max_per_day=0)
-        ouser = await pro.on_event(Event(source=EventSource.app, text="Wire payment to a vendor."), now=now)
+        ouser = await pro.on_event(Event(source=EventSource.app,
+                                         text="Send the signed contract to the vendor."), now=now)
         if ouser["decision"] != "ask":
             fails.append(f"user-initiated ask must bypass the budget: {ouser}")
-        oproactive = await pro.on_event(Event(source=EventSource.system, text="Wire a different payment."), now=now)
+        oproactive = await pro.on_event(Event(source=EventSource.system,
+                                              text="Send the revised contract to the vendor."), now=now)
         if oproactive["decision"] != "suppressed":
             fails.append(f"proactive ask at cap 0 must be suppressed: {oproactive}")
     finally:

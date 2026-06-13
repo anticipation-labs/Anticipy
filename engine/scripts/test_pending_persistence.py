@@ -39,7 +39,7 @@ os.environ["OWNER_PHONE"] = OWNER
 from anticipy_engine.channels.inbound import InboundPoller  # noqa: E402
 from anticipy_engine.core.bus import Bus  # noqa: E402
 from anticipy_engine.core.control_core import ControlCore  # noqa: E402
-from anticipy_engine.core.envelopes import Event, EventSource, GoalState  # noqa: E402
+from anticipy_engine.core.envelopes import Event, EventSource, Goal, GoalState  # noqa: E402
 from anticipy_engine.core.gateway import ModelGateway  # noqa: E402
 from anticipy_engine.core.orchestrator import AutoApprover, Orchestrator  # noqa: E402
 from anticipy_engine.core.proactive import ProactiveEngine  # noqa: E402
@@ -63,11 +63,11 @@ class FakeScore:
 
 _BUSES = []
 
-# money lines: triage actionable + harm-line detrimental -> the ask path
+# money lines are terminally blocked; non-money human-impacting lines exercise the ask path
 MONEY = "Pay the contractor invoice tonight"
-MONEY2 = "Wire the deposit to the venue tomorrow"
-MONEY3 = "Pay the caterer the remaining balance"
 SEND_SAM = "okay just send Sam the revised decking file before Friday."
+SEND_PRIYA = "Email Priya the signed investor update before noon."
+SEND_MARTA = "Text Marta the revised schedule before Friday."
 
 
 async def engine_in(tmp: Path):
@@ -92,8 +92,13 @@ def ev(text):
     return Event(source=EventSource.mac_mic, text=text)
 
 
-async def ask_one(tmp: Path, line=MONEY):
-    """One engine takes one money ask and 'dies' (goes out of scope)."""
+def pending_disk(tmp: Path) -> dict:
+    p = tmp / "pending_asks.json"
+    return json.loads(p.read_text()) if p.exists() else {}
+
+
+async def ask_one(tmp: Path, line=SEND_SAM):
+    """One engine takes one human-impacting ask and 'dies' (goes out of scope)."""
     pro, store, glass = await engine_in(tmp)
     res = await pro.on_event(ev(line))
     assert res["decision"] == "ask" and res["ask_id"], res
@@ -109,11 +114,11 @@ async def main():
     on_disk = json.loads(path.read_text())
     assert set(on_disk) == {res["ask_id"]}, on_disk
     assert on_disk[res["ask_id"]]["goal_id"] == res["goal_id"]
-    assert on_disk[res["ask_id"]]["action"] == MONEY
+    assert on_disk[res["ask_id"]]["action"] == SEND_SAM
     pro2, store2, glass2 = await engine_in(tmp)
     assert "pending_restored" in glass2.kinds()
     assert set(pro2.pending) == {res["ask_id"]}, "restart must restore the pending map"
-    assert pro2.pending[res["ask_id"]]["action"] == MONEY
+    assert pro2.pending[res["ask_id"]]["action"] == SEND_SAM
     out = await pro2.resolve_ask(res["ask_id"], True)
     assert out["approved"] is True and out["goal_id"] == res["goal_id"], out
     assert store2.load(res["goal_id"]).state == GoalState.done, \
@@ -127,19 +132,19 @@ async def main():
     res = await ask_one(tmp)
     pro_n, store_n, glass_n = await engine_in(tmp)
     out = await pro_n.resolve_ask(res["ask_id"], False)
-    assert out["approved"] is False and out["declined_action"] == MONEY, out
+    assert out["approved"] is False and out["declined_action"] == SEND_SAM, out
     assert store_n.load(res["goal_id"]).state == GoalState.failed
     assert "ask_declined" in glass_n.kinds()
-    assert json.loads((tmp / "pending_asks.json").read_text()) == {}
+    assert pending_disk(tmp) == {}
     print("PASS decline: NO after a restart fails the goal, never executes")
 
     # ---- 3) restore validates against the store: stale entries drop, valid stay ----
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-"))
     path = tmp / "pending_asks.json"
     pro_a, store_a, _ = await engine_in(tmp)
-    r1 = await pro_a.on_event(ev(MONEY))
-    r2 = await pro_a.on_event(ev(MONEY2))
-    r3 = await pro_a.on_event(ev(MONEY3))
+    r1 = await pro_a.on_event(ev(SEND_SAM))
+    r2 = await pro_a.on_event(ev(SEND_PRIYA))
+    r3 = await pro_a.on_event(ev(SEND_MARTA))
     assert all(r["decision"] == "ask" for r in (r1, r2, r3))
     # stale by deletion (the goal file is gone) and stale by state (already ran):
     # defense-in-depth — the live mutation order never writes these shapes itself
@@ -201,10 +206,51 @@ async def main():
                           scorecard=FakeScore(), approver=AutoApprover(True))
     pro_d = ProactiveEngine(bus, ModelGateway(), orch_d, glassbox=FakeGlass(),
                             scorecard=FakeScore())
-    res = await pro_d.on_event(ev(MONEY))
+    res = await pro_d.on_event(ev(SEND_SAM))
     assert res["decision"] == "ask" and pro_d._pending_path is None
     assert not (tmp / "pending_asks.json").exists(), "no path configured -> no files"
     print("PASS default: no path configured -> in-memory behavior unchanged, no files")
+
+    # ---- 6b) money is a hard wall: no pending ask; a stale money ask still cannot approve ----
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-money-"))
+    pro_m, store_m, glass_m = await engine_in(tmp)
+    blocked = await pro_m.on_event(ev(MONEY))
+    assert blocked["decision"] == "blocked" and blocked["category"] == "money", blocked
+    assert blocked["ask_id"] is None and not pro_m.pending, blocked
+    assert store_m.load(blocked["goal_id"]).state == GoalState.failed
+    assert store_m.load(blocked["goal_id"]).proof.get("blocked", {}).get("category") == "money"
+    assert "ask_sent" not in glass_m.kinds()
+    assert pending_disk(tmp) == {}
+
+    legacy = Goal(intent=MONEY, description=MONEY, state=GoalState.waiting)
+    store_m.save(legacy)
+    pro_m.pending["legacy-money"] = {
+        "goal_id": legacy.id,
+        "action": MONEY,
+        "reason": "legacy pending money ask",
+        "category": "money",
+    }
+    pro_m._persist_pending()
+    out = await pro_m.resolve_ask("legacy-money", True)
+    assert out["blocked"] is True and out["approved"] is False, out
+    assert store_m.load(legacy.id).state == GoalState.failed
+    assert store_m.load(legacy.id).proof.get("blocked", {}).get("category") == "money"
+    assert json.loads((tmp / "pending_asks.json").read_text()) == {}
+
+    legacy_no_category = Goal(intent=MONEY, description=MONEY, state=GoalState.waiting)
+    store_m.save(legacy_no_category)
+    pro_m.pending["legacy-money-no-category"] = {
+        "goal_id": legacy_no_category.id,
+        "action": MONEY,
+        "reason": "legacy pending money ask without category",
+    }
+    pro_m._persist_pending()
+    out = await pro_m.resolve_ask("legacy-money-no-category", True)
+    assert out["blocked"] is True and out["approved"] is False, out
+    assert store_m.load(legacy_no_category.id).state == GoalState.failed
+    assert store_m.load(legacy_no_category.id).proof.get("blocked", {}).get("category") == "money"
+    assert json.loads((tmp / "pending_asks.json").read_text()) == {}
+    print("PASS money wall: money creates no pending ask; stale money approval cannot execute")
 
     # ---- 7) end-to-end: ControlCore restart + inbound YES (the gate_P3 leg) ----
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-e2e-"))

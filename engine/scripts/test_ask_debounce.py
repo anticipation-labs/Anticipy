@@ -5,12 +5,12 @@ dinner" ... two minutes later ... "Hold on, he said he'd expense it. Leave it." 
 must not interrupt for a commitment the speaker un-made one breath later:
   A) ambient money TRANSFER command -> HELD (goal paused waiting, NO ask sent yet)
   B) retraction within the window  -> held ask dies silently; goal failed; memory note
-  C) no retraction                  -> the SAME ask flushes late (events- or time-window)
-  D) typed/API money command (no observed_at) -> immediate ask, unchanged
-  E) non-transfer money (buy/cart) -> immediate ask, unchanged (debounce out of scope)
+  C) no retraction                  -> the held transfer becomes a terminal block
+  D) typed/API money command (no observed_at) -> immediate block
+  E) non-transfer money (buy/cart) -> immediate block (debounce out of scope)
   F) an unrelated "do not <verb>" line must NOT cancel (verb-anchored retraction only)
 
-One-way safety throughout: a held goal NEVER executes; cancel -> silence, flush -> ask.
+One-way safety throughout: a held goal NEVER executes; cancel -> silence, flush -> blocked.
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_ask_debounce.py
 """
@@ -92,7 +92,7 @@ async def main():
     finally:
         await bus.stop()
 
-    # C1) no retraction -> the SAME ask flushes after the events window (2 lines)
+    # C1) no retraction -> the transfer blocks after the events window (2 lines)
     bus, glass, orch, pro = make()
     await bus.start()
     try:
@@ -105,16 +105,15 @@ async def main():
         assert pro.debounce.has_held(), "unrelated negation must not cancel the held ask"
         await pro.on_event(Event(source=EventSource.app, text="The weather is nice today.",
                                  meta=dict(AMBIENT)))
-        assert "ask_flushed" in glass.kinds() and "ask_sent" in glass.kinds()
-        assert pro.pending, "flushed ask must be awaiting a reply"
-        assert orch.store.load(held_goal).state == GoalState.waiting  # still paused, never executed
-        res = await pro.resolve_ask(held_goal, approved=False)
-        assert res["approved"] is False
-        print("  C1 flushed (events window): same ask sent late, deny round-trip works")
+        assert "ask_blocked" in glass.kinds() and "blocked" in glass.kinds()
+        assert "ask_sent" not in glass.kinds() and not pro.pending
+        assert orch.store.load(held_goal).state == GoalState.failed
+        assert orch.store.load(held_goal).proof.get("blocked", {}).get("category") == "money"
+        print("  C1 blocked (events window): survived transfer cannot become approvable")
     finally:
         await bus.stop()
 
-    # C2) time window: stream goes quiet -> first event after hold_seconds flushes
+    # C2) time window: stream goes quiet -> first event after hold_seconds blocks
     bus, glass, orch, pro = make()
     pro.debounce = AskDebounce(hold_events=99, hold_seconds=240.0)
     await bus.start()
@@ -123,25 +122,29 @@ async def main():
                                  now=1000.0)
         await pro.on_event(Event(source=EventSource.app, text="The weather is nice today.",
                                  meta=dict(AMBIENT)), now=1300.0)
-        assert "ask_flushed" in glass.kinds(), "time-expired hold must flush"
-        assert pro.pending and not pro.debounce.has_held()
+        assert "ask_blocked" in glass.kinds(), "time-expired hold must block"
+        assert not pro.pending and not pro.debounce.has_held()
         # and due() drains nothing further
         assert pro.debounce.due(2000.0) == []
-        print("  C2 flushed (time window): quiet stream still surfaces the ask")
+        print("  C2 blocked (time window): quiet stream still hits the money wall")
     finally:
         await bus.stop()
 
-    # D) typed/API money command (no observed_at) -> immediate ask, unchanged behavior
+    # D) typed/API money command (no observed_at) -> immediate terminal block
     bus, glass, orch, pro = make()
     await bus.start()
     try:
         out = await pro.on_event(Event(source=EventSource.app, text=MONEY))
-        assert out["decision"] == "ask" and out["ask_id"], out
-        print("  D typed: deliberate money command still asks immediately")
+        assert out["decision"] == "blocked" and out["ask_id"] is None, out
+        rail = await pro.on_event(Event(
+            source=EventSource.app,
+            text="Send Yusuf the forty over zelle so he can cover the permit"))
+        assert rail["decision"] == "blocked" and rail["category"] == "money", rail
+        print("  D typed: deliberate money command blocks immediately")
     finally:
         await bus.stop()
 
-    # E) ambient money WITHOUT a transfer verb (shopping flow) -> immediate ask
+    # E) ambient money WITHOUT a transfer verb (shopping flow) -> immediate terminal block
     bus, glass, orch, pro = make()
     await bus.start()
     try:
@@ -149,8 +152,8 @@ async def main():
             source=EventSource.app,
             text="buy the standing desk on the office site, the one for $400",
             meta=dict(AMBIENT)))
-        assert out["decision"] == "ask" and out["ask_id"], out
-        print("  E non-transfer: buy/shopping money ask is not debounced")
+        assert out["decision"] == "blocked" and out["ask_id"] is None, out
+        print("  E non-transfer: buy/shopping money blocks immediately")
     finally:
         await bus.stop()
 
@@ -172,7 +175,7 @@ async def main():
         assert not AskDebounce.is_retraction(line), f"must NOT read as retraction: {line}"
     print("  idioms: retraction shapes pinned (verb-anchored negations only)")
 
-    print("PASS ask_debounce: hold / retract-silently / flush-late / typed-unchanged")
+    print("PASS ask_debounce: hold / retract-silently / block-late / typed-money-blocked")
 
 
 if __name__ == "__main__":

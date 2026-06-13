@@ -37,7 +37,7 @@ from ..shared.storesite import derive_store_site
 # --- hard detrimental (ASK; override everything). Money = SPENDING verbs, not price mentions. ---
 _HARD = [
     ("money", r"\b(pay|paid|buy|buys|buying|bought|purchase|purchasing|wire|transfer|transferring|"
-              r"spend|spending|checkout|check out|deposit|withdraw|venmo|paypal|donate|reimburse)\b"
+              r"spend|spending|checkout|check out|deposit|withdraw|venmo|zelle|cash ?app|paypal|donate|reimburse)\b"
               r"|\border (a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffee|\d)"),
     ("destroy", r"\b(delete|deletes|deleting|destroy|destroys|destroying|wipe|wipes|wiping|"
                 r"erase|erases|erasing|unsubscribe|unsubscribes|deactivate|deactivates)\b"

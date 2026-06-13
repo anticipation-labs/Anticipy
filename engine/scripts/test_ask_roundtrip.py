@@ -50,8 +50,8 @@ async def main():
     fails = []
     await bus.start()
     try:
-        # (1) detrimental -> PAUSE (waiting goal, NOT executed) + ask goes out
-        out = await pro.on_event(Event(source=EventSource.app, text="Wire money to the contractor."))
+        # (1) detrimental non-money action -> PAUSE (waiting goal, NOT executed) + ask goes out
+        out = await pro.on_event(Event(source=EventSource.app, text="Delete the old project files."))
         if not (out["decision"] == "ask" and out["ask_id"] and out["goal_id"]):
             fails.append(f"detrimental should pause + register an ask: {out}")
         paused = orch.store.load(out["goal_id"])
@@ -67,7 +67,7 @@ async def main():
             fails.append(f"YES must resume the exact paused goal to done: r={r} state={resumed.state}")
 
         # (3) another detrimental -> reply NO -> goal dropped + decline written to memory
-        out2 = await pro.on_event(Event(source=EventSource.app, text="Delete the old project files."))
+        out2 = await pro.on_event(Event(source=EventSource.app, text="Post the incident summary publicly."))
         r2 = await pro.resolve_ask(out2["ask_id"], approved=False)
         dropped = orch.store.load(out2["goal_id"])
         if not (r2.get("approved") is False and dropped.state == GoalState.failed):
@@ -75,7 +75,7 @@ async def main():
         all_items = (lm.memory.profile.all() + lm.memory.history.all()
                      + lm.memory.derived.all() + lm.memory.open_loops.all())
         declines = [i.text for i in all_items if "declined" in i.text.lower()]
-        if not any("Delete the old project files" in d for d in declines):
+        if not any("Post the incident summary publicly" in d for d in declines):
             fails.append(f"decline not written to memory (Room 5 feed): {declines}")
     finally:
         await bus.stop()

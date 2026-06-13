@@ -163,6 +163,20 @@ class OwnerMode:
         """Regex shaping for one observed line (no side effects)."""
         return self._card_for_line(line, source)
 
+    def execution_text_for_card(self, card: OwnerTaskCard) -> str:
+        """Text to send through the action spine for a shaped owner card.
+
+        The owner card keeps the exact source text. This only removes an explicit
+        no-purchase bound from cart-prep cards so the lower harm-line does not
+        mistake "don't buy" for purchase intent while the card args still carry
+        payment_allowed=False.
+        """
+        if card.action != "find_or_cart_without_purchase":
+            return card.source_text
+        text = _NO_BUY.sub(" ", card.source_text)
+        text = re.sub(r"\s+", " ", text).strip(" ,.-")
+        return text or card.source_text
+
     def ingest(self, text: str, source: str = "transcript", meta: dict[str, Any] | None = None) -> OwnerIngestResult:
         del meta  # reserved for clock/device context; kept out of rules for determinism.
         observed = self.observe(text)

@@ -10,7 +10,7 @@ Loop over Events:
      it with an honest reason. An unread line never acts.
   2. read memory context (cheap worker) for the harm-line's gray middle.
   3. the HARM-LINE (Room 2): is this detrimental? confident-no -> ACT (hand a Goal to the
-     orchestrator and DO IT); yes or UNSURE -> ASK (pause; never execute until approved).
+     orchestrator and DO IT); money -> BLOCK; other yes/UNSURE -> ASK.
   4. record every decision (+ category, memory_forced) to the glass-box and scorecard.
 
 The harm-line is deterministic + inspectable (proactive/harm.py); the smart model is used
@@ -48,6 +48,7 @@ from .orchestrator import Orchestrator
 # that the engine fails toward silence, honestly labeled — never act on an unread line.
 DECIDER_RETRY_SECONDS = 75.0
 DECIDER_MAX_RETRIES = 2
+NEVER_EXECUTE_CATEGORIES = {"money"}
 
 
 @dataclass
@@ -98,7 +99,7 @@ class ProactiveEngine:
         self.user_contact = user_contact        # the user's number/handle for asks (set in prod)
         self.pending = {}                       # ask_id -> {goal_id, action, reason, category} (awaiting reply)
         self.budget = AnnoyanceBudget()         # Room 5: cap proactive interruptions; learn from declines
-        self.debounce = AskDebounce()           # Room 2.6: ambient money-transfer asks wait out the retraction
+        self.debounce = AskDebounce()           # Room 2.6: ambient money transfers wait out the retraction
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
         self.decider_deferred = []              # Room 1.5 outage queue: [{event, due}] awaiting a retry tick
         self._decider_attempts = {}             # event.id -> deferrals so far (capped at DECIDER_MAX_RETRIES)
@@ -123,7 +124,7 @@ class ProactiveEngine:
 
     async def on_event(self, event: Event, now: Optional[float] = None) -> dict:
         now = now if now is not None else now_ts()
-        # 0) Room 2.6 — while a money-transfer ask is held, the very next utterances can
+        # 0) Room 2.6 — while a money-transfer command is held, the very next utterances can
         #    take it back ("scratch that", "don't send him anything"): the retraction
         #    consumes this event and the held ask dies silently (on money the engine
         #    fails toward silence, never act). Surviving holds tick down; an exhausted
@@ -142,7 +143,7 @@ class ProactiveEngine:
                     await self.bus.submit_job(Job(intent="write_memory",
                                                   args={"text": f"User retracted: {h['action']}",
                                                         "kind": "history"}))
-                self._record(event, "ignore", "retraction of a just-held money ask -> silent")
+                self._record(event, "ignore", "retraction of a just-held money command -> silent")
                 return {"decision": "ignore", "triaged": False, "goal_id": None,
                         "retracted_goal_ids": [h["goal_id"] for h in cancelled]}
             for h in self.debounce.event_passed(now):
@@ -205,6 +206,7 @@ class ProactiveEngine:
         forced_ask = decider_word == DECIDER_ASK and not verdict.detrimental
         reason = ("decider: binding or half-formed -> confirm before acting"
                   if forced_ask else verdict.reason)
+        terminal_block = self._never_execute_category(verdict.category, event.text)
         if not verdict.detrimental and not forced_ask:
             goal = await self.orchestrator.start_goal(Goal(intent=event.text, description=description))
             goal_id = goal.id
@@ -225,12 +227,15 @@ class ProactiveEngine:
             elif self.debounce.should_hold(event.text, verdict.category, event.meta):
                 # Room 2.6: a money TRANSFER command heard in ambient speech waits one
                 # breath — people retract these seconds later. Goal stays paused; the
-                # ask is sent only if no retraction arrives within the window.
+                # terminal block lands only if no retraction arrives within the window.
                 decision = "held"
                 self.debounce.hold(goal_id, event.text, reason, verdict.category, now)
                 if self.glassbox is not None:
                     self.glassbox.log("ask_held", {"goal_id": goal_id, "category": verdict.category,
                                                    "action": event.text})
+            elif terminal_block:
+                decision = "blocked"
+                self._block_goal(goal, event.text, reason, terminal_block)
             else:
                 decision = "ask"
                 ask_id = self._send_ask(goal, event.text, reason, verdict.category)
@@ -238,7 +243,8 @@ class ProactiveEngine:
                 if proactive:
                     self.budget.record_interruption(now)
             # HARD SUB-GATE: a paused goal is WAITING — no step executed until approved (no silent harm).
-            assert self.orchestrator.store.load(goal_id).state == GoalState.waiting, "paused action must not execute"
+            if decision in ("ask", "held", "suppressed"):
+                assert self.orchestrator.store.load(goal_id).state == GoalState.waiting, "paused action must not execute"
         self._record(event, decision, reason, category=verdict.category,
                      memory_forced=verdict.memory_forced)
         return {"decision": decision, "category": verdict.category, "reason": reason,
@@ -352,12 +358,53 @@ class ProactiveEngine:
                                   {"path": str(p), "error": str(exc)})
 
     def _flush_held(self, h: dict) -> None:
-        """A held money ask survived its retraction window — send the SAME ask, late."""
+        """A held transfer survived its retraction window: block money, or send the SAME ask late."""
         goal = self.orchestrator.store.load(h["goal_id"])
+        terminal_category = self._never_execute_category(h.get("category", ""), h.get("action", ""))
+        if terminal_category:
+            self._block_goal(goal, h["action"], h["reason"], terminal_category)
+            if self.glassbox is not None:
+                self.glassbox.log("ask_blocked", {"goal_id": h["goal_id"],
+                                                  "category": terminal_category,
+                                                  "action": h["action"]})
+            return
         ask_id = self._send_ask(goal, h["action"], h["reason"], h["category"])
         if self.glassbox is not None:
             self.glassbox.log("ask_flushed", {"ask_id": ask_id, "goal_id": h["goal_id"],
                                               "action": h["action"]})
+
+    def _never_execute(self, category: str = "", action: str = "") -> bool:
+        return bool(self._never_execute_category(category, action))
+
+    def _never_execute_category(self, category: str = "", action: str = "") -> str:
+        """Defense-in-depth for categories that must never become executable.
+
+        New asks carry a category, but old pending files may not. When category is
+        missing, re-run the deterministic harm-line on the saved action so a stale
+        approval cannot turn money into execution after restart.
+        """
+        if category in NEVER_EXECUTE_CATEGORIES:
+            return category
+        if not category and action:
+            try:
+                assessed = self.harm.assess(action, {}).category
+                return assessed if assessed in NEVER_EXECUTE_CATEGORIES else ""
+            except Exception:
+                return ""
+        return ""
+
+    def _block_goal(self, goal: Goal, action: str, reason: str, category: str) -> None:
+        """Terminal wall: persist a receipt that the request was refused, with no
+        pending approval and no executable steps."""
+        goal.state = GoalState.failed
+        goal.proof = {
+            **(goal.proof or {}),
+            "blocked": {"category": category, "reason": reason, "action": action},
+        }
+        self.orchestrator.store.save(goal)
+        if self.glassbox is not None:
+            self.glassbox.log("blocked", {"goal_id": goal.id, "category": category,
+                                          "reason": reason, "action": action})
 
     def _send_ask(self, goal: Goal, action: str, reason: str, category: str = "") -> str:
         """Send the ask over the channel and register it pending a reply."""
@@ -385,6 +432,11 @@ class ProactiveEngine:
         # whose approval may already have acted (same law as the deferred drain).
         self._persist_pending()
         goal = self.orchestrator.store.load(p["goal_id"])
+        terminal_category = self._never_execute_category(p.get("category", ""), p.get("action", ""))
+        if approved and terminal_category:
+            self._block_goal(goal, p["action"], p["reason"], terminal_category)
+            return {"ask_id": ask_id, "approved": False, "blocked": True,
+                    "goal_id": goal.id, "reason": "never-execute category"}
         if approved:
             goal = await self.orchestrator.start_goal(goal)   # resume the EXACT paused goal -> run to done
             if self.glassbox is not None:
@@ -405,8 +457,8 @@ class ProactiveEngine:
         A TIME-GROUNDED reminder (remind_ts set at capture) is a NOTIFY — tell the user, don't
         open a goal or a YES/NO ask — unless its text is detrimental, which keeps the ask path."""
         now = now if now is not None else now_ts()
-        # Room 2.6 time flush: the stream went quiet, so a held money ask that outlived
-        # its retraction window goes out now instead of waiting for more speech.
+        # Room 2.6 time flush: the stream went quiet, so a held transfer that outlived
+        # its retraction window either hits the terminal money wall or becomes an ask.
         for h in self.debounce.due(now):
             self._flush_held(h)
         # Room 1.5 outage retries (ledger F7): events deferred because the decider had
@@ -456,8 +508,8 @@ class ProactiveEngine:
     async def _fire_reminder(self, loop: dict, task: str, now: float) -> dict:
         """A due reminder fires as a NOTIFY: re-gate the loop text on the harm-line; only a
         safe/reversible reminder goes straight out over the channel (budget-capped, counted
-        as an interruption) and the loop is marked waiting. Detrimental text falls back to
-        the ask round-trip — money/sends never fire silently."""
+        as an interruption) and the loop is marked waiting. Detrimental text re-enters
+        the same pipeline: money blocks; other human-impacting work asks first."""
         ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": task}))
         verdict = self.harm.assess(task, ctx.output or {})
         if verdict.detrimental:

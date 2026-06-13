@@ -6,7 +6,7 @@ Pins (zero model calls; deciders are scripted):
     re-enters the FULL pipeline at its due tick (late catch, honest glass-box).
   - the DECIDER_MAX_RETRIES bound holds ACROSS restarts: attempt counts persist,
     so restarting cannot grant an event extra retries; exhaustion stays honest.
-  - a restored money line still ends at the harm-line's ASK — restore never
+  - a restored money line still ends at the terminal money wall — restore never
     weakens the one-way rule.
   - stub boots neither restore nor touch the file (no decider = an unread line
     must never re-enter the pipeline without one); the next live boot still gets it.
@@ -88,7 +88,7 @@ def ev(text):
 
 
 SAFE_LINE = "Remind me to stretch at six tomorrow"   # triage True, harm-safe (act)
-MONEY_LINE = "Pay the contractor invoice tonight"    # triage True, harm money (ask)
+MONEY_LINE = "Pay the contractor invoice tonight"    # triage True, harm money (blocked)
 T0 = 1_000_000.0
 
 
@@ -140,16 +140,17 @@ async def main():
     assert json.loads(path.read_text()) == []
     print("PASS bound: attempt counts persist — restarts grant no extra retries")
 
-    # ---- 3) a restored money line still ends at the harm-line's ASK ----
+    # ---- 3) a restored money line still ends at the terminal money wall ----
     path = Path(tempfile.mkdtemp(prefix="anticipy-defper-")) / "decider_deferred.json"
     await defer_one(path, line=MONEY_LINE)
     pro_m, store_m, glass_m = await fresh_engine(decider=FakeDecider(ACT), deferred_path=path)
     await pro_m.trigger_tick(now=T0 + DECIDER_RETRY_SECONDS + 5)
     goals = store_m.all()
-    assert len(goals) == 1 and goals[0].state == GoalState.waiting, \
-        "restore must not weaken the harm-line: money waits for a YES"
-    assert pro_m.pending, "the restored money line must reach the ask path"
-    print("PASS one-way: restored money line -> harm-line ASK is still FINAL")
+    assert len(goals) == 1 and goals[0].state == GoalState.failed, \
+        "restore must not weaken the harm-line: money is blocked"
+    assert goals[0].proof.get("blocked", {}).get("category") == "money"
+    assert not pro_m.pending, "the restored money line must not become approvable"
+    print("PASS one-way: restored money line -> terminal money wall is still FINAL")
 
     # ---- 4) stub boots neither restore nor touch the file; the next live boot gets it ----
     path = Path(tempfile.mkdtemp(prefix="anticipy-defper-")) / "decider_deferred.json"

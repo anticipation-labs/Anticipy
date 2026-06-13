@@ -3,7 +3,7 @@
 The engine acts by default and stops to ask ONLY before something detrimental:
   A) clearly-safe/reversible actionable event -> ACT (goal created + run to done)
   B) ambient noise                            -> triaged out -> ignore (zero smart calls)
-  C) detrimental event (spend money)          -> ASK (no goal; raised to human) [hard sub-gate]
+  C) money event                              -> BLOCKED (durable receipt, no approval path)
 The harm-line is deterministic (no smart call); only the orchestrator's plan uses smart.
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_proactive.py
@@ -95,19 +95,20 @@ async def main():
     assert len(gw.smart_calls) == 0  # triage is free; no smart model touched
     print("  B noise: triaged out -> ignore; smart calls =", len(gw.smart_calls))
 
-    # C) detrimental (spend money) -> ASK -> raised to human, NO goal (hard sub-gate: no silent harm)
+    # C) money -> BLOCKED -> durable receipt, no ask, no approval path
     tmp, bus, gw, glass, score, orch, pro = make()
     await bus.start()
     try:
         out = await pro.on_event(Event(source=EventSource.mac_mic, text="Wire money to the contractor."))
     finally:
         await bus.stop()
-    assert out["decision"] == "ask" and out["detrimental"] and out["category"] == "money"
-    assert out["goal_id"] and out["ask_id"], f"ask must pause a goal + register the ask, got {out}"
-    assert orch.store.load(out["goal_id"]).state == GoalState.waiting  # PAUSED, not executed (no silent harm)
-    assert any(k == "ask_human" for k, _ in glass.entries) and any(k == "ask_sent" for k, _ in glass.entries)
-    assert len(gw.smart_calls) == 0  # waiting goal not run -> no plan; harm-line deterministic
-    print(f"  C detrimental: decision=ask ({out['category']}), goal PAUSED (waiting), ask sent")
+    assert out["decision"] == "blocked" and out["detrimental"] and out["category"] == "money"
+    assert out["goal_id"] and out["ask_id"] is None, f"money must not create a pending approval, got {out}"
+    assert orch.store.load(out["goal_id"]).state == GoalState.failed
+    assert orch.store.load(out["goal_id"]).proof.get("blocked", {}).get("category") == "money"
+    assert any(k == "blocked" for k, _ in glass.entries) and not any(k == "ask_sent" for k, _ in glass.entries)
+    assert len(gw.smart_calls) == 0  # blocked goal not run -> no plan; harm-line deterministic
+    print(f"  C money: decision=blocked ({out['category']}), no approval path")
 
     print("PASS proactive: act-first engine (triage / harm-line / act-or-ask / record)")
 

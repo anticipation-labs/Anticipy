@@ -3,7 +3,7 @@
 Plants open loops with remind_ts (what due-time grounding writes at capture):
   - a safe reminder past its remind_ts -> direct channel notify, NO pending ask,
     NO new goal, loop marked waiting, counted against the annoyance budget.
-  - a detrimental reminder (money text) -> falls back to the ask round-trip.
+  - a money reminder -> falls back to the terminal money wall, never notify/ask.
   - over-budget reminders -> suppressed (no notify, no ask).
   - fire-once still holds; non-reminder loops (no remind_ts) keep the act path.
 
@@ -60,7 +60,7 @@ async def main():
     # a grounded reminder whose 15-min lead has arrived (due still 2 min out — the gate-S2 shape)
     safe = lm.memory.open_loops.write(
         loop("remind me to stretch", due_ts=now + 120, remind_ts=now - 10, timestamp=now - 600))
-    # a grounded reminder whose TEXT is money — must re-gate to ASK, never notify silently
+    # a grounded reminder whose TEXT is money — must re-gate to BLOCK, never notify silently
     money = lm.memory.open_loops.write(
         loop("remind me to wire the settlement money to the vendor",
              due_ts=now + 120, remind_ts=now - 10, timestamp=now - 500))
@@ -90,10 +90,10 @@ async def main():
         if pro.budget.count(now) < 1:
             fails.append("a notify must count against the annoyance budget")
 
-        # detrimental grounded reminder -> ask path, not notify
+        # money grounded reminder -> terminal block, not notify or ask
         f = by_id.get(money.id)
-        if not f or f["decision"] != "ask":
-            fails.append(f"money reminder should fall back to ASK: {f}")
+        if not f or f["decision"] != "blocked" or f.get("ask_id") is not None:
+            fails.append(f"money reminder should fall back to BLOCKED: {f}")
         if any("wire the settlement" in m.get("message", "") and m["message"].startswith("Reminder:")
                for m in pro.channel.sent):
             fails.append("money reminder must never go out as a bare notify")
@@ -124,7 +124,7 @@ async def main():
         await bus.stop()
 
     print("==== ROOM 3 — REMINDER NOTIFY ROUTING ====")
-    print(f"  fired {len(fired)} loops: safe->notify, money->ask, ungrounded->act; "
+    print(f"  fired {len(fired)} loops: safe->notify, money->blocked, ungrounded->act; "
           f"tick-2 fired {len(again)}; over-budget->suppressed")
     if fails:
         print("==== FAIL ====")

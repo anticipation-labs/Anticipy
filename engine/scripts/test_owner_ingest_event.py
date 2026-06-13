@@ -274,7 +274,7 @@ async def owner_lane_check():
     assert ask["cards"][0]["args"].get("person") == "Sam", ask
     assert _record(tmp, ask["goal_id"])["state"] == "waiting", ask
 
-    # money without an explicit no-buy is a blocked card -> surfaces as ask, NEVER executes
+    # money without an explicit no-buy is a blocked card -> surfaces as a non-resolvable wall, NEVER executes
     assert money["decision"] == "ask" and money["ask_id"] is None, money
     assert money["cards"][0]["disposition"] == "blocked", money
     money_rec = _record(tmp, money["goal_id"])
@@ -285,7 +285,7 @@ async def owner_lane_check():
     # F23: a money-flavored vent the spine's OWN triage silences stays SILENT — no
     # junk ask, no card, no record, no goal, nothing resolvable. The MONEY pin above
     # is the other half of the bound: a triage-actionable money line keeps its
-    # blocked ask, so the consult can only ever trade ask -> silence, never -> act.
+    # blocked card, so the consult can only ever trade blocked -> silence, never -> act.
     assert money_vent["decision"] == "ignore" and money_vent["ask_id"] is None, money_vent
     assert money_vent["goal_id"] is None and not money_vent["cards"], money_vent
 

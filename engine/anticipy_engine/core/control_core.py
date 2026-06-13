@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from .browser_link import BrowserLink
 from .bus import Bus
 from .env import load_local_env
-from .envelopes import Event, EventSource
+from .envelopes import Event, EventSource, Goal, GoalState, Job
 from .gateway import ModelGateway, PROVIDER_OPENROUTER
 from .glassbox import GlassBox
 from .native_bridge_link import NativeBridgeLink
@@ -163,6 +164,30 @@ class ControlCore:
     def _owner_event_enabled() -> bool:
         return (os.environ.get("ANTICIPY_OWNER_INGEST", "") or "").strip().lower() in {"1", "true", "yes", "on"}
 
+    @staticmethod
+    def _has_external_context(ctx_output: dict | None, source_text: str) -> bool:
+        """True when memory has context beyond the line just captured."""
+        context = (ctx_output or {}).get("context") or {}
+        source = (source_text or "").strip().lower()
+        stop = {
+            "that", "this", "thing", "things", "one", "item", "product",
+            "cart", "buy", "buying", "checkout", "find", "found", "put",
+            "add", "grab", "same", "still", "later", "dont", "don't",
+            "with", "from", "into", "onto", "please", "before", "after",
+        }
+        source_terms = {t for t in re.findall(r"[a-z0-9]+", source)
+                        if len(t) > 3 and t not in stop}
+        for key in ("profile", "history", "derived", "open_loops"):
+            for item in context.get(key, []) or []:
+                text = str(item).strip().lower()
+                if not text or text == source:
+                    continue
+                item_terms = {t for t in re.findall(r"[a-z0-9]+", text)
+                              if len(t) > 3 and t not in stop}
+                if len(source_terms & item_terms) >= 2:
+                    return True
+        return False
+
     async def feed(self, source: str, text: str, meta: dict | None = None) -> dict:
         meta = meta or {}
         # Owner-lane honesty seam: with ANTICIPY_OWNER_INGEST=1 the same /event pipe the
@@ -237,8 +262,30 @@ class ControlCore:
             if not self.proactive.triage.actionable(line.text):
                 return None
             return shaped
-        out = await self.feed("app", line.text,
-                              {**meta, "owner_source": source, "owner_ingest_execute": True})
+        if shaped is not None and shaped.action == "find_or_cart_without_purchase":
+            ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": line.text}))
+            if not self._has_external_context(ctx.output, line.text):
+                goal = Goal(intent=line.text, description=shaped.title, state=GoalState.waiting)
+                self.store.save(goal)
+                ask_id = self.proactive._send_ask(
+                    goal,
+                    line.text,
+                    "browser cart prep needs the exact item or source before acting",
+                    "browser",
+                )
+                shaped.disposition = "ask"
+                shaped.reason = "missing item/source context before carting"
+                shaped.execution = {"decision": "ask", "goal_id": goal.id,
+                                    "ask_id": ask_id, "goal_state": None}
+                return shaped
+        execution_text = (
+            self.owner_mode.execution_text_for_card(shaped)
+            if shaped is not None else line.text
+        )
+        out = await self.feed("app", execution_text,
+                              {**meta, "owner_source": source,
+                               "owner_ingest_execute": True,
+                               "owner_source_text": line.text})
         decision = out.get("decision") or "ignore"
         execution = {"decision": decision, "goal_id": out.get("goal_id"),
                      "ask_id": out.get("ask_id"), "goal_state": None}

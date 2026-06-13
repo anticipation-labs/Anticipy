@@ -1,28 +1,28 @@
-"""Room 2.6 — the breath: ambient money-transfer asks wait out the retraction.
+"""Room 2.6 — the breath: ambient money-transfer commands wait out the retraction.
 
 People blurt payment commands and take them back one breath later ("Just venmo
 Raj for the team dinner" ... "Hold on, he said he'd expense it. Leave it.").
 Surfacing the ask on the first line interrupts the user for a commitment they
 un-made seconds after making it. So a money TRANSFER command heard in AMBIENT
 speech is HELD, not asked: the goal is persisted waiting (never executed), and
-the ask goes out only if it survives a short window with no retraction.
+the terminal money block lands only if it survives a short window with no retraction.
 
 Scope is deliberately narrow — two conditions, both required:
   - harm-line category "money" OR "binding_send", AND the text uses a TRANSFER
     verb (pay/venmo/zelle/wire/transfer/...). Direct pay-someone commands are
-    the class people retract mid-conversation; buy/cart/purchase intents are
-    shopping flows whose money ask should surface normally. binding_send is
+    the class people retract mid-conversation; buy/cart/purchase intents hit the
+    terminal money wall immediately. binding_send is
     included because "send <person> <amount> over <rail>" reads as a send to
     the harm-line while being a money transfer in substance (ledger F9 —
     category jitter was bypassing this window); the rail-verb requirement
     keeps ordinary sends ("send her the lease") asking immediately.
   - the event is AMBIENT (meta.observed_at present — transcript/pendant
-    capture). A typed or API command is deliberate; it gets its ask
+    capture). A typed or API command is deliberate; it hits the money wall
     immediately (SideDoor and the gate's typed money probe are unchanged).
 
-One-way safety: a held ask can only be CANCELLED (silence; money fails toward
-silence, never act) or FLUSHED (the same ask, sent late). It can never become
-an ACT, and the paused goal never executes while held.
+One-way safety: a held command can only be CANCELLED (silence; money fails
+toward silence, never act) or BLOCKED. It can never become an ACT or an
+approval ask, and the paused goal never executes while held.
 
 This class is pure bookkeeping + predicates: no I/O, no model calls, fully
 deterministic — identical behavior at stub and live tier. The engine

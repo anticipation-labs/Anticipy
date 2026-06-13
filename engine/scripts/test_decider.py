@@ -9,11 +9,11 @@ Pins the safety contract (zero model calls; the decider is faked or keyless):
   - outage round-trip: UNAVAILABLE defers the event (no goal, no ask), a later
     trigger_tick retries it through the FULL pipeline, exhausted retries drop it
     with an honest reason, and a deferred money line still ends at the harm-line's
-    ASK — no failure path ever acts.
+    terminal BLOCK — no failure path ever acts or asks for spend approval.
   - live-only: stub gateway -> engine has NO decider; openrouter gateway -> it has one.
   - pipeline one-way: SILENT drops a triage-surviving event (no goal, no ask);
     ASK forces the ask path on a harm-safe line (goal paused, ask pending);
-    ACT defers to the harm-line and can NEVER turn its ASK into an act.
+    ACT defers to the harm-line and can NEVER turn its ask/block into an act.
   - triage still runs first: a non-actionable line never reaches the decider.
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_decider.py
@@ -109,7 +109,7 @@ def ev(text):
 
 
 SAFE_LINE = "Remind me to stretch at six tomorrow"          # triage True, harm calendar_hold (act)
-MONEY_LINE = "Pay the contractor invoice tonight"           # triage True, harm money (ask)
+MONEY_LINE = "Pay the contractor invoice tonight"           # triage True, harm money (block)
 VENT_LINE = "Ugh, what a day."                              # triage False
 
 
@@ -201,13 +201,13 @@ async def main():
     assert res["decision"] == "act" and res["goal_id"] is not None
     print("PASS pipeline: decider ACT + harm-safe -> acts")
 
-    # ---- 7) one-way: decider ACT can NEVER override the harm-line's ASK ----
+    # ---- 7) one-way: decider ACT can NEVER override the harm-line's money BLOCK ----
     fake = FakeDecider(ACT)
     pro, store, _ = await fresh_engine(decider=fake)
     res = await pro.on_event(ev(MONEY_LINE))
-    assert res["decision"] == "ask" and res["detrimental"] is True
-    assert store.load(res["goal_id"]).state == GoalState.waiting
-    print("PASS pipeline: decider ACT on money line -> harm-line ASK is FINAL")
+    assert res["decision"] == "blocked" and res["detrimental"] is True
+    assert store.load(res["goal_id"]).state == GoalState.failed
+    print("PASS pipeline: decider ACT on money line -> harm-line BLOCK is FINAL")
 
     # ---- 8) triage still runs first: non-actionable lines never reach the decider ----
     fake = FakeDecider(ACT)
@@ -260,18 +260,18 @@ async def main():
     assert any("after retries" in r for r in reasons), "exhaustion must be stated honestly"
     print("PASS outage: sustained UNAVAILABLE -> bounded retries -> honest fail-silent")
 
-    # ---- 12) a deferred money line still ends at the harm-line's ASK, never an act ----
+    # ---- 12) a deferred money line still ends at the harm-line's BLOCK, never an act ----
     fake = SequenceDecider([UNAVAILABLE, ACT])
     pro, store, glass = await fresh_engine(decider=fake)
     res = await pro.on_event(ev(MONEY_LINE), now=t0)
     assert res["decision"] == "deferred" and not store.all()
     await pro.trigger_tick(now=t0 + DECIDER_RETRY_SECONDS + 5)
-    asks = [d for k, d in glass.entries if k == "decision" and d.get("decision") == "ask"]
-    assert asks, "the retried money line must reach the ask path"
+    blocks = [d for k, d in glass.entries if k == "decision" and d.get("decision") == "blocked"]
+    assert blocks, "the retried money line must reach the block path"
     goals = store.all()
-    assert len(goals) == 1 and goals[0].state == GoalState.waiting, \
-        "deferral must not weaken the harm-line: money waits for a YES"
-    print("PASS outage: deferred money line -> harm-line ASK is still FINAL")
+    assert len(goals) == 1 and goals[0].state == GoalState.failed, \
+        "deferral must not weaken the harm-line: money is terminally blocked"
+    print("PASS outage: deferred money line -> harm-line BLOCK is still FINAL")
 
     for b in _BUSES:
         await b.stop()
