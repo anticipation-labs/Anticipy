@@ -87,6 +87,10 @@ def main():
         resolution = browser_record["steps"][0]["args"]["memory_resolution"]
         assert resolution["site"] == "https://www.staples.com", resolution
         assert "notebook" in resolution["item"].lower(), resolution
+        memory_receipts = [p for p in browser["proof"] if p.get("type") == "memory_resolution"]
+        assert memory_receipts, browser
+        assert memory_receipts[0]["site"] == "https://www.staples.com", memory_receipts
+        assert "notebook" in memory_receipts[0]["item"].lower(), memory_receipts
 
         # Human-impacting communication pauses in /pending, then /resolve resumes
         # the exact paused goal and writes the result back onto the durable card.
@@ -117,6 +121,9 @@ def main():
         assert durable_message["execution"]["ask_id"] is None, durable_message
         assert any(p["type"] == "resolution" and p["decision"] == "approved"
                    for p in durable_message["proof"]), durable_message
+        durable_browser = next(c for c in durable_cards if c["id"] == browser["id"])
+        assert any(p.get("type") == "memory_resolution" and p.get("site") == "https://www.staples.com"
+                   for p in durable_browser["proof"]), durable_browser
 
         still_pending = client.get("/pending").json()["pending"]
         assert all(p["ask_id"] != ask_id for p in still_pending), still_pending

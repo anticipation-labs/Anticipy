@@ -37,6 +37,27 @@ def _base(data_dir=None) -> Path:
     return Path(data_dir or os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
 
 
+def _card_step_receipts(steps: list[dict]) -> list[dict]:
+    """Human-readable receipts extracted from executed goal steps."""
+    receipts: list[dict] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        args = step.get("args") or {}
+        if not isinstance(args, dict):
+            continue
+        resolution = args.get("memory_resolution")
+        if isinstance(resolution, dict):
+            receipts.append({
+                "type": "memory_resolution",
+                "site": resolution.get("site"),
+                "item": resolution.get("item"),
+                "source_ref": resolution.get("source_ref"),
+                "matched_hints": resolution.get("matched_hints") or [],
+            })
+    return receipts
+
+
 class GatedApprover(Approver):
     """Human-path stub that also propagates the gate's approval flag onto the
     step args, so the hand's defense-in-depth (refuse high-risk without the flag)
@@ -434,6 +455,7 @@ class ControlCore:
                 steps = [s.model_dump(mode="json") for s in goal.steps]
                 goal_proof = goal.proof or {}
                 state = goal.state.value  # done only when every step carried proof
+                card.proof.extend(_card_step_receipts(steps))
                 if execution.get("ask_id") or execution.get("decision") in ("ask", "held"):
                     state = "waiting"
                     self._owner_card_goals[goal.id] = {"record_path": record_path,

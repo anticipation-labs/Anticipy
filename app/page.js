@@ -27,6 +27,7 @@ function cardBucket(card) {
 
 function proofValue(proof) {
   if (!proof) return "";
+  if (proof.type === "memory_resolution") return [proof.item, proof.site].filter(Boolean).join(" @ ");
   if (proof.decision) return [proof.decision, proof.goal_state].filter(Boolean).join(" / ");
   if (proof.memory_id) return proof.memory_id;
   if (proof.path) return proof.path;
@@ -35,6 +36,7 @@ function proofValue(proof) {
 }
 
 function proofLabel(proof) {
+  if (proof?.type === "memory_resolution") return "used memory";
   const type = proof?.type || "proof";
   return type.replaceAll("_", " ");
 }
