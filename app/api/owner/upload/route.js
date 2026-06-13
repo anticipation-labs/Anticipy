@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ENGINE_URL, engineHeaders } from "../../_engine";
@@ -12,6 +12,7 @@ function safeFilename(name) {
 }
 
 export async function POST(request) {
+  let uploadDir = "";
   try {
     const form = await request.formData();
     const file = form.get("file");
@@ -28,7 +29,7 @@ export async function POST(request) {
       );
     }
 
-    const uploadDir = path.join(UPLOAD_ROOT, randomUUID());
+    uploadDir = path.join(UPLOAD_ROOT, randomUUID());
     await mkdir(uploadDir, { recursive: true });
     const filename = safeFilename(file.name);
     const localPath = path.join(uploadDir, filename);
@@ -57,5 +58,9 @@ export async function POST(request) {
       },
       { status: 503 },
     );
+  } finally {
+    if (uploadDir) {
+      await rm(uploadDir, { recursive: true, force: true });
+    }
   }
 }

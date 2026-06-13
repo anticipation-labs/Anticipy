@@ -68,6 +68,27 @@ def main():
         )
         assert rejected.status_code == 403, rejected.text
 
+        old_roots = os.environ.pop("ANTICIPY_UPLOAD_ROOTS", None)
+        old_root = os.environ.get("ANTICIPY_UPLOAD_ROOT")
+        singular_root = Path(tempfile.mkdtemp(prefix="anticipy-owner-upload-single-")).resolve()
+        os.environ["ANTICIPY_UPLOAD_ROOT"] = str(singular_root)
+        try:
+            singular_path = singular_root / "single-root.txt"
+            singular_path.write_text(TRANSCRIPT, encoding="utf-8")
+            singular = client.post(
+                "/owner/ingest-file",
+                json={"path": str(singular_path), "filename": "single-root.txt", "source": "upload"},
+            )
+            assert singular.status_code == 200, singular.text
+            assert not singular_path.exists(), "singular-root staged file should be deleted after ingest"
+        finally:
+            if old_roots is not None:
+                os.environ["ANTICIPY_UPLOAD_ROOTS"] = old_roots
+            if old_root is None:
+                os.environ.pop("ANTICIPY_UPLOAD_ROOT", None)
+            else:
+                os.environ["ANTICIPY_UPLOAD_ROOT"] = old_root
+
         old_cap = os.environ.get("ANTICIPY_MAX_UPLOAD_BYTES")
         try:
             os.environ["ANTICIPY_MAX_UPLOAD_BYTES"] = "4"

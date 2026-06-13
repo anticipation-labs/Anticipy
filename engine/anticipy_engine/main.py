@@ -178,7 +178,7 @@ class ConnectionAuthorizeIn(BaseModel):
 
 
 def _upload_roots() -> list[Path]:
-    raw = os.environ.get("ANTICIPY_UPLOAD_ROOTS") or str(DEFAULT_UPLOAD_ROOT)
+    raw = os.environ.get("ANTICIPY_UPLOAD_ROOTS") or os.environ.get("ANTICIPY_UPLOAD_ROOT") or str(DEFAULT_UPLOAD_ROOT)
     return [Path(p).expanduser().resolve() for p in raw.split(os.pathsep) if p.strip()]
 
 
