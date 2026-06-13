@@ -8,8 +8,9 @@ Each entry: date · slice · the RECEIPT (a real artifact a human can independen
 - **Slice 1 — inference core (catch unspoken commitments):** BLOCKED ON A PRODUCT DECISION (Omar). Two
   engineering attempts (1, 1b) both hit the cardinal-sin wall — see the finding below. Safe baseline restored
   (11/16 catch, 0 false-actions). The fork is Omar's to call.
-- **Slice 6 — browser arm (open-source + our model):** ✅ HARNESS PROVEN (spike). See receipt below. Full
-  engine integration (Python 3.11 boundary) + write prepare-then-handoff still to build.
+- **Slice 6 — browser arm (open-source + our model):** ✅ READ ARM PROVEN + ENGINE-INTEGRATED. Harness +
+  reliability + engine bridge all done & committed. Remaining: WRITE prepare-then-handoff (needs the user's
+  accounts → not autonomously provable) and deeper onboarding-scrape (deferred per research until the core holds).
 - Slices 2–5, 7: NOT STARTED.
 
 ### ✅ Slice 6 spike — open-source browser arm proven · 2026-06-13
@@ -39,6 +40,21 @@ Each entry: date · slice · the RECEIPT (a real artifact a human can independen
   (read-back / second source) before they're written to a profile.**
 - Read-only compliance audited (navigate/extract/evaluate/scroll/benign-click only; no login/write/money);
   own throwaway browser; engine venv untouched. Skeptic: refuted=false (honest failures, not fabrication).
+
+### ✅ Slice 6 step 3 — browser arm is now ENGINE-CALLABLE · 2026-06-13
+**The 3.10 engine can drive the open-source browser arm via a separate-process bridge (browser-use stays in its
+own 3.11 venv) — proven end-to-end, suite stays green.**
+- New: `engine/anticipy_engine/hands/browser_use_runner.py` (3.11 bridge, the ONLY browser_use importer;
+  stdin JSON task → sentinel-tagged JSON result; read-only guard; throwaway browser),
+  `engine/anticipy_engine/hands/browser_use_link.py` (3.10-SAFE engine client — no browser_use import; shells
+  out via `ANTICIPY_BROWSERUSE_PYTHON`; hard subprocess timeout; honest-by-construction; Slice-0 trust grading),
+  `test_browser_use_link_live.py` (live test, NOT in stub suite), `setup_bu_venv.sh` (reproducible venv),
+  `.gitignore` += `engine/.bu-venv/`. Durable 3.11 bridge venv at `engine/.bu-venv` (gitignored).
+- **RECEIPT:** skeptic drove the SAME 3.10 client at two different pages → two different REAL facts
+  (example.com→"Example Domain" 2 steps; iana.org→"Example Domains" 3 steps), curl-confirmed both (decisive
+  falsification — not a mock). Foreman re-verified: `browser_use_link` imports under 3.10 with browser_use NOT
+  loaded; `.bu-venv` gitignored; suite **56/56 green**; engine/.venv (3.10.14) untouched. Read-only, own browser.
+- **Committed.** The browser READ arm is now a real engine capability, isolated from the engine's Python.
 
 ## KEY FINDING — the moat's real wall (2026-06-13)
 **You cannot raise interrupt-catch (decider→ASK) on uncertain commitments without reintroducing the cardinal

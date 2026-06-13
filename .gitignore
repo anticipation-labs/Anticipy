@@ -62,6 +62,10 @@ realdays/holdout/**
 # python (engine)
 .venv/
 **/.venv/
+# durable browser-use bridge venv (3.11; runs the open-source browser arm as a
+# separate process the 3.10 engine shells out to). NEVER commit it.
+engine/.bu-venv/
+**/.bu-venv/
 __pycache__/
 *.pyc
 *.pyo
