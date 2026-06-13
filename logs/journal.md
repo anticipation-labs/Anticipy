@@ -1044,3 +1044,19 @@ catch_worst 0.8333, e2e 0.8301, correct 0.9333, false 0, harm 0, interrupt 1.0/2
 recall_worst 1.0, worst_persona freelancer_nora. `bash scripts/run_suite.sh` stayed
 green at 46/46. P3 live calls/SMS were not attempted because
 `factory/config/owner_phone.confirmed` is still absent.
+
+2026-06-13 lap 20260613T041115Z (groundwork, TARGET v10 browser proof discipline):
+P3 live closure stayed blocked by the absent `factory/config/owner_phone.confirmed`
+marker, and the official v10 owner metric was already saturated at owner_success 1.0,
+so I took the remaining TARGET-approved Stage B groundwork slice. Added
+`engine/anticipy_engine/agent/proof.py`, a target-agnostic repeated-read artifact
+verifier, and routed WebVoyager durable cart confirmation through it without relaxing
+cart proof. Added `engine/scripts/test_agent_proof.py` and included it in
+`scripts/run_suite.sh`; the focused test pins stable success, flicker rejection, and
+fail-closed observer exceptions. Required legacy dev smoke (`20260613T041115Z-pre`)
+stayed stable at owner_success 0.9226, catch 1.0/1.0, e2e 0.6483, correct 0.8475,
+false 0, harm 0. Official v10 owner lane (`ANTICIPY_OWNER_INGEST=1`,
+`factory/personas/dev_v2`, stub, `20260613T041115Z-pre-v10`) stayed at owner_success
+1.0, catch 1.0/1.0, e2e 0.7857, correct 0.9444, false 0, harm 0, interrupt 1.0/2.0,
+recall_worst 1.0, worst_persona caregiver_mina. `bash scripts/run_suite.sh` was
+green at 47/47.

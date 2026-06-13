@@ -27,6 +27,7 @@ from typing import List, Optional
 from ..core.browser_link import BrowserLink
 from ..core.envelopes import new_id
 from ..core.gateway import CHEAP, SMART, ModelGateway
+from .proof import confirm_stable_artifact
 from . import site_hints
 from .handoff import ask_message, classify_wall
 
@@ -1328,18 +1329,14 @@ class WebVoyagerAgent:
         return best_out, best_shot
 
     async def _observe_durable_cart_confirmation(self, url: str, item: str):
-        best_out: dict = {}
-        best_shot = None
-        for read_idx in range(CART_DURABILITY_READS):
-            if read_idx:
-                await asyncio.sleep(CART_DURABILITY_DELAY_SECONDS)
-            out, shot = await self._observe_cart_ready(url, item, fresh_probe=True)
-            if out and (not best_out or _cart_signal_score(out, item) >= _cart_signal_score(best_out, item)):
-                best_out = out
-                best_shot = shot or best_shot
-            if not _cart_page_verified(out, item):
-                return out, shot, False
-        return best_out, best_shot, True
+        proof = await confirm_stable_artifact(
+            lambda: self._observe_cart_ready(url, item, fresh_probe=True),
+            lambda out: _cart_page_verified(out, item),
+            score=lambda out: _cart_signal_score(out, item),
+            reads=CART_DURABILITY_READS,
+            delay_seconds=CART_DURABILITY_DELAY_SECONDS,
+        )
+        return proof.observation, proof.shot, proof.confirmed
 
     async def _plan(self, task: str) -> List[str]:
         if _search_text(task):
