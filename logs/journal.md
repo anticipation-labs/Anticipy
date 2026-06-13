@@ -1060,3 +1060,16 @@ false 0, harm 0. Official v10 owner lane (`ANTICIPY_OWNER_INGEST=1`,
 1.0, catch 1.0/1.0, e2e 0.7857, correct 0.9444, false 0, harm 0, interrupt 1.0/2.0,
 recall_worst 1.0, worst_persona caregiver_mina. `bash scripts/run_suite.sh` was
 green at 47/47.
+
+2026-06-13 lap 20260613T042137Z (groundwork, TARGET v10 no-headroom evidence):
+P3 live closure remained blocked because `factory/config/owner_phone.confirmed` is
+absent, so I did not run live calls or SMS. I made no product-code changes because the
+official v10 owner-success metric has no local headroom. Required legacy dev smoke
+(`20260613T042137Z-pre`) stayed stable at owner_success 0.9226, catch 1.0/1.0, e2e
+0.6483, correct 0.8475, false 0, harm 0. Official v10 owner lane
+(`ANTICIPY_OWNER_INGEST=1`, `factory/personas/dev_v2`, stub,
+`20260613T042137Z-pre-v10`) stayed saturated at owner_success 1.0, catch 1.0/1.0,
+e2e 0.7857, correct 0.9444, false 0, harm 0, interrupt 1.0/2.0, recall_worst 1.0,
+worst_persona caregiver_mina. `bash scripts/run_suite.sh` stayed green at 47/47.
+This lap exists to provide clean evidence for the foreman: P3 needs the confirmed
+phone marker or a retarget/new instrument, not another metric-game code change.

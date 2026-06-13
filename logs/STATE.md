@@ -1,28 +1,20 @@
 # STATE
 
-LATEST LAP 20260613T041115Z (groundwork, TARGET v10 browser proof discipline):
+LATEST LAP 20260613T042137Z (groundwork, TARGET v10 no-headroom evidence):
 P3 closure is still blocked by absent `factory/config/owner_phone.confirmed`, so
-live calls/SMS were not attempted. The official v10 owner metric is saturated
-locally, so this lap used the remaining TARGET-approved Stage B slice: browser
-proof discipline. Added `engine/anticipy_engine/agent/proof.py`, a generic
-multi-read artifact verifier that confirms only when every delayed read still
-verifies the artifact, keeps the best successful read on pass, returns the first
-failed read on rejection, and fails closed on observer exceptions. WebVoyager
-durable cart confirmation now delegates to that helper while keeping the same
-cart-specific verifier and scorer. Added `engine/scripts/test_agent_proof.py`
-and included it in `scripts/run_suite.sh`. Focused proof test passed. Official
-v10 owner-ingest dev_v2 stub lane stayed stable: owner_success 1.0, catch 1.0,
-catch_worst 1.0, e2e 0.7857, correct 0.9444, false 0, harm 0, interrupt
-1.0/2.0, recall_worst 1.0, worst_persona `caregiver_mina`. Legacy dev-bank
-smoke stayed stable: owner_success 0.9226, catch 1.0/1.0, false 0, harm 0,
-interrupt 0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0. Suite is now
-47/47 green. If the owner phone marker appears, attempt P3. If it remains absent,
-the current official v10 owner metric has no local headroom; the next countable
-lap needs a foreman retarget, a new dev_v2 bank, or an ungated phase path. Do not
-retry first-person follow-up note auto-capture or no-clock pickup/dropoff alarm
-adjustment without a new owner/foreman law. Law digest: never fake or shrink the
-goal; judge proves reality; owner success counts proof-bearing actions and real
-waiting asks, not metric games.
+live calls/SMS were not attempted. No product-code changes were made. The
+official v10 owner-ingest dev_v2 stub lane stayed saturated: owner_success 1.0,
+catch 1.0, catch_worst 1.0, e2e 0.7857, correct 0.9444, false 0, harm 0,
+interrupt 1.0/2.0, recall_worst 1.0, worst_persona `caregiver_mina`. Legacy
+dev-bank smoke stayed stable: owner_success 0.9226, catch 1.0/1.0, false 0,
+harm 0, interrupt 0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0. Suite is
+47/47 green. If the owner phone marker appears, attempt P3. If it remains
+absent, the current official v10 owner metric has no local headroom; the next
+countable lap needs a foreman retarget, a new dev_v2 bank, or an ungated phase
+path. Do not retry first-person follow-up note auto-capture or no-clock
+pickup/dropoff alarm adjustment without a new owner/foreman law. Law digest:
+never fake or shrink the goal; judge proves reality; owner success counts
+proof-bearing actions and real waiting asks, not metric games.
 
 CERTIFIED 2026-06-11 (overnight): **P2-brain CLOSED, judge REAL** (lap 20260611T041654Z)
 — holdout catch_rate_worst 1.0 (14/14 tasks, 4 never-seen personas), false 0, harm 0.
