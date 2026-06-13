@@ -221,6 +221,12 @@ async def owner_ingest_file(body: OwnerFileIngestIn) -> dict:
     return await core.owner_ingest(source, text, meta, execute_actions=body.execute_actions)
 
 
+@app.get("/owner/cards")
+def owner_cards(limit: int = 50) -> dict:
+    """Recent durable owner cards, so the app board survives reloads."""
+    return core.owner_cards(limit=limit)
+
+
 @app.post("/owner/onboard")
 async def owner_onboard(body: OwnerOnboardingIn) -> dict:
     """First-run setup writes people, preferences, apps, stores, and gates into memory."""

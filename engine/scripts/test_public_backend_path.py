@@ -108,6 +108,16 @@ def main():
         assert message_record["resolution"] == {"ask_id": ask_id, "approved": True}, message_record
         assert message_record["proof"], message_record
 
+        durable = client.get("/owner/cards?limit=20")
+        assert durable.status_code == 200, durable.text
+        durable_cards = durable.json()["cards"]
+        durable_message = next(c for c in durable_cards if c["id"] == message["id"])
+        assert durable_message["status"] == "done", durable_message
+        assert durable_message["execution"]["goal_state"] == "done", durable_message
+        assert durable_message["execution"]["ask_id"] is None, durable_message
+        assert any(p["type"] == "resolution" and p["decision"] == "approved"
+                   for p in durable_message["proof"]), durable_message
+
         still_pending = client.get("/pending").json()["pending"]
         assert all(p["ask_id"] != ask_id for p in still_pending), still_pending
 

@@ -145,10 +145,11 @@ export default function Home() {
   const unmatchedPending = pending.filter((ask) => !matchedPendingIds.has(ask.ask_id));
 
   async function loadStatus() {
-    const [health, pendingRes, glassbox] = await Promise.allSettled([
+    const [health, pendingRes, glassbox, durableCards] = await Promise.allSettled([
       fetch("/api/health", { cache: "no-store" }).then((r) => r.json().then((data) => ({ ok: r.ok, data }))),
       fetch("/api/pending", { cache: "no-store" }).then((r) => r.json()),
       fetch("/api/glassbox?limit=20", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/owner/cards?limit=50", { cache: "no-store" }).then((r) => r.json()),
     ]);
     if (health.status === "fulfilled" && health.value.ok) {
       setEngine({ ok: true, label: health.value.data.service || "engine online" });
@@ -157,6 +158,14 @@ export default function Home() {
     }
     if (pendingRes.status === "fulfilled") setPending(pendingRes.value.pending || []);
     if (glassbox.status === "fulfilled") setEvents(glassbox.value.entries || []);
+    if (durableCards.status === "fulfilled") {
+      const loadedCards = durableCards.value.cards || [];
+      setCards((current) => {
+        if (!current.length) return loadedCards;
+        const loadedById = new Map(loadedCards.map((card) => [card.id, card]));
+        return current.map((card) => loadedById.get(card.id) || card);
+      });
+    }
   }
 
   useEffect(() => {

@@ -516,6 +516,48 @@ class ControlCore:
                  "category": p.get("category", ""), "goal_id": p["goal_id"]}
                 for aid, p in self.proactive.pending.items()]
 
+    def owner_cards(self, limit: int = 50) -> dict:
+        """Return recent durable owner cards for the app board.
+
+        The UI is allowed to reload or reconnect without losing the visible work
+        surface. The source of truth is the card record written beside each goal,
+        not React state from the last ingest response.
+        """
+        cards_dir = self.data_dir / "owner_cards"
+        if not cards_dir.is_dir():
+            return {"cards": [], "count": 0}
+        cards = []
+        paths = sorted(cards_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for path in paths[:max(0, limit)]:
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            card = record.get("owner_card") or {}
+            if not isinstance(card, dict):
+                continue
+            state = record.get("state") or card.get("status") or "open"
+            card = {**card, "status": state}
+            execution = card.get("execution")
+            if isinstance(execution, dict):
+                card["execution"] = {
+                    **execution,
+                    "goal_state": state,
+                    "ask_id": execution.get("ask_id") if state == "waiting" else None,
+                }
+            resolution = record.get("resolution")
+            if isinstance(resolution, dict):
+                proof = list(card.get("proof") or [])
+                if not any(p.get("type") == "resolution" for p in proof if isinstance(p, dict)):
+                    proof.append({
+                        "type": "resolution",
+                        "decision": "approved" if resolution.get("approved") else "declined",
+                        "goal_state": state,
+                    })
+                card["proof"] = proof
+            cards.append(card)
+        return {"cards": cards, "count": len(cards)}
+
     def _find_card_record(self, goal_id: str) -> dict | None:
         """Scan the durable owner card records for one whose execution targeted
         goal_id (ledger F18 fallback; only runs when the in-memory map missed)."""
