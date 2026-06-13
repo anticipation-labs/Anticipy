@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import hashlib
 from pathlib import Path
 
 from .browser_link import BrowserLink
@@ -71,6 +72,22 @@ def _steps_create_open_loop(steps: list[dict]) -> bool:
 
 def _status_for_open_loop(state: str) -> str:
     return "waiting" if state == "waiting" else "open" if state == "open" else state
+
+
+def _owner_card_dedupe_key(card: OwnerTaskCard) -> str:
+    """Stable replay key for the same owner utterance and shaped action.
+
+    Pressing Go twice, replaying a listening transcript, or uploading the same
+    transcript must not create a second external action or approval ask. Exact
+    source text is deliberately part of the key: a materially different phrasing
+    gets a fresh card, while an accidental replay lands on the durable record.
+    """
+    raw = "|".join([
+        re.sub(r"\s+", " ", (card.source_text or "").strip().lower()),
+        card.route,
+        card.action,
+    ])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
 
 
 _CONNECT_TOOL_BY_IDENTIFIER = {
@@ -476,14 +493,24 @@ class ControlCore:
         cards: list[OwnerTaskCard] = []
         ignored = 0
         for line in observed:
+            preview = self.owner_mode.card_for_line(line, source)
+            if preview is not None:
+                existing = self._existing_owner_card(preview)
+                if existing is not None:
+                    cards.append(existing)
+                    continue
             if execute_actions:
                 card = await self._spine_card(line, source, meta)
             else:
-                card = self.owner_mode.card_for_line(line, source)
+                card = preview
             if card is None:
                 ignored += 1
                 if execute_actions:
                     self._sync_capture_result_status(captured_by_line.get(line.line_no), "ignored")
+                continue
+            existing = self._existing_owner_card(card)
+            if existing is not None:
+                cards.append(existing)
                 continue
             cards.append(card)
             self._persist_card(card, source, execute_actions, captured_by_line.get(line.line_no))
@@ -504,6 +531,7 @@ class ControlCore:
         proof (or a read-back memory write) — a card that never ran stays open."""
         fields = {
             "owner_card_id": card.id,
+            "owner_card_dedupe_key": _owner_card_dedupe_key(card),
             "source": source,
             "line_no": card.line_no,
             "source_text": card.source_text,
@@ -599,6 +627,7 @@ class ControlCore:
         card.proof.append({"type": "card_record", "path": str(record_path)})
         record = {
             "id": card.id,
+            "dedupe_key": _owner_card_dedupe_key(card),
             "intent": card.action,
             "description": f"{card.title} — {card.source_text}",
             "state": state,
@@ -608,6 +637,39 @@ class ControlCore:
         }
         record_path.parent.mkdir(parents=True, exist_ok=True)
         record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+
+    def _existing_owner_card(self, card: OwnerTaskCard) -> OwnerTaskCard | None:
+        """Return the durable card for an accidental replay, before re-executing."""
+        key = _owner_card_dedupe_key(card)
+        cards_dir = self.data_dir / "owner_cards"
+        if not cards_dir.is_dir():
+            return None
+        for path in sorted(cards_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            record_card = record.get("owner_card") if isinstance(record, dict) else None
+            if not isinstance(record_card, dict):
+                continue
+            record_key = record.get("dedupe_key")
+            if not record_key:
+                try:
+                    record_key = _owner_card_dedupe_key(OwnerTaskCard.model_validate(record_card))
+                except Exception:
+                    continue
+            if record_key != key:
+                continue
+            card_data = {**record_card, "status": record.get("state") or record_card.get("status") or "open"}
+            execution = card_data.get("execution")
+            if isinstance(execution, dict):
+                card_data["execution"] = {
+                    **execution,
+                    "goal_state": card_data["status"],
+                    "ask_id": execution.get("ask_id") if card_data["status"] == "waiting" else None,
+                }
+            return OwnerTaskCard.model_validate(card_data)
+        return None
 
     async def owner_onboard(self, body: OwnerOnboardingIn) -> dict:
         """Write first-run onboarding into the same memory ledger the engine uses."""

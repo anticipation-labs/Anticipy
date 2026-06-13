@@ -109,6 +109,25 @@ def main():
         pending_items = pending.json()["pending"]
         assert any(p["ask_id"] == ask_id and p["goal_id"] == message["execution"]["goal_id"]
                    for p in pending_items), pending_items
+        data_dir = Path(os.environ["ANTICIPY_DATA_DIR"])
+        card_count_before_replay = len(list((data_dir / "owner_cards").glob("*.json")))
+        goal_count_before_replay = len(list((data_dir / "goals").glob("*.json")))
+        pending_count_before_replay = len(pending_items)
+        replay = client.post(
+            "/owner/ingest",
+            json={
+                "source": "typed",
+                "text": TRANSCRIPT,
+                "execute_actions": True,
+                "meta": {"test": "public_backend_path_replay"},
+            },
+        )
+        assert replay.status_code == 200, replay.text
+        replay_cards = replay.json()["cards"]
+        assert {c["id"] for c in replay_cards} == {c["id"] for c in cards}, replay_cards
+        assert len(list((data_dir / "owner_cards").glob("*.json"))) == card_count_before_replay
+        assert len(list((data_dir / "goals").glob("*.json"))) == goal_count_before_replay
+        assert len(client.get("/pending").json()["pending"]) == pending_count_before_replay
         protected_loops = client.get("/memory/open-loops?limit=20")
         assert protected_loops.status_code == 200, protected_loops.text
         protected_loop = next(
