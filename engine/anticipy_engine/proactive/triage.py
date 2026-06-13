@@ -37,6 +37,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from ..shared.schedule_change import match_schedule_change_hold
+
 # Actionable VERBS / task intents — general task language. These no longer match
 # "anywhere in the line": they count only clause-initial (imperative) or inside an
 # intent/idiom pattern below. Kept as the canonical vocabulary.
@@ -558,7 +560,8 @@ class Triage:
         """Command shapes (idioms / delegation / clause-initial imperative) count anywhere;
         weak first-person-future cues ("I'll...", "need to...") count only OUTSIDE an open
         sarcasm/conditional frame — inside one they are the vent continuing, not a plan."""
-        if (_CAL_PUT.search(ct) or _CAL_BLOCK.search(ct) or _CART_PUT.search(ct)
+        if (match_schedule_change_hold(clause_raw)
+                or _CAL_PUT.search(ct) or _CAL_BLOCK.search(ct) or _CART_PUT.search(ct)
                 or _LIST_PUT.search(ct) or _REMIND_REQ.search(ct)):
             return True
         if _CAUSATIVE_GET.search(ct) or _DELEGATE.search(ct):
@@ -778,6 +781,8 @@ class Triage:
             if _HEDGE.search(ct) and not _TIME_ANCHOR.search(ct):
                 negative_clauses += 1
                 continue   # hedged non-commitment (a vent shape)
+            if match_schedule_change_hold(clause):
+                return True
             if self._vocative_aside(clause):
                 negative_clauses += 1
                 continue

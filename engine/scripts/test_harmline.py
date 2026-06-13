@@ -84,7 +84,11 @@ BATTERY = [
     ("Make an event on my calendar for the dentist on June 18 from 9:40 AM to 10:10 AM.", False),
     ("Put the inspection Wednesday 9am on my calendar.", False),    # spoken calendar-put
     ("Block 9 to noon for the deposition.", False),                 # hold as a time range
+    ("The vendor call moved from Thursday to Friday at 9, block that so I stop double-booking.", False),
+    ("Ari moved my Tuesday shift to noon, can you block the morning for the clinic ride.", False),
+    ("Pickup moved to 2:20 today, put that somewhere loud.", False),
     ("Update my calendar with the new board call time.", False),    # repair-verb hold
+    ("Get that into my calendar before my brain deletes it.", False),
     # ---- SAFE: prepare a document ----
     ("Prepare a brief for the board meeting.", False),
     ("Put together a summary of the user interviews.", False),

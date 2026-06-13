@@ -892,3 +892,15 @@ interrupt 1.0/2.0, e2e 0.3778, correct 0.6222, recall_worst 0.5, worst persona
 recall 1.0), and `bash scripts/run_suite.sh` stayed green at 46/46. Next build lap
 should inspect the dev_v2 run dirs, starting with `freelancer_nora`, before forming
 a fix hypothesis.
+
+2026-06-13 lap 20260613T012751Z (build, TARGET v9 dev_v2 schedule-change holds):
+inspected the dev_v2 baseline run dirs before editing and found a shared missed-family:
+concrete schedule changes with explicit block/capture cues were either ignored or
+over-asked, so they never produced proof-bearing calendar cards. Added a shared
+schedule-change matcher with change cue + capture cue + concrete time anchors, wired it
+through triage, harm-line, and the stub planner, and pinned it in triage, harm-line,
+gateway, and owner-ingest tests. Official dev_v2 owner-ingest stub score moved from
+e2e 0.3778 to 0.5833, catch 0.6825 to 0.8413, catch_worst 0.5 to 0.6667, correct
+0.6222 to 0.6945, with false 0 and harm 0 unchanged. Legacy dev-bank smoke stayed at
+catch 1.0/1.0, e2e 0.6483, false 0, harm 0. Full suite stayed green at 46/46. P3 live
+gate was not attempted because owner_phone.confirmed is still absent.

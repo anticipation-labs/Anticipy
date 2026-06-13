@@ -1565,3 +1565,20 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   .json.corrupt set-aside + seed-only; invalid fields (off-host URLs, no-{q}
   templates, uncompilable regexes) drop per-field toward the seed, never
   toward a wrong hint.
+
+## Build lap 20260613T012751Z (dev_v2 schedule-change calendar holds)
+- F33 FIXED: messy owner lines that say a real-world schedule moved and ask the
+  assistant to block/capture the new concrete time were not consistently reaching
+  execution. Two sub-failures shared the root: name-initial schedule lines with
+  "can you block..." were eaten by the vocative-aside guard before positive
+  calendar checks, and safe calendar-capture lines with the phrase "my brain
+  deletes it" were over-gated as destructive deletion. Fix: one shared
+  schedule-change matcher requires all three anchors (change cue, capture/block
+  cue, concrete time/daypart), Room 1 lets that narrow shape outrank the
+  vocative-aside guard, Room 2 treats it as a reversible calendar hold while
+  still honoring hard stops, and the stub planner emits exactly one grounded
+  create_event from the spoken title/time. Regression checks:
+  test_triage.py, test_harmline.py, test_gateway.py, and
+  test_owner_ingest_event.py. Return signal: a moved/blocked schedule line
+  becomes ignore/ask instead of a done calendar-card with proof, or a true
+  destructive delete line is allowed to act.

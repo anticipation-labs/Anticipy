@@ -93,6 +93,18 @@ async def main() -> None:
     plan9 = json.loads(await gw2.think(
         "Plan: Remind me tomorrow at 8am to block 9 to 10 for the gym.", tier=SMART, caller="plan"))
     assert [s["intent"] for s in plan9["steps"]] == ["write_memory"], plan9  # the reminder hold still wins
+    plan10 = json.loads(await gw2.think(
+        "Plan the goal into ordered steps. ...\nGOAL: The vendor call moved from Thursday "
+        "to Friday at 9, block that so I stop double-booking.", tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan10["steps"]] == ["create_event"], plan10
+    assert plan10["steps"][0]["args"]["when"] == "Friday at 9", plan10
+    assert plan10["steps"][0]["args"]["title"] == "vendor call", plan10
+    plan11 = json.loads(await gw2.think(
+        "Plan the goal into ordered steps. ...\nGOAL: Ari moved my Tuesday shift to noon, "
+        "can you block the morning for the clinic ride.", tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan11["steps"]] == ["create_event"], plan11
+    assert plan11["steps"][0]["args"]["when"] == "Tuesday morning", plan11
+    assert plan11["steps"][0]["args"]["title"] == "clinic ride", plan11
 
     print("PASS piece 3: model gateway")
     print("  plan intents:", intents)

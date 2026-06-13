@@ -38,6 +38,8 @@ STREAM = [
     # --- spoken command shapes (lap 20260610T062952Z: every dev-bank miss was one of these) ---
     ("Put the vendor walkthrough Wednesday 9am on my calendar.", True),   # calendar-put idiom
     ("Block 10 to noon for the deposition prep.", True),                  # block <time> to <time>
+    ("The vendor call moved from Thursday to Friday at 9, block that so I stop double-booking.", True),
+    ("Ari moved my Tuesday shift to noon, can you block the morning for the clinic ride.", True),
     ("That goes on the calendar now.", True),                            # calendar-put, 3rd person
     ("Update my calendar so I don't double-book.", True),                # repair-verb imperative
     ("Someone needs to chase the unpaid invoice.", True),                # delegation

@@ -16,7 +16,11 @@ TARGET v9 resumed the factory on Codex with the harder dev_v2 owner-ingest instr
 first local baseline lap 20260613T011932Z-pre measured catch 0.6825, catch_worst 0.5,
 false 0, harm 0, interrupt 1.0/2.0, e2e 0.3778, correct 0.6222, recall_worst 0.5,
 worst_persona freelancer_nora. Suite stayed 46/46 green. P3 live gate was not attempted
-because `factory/config/owner_phone.confirmed` is still absent.
+because `factory/config/owner_phone.confirmed` is still absent. First build lap on v2
+closed F33 (schedule-change calendar holds) and moved the official local stub score
+to catch 0.8413, catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.5833,
+correct 0.6945, recall_worst 0.5, worst_persona freelancer_nora; suite stayed 46/46
+green and legacy dev stayed at ratchet bests.
 
 OWNER DIRECTIVE 2026-06-10: the immediate product priority is the Owner Action Engine,
 not another narrow loop around one brain metric. Durable directive:
@@ -40,7 +44,7 @@ door are the NEXT plan; pendant and iPhone after that. autopilot/ remains read-o
 its LESSONS.md still binds.
 
 ## The Factory (how work happens now)
-- Steering: `factory/TARGET.md` (foreman-owned, currently v2 / phase P1-closed-loop).
+- Steering: `factory/TARGET.md` (foreman-owned, currently v9 / phase P3-voice).
 - Phases and gates: `factory/PHASES.yaml`, gates in `factory/gates/`.
 - Nightly: launchd `com.anticipy.factory` starts `factory/bin/loop.sh --nightly` at 22:30,
   stops by 07:00. Manual: `factory/bin/loop.sh --once|--max-laps N`.
@@ -86,6 +90,22 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate) -> TARGET v8 (second K=5 resolved): Stage A = P3 closure on OWNER_PHONE confirm, Stage B = P4-browser groundwork -> TARGET v9: first resumed lap is the countable dev_v2 owner-ingest baseline, then build from the actual dev_v2 gaps
+- SCHEDULE-CHANGE CALENDAR HOLDS NOW COMPLETE IN OWNER LANE (lap
+  20260613T012751Z, build — F33 FIXED, first post-baseline dev_v2 metric
+  movement). The v2 run dirs showed a shared miss-family: concrete schedule
+  changes with explicit block/capture cues were ignored or over-asked, so they
+  never produced proof-bearing calendar cards. Fix = a shared
+  schedule-change matcher requiring a change cue + capture/block cue +
+  concrete time/daypart, wired through Room 1 triage, Room 2 harm-line, and
+  the stub planner. It also narrows the harmless "my brain deletes it" metaphor
+  away from destructive-delete gating while true delete/remove/wipe hard stops
+  still ask. Official TARGET v9 lane (`ANTICIPY_OWNER_INGEST=1`,
+  `factory/personas/dev_v2`, stub): catch 0.6825 -> 0.8413, catch_worst 0.5 ->
+  0.6667, e2e 0.3778 -> 0.5833, correct 0.6222 -> 0.6945, false 0, harm 0,
+  interrupt unchanged 1.0/2.0, recall_worst 0.5. Legacy dev-bank smoke stayed
+  at ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e
+  0.6483, correct 0.8475, recall 1.0). Suite 46/46 green. P3 live gate still
+  waits on `factory/config/owner_phone.confirmed`.
 - THE AGENT'S PER-HOST FACTS ARE DATA, NOT CODE (lap 20260611T135937Z,
   groundwork — TARGET v8 STAGE B item 1; honest DEAD lap by design, disclosed
   in the manifest: e2e is at the F31 ceiling, foreman-owned). webvoyager's

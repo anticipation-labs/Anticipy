@@ -28,6 +28,7 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
+from ..shared.schedule_change import match_schedule_change_hold
 from ..shared.slotbooking import match_slot_choice_booking
 from ..shared.storesite import derive_store_site
 
@@ -85,6 +86,11 @@ _MONEY_GERUND_NOUN = re.compile(
     r"(?:window|windows|deadline|deadlines|cutoff|cutoffs|freeze|cycle|cycles|"
     r"period|periods|process|processes|policy|policies|approval|approvals|paperwork|"
     r"department|departments|office|team|teams|manager|managers|decision|decisions)\b")
+_MEMORY_DELETE_METAPHOR = re.compile(
+    r"\b(?:my|your|his|her|our)?\s*(?:brain|memory|head|mind)\s+"
+    r"(?:deletes?|erases?|wipes?)\s+(?:it|that|this)\b",
+    re.I,
+)
 _SOFT_SEND = re.compile(r"\b(email|emails|emailing|message|messages|messaging|text|texts|texting|"
                         r"reply|replies|replying|respond|responds|responding|tell|tells|telling|"
                         r"ping|pings|pinging)\b")
@@ -183,7 +189,8 @@ class HarmLine:
         # 1) hard detrimental — overrides everything (including the rule-2 scoping below:
         #    "remind me tomorrow at 9 to pay the vendor" stays an ask). The money test
         #    ignores gerund-noun compounds ("the purchasing window closes"), never verbs.
-        hard = _first_match(_MONEY_GERUND_NOUN.sub(" ", t), _HARD)
+        hard_text = _MEMORY_DELETE_METAPHOR.sub(" ", _MONEY_GERUND_NOUN.sub(" ", t))
+        hard = _first_match(hard_text, _HARD)
         if hard is not None:
             return HarmVerdict(True, hard, f"detrimental:{hard} -> ask before acting")
         # 2) hard send (send/forward/dm) — binding, gray via memory. Two SCOPE exceptions
@@ -204,6 +211,9 @@ class HarmLine:
         # 3) reminder / calendar hold — reversible (the future action is re-gated when it fires)
         if _REMINDER.search(t):
             return HarmVerdict(False, "calendar_hold", "reversible:reminder/hold -> act (re-gated on fire)")
+        if match_schedule_change_hold(action_text or "") is not None:
+            return HarmVerdict(False, "calendar_hold",
+                               "reversible:schedule-change hold -> act (re-gated on fire)")
         # 4) soft send WITHOUT a draft frame — binding, gray via memory
         if _SOFT_SEND.search(t) and not _DRAFT_FRAME.search(t):
             return self._assess_send(t, ctx)

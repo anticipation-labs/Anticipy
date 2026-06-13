@@ -15,6 +15,8 @@ import os
 import re
 from typing import List, Optional
 
+from ..shared.schedule_change import match_schedule_change_hold
+
 CHEAP = "cheap"
 SMART = "smart"
 COST = {CHEAP: 0.0005, SMART: 0.02}
@@ -241,6 +243,9 @@ def _grounded_calendar_step(goal_line: str) -> Optional[dict]:
     if slot:
         title = appointment_title(line) or line[:80]
         return {"intent": "create_event", "args": {"title": title, "when": slot}, "risk": "low"}
+    hold = match_schedule_change_hold(line)
+    if hold:
+        return {"intent": "create_event", "args": {"title": hold.title, "when": hold.when}, "risk": "low"}
     m = _BLOCK_RANGE_RE.search(line)
     if m:
         window = re.sub(r"\s+", " ", m.group("window")).strip()
