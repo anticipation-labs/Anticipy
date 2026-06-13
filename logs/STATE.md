@@ -1,19 +1,19 @@
 # STATE
 
-LATEST LAP 20260613T025806Z (build, TARGET v9 dev_v2): seeded possessive-store
-cart resolution moved Mina's no-checkout Lowe's grab-bar card from ask to done
-without adding a new hostname literal or opening the B&H dead end. The kept slice
-reuses existing packaged site-hints seed host stems only: a product memory line
-such as `at Lowe's` resolves to `lowes.com` only because that host is already in
-the seed; unseeded possessives and B&H remain non-derivable. It also closes F43:
-apostrophes in possessives no longer masquerade as product quotes, current-command
-echoes no longer authorize cart acts, and command-tail fragments are rejected as
-item identity. Official TARGET v9 lane (`ANTICIPY_OWNER_INGEST=1`,
-`factory/personas/dev_v2`, stub) moved e2e 0.7579 -> 0.8135 and correct 0.8611
--> 0.9167; catch 0.8889, catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0,
-recall_worst 0.5, worst_persona `freelancer_nora`. Legacy dev-bank smoke stayed
-at catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483, correct
-0.8475, recall 1.0. Suite stayed 46/46 green. P3 live gate still waits on
+LATEST LAP 20260613T031441Z (build, TARGET v9 dev_v2): the pre-registered
+first-person follow-up-note auto-capture hypothesis was rejected by official
+dev_v2 scoring. The first attempt moved Nora's follow-up note to act and produced
+`false_action_count=1`, so that matcher and proof test were removed. The kept
+slice closes F44 only: Room 2's generic reversible `add ... cart` / `put ... cart`
+rule now refuses clauses with a nearby `note`, preventing note-bearing follow-up
+language from becoming an ungrounded cart action. F45 records that first-person
+follow-up note auto-capture remains a do-not-retry dead end without a new product
+law. Official TARGET v9 lane (`ANTICIPY_OWNER_INGEST=1`,
+`factory/personas/dev_v2`, stub) stayed catch 0.8889, catch_worst 0.6667, e2e
+0.8135, correct 0.9167, false 0, harm 0, interrupt 1.0/2.0, recall_worst 0.5,
+worst_persona `freelancer_nora`. Legacy dev-bank smoke stayed at catch 1.0/1.0,
+false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0.
+Suite stayed 46/46 green. P3 live gate still waits on
 `factory/config/owner_phone.confirmed`.
 
 CERTIFIED 2026-06-11 (overnight): **P2-brain CLOSED, judge REAL** (lap 20260611T041654Z)

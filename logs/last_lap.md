@@ -1,31 +1,28 @@
-# Last lap: 20260613T025806Z (build - seeded possessive-store cart resolution)
+# Last lap: 20260613T031441Z (build - note-bearing cart false-action guard)
 
 ## What changed
-- Added seed-backed possessive store derivation: a product-shaped memory line
-  like `at Lowe's` now resolves only when the normalized host stem already exists
-  in the packaged `site_hints_seed.json`. This adds no new host literal and does
-  not open the B&H path.
-- Kept Room 2 and the deterministic browser planner aligned: no-checkout cart
-  tasks can act only when prior memory resolves a product and site; current
-  command echoes no longer authorize themselves.
-- Fixed product item extraction bugs exposed by this slice: ASCII apostrophes in
-  possessives are not treated as quote delimiters, and command-tail fragments are
-  rejected as memory item identity.
-- Added regression coverage in `test_storesite.py`, `test_harmline.py`,
-  `test_orchestrator.py`, and `test_owner_ingest_event.py`.
-- Logged F43 in `logs/factory/FAILURE_MODES.md`.
+- Pre-registered and tried a narrow first-person follow-up-note auto-capture
+  hypothesis. Official dev_v2 scoring returned `false_action_count=1`, so the
+  matcher and owner-ingest proof test were removed before the kept run.
+- Kept only the failure-mode fix found during focused testing: Room 2's generic
+  reversible `add ... cart` / `put ... cart` regex now refuses clauses with a
+  nearby `note`, so note-bearing follow-up lines cannot become ungrounded cart
+  actions by falling through to the cart rule.
+- Added the regression to `test_harmline.py`.
+- Logged F44 fixed and F45 avoided in `logs/factory/FAILURE_MODES.md`.
 
 ## Eval numbers seen
 - Official TARGET v9 lane: `ANTICIPY_OWNER_INGEST=1`, bank
-  `factory/personas/dev_v2`, tier `stub`, lap `20260613T025806Z-pre`.
-- dev_v2 score: catch 0.8889, catch_worst 0.6667, false 0, harm 0, interrupt
-  1.0/2.0, e2e 0.8135, correct 0.9167, recall_worst 0.5, worst_persona
-  `freelancer_nora`.
-- Previous kept score from lap `20260613T023948Z-pre`: catch 0.8889,
-  catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.7579,
-  correct 0.8611, recall_worst 0.5.
+  `factory/personas/dev_v2`, tier `stub`, lap `20260613T031441Z-pre`.
+- First attempt score, rejected and removed: false 1 on `freelancer_nora`.
+- Final dev_v2 score: catch 0.8889, catch_worst 0.6667, false 0, harm 0,
+  interrupt 1.0/2.0, e2e 0.8135, correct 0.9167, recall_worst 0.5,
+  worst_persona `freelancer_nora`.
+- Previous kept score from lap `20260613T025806Z-pre`: catch 0.8889,
+  catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.8135,
+  correct 0.9167, recall_worst 0.5.
 - Legacy contract smoke, bank `factory/personas/dev`, lap
-  `20260613T025806Z-pre-dev`: catch 1.0/1.0, false 0, harm 0, interrupt
+  `20260613T031441Z-pre-dev`: catch 1.0/1.0, false 0, harm 0, interrupt
   0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0.
 - `bash scripts/run_suite.sh`: 46/46 GREEN.
 
@@ -34,8 +31,8 @@
   are still banned and were not attempted.
 
 ## What's next
-- Remaining official v2 floor is still `freelancer_nora`. The B&H cart line remains
-  non-derivable and should not be forced by a new hostname literal or recipe.
-- Nora's invoice draft ask would improve catch but lower the current e2e ratio, so
-  do not spend a primary-metric build lap on that unless the foreman changes the
-  metric or pairs it with an e2e-positive completion.
+- Do not retry first-person follow-up note auto-capture without a new product law;
+  the stricter explicit-note hypothesis still scored as a false action.
+- Remaining official v2 floor is still `freelancer_nora`. Avoid the B&H cart path
+  unless memory resolves a derivable store without adding a new hostname literal or
+  recipe.

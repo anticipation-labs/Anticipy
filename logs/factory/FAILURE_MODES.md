@@ -1685,3 +1685,23 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   context prepositions are rejected, and Room 2 does not let current-command echoes
   authorize cart-only acts. Regression checks: `test_storesite.py`,
   `test_harmline.py`, `test_orchestrator.py`, and `test_owner_ingest_event.py`.
+
+## Build lap 20260613T031441Z (note-bearing cart false-action guard)
+- F44 FIXED: a note-bearing clause can fall through into Room 2's broad reversible
+  `add ... cart` regex after a narrower note-capture hypothesis rejects it. The
+  concrete risk is a line shaped as adding a note to a follow-up plus "cart it":
+  the requested object is the note, not a safe cart mutation, and treating it as
+  cart would silently act on an ungrounded browser task. Fix: the generic
+  reversible cart regex now refuses `add`/`put` clauses with a nearby `note`
+  before `cart`, so they fall through to fail-safe ask unless another explicit
+  safe rule owns them. Regression check: `test_harmline.py` pins the note-plus-cart
+  shape as detrimental while keeping ordinary safe cart examples green.
+- F45 AVOIDED/DO-NOT-RETRY: the explicit-note-object retry of F40 still fails the
+  official product boundary. A first-person follow-up note line with an explicit
+  note object and no send/money/delete/cart tail moved to act in the first attempt,
+  but official dev_v2 scoring returned `false_action_count=1`. The matcher and
+  owner-ingest proof test were removed before the kept run. Do not retry
+  first-person follow-up note auto-capture again without a new owner/foreman law;
+  regression check remains official dev_v2 owner-ingest score with
+  `false_action_count==0`, plus `test_harmline.py` keeping that shape on the ask
+  side.

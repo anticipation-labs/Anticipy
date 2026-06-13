@@ -975,3 +975,17 @@ catch stayed 0.8889, false stayed 0, harm stayed 0, interrupt stayed 1.0/2.0, an
 recall_worst stayed 0.5. Legacy dev-bank smoke stayed at catch 1.0/1.0, e2e 0.6483,
 false 0, harm 0. `bash scripts/run_suite.sh` stayed green at 46/46. P3 live gate was
 not attempted because `factory/config/owner_phone.confirmed` is still absent.
+
+2026-06-13 lap 20260613T031441Z (build, TARGET v9 dev_v2 note-bearing cart guard):
+inspected Nora's latest dev_v2 run and pre-registered a narrow follow-up-note hypothesis.
+The hypothesis was false: acting on the first-person follow-up note produced official
+dev_v2 `false_action_count=1`, so that matcher and proof test were removed. The kept
+slice is the failure found during the focused test: a note-bearing line with an attached
+cart tail could fall through into the broad reversible `add ... cart` rule. Room 2 now
+refuses add/put-cart clauses with nearby `note`, and `test_harmline.py` pins that
+guard while ordinary cart examples still act. Official dev_v2 owner-ingest final score
+was unchanged at catch 0.8889, catch_worst 0.6667, e2e 0.8135, correct 0.9167, false
+0, harm 0, interrupt 1.0/2.0, recall_worst 0.5, worst_persona freelancer_nora. Legacy
+dev-bank smoke stayed catch 1.0/1.0, e2e 0.6483, false 0, harm 0. `bash
+scripts/run_suite.sh` stayed green at 46/46. P3 live gate was not attempted because
+`factory/config/owner_phone.confirmed` is still absent.

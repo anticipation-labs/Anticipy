@@ -156,7 +156,8 @@ _REVERSIBLE: List[Tuple[str, str]] = [
     ("research", r"\b(research|look up|looks up|looking up|look into|find|finds|finding|find out|"
                  r"check(?:s|ing)?(?!\s+with\b)\b|read up|search|searches|searching|browse|browses|"
                  r"compare|compares|summari[sz]e|review|reviews|gather)\b"),
-    ("cart", r"\badd\b.*\bcart\b|\bput\b.*\bcart\b"),   # add/put <item> to/in (amazon) cart -> reversible
+    ("cart", r"\badd\b(?![^.;!?]{0,80}\bnote\b)[^.;!?]*\bcart\b"
+             r"|\bput\b(?![^.;!?]{0,80}\bnote\b)[^.;!?]*\bcart\b"),   # add/put <item> to/in (amazon) cart -> reversible
     # natural phrasing: allow filler between the verb and the noun ("book us a table", "set up a
     # quick sync", "prepare a short brief"). Detrimental is checked FIRST, so a paid/binding action
     # can never reach here -> this only moves genuinely-reversible asks to act.

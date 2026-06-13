@@ -70,6 +70,7 @@ BATTERY = [
     ("Add a note to tell customers candle restock is Friday, not today.", False),
     ("I should add the packaging mockup note to the follow-up so it does not vanish.", True),
     ("Add a note to pay the vendor tomorrow.", True),
+    ("I should add the tripod note to the B&H follow-up and cart it.", True),
     # ---- SAFE: add-to-cart (NOT buy) ----
     ("Add the desk to my Amazon cart.", False),
     ("Put the noise-cancelling headphones in the cart.", False),
