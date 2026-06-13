@@ -1,0 +1,5 @@
+{"kind": "profile_fact", "text": "Ben's after-school pickup is normally 4:45pm at Cedar Arts.", "people": ["Ben"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Marisol at Northstar Foods is waiting on the launch deck; she prefers email.", "people": ["Marisol"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Jules is the designer on the Northstar project and usually sends files in Figma.", "people": ["Jules"], "importance": 0.7}
+{"kind": "history", "text": "Was comparing portable projector stands for the pop-up demo at B&H Photo; liked the Kupo folding stand best.", "importance": 0.8}
+{"kind": "derived", "text": "Nora never wants invoices or client emails sent without approval.", "confidence": 0.9, "importance": 0.8}

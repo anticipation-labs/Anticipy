@@ -1,14 +1,33 @@
-# TARGET v8
-updated: 2026-06-11T14:05:00Z by foreman (second K=5 resolved: e2e instrument at its honest ceiling per F31 AND gate_P3.sh did not exist — both were foreman debts, now paid)
+# TARGET v9
+updated: 2026-06-13T01:30:00Z by foreman (owner resumed; Codex backend active; bank-v2 baseline is the countable first lap)
 north_star: A person's messy day in -> the right tasks caught, done for real, proven; wrong ones never done.
 current_phase: P3-voice
-primary_metric: e2e_completion_rate
+primary_metric: v2_e2e_completion_rate
 guards: false_action_count==0 silent_harm_count==0
 phase_gate: factory/gates/gate_P3.sh
 eval_tier: stub
+eval_bank: factory/personas/dev_v2
 eval_env: ANTICIPY_OWNER_INGEST=1
+metric_alias_from: e2e_completion_rate
 budget_week_usd: 200
 allowed_strategies: |
+  HUMAN TARGET: the app should let a user press Go, type/paste/upload messy life input,
+  and watch the proactive engine create clear task cards, execute safe actions with
+  receipts, ask before human-impacting actions, never spend money, and close loops through
+  UI, memory, browser/API hands, and voice/text. This is the product. Do not drift back
+  into a hidden science project.
+
+  FIRST RESUMED LAP: baseline only, and it must count. The official eval now runs the
+  harder dev_v2 bank through the owner ingest path. The metric alias
+  v2_e2e_completion_rate is a first measurement, so a kept baseline lap resets the
+  treadmill without pretending old-bank progress. Write an honest manifest, make no
+  product-code changes unless a harness bug is found, run suite/eval, commit logs, stop.
+
+  AFTER BASELINE COUNTS: improve the largest dev_v2 gap that blocks the real integrated
+  product: UI/input door -> owner ingest -> card -> execution -> proof -> ask/block
+  receipt. Use actual run dirs, not theory. Do not chase bank wording; fix shared
+  product plumbing, planner grounding, proof write-back, UI wiring, or policy boundaries.
+
   Check factory/config/owner_phone.confirmed for stage:
 
   STAGE A (owner_phone.confirmed EXISTS — Omar confirmed his number): attempt the P3
@@ -20,9 +39,8 @@ allowed_strategies: |
   stub persona pass), set "attempt_gate_close": true, let the gate + judge rule.
   Judge instruction: closure-grade holdout runs use ANTICIPY_OWNER_INGEST=1 (C13).
 
-  STAGE B (no confirm marker): P4-browser groundwork, mock-proven, pre-registered
-  honestly as instrument-dead (e2e is at the F31 ceiling — foreman-owned; do NOT
-  chase sub-epsilon flips or invent stores for fenced acts):
+  STAGE B (no confirm marker): keep building the integrated owner product against dev_v2;
+  browser groundwork is only valuable when it moves card execution/proof on messy input:
   1. agent/site_hints.py: per-host hints (search/cart/product URL shapes) as JSON in
      the data dir; one-time export from webvoyager's host-literal tables; successful
      runs write learned hints back. Then DELETE the host literals from agent code —
@@ -46,6 +64,11 @@ banned_work: |
   self-owned, labeled, reversible, cleaned up. NEVER edit or commit while
   factory/.lock exists (applies to every actor).
 notes: |
+  v9 (foreman, 2026-06-13T01:30Z): Omar approved resumption. Claude credits are not
+  available, so FACTORY_AGENT defaults to Codex. The first resumed lap is steered to a
+  bank-v2 baseline measurement, not live phone and not dead-by-design P4. eval_bank and
+  metric_alias_from are now honored by verify_gate/scoreboard. Once baseline counts, the
+  treadmill has honest headroom again.
   v8.1 (foreman, 2026-06-11T14:45Z): treadmill sits at 5+ and ONLY metric movement
   resets it — so the FIRST lap after any resume must be one that can count: a bank-v2
   baseline measurement (first-measurement counts) or a Stage A P3 closure attempt.

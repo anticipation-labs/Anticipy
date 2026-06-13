@@ -1,0 +1,7 @@
+{
+  "id": "shopkeeper_eli",
+  "tz": "America/Denver",
+  "occupation": "small gift-shop owner handling staff, suppliers, and family errands",
+  "people": ["employee Rae", "supplier Mateo", "daughter Lila", "landlord June", "neighbor Tess"],
+  "style": "chatty, practical, sarcastic about retail chaos"
+}

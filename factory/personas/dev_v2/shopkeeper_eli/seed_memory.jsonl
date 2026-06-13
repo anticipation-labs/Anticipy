@@ -1,0 +1,5 @@
+{"kind": "profile_fact", "text": "Rae normally opens the shop on Wednesdays.", "people": ["Rae"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Mateo supplies the handmade candles and responds fastest by text.", "people": ["Mateo"], "importance": 0.7}
+{"kind": "profile_fact", "text": "Lila's school pickup is normally 3:05pm.", "people": ["Lila"], "importance": 0.8}
+{"kind": "history", "text": "Was comparing kraft paper shopping bags at Uline; liked the 8x4x10 recycled kraft bags.", "importance": 0.8}
+{"kind": "open_loop", "text": "Renew the sidewalk sign permit before the end of the month.", "status": "open", "fields": {"task": "renew sidewalk sign permit"}, "importance": 0.7}

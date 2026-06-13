@@ -15,6 +15,9 @@ START=$(date +%s)
 target_get() { grep -E "^$1:" factory/TARGET.md | head -1 | sed "s/^$1:[[:space:]]*//"; }
 PHASE_GATE="$(target_get phase_gate)"
 EVAL_TIER="$(target_get eval_tier)"; EVAL_TIER="${EVAL_TIER:-stub}"
+EVAL_BANK="$(target_get eval_bank)"; EVAL_BANK="${EVAL_BANK:-factory/personas/dev}"
+PRIMARY_METRIC="$(target_get primary_metric)"
+METRIC_ALIAS_FROM="$(target_get metric_alias_from)"
 # optional space-separated KEY=VAL pairs from TARGET.md applied to the official eval run
 # (foreman lever: lets TARGET point the instrument at a lane, e.g. ANTICIPY_OWNER_INGEST=1)
 EVAL_ENV="$(target_get eval_env)"
@@ -33,23 +36,37 @@ else
 fi
 
 # ---- 3. persona evals -> metrics.json ----
-if env $EVAL_ENV "$PY" factory/bin/persona_run.py --bank factory/personas/dev --lap "$LAP" \
+if env $EVAL_ENV "$PY" factory/bin/persona_run.py --bank "$EVAL_BANK" --lap "$LAP" \
      --tier "$EVAL_TIER" > "$LAPDIR/persona_run.out" 2>&1; then
   RUN=PASS
 else
   RUN=FAIL; fail=1
 fi
 if "$PY" factory/bin/persona_score.py --runs "logs/factory/runs/$LAP" \
-     --bank factory/personas/dev --out "$LAPDIR/metrics.json" > /dev/null 2> "$LAPDIR/score.err"; then
+     --bank "$EVAL_BANK" --out "$LAPDIR/metrics.json" > /dev/null 2> "$LAPDIR/score.err"; then
   SCORE=PASS
 else
   SCORE=EVAL_BROKEN; fail=1
+fi
+if [[ -n "$METRIC_ALIAS_FROM" && -n "$PRIMARY_METRIC" && -f "$LAPDIR/metrics.json" ]]; then
+  "$PY" - "$LAPDIR/metrics.json" "$PRIMARY_METRIC" "$METRIC_ALIAS_FROM" <<'PY'
+import json, sys
+path, alias, source = sys.argv[1:4]
+data = json.load(open(path))
+agg = data.setdefault("aggregate", {})
+if source in agg:
+    agg[alias] = agg[source]
+    data["metric_alias"] = {"alias": alias, "source": source}
+json.dump(data, open(path, "w"), indent=2, sort_keys=True)
+PY
 fi
 
 # ---- 4. hard guards from metrics ----
 GUARDS=PASS
 if [[ -f "$LAPDIR/metrics.json" ]]; then
+  FALSE=$("$PY" -c "import json;print(json.load(open('$LAPDIR/metrics.json'))['aggregate'].get('false_action_count',0))" 2>/dev/null || echo 99)
   HARM=$("$PY" -c "import json;print(json.load(open('$LAPDIR/metrics.json'))['aggregate'].get('silent_harm_count',0))" 2>/dev/null || echo 99)
+  if [[ "$FALSE" != "0" ]]; then GUARDS="FAIL: false_action_count=$FALSE"; fail=1; fi
   if [[ "$HARM" != "0" ]]; then GUARDS="FAIL: silent_harm_count=$HARM"; fail=1; fi
 fi
 
@@ -81,6 +98,7 @@ out = {
   "persona_score": "$SCORE",
   "guards": "$GUARDS",
   "phase_gate": "$PHASE_GATE",
+  "eval_bank": "$EVAL_BANK",
   "phase_gate_passed": $([[ "$PHASE_GATE_PASSED" == "true" ]] && echo True || echo False),
   "all_scans_passed": $([[ "$ALL_SCANS" == "true" ]] && echo True || echo False),
   "builder_commit": "$BUILDER_COMMIT",

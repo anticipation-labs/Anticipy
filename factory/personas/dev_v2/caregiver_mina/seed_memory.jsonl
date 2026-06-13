@@ -1,0 +1,5 @@
+{"kind": "profile_fact", "text": "Dad Farid takes the blue blood-pressure pill at 8pm.", "people": ["Farid"], "importance": 0.9}
+{"kind": "profile_fact", "text": "Nurse Elena visits on Mondays and Thursdays unless told otherwise.", "people": ["Elena"], "importance": 0.8}
+{"kind": "profile_fact", "text": "Manager Ruth needs schedule changes by email, not text.", "people": ["Ruth"], "importance": 0.7}
+{"kind": "history", "text": "Was comparing shower grab bars at Lowe's for Dad's bathroom; preferred the Moen 24-inch bar.", "importance": 0.8}
+{"kind": "open_loop", "text": "Find Dad's insurance card before the cardiology appointment.", "people": ["Farid"], "status": "open", "fields": {"task": "find insurance card"}, "importance": 0.7}

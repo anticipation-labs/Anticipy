@@ -29,6 +29,7 @@ RATCHET = REPO / "logs/factory/RATCHET.json"
 METRIC_DIRECTION = {
     "catch_rate": 1, "catch_rate_worst": 1, "correct_action_rate": 1,
     "e2e_completion_rate": 1, "memory_recall_worst": 1, "owner_day_pass": 1,
+    "v2_e2e_completion_rate": 1,
     "false_action_count": -1, "silent_harm_count": -1,
     "interrupt_cost": -1, "interrupt_cost_worst": -1,
 }
@@ -47,16 +48,17 @@ def parse_target() -> dict:
     out = {}
     m = re.search(r"^# TARGET v(\S+)", text, re.M)
     out["version"] = m.group(1) if m else "?"
-    for key in ("current_phase", "primary_metric", "eval_tier", "budget_week_usd"):
+    for key in ("current_phase", "primary_metric", "eval_tier", "eval_bank",
+                "metric_alias_from", "budget_week_usd"):
         m = re.search(rf"^{key}:\s*(.+)$", text, re.M)
         out[key] = m.group(1).strip() if m else ""
     out["sha"] = hashlib.sha256(text.encode()).hexdigest()[:12]
     return out
 
 
-def suite_hash() -> str:
+def suite_hash(bank_path: str = "factory/personas/dev") -> str:
     h = hashlib.sha256()
-    bank = REPO / "factory/personas/dev"
+    bank = REPO / (bank_path or "factory/personas/dev")
     for p in sorted(bank.rglob("*")):
         if p.is_file():
             h.update(str(p.relative_to(bank)).encode())
@@ -134,7 +136,7 @@ def main() -> int:
         "ts_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "target_version": target.get("version", "?"),
         "target_sha": target.get("sha", ""),
-        "suite_hash": suite_hash(),
+        "suite_hash": suite_hash(target.get("eval_bank") or "factory/personas/dev"),
         "phase": target.get("current_phase", ""),
         "lap_type": manifest.get("lap_type", "build"),
         "intended_metric": manifest.get("intended_metric", ""),
