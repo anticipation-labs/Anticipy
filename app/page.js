@@ -1030,19 +1030,41 @@ export default function Home() {
               <span className="status-strip">{remembered.length} remembered</span>
             </div>
             <div className="loop-list">
-              {remembered.length ? remembered.map((row, index) => (
+              {remembered.length ? remembered.map((row, index) => {
+                // DISPLAY-ONLY inference: the inferred task is shown ABOVE the raw line.
+                // The raw line stays visible as the ground truth the owner can check.
+                const inf = row.inferred;
+                const hasTask = inf && inf.task;
+                const conf = inf && inf.confidence;
+                return (
                 <article className="card" key={row.id || `${row.ts || "remembered"}-${index}`}>
                   <div className="card-head">
-                    <h4>{row.text}</h4>
+                    {hasTask
+                      ? <h4 className="inferred-task">{inf.task}</h4>
+                      : <h4>{row.text}</h4>}
                     {row.ts ? <span className="status-strip">{formatRememberTs(row.ts)}</span> : null}
                   </div>
+                  {hasTask ? (
+                    <p className="inferred-raw" title="What you actually said (ground truth)">
+                      <span className="inferred-raw-label">you said</span> {row.text}
+                    </p>
+                  ) : null}
+                  {(conf || (inf && inf.due_phrase) || (inf && inf.people && inf.people.length)) ? (
+                    <div className="inferred-meta">
+                      {conf ? <span className={`conf conf-${conf}`}>{conf} confidence</span> : null}
+                      {inf && inf.due_phrase ? <span className="conf-due">{inf.due_phrase}</span> : null}
+                      {inf && inf.people && inf.people.length
+                        ? <span className="conf-people">{inf.people.join(", ")}</span> : null}
+                    </div>
+                  ) : null}
                   {(row.source || (row.people && row.people.length)) ? (
                     <div className="loop-meta">
                       {[row.source, (row.people || []).join(", ")].filter(Boolean).join(" / ")}
                     </div>
                   ) : null}
                 </article>
-              )) : <div className="empty">Nothing remembered yet.</div>}
+                );
+              }) : <div className="empty">Nothing remembered yet.</div>}
             </div>
           </section>
 

@@ -93,8 +93,15 @@ actionable open_loops, with NO due/remind/trigger fields, read by NOTHING in the
   forced to evaluate remember rows at **now+100 years fired 0** — the delayed-cardinal-sin vector is closed.
   Suite **57/57 green**. Committed.
 - This is exactly Omar's model: over-catching is now SAFE because a wrongly-remembered vent just sits parked in
-  the review and can never interrupt or fire. The "prepare the action + park for approval" half + the review UI
-  are next; real execution waits on Omar connecting his accounts.
+  the review and can never interrupt or fire.
+
+### ✅ Daily review UI — the remembered list is now a visible owner experience · 2026-06-13
+Read-only "Review — what you said you'd do" in the Next.js app (`app/page.js` + new GET-only proxy
+`app/api/memory/remembered/route.js`). Skeptic proved it LIVE (Playwright DOM read-back + a liveness test: a
+freshly-inserted line appeared in the rendered view immediately — real data, not a fixture). Read-only;
+decision/trigger path untouched; python suite 57/57. Committed (03d79f8). **Next:** infer the structured task
+(deliverable/person/deadline) from each remembered line for the review (the core inference, display-only/safe);
+then the "prepare + execute on approval" half — which needs Omar's accounts to be real, not staging.
 
 ## Honest negatives (reverted; kept so we never repeat them)
 

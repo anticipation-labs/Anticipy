@@ -17,6 +17,7 @@ from ..memory.store import Memory
 from ..shared.schema import MemoryItem
 from .duetime import REMIND_LEAD_S, anchor_from_meta, parse_due
 from .remember import RememberList
+from .review_infer import ReviewEnricher
 
 _FILLER = {"um", "uh", "ok", "okay", "yeah", "yep", "yup", "nope", "no", "yes", "thanks",
            "thank", "hi", "hey", "hello", "bye", "cool", "nice", "sure", "right", "mhm",
@@ -113,6 +114,10 @@ class Capturer:
         # Constructed here so both capture call sites (feed + owner_ingest) write to it
         # through the single capture chokepoint with no control_core change.
         self.remember = remember if remember is not None else RememberList(memory.db)
+        # DISPLAY-ONLY review enrichment cache (a DISTINCT table from remembered_lines;
+        # no due/remind/trigger field, on no background loop). Surfaces the inferred
+        # {task, people, due_phrase, confidence} above the raw line in the daily review.
+        self.review_enricher = ReviewEnricher(memory.db)
 
     def _remember_side_write(self, text: str, source: str,
                              people: List[str], meta: Optional[Dict[str, object]]) -> None:

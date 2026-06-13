@@ -309,8 +309,16 @@ def memory_remembered(limit: int = 50) -> dict:
     commitments"). Strictly read-only: it returns rows from a SEPARATE table that no
     proactive loop, decider, harm-line, or TriggerWatcher reads, and that carries no
     due/remind/trigger field — so surfacing it can never fire an action or interrupt.
-    This endpoint is on NO background loop; it only answers an explicit request."""
-    rows = core.live_memory.capturer.remember.recent(limit)
+    This endpoint is on NO background loop; it only answers an explicit request.
+
+    Each row is enriched with a DISPLAY-ONLY ``inferred`` {task, people, due_phrase,
+    confidence} computed off to the side and CACHED (only un-enriched recent lines are
+    inferred per pull). The enrichment is metadata for the review only: it carries no
+    due_ts/remind_ts/trigger, creates no open_loop, and never reaches the decider /
+    harm-line / TriggerWatcher — the raw line stays the ground truth the owner checks."""
+    cap = core.live_memory.capturer
+    rows = cap.remember.recent(limit)
+    rows = cap.review_enricher.enrich_rows(rows)
     return {"remembered": rows, "count": len(rows)}
 
 

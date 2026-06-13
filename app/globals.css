@@ -564,6 +564,59 @@ button {
   color: var(--ink);
 }
 
+/* DISPLAY-ONLY review inference: the inferred task above the raw "you said" line. */
+.inferred-task {
+  font-weight: 600;
+}
+
+.inferred-raw {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.inferred-raw-label {
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  margin-right: 4px;
+}
+
+.inferred-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inferred-meta span {
+  font-size: 11px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+.inferred-meta .conf-high {
+  border-color: rgba(53, 95, 149, 0.4);
+  color: #355f95;
+}
+
+.inferred-meta .conf-med {
+  border-color: rgba(138, 90, 0, 0.34);
+  color: #8a5a00;
+}
+
+.inferred-meta .conf-low {
+  opacity: 0.75;
+}
+
+.inferred-meta .conf-due {
+  border-color: rgba(138, 90, 0, 0.3);
+  color: #8a5a00;
+}
+
 .outcome {
   border: 1px solid var(--line);
   padding: 4px 7px;
