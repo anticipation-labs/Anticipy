@@ -111,6 +111,13 @@ function receiptText(entry) {
   return entry.summary || entry.message || JSON.stringify(entry.data || entry);
 }
 
+function firedLoopText(item) {
+  const pieces = [item.task || item.text || "loop", item.decision || "checked"];
+  if (item.category) pieces.push(item.category);
+  if (item.ask_id) pieces.push(`ask ${item.ask_id.slice(0, 6)}`);
+  return pieces.join(" / ");
+}
+
 function loopMeta(loop) {
   const fields = loop.fields || {};
   return [fields.route, fields.action, fields.disposition || fields.kind]
@@ -767,8 +774,19 @@ export default function Home() {
               </div>
             </div>
             {tickResult ? (
-              <div className="loop-meta">
-                Proactive scan: {(tickResult.fired || []).length} loop{(tickResult.fired || []).length === 1 ? "" : "s"} fired.
+              <div className="scan-result">
+                <span>
+                  Proactive scan: {(tickResult.fired || []).length} loop{(tickResult.fired || []).length === 1 ? "" : "s"} fired.
+                </span>
+                {(tickResult.fired || []).length ? (
+                  <div className="scan-fired">
+                    {(tickResult.fired || []).map((item, index) => (
+                      <span key={item.loop_id || `${item.task || "loop"}-${index}`}>
+                        {firedLoopText(item)}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div className="loop-list">

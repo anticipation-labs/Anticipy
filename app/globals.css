@@ -629,6 +629,26 @@ button {
   white-space: nowrap;
 }
 
+.scan-result {
+  color: var(--muted);
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.scan-fired {
+  display: grid;
+  gap: 4px;
+}
+
+.scan-fired span {
+  border-left: 2px solid var(--line);
+  color: var(--ink);
+  line-height: 1.35;
+  padding-left: 8px;
+}
+
 .loop-actions {
   display: flex;
   gap: 8px;
