@@ -46,6 +46,7 @@ STREAM = [
     ("Someone needs to chase the unpaid invoice.", True),                # delegation
     ("Get the signed forms over to the front office today.", True),      # causative hand-off
     ("Those wide trail shoes I picked out - put them in the cart.", True),  # cart idiom
+    ("That notebook size I liked at Staples, cart one pack so I can check shipping later, no buying.", True),
     # --- ambient noise (SHOULD drop: filler / greeting / bare observation) ---
     ("um", False), ("ok thanks", False), ("hey", False), ("yeah", False), ("hmm", False),
     ("Cool, sounds good.", False),

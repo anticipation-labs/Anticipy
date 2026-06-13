@@ -1646,3 +1646,30 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   non-imperative note and money-note -> ask; `test_gateway.py` pins exact
   `write_memory`; `test_owner_ingest_event.py` pins full owner card execution
   with proof.
+
+## Build lap 20260613T023948Z (derivable-store cart-only commands)
+- F40 AVOIDED/DO-NOT-RETRY-BROADLY: the first hypothesis expanded note capture
+  from imperative commands to a named-follow-up self-commitment. Official dev_v2
+  scoring returned `false_action_count=1` on Nora's follow-up note and no e2e
+  gain, so the matcher and tests were ripped out before the kept slice. Do not
+  retry non-imperative note capture without a stronger product law and a zero-false
+  eval. Regression check: official dev_v2 owner-ingest score must keep
+  `false_action_count==0`, and `test_harmline.py` must keep non-imperative
+  follow-up note wording on the ask side unless a new law changes it.
+- F41 FIXED: explicit cart-only browser tasks could be shaped as owner cards but
+  still fail to execute when the spoken command used "cart" as a verb and the
+  no-buy/no-checkout phrase was read as a money countermand. The safe product
+  boundary is narrower: act only when memory resolves both a product-shaped item
+  and a derivable store URL; otherwise the line stays ask/ignore and no site is
+  invented. Fix: Room 1 survives verb-style cart clauses, Room 2 strips no-buy
+  language only inside a memory-resolved cart-only action, owner shaping treats
+  `no buying` and `no checkout` as no-purchase bounds, and the deterministic
+  browser resolver handles cart-verb lines plus preferred-item memory. Regression
+  checks: `test_triage.py`, `test_harmline.py`, `test_orchestrator.py`,
+  `test_browser_hand.py`, and `test_owner_ingest_event.py`; official dev_v2
+  owner-ingest must keep false 0 while moving derivable-store cart cards to done.
+- F42 OPS-AVOIDED: a broad `git status --ignored` check printed ignored
+  `.anticipy-data` filenames. It did not print file contents, but it repeated the
+  local-operational-state listing mistake already in `autopilot/LESSONS.md`.
+  Regression check: use plain `git status --short` for staging decisions; never run
+  ignored-status or broad ignored listings in builder laps.

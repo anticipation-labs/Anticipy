@@ -943,3 +943,20 @@ false stayed 0, harm stayed 0, catch stayed 0.8413, interrupt stayed 1.0/2.0, an
 recall_worst stayed 0.5. Legacy dev-bank smoke stayed at catch 1.0/1.0, e2e 0.6483,
 false 0, harm 0. `bash scripts/run_suite.sh` stayed green at 46/46. P3 live gate was
 not attempted because `factory/config/owner_phone.confirmed` is still absent.
+
+2026-06-13 lap 20260613T023948Z (build, TARGET v9 dev_v2 derivable-store cart-only
+commands): inspected the official dev_v2 run dirs before editing. The first
+named-follow-up note hypothesis was wrong: it made Nora's follow-up note act and the
+official scorer returned `false_action_count=1`, so that code and its tests were removed
+and logged as F40. The kept slice fixes a real browser-card execution gap without
+adding store recipes: cart-only commands with explicit no-buy/no-checkout language now
+survive triage and act only when memory resolves both a product-shaped item and a
+derivable store URL; non-derivable stores remain non-act. Official dev_v2 owner-ingest
+stub score moved e2e 0.75 -> 0.7579 and catch 0.8413 -> 0.8889 while false stayed 0,
+harm stayed 0, correct stayed 0.8611, interrupt stayed 1.0/2.0, and recall_worst stayed
+0.5. Legacy dev-bank smoke stayed at catch 1.0/1.0, e2e 0.6483, false 0, harm 0.
+`bash scripts/run_suite.sh` stayed green at 46/46. P3 live gate was not attempted
+because `factory/config/owner_phone.confirmed` is still absent. Ops mistake: a broad
+`git status --ignored` printed ignored `.anticipy-data` filenames; no contents were
+printed, and the repeated lesson plus F42 now ban ignored-status listings in builder
+laps.

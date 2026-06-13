@@ -264,7 +264,8 @@ _CAL_BLOCK = re.compile(
 # "put/add ... in the cart" — spoken cart add.
 _CART_PUT = re.compile(
     r"\b(?:put|add|stick|throw|toss|drop)\b[^.;!?]{0,60}"
-    r"\b(?:in|into|to)\s+(?:my\s+|the\s+)?(?:cart|basket|bag)\b",
+    r"\b(?:in|into|to)\s+(?:my\s+|the\s+)?(?:cart|basket|bag)\b"
+    r"|\bcart\s+(?:one|a|an|the|\d)\b",
     re.I)
 # "put/add/jot ... on the (grocery/shopping/to-do) list", "jot that down" — THE spoken
 # list command. "bucket list" is excluded: putting something on the bucket list is a

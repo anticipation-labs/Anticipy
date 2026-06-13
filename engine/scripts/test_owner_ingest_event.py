@@ -50,6 +50,8 @@ FORGET_HOLD = "Renew the patio permit tomorrow morning before I forget again."
 SLOT_CONTEXT = "Marta texted that she can look at the furnace Tuesday morning."
 SLOT_BOOKING = "Book the Tuesday morning one with Marta before she fills up."
 NOTE_TO_CUSTOMERS = "Add a note to tell customers candle restock is Friday, not today."
+CART_CONTEXT = "Was comparing spiral notebooks at Staples; liked the 5x8 recycled notebook pack."
+CART_DERIVED_NO_BUY = "That notebook size I liked at Staples, cart one pack so I can check shipping later, no buying."
 # F28 requested-action scope: a draft request whose line carries work vocabulary
 # ("supply order", "purchasing window", "ready to send") is NOT money, NOT a send —
 # the pre-gate must not block it, the spine must act, and the plan is the DRAFT
@@ -100,6 +102,8 @@ async def owner_lane_check():
         slot_context = await core.feed("app", SLOT_CONTEXT, {})
         slot_booking = await core.feed("app", SLOT_BOOKING, {})
         note_to_customers = await core.feed("app", NOTE_TO_CUSTOMERS, {})
+        cart_context = await core.feed("app", CART_CONTEXT, {})
+        cart_derived = await core.feed("app", CART_DERIVED_NO_BUY, {})
         draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
@@ -117,7 +121,8 @@ async def owner_lane_check():
 
     # the realday/scorer contract: decision + goal_id + ask_id on every response
     for out in (noise, act, ask, promise, unshaped, schedule_change, forget_hold,
-                slot_context, slot_booking, note_to_customers, draft_order, cart,
+                slot_context, slot_booking, note_to_customers, cart_context,
+                cart_derived, draft_order, cart,
                 money, money_vent, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
@@ -191,6 +196,17 @@ async def owner_lane_check():
     note_steps = [s.get("intent") for s in note_rec["steps"]]
     assert note_steps == ["write_memory"], note_rec
     assert note_rec["steps"][0]["args"] == {"kind": "open_loop", "text": NOTE_TO_CUSTOMERS}, note_rec
+
+    # Cart-only browser tasks can execute only when memory resolves a derivable
+    # store and item. The no-buy phrase is a safety bound, not money intent.
+    assert cart_context["decision"] == "ignore", cart_context
+    assert cart_derived["decision"] == "act", cart_derived
+    cd_rec = _record(tmp, cart_derived["goal_id"])
+    assert cd_rec["state"] == "done" and cd_rec["proof"], cd_rec
+    cd_steps = [s.get("intent") for s in cd_rec["steps"]]
+    assert cd_steps == ["browse_task"], cd_rec
+    assert cd_rec["steps"][0]["args"]["url"] == "https://www.staples.com", cd_rec
+    assert cd_rec["owner_card"]["route"] == "browser", cd_rec
 
     # F28: the draft request acts (no money pre-gate on the noun "order"; no send
     # reading on the purpose tail) and the executed plan is the DRAFT — never a send

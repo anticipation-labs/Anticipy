@@ -1,5 +1,20 @@
 # STATE
 
+LATEST LAP 20260613T023948Z (build, TARGET v9 dev_v2): derivable-store cart-only
+commands now complete in the owner lane without store recipes. The kept slice acts only
+when memory resolves both a product-shaped item and a derivable store URL; non-derivable
+stores like B&H/Lowe's stay non-act, so no site is invented. Official TARGET v9 lane
+(`ANTICIPY_OWNER_INGEST=1`, `factory/personas/dev_v2`, stub) moved e2e 0.75 -> 0.7579
+and catch 0.8413 -> 0.8889; false 0, harm 0, correct 0.8611, interrupt 1.0/2.0,
+recall_worst 0.5, worst_persona `freelancer_nora`. Legacy dev-bank smoke stayed at
+catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483, correct 0.8475,
+recall 1.0. Suite stayed 46/46 green. F40 NEW AVOIDED: a named-follow-up note-capture
+expansion produced `false_action_count=1` and was ripped out; do not retry
+non-imperative note capture without a new product law and zero-false eval. F42
+OPS-AVOIDED: do not run `git status --ignored` or broad ignored listings because they
+print ignored local operational-state filenames. P3 live gate still waits on
+`factory/config/owner_phone.confirmed`.
+
 CERTIFIED 2026-06-11 (overnight): **P2-brain CLOSED, judge REAL** (lap 20260611T041654Z)
 — holdout catch_rate_worst 1.0 (14/14 tasks, 4 never-seen personas), false 0, harm 0.
 Then four kept Stage-B laps: owner lane is ONE BRAIN (F17 closed — every owner line

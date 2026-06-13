@@ -103,6 +103,7 @@ _BROWSER_ACTION_RE = re.compile(
     r"https?://"
     r"|\b(?:on|at|from|using|via)\s+(?:[a-z0-9-]+\.)+[a-z]{2,}\b"
     r"|\b(?:add|put)\b[\w' ,.-]{0,120}\b(?:cart|basket|bag)\b"
+    r"|\bcart\s+(?:one|a|an|the|\d)\b"
     # the spoken anaphor carries modifiers between determiner and head
     # ("that water table thing", "the clamp one") — bounded, never open-ended
     r"|\b(?:get|grab)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:[\w-]+\s+){0,3}(?:thing|one|item|product)\b",
@@ -110,7 +111,9 @@ _BROWSER_ACTION_RE = re.compile(
 )
 _VAGUE_BROWSER_RE = re.compile(
     r"\b(that|the)\s+(?:[\w-]+\s+){0,3}(thing|one|item|product)\b"
-    r"|\b(earlier|last time|before|was looking at|looked at)\b",
+    r"|\b(earlier|last time|before|was looking at|looked at)\b"
+    r"|\bcart\s+(?:one|a|an|the|\d)\b"
+    r"|\b(?:liked|preferred)\b[\w' ,.-]{0,80}\b(?:at|on|from)\s+[A-Z]",
     re.I,
 )
 _URL_IN_TEXT_RE = re.compile(r"https?://[^\s<>\]})\"']+", re.I)
@@ -291,6 +294,12 @@ def _line_item(line: str) -> str:
     if quoted:
         item = _sanitize_item(quoted[-1], site=site)
         return item if 3 <= len(item) <= 160 else ""
+    preferred = re.search(r"\b(?:liked|preferred)\s+(?:the\s+|a\s+|an\s+)?(?P<item>[^.;\n]{3,140})", line, re.I)
+    if preferred:
+        item = _sanitize_item(preferred.group("item"), site=site)
+        item = re.sub(r"\s+\b(?:best|most)\b$", "", item, flags=re.I)
+        if 3 <= len(item) <= 160:
+            return item
     patterns = (
         r"\b(?:looked at|looking at|viewed|found|considered|considering|wanted|shopping for|"
         r"compared|comparing|researched|researching|checked out|checking out)\s+"

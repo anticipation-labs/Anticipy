@@ -170,6 +170,22 @@ async def test_memory_resolved_store_name_plan():
     assert _memory_resolved_browser_step(spoken, storeless) is None
     assert _browser_action_step(spoken, storeless) is None  # never a whole-line dump
 
+    cart_only = "That notebook size I liked at Staples, cart one pack so I can check shipping later, no buying."
+    cart_ctx = {"history": ["Was comparing spiral notebooks at Staples; liked the 5x8 recycled notebook pack."]}
+    step3 = _memory_resolved_browser_step(cart_only, cart_ctx)
+    assert step3 is not None and step3.intent == "browse_task", step3
+    assert step3.args["url"] == "https://www.staples.com", step3.args
+    assert step3.args["memory_resolution"]["item"] == "5x8 recycled notebook pack", step3.args
+    assert "Do not checkout" in step3.args["task"], step3.args
+
+    mixed_brand = {
+        "history": ["Was comparing portable projector stands at B&H Photo; liked the folding stand best."]
+    }
+    assert _memory_resolved_browser_step(
+        "That projector stand thing, put it in the cart if the same one is still at B&H, don't buy it.",
+        mixed_brand,
+    ) is None
+
     # end-to-end: the resolved plan drives the goal to done with proof, zero model calls
     tmp, bus, gw, store, _ = make_env()
     orch = Orchestrator(bus, gw, store, approver=AutoApprover(True),
@@ -182,6 +198,19 @@ async def test_memory_resolved_store_name_plan():
     assert [s.intent for s in goal.steps] == ["browse_task"], goal.steps
     assert goal.state == GoalState.done and goal.steps[0].result.proof, goal.state
     assert len(gw.smart_calls) == 0
+
+    tmp2, bus2, gw2, store2, _ = make_env()
+    orch2 = Orchestrator(bus2, gw2, store2, approver=AutoApprover(True),
+                         memory_context=lambda about: cart_ctx)
+    await bus2.start()
+    try:
+        goal2 = await orch2.start_goal(Goal(intent="cart", description=cart_only))
+    finally:
+        await bus2.stop()
+    assert [s.intent for s in goal2.steps] == ["browse_task"], goal2.steps
+    assert goal2.steps[0].args["url"] == "https://www.staples.com", goal2.steps[0].args
+    assert goal2.state == GoalState.done and goal2.steps[0].result.proof, goal2.state
+    assert len(gw2.smart_calls) == 0
     print("  memory-resolved store name: derived-site browse plan, honest provenance, "
           "storeless stays unplanned, goal done with proof")
 

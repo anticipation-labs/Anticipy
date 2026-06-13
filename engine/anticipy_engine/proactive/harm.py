@@ -87,6 +87,17 @@ _MONEY_GERUND_NOUN = re.compile(
     r"(?:window|windows|deadline|deadlines|cutoff|cutoffs|freeze|cycle|cycles|"
     r"period|periods|process|processes|policy|policies|approval|approvals|paperwork|"
     r"department|departments|office|team|teams|manager|managers|decision|decisions)\b")
+_CART_ONLY_ACTION = re.compile(
+    r"\b(?:add|put|stick|throw|toss|drop)\b[^.;!?]{0,80}\b(?:cart|basket|bag)\b"
+    r"|\bcart\s+(?:one|a|an|the|\d)\b",
+    re.I,
+)
+_NO_PURCHASE_BOUND = re.compile(
+    r"\b(?:don'?t|do not)\s+(?:buy|purchase|checkout|check out|pay|order)\b"
+    r"|\bno\s+(?:buying|purchase|checkout|payment)\b"
+    r"|\bwithout\s+(?:buying|purchasing|checking out|paying)\b",
+    re.I,
+)
 _MEMORY_DELETE_METAPHOR = re.compile(
     r"\b(?:my|your|his|her|our)?\s*(?:brain|memory|head|mind)\s+"
     r"(?:deletes?|erases?|wipes?)\s+(?:it|that|this)\b",
@@ -195,6 +206,8 @@ class HarmLine:
         #    "remind me tomorrow at 9 to pay the vendor" stays an ask). The money test
         #    ignores gerund-noun compounds ("the purchasing window closes"), never verbs.
         hard_text = _MEMORY_DELETE_METAPHOR.sub(" ", _MONEY_GERUND_NOUN.sub(" ", t))
+        if _CART_ONLY_ACTION.search(t) and self._memory_has_cart_target(ctx, t):
+            hard_text = _NO_PURCHASE_BOUND.sub(" ", hard_text)
         hard = _first_match(hard_text, _HARD)
         if hard is not None:
             return HarmVerdict(True, hard, f"detrimental:{hard} -> ask before acting")
@@ -233,7 +246,8 @@ class HarmLine:
         # 5) draft / prepare (incl. drafting a message) — reversible
         if _DRAFT_FRAME.search(t):
             return HarmVerdict(False, "draft", "reversible:draft (not send) -> act")
-        if _VAGUE_CART.search(t) and self._memory_has_cart_target(ctx, t):
+        if ((_VAGUE_CART.search(t) or _CART_ONLY_ACTION.search(t))
+                and self._memory_has_cart_target(ctx, t)):
             return HarmVerdict(False, "cart", "reversible:memory-resolved cart target -> act")
         # 5b) anaphoric slot-choice booking ("they have Friday 9am or Tuesday 2.
         #     Book the Friday 9am one") — the slot anaphor's head is "one", so the

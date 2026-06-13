@@ -72,7 +72,11 @@ _SEND = re.compile(r"\b(send|email|text|tell|reply|follow up|circle back|draft)\
 _ORDER_VERB = r"order (?:a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffee|\d)"
 _BROWSER = re.compile(r"\b(grab|buy|" + _ORDER_VERB + r"|purchase|checkout|cart|find|look up|research)\b", re.I)
 _MONEY = re.compile(r"\b(pay|buy|" + _ORDER_VERB + r"|purchase|checkout|wire|venmo|zelle|cashapp|credit card|payment)\b", re.I)
-_NO_BUY = re.compile(r"\b(don'?t buy|do not buy|don'?t checkout|do not checkout|cart only|just.*cart)\b", re.I)
+_NO_BUY = re.compile(
+    r"\b(don'?t buy|do not buy|no buying|don'?t checkout|do not checkout|"
+    r"no checkout|cart only|just.*cart)\b",
+    re.I,
+)
 _PROFILE = re.compile(
     r"\b(my name is|i am a|i'm a|i work at|i work as|i live in|i prefer|i like|i hate|"
     r"my wife|my husband|my partner|my kid|my daughter|my son|my boss|my contractor)\b",
