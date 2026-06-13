@@ -1,9 +1,9 @@
-"""LiveMemoryBrain — stubbed seam between memory and the proactive engine.
+"""LiveMemoryBrain — the memory agent behind the proactive engine.
 
-- inject(context):  later, select the memory that matters for `context`.
-                    Scaffold: returns the shape, selects nothing.
-- capture(event):   fold a capture event into memory (history). Minimal wiring.
-- maintain():       later, dedupe/decay/summarize. Scaffold: no-op stub.
+It owns the hot write path (capture), hot read path (inject), cold cleanup
+(maintain), cold inference (infer), and retrieval audit (self-check). The live
+model enrichment seams are optional; the default deterministic path is real and
+must keep working without model calls.
 """
 from __future__ import annotations
 

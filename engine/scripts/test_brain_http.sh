@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Brain wiring over HTTP: capture -> think -> history write -> read back, plus
-# the extension-connected handshake. Isolated temp data dir; dedicated port.
+# Engine HTTP compatibility wiring: capture -> ControlCore feed -> memory write ->
+# read back, plus the extension-connected handshake. Isolated temp data dir; dedicated port.
 set -euo pipefail
 
 ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,7 +25,7 @@ curl -fsS --retry 40 --retry-delay 1 --retry-connrefused "$BASE/health" >/dev/nu
 echo "--- POST /capture {text: hello from the mic} ---"
 CAP="$(curl -fsS -X POST "$BASE/capture" -H 'content-type: application/json' -d '{"text":"hello from the mic"}')"
 echo "$CAP"
-echo "$CAP" | grep -q '"thought"' || { echo "FAIL: think() did not run" >&2; exit 1; }
+echo "$CAP" | grep -Eq '"decision"|"category"' || { echo "FAIL: ControlCore did not answer capture" >&2; exit 1; }
 
 echo "--- GET /memory/history (another client reads the scrap back) ---"
 HIST="$(curl -fsS "$BASE/memory/history")"
@@ -39,4 +39,4 @@ echo "--- GET /status ---"
 ST="$(curl -fsS "$BASE/status")"; echo "$ST"
 echo "$ST" | grep -q '"extension_connected":true' || { echo "FAIL: extension not connected" >&2; exit 1; }
 
-echo "--- PASS: brain HTTP wiring (capture -> think -> memory -> read back; extension connected) ---"
+echo "--- PASS: engine HTTP compatibility wiring (capture -> real core -> memory -> read back; extension connected) ---"

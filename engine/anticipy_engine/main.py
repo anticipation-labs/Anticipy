@@ -1,7 +1,8 @@
 """Anticipy Engine — the hub's HTTP surface.
 
-`/health` is the liveness probe. Scaffold endpoints (/capture, /memory/history,
-/extension/hello, /status) remain. The control core adds:
+`/health` is the liveness probe. The legacy compatibility endpoints
+(/capture, /memory/history, /extension/hello, /status) route through the same
+ControlCore used by the product surface:
 
     POST /event       -> feed an event to the proactive engine (triage->gate->act)
     GET  /glassbox     -> the live activity feed (what it's doing / did)
@@ -22,20 +23,19 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .agent import WebVoyagerAgent, judge
-from .brain import Brain
 from .capture.transcribe import is_audio_file, transcribe_audio
 from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
-from .core.envelopes import Job, new_id
+from .core.envelopes import EventSource, Job, new_id
 from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
 from .owner_onboarding import OwnerOnboardingIn
 
 ENGINE_NAME = "anticipy-engine"
 
-brain = Brain()
 core = ControlCore()
+extension_hello_seen = False
 # Real reasoning+vision model for the web-agent loop (kept separate from the
-# brain's stub gateway so the brain/hands tests stay free + deterministic).
+# core's default gateway so the engine/hands tests stay free + deterministic).
 gateway_agent = ModelGateway(
     provider=PROVIDER_OPENROUTER,
     cheap_model="google/gemini-3.1-flash-lite",   # routine see-and-locate steps
@@ -137,22 +137,34 @@ def health() -> dict:
 
 @app.get("/status")
 def status() -> dict:
-    return brain.status()
+    return {
+        "engine": "ok",
+        "core": "control_core",
+        "extension_connected": extension_hello_seen or core.browser_link.connected,
+        "history_count": len(core.memory.history.all()),
+        "open_loop_count": len([i for i in core.memory.open_loops.all() if i.status in ("open", "waiting")]),
+        "pending_count": len(core.pending_asks()),
+    }
 
 
 @app.post("/capture")
-def capture(body: CaptureIn) -> dict:
-    return brain.handle_capture(body.text, body.source)
+async def capture(body: CaptureIn) -> dict:
+    if body.source not in EventSource._value2member_map_:
+        raise HTTPException(status_code=400, detail=f"unknown capture source: {body.source}")
+    return await core.feed(body.source, body.text, {"legacy_capture": True})
 
 
 @app.get("/memory/history")
 def history() -> dict:
-    return {"items": [i.model_dump() for i in brain.memory.history.all()]}
+    return {"items": [i.model_dump() for i in core.memory.history.all()]}
 
 
 @app.post("/extension/hello")
 def extension_hello(body: ExtensionHello) -> dict:
-    return brain.mark_extension_connected(body.client)
+    global extension_hello_seen
+    extension_hello_seen = True
+    core.glassbox.log("extension_hello", {"client": body.client})
+    return {"connected": True, "client": body.client, "core": "control_core"}
 
 
 # ---- control core ----

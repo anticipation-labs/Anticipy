@@ -23,7 +23,7 @@ run() {  # name, command...
 }
 
 echo "== unit (free, deterministic) =="
-for t in bus workers gateway gateway_retry orchestrator proactive triage triage_clause_scope harmline storesite trigger trigger_notify trigger_persistence duetime decider deferred_persistence pending_persistence ask_roundtrip ask_debounce annoyance frontend_api glassbox_scorecard api_hand browser_hand handoff site_hints agent_proof channels channel_worker inbound memory memory_capture memory_inject memory_maintain memory_infer memory_selfcheck memory_glue owner_mode owner_onboarding owner_ingest_event; do
+for t in bus workers gateway gateway_retry orchestrator proactive triage triage_clause_scope harmline storesite trigger trigger_notify trigger_persistence duetime decider deferred_persistence pending_persistence ask_roundtrip ask_debounce annoyance frontend_api glassbox_scorecard api_hand browser_hand handoff site_hints agent_proof channels channel_worker inbound memory memory_capture memory_inject memory_maintain memory_infer memory_selfcheck memory_glue owner_mode owner_onboarding owner_ingest_event owner_upload_ingest; do
   run "$t" "$PY" "$REPO/engine/scripts/test_$t.py"
 done
 
