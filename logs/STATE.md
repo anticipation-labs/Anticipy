@@ -12,6 +12,11 @@ e2e_completion_rate (baseline 0.3427). Twilio account verified in console ($17.8
 pay-as-you-go, +1 619 658 4447, webhooks live); TWILIO_FROM env gap fixed in .env.local.
 P3 live gate awaits Omar's OWNER_PHONE confirmation (+1 604 724 5161 corroborated).
 Phases closed: P0, P1, P2 — gates remaining: P3 voice, P4 browser, P5 owner test.
+TARGET v9 resumed the factory on Codex with the harder dev_v2 owner-ingest instrument:
+first local baseline lap 20260613T011932Z-pre measured catch 0.6825, catch_worst 0.5,
+false 0, harm 0, interrupt 1.0/2.0, e2e 0.3778, correct 0.6222, recall_worst 0.5,
+worst_persona freelancer_nora. Suite stayed 46/46 green. P3 live gate was not attempted
+because `factory/config/owner_phone.confirmed` is still absent.
 
 OWNER DIRECTIVE 2026-06-10: the immediate product priority is the Owner Action Engine,
 not another narrow loop around one brain metric. Durable directive:
@@ -80,7 +85,7 @@ its LESSONS.md still binds.
 - Possible stray artifact: `[Anticipy test] M2 typed smoke 20260607-continue` calendar
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
-## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate) -> TARGET v8 (second K=5 resolved): Stage A = P3 closure on OWNER_PHONE confirm, Stage B = P4-browser groundwork
+## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate) -> TARGET v8 (second K=5 resolved): Stage A = P3 closure on OWNER_PHONE confirm, Stage B = P4-browser groundwork -> TARGET v9: first resumed lap is the countable dev_v2 owner-ingest baseline, then build from the actual dev_v2 gaps
 - THE AGENT'S PER-HOST FACTS ARE DATA, NOT CODE (lap 20260611T135937Z,
   groundwork — TARGET v8 STAGE B item 1; honest DEAD lap by design, disclosed
   in the manifest: e2e is at the F31 ceiling, foreman-owned). webvoyager's

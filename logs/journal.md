@@ -880,3 +880,15 @@ judge, scoreboard, ratchet, treadmill, and lock discipline. Verified Codex CLI w
 read-only ephemeral smoke (`CODEX_OK`), syntax-checked the touched shell scripts, and
 ran the deterministic suite green (46/46). The loop remains paused by owner order; first
 resume must be countable: phone-confirmed P3 closure or bank-v2 baseline.
+
+2026-06-13 lap 20260613T011932Z (groundwork, TARGET v9 dev_v2 baseline): made no
+product-code changes and ran the first resumed official owner-ingest dev_v2 baseline
+as directed. The P3 live gate was not attempted because `factory/config/owner_phone.confirmed`
+is absent, so live calls/SMS to OWNER_PHONE remain banned. Official dev_v2 stub score
+on `ANTICIPY_OWNER_INGEST=1`: catch 0.6825, catch_worst 0.5, false 0, harm 0,
+interrupt 1.0/2.0, e2e 0.3778, correct 0.6222, recall_worst 0.5, worst persona
+`freelancer_nora`. Legacy dev-bank contract smoke stayed at the old ratchet bests
+(catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483, correct 0.8475,
+recall 1.0), and `bash scripts/run_suite.sh` stayed green at 46/46. Next build lap
+should inspect the dev_v2 run dirs, starting with `freelancer_nora`, before forming
+a fix hypothesis.

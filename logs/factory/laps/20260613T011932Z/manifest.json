@@ -1,0 +1,11 @@
+{
+  "lap_type": "groundwork",
+  "intended_metric": "v2_e2e_completion_rate",
+  "hypothesis": "Running the official dev_v2 owner-ingest baseline will create the first countable v2_e2e_completion_rate measurement without product-code drift, enabling the next build lap to target the largest actual dev_v2 run-dir gap.",
+  "planned_changes": [
+    "logs/factory/laps/20260613T011932Z/manifest.json",
+    "logs/journal.md",
+    "logs/last_lap.md",
+    "logs/STATE.md only if ground truth changes"
+  ]
+}
