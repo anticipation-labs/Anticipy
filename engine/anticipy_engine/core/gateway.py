@@ -15,6 +15,7 @@ import os
 import re
 from typing import List, Optional
 
+from ..shared.note_task import match_note_task
 from ..shared.schedule_change import match_schedule_change_hold
 
 CHEAP = "cheap"
@@ -282,6 +283,10 @@ def default_stub(task: str, tier: str, caller: str) -> str:
                                           "args": {"kind": "open_loop", "text": goal_line},
                                           "risk": "low"}]})
         if _FORGET_HOLD_RE.search(goal_line) and _FORGET_HOLD_TIME_RE.search(goal_line):
+            return json.dumps({"steps": [{"intent": "write_memory",
+                                          "args": {"kind": "open_loop", "text": goal_line},
+                                          "risk": "low"}]})
+        if match_note_task(goal_line) is not None:
             return json.dumps({"steps": [{"intent": "write_memory",
                                           "args": {"kind": "open_loop", "text": goal_line},
                                           "risk": "low"}]})

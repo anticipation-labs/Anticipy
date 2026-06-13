@@ -19,6 +19,7 @@ from .bus import Bus
 from .envelopes import Goal, GoalState, Job, JobStatus, Result, Risk, Step, StepState
 from .gateway import SMART, ModelGateway
 from .store import GoalStore
+from ..shared.note_task import match_note_task
 from ..shared.slotbooking import match_context_slot_choice_booking
 from ..shared.storesite import derive_store_site
 
@@ -529,6 +530,11 @@ class Orchestrator:
         if slot is not None:
             return [Step(intent="create_event",
                          args={"title": slot.title, "when": slot.when},
+                         risk=Risk.low)]
+        note = match_note_task(text)
+        if note is not None:
+            return [Step(intent="write_memory",
+                         args={"kind": "open_loop", "text": note},
                          risk=Risk.low)]
         calendar = _calendar_event_step(text)
         if calendar is not None:

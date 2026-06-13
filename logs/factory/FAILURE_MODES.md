@@ -1626,3 +1626,23 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   retry no-clock pickup-alarm auto-holds without a new product law that explains
   why the line is safe to act instead of ask. Regression check: official dev_v2
   owner-ingest score must keep `false_action_count==0`.
+
+## Build lap 20260613T022002Z (imperative note commands)
+- F38 AVOIDED/DO-NOT-RETRY: a narrower context-backed retry of no-clock
+  pickup/dropoff alarm adjustment still produced `false_action_count=1` on
+  official dev_v2. The attempted law required a concrete same-day override in
+  memory, but the product/eval boundary still treated the later no-clock alarm
+  adjustment as unsafe to act. The code and tests were ripped out before the
+  kept run. Do not retry this family again until the foreman or owner supplies
+  an explicit product rule for alarm changes; regression check remains official
+  dev_v2 owner-ingest score with `false_action_count==0`.
+- F39 FIXED: imperative note-creation commands that contain audience language
+  were over-gated as binding sends because Room 2 read "tell customers" as a
+  contact action instead of note content. Fix: `shared/note_task.py` recognizes
+  only imperative note creation (`add/write/make/create/leave/put note`), Room 2
+  treats that narrow shape as reversible note capture after hard stops, and the
+  deterministic planner writes the exact note text to the open-loop drawer.
+  Regression checks: `test_harmline.py` pins imperative note -> act plus
+  non-imperative note and money-note -> ask; `test_gateway.py` pins exact
+  `write_memory`; `test_owner_ingest_event.py` pins full owner card execution
+  with proof.

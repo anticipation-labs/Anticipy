@@ -49,6 +49,7 @@ SCHEDULE_CHANGE = "The vendor call moved from Thursday to Friday at 9, block tha
 FORGET_HOLD = "Renew the patio permit tomorrow morning before I forget again."
 SLOT_CONTEXT = "Marta texted that she can look at the furnace Tuesday morning."
 SLOT_BOOKING = "Book the Tuesday morning one with Marta before she fills up."
+NOTE_TO_CUSTOMERS = "Add a note to tell customers candle restock is Friday, not today."
 # F28 requested-action scope: a draft request whose line carries work vocabulary
 # ("supply order", "purchasing window", "ready to send") is NOT money, NOT a send —
 # the pre-gate must not block it, the spine must act, and the plan is the DRAFT
@@ -98,6 +99,7 @@ async def owner_lane_check():
         forget_hold = await core.feed("app", FORGET_HOLD, {})
         slot_context = await core.feed("app", SLOT_CONTEXT, {})
         slot_booking = await core.feed("app", SLOT_BOOKING, {})
+        note_to_customers = await core.feed("app", NOTE_TO_CUSTOMERS, {})
         draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
@@ -115,7 +117,8 @@ async def owner_lane_check():
 
     # the realday/scorer contract: decision + goal_id + ask_id on every response
     for out in (noise, act, ask, promise, unshaped, schedule_change, forget_hold,
-                slot_context, slot_booking, draft_order, cart, money, money_vent, remember, clarify):
+                slot_context, slot_booking, note_to_customers, draft_order, cart,
+                money, money_vent, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
 
@@ -179,6 +182,15 @@ async def owner_lane_check():
     assert sb_steps == ["create_event"], sb_rec
     assert sb_rec["steps"][0]["args"]["when"] == "Tuesday morning", sb_rec
     assert sb_rec["steps"][0]["args"]["title"] == "furnace with Marta", sb_rec
+
+    # An imperative note command is reversible capture. The audience phrase is
+    # note content, not a binding send.
+    assert note_to_customers["decision"] == "act", note_to_customers
+    note_rec = _record(tmp, note_to_customers["goal_id"])
+    assert note_rec["state"] == "done" and note_rec["proof"], note_rec
+    note_steps = [s.get("intent") for s in note_rec["steps"]]
+    assert note_steps == ["write_memory"], note_rec
+    assert note_rec["steps"][0]["args"] == {"kind": "open_loop", "text": NOTE_TO_CUSTOMERS}, note_rec
 
     # F28: the draft request acts (no money pre-gate on the noun "order"; no send
     # reading on the purpose tail) and the executed plan is the DRAFT — never a send

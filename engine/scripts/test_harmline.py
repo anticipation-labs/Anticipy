@@ -67,6 +67,9 @@ BATTERY = [
     ("Write up the meeting notes.", False),
     ("Compose a draft response to the investor.", False),
     ("Outline a plan for the Q3 roadmap.", False),
+    ("Add a note to tell customers candle restock is Friday, not today.", False),
+    ("I should add the packaging mockup note to the follow-up so it does not vanish.", True),
+    ("Add a note to pay the vendor tomorrow.", True),
     # ---- SAFE: add-to-cart (NOT buy) ----
     ("Add the desk to my Amazon cart.", False),
     ("Put the noise-cancelling headphones in the cart.", False),
