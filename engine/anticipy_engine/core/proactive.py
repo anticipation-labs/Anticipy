@@ -19,6 +19,7 @@ only when a decision is genuinely hard. Triage cues live in proactive/triage.py.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from dataclasses import dataclass
@@ -161,7 +162,17 @@ class ProactiveEngine:
         #      defers to the harm-line — the decider never overrides an ASK into ACT.
         decider_word = None
         if self.decider is not None:
-            decider_word = await self.decider.decide(event.text)
+            try:
+                decider_word = await asyncio.wait_for(
+                    self.decider.decide(event.text),
+                    timeout=float(os.environ.get("ANTICIPY_DECISION_WALL_S", "6") or 6))
+            except asyncio.TimeoutError:
+                # a starved/slow brain (free-tier 429s, 60s+/call) must NOT freeze the
+                # always-listening loop: a timed-out decision is deafness, routed to the
+                # SAME bounded defer-then-fail-silent path (an unread line NEVER acts).
+                decider_word = DECIDER_UNAVAILABLE
+                if self.glassbox is not None:
+                    self.glassbox.log("decider_timeout", {"event_id": event.id})
             if decider_word == DECIDER_UNAVAILABLE:
                 # No model read happened (quota/transport outage, ledger F7). Deafness
                 # must not masquerade as judgment: defer the event past the quota
