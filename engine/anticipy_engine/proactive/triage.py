@@ -266,7 +266,7 @@ _CAL_BLOCK = re.compile(
 _CART_PUT = re.compile(
     r"\b(?:put|add|stick|throw|toss|drop)\b[^.;!?]{0,60}"
     r"\b(?:in|into|to)\s+(?:my\s+|the\s+)?(?:cart|basket|bag)\b"
-    r"|\bcart\s+(?:one|a|an|the|\d)\b",
+    r"|\bcart\s+(?:it|that|this|them|these|those|one|a|an|the|\d)\b",
     re.I)
 _CART_ONLY_NO_PURCHASE = re.compile(
     r"\b(?:don'?t buy|do not buy|don'?t checkout|do not checkout|no buying|no checkout)\b",

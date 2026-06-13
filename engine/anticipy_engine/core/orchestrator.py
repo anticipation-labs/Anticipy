@@ -103,7 +103,7 @@ _BROWSER_ACTION_RE = re.compile(
     r"https?://"
     r"|\b(?:on|at|from|using|via)\s+(?:[a-z0-9-]+\.)+[a-z]{2,}\b"
     r"|\b(?:add|put)\b[\w' ,.-]{0,120}\b(?:cart|basket|bag)\b"
-    r"|\bcart\s+(?:one|a|an|the|\d)\b"
+    r"|\bcart\s+(?:it|that|this|them|these|those|one|a|an|the|\d)\b"
     # the spoken anaphor carries modifiers between determiner and head
     # ("that water table thing", "the clamp one") — bounded, never open-ended
     r"|\b(?:get|grab)\b[\w' ,.-]{0,80}\b(?:that|the)\s+(?:[\w-]+\s+){0,3}(?:thing|one|item|product)\b",
@@ -112,7 +112,7 @@ _BROWSER_ACTION_RE = re.compile(
 _VAGUE_BROWSER_RE = re.compile(
     r"\b(that|the)\s+(?:[\w-]+\s+){0,3}(thing|one|item|product)\b"
     r"|\b(earlier|last time|before|was looking at|looked at)\b"
-    r"|\bcart\s+(?:one|a|an|the|\d)\b"
+    r"|\bcart\s+(?:it|that|this|them|one|a|an|the|\d)\b"
     r"|\b(?:liked|preferred)\b[\w' ,.-]{0,80}\b(?:at|on|from)\s+[A-Z]",
     re.I,
 )
@@ -326,8 +326,8 @@ def _candidate_score(line: str, hints: set[str], rank: int) -> tuple[int, int]:
 
 
 _COMMAND_TAIL_RE = re.compile(
-    r"\b(?:put|add|stick|throw|toss|drop)\s+(?:it|that|this|one|them)\b"
-    r"|\bcart\s+(?:it|that|this|one|them|a|an|the|\d)\b"
+    r"\b(?:put|add|stick|throw|toss|drop)\s+(?:it|that|this|one|them|these|those)\b"
+    r"|\bcart\s+(?:it|that|this|one|them|these|those|a|an|the|\d)\b"
     r"|\b(?:no checkout|no buying|don'?t buy|do not buy|don'?t checkout|do not checkout)\b",
     re.I,
 )
