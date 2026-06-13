@@ -18,6 +18,7 @@ const sources = [
 ];
 
 function cardBucket(card) {
+  if (card.status === "declined") return "done";
   if (card.status === "done" || card.disposition === "remember") return "done";
   if (card.disposition === "blocked" || card.status === "blocked") return "blocked";
   if (card.disposition === "ask" || card.status === "waiting") return "ask";
@@ -40,6 +41,7 @@ function proofLabel(proof) {
 
 function outcomeText(card, pendingAsk) {
   const bucket = cardBucket(card);
+  if (card.status === "declined") return "Declined by Omar";
   if (bucket === "blocked") return "Hard wall: no payment executed";
   if (bucket === "ask") return pendingAsk ? `Waiting for Omar: ${pendingAsk.ask_id.slice(0, 6)}` : "Waiting for Omar";
   if (bucket === "done") return "Done with receipt";
@@ -218,6 +220,29 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || data.error || "Resolve failed");
+      setPending((current) => current.filter((ask) => ask.ask_id !== askId));
+      setCards((current) => current.map((card) => {
+        const matched = card.execution?.ask_id === askId || card.execution?.goal_id === data.goal_id;
+        if (!matched) return card;
+        const nextStatus = data.blocked ? "blocked" : data.approved ? (data.state || "done") : "declined";
+        return {
+          ...card,
+          status: nextStatus,
+          execution: {
+            ...(card.execution || {}),
+            ask_id: null,
+            goal_state: nextStatus,
+          },
+          proof: [
+            ...(card.proof || []),
+            {
+              type: "resolution",
+              decision: data.approved ? "approved" : "declined",
+              goal_state: nextStatus,
+            },
+          ],
+        };
+      }));
       await loadStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
