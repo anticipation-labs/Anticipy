@@ -76,6 +76,17 @@ async def main():
     await BrowserHand(link3).handle(Job(intent="browse_task", args={"task": "open https://anticipy.ai now"}))
     assert "url" not in link3.last_args, link3.last_args
 
+    # In live mode, a memory-resolved browser ACTION still needs the browser
+    # planner. A read-only observe proof is not proof that a cart/action happened.
+    live_no_planner = FakeLink(behavior="success")
+    r = await BrowserHand(live_no_planner).handle(Job(intent="browse_task", args={
+        "task": "On https://store.test, find wide shoes and add to the cart. Do not checkout.",
+        "url": "https://store.test",
+        "resolved_from_memory": True,
+    }))
+    assert r.status == JobStatus.needs_human and "live browser planner" in r.output["reason"], r
+    assert live_no_planner.last_args is None, "must not fake-complete an action through observe"
+
     # ---- MOCK mode (ANTICIPY_HANDS_MODE=mock via ControlCore; default stays LIVE) ----
     # navigable job -> loudly-labeled mock artifact, the link NEVER touched
     mock_link = FakeLink(connected=False)

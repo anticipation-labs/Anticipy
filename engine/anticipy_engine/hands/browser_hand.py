@@ -189,6 +189,18 @@ class BrowserHand(Worker):
                     output={"reason": "browser action task has no resolved real site; refusing search fallback"},
                     error="browser action task has no resolved real site",
                 )
+        if job.intent == "browse_task" and task and _action_task_needs_site(task) and self.gateway is None:
+            return Result(
+                job_id=job.id,
+                status=JobStatus.needs_human,
+                proof=None,
+                output={
+                    "reason": (
+                        "browser action needs the live browser planner; read-only "
+                        "page proof is not action proof"
+                    )
+                },
+            )
         try:
             resp = await link.send_browse(job.id, job.intent, target_args, timeout=self.timeout)
         except asyncio.TimeoutError:
