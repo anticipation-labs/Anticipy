@@ -105,6 +105,18 @@ then the "prepare + execute on approval" half — which needs Omar's accounts to
 
 ## Honest negatives (reverted; kept so we never repeat them)
 
+### ❌ Approve→do-it press-go — REVERTED for a MONEY-execution hole · 2026-06-13
+Built the explicit-approval-only press-go (approve a remembered+inferred task → runs through the real
+orchestrator + hands + read-back gate → receipt). The design was sound and reused the proven seams: nothing
+auto-executes (skeptic confirmed trigger_tick fires 0 on remembered items), vents are refused, literal money
+verbs ("pay $500", "wire $1000") BLOCK. **But a skeptic found a money-execution hole:** money phrased as a
+payment SEND — "send a $500 payment to the vendor" — is classified by the harm-line as `binding_send`, NOT
+`money`, so it routes to the normal approval and would execute a real $500 payment on a YES in live mode. That
+violates Law 3 (money is the only hard stop). **Reverted entirely** (back to 58/58). Root cause = the harm-line's
+money detector misses payment-SEND phrasing (the binding-send rule wins over the money rule). The press-go is
+re-buildable fast once the money guard is airtight — but it's the money-risk surface and should be finalized with
+Omar (it also can't run live until he connects accounts). **Next:** harden the harm-line money detector (the root).
+
 ### ❌ Slice 1 attempt 1 — owed-commitment carve-out · 2026-06-13 · REVERTED
 **Baseline measured live (OpenRouter):** 11/16 reported/indirect commitments caught, **0 vent false-actions**.
 Root cause of the 5 misses: they pass triage but the **decider (Room 1.5, cheap `gemini-2.5-flash-lite`)** files
