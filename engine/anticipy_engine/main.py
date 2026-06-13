@@ -151,7 +151,7 @@ def status() -> dict:
         "core": "control_core",
         "extension_connected": extension_hello_seen or core.browser_link.connected,
         "history_count": len(core.memory.history.all()),
-        "open_loop_count": len([i for i in core.memory.open_loops.all() if i.status in ("open", "waiting")]),
+        "open_loop_count": core.memory_open_loops(limit=0)["count"],
         "pending_count": len(core.pending_asks()),
         "memory_recovered": bool(getattr(core.memory.db, "recovered_corruption", False)),
         "channels": core.channel_status(),

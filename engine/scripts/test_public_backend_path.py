@@ -192,6 +192,9 @@ def main():
         )
         visible_after_stale = client.get("/memory/open-loops?limit=100").json()["loops"]
         assert all(i["id"] != stale.id for i in visible_after_stale), visible_after_stale
+        active_count = client.get("/memory/open-loops?limit=0").json()["count"]
+        status_after_stale = client.get("/status").json()
+        assert status_after_stale["open_loop_count"] == active_count, status_after_stale
 
         onboarding = client.post("/owner/onboard", json={
             "source": "public_backend_path",
