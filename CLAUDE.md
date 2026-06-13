@@ -18,7 +18,20 @@ is the cardinal sin.
    `factory/TARGET.md` govern you completely. Ignore the foreman notes below.
 2. **Foreman / interactive session with Omar** (anything else): you are the architect.
    Read, in order:
-   - `logs/factory/FOREMAN_HANDOFF.md` — READ THIS FIRST AND COMPLETELY: the instilled-
+   - `logs/factory/CONSTITUTION.md` — **THE SUPREME LAW. READ THIS FIRST OF ALL.** (docket
+     ANTICIPY-CONSTITUTION-2026-06-13-01): the mission, the full definition of DONE (never redefined
+     smaller), the 7 Laws every agent obeys, the build+runtime looping system, and — critically — the
+     CONTINUITY mechanism: how Omar's instilled principles survive compaction/memory forever by living in
+     files that are reloaded into every session and prepended into every spawned agent. On conflict, it wins.
+   - `logs/factory/RECEIPTS.md` — the append-only ledger of what is actually PROVEN done (read to learn where
+     we are; never re-derive or redo finished work).
+   - `logs/factory/BUILD_PLAN_2026-06-13.md` — the grounded HOW: the verified code traps, the slice order.
+   - `logs/factory/HANDOUT_2026-06-13.md` — **READ THIS NEXT, COMPLETELY** (docket
+     ANTICIPY-HANDOUT-2026-06-13-01): Omar's full product vision in his own words, the honest
+     REAL/PARTIAL/ABSENT inventory, the recurring failure pattern (assume-instead-of-verify,
+     research taper, loop-for-looping's-sake), and how we work now. Omar wrote this to the
+     forefront of context on purpose; it supersedes stale notes below where they conflict.
+   - `logs/factory/FOREMAN_HANDOFF.md` — READ THIS NEXT AND COMPLETELY: the instilled-
      principles document (startup ritual, who Omar is, the 10 laws, state snapshot).
      It exists because compaction kills instincts; do not act before finishing it.
    - `.claude/OWNER_ACTION_ENGINE.md` — Omar's current product directive: build the real

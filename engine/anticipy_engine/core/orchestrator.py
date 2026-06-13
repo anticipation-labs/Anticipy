@@ -554,8 +554,23 @@ class Orchestrator:
 
     @staticmethod
     def _verify(result: Result) -> bool:
-        """No proof, not done."""
-        return result.proof is not None and bool(result.proof)
+        """No proof, not done — and a self-attested-only proof is not proof.
+
+        A live external WRITE must carry an independent read-back (an ApiHand write
+        sets self_attested=False + verified_by_read after re-reading the artifact).
+        A proof that explicitly declares itself self_attested without that read-back
+        is the actor grading its own homework and is rejected. We gate on an EXPLICIT,
+        opt-in marker, never on proof shape, so every legitimate shape still passes:
+        memory/channel/stub proofs, browser read-backed proofs, and mock proofs (none
+        of which set self_attested).
+        """
+        proof = result.proof
+        if not proof:
+            return False
+        if isinstance(proof, dict) and proof.get("self_attested") is True \
+                and not proof.get("verified_by_read"):
+            return False
+        return True
 
     # ---- helpers ----
     @staticmethod

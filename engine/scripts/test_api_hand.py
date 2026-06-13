@@ -16,6 +16,11 @@ class FakeErr(Exception):
         super().__init__(f"http {code}")
 
 
+# Read-back tools the live write path now calls as its SECOND independent execute().
+READ_TOOLS = {"Gmail.ListEmails", "GoogleCalendar.ListEvents", "Gmail.ListThreads",
+              "GoogleDocs.GetDocumentById"}
+
+
 class FakeTools:
     def __init__(self, fake):
         self.f = fake
@@ -24,9 +29,23 @@ class FakeTools:
         return SimpleNamespace(status=self.f.auth_status, url=self.f.auth_url)
 
     def execute(self, tool_name, input, user_id):
-        if self.f.exec_behavior.startswith("raise"):
+        # The live write path calls execute TWICE: once to WRITE, then a SECOND,
+        # independent READ to confirm the artifact. The double models both legs.
+        is_read = tool_name in READ_TOOLS
+        if not is_read and self.f.exec_behavior.startswith("raise"):
             raise FakeErr(int(self.f.exec_behavior[5:]))
         self.f.executed.append((tool_name, input, user_id))
+        if is_read:
+            # the independent read-back leg: returns a list-shaped store. By default it
+            # RE-OBSERVES the just-written id; readback_finds_id=False simulates a write
+            # that never landed (fail-closed). id=request-distinct for the audit trail.
+            if self.f.readback_finds_id:
+                value = {"events": [self.f.exec_value]}
+            else:
+                value = {"events": []}
+            return SimpleNamespace(id="read-req-1",
+                                   output=SimpleNamespace(value=value, error=None))
+        # the WRITE leg
         if self.f.exec_behavior == "empty":
             return SimpleNamespace(output=SimpleNamespace(value=None, error=None))
         return SimpleNamespace(output=SimpleNamespace(value=self.f.exec_value, error=None))
@@ -39,6 +58,7 @@ class FakeArcade:
         self.auth_url = "https://connect.example/grant"
         self.exec_behavior = "success"   # success|empty|raise401|raise403|raise429|raise500
         self.exec_value = {"id": "msg-123"}
+        self.readback_finds_id = True    # independent read re-observes the written id
         self.executed = []
 
 
@@ -47,17 +67,25 @@ def job(intent, **args):
 
 
 async def main():
-    # LIVE success carries a real proof id
+    # LIVE success: the write is confirmed by a SECOND, independent read-back (not the
+    # write echo). Proof carries readback evidence and is explicitly NOT self-attested.
     fake = FakeArcade()
     hand = ApiHand(user_id="omar@anticipy.ai", client=fake, mode=MODE_LIVE)
     r = await hand.handle(job("send_email", approved=True, recipient="t@x.com", subject="hi", body="yo"))
     assert r.status == JobStatus.success and r.proof["id"] == "msg-123", r
-    assert len(fake.executed) == 1
+    assert r.proof.get("readback") is True and r.proof.get("self_attested") is False
+    assert r.proof.get("verified_by_read") == "Gmail.ListEmails"
+    assert r.proof.get("read_request_id") == "read-req-1"  # distinct read req id, audited
+    # the live write path executed TWICE: the write, then >=1 independent read-back
+    write_calls = [c for c in fake.executed if c[0] == "Gmail.SendEmail"]
+    read_calls = [c for c in fake.executed if c[0] == "Gmail.ListEmails"]
+    assert len(write_calls) == 1 and len(read_calls) >= 1, fake.executed
 
-    # idempotency: a retry of the same write does NOT execute again
+    # idempotency: a retry of the same write does NOT execute again (no new write, no new read)
+    before = len(fake.executed)
     r2 = await hand.handle(job("send_email", approved=True, recipient="t@x.com", subject="hi", body="yo"))
     assert r2.status == JobStatus.success and r2.output.get("idempotent") is True
-    assert len(fake.executed) == 1, "must not re-send on retry"
+    assert len(fake.executed) == before, "must not re-send (or re-read) on retry"
 
     # defense in depth: HIGH-RISK write without approval flag -> needs_human, never executes
     fake2 = FakeArcade()
