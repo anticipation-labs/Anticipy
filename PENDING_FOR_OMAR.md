@@ -1,5 +1,26 @@
 # PENDING_FOR_OMAR
 
+**THE ONE ASK (2026-06-13): fund the brain.** Diagnosing the hard middle (input->memory->
+inference->action) live, the real blocker is NOT mainly code — the brain runs on Gemini's
+FREE tier, which 429-rate-limits every call, so a single decision hangs 60s+. The
+model-dependent middle (intent inference, disambiguation, planning) can't run at usable
+speed, and a loop can't even verify the real chain when the chain stalls. **Top up
+OpenRouter or drop in a paid Gemini/Anthropic key** — that single move unlocks the whole
+inference middle and lets the loop grind the REAL chain. This is the one thing only you can do.
+
+Landed + tested tonight while you were out (all suite 55/55 green, no fake finishes):
+- Disambiguator woken (J1, 91fdfbb): the ambiguity tiebreak actually consults the model now
+  (was dead code that silently passed everything); fails open fast on a slow brain.
+- No-freeze (J2, 5c27a1b): the action-brain degrades to silent fast instead of hanging 60s
+  on the starved model.
+- Hard interrupt cap (J5, f8cde94): the cold-boot flood that texted you 6× can never recur;
+  money is never demoted past its hard stop.
+- Reply-match (cea355e): your YES/NO SMS reply can't be silently dropped on a number-format drift.
+Deliberately NOT done (need your call, not an unattended gamble): J3 "form intents not words"
+(false-action risk; the desk still files as passive history) and J4 "rank recall" (changes a
+recall-completeness measurement). Autonomous loop stopped — escalated here, not grinding.
+
+---
 **Overnight headline (2026-06-11): P2-brain CLOSED, judge REAL.** The brain caught
 14/14 tasks across the 4 hidden strangers, zero vent-actions, zero harm (holdout worst
 1.0 — the score that was stuck at 0.667 for two nights). Then four more kept laps:
