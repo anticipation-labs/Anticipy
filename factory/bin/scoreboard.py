@@ -29,7 +29,7 @@ RATCHET = REPO / "logs/factory/RATCHET.json"
 METRIC_DIRECTION = {
     "catch_rate": 1, "catch_rate_worst": 1, "correct_action_rate": 1,
     "e2e_completion_rate": 1, "memory_recall_worst": 1, "owner_day_pass": 1,
-    "v2_e2e_completion_rate": 1,
+    "owner_success_rate": 1, "v2_e2e_completion_rate": 1, "v2_owner_success_rate": 1,
     "false_action_count": -1, "silent_harm_count": -1,
     "interrupt_cost": -1, "interrupt_cost_worst": -1,
 }
@@ -172,7 +172,7 @@ def main() -> int:
     SB.parent.mkdir(parents=True, exist_ok=True)
     new_file = not SB.exists()
     with SB.open("a", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=COLUMNS)
+        w = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
         if new_file:
             w.writeheader()
         w.writerow(row)

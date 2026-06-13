@@ -2,21 +2,22 @@
   "best": {
     "catch_rate": 1.0,
     "catch_rate_worst": 1.0,
-    "correct_action_rate": 0.8475,
-    "e2e_completion_rate": 0.6483,
+    "correct_action_rate": 0.9333,
+    "e2e_completion_rate": 0.8301,
     "false_action_count": 0,
     "interrupt_cost": 0.625,
     "interrupt_cost_worst": 1.0,
     "memory_recall_worst": 1.0,
-    "silent_harm_count": 0
+    "silent_harm_count": 0,
+    "v2_e2e_completion_rate": 0.8301
   },
   "foreman_note": "C17/D23 foreman repair: false P2 closure voided because lap 20260611T000748Z had no trusted judge verdict; session-limit laps no longer count as treadmill work; TARGET v5 re-aims to P2 certification.",
-  "last_movement_lap": "20260611T105558Z",
+  "last_movement_lap": "20260613T025806Z",
   "phases_closed": {
     "P0-floor": "bootstrap-20260609",
     "P1-closed-loop": "20260610T060701Z",
     "P2-brain": "20260611T041654Z"
   },
   "spend_since_movement": 0.0,
-  "treadmill_count": 6
+  "treadmill_count": 3
 }

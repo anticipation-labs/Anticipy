@@ -1,14 +1,14 @@
-# TARGET v9
-updated: 2026-06-13T01:30:00Z by foreman (owner resumed; Codex backend active; bank-v2 baseline is the countable first lap)
+# TARGET v10
+updated: 2026-06-13T03:58:00Z by foreman (F47 resolved; asks are first-class owner success, not action failures)
 north_star: A person's messy day in -> the right tasks caught, done for real, proven; wrong ones never done.
 current_phase: P3-voice
-primary_metric: v2_e2e_completion_rate
+primary_metric: v2_owner_success_rate
 guards: false_action_count==0 silent_harm_count==0
 phase_gate: factory/gates/gate_P3.sh
 eval_tier: stub
 eval_bank: factory/personas/dev_v2
 eval_env: ANTICIPY_OWNER_INGEST=1
-metric_alias_from: e2e_completion_rate
+metric_alias_from: owner_success_rate
 budget_week_usd: 200
 allowed_strategies: |
   HUMAN TARGET: the app should let a user press Go, type/paste/upload messy life input,
@@ -17,15 +17,19 @@ allowed_strategies: |
   UI, memory, browser/API hands, and voice/text. This is the product. Do not drift back
   into a hidden science project.
 
-  FIRST RESUMED LAP: baseline only, and it must count. The official eval now runs the
-  harder dev_v2 bank through the owner ingest path. The metric alias
-  v2_e2e_completion_rate is a first measurement, so a kept baseline lap resets the
+  FIRST v10 LAP: baseline only, and it must count. The official eval now measures
+  owner success, not action-only completion: expected actions count only when done
+  with proof; expected asks count only when the product creates a real waiting ask
+  card; false actions and silent harm stay hard zero. The metric alias
+  v2_owner_success_rate is a first measurement, so a kept baseline lap resets the
   treadmill without pretending old-bank progress. Write an honest manifest, make no
   product-code changes unless a harness bug is found, run suite/eval, commit logs, stop.
 
   AFTER BASELINE COUNTS: improve the largest dev_v2 gap that blocks the real integrated
   product: UI/input door -> owner ingest -> card -> execution -> proof -> ask/block
-  receipt. Use actual run dirs, not theory. Do not chase bank wording; fix shared
+  receipt. Use actual run dirs, not theory. The known first target is Nora's Northstar
+  invoice-draft line: it should become an ask-first card with a waiting ask receipt,
+  not an ignored line and not a sent invoice. Do not chase bank wording; fix shared
   product plumbing, planner grounding, proof write-back, UI wiring, or policy boundaries.
 
   Check factory/config/owner_phone.confirmed for stage:
@@ -64,6 +68,12 @@ banned_work: |
   self-owned, labeled, reversible, cleaned up. NEVER edit or commit while
   factory/.lock exists (applies to every actor).
 notes: |
+  v10 (foreman, 2026-06-13T03:58Z): F47 resolved by fixing the instrument, not by
+  lowering the goal. `e2e_completion_rate` was action-only and punished the product
+  for catching required ask-first work. `owner_success_rate` now counts proof-bearing
+  actions and real waiting ask cards, while false_action_count and silent_harm_count
+  remain absolute hard guards. The next countable lap is a v10 baseline, then the
+  expected build target is Nora's Northstar invoice-draft ask card.
   v9 (foreman, 2026-06-13T01:30Z): Omar approved resumption. Claude credits are not
   available, so FACTORY_AGENT defaults to Codex. The first resumed lap is steered to a
   bank-v2 baseline measurement, not live phone and not dead-by-design P4. eval_bank and
