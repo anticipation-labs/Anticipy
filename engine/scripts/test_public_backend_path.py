@@ -145,6 +145,10 @@ def main():
         assert message_record["state"] == "done", message_record
         assert message_record["resolution"] == {"ask_id": ask_id, "approved": True}, message_record
         assert message_record["proof"], message_record
+        message_args = message_record["steps"][0]["args"]
+        assert message_args["to"] == "Sam", message_args
+        assert "Sam needs the revised decking" in message_args["body"], message_args
+        assert "Sarah" not in json.dumps(message_record["steps"]), message_record["steps"]
 
         durable = client.get("/owner/cards?limit=20")
         assert durable.status_code == 200, durable.text

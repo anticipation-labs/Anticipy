@@ -245,6 +245,21 @@ _BLOCK_PURPOSE_RE = re.compile(
     r"(?=\s+(?:so|because|since|before|after)\b|[.;!?,]|$)",
     re.I,
 )
+_PLAN_PREFIX_RE = re.compile(r"^\s*plan\s*:\s*", re.I)
+_RECIPIENT_NEEDS_RE = re.compile(
+    r"\b(?P<name>[A-Z][a-z]+)\s+(?:needs|asked|is waiting|wanted)\b"
+)
+_RECIPIENT_TO_RE = re.compile(
+    r"\b(?:to|with)\s+(?:the\s+)?(?P<name>[A-Z][a-z]+|[a-z][a-z-]{2,}(?:\s+[a-z][a-z-]{2,}){0,2})\b"
+)
+_RECIPIENT_DIRECT_RE = re.compile(
+    r"\b(?:send|email|text|tell|reply to|follow up with|forward)\s+"
+    r"(?P<name>[A-Z][a-z]+|[a-z][a-z-]{2,})\b"
+)
+_RECIPIENT_STOP = {
+    "the", "a", "an", "q3", "q4", "revised", "signed", "deck", "email", "reply",
+    "message", "note", "contract", "offer", "announcement", "post",
+}
 
 
 def _grounded_calendar_step(goal_line: str) -> Optional[dict]:
@@ -267,6 +282,39 @@ def _grounded_calendar_step(goal_line: str) -> Optional[dict]:
     return None
 
 
+def _goal_line_from_plan(task: str) -> str:
+    goal_m = _GOAL_LINE_RE.search(task)
+    goal_line = (goal_m.group("goal") if goal_m else task).strip()
+    return _PLAN_PREFIX_RE.sub("", goal_line).strip()
+
+
+def _email_recipient(line: str) -> str:
+    for pat in (_RECIPIENT_NEEDS_RE, _RECIPIENT_TO_RE, _RECIPIENT_DIRECT_RE):
+        m = pat.search(line or "")
+        if not m:
+            continue
+        name = re.sub(r"\s+", " ", m.group("name")).strip(" .,;:")
+        if name.lower() not in _RECIPIENT_STOP:
+            return name
+    return "recipient"
+
+
+def _email_subject(line: str) -> str:
+    clean = re.sub(r"\s+", " ", line or "").strip(" .")
+    clean = re.sub(r"\b(?:please\s+)?(?:send|email|text|tell|reply|forward|draft)\b", "", clean, flags=re.I)
+    clean = re.sub(r"\s+", " ", clean).strip(" .;:,")
+    return (clean[:72].rstrip(" .;:,") or "Owner request")
+
+
+def _email_args(goal_line: str) -> dict:
+    line = _goal_line_from_plan(goal_line)
+    return {
+        "to": _email_recipient(line),
+        "subject": _email_subject(line),
+        "body": f"Owner request: {line}",
+    }
+
+
 def default_stub(task: str, tier: str, caller: str) -> str:
     t = task.lower()
     if caller == "gate":
@@ -276,8 +324,7 @@ def default_stub(task: str, tier: str, caller: str) -> str:
         return json.dumps({"decision": decision, "reason": f"stub gate read of: {task[:80]}"})
 
     if caller == "plan":
-        goal_m = _GOAL_LINE_RE.search(task)
-        goal_line = (goal_m.group("goal") if goal_m else task).strip()
+        goal_line = _goal_line_from_plan(task)
         if _SELF_REMINDER_RE.search(task):
             return json.dumps({"steps": [{"intent": "write_memory",
                                           "args": {"kind": "open_loop", "text": goal_line},
@@ -299,11 +346,11 @@ def default_stub(task: str, tier: str, caller: str) -> str:
         # sends); only undrafted email/send requests plan the gated send
         if "draft" in t:
             steps.append({"intent": "send_email_draft",
-                          "args": {"to": "Sarah", "subject": "Q3 deck", "body": "Attached."},
+                          "args": _email_args(goal_line),
                           "risk": "low"})
         elif any(k in t for k in ("email", "send", "deck")):
             steps.append({"intent": "send_email",
-                          "args": {"to": "Sarah", "subject": "Q3 deck", "body": "Attached."},
+                          "args": _email_args(goal_line),
                           "risk": "needs_confirm"})
         # "set up" is already a gate-trigger word; a time-anchored "set up X" is a
         # calendar write (it used to reach create_event only via memory-noise steps)
@@ -312,7 +359,7 @@ def default_stub(task: str, tier: str, caller: str) -> str:
                           "args": {"title": "Lunch with Sarah", "when": "Friday 12:00"}, "risk": "low"})
         if any(k in t for k in ("remind", "friday", "follow", "later")):
             steps.append({"intent": "write_memory",
-                          "args": {"kind": "open_loop", "text": "Send Sarah the Q3 deck Friday"}, "risk": "low"})
+                          "args": {"kind": "open_loop", "text": goal_line}, "risk": "low"})
         if _POST_WORD_RE.search(t) or any(k in t for k in ("tweet", "launch", " x ", " x.", "on x")):
             steps.append({"intent": "post_to_x", "args": {"text": "We just launched. "}, "risk": "low"})
         if any(k in t for k in ("browse", "open ", "website", "site", "check the")):

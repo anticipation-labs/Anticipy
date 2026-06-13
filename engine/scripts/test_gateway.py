@@ -68,10 +68,21 @@ async def main() -> None:
         "Plan: Draft the order email to Vicky so it's ready to send.", tier=SMART, caller="plan"))
     intents5 = [s["intent"] for s in plan5["steps"]]
     assert "send_email_draft" in intents5 and "send_email" not in intents5, plan5
+    draft_args = next(s for s in plan5["steps"] if s["intent"] == "send_email_draft")["args"]
+    assert draft_args["to"] == "Vicky" and "Vicky" in draft_args["subject"], draft_args
     plan6 = json.loads(await gw2.think(
         "Plan: send Sarah the Q3 deck.", tier=SMART, caller="plan"))
     steps6 = {s["intent"]: s for s in plan6["steps"]}
     assert "send_email" in steps6 and steps6["send_email"]["risk"] == "needs_confirm", plan6
+    assert steps6["send_email"]["args"]["to"] == "Sarah", plan6
+    assert "Sarah" in steps6["send_email"]["args"]["body"], plan6
+    plan6b = json.loads(await gw2.think(
+        "Plan: Sam needs the revised deck before Friday; I told him I'd send it.",
+        tier=SMART, caller="plan"))
+    send6b = next(s for s in plan6b["steps"] if s["intent"] == "send_email")
+    assert send6b["args"]["to"] == "Sam", plan6b
+    assert "Sam needs the revised deck" in send6b["args"]["body"], plan6b
+    assert "Sarah" not in json.dumps(plan6b), plan6b
 
     # F27/F30: grounded calendar shapes plan EXACTLY one create_event whose args come
     # from the SPOKEN line — the canned placeholder args never ride a grounded shape,
