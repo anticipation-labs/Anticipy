@@ -5,8 +5,23 @@ Each entry: date · slice · the RECEIPT (a real artifact a human can independen
 
 ## Slice status
 - **Slice 0 — real read-back completion gate:** ✅ DONE & PROVEN (2026-06-13). See receipt below.
-- **Slice 1 — one real day end-to-end (inference core on the live brain):** NEXT.
+- **Slice 1 — inference core (catch unspoken commitments):** IN PROGRESS. Attempt 1 REVERTED (see below). Attempt 2 (1b) running.
 - Slices 2–7: NOT STARTED.
+
+## Honest negatives (reverted; kept so we never repeat them)
+
+### ❌ Slice 1 attempt 1 — owed-commitment carve-out · 2026-06-13 · REVERTED
+**Baseline measured live (OpenRouter):** 11/16 reported/indirect commitments caught, **0 vent false-actions**.
+Root cause of the 5 misses: they pass triage but the **decider (Room 1.5, cheap `gemini-2.5-flash-lite`)** files
+first-person commitments as "self-narration" and defaults SILENT. The attempt added an "OWED COMMITMENT"
+category to the decider prompt → catch rose to 16/16. **But it reintroduced the CARDINAL SIN:** skeptic #1
+found **6 deterministic false-actions** on grammatically-clean-but-absurd/sarcastic obligations ("I'll have the
+unicorn delivered to Karen by Monday", "my boss wants me to clone the entire codebase in my head by Friday",
+"I promised the team I'd fix everything by Friday lol") — all fired ASK 5/5 reps. The cheap model can't tell a
+real obligation from a sarcastic/absurd one once the prompt says obligations "must NOT be dropped to silence."
+2/3 skeptics refuted. **Reverted; suite 56/56 green.** Lesson: raising commitment catch on the cheap decider by
+shape alone manufactures false-actions — the exact F34/F37/F38 trap. The fix must add a dominant
+sarcasm/absurdity/hyperbole veto and/or escalate the judgment to the SMART model.
 
 ## Proven receipts
 
