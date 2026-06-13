@@ -10,12 +10,69 @@ const SAMPLE = `[08:02] Omar: yeah okay no the coffee machine is being weird aga
 [12:10] order the replacement filter today and just pay whatever it costs.
 [13:00] My wife Maya prefers texts after lunch.`;
 
+const DEFAULT_MEMORY = {
+  ownerName: "Omar",
+  timezone: "America/Vancouver",
+  phone: "",
+  email: "",
+  preferences: "Ask before sending messages to real people.\nNever buy anything.",
+  people: "Maya | wife | sms | school pickup changes\nSam | contractor | email | revised deck",
+  connections: "Google Calendar | connected | api | calendar | reminders and events\nGmail | needs_auth | api | gmail.compose | drafts and approvals\nChrome | needs_setup | browser | chrome | browser tasks",
+  stores: "Staples | https://www.staples.com | office supplies\nTarget | https://www.target.com | birthday gifts",
+  notes: "Weekday afternoons are usually packed.",
+};
+
 const sources = [
   ["typed", "Typed"],
   ["transcript", "Transcript"],
   ["upload", "Upload"],
   ["start_listening", "Listen"],
 ];
+
+function lines(value) {
+  return (value || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function pipeParts(line) {
+  return line.split("|").map((part) => part.trim());
+}
+
+function normalizeConnectionStatus(value) {
+  const allowed = new Set(["connected", "needs_auth", "needs_setup", "unavailable", "unknown"]);
+  return allowed.has(value) ? value : "unknown";
+}
+
+function normalizeRoute(value) {
+  const allowed = new Set(["api", "browser", "voice_text", "memory"]);
+  return allowed.has(value) ? value : "api";
+}
+
+function onboardingPayload(form) {
+  return {
+    source: "owner_mode",
+    owner_name: form.ownerName,
+    timezone: form.timezone,
+    phone: form.phone,
+    email: form.email,
+    preferences: lines(form.preferences),
+    people: lines(form.people).map((line) => {
+      const [name, relationship = "", channel = "", notes = ""] = pipeParts(line);
+      return { name, relationship, channels: channel ? [channel] : [], notes };
+    }).filter((person) => person.name),
+    connections: lines(form.connections).map((line) => {
+      const [name, status = "unknown", route = "api", identifier = "", notes = ""] = pipeParts(line);
+      return { name, status: normalizeConnectionStatus(status), route: normalizeRoute(route), identifier, notes };
+    }).filter((connection) => connection.name),
+    stores: lines(form.stores).map((line) => {
+      const [name, url = "", notes = "", route = "browser"] = pipeParts(line);
+      return { name, url, notes, route: normalizeRoute(route) };
+    }).filter((store) => store.name),
+    raw_notes: form.notes,
+  };
+}
 
 function cardBucket(card) {
   if (card.status === "declined") return "done";
@@ -52,6 +109,21 @@ function outcomeText(card, pendingAsk) {
 
 function receiptText(entry) {
   return entry.summary || entry.message || JSON.stringify(entry.data || entry);
+}
+
+function MemoryField({ label, value, onChange, multiline = false, placeholder = "" }) {
+  const props = {
+    value,
+    onChange: (event) => onChange(event.target.value),
+    placeholder,
+    spellCheck: "true",
+  };
+  return (
+    <label className="memory-field">
+      <span>{label}</span>
+      {multiline ? <textarea {...props} /> : <input {...props} />}
+    </label>
+  );
 }
 
 function TaskCard({ card, pendingAsk, onResolve }) {
@@ -122,6 +194,10 @@ export default function Home() {
   const [ignored, setIgnored] = useState(0);
   const [pending, setPending] = useState([]);
   const [events, setEvents] = useState([]);
+  const [memoryForm, setMemoryForm] = useState(DEFAULT_MEMORY);
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryResult, setMemoryResult] = useState(null);
+  const [memoryError, setMemoryError] = useState("");
   const [engine, setEngine] = useState({
     ok: false,
     label: "checking",
@@ -201,6 +277,30 @@ export default function Home() {
     setCards(data.cards || []);
     setObserved(data.observed_lines || []);
     setIgnored(data.ignored_line_count || 0);
+  }
+
+  function updateMemoryField(field, value) {
+    setMemoryForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveMemory() {
+    setMemoryBusy(true);
+    setMemoryError("");
+    try {
+      const response = await fetch("/api/owner/onboard", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(onboardingPayload(memoryForm)),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || data.detail || data.error || "Memory save failed");
+      setMemoryResult(data);
+      await loadStatus();
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMemoryBusy(false);
+    }
   }
 
   async function runUpload() {
@@ -422,6 +522,76 @@ export default function Home() {
             </button>
           </div>
           {error ? <div className="error">{error}</div> : null}
+
+          <details className="memory-primer">
+            <summary>
+              <span>Memory</span>
+              {memoryResult ? <small>{memoryResult.written?.length || 0} saved</small> : null}
+            </summary>
+            <div className="memory-grid">
+              <MemoryField
+                label="Owner"
+                value={memoryForm.ownerName}
+                onChange={(value) => updateMemoryField("ownerName", value)}
+              />
+              <MemoryField
+                label="Time zone"
+                value={memoryForm.timezone}
+                onChange={(value) => updateMemoryField("timezone", value)}
+              />
+              <MemoryField
+                label="Phone"
+                value={memoryForm.phone}
+                onChange={(value) => updateMemoryField("phone", value)}
+              />
+              <MemoryField
+                label="Email"
+                value={memoryForm.email}
+                onChange={(value) => updateMemoryField("email", value)}
+              />
+              <MemoryField
+                label="Preferences"
+                value={memoryForm.preferences}
+                onChange={(value) => updateMemoryField("preferences", value)}
+                multiline
+              />
+              <MemoryField
+                label="People"
+                value={memoryForm.people}
+                onChange={(value) => updateMemoryField("people", value)}
+                multiline
+              />
+              <MemoryField
+                label="Apps"
+                value={memoryForm.connections}
+                onChange={(value) => updateMemoryField("connections", value)}
+                multiline
+              />
+              <MemoryField
+                label="Stores"
+                value={memoryForm.stores}
+                onChange={(value) => updateMemoryField("stores", value)}
+                multiline
+              />
+              <MemoryField
+                label="Notes"
+                value={memoryForm.notes}
+                onChange={(value) => updateMemoryField("notes", value)}
+                multiline
+              />
+            </div>
+            <div className="control-row">
+              <button className="secondary" type="button" onClick={saveMemory} disabled={memoryBusy}>
+                {memoryBusy ? "Saving" : "Save memory"}
+              </button>
+              {memoryResult?.missing_connections?.length ? (
+                <span className="memory-result">Missing: {memoryResult.missing_connections.join(", ")}</span>
+              ) : memoryResult ? (
+                <span className="memory-result">Memory saved</span>
+              ) : null}
+            </div>
+            {memoryError ? <div className="error">{memoryError}</div> : null}
+          </details>
         </aside>
 
         <section className="board">
