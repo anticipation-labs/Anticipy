@@ -2,6 +2,9 @@
 
 Fresh working environment for Anticipy, wired to its own GitHub repo and Vercel project.
 
+Read [PRODUCT_STATUS.md](./PRODUCT_STATUS.md) for the current human product target,
+what is proven, and what is still not public-ready.
+
 - **Framework:** Next.js 15 (App Router)
 - **GitHub:** `omize10/Anticipy-executor-working` (private)
 - **Vercel:** project `anticipy-executor-working` (auto-deploys on push to `main`)
