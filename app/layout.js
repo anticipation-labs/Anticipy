@@ -1,6 +1,8 @@
+import "./globals.css";
+
 export const metadata = {
-  title: "Anticipy — Executor (Working)",
-  description: "Vibe your life.",
+  title: "Anticipy Owner Mode",
+  description: "Messy life input into safe task cards with receipts.",
 };
 
 export default function RootLayout({ children }) {
@@ -10,24 +12,11 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body
-        style={{
-          margin: 0,
-          minHeight: "100vh",
-          background: "#1c1b19",
-          color: "#f4efe6",
-          fontFamily: "Inter, system-ui, sans-serif",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
