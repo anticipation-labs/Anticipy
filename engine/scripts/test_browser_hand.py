@@ -5,6 +5,7 @@ Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_hand.
 import asyncio
 
 from anticipy_engine.core.envelopes import Job, JobStatus
+from anticipy_engine.agent.webvoyager import AGENT_MAX_TOKENS
 from anticipy_engine.hands.browser_hand import BrowserHand, MODE_MOCK
 
 
@@ -33,6 +34,7 @@ class FakeLink:
 
 
 async def main():
+    assert AGENT_MAX_TOKENS >= 64, "browser planner JSON replies need room to parse"
     assert set(BrowserHand(FakeLink()).handles()) == {"browse_task", "read_page"}
 
     r = await BrowserHand(FakeLink(behavior="success")).handle(Job(intent="browse_task", args={"task": "x"}))

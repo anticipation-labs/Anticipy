@@ -35,7 +35,7 @@ PLAN_SYS = """Break the task into 3-6 ordered subgoals a browser agent completes
 (e.g., reach the target page; find the target item; select it; perform the action; verify/stop).
 Reply ONLY JSON: {"subgoals":["...","..."]}"""
 
-AGENT_MAX_TOKENS = 16
+AGENT_MAX_TOKENS = max(64, int(os.environ.get("ANTICIPY_AGENT_MAX_TOKENS", "96")))
 ADD_CLICK_SETTLE_SECONDS = 2.0
 
 ACT_SYS = """You control a REAL browser through a numbered set-of-marks overlay (the screenshot shows numbered boxes).
