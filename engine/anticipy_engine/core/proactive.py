@@ -38,7 +38,7 @@ from ..proactive.harm import FOLLOWUP_PREFIX, HarmLine
 from ..proactive.triage import Triage
 from ..proactive.trigger import TriggerWatcher
 from .bus import Bus
-from .envelopes import Event, EventSource, Goal, GoalState, Job, JobStatus, now_ts
+from .envelopes import Event, EventSource, Goal, GoalState, Job, JobStatus, Risk, StepState, now_ts
 from .gateway import PROVIDER_OPENROUTER, ModelGateway
 from .orchestrator import Orchestrator
 
@@ -210,7 +210,15 @@ class ProactiveEngine:
         if not verdict.detrimental and not forced_ask:
             goal = await self.orchestrator.start_goal(Goal(intent=event.text, description=description))
             goal_id = goal.id
-            decision = "act"
+            if goal.state == GoalState.waiting and self._goal_waiting_for_planned_approval(goal):
+                decision = "ask"
+                reason = self._waiting_goal_reason(goal, reason)
+                ask_id = self._send_ask(goal, event.text, reason, "planned_high_risk")
+                self._raise_to_human(event, reason)
+                if event.source == EventSource.system:
+                    self.budget.record_interruption(now)
+            else:
+                decision = "act"
         else:
             goal = Goal(intent=event.text, description=description, state=GoalState.waiting)
             self.orchestrator.store.save(goal)        # persist the PAUSED goal (NOT executed)
@@ -439,7 +447,12 @@ class ProactiveEngine:
             return {"ask_id": ask_id, "approved": False, "blocked": True,
                     "goal_id": goal.id, "reason": "never-execute category"}
         if approved:
-            goal = await self.orchestrator.start_goal(goal)   # resume the EXACT paused goal -> run to done
+            if goal.steps:
+                self._approve_waiting_goal(goal)
+                goal = await self.orchestrator._drive(goal)   # resume the EXACT planned goal -> run to done
+            else:
+                goal.proof = {**(goal.proof or {}), "owner_approved": True}
+                goal = await self.orchestrator.start_goal(goal)   # first run of an ask-paused goal
             if self.glassbox is not None:
                 self.glassbox.log("ask_approved", {"ask_id": ask_id, "goal_id": goal.id, "state": goal.state.value})
             return {"ask_id": ask_id, "approved": True, "goal_id": goal.id, "state": goal.state.value}
@@ -451,6 +464,31 @@ class ProactiveEngine:
         if self.glassbox is not None:
             self.glassbox.log("ask_declined", {"ask_id": ask_id, "goal_id": goal.id, "action": p["action"]})
         return {"ask_id": ask_id, "approved": False, "goal_id": goal.id, "declined_action": p["action"]}
+
+    @staticmethod
+    def _waiting_goal_reason(goal: Goal, fallback: str) -> str:
+        for step in goal.steps:
+            if (step.state == StepState.needs_human and step.result is None
+                    and step.risk in (Risk.needs_confirm, Risk.ask_human)):
+                return f"planned step '{step.intent}' requires approval before acting"
+        return fallback or "planned work requires approval before acting"
+
+    @staticmethod
+    def _goal_waiting_for_planned_approval(goal: Goal) -> bool:
+        return any(
+            step.state == StepState.needs_human
+            and step.result is None
+            and step.risk in (Risk.needs_confirm, Risk.ask_human)
+            for step in goal.steps
+        )
+
+    @staticmethod
+    def _approve_waiting_goal(goal: Goal) -> None:
+        for step in goal.steps:
+            if (step.state == StepState.needs_human and step.result is None
+                    and step.risk in (Risk.needs_confirm, Risk.ask_human)):
+                step.args["approved"] = True
+                return
 
     async def trigger_tick(self, now: Optional[float] = None) -> list:
         """Room 3: watch the commitment ledger against the clock. Each due/elapsed loop fires a

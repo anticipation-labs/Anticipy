@@ -159,6 +159,49 @@ def main():
         assert any(p.get("type") == "memory_resolution" and p.get("site") == "https://www.staples.com"
                    for p in durable_browser["proof"]), durable_browser
 
+        # A lower-level model/planner risk cannot bypass the owner approval rail.
+        # The top-level request is safe enough to plan, but the planned send step is
+        # ask_human; product core must surface it as pending and resume the exact
+        # planned goal only after approval.
+        from anticipy_engine.core.gateway import default_stub
+        old_stub = core.gateway._stub
+
+        def planned_high_risk(task, tier, caller):
+            if caller == "plan":
+                return json.dumps({
+                    "steps": [{
+                        "intent": "send_email",
+                        "args": {"to": "Jordan", "subject": "Packet", "body": "Prepared packet."},
+                        "risk": "ask_human",
+                    }],
+                })
+            return default_stub(task, tier, caller)
+
+        core.gateway._stub = planned_high_risk
+        try:
+            lower_gate = client.post(
+                "/event",
+                json={"source": "app", "text": "Prepare the project packet", "meta": {"test": "planner_risk"}},
+            )
+            assert lower_gate.status_code == 200, lower_gate.text
+            lower_out = lower_gate.json()
+            assert lower_out["decision"] == "ask" and lower_out["ask_id"], lower_out
+            lower_goal = core.store.load(lower_out["goal_id"])
+            assert lower_goal.state.value == "waiting", lower_goal
+            assert lower_goal.steps[0].state.value == "needs_human", lower_goal.steps[0]
+            assert not lower_goal.steps[0].args.get("approved"), lower_goal.steps[0]
+            lower_pending = client.get("/pending").json()["pending"]
+            assert any(p["ask_id"] == lower_out["ask_id"] for p in lower_pending), lower_pending
+            lower_approved = client.post("/resolve", json={"ask_id": lower_out["ask_id"], "approved": True})
+            assert lower_approved.status_code == 200, lower_approved.text
+            lower_approved_out = lower_approved.json()
+            assert lower_approved_out["approved"] is True and lower_approved_out["state"] == "done", lower_approved_out
+            lower_done = core.store.load(lower_out["goal_id"])
+            assert lower_done.state.value == "done", lower_done
+            assert lower_done.steps[0].args["approved"] is True, lower_done.steps[0]
+        finally:
+            core.gateway._stub = old_stub
+
         still_pending = client.get("/pending").json()["pending"]
         assert all(p["ask_id"] != ask_id for p in still_pending), still_pending
 

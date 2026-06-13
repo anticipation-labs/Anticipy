@@ -116,13 +116,19 @@ def _connect_tool(fields: dict) -> str | None:
 
 class GatedApprover(Approver):
     """Human-path stub that also propagates the gate's approval flag onto the
-    step args, so the hand's defense-in-depth (refuse high-risk without the flag)
-    is satisfied. Done in the approver — no orchestrator change."""
+    step args only after the owner has approved. Product core uses this as a
+    lower safety rail: a planner-level high-risk step cannot auto-approve itself
+    just because the top-level proactive gate thought the request was safe."""
 
-    def __init__(self, approve: bool = True) -> None:
+    def __init__(self, approve: bool = False) -> None:
         self._approve = approve
 
     async def approve(self, goal, step) -> bool:
+        if step.args.get("approved") is True:
+            return True
+        if (goal.proof or {}).get("owner_approved") is True:
+            step.args["approved"] = True
+            return True
         if self._approve:
             step.args["approved"] = True
         return self._approve
@@ -196,7 +202,7 @@ class ControlCore:
         alternates = {"post_to_x": "browse_task", "create_event": "browse_task", "message": "browse_task"}
         self.orchestrator = Orchestrator(
             self.bus, self.gateway, self.store, glassbox=self.glassbox, scorecard=self.scorecard,
-            alternates=alternates, approver=GatedApprover(True), memory_context=self._mem_ctx,
+            alternates=alternates, approver=GatedApprover(False), memory_context=self._mem_ctx,
         )
         self.proactive = ProactiveEngine(
             self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard,
