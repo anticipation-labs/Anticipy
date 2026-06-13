@@ -13,6 +13,8 @@ os.environ.setdefault("ANTICIPY_HANDS_MODE", "mock")
 os.environ.setdefault("ANTICIPY_TICK_SECONDS", "0")
 os.environ.setdefault("ANTICIPY_INBOUND_POLL_SECONDS", "0")
 os.environ["ANTICIPY_DATA_DIR"] = tempfile.mkdtemp(prefix="anticipy-upload-api-")
+UPLOAD_ROOT = Path(tempfile.mkdtemp(prefix="anticipy-owner-uploads-")).resolve()
+os.environ["ANTICIPY_UPLOAD_ROOTS"] = str(UPLOAD_ROOT)
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -42,7 +44,8 @@ def _post(client, file_path: Path, *, filename: str) -> dict:
 
 
 def main():
-    tmp = Path(tempfile.mkdtemp(prefix="anticipy-upload-files-"))
+    tmp = UPLOAD_ROOT / "case"
+    tmp.mkdir(parents=True, exist_ok=True)
     text_path = tmp / "omar-day.txt"
     text_path.write_text(TRANSCRIPT, encoding="utf-8")
 
@@ -53,6 +56,35 @@ def main():
     with TestClient(app) as client:
         text_out = _post(client, text_path, filename="omar-day.txt")
         audio_out = _post(client, audio_path, filename="omar-day.mp3")
+        assert not text_path.exists(), "text upload staging file should be deleted after ingest"
+        assert not audio_path.exists(), "audio upload staging file should be deleted after ingest"
+        assert not audio_path.with_suffix(".transcript").exists(), "audio transcript sidecar should be deleted"
+
+        outside = Path(tempfile.mkdtemp(prefix="anticipy-upload-outside-")) / "secret.txt"
+        outside.write_text(TRANSCRIPT, encoding="utf-8")
+        rejected = client.post(
+            "/owner/ingest-file",
+            json={"path": str(outside), "filename": "secret.txt", "source": "upload"},
+        )
+        assert rejected.status_code == 403, rejected.text
+
+        old_cap = os.environ.get("ANTICIPY_MAX_UPLOAD_BYTES")
+        try:
+            os.environ["ANTICIPY_MAX_UPLOAD_BYTES"] = "4"
+            tmp.mkdir(parents=True, exist_ok=True)
+            too_big = tmp / "too-big.txt"
+            too_big.write_text("too large", encoding="utf-8")
+            oversized = client.post(
+                "/owner/ingest-file",
+                json={"path": str(too_big), "filename": "too-big.txt", "source": "upload"},
+            )
+            assert oversized.status_code == 413, oversized.text
+            assert not too_big.exists(), "oversized staged file should be deleted"
+        finally:
+            if old_cap is None:
+                os.environ.pop("ANTICIPY_MAX_UPLOAD_BYTES", None)
+            else:
+                os.environ["ANTICIPY_MAX_UPLOAD_BYTES"] = old_cap
 
     for out, expected_source in ((text_out, "text_upload"), (audio_out, "audio_upload")):
         assert out["source"] == expected_source, out

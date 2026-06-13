@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import tempfile
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Optional
@@ -31,6 +32,8 @@ from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
 from .owner_onboarding import OwnerOnboardingIn
 
 ENGINE_NAME = "anticipy-engine"
+DEFAULT_UPLOAD_ROOT = Path(tempfile.gettempdir()) / "anticipy-owner-uploads"
+DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 core = ControlCore()
 extension_hello_seen = False
@@ -139,6 +142,33 @@ class ConnectionAuthorizeIn(BaseModel):
     id: str
 
 
+def _upload_roots() -> list[Path]:
+    raw = os.environ.get("ANTICIPY_UPLOAD_ROOTS") or str(DEFAULT_UPLOAD_ROOT)
+    return [Path(p).expanduser().resolve() for p in raw.split(os.pathsep) if p.strip()]
+
+
+def _under_root(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _cleanup_upload(path: Path) -> None:
+    candidates = [path]
+    if is_audio_file(path):
+        candidates.append(path.with_suffix(".transcript"))
+    for candidate in candidates:
+        with suppress(OSError):
+            candidate.unlink()
+    for parent in path.parents:
+        if parent in _upload_roots() or parent == parent.parent:
+            break
+        with suppress(OSError):
+            parent.rmdir()
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": ENGINE_NAME, "version": __version__}
@@ -215,36 +245,46 @@ async def owner_ingest(body: OwnerIngestIn) -> dict:
 async def owner_ingest_file(body: OwnerFileIngestIn) -> dict:
     """Read one uploaded local file, then use the same owner-ingest path as typed text."""
     path = Path(body.path).expanduser().resolve()
+    if not any(_under_root(path, root) for root in _upload_roots()):
+        raise HTTPException(status_code=403, detail="uploaded file path is outside the Anticipy upload staging area")
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail=f"uploaded file not found: {path}")
+    max_bytes = int(os.environ.get("ANTICIPY_MAX_UPLOAD_BYTES", str(DEFAULT_MAX_UPLOAD_BYTES)) or DEFAULT_MAX_UPLOAD_BYTES)
+    size = path.stat().st_size
+    if size > max_bytes:
+        _cleanup_upload(path)
+        raise HTTPException(status_code=413, detail=f"{path.name} is too large ({size} bytes > {max_bytes})")
 
     filename = body.filename or path.name
     meta = {
         **body.meta,
         "upload_filename": filename,
         "upload_path": str(path),
-        "upload_bytes": path.stat().st_size,
+        "upload_bytes": size,
     }
 
-    if is_audio_file(path):
-        try:
-            transcript = transcribe_audio(path)
-        except Exception as exc:  # noqa: BLE001 - surface an honest product error
-            core.glassbox.log(
-                "owner_upload_error",
-                {"filename": filename, "path": str(path), "error": f"{type(exc).__name__}: {exc}"},
-            )
-            raise HTTPException(
-                status_code=422,
-                detail=f"Could not transcribe {filename}: {type(exc).__name__}: {exc}",
-            ) from exc
-        text = "\n".join(transcript.lines)
-        meta.update({"upload_kind": "audio", "transcript": transcript.metadata})
-        source = body.source if body.source != "upload" else "audio_upload"
-    else:
-        text = path.read_bytes().decode("utf-8", errors="replace")
-        meta.update({"upload_kind": "text"})
-        source = body.source if body.source != "upload" else "text_upload"
+    try:
+        if is_audio_file(path):
+            try:
+                transcript = transcribe_audio(path)
+            except Exception as exc:  # noqa: BLE001 - surface an honest product error
+                core.glassbox.log(
+                    "owner_upload_error",
+                    {"filename": filename, "path": str(path), "error": f"{type(exc).__name__}: {exc}"},
+                )
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Could not transcribe {filename}: {type(exc).__name__}: {exc}",
+                ) from exc
+            text = "\n".join(transcript.lines)
+            meta.update({"upload_kind": "audio", "transcript": transcript.metadata})
+            source = body.source if body.source != "upload" else "audio_upload"
+        else:
+            text = path.read_bytes().decode("utf-8", errors="replace")
+            meta.update({"upload_kind": "text"})
+            source = body.source if body.source != "upload" else "text_upload"
+    finally:
+        _cleanup_upload(path)
 
     if not text.strip():
         raise HTTPException(status_code=400, detail=f"{filename} did not contain usable text")

@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 
 const ENGINE_URL = process.env.ANTICIPY_ENGINE_URL || "http://127.0.0.1:8787";
+const UPLOAD_ROOT = process.env.ANTICIPY_UPLOAD_ROOT || path.join(os.tmpdir(), "anticipy-owner-uploads");
+const MAX_UPLOAD_BYTES = Number(process.env.ANTICIPY_MAX_UPLOAD_BYTES || 100 * 1024 * 1024);
 
 function safeFilename(name) {
   return (name || "owner-upload.txt").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
@@ -16,8 +18,17 @@ export async function POST(request) {
     if (!file || typeof file.arrayBuffer !== "function") {
       return Response.json({ error: "missing_file", message: "Upload a transcript or audio file." }, { status: 400 });
     }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return Response.json(
+        {
+          error: "upload_too_large",
+          message: `Upload is too large (${file.size} bytes > ${MAX_UPLOAD_BYTES}).`,
+        },
+        { status: 413 },
+      );
+    }
 
-    const uploadDir = path.join(os.tmpdir(), "anticipy-owner-uploads", randomUUID());
+    const uploadDir = path.join(UPLOAD_ROOT, randomUUID());
     await mkdir(uploadDir, { recursive: true });
     const filename = safeFilename(file.name);
     const localPath = path.join(uploadDir, filename);
