@@ -904,3 +904,15 @@ e2e 0.3778 to 0.5833, catch 0.6825 to 0.8413, catch_worst 0.5 to 0.6667, correct
 0.6222 to 0.6945, with false 0 and harm 0 unchanged. Legacy dev-bank smoke stayed at
 catch 1.0/1.0, e2e 0.6483, false 0, harm 0. Full suite stayed green at 46/46. P3 live
 gate was not attempted because owner_phone.confirmed is still absent.
+
+2026-06-13 lap 20260613T014006Z (build, TARGET v9 dev_v2 time-anchored forget holds):
+inspected the Nora, Mina, and Eli dev_v2 run dirs before keeping a fix. The first broad
+safe-capture hypothesis was wrong: it created two unmatched Nora ACTs and raised
+false_action_count to 2, so that code was removed. The kept slice is narrower: a
+time-anchored "before I forget" line is now a reversible hold after hard money/send/delete
+checks, and the stub planner writes the exact open-loop text with proof. Official dev_v2
+owner-ingest stub score moved e2e 0.5833 -> 0.6389 and correct 0.6945 -> 0.75 while
+catch stayed 0.8413, false stayed 0, harm stayed 0, interrupt stayed 1.0/2.0, and
+recall_worst stayed 0.5. Legacy dev-bank smoke stayed at catch 1.0/1.0, e2e 0.6483,
+false 0, harm 0. `bash scripts/run_suite.sh` stayed green at 46/46. P3 live gate was
+not attempted because `factory/config/owner_phone.confirmed` is still absent.

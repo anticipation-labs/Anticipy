@@ -112,6 +112,10 @@ _REMINDER = re.compile(r"\b(remind me|set (a |an )?reminder|reminder to|don'?t f
                        # "block 9 to noon", "block Monday 8 to 9" — a hold phrased as a time range
                        r"|\bblock\b[^.;!?]{0,40}?\b(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|midnight)\s*"
                        r"(?:to|until|till|through|-|–)\s*(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon|midnight)\b")
+_FORGET_HOLD = re.compile(
+    r"\b(?:before|so)\s+(?:i|we)\s+(?:don'?t\s+)?forget\b",
+    re.I,
+)
 _DRAFT_FRAME = re.compile(r"\b(draft|drafts|drafted|drafting|prepare|prepares|preparing|compose|composes|composing|"
                           r"write up|writes up|outline|outlines|put together)\b")
 _VAGUE_CART = re.compile(
@@ -214,6 +218,9 @@ class HarmLine:
         if match_schedule_change_hold(action_text or "") is not None:
             return HarmVerdict(False, "calendar_hold",
                                "reversible:schedule-change hold -> act (re-gated on fire)")
+        if _FORGET_HOLD.search(t) and _REMINDER_TIME_ANCHOR.search(t):
+            return HarmVerdict(False, "calendar_hold",
+                               "reversible:time-anchored forget-hold -> act (re-gated on fire)")
         # 4) soft send WITHOUT a draft frame — binding, gray via memory
         if _SOFT_SEND.search(t) and not _DRAFT_FRAME.search(t):
             return self._assess_send(t, ctx)

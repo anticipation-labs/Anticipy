@@ -89,6 +89,8 @@ BATTERY = [
     ("Pickup moved to 2:20 today, put that somewhere loud.", False),
     ("Update my calendar with the new board call time.", False),    # repair-verb hold
     ("Get that into my calendar before my brain deletes it.", False),
+    ("Renew the patio permit tomorrow morning before I forget again.", False),
+    ("Pay the permit fee tomorrow before I forget.", True),          # money outranks forget-hold
     # ---- SAFE: prepare a document ----
     ("Prepare a brief for the board meeting.", False),
     ("Put together a summary of the user interviews.", False),

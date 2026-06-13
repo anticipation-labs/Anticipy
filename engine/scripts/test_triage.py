@@ -42,6 +42,7 @@ STREAM = [
     ("Ari moved my Tuesday shift to noon, can you block the morning for the clinic ride.", True),
     ("That goes on the calendar now.", True),                            # calendar-put, 3rd person
     ("Update my calendar so I don't double-book.", True),                # repair-verb imperative
+    ("Renew the patio permit tomorrow morning before I forget again.", True),
     ("Someone needs to chase the unpaid invoice.", True),                # delegation
     ("Get the signed forms over to the front office today.", True),      # causative hand-off
     ("Those wide trail shoes I picked out - put them in the cart.", True),  # cart idiom

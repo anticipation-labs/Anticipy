@@ -105,6 +105,12 @@ async def main() -> None:
     assert [s["intent"] for s in plan11["steps"]] == ["create_event"], plan11
     assert plan11["steps"][0]["args"]["when"] == "Tuesday morning", plan11
     assert plan11["steps"][0]["args"]["title"] == "clinic ride", plan11
+    forget_goal = "Renew the patio permit tomorrow morning before I forget again."
+    plan12 = json.loads(await gw2.think(
+        "Plan the goal into ordered steps. ...\nGOAL: " + forget_goal,
+        tier=SMART, caller="plan"))
+    assert [s["intent"] for s in plan12["steps"]] == ["write_memory"], plan12
+    assert plan12["steps"][0]["args"] == {"kind": "open_loop", "text": forget_goal}, plan12
 
     print("PASS piece 3: model gateway")
     print("  plan intents:", intents)

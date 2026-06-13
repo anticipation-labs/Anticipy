@@ -1582,3 +1582,26 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   test_owner_ingest_event.py. Return signal: a moved/blocked schedule line
   becomes ignore/ask instead of a done calendar-card with proof, or a true
   destructive delete line is allowed to act.
+
+## Build lap 20260613T014006Z (time-anchored forget holds)
+- F34 FIXED: time-anchored "before I forget" commitments that should become
+  reversible holds were reaching the harm-line as unclassified and turning into
+  waits instead of proof-bearing open-loop writes. The observed dev_v2 instance
+  was a permit-renewal reminder with "tomorrow morning"; it was safe to capture
+  as an open loop because all hard stops still run first and the future action is
+  re-gated when the loop fires. Fix: Room 2 recognizes only time-anchored
+  forget-holds after money/send/delete/auth checks, and the stub planner writes
+  the exact goal text to `write_memory` as an open loop. Regression checks:
+  `test_harmline.py`, `test_gateway.py`, `test_owner_ingest_event.py`, and
+  `test_triage.py`. Return signal: a time-anchored forget-hold becomes ask/open
+  instead of a done memory-backed card, or a money/send forget-hold is allowed to
+  act.
+- F35 AVOIDED/DO-NOT-RETRY-BROADLY: the first hypothesis in this lap treated
+  broad "keep this visible / add this note so it does not vanish" lines as safe
+  open-loop writes. The dev_v2 scorer immediately showed two unmatched ACTs and
+  `false_action_count=2`, with no aggregate e2e movement. That broad matcher was
+  ripped out before the kept run. Do not reintroduce a broad visibility-capture
+  matcher without a narrower product law and a zero-false eval. Regression check:
+  official dev_v2 owner-ingest score must keep `false_action_count==0`; there
+  must be no generic capture-to-visibility helper that acts on arbitrary note or
+  visibility wording.

@@ -20,7 +20,12 @@ because `factory/config/owner_phone.confirmed` is still absent. First build lap 
 closed F33 (schedule-change calendar holds) and moved the official local stub score
 to catch 0.8413, catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.5833,
 correct 0.6945, recall_worst 0.5, worst_persona freelancer_nora; suite stayed 46/46
-green and legacy dev stayed at ratchet bests.
+green and legacy dev stayed at ratchet bests. Second build lap on v2 closed F34
+(time-anchored before-I-forget holds) and moved the official local stub score to
+catch 0.8413, catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.6389,
+correct 0.75, recall_worst 0.5, worst_persona freelancer_nora; suite stayed 46/46
+green and legacy dev stayed at ratchet bests. The broad capture-to-visibility attempt
+inside that lap was ripped out after it produced false_action_count 2.
 
 OWNER DIRECTIVE 2026-06-10: the immediate product priority is the Owner Action Engine,
 not another narrow loop around one brain metric. Durable directive:
@@ -90,6 +95,24 @@ its LESSONS.md still binds.
   event on June 12 (cleanup blocked by TCC; do not touch other calendar data).
 
 ## Current phase: P2-brain CLOSED (lap 20260611T041654Z, judge REAL — F15a holdout state finally judged) -> TARGET v7: owner lane IS the official instrument (eval_env ANTICIPY_OWNER_INGEST=1, primary e2e_completion_rate) -> TARGET v8 (second K=5 resolved): Stage A = P3 closure on OWNER_PHONE confirm, Stage B = P4-browser groundwork -> TARGET v9: first resumed lap is the countable dev_v2 owner-ingest baseline, then build from the actual dev_v2 gaps
+- TIME-ANCHORED BEFORE-I-FORGET HOLDS NOW COMPLETE IN OWNER LANE (lap
+  20260613T014006Z, build - F34 FIXED, second post-baseline dev_v2 metric
+  movement). The v2 run dirs showed a proof gap where a concrete, time-anchored
+  "before I forget" commitment was caught as an ask but not completed, even
+  though the safe product action is only to capture an open loop and re-gate the
+  future external action when it fires. Fix = Room 2 treats only time-anchored
+  forget-holds as reversible calendar/open-loop holds after hard money/send/delete
+  checks, and the stub planner writes the exact goal text as one `write_memory`
+  open-loop step. Official TARGET v9 lane (`ANTICIPY_OWNER_INGEST=1`,
+  `factory/personas/dev_v2`, stub): e2e 0.5833 -> 0.6389, correct 0.6945 ->
+  0.75, catch 0.8413, catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0,
+  recall_worst 0.5, worst_persona freelancer_nora. Legacy dev-bank smoke stayed
+  at ratchet bests (catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0,
+  e2e 0.6483, correct 0.8475, recall 1.0). Suite 46/46 green. F35 NEW
+  AVOIDED: a broader capture-to-visibility matcher produced false_action_count
+  2 and was ripped out before the kept run; do not retry that broad shape
+  without a narrower product law and a zero-false eval. P3 live gate still waits
+  on `factory/config/owner_phone.confirmed`.
 - SCHEDULE-CHANGE CALENDAR HOLDS NOW COMPLETE IN OWNER LANE (lap
   20260613T012751Z, build — F33 FIXED, first post-baseline dev_v2 metric
   movement). The v2 run dirs showed a shared miss-family: concrete schedule

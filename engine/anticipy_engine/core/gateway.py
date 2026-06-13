@@ -212,6 +212,17 @@ _POST_WORD_RE = re.compile(r"\bpost(?:ed|ing|s)?\b(?!-)")
 # "remind me ... to send X" line must hold, not send now), and the loop text is the
 # GOAL line itself, never the whole plan prompt (no prompt dumping).
 _SELF_REMINDER_RE = re.compile(r"\b(?:remind me|set (?:a |an )?reminder|reminder to|don'?t forget)\b", re.I)
+_FORGET_HOLD_RE = re.compile(
+    r"\b(?:before|so)\s+(?:i|we)\s+(?:don'?t\s+)?forget\b",
+    re.I,
+)
+_FORGET_HOLD_TIME_RE = re.compile(
+    r"\b(?:today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+    r"noon|midnight|morning|afternoon|evening|night|"
+    r"in \d+ (?:minutes?|hours?|days?))\b"
+    r"|\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b",
+    re.I,
+)
 _GOAL_LINE_RE = re.compile(r"\bGOAL: (?P<goal>[^\n]+)")
 # Grounded calendar shapes (decided act upstream by the harm-line's calendar_hold /
 # slot-choice rules): the honest plan is ONE create_event whose args come from the
@@ -267,6 +278,10 @@ def default_stub(task: str, tier: str, caller: str) -> str:
         goal_m = _GOAL_LINE_RE.search(task)
         goal_line = (goal_m.group("goal") if goal_m else task).strip()
         if _SELF_REMINDER_RE.search(task):
+            return json.dumps({"steps": [{"intent": "write_memory",
+                                          "args": {"kind": "open_loop", "text": goal_line},
+                                          "risk": "low"}]})
+        if _FORGET_HOLD_RE.search(goal_line) and _FORGET_HOLD_TIME_RE.search(goal_line):
             return json.dumps({"steps": [{"intent": "write_memory",
                                           "args": {"kind": "open_loop", "text": goal_line},
                                           "risk": "low"}]})
