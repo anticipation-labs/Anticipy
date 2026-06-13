@@ -191,9 +191,10 @@ function PendingAsk({ ask, onResolve }) {
   );
 }
 
-function MemoryLoop({ loop, onResolve }) {
+function MemoryLoop({ loop, onResolve, onConnect, connection }) {
   const meta = loopMeta(loop);
   const canResolve = !loop.fields?.owner_card_id;
+  const canConnect = canResolve && loop.fields?.action === "connect_account";
   return (
     <article className={`loop-item ${loop.status || "open"}`}>
       <div className="loop-head">
@@ -201,8 +202,14 @@ function MemoryLoop({ loop, onResolve }) {
         <span className="tag ask">{loop.status || "open"}</span>
       </div>
       {meta ? <span className="loop-meta">{meta}</span> : null}
+      {connection ? (
+        <span className="loop-meta">
+          {connection.status}: {connection.message || connection.connect_url || connection.name}
+        </span>
+      ) : null}
       {canResolve ? (
         <div className="loop-actions">
+          {canConnect ? <button type="button" onClick={() => onConnect(loop.id)}>Connect</button> : null}
           <button type="button" onClick={() => onResolve(loop.id)}>Done</button>
         </div>
       ) : null}
@@ -220,6 +227,7 @@ export default function Home() {
   const [ignored, setIgnored] = useState(0);
   const [pending, setPending] = useState([]);
   const [loops, setLoops] = useState([]);
+  const [connections, setConnections] = useState({});
   const [events, setEvents] = useState([]);
   const [memoryForm, setMemoryForm] = useState(DEFAULT_MEMORY);
   const [memoryBusy, setMemoryBusy] = useState(false);
@@ -344,6 +352,27 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || data.detail || data.error || "Loop resolve failed");
       setLoops((current) => current.filter((loop) => loop.id !== data.id));
+      await loadStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function connectLoop(loopId) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/connections/authorize", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: loopId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || data.detail || data.error || "Connection setup failed");
+      setConnections((current) => ({ ...current, [loopId]: data }));
+      if (data.connect_url) window.open(data.connect_url, "_blank", "noopener,noreferrer");
       await loadStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -717,7 +746,13 @@ export default function Home() {
             </div>
             <div className="loop-list">
               {loops.length ? loops.map((loop) => (
-                <MemoryLoop loop={loop} key={loop.id} onResolve={resolveLoop} />
+                <MemoryLoop
+                  loop={loop}
+                  key={loop.id}
+                  onConnect={connectLoop}
+                  onResolve={resolveLoop}
+                  connection={connections[loop.id]}
+                />
               )) : <div className="empty">No active memory loops.</div>}
             </div>
           </section>

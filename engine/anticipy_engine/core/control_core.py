@@ -26,7 +26,8 @@ from .workers import ChannelStub, ChannelWorker, MemoryWorker
 from ..channels.call import CallChannel
 from ..agent import site_hints
 from ..channels.text import TextChannel
-from ..hands import ApiHand, BrowserHand, MODE_MOCK
+from ..hands import ApiHand, BrowserHand, MODE_LIVE, MODE_MOCK, NotFundedError
+from ..hands.api_hand import INTENT_MAP
 from ..live_memory.brain import LiveMemoryBrain
 from ..memory.store import Memory
 from ..owner_mode import OwnerIngestResult, OwnerMode, OwnerObservedLine, OwnerTaskCard
@@ -70,6 +71,30 @@ def _steps_create_open_loop(steps: list[dict]) -> bool:
 
 def _status_for_open_loop(state: str) -> str:
     return "waiting" if state == "waiting" else "open" if state == "open" else state
+
+
+_CONNECT_TOOL_BY_IDENTIFIER = {
+    "calendar": "GoogleCalendar.CreateEvent",
+    "google_calendar": "GoogleCalendar.CreateEvent",
+    "gmail": "Gmail.SendEmail",
+    "gmail.compose": "Gmail.WriteDraftEmail",
+    "gmail.send": "Gmail.SendEmail",
+    "gmail.threads": "Gmail.ListThreads",
+}
+
+
+def _connect_tool(fields: dict) -> str | None:
+    identifier = str(fields.get("identifier") or "").strip().lower()
+    name = str(fields.get("name") or "").strip().lower()
+    if identifier in _CONNECT_TOOL_BY_IDENTIFIER:
+        return _CONNECT_TOOL_BY_IDENTIFIER[identifier]
+    if "gmail" in name:
+        return "Gmail.SendEmail"
+    if "calendar" in name:
+        return "GoogleCalendar.CreateEvent"
+    if "doc" in name:
+        return "GoogleDocs.GetDocumentById"
+    return INTENT_MAP.get(identifier)
 
 
 class GatedApprover(Approver):
@@ -652,6 +677,72 @@ class ControlCore:
             "previous_status": before,
             "text": item.text,
         }
+
+    def authorize_connection_loop(self, loop_id: str) -> dict:
+        """Read-only connect helper for setup loops; never executes an action."""
+        item = self.memory.open_loops.get(loop_id)
+        if item is None:
+            return {"ok": False, "reason": "unknown open loop"}
+        fields = item.fields or {}
+        if fields.get("action") != "connect_account":
+            return {"ok": False, "reason": "loop is not a connection setup task", "id": item.id}
+        if fields.get("owner_card_id"):
+            return {"ok": False, "reason": "owner-card loops must resolve through the task card", "id": item.id}
+
+        route = str(fields.get("route") or "").strip().lower()
+        name = str(fields.get("name") or item.text).strip()
+        if route == "browser":
+            connected = bool(self.browser_link.connected or getattr(self.native_bridge_link, "connected", False))
+            out = {
+                "ok": True,
+                "id": item.id,
+                "name": name,
+                "route": "browser",
+                "status": "connected" if connected else "needs_setup",
+                "message": "browser linked" if connected else "open Chrome and connect the Anticipy browser helper",
+            }
+            self.glassbox.log("connection_checked", out)
+            return out
+
+        if route != "api":
+            out = {"ok": True, "id": item.id, "name": name, "route": route or "unknown",
+                   "status": "needs_setup", "message": "manual setup required"}
+            self.glassbox.log("connection_checked", out)
+            return out
+
+        tool = _connect_tool(fields)
+        if not tool:
+            out = {"ok": True, "id": item.id, "name": name, "route": "api",
+                   "status": "needs_setup", "message": "no known connector for this app yet"}
+            self.glassbox.log("connection_checked", out)
+            return out
+        if self.api_hand.mode != MODE_LIVE:
+            out = {"ok": True, "id": item.id, "name": name, "route": "api", "tool": tool,
+                   "status": "mock", "message": "live connector mode is required to generate a connect URL"}
+            self.glassbox.log("connection_checked", out)
+            return out
+        try:
+            client = self.api_hand._client_or_build()
+            auth = client.tools.authorize(tool_name=tool, user_id=self.api_hand.user_id)
+        except NotFundedError as exc:
+            out = {"ok": True, "id": item.id, "name": name, "route": "api", "tool": tool,
+                   "status": "needs_setup", "message": str(exc)}
+            self.glassbox.log("connection_checked", out)
+            return out
+        except Exception as exc:  # noqa: BLE001 - setup help must not crash the app
+            out = {"ok": True, "id": item.id, "name": name, "route": "api", "tool": tool,
+                   "status": "needs_setup", "message": f"{type(exc).__name__}: {exc}"}
+            self.glassbox.log("connection_checked", out)
+            return out
+
+        status = getattr(auth, "status", None) or "unknown"
+        url = getattr(auth, "url", None)
+        out = {"ok": True, "id": item.id, "name": name, "route": "api", "tool": tool,
+               "status": "connected" if status == "completed" else "needs_auth",
+               "connect_url": url,
+               "message": "already connected" if status == "completed" else "open the connect URL and approve access"}
+        self.glassbox.log("connection_checked", out)
+        return out
 
     def owner_cards(self, limit: int = 50) -> dict:
         """Return recent durable owner cards for the app board.

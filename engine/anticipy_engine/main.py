@@ -135,6 +135,10 @@ class MemoryLoopResolveIn(BaseModel):
     status: str = "done"
 
 
+class ConnectionAuthorizeIn(BaseModel):
+    id: str
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": ENGINE_NAME, "version": __version__}
@@ -174,6 +178,14 @@ def memory_loop_resolve(body: MemoryLoopResolveIn) -> dict:
     out = core.resolve_memory_loop(body.id, body.status)
     if not out.get("resolved"):
         raise HTTPException(status_code=400, detail=out.get("reason") or "could not resolve memory loop")
+    return out
+
+
+@app.post("/connections/authorize")
+def connection_authorize(body: ConnectionAuthorizeIn) -> dict:
+    out = core.authorize_connection_loop(body.id)
+    if not out.get("ok"):
+        raise HTTPException(status_code=400, detail=out.get("reason") or "could not prepare connection")
     return out
 
 

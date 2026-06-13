@@ -56,6 +56,9 @@ def _summarize(entry: dict) -> str:
         return f"{decision} card {str(d.get('card_id', ''))[:8]} -> {d.get('state', '')}"
     if kind == "memory_loop_resolved":
         return f"closed loop: {d.get('text', '')} -> {d.get('status', '')}"
+    if kind == "connection_checked":
+        detail = d.get("message") or d.get("connect_url") or d.get("tool") or ""
+        return f"connection {d.get('name', 'app')}: {d.get('status', '')} — {detail}"
     if kind == "decision":
         return f"decided {d.get('decision')} — {d.get('text', '')}"
     if kind == "ask_human":

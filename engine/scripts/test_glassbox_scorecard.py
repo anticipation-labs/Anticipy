@@ -21,7 +21,12 @@ def test_units():
     gb.log("blocked", {"category": "money", "action": "pay the invoice"})
     gb.log("owner_card_resolved", {"card_id": "card123456", "approved": True, "state": "done"})
     gb.log("memory_loop_resolved", {"text": "Connect Gmail for Owner Action Engine", "status": "done"})
-    assert len(gb.entries()) == 7
+    gb.log("connection_checked", {
+        "name": "Gmail",
+        "status": "mock",
+        "message": "live connector mode is required to generate a connect URL",
+    })
+    assert len(gb.entries()) == 8
     sums = gb.summaries()
     assert any(s["kind"] == "decision" and "do_and_notify" in s["summary"] for s in sums)
     assert any(s["kind"] == "owner_ingest" and "processed 6 lines -> 4 cards" in s["summary"] for s in sums)
@@ -29,6 +34,7 @@ def test_units():
     assert any(s["kind"] == "blocked" and "hard wall: money" in s["summary"] for s in sums)
     assert any(s["kind"] == "owner_card_resolved" and "approved card" in s["summary"] for s in sums)
     assert any(s["kind"] == "memory_loop_resolved" and "closed loop" in s["summary"] for s in sums)
+    assert any(s["kind"] == "connection_checked" and "connection Gmail: mock" in s["summary"] for s in sums)
 
     sc = Scorecard(tmp / "scorecard.jsonl")
     sc.record_decision("do_and_notify", "ev1")

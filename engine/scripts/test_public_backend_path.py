@@ -188,6 +188,11 @@ def main():
         assert onboarding.status_code == 200, onboarding.text
         setup_loop = next(i for i in client.get("/memory/open-loops?limit=20").json()["loops"]
                           if i["text"] == "Connect Gmail for Owner Action Engine")
+        connect = client.post("/connections/authorize", json={"id": setup_loop["id"]})
+        assert connect.status_code == 200, connect.text
+        connect_out = connect.json()
+        assert connect_out["status"] == "mock", connect_out
+        assert connect_out["tool"] == "Gmail.SendEmail", connect_out
         closed = client.post("/memory/open-loops/resolve", json={"id": setup_loop["id"], "status": "done"})
         assert closed.status_code == 200, closed.text
         assert closed.json()["resolved"] is True, closed.text
@@ -200,6 +205,7 @@ def main():
         assert any("processed" in s and "cards" in s for s in summaries), summaries
         assert any("waiting for you" in s and "Sam" in s for s in summaries), summaries
         assert any("hard wall: money" in s for s in summaries), summaries
+        assert any("connection Gmail: mock" in s for s in summaries), summaries
 
     print("PASS public_backend_path: messy input -> memory -> safe actions, pending approval, receipts, money wall")
 
