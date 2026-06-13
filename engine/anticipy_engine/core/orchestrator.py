@@ -290,7 +290,7 @@ def _sanitize_item(raw: str, site: str = "") -> str:
 
 def _line_item(line: str) -> str:
     site = _line_site(line)
-    quoted = re.findall(r"['\"“”]([^'\"“”]{3,140})['\"“”]", line)
+    quoted = re.findall(r"[\"“”]([^\"“”]{3,140})[\"“”]", line)
     if quoted:
         item = _sanitize_item(quoted[-1], site=site)
         return item if 3 <= len(item) <= 160 else ""
@@ -325,17 +325,42 @@ def _candidate_score(line: str, hints: set[str], rank: int) -> tuple[int, int]:
     return (len(hints & line_toks), -rank)
 
 
+_COMMAND_TAIL_RE = re.compile(
+    r"\b(?:put|add|stick|throw|toss|drop)\s+(?:it|that|this|one|them)\b"
+    r"|\bcart\s+(?:it|that|this|one|them|a|an|the|\d)\b"
+    r"|\b(?:no checkout|no buying|don'?t buy|do not buy|don'?t checkout|do not checkout)\b",
+    re.I,
+)
+
+
+def _usable_memory_item(item: str) -> bool:
+    item_l = (item or "").strip().lower()
+    if len(item_l) < 3:
+        return False
+    if re.match(r"^(?:for|at|on|from|with|if)\b", item_l):
+        return False
+    return _COMMAND_TAIL_RE.search(item_l) is None
+
+
+def _same_text(a: str, b: str) -> bool:
+    return re.sub(r"\s+", " ", a or "").strip().lower() == re.sub(
+        r"\s+", " ", b or ""
+    ).strip().lower()
+
+
 def _memory_resolved_browser_step(text: str, context) -> Optional[Step]:
     if not _VAGUE_BROWSER_RE.search(text or ""):
         return None
     candidates = []
     hints = _resolution_hints(text)
     for rank, line in enumerate(_context_lines(context)):
+        if _same_text(line, text):
+            continue
         if not _PRODUCT_HINT_RE.search(line):
             continue
         site = _line_site(line)
         item = _line_item(line)
-        if site and item:
+        if site and _usable_memory_item(item):
             score = _candidate_score(line, hints, rank)
             candidates.append({
                 "site": site,

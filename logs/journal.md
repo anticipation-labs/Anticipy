@@ -960,3 +960,18 @@ because `factory/config/owner_phone.confirmed` is still absent. Ops mistake: a b
 `git status --ignored` printed ignored `.anticipy-data` filenames; no contents were
 printed, and the repeated lesson plus F42 now ban ignored-status listings in builder
 laps.
+
+2026-06-13 lap 20260613T025806Z (build, TARGET v9 dev_v2 seeded possessive-store cart
+resolution): inspected the official dev_v2 run dirs and first considered Nora's invoice
+draft ask, but scorer semantics showed a pure ask catch would lower the primary e2e ratio,
+so the manifest was revised before product-code edits. The kept slice fixes Mina's
+no-checkout Lowe's cart task without adding a new host literal: possessive store names
+resolve only when their normalized host stem exists in the packaged site-hints seed,
+and the harm-line plus planner reject current-command echoes as memory. Focused testing
+exposed a second product bug where apostrophes in possessives were parsed as quotes and
+command tails became item identity; that is fixed and logged as F43. Official dev_v2
+owner-ingest stub score moved e2e 0.7579 -> 0.8135 and correct 0.8611 -> 0.9167 while
+catch stayed 0.8889, false stayed 0, harm stayed 0, interrupt stayed 1.0/2.0, and
+recall_worst stayed 0.5. Legacy dev-bank smoke stayed at catch 1.0/1.0, e2e 0.6483,
+false 0, harm 0. `bash scripts/run_suite.sh` stayed green at 46/46. P3 live gate was
+not attempted because `factory/config/owner_phone.confirmed` is still absent.

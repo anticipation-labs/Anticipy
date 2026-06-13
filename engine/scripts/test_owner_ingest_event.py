@@ -52,6 +52,8 @@ SLOT_BOOKING = "Book the Tuesday morning one with Marta before she fills up."
 NOTE_TO_CUSTOMERS = "Add a note to tell customers candle restock is Friday, not today."
 CART_CONTEXT = "Was comparing spiral notebooks at Staples; liked the 5x8 recycled notebook pack."
 CART_DERIVED_NO_BUY = "That notebook size I liked at Staples, cart one pack so I can check shipping later, no buying."
+LOWES_CONTEXT = "Was comparing shower grab bars at Lowe's for Dad's bathroom; preferred the Moen 24-inch bar."
+LOWES_CART_NO_CHECKOUT = "That grab bar I was looking at for Dad's shower, put it in the cart at Lowe's, no checkout."
 # F28 requested-action scope: a draft request whose line carries work vocabulary
 # ("supply order", "purchasing window", "ready to send") is NOT money, NOT a send —
 # the pre-gate must not block it, the spine must act, and the plan is the DRAFT
@@ -104,6 +106,8 @@ async def owner_lane_check():
         note_to_customers = await core.feed("app", NOTE_TO_CUSTOMERS, {})
         cart_context = await core.feed("app", CART_CONTEXT, {})
         cart_derived = await core.feed("app", CART_DERIVED_NO_BUY, {})
+        lowes_context = await core.feed("app", LOWES_CONTEXT, {})
+        lowes_cart = await core.feed("app", LOWES_CART_NO_CHECKOUT, {})
         draft_order = await core.feed("app", DRAFT_ORDER, {})
         cart = await core.feed("app", CART_NO_BUY, {})
         money = await core.feed("app", MONEY, {})
@@ -122,7 +126,7 @@ async def owner_lane_check():
     # the realday/scorer contract: decision + goal_id + ask_id on every response
     for out in (noise, act, ask, promise, unshaped, schedule_change, forget_hold,
                 slot_context, slot_booking, note_to_customers, cart_context,
-                cart_derived, draft_order, cart,
+                cart_derived, lowes_context, lowes_cart, draft_order, cart,
                 money, money_vent, remember, clarify):
         assert out.get("owner_lane") is True, out
         assert "decision" in out and "goal_id" in out and "ask_id" in out, out
@@ -207,6 +211,15 @@ async def owner_lane_check():
     assert cd_steps == ["browse_task"], cd_rec
     assert cd_rec["steps"][0]["args"]["url"] == "https://www.staples.com", cd_rec
     assert cd_rec["owner_card"]["route"] == "browser", cd_rec
+
+    assert lowes_context["decision"] == "ignore", lowes_context
+    assert lowes_cart["decision"] == "act", lowes_cart
+    lw_rec = _record(tmp, lowes_cart["goal_id"])
+    assert lw_rec["state"] == "done" and lw_rec["proof"], lw_rec
+    lw_steps = [s.get("intent") for s in lw_rec["steps"]]
+    assert lw_steps == ["browse_task"], lw_rec
+    assert lw_rec["steps"][0]["args"]["url"] == "https://www.lowes.com", lw_rec
+    assert lw_rec["steps"][0]["args"]["memory_resolution"]["item"] == "Moen 24-inch bar", lw_rec
 
     # F28: the draft request acts (no money pre-gate on the noun "order"; no send
     # reading on the purpose tail) and the executed plan is the DRAFT — never a send

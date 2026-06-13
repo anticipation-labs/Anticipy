@@ -1,0 +1,11 @@
+{
+  "lap_type": "build",
+  "intended_metric": "v2_e2e_completion_rate",
+  "hypothesis": "If single-token possessive store names such as Lowe's resolve only when their normalized host stem already exists in the packaged site-hints seed, Mina's no-checkout grab-bar cart task will complete without adding new host literals, B&H derivation, false actions, or silent harm.",
+  "planned_changes": [
+    "engine/anticipy_engine/shared/storesite.py seeded-host derivation helper",
+    "engine/anticipy_engine/proactive/harm.py and core/orchestrator.py memory cart resolution through the shared helper",
+    "engine tests covering seeded possessive store resolution and B&H denial",
+    "lap logs only"
+  ]
+}

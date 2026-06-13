@@ -1,48 +1,41 @@
-# Last lap: 20260613T023948Z (build - dev_v2 derivable-store cart-only commands)
+# Last lap: 20260613T025806Z (build - seeded possessive-store cart resolution)
 
 ## What changed
-- Added the narrow derivable-store cart-only path: Room 1 now survives verb-style
-  "cart one ..." clauses, Room 2 strips no-buy/no-checkout language only when memory
-  resolves a product-shaped item plus a derivable store URL, and owner shaping treats
-  `no buying` / `no checkout` as no-purchase bounds.
-- Extended the deterministic browser resolver to handle cart-verb action lines and to
-  prefer explicit "liked/preferred the ..." item memory before broader shopping-category
-  text.
-- Added regression coverage in `test_triage.py`, `test_harmline.py`,
-  `test_orchestrator.py`, and `test_owner_ingest_event.py`, including non-derivable
-  store denial so no site is invented.
-- Logged F40, F41, and the F42 ops listing mistake in `logs/factory/FAILURE_MODES.md`.
-
-## Failed attempt ripped out
-- A named-follow-up note-capture expansion was tried first. Official dev_v2 scoring
-  produced `false_action_count=1` and no e2e gain, so the matcher and tests were removed.
-  Do not retry non-imperative note capture without a new product law and a zero-false eval.
-- Ops note: a broad `git status --ignored` printed ignored `.anticipy-data` filenames.
-  It did not print contents, but it repeated the local-state listing mistake; the lesson
-  and failure ledger now forbid ignored-status listings in builder laps.
+- Added seed-backed possessive store derivation: a product-shaped memory line
+  like `at Lowe's` now resolves only when the normalized host stem already exists
+  in the packaged `site_hints_seed.json`. This adds no new host literal and does
+  not open the B&H path.
+- Kept Room 2 and the deterministic browser planner aligned: no-checkout cart
+  tasks can act only when prior memory resolves a product and site; current
+  command echoes no longer authorize themselves.
+- Fixed product item extraction bugs exposed by this slice: ASCII apostrophes in
+  possessives are not treated as quote delimiters, and command-tail fragments are
+  rejected as memory item identity.
+- Added regression coverage in `test_storesite.py`, `test_harmline.py`,
+  `test_orchestrator.py`, and `test_owner_ingest_event.py`.
+- Logged F43 in `logs/factory/FAILURE_MODES.md`.
 
 ## Eval numbers seen
-- Official TARGET v9 lane: `ANTICIPY_OWNER_INGEST=1`, bank `factory/personas/dev_v2`,
-  tier `stub`, lap `20260613T023948Z-pre`.
+- Official TARGET v9 lane: `ANTICIPY_OWNER_INGEST=1`, bank
+  `factory/personas/dev_v2`, tier `stub`, lap `20260613T025806Z-pre`.
 - dev_v2 score: catch 0.8889, catch_worst 0.6667, false 0, harm 0, interrupt
-  1.0/2.0, e2e 0.7579, correct 0.8611, recall_worst 0.5, worst_persona
+  1.0/2.0, e2e 0.8135, correct 0.9167, recall_worst 0.5, worst_persona
   `freelancer_nora`.
-- Previous kept score from lap `20260613T022002Z-pre`: catch 0.8413,
-  catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.75,
+- Previous kept score from lap `20260613T023948Z-pre`: catch 0.8889,
+  catch_worst 0.6667, false 0, harm 0, interrupt 1.0/2.0, e2e 0.7579,
   correct 0.8611, recall_worst 0.5.
-- Legacy contract smoke, bank `factory/personas/dev`, lap `20260613T023948Z-pre-dev`:
-  catch 1.0/1.0, false 0, harm 0, interrupt 0.625/1.0, e2e 0.6483, correct 0.8475,
-  recall 1.0.
+- Legacy contract smoke, bank `factory/personas/dev`, lap
+  `20260613T025806Z-pre-dev`: catch 1.0/1.0, false 0, harm 0, interrupt
+  0.625/1.0, e2e 0.6483, correct 0.8475, recall 1.0.
 - `bash scripts/run_suite.sh`: 46/46 GREEN.
 
 ## Gate status
-- `factory/config/owner_phone.confirmed` is absent, so `gate_P3.sh` live calls/SMS are
-  still banned and were not attempted.
-- This builder ran under the active Factory loop lock for this lap id. No competing
-  lock owner was observed.
+- `factory/config/owner_phone.confirmed` is absent, so `gate_P3.sh` live calls/SMS
+  are still banned and were not attempted.
 
 ## What's next
-- Remaining official v2 floor is still `freelancer_nora`. Do not retry no-clock
-  pickup-alarm changes or non-imperative note capture without a new product law. The
-  remaining Nora browser gap is non-derivable B&H memory; do not invent a store URL or
-  add per-store recipes to force it.
+- Remaining official v2 floor is still `freelancer_nora`. The B&H cart line remains
+  non-derivable and should not be forced by a new hostname literal or recipe.
+- Nora's invoice draft ask would improve catch but lower the current e2e ratio, so
+  do not spend a primary-metric build lap on that unless the foreman changes the
+  metric or pairs it with an e2e-positive completion.

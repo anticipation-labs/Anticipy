@@ -308,6 +308,7 @@ class HarmLine:
         mem = (ctx or {}).get("context") if isinstance(ctx, dict) else {}
         if not isinstance(mem, dict):
             return False
+        action_norm = re.sub(r"\s+", " ", action_text or "").strip().lower()
         vals = []
         for key in ("notes", "open_loops", "history", "profile", "derived"):
             value = mem.get(key)
@@ -315,6 +316,10 @@ class HarmLine:
                 vals.extend(line.strip() for line in value.splitlines() if line.strip())
             elif isinstance(value, list):
                 vals.extend(str(v) for v in value)
+        vals = [
+            line for line in vals
+            if re.sub(r"\s+", " ", line or "").strip().lower() != action_norm
+        ]
         # a real site is a spoken hostname OR a store named the way people speak
         # ("at Target", "on Amazon") in a product-shaped line — the same deny-bounded
         # derivation the orchestrator's resolver uses (shared/storesite.py), so the

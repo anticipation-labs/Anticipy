@@ -178,6 +178,21 @@ async def test_memory_resolved_store_name_plan():
     assert step3.args["memory_resolution"]["item"] == "5x8 recycled notebook pack", step3.args
     assert "Do not checkout" in step3.args["task"], step3.args
 
+    lowes_cart = (
+        "That grab bar I was looking at for Dad's shower, put it in the cart at Lowe's, no checkout."
+    )
+    lowes_ctx = {
+        "history": [
+            lowes_cart,
+            "Was comparing shower grab bars at Lowe's for Dad's bathroom; preferred the Moen 24-inch bar."
+        ]
+    }
+    step4 = _memory_resolved_browser_step(lowes_cart, lowes_ctx)
+    assert step4 is not None and step4.intent == "browse_task", step4
+    assert step4.args["url"] == "https://www.lowes.com", step4.args
+    assert step4.args["memory_resolution"]["item"] == "Moen 24-inch bar", step4.args
+    assert step4.args["memory_resolution"]["site_derived_from_store_name"] is True, step4.args
+
     mixed_brand = {
         "history": ["Was comparing portable projector stands at B&H Photo; liked the folding stand best."]
     }

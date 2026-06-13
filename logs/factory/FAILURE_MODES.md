@@ -1673,3 +1673,15 @@ bounded, documented) / REFUTED (claimed but disproven by test) / OPEN (fix pendi
   local-operational-state listing mistake already in `autopilot/LESSONS.md`.
   Regression check: use plain `git status --short` for staging decisions; never run
   ignored-status or broad ignored listings in builder laps.
+
+## Build lap 20260613T025806Z (seeded possessive-store cart resolution)
+- F43 FIXED: once a possessive store name such as `Lowe's` resolves to a seeded
+  host, product identity extraction can be corrupted in two ways: ASCII apostrophes
+  in possessives were treated as quote delimiters, and the owner lane's current
+  command line could be re-injected as if it were prior memory. Either bug can turn
+  a cart task into a wrong item while still producing browser proof. Fix: product
+  quote extraction ignores ASCII apostrophes, the browser memory resolver skips
+  current-command echoes, item candidates containing command tails or leading
+  context prepositions are rejected, and Room 2 does not let current-command echoes
+  authorize cart-only acts. Regression checks: `test_storesite.py`,
+  `test_harmline.py`, `test_orchestrator.py`, and `test_owner_ingest_event.py`.

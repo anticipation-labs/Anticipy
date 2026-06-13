@@ -2,8 +2,10 @@
 
 People say "at Target" / "on Amazon", never hostnames; the derivation turns a
 product-shaped memory line's single-word capitalized store name into the
-<brand>.com convention, and every deny bound fails toward "" (a junk derivation
-would point a real browser somewhere wrong). Deterministic; zero model calls.
+<brand>.com convention. Possessives only resolve when the normalized host is
+already present in the packaged site-hints seed. Every deny bound fails toward
+"" (a junk derivation would point a real browser somewhere wrong). Deterministic;
+zero model calls.
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_storesite.py
 """
@@ -25,6 +27,10 @@ BATTERY = [
     # the store name can end the sentence (followed by punctuation, not a word)
     ("Was checking out standing desks from Costco.",
      "https://www.costco.com"),
+    # seeded possessive brand: not guessed; lowes.com already exists in the
+    # packaged site-hints seed
+    ("Was comparing shower grab bars at Lowe's for the downstairs bath.",
+     "https://www.lowes.com"),
     # ---- deny: not a product-shaped line (no shopping context verb/noun) ----
     ("Stopped at Walmart on the way home.", ""),
     ("Dropped the kids at Riverside this morning.", ""),
@@ -32,7 +38,7 @@ BATTERY = [
     ("Was looking at backpacks at Lincoln Elementary for the fundraiser.", ""),
     ("Was comparing the Hoka Bondi 9 shoes for long shifts, the wide fit.", ""),
     ("Was looking at gift cards from Best Buy last week.", ""),
-    # ---- deny: possessive = a person's place, not a storefront ----
+    # ---- deny: unseeded possessive = a person's place, not a storefront ----
     ("Was looking at rings at Bob's last weekend.", ""),
     # ---- deny: closed-class non-store capitalized words ----
     ("Was comparing flights on Friday morning.", ""),

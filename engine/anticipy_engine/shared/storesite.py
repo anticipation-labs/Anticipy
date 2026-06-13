@@ -28,7 +28,10 @@ every bound fails toward ""):
 """
 from __future__ import annotations
 
+import json
 import re
+from functools import lru_cache
+from pathlib import Path
 
 # The shopping-context shape (same verb family as the orchestrator's
 # _PRODUCT_HINT_RE / harm.py's _MEM_PRODUCT — keep the three aligned).
@@ -42,6 +45,9 @@ PRODUCT_CONTEXT_RE = re.compile(
 _STORE_AFTER_PREP_RE = re.compile(
     r"\b(?:at|on|from)\s+([A-Z][a-z0-9&-]{2,})\b(?!['’]s?\b)(?!\s+[A-Z0-9])"
 )
+_POSSESSIVE_STORE_AFTER_PREP_RE = re.compile(
+    r"\b(?:at|on|from)\s+([A-Z][a-z0-9&-]{2,})['’]s\b(?!\s+[A-Z0-9])"
+)
 
 _NOT_A_STORE = frozenset({
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
@@ -51,6 +57,31 @@ _NOT_A_STORE = frozenset({
     "School", "Work", "Home", "Church", "Lunch", "Dinner", "Breakfast",
     "Mom", "Dad", "Grandma", "Grandpa",
 })
+
+
+@lru_cache(maxsize=1)
+def _seed_hosts_by_stem() -> dict[str, str]:
+    """Known host stems from the packaged verified site-hints seed.
+
+    This is not a new recipe table. It reuses already-packaged host facts and
+    fails closed if the seed cannot be read.
+    """
+    path = Path(__file__).resolve().parents[1] / "data" / "site_hints_seed.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    hosts = data.get("hosts") if isinstance(data, dict) else {}
+    if not isinstance(hosts, dict):
+        return {}
+    out: dict[str, str] = {}
+    for host in sorted(str(h).lower().lstrip(".") for h in hosts):
+        bare = re.sub(r"^www\.", "", host)
+        if "." not in bare:
+            continue
+        stem = bare.split(".", 1)[0]
+        out.setdefault(stem, bare)
+    return out
 
 
 def derive_store_site(line: str) -> str:
@@ -63,4 +94,17 @@ def derive_store_site(line: str) -> str:
         if token in _NOT_A_STORE:
             continue
         return f"https://www.{token.lower()}.com"
+    # Some real retail brands are spoken as possessives ("at Lowe's"). The
+    # generic <brand>.com rule deliberately refuses possessives because a local
+    # person's place ("Bob's") must not become a guessed browser target. The only
+    # exception is when the normalized possessive stem already exists in the
+    # packaged verified site-hints seed.
+    hosts_by_stem = _seed_hosts_by_stem()
+    for m in _POSSESSIVE_STORE_AFTER_PREP_RE.finditer(line):
+        token = m.group(1)
+        if token in _NOT_A_STORE:
+            continue
+        host = hosts_by_stem.get((token + "s").lower())
+        if host:
+            return "https://www." + host
     return ""
