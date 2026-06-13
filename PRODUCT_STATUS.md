@@ -20,6 +20,7 @@ Done means this works together as one product, not as isolated demos.
 - Owner approval works through the app route: approving and declining waiting cards update durable records and survive reload.
 - Text/call readiness is visible without leaking secrets: outbound channel readiness and inbound YES/NO reply readiness are both surfaced.
 - Inbound SMS reply mechanics are backend-proven with fake transport: exact YES/NO codes resolve owner cards, ambiguity is refused, restart recovery works, and money still fails closed.
+- Browser visual smoke has passed for the owner UI in protected mock mode: locked owner gate, unlock, transcript input, Go, task cards, approval, decline, blocked money, done receipts, and no browser console errors.
 - Current deterministic suite was green after the latest product change: 53 passed, 0 failed.
 
 ## What Is Not Done Yet
@@ -27,7 +28,7 @@ Done means this works together as one product, not as isolated demos.
 - The public product has not been proven with a real live Twilio call/SMS round trip in this direct Codex lane. The app can now tell when the system is ready to enable it, but live sending remains explicitly gated.
 - The owner app path has not yet proven a real browser hand on a real signed-in Chrome session for a safe cart task with page read-back. Mock browser proofs are useful, but they are not public readiness.
 - API hands beyond the mocked owner path still need live public-product proof in the app flow. Calendar had earlier real proof; Gmail draft auth still depends on `gmail.compose`.
-- The frontend has strong shell/API proofs, but it still needs a visual/browser smoke pass for the final public UI states.
+- The frontend visual smoke is proven in protected mock mode, but not yet against live connectors, a real browser hand, or live text/call delivery.
 - A real multi-day owner trial has not happened. Until Omar can use the app for real days with no false actions, no money execution, and useful closed loops, the product is not finished.
 
 ## Why This Attempt Is Working Better
@@ -43,6 +44,4 @@ Done means this works together as one product, not as isolated demos.
 1. Prove live text/call loop closure with Omar-confirmed owner phone: app asks, SMS/code round trip resolves, call/text receipt appears, no third-party impact.
 2. Prove one real browser action from the owner app path with Chrome helper connected: safe cart or lookup only, no checkout, page read-back receipt.
 3. Prove live API connector readiness from the app path: Calendar read/write remains real; Gmail draft path needs `gmail.compose` authorization before it can be counted.
-4. Run a browser visual smoke of the owner UI states: locked, unlocked, ready, cards, approvals, blocked money, setup/readiness.
-5. Run a real-day trial only after the above are true.
-
+4. Run a real-day trial only after the above are true.
