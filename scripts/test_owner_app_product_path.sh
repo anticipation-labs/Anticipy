@@ -112,10 +112,43 @@ test "$code" = "401"
 
 cat >"$PAYLOAD" <<'JSON'
 {
+  "source": "owner_app_product_path_onboarding",
+  "owner_name": "Omar",
+  "timezone": "America/Vancouver",
+  "preferences": ["Ask before sending messages to real people.", "Never buy anything."],
+  "people": [
+    {"name": "Sam", "relationship": "contractor", "channels": ["email"], "notes": "deck revisions"}
+  ],
+  "connections": [
+    {"name": "Gmail", "status": "needs_auth", "route": "api", "identifier": "gmail.compose", "notes": "drafts and approvals"}
+  ],
+  "stores": [
+    {"name": "Target", "url": "https://www.target.com", "notes": "birthday gifts", "route": "browser"}
+  ],
+  "raw_notes": "Was comparing travel umbrellas at Target; liked the black compact travel umbrella."
+}
+JSON
+
+code="$(curl -sS -b "$COOKIE_JAR" -o "$BODY" -w "%{http_code}" \
+  -H "content-type: application/json" \
+  --data-binary "@$PAYLOAD" \
+  "$NEXT_BASE/api/owner/onboard")"
+test "$code" = "200"
+"$PY" - "$BODY" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert "Gmail" in body["missing_connections"], body
+assert any("black compact travel umbrella" in item["text"] for item in body["written"]), body
+PY
+
+cat >"$PAYLOAD" <<'JSON'
+{
   "source": "typed",
   "execute_actions": true,
   "meta": {"test": "owner_app_product_path"},
-  "text": "[08:01] Omar: yeah yeah whatever, this week is cooked.\n[08:04] Maya: school moved pickup to 3 today, please remind me before I forget.\n[08:05] Omar: oh sure, I will just clone myself, that will fix the schedule.\n[09:12] Sam needs the revised deck before Friday; I told him I would send it.\n[10:17] I was comparing compact label makers at Staples; liked the Brother cube one.\n[10:22] That label thing I liked at Staples, cart it so I can check shipping later, no buying.\n[11:33] That random gadget thing, put it in the cart if it looks right, don't buy it.\n[12:10] order the replacement filter today and just pay whatever it costs.\n[13:00] My wife Maya prefers texts after lunch."
+  "text": "[08:01] Omar: yeah yeah whatever, this week is cooked.\n[08:04] Maya: school moved pickup to 3 today, please remind me before I forget.\n[08:05] Omar: oh sure, I will just clone myself, that will fix the schedule.\n[09:12] Sam needs the revised deck before Friday; I told him I would send it.\n[10:17] I was comparing compact label makers at Staples; liked the Brother cube one.\n[10:22] That label thing I liked at Staples, cart it so I can check shipping later, no buying.\n[10:29] That umbrella thing from Target, cart it so I can compare shipping later, no checkout.\n[11:33] That random gadget thing, put it in the cart if it looks right, don't buy it.\n[12:10] order the replacement filter today and just pay whatever it costs.\n[13:00] My wife Maya prefers texts after lunch."
 }
 JSON
 
@@ -147,6 +180,14 @@ assert send["status"] == "waiting" and send["execution"]["ask_id"], send
 resolved_cart = one("label thing")
 assert resolved_cart["status"] == "done", resolved_cart
 assert any(p.get("type") == "memory_resolution" for p in resolved_cart["proof"]), resolved_cart
+
+onboarded_cart = one("umbrella thing")
+assert onboarded_cart["status"] == "done", onboarded_cart
+onboarded_resolution = next((p for p in onboarded_cart["proof"] if p.get("type") == "memory_resolution"), None)
+assert onboarded_resolution, onboarded_cart
+assert onboarded_resolution["site"] == "https://www.target.com", onboarded_resolution
+assert "black compact travel umbrella" in onboarded_resolution["item"].lower(), onboarded_resolution
+assert "target" in onboarded_resolution["matched_hints"], onboarded_resolution
 
 unresolved_cart = one("random gadget")
 assert unresolved_cart["status"] == "waiting", unresolved_cart
@@ -237,9 +278,17 @@ import sys
 cards = json.load(open(sys.argv[1], encoding="utf-8"))["cards"]
 statuses = {c["source_text"]: c["status"] for c in cards}
 assert any("label thing" in text and status == "done" for text, status in statuses.items()), statuses
+assert any("umbrella thing" in text and status == "done" for text, status in statuses.items()), statuses
 assert any("random gadget" in text and status == "declined" for text, status in statuses.items()), statuses
 assert any("pay whatever" in text and status == "blocked" for text, status in statuses.items()), statuses
 by_id = {card["id"]: card for card in cards}
+umbrella = next(c for c in cards if "umbrella thing" in c["source_text"])
+assert any(
+    p.get("type") == "memory_resolution"
+    and p.get("site") == "https://www.target.com"
+    and "black compact travel umbrella" in (p.get("item") or "").lower()
+    for p in umbrella["proof"]
+), umbrella
 send = by_id[sys.argv[2]]
 assert send["status"] == "done", send
 assert send["execution"]["ask_id"] is None and send["execution"]["goal_state"] == "done", send
