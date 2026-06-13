@@ -7,6 +7,7 @@ const SAMPLE = `[08:02] Omar: yeah okay no the coffee machine is being weird aga
 [08:05] Omar: oh sure, I'll just clone myself, that'll fix the schedule.
 [09:12] Sam needs the revised deck before Friday; I told him I'd send it.
 [11:22] that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.
+[12:10] order the replacement filter today and just pay whatever it costs.
 [13:00] My wife Maya prefers texts after lunch.`;
 
 const sources = [
@@ -25,30 +26,48 @@ function cardBucket(card) {
 
 function proofValue(proof) {
   if (!proof) return "";
+  if (proof.decision) return [proof.decision, proof.goal_state].filter(Boolean).join(" / ");
   if (proof.memory_id) return proof.memory_id;
   if (proof.path) return proof.path;
   if (proof.type) return proof.type;
   return JSON.stringify(proof);
 }
 
+function proofLabel(proof) {
+  const type = proof?.type || "proof";
+  return type.replaceAll("_", " ");
+}
+
+function outcomeText(card, pendingAsk) {
+  const bucket = cardBucket(card);
+  if (bucket === "blocked") return "Hard wall: no payment executed";
+  if (bucket === "ask") return pendingAsk ? `Waiting for Omar: ${pendingAsk.ask_id.slice(0, 6)}` : "Waiting for Omar";
+  if (bucket === "done") return "Done with receipt";
+  return "Ready";
+}
+
 function TaskCard({ card, pendingAsk, onResolve }) {
   const bucket = cardBucket(card);
   return (
-    <article className="card">
-      <h4>{card.title || card.action || "Owner task"}</h4>
-      <p>{card.source_text}</p>
+    <article className={`card ${bucket}`}>
+      <div className="card-head">
+        <h4>{card.title || card.action || "Owner task"}</h4>
+        <span className={`outcome ${bucket}`}>{outcomeText(card, pendingAsk)}</span>
+      </div>
+      <p className="source-text">{card.source_text}</p>
       <div className="meta">
         <span className={`tag ${bucket}`}>{card.disposition}</span>
         <span className="tag">{card.route}</span>
         <span className="tag">{card.action}</span>
         {card.status ? <span className={`tag ${bucket}`}>{card.status}</span> : null}
+        {card.execution?.goal_state ? <span className={`tag ${bucket}`}>{card.execution.goal_state}</span> : null}
       </div>
       {card.reason ? <p>{card.reason}</p> : null}
       {card.proof?.length ? (
         <div className="proof">
           {card.proof.slice(-4).map((proof, index) => (
             <div className="proof-row" key={`${card.id}-proof-${index}`}>
-              <span>{proof.type || "proof"}</span>
+              <span>{proofLabel(proof)}</span>
               <code title={proofValue(proof)}>{proofValue(proof)}</code>
             </div>
           ))}
@@ -66,9 +85,12 @@ function TaskCard({ card, pendingAsk, onResolve }) {
 
 function PendingAsk({ ask, onResolve }) {
   return (
-    <article className="card">
-      <h4>{ask.action}</h4>
-      <p>{ask.reason}</p>
+    <article className="card ask">
+      <div className="card-head">
+        <h4>{ask.action}</h4>
+        <span className="outcome ask">Waiting for Omar: {ask.ask_id.slice(0, 6)}</span>
+      </div>
+      <p className="source-text">{ask.reason}</p>
       <div className="meta">
         <span className="tag ask">needs yes</span>
         <span className="tag">{ask.category || "ask"}</span>
@@ -362,6 +384,10 @@ export default function Home() {
             <div className="metric">
               <strong>{pending.length}</strong>
               <span>waiting asks</span>
+            </div>
+            <div className="metric">
+              <strong>{buckets.blocked.length}</strong>
+              <span>hard walls</span>
             </div>
             <div className="metric">
               <strong>{ignored}</strong>

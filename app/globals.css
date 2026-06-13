@@ -296,7 +296,7 @@ button {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 10px;
 }
 
@@ -345,10 +345,32 @@ button {
   margin-bottom: 10px;
 }
 
+.card.ask {
+  border-color: rgba(138, 90, 0, 0.38);
+}
+
+.card.blocked {
+  border-color: rgba(157, 52, 48, 0.42);
+  background: #fff9f8;
+}
+
+.card.done {
+  border-color: rgba(53, 95, 149, 0.34);
+}
+
+.card-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 .card h4 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 15px;
   line-height: 1.25;
+  min-width: 0;
 }
 
 .card p {
@@ -357,6 +379,41 @@ button {
   font-size: 13px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.source-text {
+  color: var(--ink);
+}
+
+.outcome {
+  border: 1px solid var(--line);
+  padding: 4px 7px;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--panel-2);
+}
+
+.outcome.ready {
+  color: var(--ready);
+}
+
+.outcome.ask {
+  color: var(--ask);
+  background: #fff5d8;
+}
+
+.outcome.blocked {
+  color: var(--blocked);
+  background: #ffe8e6;
+}
+
+.outcome.done {
+  color: var(--done);
+  background: #e8f0fb;
 }
 
 .meta {
@@ -512,5 +569,14 @@ button {
 
   .source-row button:nth-child(-n + 2) {
     border-bottom: 1px solid var(--line);
+  }
+
+  .card-head {
+    grid-template-columns: 1fr;
+  }
+
+  .outcome {
+    width: fit-content;
+    max-width: 100%;
   }
 }
