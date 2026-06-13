@@ -1,0 +1,50 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const ENGINE_URL = process.env.ANTICIPY_ENGINE_URL || "http://127.0.0.1:8787";
+
+function safeFilename(name) {
+  return (name || "owner-upload.txt").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160);
+}
+
+export async function POST(request) {
+  try {
+    const form = await request.formData();
+    const file = form.get("file");
+    if (!file || typeof file.arrayBuffer !== "function") {
+      return Response.json({ error: "missing_file", message: "Upload a transcript or audio file." }, { status: 400 });
+    }
+
+    const uploadDir = path.join(os.tmpdir(), "anticipy-owner-uploads", randomUUID());
+    await mkdir(uploadDir, { recursive: true });
+    const filename = safeFilename(file.name);
+    const localPath = path.join(uploadDir, filename);
+    await writeFile(localPath, Buffer.from(await file.arrayBuffer()));
+
+    const response = await fetch(`${ENGINE_URL}/owner/ingest-file`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        path: localPath,
+        filename,
+        source: String(form.get("source") || "upload"),
+        execute_actions: String(form.get("execute_actions") || "false") === "true",
+        meta: { ui: "owner_mode", uploaded_via: "next_api" },
+      }),
+    });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+    return Response.json(data, { status: response.status });
+  } catch (error) {
+    return Response.json(
+      {
+        error: "upload_failed",
+        message: `Could not process upload through Anticipy Engine at ${ENGINE_URL}`,
+        detail: error instanceof Error ? error.message : String(error),
+      },
+      { status: 503 },
+    );
+  }
+}

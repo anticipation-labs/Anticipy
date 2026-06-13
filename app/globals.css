@@ -206,6 +206,35 @@ button {
   flex-wrap: wrap;
 }
 
+.upload-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  background: #f7f1df;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.upload-note strong {
+  min-width: 0;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quiet-link {
+  padding: 0;
+  color: #2f6d91;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .primary,
 .secondary,
 .quiet-button {

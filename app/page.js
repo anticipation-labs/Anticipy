@@ -12,7 +12,7 @@ const SAMPLE = `[08:02] Omar: yeah okay no the coffee machine is being weird aga
 const sources = [
   ["typed", "Typed"],
   ["transcript", "Transcript"],
-  ["mp3", "Upload"],
+  ["upload", "Upload"],
   ["start_listening", "Listen"],
 ];
 
@@ -86,6 +86,7 @@ export default function Home() {
   const [text, setText] = useState(SAMPLE);
   const [source, setSource] = useState("typed");
   const [executeActions, setExecuteActions] = useState(true);
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [cards, setCards] = useState([]);
   const [observed, setObserved] = useState([]);
   const [ignored, setIgnored] = useState(0);
@@ -140,11 +141,28 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  function applyIngestResult(data) {
+    setCards(data.cards || []);
+    setObserved(data.observed_lines || []);
+    setIgnored(data.ignored_line_count || 0);
+  }
+
+  async function runUpload() {
+    const form = new FormData();
+    form.append("file", uploadedFile);
+    form.append("source", source);
+    form.append("execute_actions", String(executeActions));
+    return fetch("/api/owner/upload", {
+      method: "POST",
+      body: form,
+    });
+  }
+
   async function runIngest() {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/owner/ingest", {
+      const response = uploadedFile ? await runUpload() : await fetch("/api/owner/ingest", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -156,11 +174,9 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.message || data.error || "Owner ingest failed");
+        throw new Error(data.message || data.detail || data.error || "Owner ingest failed");
       }
-      setCards(data.cards || []);
-      setObserved(data.observed_lines || []);
-      setIgnored(data.ignored_line_count || 0);
+      applyIngestResult(data);
       await loadStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -191,8 +207,14 @@ export default function Home() {
   async function loadFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setSource("mp3");
-    setText(await file.text());
+    setUploadedFile(file);
+    setSource("upload");
+    setError("");
+    if (file.type.startsWith("text/") || /\.(txt|md|vtt|srt|json|csv)$/i.test(file.name)) {
+      setText(await file.text());
+    } else {
+      setText(`Uploaded ${file.name}. Press Go to transcribe and create task cards.`);
+    }
   }
 
   function startListening() {
@@ -207,6 +229,7 @@ export default function Home() {
       return;
     }
     setSource("start_listening");
+    setUploadedFile(null);
     setError("");
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
@@ -244,7 +267,14 @@ export default function Home() {
         <aside className="panel">
           <div className="panel-head">
             <h2>Input</h2>
-            <button className="quiet-button" onClick={() => setText(SAMPLE)}>
+            <button
+              className="quiet-button"
+              onClick={() => {
+                setUploadedFile(null);
+                setSource("typed");
+                setText(SAMPLE);
+              }}
+            >
               Reset
             </button>
           </div>
@@ -254,7 +284,10 @@ export default function Home() {
               <button
                 className={source === value ? "active" : ""}
                 key={value}
-                onClick={() => setSource(value)}
+                onClick={() => {
+                  setSource(value);
+                  if (value !== "upload") setUploadedFile(null);
+                }}
                 type="button"
               >
                 {label}
@@ -265,16 +298,33 @@ export default function Home() {
           <textarea
             className="transcript"
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => {
+              setUploadedFile(null);
+              setText(event.target.value);
+            }}
             spellCheck="true"
           />
 
           <div className="control-row">
-            <input className="file-input" type="file" accept=".txt,.md,.vtt,.srt,.json,.csv" onChange={loadFile} />
+            <input
+              className="file-input"
+              type="file"
+              accept=".txt,.md,.vtt,.srt,.json,.csv,.mp3,.m4a,.wav,.aac,.flac,.ogg"
+              onChange={loadFile}
+            />
             <button className="secondary" type="button" onClick={startListening}>
               {recognitionRef.current ? "Stop" : "Listen"}
             </button>
           </div>
+          {uploadedFile ? (
+            <div className="upload-note">
+              <span>Selected</span>
+              <strong>{uploadedFile.name}</strong>
+              <button className="quiet-link" type="button" onClick={() => setUploadedFile(null)}>
+                use typed text
+              </button>
+            </div>
+          ) : null}
 
           <div className="control-row">
             <label className="toggle">
@@ -285,7 +335,7 @@ export default function Home() {
               />
               Run safe actions
             </label>
-            <button className="primary" type="button" onClick={runIngest} disabled={busy || !text.trim()}>
+            <button className="primary" type="button" onClick={runIngest} disabled={busy || (!text.trim() && !uploadedFile)}>
               {busy ? "Working" : "Go"}
             </button>
           </div>

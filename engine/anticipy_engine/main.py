@@ -14,14 +14,16 @@ from __future__ import annotations
 import asyncio
 import os
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from . import __version__
 from .agent import WebVoyagerAgent, judge
 from .brain import Brain
+from .capture.transcribe import is_audio_file, transcribe_audio
 from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
 from .core.envelopes import Job, new_id
@@ -115,6 +117,14 @@ class OwnerIngestIn(BaseModel):
     execute_actions: bool = False
 
 
+class OwnerFileIngestIn(BaseModel):
+    path: str
+    filename: str = ""
+    source: str = "upload"
+    meta: dict = Field(default_factory=dict)
+    execute_actions: bool = False
+
+
 class ResolveIn(BaseModel):
     ask_id: str
     approved: bool
@@ -155,6 +165,48 @@ async def event(body: EventIn) -> dict:
 async def owner_ingest(body: OwnerIngestIn) -> dict:
     """One shared Action Engine intake for typed transcript, MP3, listening, and pay-to-try."""
     return await core.owner_ingest(body.source, body.text, body.meta, execute_actions=body.execute_actions)
+
+
+@app.post("/owner/ingest-file")
+async def owner_ingest_file(body: OwnerFileIngestIn) -> dict:
+    """Read one uploaded local file, then use the same owner-ingest path as typed text."""
+    path = Path(body.path).expanduser().resolve()
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"uploaded file not found: {path}")
+
+    filename = body.filename or path.name
+    meta = {
+        **body.meta,
+        "upload_filename": filename,
+        "upload_path": str(path),
+        "upload_bytes": path.stat().st_size,
+    }
+
+    if is_audio_file(path):
+        try:
+            transcript = transcribe_audio(path)
+        except Exception as exc:  # noqa: BLE001 - surface an honest product error
+            core.glassbox.log(
+                "owner_upload_error",
+                {"filename": filename, "path": str(path), "error": f"{type(exc).__name__}: {exc}"},
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=f"Could not transcribe {filename}: {type(exc).__name__}: {exc}",
+            ) from exc
+        text = "\n".join(transcript.lines)
+        meta.update({"upload_kind": "audio", "transcript": transcript.metadata})
+        source = body.source if body.source != "upload" else "audio_upload"
+    else:
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        meta.update({"upload_kind": "text"})
+        source = body.source if body.source != "upload" else "text_upload"
+
+    if not text.strip():
+        raise HTTPException(status_code=400, detail=f"{filename} did not contain usable text")
+
+    core.glassbox.log("owner_upload_ingest", {"filename": filename, "source": source, "kind": meta["upload_kind"]})
+    return await core.owner_ingest(source, text, meta, execute_actions=body.execute_actions)
 
 
 @app.post("/owner/onboard")
