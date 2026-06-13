@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import tempfile
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -34,6 +36,9 @@ from .owner_onboarding import OwnerOnboardingIn
 ENGINE_NAME = "anticipy-engine"
 DEFAULT_UPLOAD_ROOT = Path(tempfile.gettempdir()) / "anticipy-owner-uploads"
 DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+OWNER_API_TOKEN_ENV = "ANTICIPY_OWNER_API_TOKEN"
+OWNER_TOKEN_HEADER = "x-anticipy-owner-token"
+PUBLIC_PATHS = {"/health"}
 
 core = ControlCore()
 extension_hello_seen = False
@@ -96,6 +101,36 @@ app = FastAPI(
     description="Local-first hub for Anticipy. Binds to 127.0.0.1 only.",
     lifespan=lifespan,
 )
+
+
+def _owner_api_token() -> str:
+    return (os.environ.get(OWNER_API_TOKEN_ENV) or "").strip()
+
+
+def _owner_api_authorized(request: Request, token: str) -> bool:
+    supplied = (request.headers.get(OWNER_TOKEN_HEADER) or "").strip()
+    auth = (request.headers.get("authorization") or "").strip()
+    if not supplied and auth.lower().startswith("bearer "):
+        supplied = auth[7:].strip()
+    return bool(supplied) and secrets.compare_digest(supplied, token)
+
+
+@app.middleware("http")
+async def owner_api_auth(request: Request, call_next):
+    """Optional public-deploy guard.
+
+    Local development and the deterministic suite keep ANTICIPY_OWNER_API_TOKEN
+    unset. When it is set, every owner/private engine route requires the server
+    held token; only /health remains public for liveness probes.
+    """
+    token = _owner_api_token()
+    if token and request.url.path not in PUBLIC_PATHS and not _owner_api_authorized(request, token):
+        return JSONResponse(
+            {"error": "unauthorized", "message": "Anticipy owner API token required."},
+            status_code=401,
+            headers={"www-authenticate": "Bearer"},
+        )
+    return await call_next(request)
 
 
 class CaptureIn(BaseModel):

@@ -1,14 +1,22 @@
-const ENGINE_URL = process.env.ANTICIPY_ENGINE_URL || "http://127.0.0.1:8787";
+export const ENGINE_URL = process.env.ANTICIPY_ENGINE_URL || "http://127.0.0.1:8787";
+
+export function engineHeaders(headers = {}) {
+  const token = process.env.ANTICIPY_OWNER_API_TOKEN;
+  return {
+    ...headers,
+    ...(token ? { "x-anticipy-owner-token": token } : {}),
+  };
+}
 
 export async function engineRequest(path, options = {}) {
   const url = `${ENGINE_URL}${path}`;
   try {
     const response = await fetch(url, {
       ...options,
-      headers: {
+      headers: engineHeaders({
         "content-type": "application/json",
         ...(options.headers || {}),
-      },
+      }),
       cache: "no-store",
     });
     const text = await response.text();

@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { ENGINE_URL, engineHeaders } from "../../_engine";
 
-const ENGINE_URL = process.env.ANTICIPY_ENGINE_URL || "http://127.0.0.1:8787";
 const UPLOAD_ROOT = process.env.ANTICIPY_UPLOAD_ROOT || path.join(os.tmpdir(), "anticipy-owner-uploads");
 const MAX_UPLOAD_BYTES = Number(process.env.ANTICIPY_MAX_UPLOAD_BYTES || 100 * 1024 * 1024);
 
@@ -36,7 +36,7 @@ export async function POST(request) {
 
     const response = await fetch(`${ENGINE_URL}/owner/ingest-file`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: engineHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({
         path: localPath,
         filename,
