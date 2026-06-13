@@ -1,0 +1,4 @@
+OWNER_PHONE confirmed by Omar in chat on 2026-06-13T15:26:58Z
+number: +16047245161 (his real cell; the reply/notify target)
+TWILIO_FROM: +16196584447 (the Anticipy line)
+confirmed_for: live text round-trip + P3 voice; reconfirm if the cell ever changes

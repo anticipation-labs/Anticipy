@@ -55,6 +55,17 @@ _CLARIFY_LIST_CAP = 5
 _CLARIFY_ACTION_CHARS = 60
 
 
+def _norm_phone(s: str) -> str:
+    """E.164-insensitive compare for the owner gate: keep digits and drop a leading
+    country '1', so +1 604..., 1604..., (604) ..., 604-... all match the stored
+    OWNER_PHONE. Defensive only — Twilio reports E.164 — but a format drift must
+    NEVER silently drop the owner's own YES/NO reply (that reads as a missed loop)."""
+    d = re.sub(r"\D", "", s or "")
+    if len(d) == 11 and d.startswith("1"):
+        d = d[1:]
+    return d
+
+
 class InboundPoller:
     def __init__(self, core, fetch: Optional[Callable[[], List[dict]]] = None,
                  data_dir=None) -> None:
@@ -91,7 +102,7 @@ class InboundPoller:
             self._mark_seen(sid)               # BEFORE acting: never replay an approval
             if (m.get("direction") or "") != "inbound":
                 continue
-            if (m.get("from") or "").strip() != owner:
+            if _norm_phone(m.get("from")) != _norm_phone(owner):
                 self._log("inbound_skipped", {"sid": sid, "reason": "not the owner's number"})
                 out["skipped"].append({"sid": sid, "reason": "sender"})
                 continue
