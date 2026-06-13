@@ -12,6 +12,8 @@ Pins (zero model calls; mock channels; no Twilio transport ever constructed):
   - the resolve pop persists BEFORE the goal resumes: a crash mid-resolve LOSES
     the ask (fail toward silence) — it can never restore-and-replay an approval
     after the goal may already have acted (same law as the deferred-queue drain).
+  - ask registration happens BEFORE outbound delivery: if the channel throws, the
+    ask still lands in pending_asks.json and can be resolved from the app.
   - a corrupt file fails toward silence: empty map, honest log, file set aside.
   - no pending_path (the default, every other engine-level test) = no IO at all.
   - end-to-end (the gate_P3 inbound leg): ControlCore restart with BOTH in-memory
@@ -59,6 +61,13 @@ class FakeGlass:
 class FakeScore:
     def record_decision(self, *a): pass
     def record_goal(self, *a): pass
+
+
+class ExplodingChannel:
+    name = "text"
+
+    def send(self, to, message):
+        raise RuntimeError("simulated channel outage")
 
 
 _BUSES = []
@@ -182,7 +191,23 @@ async def main():
         "the goal stays honestly paused — nothing may execute from a lost approval"
     print("PASS crash ordering: mid-resolve death fails toward silence, never replay")
 
-    # ---- 5) a corrupt file fails toward silence, honestly, and is set aside ----
+    # ---- 5) channel delivery can fail, but the ask remains durable and resolvable ----
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-sendfail-"))
+    pro_s, store_s, glass_s = await engine_in(tmp)
+    pro_s.channel = ExplodingChannel()
+    res = await pro_s.on_event(ev(SEND_SAM))
+    assert res["decision"] == "ask" and res["ask_id"], res
+    on_disk = json.loads((tmp / "pending_asks.json").read_text())
+    assert set(on_disk) == {res["ask_id"]}, on_disk
+    assert pro_s.pending[res["ask_id"]]["goal_id"] == res["goal_id"], pro_s.pending
+    ask_logs = [d for k, d in glass_s.entries if k == "ask_sent" and d["ask_id"] == res["ask_id"]]
+    assert ask_logs and ask_logs[0]["sent"] is False and "simulated channel outage" in ask_logs[0]["error"], ask_logs
+    out = await pro_s.resolve_ask(res["ask_id"], True)
+    assert out["approved"] is True and store_s.load(res["goal_id"]).state == GoalState.done, out
+    assert json.loads((tmp / "pending_asks.json").read_text()) == {}
+    print("PASS send failure: pending ask persists before delivery and can resolve from app")
+
+    # ---- 6) a corrupt file fails toward silence, honestly, and is set aside ----
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-"))
     path = tmp / "pending_asks.json"
     path.write_text("{not json at all")
@@ -193,7 +218,7 @@ async def main():
         "the unreadable file must be set aside, never silently deleted"
     print("PASS corrupt: empty map, honest log, file set aside as .corrupt")
 
-    # ---- 6) no pending_path (the default) -> no IO at all ----
+    # ---- 7) no pending_path (the default) -> no IO at all ----
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-"))
     lm = LiveMemoryBrain(Memory(data_dir=tmp))
     bus = Bus()
@@ -211,7 +236,7 @@ async def main():
     assert not (tmp / "pending_asks.json").exists(), "no path configured -> no files"
     print("PASS default: no path configured -> in-memory behavior unchanged, no files")
 
-    # ---- 6b) money is a hard wall: no pending ask; a stale money ask still cannot approve ----
+    # ---- 7b) money is a hard wall: no pending ask; a stale money ask still cannot approve ----
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-money-"))
     pro_m, store_m, glass_m = await engine_in(tmp)
     blocked = await pro_m.on_event(ev(MONEY))
@@ -252,7 +277,7 @@ async def main():
     assert json.loads((tmp / "pending_asks.json").read_text()) == {}
     print("PASS money wall: money creates no pending ask; stale money approval cannot execute")
 
-    # ---- 7) end-to-end: ControlCore restart + inbound YES (the gate_P3 leg) ----
+    # ---- 8) end-to-end: ControlCore restart + inbound YES (the gate_P3 leg) ----
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-penper-e2e-"))
     core = ControlCore(data_dir=tmp)
     await core.start()

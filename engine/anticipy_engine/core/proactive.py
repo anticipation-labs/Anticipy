@@ -415,18 +415,29 @@ class ProactiveEngine:
                                           "reason": reason, "action": action})
 
     def _send_ask(self, goal: Goal, action: str, reason: str, category: str = "") -> str:
-        """Send the ask over the channel and register it pending a reply."""
+        """Register a pending ask durably, then try to deliver it.
+
+        The approval surface is the source of truth. If SMS/app delivery fails or
+        throws, the ask must still appear in /pending so the user can resolve it
+        from the app rather than losing a human-impacting action in transit.
+        """
         ask_id = goal.id
         # The short code lets an SMS reply name THIS ask (channels/inbound.py matches
         # it as an ask-id prefix); decision-inert — the body is never scored.
         msg = (f"Anticipy wants to: {action}\nWhy it paused: {reason}\n"
                f"Reply YES {ask_id[:6]} to proceed, NO {ask_id[:6]} to skip.")
-        sent = self.channel.send(self.user_contact, msg)
         self.pending[ask_id] = {"goal_id": goal.id, "action": action, "reason": reason, "category": category}
         self._persist_pending()
+        channel_name = getattr(self.channel, "name", "unknown")
+        try:
+            sent = self.channel.send(self.user_contact, msg)
+        except Exception as exc:  # delivery is best-effort; /pending remains authoritative
+            sent = {"sent": False, "channel": channel_name,
+                    "to": self.user_contact, "message": msg, "error": str(exc)}
         if self.glassbox is not None:
-            self.glassbox.log("ask_sent", {"ask_id": ask_id, "goal_id": goal.id, "channel": self.channel.name,
+            self.glassbox.log("ask_sent", {"ask_id": ask_id, "goal_id": goal.id, "channel": channel_name,
                                            "to": self.user_contact, "sent": bool(sent.get("sent")),
+                                           "error": sent.get("error"),
                                            "action": action, "reason": reason, "category": category})
         return ask_id
 
