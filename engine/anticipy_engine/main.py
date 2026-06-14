@@ -13,15 +13,19 @@ The engine is local-first: it binds to 127.0.0.1 only.
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
 import secrets
+import socket
 import tempfile
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from json import JSONDecodeError
 from pydantic import BaseModel, Field
 
 from . import __version__
@@ -41,6 +45,16 @@ DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 OWNER_API_TOKEN_ENV = "ANTICIPY_OWNER_API_TOKEN"
 OWNER_TOKEN_HEADER = "x-anticipy-owner-token"
 PUBLIC_PATHS = {"/health"}
+# Cap the in-memory JSON/text body we will read+process synchronously on a single
+# request. The ingest/event lanes do heavy work (triage -> gate -> act) per line; one
+# enormous body would otherwise pin the event loop. The local file-upload lane keeps its
+# own (larger) byte cap (DEFAULT_MAX_UPLOAD_BYTES) because it streams from disk, not body.
+# Override with ANTICIPY_MAX_REQUEST_BYTES; a hard ceiling defends against a 0/garbage value.
+DEFAULT_MAX_REQUEST_BYTES = 1 * 1024 * 1024  # 1 MiB of request body is already a huge transcript
+MAX_REQUEST_BYTES_CEILING = 64 * 1024 * 1024
+# Routes whose body is intentionally not size-limited (they validate/stream their own
+# payloads): the local-file upload lane caps bytes off disk, not the request body.
+REQUEST_SIZE_EXEMPT_PATHS = {"/owner/ingest-file"}
 
 core = ControlCore()
 extension_hello_seen = False
@@ -155,6 +169,57 @@ async def owner_api_auth(request: Request, call_next):
             status_code=401,
             headers={"www-authenticate": "Bearer"},
         )
+    return await call_next(request)
+
+
+def _max_request_bytes() -> int:
+    """The body-size cap (bytes). Configurable, but bounded to a sane ceiling so a
+    garbage/zero override can never disable the guard or open an unbounded read."""
+    try:
+        raw = int(os.environ.get("ANTICIPY_MAX_REQUEST_BYTES", "") or DEFAULT_MAX_REQUEST_BYTES)
+    except (TypeError, ValueError):
+        raw = DEFAULT_MAX_REQUEST_BYTES
+    if raw <= 0:
+        raw = DEFAULT_MAX_REQUEST_BYTES
+    return min(raw, MAX_REQUEST_BYTES_CEILING)
+
+
+def _too_large_response(limit: int) -> JSONResponse:
+    return JSONResponse(
+        {"error": "payload_too_large", "message": f"Request body exceeds {limit} bytes.", "limit": limit},
+        status_code=413,
+    )
+
+
+@app.middleware("http")
+async def request_size_cap(request: Request, call_next):
+    """Reject an oversized request body with 413 BEFORE any heavy synchronous work.
+
+    One huge /event (or /owner/ingest) body would otherwise drive triage->gate->act on a
+    giant string and pin the event loop. We reject in two layers: (1) a declared
+    Content-Length over the cap is refused immediately (no read), and (2) the body is
+    read with a hard cap so a missing/understated Content-Length (chunked, or a lying
+    client) still cannot smuggle an unbounded body past the gate. The upload-from-disk
+    lane is exempt — it caps bytes off disk, not the request body.
+    """
+    if request.method in ("POST", "PUT", "PATCH") and request.url.path not in REQUEST_SIZE_EXEMPT_PATHS:
+        limit = _max_request_bytes()
+        declared = request.headers.get("content-length")
+        if declared is not None:
+            try:
+                if int(declared) > limit:
+                    return _too_large_response(limit)
+            except (TypeError, ValueError):
+                pass  # malformed Content-Length: fall through to the read-size guard
+        # Defend against a missing/understated Content-Length: read the body here with a
+        # hard cap. Caching it on request._body lets the downstream handler re-read it
+        # (Starlette's Request.body() returns the cached bytes) without a second read.
+        body = b""
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > limit:
+                return _too_large_response(limit)
+        request._body = body
     return await call_next(request)
 
 
@@ -646,6 +711,94 @@ async def owner_onboard(body: OwnerOnboardingIn) -> dict:
 # Max public source URLs we will read per profile build (keep the read bounded).
 ONBOARDING_MAX_SOURCES = 6
 
+# SSRF guard: how many DNS-resolved addresses we will check per source host. A host that
+# fans out to more than this is treated as suspicious and rejected (defends both the read
+# budget and a host that floods the resolver).
+SSRF_MAX_RESOLVED_ADDRS = 32
+
+
+def _ip_is_public(ip: ipaddress._BaseAddress) -> bool:
+    """A single address is safe to fetch ONLY if it is a globally-routable public IP.
+
+    Rejects loopback (127/8, ::1), link-local incl. the cloud-metadata 169.254.169.254
+    and IPv6 fe80::/10, private (10/8, 172.16/12, 192.168/16, fc00::/7), reserved,
+    multicast, unspecified (0.0.0.0/::), and the CGNAT 100.64/10 (is_global is False).
+    IPv4-mapped IPv6 (::ffff:127.0.0.1) is unwrapped first so it cannot smuggle a private
+    v4 address past a v6 check."""
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    if (
+        ip.is_loopback
+        or ip.is_link_local
+        or ip.is_private
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    ):
+        return False
+    return bool(ip.is_global)
+
+
+def _assert_public_source_url(url: str) -> None:
+    """SSRF gate for an onboarding source URL: reject anything that resolves to a
+    non-public address BEFORE we hand it to the read-only browser arm.
+
+    Validates the scheme is http(s), extracts the host, and:
+      - if the host is a literal IP, classifies it directly;
+      - if the host is a name, resolves it (getaddrinfo) and requires EVERY resolved
+        address to be public — so `localhost`, an internal name, or a DNS-rebind to a
+        private IP is all rejected.
+    Raises HTTPException(422) with a non-leaky message on any rejection. The host is never
+    echoed back beyond a short, sanitized label."""
+    parts = urlsplit(url)
+    if parts.scheme.lower() not in ("http", "https"):
+        raise HTTPException(status_code=422, detail="source URL must be http(s)")
+    host = parts.hostname  # already lowercased, brackets stripped for IPv6
+    if not host:
+        raise HTTPException(status_code=422, detail="source URL has no host")
+
+    # 1) Host is a literal IP address -> classify it directly (no DNS).
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        if not _ip_is_public(literal):
+            raise HTTPException(status_code=422, detail="source URL host is not a public address")
+        return
+
+    # 2) Host is a name -> resolve and require EVERY resolved address to be public. A name
+    # that resolves to ANY non-public address (incl. a DNS-rebind to 169.254.169.254 / a
+    # private IP / localhost->127.0.0.1) is rejected. A name that does NOT resolve
+    # (NXDOMAIN, a reserved .example/.invalid/.test TLD, or a transient resolver miss) is
+    # NOT an SSRF vector — nothing internal can be reached through it — so it is allowed to
+    # pass to the read-only browser arm, which fails the read honestly and yields a blocker
+    # (never a 422 and never an invented fact). This keeps the gate about WHERE a host
+    # points, not whether it currently resolves.
+    try:
+        infos = socket.getaddrinfo(host, parts.port or None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        return  # unresolvable: not an SSRF target; let the browser arm degrade honestly
+    addrs = []
+    for info in infos:
+        sockaddr = info[4]
+        if not sockaddr:
+            continue
+        addrs.append(sockaddr[0])
+        if len(addrs) > SSRF_MAX_RESOLVED_ADDRS:
+            raise HTTPException(status_code=422, detail="source URL host resolves to too many addresses")
+    for raw in addrs:
+        # Strip a scoped-IPv6 zone id (fe80::1%en0) before parsing.
+        candidate = raw.split("%", 1)[0]
+        try:
+            resolved = ipaddress.ip_address(candidate)
+        except ValueError:
+            # An address we cannot classify is treated as unsafe (fail closed).
+            raise HTTPException(status_code=422, detail="source URL host resolved to an unparseable address")
+        if not _ip_is_public(resolved):
+            raise HTTPException(status_code=422, detail="source URL host resolves to a non-public address")
+
 
 def _profile_browse_reader():
     """The reader the profile builder uses. Tests may inject a fake via
@@ -673,8 +826,13 @@ def _normalize_onboarding_sources(raw_name: str, raw_sources) -> tuple[str, list
         if not isinstance(url, str):
             continue
         url = url.strip()
-        if url.lower().startswith(("http://", "https://")):
-            sources.append(s)
+        if not url.lower().startswith(("http://", "https://")):
+            continue
+        # SSRF gate: the host must resolve to a PUBLIC address. A loopback/link-local
+        # (incl. 169.254.169.254 cloud-metadata)/private/internal host is rejected (422)
+        # before the read-only browser arm is ever pointed at it.
+        _assert_public_source_url(url)
+        sources.append(s)
     if not sources:
         raise HTTPException(status_code=422, detail="at least one public http(s) source URL is required")
     return name, sources
@@ -1018,7 +1176,16 @@ async def conversation_relay(ws: WebSocket) -> None:
     last_handoff: dict = {"event": "no_prompt"}
     try:
         while True:
-            msg = await ws.receive_json()
+            try:
+                msg = await ws.receive_json()
+            except JSONDecodeError:
+                # A malformed/non-JSON frame mid-call must not crash the live call:
+                # stay silent and wait for the next frame (mirrors the unknown-frame bias).
+                continue
+            if not isinstance(msg, dict):
+                # A valid-JSON but non-object frame (a bare string/number/array) has no
+                # type and no fields to read — skip it before any msg.get().
+                continue
             kind = msg.get("type")
             if kind == "prompt":
                 turn = await brain.turn(msg.get("voicePrompt") or "")
@@ -1057,7 +1224,16 @@ async def ws_extension(ws: WebSocket) -> None:
     core.glassbox.log("extension", {"event": "connected"})
     try:
         while True:
-            msg = await ws.receive_json()
+            try:
+                msg = await ws.receive_json()
+            except JSONDecodeError:
+                # A malformed/non-JSON frame must not drop the extension link: skip it
+                # and keep the socket alive for the next frame.
+                continue
+            if not isinstance(msg, dict):
+                # A valid-JSON but non-object frame has no type/fields to act on — skip
+                # before any msg.get() and before handing it to the browser link.
+                continue
             if msg.get("type") == "ping":
                 await ws.send_json({"type": "pong"})
             else:
