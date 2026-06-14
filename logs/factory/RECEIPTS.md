@@ -119,6 +119,25 @@ cherry-picked + edits hand-applied), suite **62/62 green**:
 factory/build HEAD first (so it cherry-picked cleanly). Next swarm: instruct builders to `git reset --hard factory/build`
 onto current HEAD before building, so branches merge instead of needing file-by-file lift.
 
+### ✅ Press-go (approve → do-it), default-deny — THE ACTION LOOP IS NOW COMPLETE · 2026-06-13
+`POST /memory/remembered/approve` runs an approved remembered+inferred task. **Default-deny:** only a whitelist
+of provably-safe reversible intents (`create_event`, `send_email_draft`, `write_memory`) auto-executes through
+the orchestrator + Slice-0 read-back gate; EVERYTHING else (real sends, money, messages) is prepared-and-handed-
+back, never executed. No money-detection whack-a-mole — money isn't on the run-list, so the earlier reverted
+version's money hole is structurally gone. 3/3 skeptics refuted=false (spies: start_goal=0/_drive=0 on every
+non-whitelisted approve; calendar/draft execute through the real funnel; vents → approved=false; trigger_tick
+fires 0). Decision/harm/trigger/orchestrator/api_hand path byte-for-byte unchanged. Additive. Suite 65/65. (f02185f)
+
+## 🎯 STATE OF THE WHOLE (2026-06-13): the full owner loop now EXISTS, mock/dev-proven end to end
+hear (event/transcript) → **remember** everything (inert) → **infer** the real task (vent-safe) → **review** (app)
+→ **approve → do it** (default-deny: safe whitelist executes w/ read-back; rest handed back) — plus the **arms**
+(browser read+engine-bridge, browser write prepare-then-handoff, per-user encrypted token vault wired into ApiHand),
+**voice** transport (/cr two-way), **onboarding** (profile-builder + endpoint + view), and the **download front-door**.
+Suite 65/65; every piece skeptic-verified; cardinal-sin + money held throughout (2 reverts caught them).
+**THE GAP TO "DONE" IS NOW LIVE PROOF, which needs Omar's accounts:** real Google auth (real calendar event +
+draft read-back), live Twilio (the 2:45 call), real onboarding scrape of HIS logged-in Chrome, Apple Developer ID
+(signed download), and the 5 lived days. The mechanism is built; connecting accounts turns mock-proven → proven-real.
+
 ## Honest negatives (reverted; kept so we never repeat them)
 
 ### ❌ Money-detector regex hardening — REVERTED (whack-a-mole) · 2026-06-13
