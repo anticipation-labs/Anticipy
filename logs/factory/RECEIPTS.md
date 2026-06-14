@@ -187,6 +187,18 @@ whitelist...' all drop at triage; genuine commitments still pass. Also: SSRF rej
 on /agent/* + /ws/*, a code-level browser nav-wall (navwall.py) the model can't override, and the /dryrun preview
 wired into the app. Press-go default-deny + money hard-stop verified airtight across 119 adversarial lines.
 
+
+### ✅ Apollo fix wave 4 integrated + re-verified · 2026-06-14 (suite 73/73)
+Wave-4 audit: PROACTIVE path airtight (0 vent/money breaches across 145 lines). The remaining HIGHs were press-go's
+denial belt being NARROWER than the harm-line. FIX (structural): press-go now DEFERS to the harm-line — before any
+whitelist mapping it runs harm.assess + is_vent on the RAW line and hands back on money/binding/destroy/vent, so it
+can never be looser than the gate (foreman re-verified: 'square up the tab'/'email the resignation'/gerund-sends
+handback; 'meet the vendor 2pm'/'call the dentist' still execute). + bare-cardinal money idioms ('spot me forty')
+now classify money (blocked); + /cr fail-CLOSED on public deploy + turn cap; + multi-intent split (a money clause
+no longer drops the co-located safe action) + sentence-splitter (Dr./Mr.); + duplicate open_loops write deduped.
+Known low residual: 'Remind me to scream at 3pm' (is_vent doesn't flag imperative 'scream' yet) — contained
+(reversible note); the press-go gate is wired and catches it the moment is_vent recognizes it.
+
 ## Honest negatives (reverted; kept so we never repeat them)
 
 ### ❌ Money-detector regex hardening — REVERTED (whack-a-mole) · 2026-06-13
