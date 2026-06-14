@@ -153,6 +153,54 @@ def main():
         "That camera strap I liked, put it in the cart if it's there, don't buy it."
     ).cards)
 
+    # ---- Apollo wave 4 MULTI-INTENT SPLIT pin: a single line that bundles a SAFE action and a
+    # MONEY action used to collapse to ONE blocked-money card, silently DROPPING the safe action.
+    # Now the line splits into independent intent clauses so the safe clause SURVIVES as a draft
+    # and the money clause is blocked/handed back on its own — never the whole line dropped.
+    from anticipy_engine.owner_mode import _sentence_split, _split_intent_clauses  # noqa: E402
+    multi = mode.ingest("email Sam the deck and venmo grandma $20").cards
+    assert any(c.action == "draft_or_confirm_message" and c.args.get("person") == "Sam"
+               for c in multi), ("safe clause must survive as a draft", signature(mode.ingest(
+                   "email Sam the deck and venmo grandma $20")))
+    assert any(c.disposition == "blocked"
+               and c.action == "prepare_purchase_path_without_payment" for c in multi), \
+        ("money clause must be blocked independently", signature(mode.ingest(
+            "email Sam the deck and venmo grandma $20")))
+    # the same shape with a co-located scheduling clause: calendar action survives + money blocks
+    multi2 = mode.ingest("Meet Dr. Lee at 3pm and pay the rent").cards
+    assert any(c.action == "create_calendar_or_reminder" for c in multi2), signature(
+        mode.ingest("Meet Dr. Lee at 3pm and pay the rent"))
+    assert any(c.disposition == "blocked" for c in multi2), signature(
+        mode.ingest("Meet Dr. Lee at 3pm and pay the rent"))
+    # the split is NARROW: a single money intent with an internal comma/apposition to the SAME
+    # person ("reply to Maya, send her the 200 we owe") stays ONE blocked card, never a draft;
+    # an all-money "buy milk and eggs" is not severed into a safe clause; a cart-prep no-buy
+    # bound stays one find_or_cart card. Benign no-money multi-part speech is not over-split.
+    one_pay = mode.ingest("reply to Maya, send her the 200 bucks we owe").cards
+    assert not any(c.action == "draft_or_confirm_message" for c in one_pay), signature(
+        mode.ingest("reply to Maya, send her the 200 bucks we owe"))
+    assert all(c.disposition == "blocked" for c in mode.ingest("buy milk and eggs").cards)
+    assert all(c.action == "find_or_cart_without_purchase" for c in mode.ingest(
+        "Put it in the cart if you find it and don't buy it.").cards)
+
+    # ---- Apollo wave 4 SENTENCE-SPLITTER pin: the splitter must NOT break on a known
+    # title/abbreviation period ("Dr.", "Mr.", "Mrs.", "Ms.", "St.", "a.m.") — severing a task
+    # from its time ("Meet Dr. Lee at 3pm" must NOT split at "Dr."). Genuine sentence ends
+    # (a non-abbreviation period) still split so real multi-sentence input is separated.
+    assert _sentence_split("Meet Dr. Lee at 3pm") == ["Meet Dr. Lee at 3pm"]
+    assert _sentence_split("Meet Dr. Lee at 3pm. Call Maya.") == ["Meet Dr. Lee at 3pm.", "Call Maya."]
+    assert _sentence_split("Call him at 9 a.m. tomorrow. Then leave.") == [
+        "Call him at 9 a.m. tomorrow.", "Then leave."]
+    assert _sentence_split("Mr. and Mrs. Smith arrive at 5pm. Greet them.") == [
+        "Mr. and Mrs. Smith arrive at 5pm.", "Greet them."]
+    assert _sentence_split("Meet at St. Mary. Done.") == ["Meet at St. Mary.", "Done."]
+    # the whole task+time survives as one observed line through the full ingest path
+    assert mode.ingest("Meet Dr. Lee at 3pm tomorrow.").observed_lines[0].text.startswith(
+        "Meet Dr. Lee at 3pm")
+    # a line with no money is NOT a multi-intent split candidate (returns itself unchanged)
+    assert _split_intent_clauses("email Sam the deck and call Maya tomorrow") == [
+        "email Sam the deck and call Maya tomorrow"]
+
     asyncio.run(control_core_check())
     print("PASS owner_mode: noisy owner transcript -> shared durable action cards")
 

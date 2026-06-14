@@ -135,6 +135,111 @@ def _clean_line(raw: str) -> str:
     return re.sub(r"\s+", " ", text).strip(" -\t")
 
 
+# SENTENCE-SPLITTER ABBREVIATIONS (integration/recall fix): the sentence splitter breaks on
+# any period+space, so "Meet Dr. Lee at 3pm" was severed at "Dr." — tearing the task ("Meet
+# ... Lee") from its time ("at 3pm") and producing a stub clause and a timeless one. A period
+# that belongs to a known title/abbreviation is NOT a sentence end, so it must not split. The
+# set is the common spoken/written titles and time/Latin abbreviations; matched
+# case-INSENSITIVELY on the token just before the period (so "dr." mid-stream is also safe).
+# Multi-dot abbreviations ("a.m.", "p.m.", "e.g.", "i.e.") are protected by their own pattern
+# because the internal dots would otherwise each look like a sentence break.
+_ABBREVIATIONS = (
+    "dr", "mr", "mrs", "ms", "prof", "st", "ave", "rd", "blvd", "apt", "dept",
+    "jr", "sr", "vs", "etc", "no", "fig", "approx", "min", "hr", "hrs", "sgt",
+    "lt", "gen", "col", "capt", "rev", "gov", "sen", "rep", "messrs", "mt", "ft",
+)
+# Dotted run-on abbreviations end in an internal-dot form ("a.m.", "p.m.", "e.g.", "i.e.",
+# "a.k.a.", "u.s.", "p.s."). The internal dot is REQUIRED so a bare time token without dots
+# ("3pm.") is NOT mistaken for "p.m." — that period is a genuine sentence end and may split.
+_DOTTED_ABBREV = re.compile(
+    r"(?:[ap]\.m|e\.g|i\.e|a\.k\.a|u\.s|p\.s)\.$", re.I
+)
+_SENTENCE_BOUNDARY = re.compile(
+    r"(?<=[.!?])\s+", re.I
+)
+
+
+def _sentence_split(text: str) -> list[str]:
+    """Split a run of text into sentences WITHOUT severing a known abbreviation period.
+
+    The naive ``re.split(r"(?<=[.!?])\\s+")`` cuts after every period, so "Meet Dr. Lee at
+    3pm" loses its time. This walks candidate boundaries and rejects any boundary whose
+    preceding token is a known title/abbreviation (Dr/Mr/Mrs/Ms/St/...) or a dotted
+    abbreviation (a.m./p.m./e.g.) — keeping the task glued to its time. Non-abbreviation
+    periods still split normally so genuine multi-sentence input is still separated.
+    """
+    parts: list[str] = []
+    start = 0
+    for m in _SENTENCE_BOUNDARY.finditer(text):
+        head = text[start:m.start()]
+        # the token immediately before the boundary period, e.g. "Dr." -> "dr"
+        prev = re.search(r"([A-Za-z]+)\.\s*$", head)
+        token = prev.group(1).lower() if prev else ""
+        if token in _ABBREVIATIONS or _DOTTED_ABBREV.search(head):
+            continue  # not a real sentence end — keep the abbreviation glued forward
+        seg = text[start:m.start()].strip()
+        if seg:
+            parts.append(seg)
+        start = m.end()
+    tail = text[start:].strip()
+    if tail:
+        parts.append(tail)
+    return [p for p in parts if p.strip()]
+
+
+# MULTI-INTENT SPLIT (integration/recall fix): a single line that bundles a SAFE action and a
+# MONEY action ("email Sam the deck and venmo grandma $20") was classified as one card; the
+# money interlock fired first and the whole line became a single blocked-money card — silently
+# DROPPING "email Sam the deck". The fix splits such a line into independent intent clauses on
+# coordinating boundaries so each clause is shaped on its own: the safe clause -> draft, the
+# money clause -> blocked handback. The split is DELIBERATELY narrow (see _split_intent_clauses
+# guards) — it only fires when isolating a money clause from a co-located safe action clause.
+# The connectors are coordinating conjunctions ONLY ("and", "then", "and then", "also", ";").
+# A bare comma is deliberately NOT a connector: it is too often a continuation/apposition of
+# the SAME intent ("reply to Maya, send her the 200 we owe" is one money intent to one person,
+# not a safe+money mix), and an internal comma in one clause ("pickup to 3 today, please remind
+# me") must never be torn apart. The conjunction boundary is what separates genuinely distinct
+# intents ("email Sam the deck AND venmo grandma $20"), so benign multi-part speech (and the
+# pinned NOISY_DAY / spine-money cards) is not over-split.
+_CLAUSE_CONNECTORS = re.compile(
+    r"\s*(?:;|,?\s+and then\s+|,?\s+then\s+|,?\s+and also\s+|,?\s+also\s+|\s+and\s+)\s*",
+    re.I,
+)
+
+
+def _split_intent_clauses(text: str) -> list[str]:
+    """Split a co-located multi-intent line into independent clauses.
+
+    Returns the list of clauses ONLY when splitting isolates a money clause from a non-money
+    clause; otherwise returns ``[text]`` unchanged so the line stays one card. Each emitted
+    clause is independently runnable: "email Sam the deck and venmo grandma $20" ->
+    ["email Sam the deck", "venmo grandma $20"]. The non-money clause survives as a draft and
+    the money clause is blocked on its own — never the whole line dropped because one clause is
+    money. Splitting is suppressed unless BOTH a money clause and a safe action clause result.
+    """
+    if not _has_money_signal(text):
+        return [text]
+    # CARVE-OUT: a cart-prep line with an explicit no-purchase BOUND ("...put it in the cart
+    # ... don't buy it") is ONE deliberate reversible command, not a money+safe mix — its
+    # "buy" is a ceiling owned by the _BROWSER branch. Never sever the bound from the command.
+    if _NO_BUY.search(text):
+        return [text]
+    raw_clauses = [c.strip(" ,.;") for c in _CLAUSE_CONNECTORS.split(text) if c and c.strip(" ,.;")]
+    if len(raw_clauses) < 2:
+        return [text]
+    money_clauses = [c for c in raw_clauses if _has_money_signal(c)]
+    safe_clauses = [c for c in raw_clauses if not _has_money_signal(c)]
+    # Only split when the line genuinely mixes a money clause WITH a safe action clause AND a
+    # safe clause is itself actionable (carries a send/browser/scheduling/pickup verb). A
+    # trailing fragment with no verb ("and the rest") is not its own intent — keep it whole.
+    if not money_clauses or not safe_clauses:
+        return [text]
+    if not any(_SEND.search(c) or _BROWSER.search(c) or _BARE_ACTION_VERB.search(c)
+               or _PICKUP.search(c) for c in safe_clauses):
+        return [text]
+    return raw_clauses
+
+
 def _split_transcript(text: str) -> list[OwnerObservedLine]:
     raw_parts: list[str] = []
     for raw_line in (text or "").splitlines():
@@ -142,16 +247,26 @@ def _split_transcript(text: str) -> list[OwnerObservedLine]:
         if not raw_line:
             continue
         if len(raw_line) > 220:
-            raw_parts.extend(p for p in re.split(r"(?<=[.!?])\s+", raw_line) if p.strip())
+            raw_parts.extend(p for p in _sentence_split(raw_line) if p.strip())
         else:
             raw_parts.append(raw_line)
     if not raw_parts and text.strip():
-        raw_parts = [p for p in re.split(r"(?<=[.!?])\s+", text.strip()) if p.strip()]
+        raw_parts = [p for p in _sentence_split(text.strip()) if p.strip()]
     observed: list[OwnerObservedLine] = []
-    for i, raw in enumerate(raw_parts, start=1):
+    line_no = 0
+    for raw in raw_parts:
         cleaned = _clean_line(raw)
-        if cleaned:
-            observed.append(OwnerObservedLine(line_no=i, text=cleaned))
+        if not cleaned:
+            continue
+        # A single cleaned line may bundle a safe action and a money action — split it into
+        # independent intent clauses so neither is dropped (the safe one drafts, the money one
+        # blocks). Most lines return unchanged; only a co-located money+safe line is split.
+        for clause in _split_intent_clauses(cleaned):
+            clause = clause.strip()
+            if not clause:
+                continue
+            line_no += 1
+            observed.append(OwnerObservedLine(line_no=line_no, text=clause))
     return observed
 
 
