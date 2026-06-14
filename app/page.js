@@ -369,6 +369,11 @@ export default function Home() {
   const [pending, setPending] = useState([]);
   const [loops, setLoops] = useState([]);
   const [remembered, setRemembered] = useState([]);
+  // Per-line press-go state keyed by remembered line id: { busy } while in flight,
+  // then the engine result (done-with-receipt for a whitelisted action, or the
+  // prepared/handback state for a non-whitelisted one). DISPLAY-ONLY; the raw line
+  // and inferred task stay visible alongside.
+  const [approveResults, setApproveResults] = useState({});
   const [connections, setConnections] = useState({});
   const [tickResult, setTickResult] = useState(null);
   const [events, setEvents] = useState([]);
@@ -638,6 +643,32 @@ export default function Home() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function approveRemembered(lineId) {
+    // Press go on ONE remembered line. The engine is default-deny: it executes only
+    // the three whitelisted reversible intents (with its own read-back proof) and hands
+    // everything else back. We just render whatever it returns.
+    setApproveResults((current) => ({ ...current, [lineId]: { busy: true } }));
+    setError("");
+    try {
+      const response = await ownerFetch("/api/memory/remembered/approve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ line_id: lineId }),
+      });
+      const data = await response.json();
+      handleOwnerAuthFailure(response, data);
+      if (!response.ok) throw new Error(data.message || data.detail || data.error || "Press-go failed");
+      setApproveResults((current) => ({ ...current, [lineId]: { busy: false, result: data } }));
+      await loadStatus();
+    } catch (err) {
+      setApproveResults((current) => ({
+        ...current,
+        [lineId]: { busy: false, error: err instanceof Error ? err.message : String(err) },
+      }));
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -1173,6 +1204,11 @@ export default function Home() {
                 const inf = row.inferred;
                 const hasTask = inf && inf.task;
                 const conf = inf && inf.confidence;
+                // Press-go is offered only for a confident inferred task (a real line,
+                // not a vent). The engine still re-infers and is default-deny.
+                const canApprove = Boolean(row.id) && hasTask && conf && conf !== "low";
+                const ar = row.id ? approveResults[row.id] : undefined;
+                const res = ar && ar.result;
                 return (
                 <article className="card" key={row.id || `${row.ts || "remembered"}-${index}`}>
                   <div className="card-head">
@@ -1197,6 +1233,45 @@ export default function Home() {
                   {(row.source || (row.people && row.people.length)) ? (
                     <div className="loop-meta">
                       {[row.source, (row.people || []).join(", ")].filter(Boolean).join(" / ")}
+                    </div>
+                  ) : null}
+                  {canApprove ? (
+                    <div className="approve-row">
+                      {!res ? (
+                        <button
+                          type="button"
+                          className="approve-btn"
+                          onClick={() => approveRemembered(row.id)}
+                          disabled={ar && ar.busy}
+                        >
+                          {ar && ar.busy ? "Working…" : "Approve & do it"}
+                        </button>
+                      ) : res.executed ? (
+                        // Whitelisted reversible action ran: show the read-back receipt.
+                        <div className="approve-done">
+                          <span className="approve-badge done">Done{res.idempotent ? " (already)" : ""}</span>
+                          <span className="approve-what">{res.would_do || res.intent}</span>
+                          {res.receipt && Object.keys(res.receipt).length ? (
+                            <pre className="approve-receipt">{JSON.stringify(res.receipt, null, 2)}</pre>
+                          ) : null}
+                        </div>
+                      ) : res.prepared ? (
+                        // Non-whitelisted: prepared and handed back, never executed.
+                        <div className="approve-handback">
+                          <span className="approve-badge handback">Prepared — your turn</span>
+                          <span className="approve-what">{res.would_do || res.inferred_action || res.intent}</span>
+                          {res.why_handback ? (
+                            <span className="approve-why">{res.why_handback}</span>
+                          ) : null}
+                        </div>
+                      ) : (
+                        // Refused at the engine (e.g. re-inferred as a vent): no action.
+                        <div className="approve-handback">
+                          <span className="approve-badge handback">Not acted on</span>
+                          <span className="approve-why">{res.reason || "no confident task"}</span>
+                        </div>
+                      )}
+                      {ar && ar.error ? <span className="approve-why">{ar.error}</span> : null}
                     </div>
                   ) : null}
                 </article>

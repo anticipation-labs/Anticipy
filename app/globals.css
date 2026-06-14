@@ -917,6 +917,78 @@ button {
   cursor: pointer;
 }
 
+.approve-row {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.approve-btn {
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--ready);
+  background: var(--ready);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.approve-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.approve-done,
+.approve-handback {
+  display: grid;
+  gap: 4px;
+}
+
+.approve-badge {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+.approve-badge.done {
+  color: #fff;
+  background: var(--done);
+}
+
+.approve-badge.handback {
+  color: #fff;
+  background: var(--ask);
+}
+
+.approve-what {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.approve-why {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.approve-receipt {
+  margin: 2px 0 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
 .event {
   display: grid;
   grid-template-columns: 120px 1fr;
