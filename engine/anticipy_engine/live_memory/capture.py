@@ -171,6 +171,13 @@ class Capturer:
             if due_dt is not None:
                 fields["due_ts"] = due_dt.timestamp()
                 fields["remind_ts"] = due_dt.timestamp() - REMIND_LEAD_S
+            # DEDUPE COORDINATION: stamp a stable content key so the OTHER open_loops writer
+            # (the owner-card persist path in control_core) can recognize that this exact
+            # commitment was already laddered into the drawer here and short-circuit to a
+            # deduped echo — one dictated task -> one active+fireable loop, no double backlog
+            # row, no double trigger fire. The key is content-only (normalized text), so the
+            # two independently-built rows for the same spoken line resolve to the same key.
+            fields["capture_key"] = _norm(text)
         dup = self._dup(text, kind)
         if dup is not None:
             return {"kept": False, "reason": "dup", "item": dup, "kind": kind, "smart_calls": 0}

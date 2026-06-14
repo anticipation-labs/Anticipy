@@ -675,9 +675,32 @@ class ControlCore:
             # the drawer remembers the person's actual words — synthetic card titles
             # ("Owner task: ...") in open loops polluted the planner's inject context
             # with tokens the speaker never said (browse steps grew on unrelated goals)
+            captured_loop = (capture_result or {}).get("item")
+            loop_fields = {**fields, "title": card.title}
+            # DEDUPE — one dictated task -> exactly ONE active+fireable open_loop.
+            # The capture path (capturer.capture, run first in owner_ingest) already wrote
+            # a RAW open_loop for this same line whenever the line is a commitment shape; it
+            # carries the spoken due/remind grounding and is the live reminder. This
+            # card-persist path also writes an open_loop (the card-board record). With BOTH
+            # active for the same task the backlog showed it twice and the trigger (which
+            # scans every active loop) could fire two reminders. FIX: when a raw capture
+            # loop already exists for this line, designate IT as the single authoritative
+            # active+fireable row and mark THIS owner-card loop a dedupe echo of it — kept
+            # for the card board + status sync, but suppressed from the backlog and stamped
+            # fired_at so it can never double-fire the trigger. When no raw capture loop
+            # exists (a line the spine caught that capture did not shape as a commitment),
+            # this owner-card loop is the only row and surfaces/fires normally.
+            has_capture_loop = getattr(captured_loop, "kind", None) == "open_loop"
+            if has_capture_loop:
+                # explicit linkage via the capture path's stable content key (capture.py),
+                # not just text equality — the two writers now coordinate on a shared key
+                loop_fields["deduped_by_capture_loop"] = captured_loop.id
+                loop_fields["capture_key"] = (captured_loop.fields or {}).get("capture_key")
+                loop_fields.setdefault("fired_at",
+                                       dt.datetime.now(dt.timezone.utc).timestamp())
             item = self.memory.open_loops.write_text(
                 card.source_text,
-                fields={**fields, "title": card.title},
+                fields=loop_fields,
                 provenance=f"owner:{source}",
                 confidence=card.confidence,
                 importance=0.85,
@@ -916,9 +939,34 @@ class ControlCore:
     def memory_open_loops(self, limit: int = 50) -> dict:
         """Visible memory backlog: open/waiting loops the owner should be able to inspect."""
         active = [i for i in self.memory.open_loops.all() if is_active_open_loop(i)]
-        active.sort(key=lambda i: i.updated_at or i.timestamp, reverse=True)
-        loops = [i.model_dump(mode="json") for i in active[:max(0, limit)]]
-        return {"loops": loops, "count": len(active)}
+        # DEDUPE — one dictated task -> exactly ONE backlog row. The owner-ingest path
+        # writes two open_loops for one commitment: a RAW capture loop (the speaker's words,
+        # the live reminder grounding) and an OWNER-CARD loop (the card-board record). When
+        # BOTH are active for the same task the backlog showed it twice. Collapse same-text
+        # active loops to one, PREFERRING the owner-card loop — it carries the card linkage,
+        # so the surfaced row is the protected one (resolve must go through the card). A raw
+        # loop with no active owner-card sibling (e.g. a do-card reminder whose card already
+        # finished) still surfaces; a loop the spine caught with no raw sibling is untouched.
+        by_task: dict = {}
+        for i in active:
+            # group same-task rows on the shared capture content key when present
+            # (the two writers stamp the same capture_key), else normalized text
+            key = i.fields.get("capture_key") or " ".join((i.text or "").split()).lower()
+            kept = by_task.get(key)
+            if kept is None:
+                by_task[key] = i
+                continue
+            # prefer the owner-card loop; otherwise keep the most recently updated
+            i_card = bool(i.fields.get("owner_card_id"))
+            kept_card = bool(kept.fields.get("owner_card_id"))
+            if i_card and not kept_card:
+                by_task[key] = i
+            elif i_card == kept_card and (i.updated_at or i.timestamp) > (kept.updated_at or kept.timestamp):
+                by_task[key] = i
+        deduped = list(by_task.values())
+        deduped.sort(key=lambda i: i.updated_at or i.timestamp, reverse=True)
+        loops = [i.model_dump(mode="json") for i in deduped[:max(0, limit)]]
+        return {"loops": loops, "count": len(deduped)}
 
     def resolve_memory_loop(self, loop_id: str, status: str = "done") -> dict:
         """Owner closes a memory/setup loop. Owner-card loops must resolve through cards."""
