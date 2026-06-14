@@ -13,11 +13,15 @@ The engine is local-first: it binds to 127.0.0.1 only.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import ipaddress
 import os
 import secrets
 import socket
 import tempfile
+import time
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Optional
@@ -45,6 +49,14 @@ DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 OWNER_API_TOKEN_ENV = "ANTICIPY_OWNER_API_TOKEN"
 OWNER_TOKEN_HEADER = "x-anticipy-owner-token"
 PUBLIC_PATHS = {"/health"}
+# Twilio request-signature header (sent on the /cr WS upgrade). When TWILIO_AUTH_TOKEN
+# is configured we can verify a non-local caller IS Twilio even without an owner token.
+TWILIO_SIGNATURE_HEADER = "x-twilio-signature"
+# /cr per-call caps so a single connection can't drive the decider brain unbounded
+# (defence-in-depth alongside the fail-closed handshake gate). Generous for a real
+# human call; overridable for tests/ops, hard-floored so a 0/garbage value can't disable it.
+CR_MAX_TURNS = 200            # spoken owner turns answered per call
+CR_MAX_CALL_SECONDS = 3600.0  # wall-clock lifetime of one /cr socket (1h)
 # Cap the in-memory JSON/text body we will read+process synchronously on a single
 # request. The ingest/event lanes do heavy work (triage -> gate -> act) per line; one
 # enormous body would otherwise pin the event loop. The local file-upload lane keeps its
@@ -131,18 +143,10 @@ def _owner_api_authorized(request: Request, token: str) -> bool:
     return bool(supplied) and secrets.compare_digest(supplied, token)
 
 
-def _owner_ws_authorized(ws: WebSocket) -> bool:
-    """Owner-token gate for owner WebSockets (e.g. Twilio ConversationRelay /cr).
-
-    The HTTP owner-token middleware never runs for the WS handshake, so each owner
-    WS must check the token itself BEFORE ws.accept() — exactly as /ws/extension
-    does. When ANTICIPY_OWNER_API_TOKEN is unset (local dev / deterministic suite),
-    the socket stays open. When it is set, the caller must present the token. Twilio
-    ConversationRelay cannot set custom headers, so we accept it on the handshake as
-    a ?token= query param (header/bearer also honored for other clients)."""
-    token = _owner_api_token()
-    if not token:
-        return True  # no token configured -> dev/local path stays open
+def _ws_owner_token_supplied(ws: WebSocket) -> str:
+    """Extract a presented owner token from the WS handshake (?token=, header, bearer).
+    Twilio ConversationRelay cannot set custom headers, so the ?token= query param is the
+    primary carrier; header/bearer are honored for other clients."""
     supplied = (ws.query_params.get("token") or "").strip()
     if not supplied:
         header = (ws.headers.get(OWNER_TOKEN_HEADER) or "").strip()
@@ -151,7 +155,80 @@ def _owner_ws_authorized(ws: WebSocket) -> bool:
             supplied = header
         elif auth.lower().startswith("bearer "):
             supplied = auth[7:].strip()
-    return bool(supplied) and secrets.compare_digest(supplied, token)
+    return supplied
+
+
+def _ws_is_local(ws: WebSocket) -> bool:
+    """True only when the WS peer is the loopback interface (real localhost dev) or the
+    in-process Starlette TestClient (the deterministic suite, never a network peer).
+
+    A public-deploy attacker connects from a routable address, so this is False for them —
+    which is exactly what flips the /cr gate from fail-OPEN to fail-CLOSED. We never trust
+    Host/Forwarded headers here (spoofable); only the transport-level peer address counts."""
+    client = ws.client
+    host = (getattr(client, "host", None) or "").strip()
+    if not host:
+        # No peer address at all -> cannot prove local; fail closed.
+        return False
+    # Starlette's in-process TestClient reports this fixed sentinel (not a real socket).
+    # It is impossible to reach over the network, so honoring it keeps the suite/dev open
+    # without opening any real remote path.
+    if host == "testclient":
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    # Unwrap IPv4-mapped IPv6 (::ffff:127.0.0.1) so a v4 loopback can't hide behind v6.
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback
+
+
+def _twilio_signature_valid(ws: WebSocket) -> bool:
+    """Verify the Twilio X-Twilio-Signature on the /cr WS upgrade WITHOUT the twilio SDK.
+
+    Twilio signs base64(HMAC-SHA1(auth_token, full_url + sorted_concat(POST params))).
+    A WS GET upgrade carries no POST params, so the signed string is just the URL Twilio
+    was configured to dial — our trusted ANTICIPY_CR_WSS_URL (we validate against the value
+    WE published, never a caller-supplied/spoofable Host header). Returns False unless both
+    TWILIO_AUTH_TOKEN and ANTICIPY_CR_WSS_URL are configured and the signature matches."""
+    auth_token = (os.environ.get("TWILIO_AUTH_TOKEN") or "").strip()
+    signed_url = (os.environ.get("ANTICIPY_CR_WSS_URL") or "").strip()
+    if not auth_token or not signed_url:
+        return False
+    supplied = (ws.headers.get(TWILIO_SIGNATURE_HEADER) or "").strip()
+    if not supplied:
+        return False
+    mac = hmac.new(auth_token.encode("utf-8"), signed_url.encode("utf-8"), hashlib.sha1)
+    expected = base64.b64encode(mac.digest()).decode("ascii")
+    return secrets.compare_digest(supplied, expected)
+
+
+def _owner_ws_authorized(ws: WebSocket) -> bool:
+    """Auth gate for owner WebSockets (e.g. Twilio ConversationRelay /cr), checked BEFORE
+    ws.accept() because the HTTP owner-token middleware never runs for a WS handshake.
+
+    A valid Twilio request-signature always authorizes (a proven real Twilio caller, no
+    owner token needed). Otherwise:
+      * Token CONFIGURED  -> the caller MUST present that token (?token=/header/bearer);
+        locality grants no bypass (preserves the strict owner-token contract).
+      * Token NOT configured -> allowed ONLY from loopback/localhost (real dev) or the
+        in-process TestClient (suite). This is the fix: a token-less PUBLIC deploy no longer
+        waves through a routable-address connect, so nobody on the internet can drive the
+        decider brain unauthenticated. Twilio still gets in via the signature branch above."""
+    # A proven Twilio caller is always allowed (the voice line works on a signature-only
+    # deploy, with or without an owner token).
+    if _twilio_signature_valid(ws):
+        return True
+    token = _owner_api_token()
+    if token:
+        # Token configured: the only other way in is presenting it. No local bypass.
+        supplied = _ws_owner_token_supplied(ws)
+        return bool(supplied) and secrets.compare_digest(supplied, token)
+    # No token configured: open for loopback/localhost dev (and the in-process suite),
+    # FAIL CLOSED for any remote/public peer.
+    return _ws_is_local(ws)
 
 
 @app.middleware("http")
@@ -1175,6 +1252,26 @@ def _relay_brain() -> ConversationRelayBrain:
     return ConversationRelayBrain.from_gateway(core.gateway, glassbox=core.glassbox)
 
 
+def _cr_max_turns() -> int:
+    """Per-call answered-turn cap. Overridable (ANTICIPY_CR_MAX_TURNS) for tests/ops but
+    hard-floored to 1 so a 0/negative/garbage override can never disable the cap."""
+    try:
+        raw = int(os.environ.get("ANTICIPY_CR_MAX_TURNS", "") or CR_MAX_TURNS)
+    except (TypeError, ValueError):
+        raw = CR_MAX_TURNS
+    return max(1, raw)
+
+
+def _cr_max_call_seconds() -> float:
+    """Per-call wall-clock lifetime cap (seconds). Overridable
+    (ANTICIPY_CR_MAX_CALL_SECONDS) but hard-floored to 1s so it can never be disabled."""
+    try:
+        raw = float(os.environ.get("ANTICIPY_CR_MAX_CALL_SECONDS", "") or CR_MAX_CALL_SECONDS)
+    except (TypeError, ValueError):
+        raw = CR_MAX_CALL_SECONDS
+    return max(1.0, raw)
+
+
 @app.websocket("/cr")
 async def conversation_relay(ws: WebSocket) -> None:
     """Twilio ConversationRelay socket — the two-way voice turn loop (the 2:45 call).
@@ -1203,8 +1300,18 @@ async def conversation_relay(ws: WebSocket) -> None:
     brain = _relay_brain()
     core.glassbox.log("conversation_relay", {"event": "connected"})
     last_handoff: dict = {"event": "no_prompt"}
+    # Per-call caps: a single connection can answer at most _cr_max_turns() owner turns and
+    # live at most _cr_max_call_seconds() of wall-clock time, so a stuck/abusive call (or a
+    # caller who got past auth on a dev box) can't drive the decider brain unbounded.
+    max_turns = _cr_max_turns()
+    deadline = time.monotonic() + _cr_max_call_seconds()
+    turns_used = 0
     try:
         while True:
+            if time.monotonic() >= deadline:
+                core.glassbox.log("conversation_relay",
+                                  {"event": "cap_reached", "reason": "duration"})
+                break
             try:
                 msg = await ws.receive_json()
             except JSONDecodeError:
@@ -1217,6 +1324,15 @@ async def conversation_relay(ws: WebSocket) -> None:
                 continue
             kind = msg.get("type")
             if kind == "prompt":
+                if turns_used >= max_turns or time.monotonic() >= deadline:
+                    # Turn/duration cap hit: stop answering and close the call. The
+                    # finally-block still sends the end frame with the last verdict.
+                    core.glassbox.log("conversation_relay",
+                                      {"event": "cap_reached",
+                                       "reason": "turns" if turns_used >= max_turns else "duration",
+                                       "turns": turns_used})
+                    break
+                turns_used += 1
                 turn = await brain.turn(msg.get("voicePrompt") or "")
                 last_handoff = turn.handoff_data()
                 # stream the reply as ConversationRelay text tokens; the FINAL frame
