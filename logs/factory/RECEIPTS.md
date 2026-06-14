@@ -105,6 +105,20 @@ then the "prepare + execute on approval" half — which needs Omar's accounts to
 
 ## Honest negatives (reverted; kept so we never repeat them)
 
+### ❌ Money-detector regex hardening — REVERTED (whack-a-mole) · 2026-06-13
+Tried to harden the harm-line's money detector with a `_MONEY_SIGNAL` regex so payment-SEND phrasing blocks.
+**3/3 skeptics refuted:** it STILL under-detected ("send money to my brother", "send the cash", "send 50 quid",
+spelled amounts "spot me forty dollars", "square up with the contractor" → binding_send/unclassified, not money)
+AND newly OVER-blocked legitimate document sends ("send the invoice to the client", "send the balance sheet",
+"forward the copay form" → wrongly money/BLOCK — no funds move). Net worse. Reverted (58/58).
+**THE REAL LESSON (architectural):** you cannot enumerate money phrasings in regex — it's whack-a-mole. The robust
+money guard is **CAPABILITY-LEVEL**: no money-MOVING tool/hand ever fires without explicit money-confirmation;
+the NL harm-line is only a best-effort first net. **CRITICAL CONTEXT:** there is currently NO money-moving
+capability at all — `WRITE_INTENTS = {send_email, send_email_draft, create_event, message}` (api_hand.py:31);
+no payment/transfer/checkout hand exists. So the money under-detection is **theoretical today — nothing can move
+a dollar.** The capability-level money guard becomes load-bearing only when/if a payment hand is added; build it
+THEN, at the tool layer, not as NL regex. Money stop is safe today by absence of capability.
+
 ### ❌ Approve→do-it press-go — REVERTED for a MONEY-execution hole · 2026-06-13
 Built the explicit-approval-only press-go (approve a remembered+inferred task → runs through the real
 orchestrator + hands + read-back gate → receipt). The design was sound and reused the proven seams: nothing
