@@ -178,6 +178,17 @@ class ConnectionAuthorizeIn(BaseModel):
     id: str
 
 
+class OnboardingProfileIn(BaseModel):
+    """Build-my-profile request: a subject name + a few PUBLIC source URLs.
+
+    Read-only scraping only — no login, no writes. `sources` are bare URLs (or
+    {"url","kind"} dicts the builder also accepts).
+    """
+
+    name: str
+    sources: list = Field(default_factory=list)
+
+
 def _upload_roots() -> list[Path]:
     raw = os.environ.get("ANTICIPY_UPLOAD_ROOTS") or os.environ.get("ANTICIPY_UPLOAD_ROOT") or str(DEFAULT_UPLOAD_ROOT)
     return [Path(p).expanduser().resolve() for p in raw.split(os.pathsep) if p.strip()]
@@ -421,6 +432,81 @@ def owner_cards(limit: int = 50) -> dict:
 async def owner_onboard(body: OwnerOnboardingIn) -> dict:
     """First-run setup writes people, preferences, apps, stores, and gates into memory."""
     return await core.owner_onboard(body)
+
+
+# Max public source URLs we will read per profile build (keep the read bounded).
+ONBOARDING_MAX_SOURCES = 6
+
+
+def _profile_browse_reader():
+    """The reader the profile builder uses. Tests may inject a fake via
+    app.state.profile_browse_reader (no live browser in CI); production binds the
+    real read-only open-source browser arm. Returns None to mean 'use the arm's
+    default', so the builder itself binds the real reader.
+    """
+    return getattr(app.state, "profile_browse_reader", None)
+
+
+@app.post("/onboarding/profile")
+async def onboarding_profile(body: OnboardingProfileIn) -> dict:
+    """Owner-gated: build a structured, trust-graded profile of a person/entity
+    from a handful of PUBLIC source URLs by reading each READ-ONLY through the
+    browser arm.
+
+    Honest by construction: when no browser bridge is available (CI / no-browser),
+    each read fails -> the source becomes a blocker and NO facts are invented; the
+    response carries `browser_available` so the caller never mistakes an empty,
+    honestly-degraded profile for a real one. A test may inject a fake reader via
+    app.state.profile_browse_reader so the assembly path is exercised without a
+    live browser.
+    """
+    from fastapi.concurrency import run_in_threadpool
+
+    from .hands.browser_use_link import available as _browser_available
+    from .onboarding.profile_builder import build_profile
+
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+
+    # Bound + normalize sources; reject obviously non-public/non-http inputs early
+    # so we never attempt a login-walled or file:// read.
+    raw_sources = list(body.sources or [])[:ONBOARDING_MAX_SOURCES]
+    sources: list = []
+    for s in raw_sources:
+        url = s.get("url") if isinstance(s, dict) else s
+        if not isinstance(url, str):
+            continue
+        url = url.strip()
+        if url.lower().startswith(("http://", "https://")):
+            sources.append(s)
+    if not sources:
+        raise HTTPException(status_code=422, detail="at least one public http(s) source URL is required")
+
+    reader = _profile_browse_reader()
+    probe = _browser_available()
+
+    # build_profile shells out to the browser bridge (blocking) -> off the loop.
+    profile = await run_in_threadpool(
+        build_profile, name, sources, browse_reader=reader
+    )
+    out = profile.as_dict()
+    # Honesty signal: was a real browser arm usable for this build? An injected
+    # test reader counts as "available" for the purpose of the assembly proof.
+    out["browser_available"] = bool(probe.get("ok")) or reader is not None
+    out["browser_probe"] = {"ok": bool(probe.get("ok")), "runner_exists": bool(probe.get("runner_exists"))}
+    core.glassbox.log(
+        "onboarding_profile_built",
+        {
+            "name": name,
+            "sources": len(sources),
+            "facts": out["summary"]["facts"],
+            "needs_cross_check": out["summary"]["needs_cross_check"],
+            "sources_read_ok": out["summary"]["sources_read_ok"],
+            "browser_available": out["browser_available"],
+        },
+    )
+    return out
 
 
 @app.post("/trigger/tick")

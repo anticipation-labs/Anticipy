@@ -201,6 +201,78 @@ function MemoryField({ label, value, onChange, multiline = false, placeholder = 
   );
 }
 
+function ProfileView({ profile }) {
+  if (!profile) return null;
+  const summary = profile.summary || {};
+  const facts = profile.key_facts || [];
+  const blockers = profile.blockers || [];
+  const browserOff = profile.browser_available === false;
+  return (
+    <div className="profile-view">
+      <div className="profile-head">
+        <strong>{profile.name}</strong>
+        {profile.role ? <span className="profile-role">{profile.role}</span> : null}
+        {browserOff ? (
+          <span className="tag ask" title="No browser arm was available, so nothing was scraped. No facts were invented.">
+            browser unavailable
+          </span>
+        ) : null}
+      </div>
+      {(profile.org || profile.location) ? (
+        <div className="profile-sub">
+          {profile.org ? <span>{profile.org}</span> : null}
+          {profile.location ? <span>{profile.location}</span> : null}
+        </div>
+      ) : null}
+      <div className="profile-counts">
+        <span className="tag">{summary.facts ?? facts.length} facts</span>
+        <span className="tag">{summary.needs_cross_check ?? 0} need cross-check</span>
+        <span className="tag">
+          {summary.sources_read_ok ?? 0}/{summary.sources_total ?? (profile.sources || []).length} sources read
+        </span>
+      </div>
+      {facts.length ? (
+        <ul className="profile-facts">
+          {facts.map((fact, index) => (
+            <li className="profile-fact" key={`${fact.field}-${index}`}>
+              <div className="profile-fact-head">
+                <span className="profile-field">{fact.field}</span>
+                {fact.needs_cross_check ? (
+                  <span className="tag ask" title="Low-trust single-page pull — confirm with a second source.">
+                    needs cross-check
+                  </span>
+                ) : (
+                  <span className="tag done" title="Whole-page read — a tier higher trust.">
+                    {fact.confidence || fact.trust}
+                  </span>
+                )}
+              </div>
+              <p className="profile-value">{fact.value}</p>
+              {fact.source_url ? (
+                <a className="profile-source" href={fact.source_url} target="_blank" rel="noopener noreferrer">
+                  {fact.source_url}
+                </a>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="profile-empty">No facts assembled. Nothing was invented.</p>
+      )}
+      {blockers.length ? (
+        <div className="profile-blockers">
+          <span className="profile-field">Blockers</span>
+          <ul>
+            {blockers.map((b, index) => (
+              <li key={`blocker-${index}`}>{b}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TaskCard({ card, pendingAsk, onResolve }) {
   const bucket = cardBucket(card);
   const proofs = visibleProofs(card.proof);
@@ -304,6 +376,11 @@ export default function Home() {
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryResult, setMemoryResult] = useState(null);
   const [memoryError, setMemoryError] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [profileSources, setProfileSources] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileResult, setProfileResult] = useState(null);
+  const [profileError, setProfileError] = useState("");
   const [access, setAccess] = useState({ checked: false, required: false, authenticated: true });
   const [accessToken, setAccessToken] = useState("");
   const [accessBusy, setAccessBusy] = useState(false);
@@ -510,6 +587,36 @@ export default function Home() {
       setMemoryError(err instanceof Error ? err.message : String(err));
     } finally {
       setMemoryBusy(false);
+    }
+  }
+
+  async function buildProfile(event) {
+    if (event) event.preventDefault();
+    const name = profileName.trim();
+    const sources = profileSources
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter((s) => /^https?:\/\//i.test(s));
+    if (!name || sources.length === 0) {
+      setProfileError("Enter a name and at least one public http(s) URL.");
+      return;
+    }
+    setProfileBusy(true);
+    setProfileError("");
+    try {
+      const response = await ownerFetch("/api/onboarding/profile", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, sources }),
+      });
+      const data = await response.json().catch(() => ({}));
+      handleOwnerAuthFailure(response, data);
+      if (!response.ok) throw new Error(data.message || data.detail || data.error || "Profile build failed");
+      setProfileResult(data);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProfileBusy(false);
     }
   }
 
@@ -915,6 +1022,36 @@ export default function Home() {
               ) : null}
             </div>
             {memoryError ? <div className="error">{memoryError}</div> : null}
+          </details>
+
+          <details className="memory-primer">
+            <summary>
+              <span>Build my profile</span>
+              {profileResult ? <small>{profileResult.summary?.facts || 0} facts</small> : null}
+            </summary>
+            <form className="profile-form" onSubmit={buildProfile}>
+              <MemoryField
+                label="Name or entity"
+                value={profileName}
+                onChange={setProfileName}
+                placeholder="e.g. Ada Lovelace"
+              />
+              <MemoryField
+                label="Public source URLs (one per line)"
+                value={profileSources}
+                onChange={setProfileSources}
+                placeholder="https://en.wikipedia.org/wiki/Ada_Lovelace"
+                multiline
+              />
+              <div className="control-row">
+                <button className="secondary" type="submit" disabled={profileBusy}>
+                  {profileBusy ? "Reading" : "Build my profile"}
+                </button>
+                <span className="memory-result">Read-only, public pages — no login, no writes.</span>
+              </div>
+            </form>
+            {profileError ? <div className="error">{profileError}</div> : null}
+            {profileResult ? <ProfileView profile={profileResult} /> : null}
           </details>
         </aside>
 
