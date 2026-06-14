@@ -11,7 +11,7 @@ Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_purchase_guar
 """
 import re
 
-from anticipy_engine.agent.webvoyager import PURCHASE_GUARD, _pick_button
+from anticipy_engine.agent.webvoyager import PURCHASE_GUARD, _pick_add_button, _pick_button
 
 # Final money-purchase controls — clicking ANY of these spends money. Must be caught.
 BLOCK = [
@@ -52,6 +52,18 @@ def main():
     # if the ONLY pattern match is a purchase control, pick NOTHING (never auto-buy).
     only_buy = [{"name": "Buy now", "role": "button"}]
     assert _pick_button(only_buy, re.compile(r"buy", re.I)) is None
+
+    # _pick_add_button (the commerce-recipe's SECOND auto-click path) must ALSO skip purchase
+    # controls and only ever pick an add-to-cart control.
+    add_els = [
+        {"name": "Place your order", "role": "button", "inView": True, "idx": 0},
+        {"name": "Add to cart", "role": "button", "inView": True, "idx": 1},
+    ]
+    picked_add = _pick_add_button(add_els, item="shoes")
+    assert picked_add and picked_add.get("idx") == 1, picked_add  # skipped 'Place your order'
+    # a product page whose ONLY buyable control is a final-pay button -> add nothing (never buy)
+    only_buy_page = [{"name": "Buy now", "role": "button", "inView": True, "idx": 0}]
+    assert _pick_add_button(only_buy_page, item="shoes") is None
 
     print(f"PASS purchase_guard: {len(BLOCK)} money controls blocked, {len(ALLOW)} cart/nav "
           "controls allowed, _pick_button skips purchase controls and never auto-selects a buy")

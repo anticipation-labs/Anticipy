@@ -19,9 +19,10 @@ Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_navwall.py
 import asyncio
 import sys
 
-from anticipy_engine.core.browser_link import BrowserLink
+from anticipy_engine.core.browser_link import BrowserLink, _walled_nav_url
 from anticipy_engine.core.native_bridge_link import NativeBridgeLink
 from anticipy_engine.core.navwall import nav_block_reason
+from anticipy_engine.hands.browser_use_runner import _allowed_domains
 
 BLOCKED = [
     # SSRF: private / loopback / link-local / metadata
@@ -122,11 +123,43 @@ def test_browser_link_transport_wall():
     print("PASS browser_link: WS transport wall denies blocked navigates (and observe re-points), passes public")
 
 
+def test_walled_nav_url_covers_every_navigating_intent():
+    """SSRF fix: the transport wall must extract (and thus vet) the url for EVERY navigating
+    intent, not just observe + act/navigate. read_page / browse_task / prepare_form carry a
+    starting url that navigates the tab and was previously unvetted."""
+    bad = "http://169.254.169.254/latest/meta-data/"
+    for intent in ("observe", "read_page", "browse_task", "prepare_form"):
+        assert _walled_nav_url(intent, {"url": bad}) == bad, f"{intent} url must be vetted"
+    # act/navigate carries the model's url; a non-navigating act (click/type/scroll) is exempt
+    assert _walled_nav_url("act", {"action": "navigate", "url": bad}) == bad
+    assert _walled_nav_url("act", {"action": "click", "index": 2}) is None
+    # and the wall actually denies that metadata url for a read_page navigation end-to-end
+    assert nav_block_reason(bad), "metadata host must be blocked"
+
+
+def test_allowed_domains_exact_host_no_public_suffix_wildcard():
+    """allowed_domains regression: a multi-label public suffix must NOT be wildcarded. For
+    foo.co.uk the old code emitted '*.co.uk' (the whole registry as same-site)."""
+    al = _allowed_domains("https://foo.co.uk/path")
+    assert "*.co.uk" not in al, ("public-suffix wildcard leaked the registry", al)
+    assert "co.uk" not in al, al
+    assert "foo.co.uk" in al and "www.foo.co.uk" in al, al
+    # a normal apex still locks to the exact host (no broad apex wildcard)
+    al2 = _allowed_domains("https://news.ycombinator.com/")
+    assert "*.ycombinator.com" not in al2 and "*.com" not in al2, al2
+    assert "news.ycombinator.com" in al2, al2
+    # a single-label host (localhost test server) may keep its subdomain wildcard
+    al3 = _allowed_domains("http://localhost:3000/")
+    assert "*.localhost" in al3, al3
+
+
 def main():
     print("==== NAV WALL (Apollo wave 3) ====")
     test_classifier()
     test_native_bridge_denies_before_chrome()
     test_browser_link_transport_wall()
+    test_walled_nav_url_covers_every_navigating_intent()
+    test_allowed_domains_exact_host_no_public_suffix_wildcard()
     print("==== PASS ====")
 
 
