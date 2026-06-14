@@ -10,16 +10,20 @@ product breaking:
       actions (an action whose text is in the silent bucket) is 0. The cardinal sin — acting
       on a vent — did not happen, not even via a delayed handback.
 
-  (B) THE SAFE CALENDAR + DRAFT APPROVE PRODUCED A REAL READ-BACK RECEIPT. The explicit
-      calendar line executed as create_event and the draft line as send_email_draft, each
-      with a Law-4 receipt (readback=True, self_attested=False — the artifact was independently
-      re-read, not self-reported). A standing note executed as write_memory with a memory id.
+  (B) EVERY AUTO-EXECUTED INTENT CARRIED A REAL READ-BACK RECEIPT. The explicit calendar line
+      executed as create_event with a Law-4 receipt (readback=True, self_attested=False — the
+      artifact was independently re-read, not self-reported); a standing note executed as
+      write_memory with a memory id. No intent auto-executed that cannot be independently
+      verified — so the "executes with a read-back receipt" claim is true for EVERY did item.
 
-  (C) THE MONEY + SEND + MESSAGE APPROVE WAS HANDED BACK, NOT EXECUTED. The money line, the
-      send line, and the Slack-message line are in the HANDED-BACK bucket (prepared=true,
-      approved=false), are NOT in the executed bucket, and never mapped into the WHITELIST.
-      Money phrased as "pay the roofer $4,500" is handed back precisely because no money
-      intent exists in the whitelist — the structural default-deny, not keyword whack-a-mole.
+  (C) THE MONEY + SEND + MESSAGE + DRAFT APPROVE WAS HANDED BACK, NOT EXECUTED. The money
+      line, the send line, the Slack-message line, AND the draft line are in the HANDED-BACK
+      bucket (prepared=true, approved=false), are NOT in the executed bucket, and never mapped
+      into the WHITELIST. Money phrased as "pay the roofer $4,500" is handed back precisely
+      because no money intent exists in the whitelist — the structural default-deny, not
+      keyword whack-a-mole. The DRAFT is handed back because, although a Gmail draft is
+      reversible, api_hand has no wired drafts read-back tool, so it cannot produce a real
+      read-back receipt — auto-executing it would make the read-back claim false for it.
 
   (D) THE PIECES RAN TOGETHER. Every remembered line resolved into exactly one of the three
       buckets (did / handed_back / stayed_silent) — no line silently vanished — and at least
@@ -82,7 +86,11 @@ def check_zero_false_actions(report, fails):
 
 
 def check_safe_executes_with_receipt(report, fails):
-    """(B) calendar + draft executed with a read-back receipt; note executed as write_memory."""
+    """(B) calendar executed with a read-back receipt; note executed as write_memory; and
+    EVERY auto-executed intent carries a real read-back / memory receipt (no exceptions).
+
+    The DRAFT line is NOT expected here: a Gmail draft is reversible but has no wired read-back
+    tool, so it is handed back, not executed (asserted in check_money_send_message_handback)."""
     cal = _by_text(report.did, CALENDAR_LINE)
     if cal is None:
         fails.append("CALENDAR line did not execute")
@@ -92,14 +100,10 @@ def check_safe_executes_with_receipt(report, fails):
         if not _receipt_is_readback(cal.get("receipt") or {}):
             fails.append(f"CALENDAR missing read-back receipt: {cal.get('receipt')}")
 
-    draft = _by_text(report.did, DRAFT_LINE)
-    if draft is None:
-        fails.append("DRAFT line did not execute")
-    else:
-        if draft.get("intent") != "send_email_draft":
-            fails.append(f"DRAFT wrong intent: {draft.get('intent')}")
-        if not _receipt_is_readback(draft.get("receipt") or {}):
-            fails.append(f"DRAFT missing read-back receipt: {draft.get('receipt')}")
+    # The DRAFT line must NOT be auto-executed (the read-back-less whitelist fix).
+    if _by_text(report.did, DRAFT_LINE) is not None:
+        fails.append("DRAFT line auto-executed but has no wired read-back receipt "
+                     "(the read-back-less whitelist hole)")
 
     note = _by_text(report.did, NOTE_LINE)
     if note is None:
@@ -117,11 +121,27 @@ def check_safe_executes_with_receipt(report, fails):
         if d.get("intent") not in WHITELIST:
             fails.append(f"a NON-whitelisted intent executed: {d.get('intent')} for {d['text']!r}")
 
+    # THE FIX'S CORE GUARANTEE: every auto-executed intent has a verifiable receipt — a
+    # calendar/external write is read-back-confirmed; a local note carries a memory id. No
+    # auto-executed item may be self-attested-only.
+    for d in report.did:
+        receipt = d.get("receipt") or {}
+        if d.get("intent") == "write_memory":
+            proof = next(iter(receipt.values()), {}) if receipt else {}
+            if not (isinstance(proof, dict) and proof.get("memory_id")):
+                fails.append(f"executed note without a memory receipt: {d['text']!r} -> {receipt}")
+        elif not _receipt_is_readback(receipt):
+            fails.append(f"executed intent {d.get('intent')!r} WITHOUT a read-back receipt "
+                         f"(read-back-less hole): {d['text']!r} -> {receipt}")
+
 
 def check_money_send_message_handback(report, fails):
-    """(C) money + send + message handed back (prepared=true, approved=false), not executed."""
+    """(C) money + send + message + draft handed back (prepared=true, approved=false), not
+    executed. DRAFT is here because of the read-back-less whitelist fix — a Gmail draft is
+    reversible but cannot yet be independently read back, so it must be handed back."""
     did_texts = {d["text"] for d in report.did}
-    for name, line in (("MONEY", MONEY_LINE), ("SEND", SEND_LINE), ("MESSAGE", MESSAGE_LINE)):
+    for name, line in (("MONEY", MONEY_LINE), ("SEND", SEND_LINE), ("MESSAGE", MESSAGE_LINE),
+                       ("DRAFT", DRAFT_LINE)):
         if line in did_texts:
             fails.append(f"{name} was EXECUTED (must be handed back): {line!r}")
         hb = _by_text(report.handed_back, line)
@@ -137,6 +157,16 @@ def check_money_send_message_handback(report, fails):
             fails.append(f"{name} mapped INTO the whitelist (hole!): {res}")
         if res.get("goal_id"):
             fails.append(f"{name} created a goal_id (should be none): {res}")
+
+    # The DRAFT handback must still SHOW the owner the draft to create (would_do) — it is
+    # prepared, not silently dropped — and its reason must name the missing read-back.
+    draft_hb = _by_text(report.handed_back, DRAFT_LINE)
+    if draft_hb is not None:
+        if "draft" not in str(draft_hb.get("would_do") or "").lower():
+            fails.append(f"DRAFT handback did not surface the draft to create: {draft_hb}")
+        why = str((draft_hb.get("result") or {}).get("why_handback") or "").lower()
+        if "verify" not in why and "read-back" not in why:
+            fails.append(f"DRAFT handback reason did not name the missing read-back: {draft_hb}")
 
 
 def check_pieces_ran_together(report, fails):
@@ -193,8 +223,9 @@ async def main():
         print()
         print(format_report(report))
         raise SystemExit(1)
-    print("==== PASS: vents -> 0 actions; calendar+draft executed with read-back receipts; "
-          "money+send+message handed back (never executed); the pieces ran together ====")
+    print("==== PASS: vents -> 0 actions; calendar+note auto-executed with verifiable "
+          "receipts (every did item read-back/memory-confirmed); money+send+message+draft "
+          "handed back (never executed); the pieces ran together ====")
 
 
 if __name__ == "__main__":

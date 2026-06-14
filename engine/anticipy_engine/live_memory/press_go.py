@@ -8,15 +8,23 @@ safe, reversible intents. This module owns the pure, additive mapper + gate; it 
 no decision/trigger/harm code.
 
 THE DEFAULT-DENY CORE (why this is not money-detection whack-a-mole):
-  WHITELIST is a frozenset of exactly the three Constitution-named reversible intents
-  (create_event = a calendar hold, send_email_draft = a Gmail DRAFT never sent,
-  write_memory = a standing note). An intent EXECUTES only if it is explicitly IN the set:
-  ``if intent in WHITELIST: execute else: handback``. There is no keyword/money test to
-  defeat — an unrecognized, ambiguous, or money/send/message intent simply is not in the
-  set, so it CANNOT execute. Money phrased as "send a payment" lands in the non-whitelist
-  branch precisely because no money intent is in the set; it is handed back to the owner,
-  never approvable into execution. This is the structural fix for the earlier reverted
-  version where money phrased as a send reached an executable approval path.
+  WHITELIST is a frozenset of exactly the reversible intents that can ALSO be independently
+  read back live (create_event = a calendar hold, read back via ListEvents; write_memory =
+  a standing note, re-read from the local memory store). An intent EXECUTES only if it is
+  explicitly IN the set: ``if intent in WHITELIST: execute else: handback``. There is no
+  keyword/money test to defeat — an unrecognized, ambiguous, or money/send/message intent
+  simply is not in the set, so it CANNOT execute. Money phrased as "send a payment" lands in
+  the non-whitelist branch precisely because no money intent is in the set; it is handed back
+  to the owner, never approvable into execution. This is the structural fix for the earlier
+  reverted version where money phrased as a send reached an executable approval path.
+
+  send_email_draft is reversible (a Gmail DRAFT is never sent) but is NOT in the auto-execute
+  set: api_hand has no wired, verified Gmail drafts-READ tool, so a live draft write cannot
+  produce a real read-back receipt — it would fail closed to needs_human, and auto-executing
+  it would make the "executes with a read-back receipt" claim false for it. So a draft is a
+  prepared-HANDBACK: the mapper surfaces the exact draft the owner would create, but returns
+  NO executable step, so the owner is shown the draft to create and creates it himself. When
+  a verified drafts-read tool is wired (api_hand READ_BACK), it can be re-admitted here.
 
 THE MAPPER is deterministic and conservative. It produces a single pre-built Step for a
 whitelisted intent, or falls through to NON-WHITELIST (handback). It NEVER emits a multi
@@ -36,11 +44,21 @@ from typing import Dict, List, Optional, Tuple
 
 from ..core.envelopes import Risk, Step
 
-# The audited execution surface: exactly the three reversible, no-money, no-binding-send
-# intents named in the Constitution. Adding send_email/message/browser-write here would
-# reopen the reverted hole — keep this a single audited constant. Default-deny is
-# structural: only an intent IN this set can execute.
-WHITELIST = frozenset({"create_event", "send_email_draft", "write_memory"})
+# The audited AUTO-EXECUTE surface: exactly the reversible intents that can ALSO be
+# independently READ BACK live (the receipt is the only currency — Law 4). An intent may
+# only auto-execute on press-go if (a) it is reversible AND (b) api_hand has a wired,
+# verified read-back tool to re-observe the artifact. Today that is:
+#   create_event  -> GoogleCalendar.ListEvents read-back (wired, verified)
+#   write_memory  -> a LOCAL note re-read from the memory store (no external tool needed)
+# send_email_draft was REMOVED from this set: it is reversible (a Gmail DRAFT never sends),
+# but api_hand.READ_BACK["send_email_draft"] is None — no Gmail drafts-read tool is wired
+# yet — so a live draft write CANNOT produce a real read-back receipt and would fail closed
+# to needs_human. Auto-executing it would make the "executes with read-back" claim false for
+# it. Until a verified drafts-read tool is wired (api_hand READ_BACK), a draft is a
+# prepared-HANDBACK: the owner is shown the draft to create, and creates it himself. Adding
+# send_email/message/browser-write here would reopen the reverted send hole — keep this a
+# single audited constant. Default-deny is structural: only an intent IN this set executes.
+WHITELIST = frozenset({"create_event", "write_memory"})
 
 # Words that signal an ACTUAL binding send / message / money / browser-write. Any of these
 # in the inferred task DENIES the whitelist mappings outright (belt-and-suspenders; the
@@ -67,7 +85,9 @@ _CALENDAR_SHAPE = re.compile(
     r"lunch|dinner|coffee|review|1:1|one[- ]on[- ]one|schedule|book)\b", re.I)
 
 # An explicit draft request: an explicit draft verb in the inferred task. "send" alone is
-# NOT here (actual-send is non-whitelisted); only "draft" opts into the Gmail DRAFT intent.
+# NOT here (actual-send is non-whitelisted). A draft is reversible (never sent) but is NOT
+# auto-executable yet (no wired drafts-read tool -> no live read-back receipt), so a draft
+# verb produces a prepared-HANDBACK that SHOWS the owner the draft to create, not a step.
 _DRAFT_SHAPE = re.compile(r"\b(draft|drafting|write up|compose)\b", re.I)
 
 # Concrete clock + day grounding, read off the RAW spoken line. Requires BOTH an explicit
@@ -195,14 +215,20 @@ def map_inferred_to_step(inferred: Dict[str, object], raw_text: str = "",
                 "non_whitelist_reason": "calendar task without a concrete grounded time"}
 
     # DRAFT shape — an explicit draft verb + a recipient, and NOT a binding-send word.
+    # A draft is reversible (a Gmail DRAFT is never sent), but it is NOT auto-executable:
+    # api_hand has no wired Gmail drafts-READ tool, so a live draft write cannot produce a
+    # real read-back receipt. Rather than auto-execute into a needs_human dead-end (and falsely
+    # claim a read-backed execution), we PREPARE a handback: surface the exact draft the owner
+    # would create — but return NO step, so the owner is shown the draft to create and creates
+    # it himself. (Re-admit to the whitelist + emit a step once a drafts-read tool is wired.)
     if _DRAFT_SHAPE.search(low) and people and not binding:
         recipient = people[0]
-        step = Step(intent="send_email_draft",
-                    args={"recipient": recipient, "subject": task[:80],
-                          "body": task, "approved": True},
-                    risk=Risk.needs_confirm)  # a Gmail DRAFT WRITE -> exercises the owner_approved gate
-        return {"intent": "send_email_draft", "step": step,
-                "would_do": f"Create a Gmail DRAFT to {recipient} (never sent): {task!r}"}
+        return {"intent": None, "step": None,
+                "would_do": f"Create a Gmail DRAFT to {recipient} (never sent): {task!r}",
+                "non_whitelist_reason": ("a Gmail draft can be prepared, but Anticipy cannot "
+                                         "yet independently verify the saved draft "
+                                         "(no drafts read-back wired) — shown for you to "
+                                         "create yourself")}
 
     # Everything else (actual send, message/Slack, money/binding, browser-write, ambiguous)
     # is NON-WHITELISTED — return no step so the gate hands it back.

@@ -4,14 +4,19 @@ The owner skims the inert remembered list and presses go on ONE line. This test 
 the DEFAULT-DENY press-go end to end, through the REAL ControlCore + orchestrator funnel
 (stub model + mock hands, CI-safe):
 
-  (1) WHITELIST EXECUTES: approving a CALENDAR line and a DRAFT line each run via the
-      orchestrator (_drive -> GatedApprover reads owner_approved -> ApiHand) and come back
-      with a real read-backed receipt (Law 4). A NOTE line executes via the MemoryWorker.
+  (1) WHITELIST EXECUTES: approving a CALENDAR line runs via the orchestrator (_drive ->
+      GatedApprover reads owner_approved -> ApiHand) and comes back with a real read-backed
+      receipt (Law 4). A NOTE line executes via the MemoryWorker. Every auto-executed intent
+      carries a real read-back receipt — there is no auto-executed intent that cannot be
+      independently verified.
 
-  (2) NON-WHITELIST HANDBACK: approving a SEND, a MONEY action, and a MESSAGE are
+  (2) NON-WHITELIST HANDBACK: approving a DRAFT, a SEND, a MONEY action, and a MESSAGE are
       prepared-and-handed-back (approved=false, prepared=true) — NO goal reaches the
-      orchestrator. We spy on orchestrator.start_goal AND orchestrator._drive and assert
-      they are called ZERO times across all three. Money phrased as a send lands here.
+      orchestrator. We spy on orchestrator.start_goal AND orchestrator._drive and assert they
+      are called ZERO times across all of them. A DRAFT is reversible but is handed back (not
+      auto-executed) precisely because api_hand has no wired Gmail drafts read-back tool, so a
+      live draft write could not produce a real read-back receipt. Money phrased as a send also
+      lands here.
 
   (3) NO AUTO-EXEC: remembered/inferred items execute ONLY via the explicit approve call.
       A vent line returns approved=false with no goal. A full trigger_tick (now AND +10y)
@@ -85,13 +90,17 @@ def _install_spy(core: ControlCore) -> dict:
 
 
 async def check_whitelist_executes(fails):
-    """(1) calendar + draft + note each execute via the funnel and return a receipt."""
+    """(1) calendar + note each execute via the funnel and return a real read-back receipt.
+
+    Every intent that auto-executes here MUST carry a read-back receipt — there is no
+    auto-executed intent that cannot be independently verified. (DRAFT is reversible but is
+    NOT here: it has no wired read-back, so it is handed back; see check_nonwhitelist_handback.)
+    """
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-pressgo-wl-"))
     core = ControlCore(data_dir=tmp)
     await core.start()
     try:
         cal_id = await _seed(core, CALENDAR)
-        draft_id = await _seed(core, DRAFT)
         note_id = await _seed(core, NOTE)
 
         cal = await core.approve_remembered(cal_id)
@@ -109,19 +118,6 @@ async def check_whitelist_executes(fails):
                 and step_proof.get("self_attested") is False):
             fails.append(f"CALENDAR receipt missing read-back proof: {receipt}")
 
-        draft = await core.approve_remembered(draft_id)
-        if not (draft.get("approved") and draft.get("executed")):
-            fails.append(f"DRAFT did not execute: {draft}")
-        if draft.get("intent") != "send_email_draft":
-            fails.append(f"DRAFT mapped to wrong intent: {draft.get('intent')}")
-        if draft.get("state") != "done":
-            fails.append(f"DRAFT goal not done (no receipt): {draft}")
-        dproof = draft.get("receipt") or {}
-        dstep = next((v for k, v in dproof.items() if "send_email_draft" in k), None)
-        if not (isinstance(dstep, dict) and dstep.get("readback") is True
-                and dstep.get("self_attested") is False):
-            fails.append(f"DRAFT receipt missing read-back proof: {dproof}")
-
         note = await core.approve_remembered(note_id)
         if not (note.get("approved") and note.get("executed")):
             fails.append(f"NOTE did not execute: {note}")
@@ -129,6 +125,16 @@ async def check_whitelist_executes(fails):
             fails.append(f"NOTE mapped to wrong intent: {note.get('intent')}")
         if note.get("state") != "done":
             fails.append(f"NOTE goal not done: {note}")
+
+        # THE FIX'S CORE GUARANTEE: every auto-executed intent has a real read-back receipt.
+        # Walk each receipt and assert no auto-executed write is self-attested-only.
+        for label, res, kind in (("CALENDAR", cal, "create_event"),):
+            rc = res.get("receipt") or {}
+            sp = next((v for k, v in rc.items() if kind in k), None)
+            if not (isinstance(sp, dict) and sp.get("readback") is True
+                    and sp.get("self_attested") is False):
+                fails.append(f"{label} auto-executed WITHOUT a read-back receipt "
+                             f"(read-back-less hole): {rc}")
 
         # IDEMPOTENCY: re-pressing the SAME calendar line returns the SAME goal + receipt
         # (no double-create of the hold). The endpoint is safe to re-press.
@@ -139,20 +145,25 @@ async def check_whitelist_executes(fails):
             fails.append(f"re-press created a NEW goal (double-create risk): "
                          f"{cal.get('goal_id')} vs {cal2.get('goal_id')}")
 
-        return cal, draft, note
+        return cal, note
     finally:
         await core.stop()
 
 
 async def check_nonwhitelist_handback(fails):
-    """(2) send + money + message are prepared-handback; orchestrator never invoked."""
+    """(2) draft + send + money + message are prepared-handback; orchestrator never invoked.
+
+    DRAFT is included here because of the read-back-less-whitelist fix: a Gmail draft is
+    reversible but cannot yet be independently read back, so it must NOT auto-execute — it is
+    prepared and handed back (the owner is shown the draft to create), exactly like a send."""
     tmp = Path(tempfile.mkdtemp(prefix="anticipy-pressgo-hb-"))
     core = ControlCore(data_dir=tmp)
     await core.start()
     counts = _install_spy(core)
     try:
         out = {}
-        for name, text in (("SEND", SEND), ("MONEY", MONEY), ("MESSAGE", MESSAGE)):
+        for name, text in (("DRAFT", DRAFT), ("SEND", SEND), ("MONEY", MONEY),
+                           ("MESSAGE", MESSAGE)):
             lid = await _seed(core, text)
             res = await core.approve_remembered(lid)
             out[name] = res
@@ -162,9 +173,20 @@ async def check_nonwhitelist_handback(fails):
                 fails.append(f"{name} not handed back as prepared: {res}")
             if res.get("intent") in WHITELIST:
                 fails.append(f"{name} mapped INTO the whitelist (hole!): {res}")
+            if res.get("executed"):
+                fails.append(f"{name} was executed (must be handed back): {res}")
             # nothing was saved as a runnable goal
             if res.get("goal_id"):
                 fails.append(f"{name} created a goal_id (should be none): {res}")
+
+        # The DRAFT handback must still SHOW the owner the draft to create (would_do),
+        # and its reason must name the missing read-back (honest, not a generic deny).
+        draft_res = out["DRAFT"]
+        if "draft" not in str(draft_res.get("would_do") or "").lower():
+            fails.append(f"DRAFT handback did not surface the draft to create: {draft_res}")
+        if "verify" not in str(draft_res.get("why_handback") or "").lower() \
+                and "read-back" not in str(draft_res.get("why_handback") or "").lower():
+            fails.append(f"DRAFT handback reason did not name the missing read-back: {draft_res}")
 
         # THE load-bearing assertion: no goal reached orchestrator execution at all.
         if counts["start_goal"] != 0 or counts["_drive"] != 0:
@@ -265,10 +287,16 @@ async def check_concurrent_double_approve(fails):
 
 
 def check_mapper_units(fails):
-    """Pure-mapper sanity: the whitelist is exactly the three reversible intents, and the
-    mapper never maps a binding send/money/message INTO the whitelist."""
-    if WHITELIST != frozenset({"create_event", "send_email_draft", "write_memory"}):
-        fails.append(f"WHITELIST drifted from the audited three: {WHITELIST}")
+    """Pure-mapper sanity: the AUTO-EXECUTE whitelist is exactly the two read-back-verifiable
+    reversible intents (send_email_draft was REMOVED — no wired drafts read-back yet, so it
+    cannot produce a live read-back receipt; it is a prepared-handback). The mapper never maps
+    a binding send/money/message INTO the whitelist, AND a draft never produces a step."""
+    if WHITELIST != frozenset({"create_event", "write_memory"}):
+        fails.append(f"WHITELIST drifted from the audited read-back-verifiable two: {WHITELIST}")
+    # send_email_draft must NOT be auto-executable until a drafts read-back tool is wired.
+    if "send_email_draft" in WHITELIST:
+        fails.append("send_email_draft is in the auto-execute WHITELIST but has no wired "
+                     "read-back receipt (the read-back-less whitelist hole)")
     # binding/send/money/message inferred tasks must NOT produce a whitelisted step
     for task in ("Send Sam the deck", "Pay the vendor $500", "Message Priya on Slack",
                  "Wire $200 to the landlord", "Buy the filter"):
@@ -276,25 +304,34 @@ def check_mapper_units(fails):
                                  raw_text=task)
         if m.get("intent") in WHITELIST or m.get("step") is not None:
             fails.append(f"mapper put a binding task into the whitelist: {task!r} -> {m}")
+    # a DRAFT task is reversible but NOT auto-executable: the mapper must surface the draft
+    # to create (would_do) but return NO executable step, so it hands back.
+    dm = map_inferred_to_step({"task": "draft the contract email to Priya",
+                               "people": ["Priya"], "due_phrase": None},
+                              raw_text="I'll draft the contract email to Priya tomorrow morning.")
+    if dm.get("step") is not None or dm.get("intent") in WHITELIST:
+        fails.append(f"DRAFT produced an auto-executable step (read-back-less hole): {dm}")
+    if "draft" not in str(dm.get("would_do") or "").lower():
+        fails.append(f"DRAFT handback did not surface the draft to create: {dm}")
 
 
 async def main():
     fails = []
     check_mapper_units(fails)
-    cal, draft, note = await check_whitelist_executes(fails)
+    cal, note = await check_whitelist_executes(fails)
     hb, counts = await check_nonwhitelist_handback(fails)
     vent, fired_now, fired_future = await check_vent_and_no_autofire(fails)
     race_writes, race_r1, race_r2 = await check_concurrent_double_approve(fails)
 
     print("==== DEFAULT-DENY PRESS-GO ====")
-    print(f"  (1) WHITELIST executes via orchestrator + read-back:")
+    print(f"  (1) WHITELIST executes via orchestrator + read-back (only read-back-verifiable "
+          f"intents auto-execute):")
     print(f"      CALENDAR  -> {cal.get('intent')} state={cal.get('state')} "
           f"receipt_keys={list((cal.get('receipt') or {}).keys())}")
-    print(f"      DRAFT     -> {draft.get('intent')} state={draft.get('state')}")
     print(f"      NOTE      -> {note.get('intent')} state={note.get('state')}")
     print(f"  (2) NON-WHITELIST handback (orchestrator never called): start_goal="
           f"{counts['start_goal']} _drive={counts['_drive']}")
-    for name in ("SEND", "MONEY", "MESSAGE"):
+    for name in ("DRAFT", "SEND", "MONEY", "MESSAGE"):
         r = hb[name]
         print(f"      {name:8s} -> approved={r.get('approved')} prepared={r.get('prepared')} "
               f"intent={r.get('intent')} why={r.get('why_handback')!r}")
@@ -305,8 +342,9 @@ async def main():
 
     if fails:
         print("==== FAIL ===="); [print("   -", f) for f in fails]; raise SystemExit(1)
-    print("==== PASS: whitelist executes with a real receipt; send/money/message are "
-          "handed back (orchestrator never called); vent denied; no auto-fire ====")
+    print("==== PASS: only read-back-verifiable intents auto-execute with a real receipt; "
+          "draft/send/money/message are handed back (orchestrator never called); vent denied; "
+          "no auto-fire ====")
 
 
 if __name__ == "__main__":

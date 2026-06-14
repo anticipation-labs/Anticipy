@@ -1092,10 +1092,11 @@ class ControlCore:
     async def approve_remembered(self, line_id: str) -> dict:
         """DEFAULT-DENY press-go: the owner presses go on ONE remembered line.
 
-        This is the ONLY execution trigger for a remembered/inferred item, and only for
-        the three whitelisted reversible intents. It is ADDITIVE: it reuses the review
-        inference (display-only), the orchestrator funnel + GatedApprover (owner_approved),
-        and the Slice-0 read-back gate verbatim. It touches no decision/trigger/harm code.
+        This is the ONLY execution trigger for a remembered/inferred item, and only for the
+        whitelisted reversible intents that can be independently read back (create_event,
+        write_memory). It is ADDITIVE: it reuses the review inference (display-only), the
+        orchestrator funnel + GatedApprover (owner_approved), and the Slice-0 read-back gate
+        verbatim. It touches no decision/trigger/harm code.
 
         STEP A INFER (reuse, read-only): pull the inert row by id and enrich it with the
         SAME ReviewEnricher.infer_line used by the read-only review. A vent yields an empty
@@ -1210,12 +1211,13 @@ class ControlCore:
                 "goal_id": goal.id, "state": goal.state.value,
                 "would_do": mapped.get("would_do"), "receipt": receipt}
 
-    # The human-readable tool each whitelisted intent WOULD call live. create_event and
-    # send_email_draft route through the Arcade api_hand (authoritative INTENT_MAP);
-    # write_memory is a LOCAL standing note (no external tool, never leaves the device).
+    # The human-readable tool each AUTO-EXECUTABLE (whitelisted) intent WOULD call live.
+    # create_event routes through the Arcade api_hand (authoritative INTENT_MAP) and is read
+    # back via ListEvents; write_memory is a LOCAL standing note (no external tool, never
+    # leaves the device). send_email_draft is NOT here — a draft is a prepared-handback (no
+    # wired drafts read-back yet), so it never reaches this whitelist preview branch.
     _DRYRUN_TOOL = {
         "create_event": "GoogleCalendar.CreateEvent",
-        "send_email_draft": "Gmail.WriteDraftEmail",
         "write_memory": "Anticipy.Memory (local note — no external account)",
     }
 
@@ -1293,5 +1295,5 @@ class ControlCore:
                 "tool": self._DRYRUN_TOOL.get(intent, intent),
                 "args": args, "would_do": mapped.get("would_do"),
                 "note": ("This runs for real once you connect Google"
-                         if intent in ("create_event", "send_email_draft")
+                         if intent == "create_event"
                          else "This saves a local note when you press go (no account needed)")}

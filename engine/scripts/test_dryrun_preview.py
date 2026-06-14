@@ -10,14 +10,16 @@ planned real actions. This test proves the dry-run through the REAL ControlCore 
       written, and the remembered enrichment never becomes an open_loop. A dry-run plans
       and shows; it never acts.
 
-  (1) WHITELIST PREVIEW: dry-running a CALENDAR / DRAFT / NOTE line returns the CONCRETE
+  (1) WHITELIST PREVIEW: dry-running a CALENDAR / NOTE line returns the CONCRETE
       planned action — would_execute=true, the right intent, the tool it WOULD call
-      (GoogleCalendar.CreateEvent / Gmail.WriteDraftEmail / local memory), the EXACT args
-      press-go would send, and the connect-first note. The previewed args MATCH the args
-      approve_remembered would actually drive (same mapper).
+      (GoogleCalendar.CreateEvent / local memory), the EXACT args press-go would send, and
+      the connect-first note. The previewed args MATCH the args approve_remembered would
+      actually drive (same mapper). Only read-back-verifiable intents preview as would_execute.
 
-  (2) NON-WHITELIST PREVIEW: dry-running a SEND / MONEY / MESSAGE returns
-      would_execute=false with a handback + why, and intent never lands in the WHITELIST.
+  (2) NON-WHITELIST PREVIEW: dry-running a DRAFT / SEND / MONEY / MESSAGE returns
+      would_execute=false with a handback + why, and intent never lands in the WHITELIST. A
+      DRAFT is reversible but is handed back (no wired drafts read-back yet), so its preview
+      shows the draft to create, not an auto-execute.
 
   (3) VENT PREVIEW: a vent returns would_execute=false with a vent-stop reason and no intent.
 
@@ -101,9 +103,10 @@ async def run(fails):
             out[name] = core.dryrun_remembered(ids[name])
 
         # ---- (1) WHITELIST PREVIEW: concrete planned intent + tool + args ----
+        # Only read-back-verifiable intents preview as would_execute. DRAFT is NOT here
+        # (handed back — no wired drafts read-back); it is asserted in the non-whitelist block.
         expect = {
             "CALENDAR": ("create_event", "GoogleCalendar.CreateEvent"),
-            "DRAFT":    ("send_email_draft", "Gmail.WriteDraftEmail"),
             "NOTE":     ("write_memory", None),  # local tool label, just assert prefix
         }
         for name, (intent, tool) in expect.items():
@@ -132,8 +135,7 @@ async def run(fails):
 
         # the previewed args are the SAME args approve_remembered would drive (same mapper):
         # dry-run promises EXACTLY what execution would send.
-        for name, intent in (("CALENDAR", "create_event"), ("DRAFT", "send_email_draft"),
-                             ("NOTE", "write_memory")):
+        for name, intent in (("CALENDAR", "create_event"), ("NOTE", "write_memory")):
             raw = next(r for r in core.live_memory.capturer.remember.all()
                        if r["id"] == ids[name])["text"]
             mapped = map_inferred_to_step(infer_line(raw), raw_text=raw)
@@ -143,7 +145,9 @@ async def run(fails):
                              f"{out[name].get('args')} != {real_args}")
 
         # ---- (2) NON-WHITELIST PREVIEW: would_execute=false + handback + why ----
-        for name in ("SEND", "MONEY", "MESSAGE"):
+        # DRAFT is included: reversible, but handed back (no wired drafts read-back), so it
+        # must NOT preview as would_execute and must show the draft to create.
+        for name in ("DRAFT", "SEND", "MONEY", "MESSAGE"):
             p = out[name]
             if p.get("would_execute") is not False:
                 fails.append(f"{name} dry-run did not deny would_execute: {p}")
@@ -153,6 +157,13 @@ async def run(fails):
                 fails.append(f"{name} preview missing handback: {p}")
             if not p.get("why"):
                 fails.append(f"{name} preview missing why: {p}")
+        # the DRAFT preview must surface the draft to create and name the missing read-back
+        dp = out["DRAFT"]
+        if "draft" not in str(dp.get("handback") or "").lower():
+            fails.append(f"DRAFT preview did not surface the draft to create: {dp}")
+        if "verify" not in str(dp.get("why") or "").lower() \
+                and "read-back" not in str(dp.get("why") or "").lower():
+            fails.append(f"DRAFT preview why did not name the missing read-back: {dp}")
 
         # ---- (3) VENT PREVIEW: would_execute=false, vent stop, no intent ----
         v = out["VENT"]
@@ -168,9 +179,9 @@ async def run(fails):
         rows = core.live_memory.capturer.remember.recent(50)
         day = {"previews": [core.dryrun_remembered(str(r.get("id"))) for r in rows]}
         day["would_execute_count"] = sum(1 for p in day["previews"] if p.get("would_execute"))
-        if day["would_execute_count"] != 3:  # CALENDAR + DRAFT + NOTE
+        if day["would_execute_count"] != 2:  # CALENDAR + NOTE (DRAFT is now a handback)
             fails.append(f"day mode would_execute_count wrong: {day['would_execute_count']} "
-                         f"(expected 3)")
+                         f"(expected 2)")
         if len(day["previews"]) != 7:
             fails.append(f"day mode did not preview all lines: {len(day['previews'])}")
 
@@ -208,13 +219,13 @@ async def main():
     print(f"  (0) EXECUTES NOTHING: start_goal={counts['start_goal']} "
           f"_drive={counts['_drive']} (must be 0/0)")
     print(f"  (1) WHITELIST preview (would_execute=true, concrete plan):")
-    for name in ("CALENDAR", "DRAFT", "NOTE"):
+    for name in ("CALENDAR", "NOTE"):
         p = out[name]
         print(f"      {name:8s} -> intent={p.get('intent')} tool={p.get('tool')!r}")
         print(f"               args={p.get('args')}")
         print(f"               note={p.get('note')!r}")
     print(f"  (2) NON-WHITELIST preview (would_execute=false, handback):")
-    for name in ("SEND", "MONEY", "MESSAGE"):
+    for name in ("DRAFT", "SEND", "MONEY", "MESSAGE"):
         p = out[name]
         print(f"      {name:8s} -> would_execute={p.get('would_execute')} "
               f"intent={p.get('intent')} why={p.get('why')!r}")

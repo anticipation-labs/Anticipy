@@ -499,8 +499,9 @@ async def memory_remembered_approve(body: RememberedApproveIn) -> dict:
     This is the ONLY new execution trigger and it requires an explicit owner POST (sitting
     behind the same owner-token middleware as every other owner route). It enriches the
     line with the SAME review inference, maps it to one closed intent, and executes ONLY
-    the three whitelisted reversible intents (create_event/send_email_draft/write_memory)
-    through the existing orchestrator funnel + read-back gate. Everything else (an actual
+    the whitelisted reversible intents that can be independently read back
+    (create_event/write_memory) through the existing orchestrator funnel + read-back gate.
+    Everything else (a Gmail draft — reversible but not yet read-back-verifiable, an actual
     send, a message/Slack, money/binding, ambiguous) is prepared-and-handed-back, never
     executed. A vent returns approved=false with no goal. There is no yes/no body that can
     route a non-whitelisted item to execution."""
@@ -518,9 +519,10 @@ def memory_remembered_dryrun(body: RememberedApproveIn) -> dict:
     orchestrator.start_goal/_drive, NEVER writes a memory note, NEVER touches the api/browser
     hands. It only PLANS and SHOWS.
 
-    For a whitelisted line it returns {would_execute:true, intent, tool (e.g.
-    GoogleCalendar.CreateEvent / Gmail.WriteDraftEmail), the EXACT args it would send, and
-    "This runs for real once you connect Google"}. For a non-whitelisted line it returns
+    For a whitelisted (auto-executable) line it returns {would_execute:true, intent, tool
+    (e.g. GoogleCalendar.CreateEvent), the EXACT args it would send, and "This runs for real
+    once you connect Google"}. For a non-whitelisted line — including a Gmail draft, which is
+    prepared for the owner to create himself until a drafts read-back is wired — it returns
     {would_execute:false, handback, why}. This lets the owner see his whole day's planned
     real actions before connecting anything."""
     return core.dryrun_remembered(body.line_id)

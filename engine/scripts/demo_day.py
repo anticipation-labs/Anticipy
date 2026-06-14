@@ -8,8 +8,10 @@ end to end, and a clean human-readable report of what Anticipy did with it:
     Here's your day
       -> Anticipy REMEMBERED N things (the inert pull-only list — can never fire)
       -> INFERRED these tasks (display-only; vents/sarcasm yield NO task)
-      -> DID these (whitelisted reversible intents executed with a real read-back receipt)
-      -> HANDED these back (money / send / message — prepared, never executed)
+      -> DID these (only read-back-verifiable reversible intents — calendar/note — executed
+         with a real read-back receipt; nothing auto-executes that it can't independently verify)
+      -> HANDED these back (money / send / message / draft — prepared, never executed; a Gmail
+         draft is reversible but handed back until a drafts read-back is wired)
       -> STAYED SILENT on these vents (zero false-actions — the cardinal sin avoided)
 
 It proves the pieces work TOGETHER, not just in isolation. Nothing here is mocked at the
@@ -17,7 +19,7 @@ seam between components: the same Capturer that the always-listening feed uses w
 inert remembered list; the same display-only ``infer_line`` the daily review shows produces
 the inferred tasks; the same default-deny ``approve_remembered`` press-go path the owner app
 calls executes the safe ones and hands back the rest. The ONLY mocks are the leaf hands
-(mock calendar/draft writes) and the stub model — exactly the CI-safe seams the suite uses.
+(mock calendar writes) and the stub model — exactly the CI-safe seams the suite uses.
 
 Run:  PYTHONPATH=engine engine/.venv/bin/python engine/scripts/demo_day.py
 Test: engine/scripts/test_demo_day.py asserts the loop's safety invariants on this day.
@@ -44,7 +46,7 @@ from anticipy_engine.live_memory.review_infer import infer_line  # noqa: E402
 # ONE messy day, the way a person actually talks. A mix on purpose:
 #   - real commitments (some explicit, some buried in reported speech / indirect)
 #   - an explicit calendar task with a concrete clock time
-#   - a draft task (an email to a named person)
+#   - a draft task (an email to a named person) — reversible but handed back (no drafts read-back)
 #   - a self-directed note ("remind me to ...")
 #   - a money line (the hard stop) and a couple of binding sends/messages
 #   - a couple of vents / sarcasm that are NOT tasks (acting on these is the cardinal sin)
@@ -56,8 +58,8 @@ from anticipy_engine.live_memory.review_infer import infer_line  # noqa: E402
 @dataclass
 class DayLine:
     text: str
-    expect: str  # one of: execute_calendar, execute_draft, execute_note,
-    #                       handback, vent, indirect, noise
+    expect: str  # one of: execute_calendar, execute_note,
+    #                       handback, handback_draft, vent, indirect, noise
 
 
 DAY: List[DayLine] = [
@@ -67,7 +69,7 @@ DAY: List[DayLine] = [
     DayLine("The kitchen leak is back, of course it is.", "noise"),
     DayLine("I told Priya I would follow up with the roofer about the warranty.", "indirect"),
     DayLine("oh great, another Monday, truly living the dream", "vent"),
-    DayLine("I should draft the contract email to Priya tomorrow morning.", "execute_draft"),
+    DayLine("I should draft the contract email to Priya tomorrow morning.", "handback_draft"),
     DayLine("Remind me to renew the patio permit.", "execute_note"),
     DayLine("I gotta pay the roofer $4,500 once the job is signed off.", "handback"),
     DayLine("Send Sam the revised decking file when you get a sec.", "handback"),
@@ -214,7 +216,7 @@ def format_report(r: DemoReport) -> str:
         proof = receipt.get(proof_key, {}) if proof_key else {}
         w(f"     - {e['intent']:16s} {e.get('would_do')}")
         if "readback" in proof:
-            # A read-back receipt (calendar / draft): the artifact was re-read, not self-reported.
+            # A read-back receipt (calendar): the artifact was re-read, not self-reported.
             w(f"         RECEIPT: {proof.get('tool', '?')}  id={proof.get('id')}  "
               f"readback={proof.get('readback')}  self_attested={proof.get('self_attested')}")
         else:
@@ -223,7 +225,8 @@ def format_report(r: DemoReport) -> str:
               f"kind={proof.get('kind')}")
 
     w(f"\n-> It HANDED BACK {len(r.handed_back)} thing(s) "
-      f"(prepared for you, NEVER executed — money/send/message is yours to send):")
+      f"(prepared for you, NEVER executed — money/send/message, and a draft to create, "
+      f"are yours):")
     for e in r.handed_back:
         w(f"     - {e.get('would_do')}")
         w(f"         why: {e.get('why_handback')}")
