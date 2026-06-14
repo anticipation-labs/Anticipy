@@ -64,13 +64,45 @@ WHITELIST = frozenset({"create_event", "write_memory"})
 # in the inferred task DENIES the whitelist mappings outright (belt-and-suspenders; the
 # set-membership gate already denies any non-set intent). An ambiguous "send" can never
 # become a draft and then look approved.
+#
+# WIDENED (Apollo wave 4) so this belt can never be NARROWER than harm.py's send/money
+# vocabulary — the class of bug where a money-idiom ("square up the dinner tab"), a soft-send
+# ("email the resignation"), or a send GERUND ("schedule sending the deck") slipped past this
+# narrower belt and got mapped into the WHITELIST. We OR IN harm's own money signal /
+# idioms / soft-send patterns plus the -ing gerund forms of the send/pay verbs, so a line
+# that harm.py would call money/send is also denied here at the shape layer. (The real,
+# structural fix is the harm-line gate in ``_harm_refuses`` below, run on the RAW line before
+# ANY whitelisted Step is returned; this widening is the second, redundant belt.)
 _BINDING_SEND = re.compile(
-    r"\b(send|sent|pay|paid|pays|payment|venmo|zelle|wire|wired|transfer|"
-    r"invoice|charge|deposit|refund|"
-    r"slack|message|messaged|text|texted|dm|post|tweet|publish|submit|submitted|"
-    r"buy|bought|purchase|order(?:ed)?|checkout|check out)\b",
+    r"\b(send|sent|sending|pay|paid|pays|paying|payment|venmo|zelle|wire|wired|wiring|"
+    r"transfer|transferring|invoice|invoicing|charge|charging|deposit|depositing|refund|"
+    r"slack|message|messaged|messaging|text|texted|texting|dm|post|posting|tweet|tweeting|"
+    r"publish|publishing|submit|submitted|submitting|email|emailing|emailed|"
+    r"buy|bought|buying|purchase|purchasing|order(?:ed|ing)?|checkout|check out)\b",
     re.I,
 )
+# Harm.py's own send/money vocabulary, OR'd in so this belt is never narrower than the
+# harm-line. Imported as raw pattern strings (compiled here) to keep this module additive
+# and pin the two vocabularies together: if harm.py widens money/idioms/soft-send, this
+# belt widens with it. Used alongside _BINDING_SEND in the binding test.
+from ..proactive.harm import _MONEY_IDIOMS as _HARM_MONEY_IDIOMS  # noqa: E402
+from ..proactive.harm import _MONEY_SIGNAL as _HARM_MONEY_SIGNAL  # noqa: E402
+from ..proactive.harm import _SOFT_SEND as _HARM_SOFT_SEND  # noqa: E402
+
+# The DETRIMENTAL harm categories that must NEVER be approvable into a press-go execution.
+# These are the clearly-detrimental / binding categories from harm.HarmLine — money, any
+# binding/casual send, destroy, public-post, sign-up, auth-wall, invoice. NOT included:
+# the reversible-safe categories (calendar_hold, note, draft, cart, reservation, research,
+# calendar, calendar_event, doc) and the ``unclassified`` fail-safe-ask bucket (a raw
+# calendar line that press-go DOES recognize by shape can read ``unclassified`` from the
+# harm-line, which must still be allowed to ground a reversible hold — refusing on it would
+# wrongly kill the legitimate calendar/note mappings). The gate is keyed off the harm
+# CATEGORY, not the broad ``detrimental`` flag, precisely so a fail-safe-ask on a genuinely
+# reversible shape does not block it.
+_HARM_REFUSE_CATEGORIES = frozenset({
+    "money", "binding_send", "casual_send", "destroy", "public",
+    "signup", "auth_wall", "invoice_draft",
+})
 
 # A self-directed reminder shape, read off the RAW line: "remind me to X", "remember to X",
 # "don't forget to X", "note that X". No external party, no send -> a standing note.
@@ -176,6 +208,92 @@ def _ground_datetime(raw: str,
     return base.isoformat(timespec="seconds"), end.isoformat(timespec="seconds")
 
 
+# A HARD binding send / money vocabulary — actual send/pay/wire verbs and money signals,
+# but deliberately WITHOUT the pure soft-send MEDIUM words (email/message/text/reply/ping).
+# A soft-send medium word is the legitimate medium of a reversible DRAFT ("draft the email
+# to Priya"), exactly as harm.py treats _SOFT_SEND as benign when a _DRAFT_FRAME is present.
+# This is used by the DRAFT branch so widening _BINDING_SEND to cover soft-send (for the
+# note/calendar branches) does not wrongly flip a genuine draft into the generic handback.
+_HARD_BINDING = re.compile(
+    r"\b(send|sent|sending|pay|paid|pays|paying|payment|venmo|zelle|wire|wired|wiring|"
+    r"transfer|transferring|invoice|invoicing|charge|charging|deposit|depositing|refund|"
+    r"slack|post|posting|tweet|tweeting|publish|publishing|submit|submitted|submitting|"
+    r"buy|bought|buying|purchase|purchasing|order(?:ed|ing)?|checkout|check out)\b",
+    re.I,
+)
+
+
+def _binding_line(low: str, raw_low: str) -> bool:
+    """True iff EITHER the inferred task OR the raw line carries a binding send / money /
+    message shape — using BOTH the local widened ``_BINDING_SEND`` belt AND harm.py's own
+    money-signal / money-idiom / soft-send vocabulary. This guarantees the press-go belt is
+    never NARROWER than the harm-line's send/money detector."""
+    for hay in (low, raw_low):
+        if not hay:
+            continue
+        if (_BINDING_SEND.search(hay)
+                or _HARM_MONEY_SIGNAL.search(hay)
+                or re.search(_HARM_MONEY_IDIOMS, hay, re.I)
+                or _HARM_SOFT_SEND.search(hay)):
+            return True
+    return False
+
+
+def _hard_binding_line(low: str, raw_low: str) -> bool:
+    """True iff EITHER the inferred task OR the raw line carries a HARD binding send / money
+    shape (actual send/pay/wire verbs + money signals/idioms), EXCLUDING the pure soft-send
+    medium words. Used only by the DRAFT branch: a draft of an email/message is reversible
+    (it is never sent), so a soft-send medium word must not deny the draft handback — but a
+    real send/pay verb or a money signal still does."""
+    for hay in (low, raw_low):
+        if not hay:
+            continue
+        if (_HARD_BINDING.search(hay)
+                or _HARM_MONEY_SIGNAL.search(hay)
+                or re.search(_HARM_MONEY_IDIOMS, hay, re.I)):
+            return True
+    return False
+
+
+def _harm_refuses(raw_line: str) -> Optional[str]:
+    """THE structural fix: run the deterministic harm-line + the vent guard on the RAW spoken
+    line BEFORE any whitelisted Step is returned. Returns a non-empty REASON string when the
+    whitelist mapping MUST be refused (handback), else None.
+
+    Refuse when:
+      * ``review_infer.is_vent(raw_line)`` is True — a vent/sarcasm/joke/retraction is the
+        cardinal sin to act on (e.g. "Remind me to scream at 3pm" once is_vent widens, plus
+        every vent is_vent already catches: "I could scream", "ugh", "kill me", "..., lol"); OR
+      * ``harm.HarmLine().assess(raw_line, {}).category`` is a clearly-detrimental / binding
+        category (money / binding_send / casual_send / destroy / public / signup / auth_wall /
+        invoice_draft). This makes press-go structurally UNABLE to out-loose the harm-line:
+        any line the harm-line would stop as money/send/destroy/etc. can no longer be mapped
+        into the WHITELIST, regardless of how the press-go shape regexes classify it.
+
+    Keyed off the harm CATEGORY, not the broad ``detrimental`` flag, so a genuine reversible
+    shape that the harm-line conservatively reads as ``unclassified`` (fail-safe ask) is NOT
+    blocked here — the press-go shape mapper still grounds it. Imports are local to keep this
+    additive and avoid any import cycle at module load."""
+    raw = (raw_line or "").strip()
+    if not raw:
+        return None
+    try:
+        from .review_infer import is_vent
+        if is_vent(raw):
+            return "raw line reads as a vent / sarcasm / joke / retraction — never act on a vent"
+    except Exception:  # noqa: BLE001 — never let a guard import failure open the gate
+        pass
+    try:
+        from ..proactive.harm import HarmLine
+        verdict = HarmLine().assess(raw, {})
+        if verdict.category in _HARM_REFUSE_CATEGORIES:
+            return (f"harm-line stops this as {verdict.category!r} "
+                    f"(detrimental / binding) — cannot map into the safe whitelist")
+    except Exception:  # noqa: BLE001 — a guard failure must FAIL CLOSED, not open
+        return "harm-line could not confirm this line is safe — handing back"
+    return None
+
+
 def map_inferred_to_step(inferred: Dict[str, object], raw_text: str = "",
                          now: Optional[dt.datetime] = None,
                          tz: Optional[dt.tzinfo] = None) -> Dict[str, object]:
@@ -204,7 +322,19 @@ def map_inferred_to_step(inferred: Dict[str, object], raw_text: str = "",
 
     low = task.lower()
     raw_low = (raw_text or "").lower()
-    binding = bool(_BINDING_SEND.search(low) or _BINDING_SEND.search(raw_low))
+    binding = _binding_line(low, raw_low)
+
+    # STRUCTURAL HARM-LINE GATE (Apollo wave 4): before ANY whitelisted mapping, run the
+    # deterministic harm-line + vent guard on the RAW spoken line. If the harm-line stops it
+    # as money/send/destroy/signup/auth_wall/public/invoice, OR it reads as a vent, REFUSE
+    # the whitelist mapping outright and hand it back. This makes press-go structurally
+    # unable to out-loose the harm-line: a money idiom ("square up the dinner tab"), a send
+    # gerund ("schedule sending the deck"), or a soft-send ("email the resignation") that the
+    # shape regexes might otherwise route into write_memory/create_event is denied here.
+    harm_reason = _harm_refuses(raw_text)
+    if harm_reason is not None:
+        return {"intent": None, "step": None, "would_do": f"Do: {task}",
+                "non_whitelist_reason": harm_reason}
 
     # NOTE shape FIRST (self-directed reminder, no external party). Read off the RAW line
     # because the review strips the "remind me to" lead-in out of the task. A note never
@@ -243,7 +373,7 @@ def map_inferred_to_step(inferred: Dict[str, object], raw_text: str = "",
     # claim a read-backed execution), we PREPARE a handback: surface the exact draft the owner
     # would create — but return NO step, so the owner is shown the draft to create and creates
     # it himself. (Re-admit to the whitelist + emit a step once a drafts-read tool is wired.)
-    if _DRAFT_SHAPE.search(low) and people and not binding:
+    if _DRAFT_SHAPE.search(low) and people and not _hard_binding_line(low, raw_low):
         recipient = people[0]
         return {"intent": None, "step": None,
                 "would_do": f"Create a Gmail DRAFT to {recipient} (never sent): {task!r}",

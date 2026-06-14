@@ -492,9 +492,68 @@ def check_mapper_units(fails):
         fails.append(f"DRAFT handback did not surface the draft to create: {dm}")
 
 
+def check_pressgo_defers_to_harmline(fails):
+    """REGRESSION PIN (Apollo wave 4): press-go's denial belt must DEFER TO the harm-line —
+    it can never be NARROWER than harm.py's money/send vocabulary. The pre-fix bug let a
+    money-idiom, a soft-send line, and a send GERUND slip past the narrower _BINDING_SEND
+    belt into the WHITELIST (write_memory / create_event = EXECUTES). The fix runs the
+    deterministic harm-line (+ is_vent) on the RAW line BEFORE returning any whitelisted Step
+    and refuses the mapping when the harm category is detrimental/binding or the line is a
+    vent. We drive the FULL review-inference path (infer_line) exactly as the product does,
+    and assert: every harmful line HANDS BACK (no whitelisted intent, no step), and every
+    genuine-safe line still EXECUTES."""
+    from anticipy_engine.live_memory.review_infer import infer_line
+
+    def _maps_to_execute(raw, people=None):
+        inferred = infer_line(raw, people_hint=people)
+        m = map_inferred_to_step(inferred, raw_text=raw,
+                                 now=dt.datetime(2026, 6, 15, 9, 0).astimezone())
+        return (m.get("intent") in WHITELIST and m.get("step") is not None), m
+
+    # MUST HAND BACK — the 3 reproduced lines + the money-idiom / soft-send / gerund set.
+    # Each of these would, pre-fix, have mapped into write_memory or create_event.
+    handback = [
+        "Don't forget to square up the dinner tab",                      # money idiom -> harm money
+        "Schedule sending the deck to the investor tomorrow at 10am",    # send gerund -> harm binding_send
+        "Remind me to email the resignation to HR",                      # soft-send (email) -> belt + note deny
+        "Remind me to cover the rent",                                   # money idiom (cover the rent)
+        "Note to self: settle the invoice with the contractor",          # money idiom (settle the invoice)
+        "Don't forget to chip in for the gift",                          # money idiom (chip in)
+        "Schedule wiring the deposit tomorrow at 2pm",                   # gerund (wiring) + money
+        "Schedule emailing the report tomorrow at 9am",                  # gerund (emailing) soft-send
+        "Remind me to send the resignation to HR",                       # send verb in a note frame
+        "Remind me to text Priya about the call",                        # soft-send (text) in a note frame
+        "Schedule paying the vendor tomorrow at 11am",                   # gerund (paying) + money
+    ]
+    for raw in handback:
+        executes, m = _maps_to_execute(raw, people=["HR"])
+        if executes:
+            fails.append(f"HARM-LINE DEFERRAL HOLE: {raw!r} mapped INTO the whitelist "
+                         f"(executes) instead of handing back: {m}")
+
+    # MUST STILL EXECUTE — genuine-safe reversibles the harm-line does NOT stop as
+    # money/send/destroy/etc. The harm-line may read the bare calendar line as 'unclassified'
+    # (a fail-safe ask), which is NOT in the refuse set, so the press-go shape mapper still
+    # grounds it — the gate keys off the harm CATEGORY, never the broad detrimental flag.
+    safe_exec = [
+        ("I need to meet the roofing vendor tomorrow at 2pm.", None, "create_event"),
+        ("Remind me to renew the patio permit.", None, "write_memory"),
+        ("Schedule a sync with Sarah tomorrow at 10am", None, "create_event"),
+        ("Remind me to call the dentist", None, "write_memory"),
+    ]
+    for raw, people, want_intent in safe_exec:
+        executes, m = _maps_to_execute(raw, people=people)
+        if not executes:
+            fails.append(f"HARM-LINE DEFERRAL OVER-BLOCK: genuine-safe {raw!r} no longer "
+                         f"executes (should map to {want_intent}): {m}")
+        elif m.get("intent") != want_intent:
+            fails.append(f"safe line {raw!r} mapped to {m.get('intent')} not {want_intent}")
+
+
 async def main():
     fails = []
     check_mapper_units(fails)
+    check_pressgo_defers_to_harmline(fails)
     check_malformed_clock_no_crash(fails)
     await check_malformed_clock_endpoints_no_crash(fails)
     cal, note = await check_whitelist_executes(fails)
