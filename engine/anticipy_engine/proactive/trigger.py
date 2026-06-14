@@ -40,7 +40,12 @@ class TriggerWatcher:
                 except (TypeError, ValueError):
                     return False
         created = loop.get("created_ts")                     # ELAPSED: open too long, no due-time
-        return created is not None and (now - float(created)) >= self.cfg.stale_after_s
+        if created is None:
+            return False
+        try:                                                 # malformed created_ts -> skip this row,
+            return (now - float(created)) >= self.cfg.stale_after_s   # never crash the whole tick
+        except (TypeError, ValueError):
+            return False
 
     def tick(self, loops: List[dict], now: float) -> List[dict]:
         fired = [l for l in loops if self._due(l, now)]

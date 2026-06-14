@@ -21,9 +21,37 @@ from anticipy_engine.core.workers import BrowserStub, ChannelStub, ConnectorStub
 from anticipy_engine.core.workers.memory import MemoryWorker
 from anticipy_engine.live_memory.brain import LiveMemoryBrain
 from anticipy_engine.memory import Memory
+from anticipy_engine.proactive.trigger import TriggerWatcher
 from anticipy_engine.shared.schema import MemoryItem, now_ts
 
 DAY = 86400.0
+
+
+def test_malformed_created_ts_does_not_crash_tick():
+    """ROBUSTNESS regression: the ELAPSED branch does numeric math on created_ts. A row with a
+    non-numeric created_ts (e.g. a corrupt/legacy ledger row) used to raise an uncaught
+    ValueError out of _due -> tick, killing the WHOLE trigger tick (no loop fires). The guard
+    must SKIP only the bad row: the tick returns the still-valid loops and never raises."""
+    now = now_ts()
+    watcher = TriggerWatcher()
+    loops = [
+        {"id": "garbage", "created_ts": "garbage"},                       # non-numeric -> skip, no crash
+        {"id": "none-ts", "created_ts": None},                            # missing -> skip
+        {"id": "bad-due", "due_ts": "not-a-number"},                      # non-numeric due_ts -> skip
+        {"id": "stale", "created_ts": now - 10 * DAY},                    # valid + elapsed -> MUST still fire
+    ]
+    fired = watcher.tick(loops, now=now)                                  # must NOT raise
+    fired_ids = {f["id"] for f in fired}
+    fails = []
+    if "stale" not in fired_ids:
+        fails.append(f"valid elapsed loop did not fire past the malformed row: fired={fired_ids}")
+    if {"garbage", "none-ts", "bad-due"} & fired_ids:
+        fails.append(f"a malformed loop wrongly fired: {fired_ids}")
+    print("==== ROOM 3 — MALFORMED created_ts ROBUSTNESS ====")
+    print(f"  tick over [garbage, None, bad-due, valid-stale] did not crash; fired={fired_ids}")
+    if fails:
+        print("==== FAIL ===="); [print("   -", f) for f in fails]; raise SystemExit(1)
+    print("  PASS (malformed rows skipped; valid loop still fires)")
 
 
 class FakeGlass:
@@ -109,4 +137,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    test_malformed_created_ts_does_not_crash_tick()   # robustness regression (no engine boot needed)
     asyncio.run(main())
