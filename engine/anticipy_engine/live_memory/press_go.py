@@ -103,14 +103,30 @@ _WEEKDAYS = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
 
 
 def _ground_datetime(raw: str,
-                     now: Optional[dt.datetime] = None) -> Optional[Tuple[str, str]]:
+                     now: Optional[dt.datetime] = None,
+                     tz: Optional[dt.tzinfo] = None) -> Optional[Tuple[str, str]]:
     """Ground the RAW spoken line to a concrete (start_iso, end_iso) 1-hour window, or None.
 
     Conservative: requires an explicit clock time AND a day anchor. Returns None
-    (-> handback) when no concrete clock time can be grounded — never invents one.
+    (-> handback) when no concrete clock time can be grounded — never invents one,
+    and never crashes on a malformed clock (an out-of-range minute like '2:99' is
+    rejected the same as a missing time, exactly like ``duetime._hm``).
+
+    TIMEZONE: the grounding clock is ``now``; pass the OWNER's tz-aware now (built from
+    the onboarded timezone) so the produced start/end ISO carry the owner's offset, not
+    the server's. ``tz`` is the owner's tzinfo: if given (and ``now`` was server-local),
+    ``now`` is converted into it first, so the resulting wall-clock day + offset are the
+    owner's. When neither is supplied, falls back to the server-local clock as before.
     """
     text = (raw or "").lower()
-    now = now or dt.datetime.now().astimezone()
+    if now is None:
+        now = dt.datetime.now(tz) if tz is not None else dt.datetime.now().astimezone()
+    elif tz is not None and now.tzinfo is not tz:
+        # caller passed a clock but a distinct owner zone: re-anchor to the owner zone so
+        # the wall-clock day boundaries (and offset) are the owner's, not the server's.
+        now = now.astimezone(tz)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=tz) if tz is not None else now.astimezone()
 
     # day anchor
     day_offset: Optional[int] = None
@@ -148,7 +164,10 @@ def _ground_datetime(raw: str,
                 hour += 12  # bare "at 3" on a calendar reads as afternoon
         elif "tonight" in text:
             hour = 19
-    if hour is None or not (0 <= hour <= 23):
+    # Validate the parsed clock BEFORE building the datetime — a malformed minute (e.g.
+    # "2:99") or hour must hand back gracefully, never crash dt.replace(). Same bounds as
+    # duetime._hm (0<=minute<=59, 0<=hour<=23). Returning None routes to a handback.
+    if hour is None or not (0 <= hour <= 23) or not (0 <= minute <= 59):
         return None
 
     base = (now + dt.timedelta(days=day_offset)).replace(
@@ -158,13 +177,16 @@ def _ground_datetime(raw: str,
 
 
 def map_inferred_to_step(inferred: Dict[str, object], raw_text: str = "",
-                         now: Optional[dt.datetime] = None) -> Dict[str, object]:
+                         now: Optional[dt.datetime] = None,
+                         tz: Optional[dt.tzinfo] = None) -> Dict[str, object]:
     """Map a display-only inferred task to ONE intent + a pre-built Step, or handback.
 
     ``inferred`` is the review's display-only {task, people, due_phrase, confidence}.
     ``raw_text`` is the spoken line, used ONLY to ground a concrete event datetime (the
-    due_phrase the review shows is a lossy human string). The whitelist DECISION is keyed
-    off the inferred shape; an ambiguous or binding/send/money/message shape returns
+    due_phrase the review shows is a lossy human string). ``now``/``tz`` carry the OWNER's
+    clock + timezone so a grounded calendar hold's start/end ISO carry the owner's offset
+    (not the server's); both are forwarded to ``_ground_datetime``. The whitelist DECISION
+    is keyed off the inferred shape; an ambiguous or binding/send/money/message shape returns
     step=None so the gate hands it back. Never produces more than a single whitelisted step.
 
     Returns a dict:
@@ -197,7 +219,7 @@ def map_inferred_to_step(inferred: Dict[str, object], raw_text: str = "",
 
     # CALENDAR shape — REQUIRES a concrete grounded datetime from the RAW line, else handback.
     if _CALENDAR_SHAPE.search(low) and not binding:
-        window = _ground_datetime(raw_text, now=now)
+        window = _ground_datetime(raw_text, now=now, tz=tz)
         if window is not None:
             start_iso, end_iso = window
             summary = task[:120]
@@ -235,3 +257,38 @@ def map_inferred_to_step(inferred: Dict[str, object], raw_text: str = "",
     reason = "binding send / message / money / ambiguous — not a provably-safe reversible intent"
     return {"intent": None, "step": None, "would_do": f"Do: {task}",
             "non_whitelist_reason": reason}
+
+
+def _norm_summary(text: str) -> str:
+    """Normalize a human action summary for content-equality (case/whitespace/punct fold)."""
+    return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
+def action_content_key(intent: object, step) -> Optional[str]:
+    """A stable CONTENT key for a whitelisted action: intent + normalized summary +
+    grounded start. Two remembered lines that map to the SAME real action (same intent,
+    same event summary, same grounded start time) share this key, so press-go can dedupe
+    on the ACTION the owner is about to take — not on the line_id. This is the
+    idempotency fix: the same task captured twice yields ONE real calendar hold.
+
+    Returns None for a non-whitelisted/None step (those never execute, so never dedupe).
+    The key is keyed off the EXACT args the executable Step carries:
+      create_event -> intent | normalized(summary) | start_datetime
+      write_memory -> intent | normalized(text)
+    """
+    if step is None or not intent:
+        return None
+    args = getattr(step, "args", {}) or {}
+    if intent == "create_event":
+        return "|".join((
+            "create_event",
+            _norm_summary(args.get("summary")),
+            str(args.get("start_datetime") or "").strip(),
+        ))
+    if intent == "write_memory":
+        return "|".join((
+            "write_memory",
+            _norm_summary(args.get("text")),
+        ))
+    # Any other (non-auto-executed) intent: key off intent + normalized args repr.
+    return "|".join((str(intent), _norm_summary(repr(sorted(args.items())))))

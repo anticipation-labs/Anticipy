@@ -34,8 +34,13 @@ os.environ.setdefault("ANTICIPY_MODEL_PROVIDER", "stub")
 os.environ.setdefault("ANTICIPY_HANDS_MODE", "mock")
 os.environ.setdefault("ANTICIPY_NATIVE_BRIDGE_FALLBACK", "0")
 
+import datetime as dt  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
 from anticipy_engine.core.control_core import ControlCore  # noqa: E402
-from anticipy_engine.live_memory.press_go import WHITELIST, map_inferred_to_step  # noqa: E402
+from anticipy_engine.live_memory.press_go import (  # noqa: E402
+    WHITELIST, _ground_datetime, map_inferred_to_step)
+from anticipy_engine.owner_onboarding import OwnerOnboardingIn  # noqa: E402
 from anticipy_engine.shared.schema import now_ts  # noqa: E402
 
 
@@ -301,6 +306,163 @@ async def check_concurrent_double_approve(fails):
         await core.stop()
 
 
+def check_malformed_clock_no_crash(fails):
+    """REGRESSION PIN (Apollo wave-2 A): an out-of-range minute in a remembered line
+    ('meet at 2:99') must NOT crash _ground_datetime / map_inferred_to_step — it hands back
+    gracefully (None / no step), exactly like a missing time. Mirrors duetime._hm bounds."""
+    # _ground_datetime must return None (not raise) on a bad minute AND a bad hour.
+    for raw in ("meet the vendor tomorrow at 2:99", "meet tomorrow at 99:00",
+                "lunch tomorrow at 13:75"):
+        try:
+            out = _ground_datetime(raw)
+        except Exception as e:  # noqa: BLE001 — any crash is the bug
+            fails.append(f"_ground_datetime CRASHED on {raw!r}: {type(e).__name__}: {e}")
+            continue
+        if out is not None:
+            fails.append(f"_ground_datetime accepted a malformed clock {raw!r} -> {out}")
+    # a VALID minute still grounds (we did not over-reject).
+    ok = _ground_datetime("meet the vendor tomorrow at 2:30pm")
+    if ok is None:
+        fails.append("_ground_datetime rejected a VALID 2:30pm clock (over-correction)")
+    # the mapper must hand back (no step), never raise.
+    try:
+        m = map_inferred_to_step({"task": "meeting with the vendor", "people": [],
+                                  "due_phrase": None},
+                                 raw_text="I need to meet the vendor tomorrow at 2:99.")
+    except Exception as e:  # noqa: BLE001
+        fails.append(f"map_inferred_to_step CRASHED on 2:99: {type(e).__name__}: {e}")
+        return
+    if m.get("step") is not None or m.get("intent") in WHITELIST:
+        fails.append(f"map_inferred_to_step grounded a malformed 2:99 clock: {m}")
+
+
+async def check_malformed_clock_endpoints_no_crash(fails):
+    """Through the REAL endpoints: approving AND dry-running a '2:99' line returns a graceful
+    handback (approved/would_execute False), never a 500/crash."""
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-pressgo-badclock-"))
+    core = ControlCore(data_dir=tmp)
+    await core.start()
+    try:
+        bad = "I need to meet the roofing vendor tomorrow at 2:99."
+        lid = await _seed(core, bad)
+        try:
+            a = await core.approve_remembered(lid)
+        except Exception as e:  # noqa: BLE001
+            fails.append(f"approve_remembered CRASHED on 2:99: {type(e).__name__}: {e}")
+            return
+        if a.get("approved") is not False or not a.get("prepared"):
+            fails.append(f"2:99 approve was not a graceful handback: {a}")
+        try:
+            d = core.dryrun_remembered(lid)
+        except Exception as e:  # noqa: BLE001
+            fails.append(f"dryrun_remembered CRASHED on 2:99: {type(e).__name__}: {e}")
+            return
+        if d.get("would_execute") is not False:
+            fails.append(f"2:99 dryrun was not a graceful handback: {d}")
+        return a, d
+    finally:
+        await core.stop()
+
+
+async def check_owner_timezone_offset(fails):
+    """REGRESSION PIN (Apollo wave-2 B): a press-go calendar hold is grounded in the OWNER's
+    onboarded timezone (profile drawer), so start/end ISO carry the owner's UTC offset — not
+    the server's. We onboard an explicit IANA zone whose offset differs from the server's and
+    assert both approve AND dryrun produce that owner offset on the grounded event."""
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-pressgo-tz-"))
+    core = ControlCore(data_dir=tmp)
+    await core.start()
+    try:
+        # pick a zone whose current offset is NOT the server's, so a server-tz regression
+        # would visibly differ. America/New_York and Asia/Kolkata can't both equal local.
+        server_off = dt.datetime.now().astimezone().utcoffset()
+        zones = ["America/New_York", "Asia/Kolkata", "Pacific/Kiritimati"]
+        zone = next(z for z in zones
+                    if dt.datetime.now(ZoneInfo(z)).utcoffset() != server_off)
+        owner_off = dt.datetime.now(ZoneInfo(zone)).utcoffset()
+
+        await core.owner_onboard(OwnerOnboardingIn(owner_name="Omar", timezone=zone))
+        tz, name = core._owner_timezone()
+        if name != zone:
+            fails.append(f"owner timezone not read from profile drawer: {name} != {zone}")
+
+        cal_id = await _seed(core, CALENDAR)
+        cal = await core.approve_remembered(cal_id)
+        goal = core.store.load(cal.get("goal_id"))
+        if goal is None or not goal.steps:
+            fails.append(f"calendar approve produced no goal/step: {cal}")
+            return
+        start_iso = goal.steps[0].args.get("start_datetime")
+        start_off = dt.datetime.fromisoformat(start_iso).utcoffset()
+        if start_off != owner_off:
+            fails.append(f"calendar start carries the WRONG offset: got {start_off} "
+                         f"(server={server_off}) expected owner {owner_off} ({zone}); "
+                         f"iso={start_iso}")
+        # dryrun must show the SAME owner offset (the preview must match the real action).
+        d = core.dryrun_remembered(cal_id)
+        d_iso = (d.get("args") or {}).get("start_datetime")
+        if d_iso and dt.datetime.fromisoformat(d_iso).utcoffset() != owner_off:
+            fails.append(f"dryrun preview offset != owner offset: {d_iso}")
+        return zone, start_iso, d_iso
+    finally:
+        await core.stop()
+
+
+async def check_content_idempotency(fails):
+    """REGRESSION PIN (Apollo wave-2 C): the SAME task captured TWICE arrives as two DIFFERENT
+    remembered lines (different line_ids). Idempotency must key on action CONTENT (intent +
+    normalized summary + grounded start), so approving BOTH lines yields EXACTLY ONE real
+    calendar hold — the second press short-circuits to the first's receipt."""
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-pressgo-content-idem-"))
+    core = ControlCore(data_dir=tmp)
+    await core.start()
+    try:
+        # count REAL write executions at the hand (the actual mutation site).
+        hand = core.api_hand
+        writes = {"n": 0}
+        real_execute = hand._execute
+
+        async def counting_execute(job, tool, ikey, *, is_write):
+            if is_write:
+                writes["n"] += 1
+            return await real_execute(job, tool, ikey, is_write=is_write)
+
+        hand._execute = counting_execute
+
+        # SAME utterance captured twice -> two distinct inert lines.
+        line_a = await _seed(core, CALENDAR)
+        # capture the identical text again; _seed returns the FIRST match, so grab the 2nd id.
+        core.live_memory.capturer.capture(CALENDAR, source="transcript")
+        ids = [str(r["id"]) for r in core.live_memory.capturer.remember.all()
+               if r["text"] == CALENDAR]
+        line_b = next(i for i in ids if i != line_a)
+        if line_a == line_b:
+            fails.append("the two captured lines share a line_id (test setup wrong)")
+
+        ra = await core.approve_remembered(line_a)
+        rb = await core.approve_remembered(line_b)
+        if writes["n"] != 1:
+            fails.append(f"same-content double-approve fired {writes['n']} real calendar "
+                         f"holds (must be exactly 1): ra={ra} rb={rb}")
+        if not (ra.get("approved") and rb.get("approved")):
+            fails.append(f"both same-content approves should be approved: {ra} | {rb}")
+        if not rb.get("idempotent"):
+            fails.append(f"second same-content approve must be idempotent: {rb}")
+        if ra.get("goal_id") != rb.get("goal_id"):
+            fails.append(f"same-content approves produced DIFFERENT goals (double-create): "
+                         f"{ra.get('goal_id')} vs {rb.get('goal_id')}")
+        if not rb.get("receipt"):
+            fails.append(f"idempotent re-press did not return the original receipt: {rb}")
+        # and the goal store holds exactly ONE remembered-approval goal for this action.
+        rmb_goals = [g for g in core.store.all() if g.id.startswith("rmb-")]
+        if len(rmb_goals) != 1:
+            fails.append(f"expected exactly ONE goal for the duplicated action, found "
+                         f"{[g.id for g in rmb_goals]}")
+        return writes["n"], ra, rb
+    finally:
+        await core.stop()
+
+
 def check_mapper_units(fails):
     """Pure-mapper sanity: the AUTO-EXECUTE whitelist is exactly the two read-back-verifiable
     reversible intents (send_email_draft was REMOVED — no wired drafts read-back yet, so it
@@ -333,10 +495,14 @@ def check_mapper_units(fails):
 async def main():
     fails = []
     check_mapper_units(fails)
+    check_malformed_clock_no_crash(fails)
+    await check_malformed_clock_endpoints_no_crash(fails)
     cal, note = await check_whitelist_executes(fails)
     hb, counts = await check_nonwhitelist_handback(fails)
     vent, fired_now, fired_future = await check_vent_and_no_autofire(fails)
     race_writes, race_r1, race_r2 = await check_concurrent_double_approve(fails)
+    tz_zone, tz_start, tz_dry = await check_owner_timezone_offset(fails)
+    idem_writes, idem_a, idem_b = await check_content_idempotency(fails)
 
     print("==== DEFAULT-DENY PRESS-GO ====")
     print(f"  (1) WHITELIST executes via orchestrator + read-back (only read-back-verifiable "
@@ -354,12 +520,19 @@ async def main():
           f"trigger_tick now+10y fired {len(fired_now)}+{len(fired_future)} (must be 0)")
     print(f"  (4) CONCURRENT double-approve of one line -> {race_writes} real write(s) "
           f"(must be 1); idempotent winner={race_r1.get('idempotent') or race_r2.get('idempotent')}")
+    print(f"  (5) MALFORMED CLOCK '2:99' -> graceful handback (no crash) on approve + dryrun")
+    print(f"  (6) OWNER TIMEZONE {tz_zone}: calendar grounded with owner offset "
+          f"approve={tz_start} dryrun={tz_dry}")
+    print(f"  (7) CONTENT IDEMPOTENCY: same task captured twice -> {idem_writes} real "
+          f"hold(s) (must be 1); 2nd press idempotent={idem_b.get('idempotent')} "
+          f"goal={idem_b.get('goal_id')}")
 
     if fails:
         print("==== FAIL ===="); [print("   -", f) for f in fails]; raise SystemExit(1)
     print("==== PASS: only read-back-verifiable intents auto-execute with a real receipt; "
           "draft/send/money/message are handed back (orchestrator never called); vent denied; "
-          "no auto-fire ====")
+          "no auto-fire; malformed clock handed back; owner-tz offset on calendar; "
+          "same-content captured twice -> ONE hold ====")
 
 
 if __name__ == "__main__":

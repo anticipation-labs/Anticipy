@@ -7,11 +7,13 @@ layer and the tests drive it through `feed()` and `resume()`.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
 import re
 import hashlib
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .browser_link import BrowserLink
 from .bus import Bus
@@ -252,6 +254,26 @@ class ControlCore:
             "history": [i.text for i in inj["history"]],
             "derived": [i.text for i in inj["derived"]],
         }
+
+    def _owner_timezone(self) -> tuple[dt.tzinfo, str | None]:
+        """Read the owner's onboarded timezone from the PROFILE drawer (the owner_identity
+        item carries ``fields['timezone']``, e.g. 'America/New_York').
+
+        Returns (tzinfo, name). When the owner has not onboarded a timezone (or it is not a
+        resolvable zone), falls back to the server-local tz so grounding still works — but a
+        real onboarded zone makes a press-go calendar hold carry the OWNER's offset, not the
+        server's. Read-only; never writes.
+        """
+        for item in self.memory.profile.all():
+            tz_name = str((item.fields or {}).get("timezone") or "").strip()
+            if not tz_name:
+                continue
+            try:
+                return ZoneInfo(tz_name), tz_name
+            except (ZoneInfoNotFoundError, ValueError, KeyError):
+                continue  # malformed onboarded zone -> fall through to server-local
+        local = dt.datetime.now().astimezone().tzinfo
+        return local, None
 
     @staticmethod
     def _user_contact() -> str:
@@ -1129,7 +1151,8 @@ class ControlCore:
 
     async def _approve_remembered_locked(self, line_id: str, goal_id: str) -> dict:
         from ..live_memory.review_infer import infer_line
-        from ..live_memory.press_go import WHITELIST, map_inferred_to_step
+        from ..live_memory.press_go import (WHITELIST, action_content_key,
+                                            map_inferred_to_step)
 
         cap = self.live_memory.capturer
         row = next((r for r in cap.remember.all() if r.get("id") == line_id), None)
@@ -1147,8 +1170,13 @@ class ControlCore:
 
         # STEP B — MAP inferred task -> a single intent + pre-built Step (or handback).
         # The raw spoken line grounds a concrete event time (the review's due_phrase is
-        # lossy); the whitelist DECISION is keyed off the inferred shape.
-        mapped = map_inferred_to_step(inferred, raw_text=str(row.get("text") or ""))
+        # lossy); the whitelist DECISION is keyed off the inferred shape. TIMEZONE: ground
+        # the calendar hold in the OWNER's onboarded zone (profile drawer) so start/end ISO
+        # carry the owner's offset, not the server's — pass the owner tz-aware now + tz.
+        tz, _tz_name = self._owner_timezone()
+        owner_now = dt.datetime.now(tz)
+        mapped = map_inferred_to_step(inferred, raw_text=str(row.get("text") or ""),
+                                      now=owner_now, tz=tz)
         intent = mapped.get("intent")
         step = mapped.get("step")
 
@@ -1196,15 +1224,46 @@ class ControlCore:
                     "line_id": line_id, "intent": prior.intent, "goal_id": prior.id,
                     "state": prior.state.value, "would_do": mapped.get("would_do"),
                     "receipt": prior.proof or {}}
+
+        # CONTENT-level idempotency: the same task captured TWICE arrives as two DIFFERENT
+        # remembered lines -> two different line_ids -> two different goal_ids, so the
+        # line-keyed check above would miss them and a second real calendar hold would form.
+        # Dedupe on the ACTION CONTENT instead (intent + normalized summary + grounded
+        # start). If a DONE goal already carries this content_key, short-circuit to ITS
+        # receipt — exactly ONE real write for the same action, however many lines say it.
+        # Held under the same per-line lock as everything else here; a same-content goal
+        # from a DIFFERENT line is found by scanning the store (its own line's lock does not
+        # gate this one, but the first writer's goal is already done by the time we scan).
+        content_key = action_content_key(intent, step)
+        if content_key:
+            for g in self.store.all():
+                if (g.id != goal_id and g.state == GoalState.done
+                        and (g.proof or {}).get("content_key") == content_key):
+                    self.glassbox.log("press_go_content_idempotent",
+                                      {"line_id": line_id, "goal_id": g.id,
+                                       "content_key": content_key})
+                    return {"approved": True, "executed": True, "idempotent": True,
+                            "line_id": line_id, "intent": g.intent, "goal_id": g.id,
+                            "state": g.state.value, "would_do": mapped.get("would_do"),
+                            "receipt": g.proof or {}}
+
         goal = Goal(id=goal_id, intent=intent, description=mapped.get("would_do") or task,
                     steps=[step])
         goal.proof = {"owner_approved": True, "approved_from": "remembered",
-                      "line_id": line_id}
+                      "line_id": line_id, "content_key": content_key}
         goal.state = GoalState.running
         self.store.save(goal)
         self.glassbox.log("press_go_execute",
                           {"line_id": line_id, "intent": intent, "goal_id": goal.id})
         goal = await self.orchestrator._drive(goal)
+
+        # Re-stamp the content_key onto the finished goal: _drive replaces goal.proof with
+        # the step read-back receipts (Law 4), which would drop the key and defeat the
+        # content-dedup scan above. Persist it back into the proof so the NEXT same-content
+        # press finds this done goal and returns its receipt (one real write per action).
+        if content_key and goal.state == GoalState.done:
+            goal.proof = {**(goal.proof or {}), "content_key": content_key}
+            self.store.save(goal)
 
         receipt = goal.proof or {}
         return {"approved": True, "executed": True, "line_id": line_id, "intent": intent,
@@ -1266,9 +1325,14 @@ class ControlCore:
                     "why": "no confident inferred task (vent/narration)"}
 
         # STEP B — MAP inferred task -> a single intent + pre-built Step (or handback). This
-        # is the IDENTICAL call approve_remembered makes; the raw line grounds a concrete
-        # event time. We read the plan but DO NOT drive it.
-        mapped = map_inferred_to_step(inferred, raw_text=raw_text)
+        # is the IDENTICAL call approve_remembered makes (SAME owner timezone grounding, so
+        # the preview's start/end ISO carry the owner's offset — the preview must match what
+        # approve would really do). The raw line grounds a concrete event time. We read the
+        # plan but DO NOT drive it.
+        tz, _tz_name = self._owner_timezone()
+        owner_now = dt.datetime.now(tz)
+        mapped = map_inferred_to_step(inferred, raw_text=raw_text,
+                                      now=owner_now, tz=tz)
         intent = mapped.get("intent")
         step = mapped.get("step")
 
