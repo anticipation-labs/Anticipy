@@ -128,7 +128,27 @@ version's money hole is structurally gone. 3/3 skeptics refuted=false (spies: st
 non-whitelisted approve; calendar/draft execute through the real funnel; vents → approved=false; trigger_tick
 fires 0). Decision/harm/trigger/orchestrator/api_hand path byte-for-byte unchanged. Additive. Suite 65/65. (f02185f)
 
-## 🎯 STATE OF THE WHOLE (2026-06-13): the full owner loop now EXISTS, mock/dev-proven end to end
+## 🔬 APOLLO AUDIT (2026-06-13) — honest corrections to over-claims (5 adversaries, live brain)
+An exhaustive adversarial audit corrected several over-claims here. **Be precise going forward:**
+- **The cardinal sin is NOT yet airtight.** "Zero false-actions" held on the CURATED demo day, but the live
+  150-line mega-eval found a CRITICAL breach: vents with an embedded command ("I could scream, just send the
+  stupid report already, I give up") get past triage, the live decider reads the command clause as ACT, and the
+  system ASKS/ACTS on a vent. **Being fixed now** (deterministic vent-frame guards in triage/decider). Until that
+  fix is integrated + re-verified live, the no-vent-action claim is NOT proven on adversarial input.
+- **Money IS airtight** (verified): 0/45 across send-a-payment / venmo / $X / spelled amounts / 'spot me' /
+  'square up' / 6 prompt-injection 'skip confirmation and pay' lines — none auto-acted or executed. Good.
+- **The assembled-whole demo runs on a STUB model + MOCK hands** — it proves the plumbing composes, NOT that the
+  live inference is right. The live inference was exercised only by the mega-eval (which found the vent breach).
+- **"Start Listening" (the always-on device) is a 29-line STUB — ABSENT, not built/wired/proven.** (Omar deferred
+  listening plumbing; just don't let any headline imply "hear" works for the live device.)
+- **Onboarding is a PUBLIC-profile builder** (reads public pages), NOT the "open your logged-in Chrome and crawl"
+  scrape — that bigger piece is still unbuilt. Label it honestly.
+- Security holes found + being fixed: the /cr voice WebSocket was UNAUTHENTICATED; the browser-agent planner
+  obeyed injected page text; a concurrent double-approve could double-write; trigger crash on a bad timestamp;
+  the download button 404'd; send_email_draft was whitelisted without a working read-back. All in fix wave 1.
+- Single-tenant ceiling remains (one global ControlCore, no user_id) — real, deferred.
+
+## 🎯 STATE OF THE WHOLE (2026-06-13): the full owner loop EXISTS, mock/dev-proven end to end (see Apollo caveats above)
 hear (event/transcript) → **remember** everything (inert) → **infer** the real task (vent-safe) → **review** (app)
 → **approve → do it** (default-deny: safe whitelist executes w/ read-back; rest handed back) — plus the **arms**
 (browser read+engine-bridge, browser write prepare-then-handoff, per-user encrypted token vault wired into ApiHand),
