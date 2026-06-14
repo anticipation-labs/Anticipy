@@ -1152,3 +1152,89 @@ class ControlCore:
         return {"approved": True, "executed": True, "line_id": line_id, "intent": intent,
                 "goal_id": goal.id, "state": goal.state.value,
                 "would_do": mapped.get("would_do"), "receipt": receipt}
+
+    # The human-readable tool each whitelisted intent WOULD call live. create_event and
+    # send_email_draft route through the Arcade api_hand (authoritative INTENT_MAP);
+    # write_memory is a LOCAL standing note (no external tool, never leaves the device).
+    _DRYRUN_TOOL = {
+        "create_event": "GoogleCalendar.CreateEvent",
+        "send_email_draft": "Gmail.WriteDraftEmail",
+        "write_memory": "Anticipy.Memory (local note — no external account)",
+    }
+
+    def dryrun_remembered(self, line_id: str) -> dict:
+        """LIVE DRY-RUN PREVIEW: show EXACTLY what press-go WOULD do, WITHOUT doing it.
+
+        Trust-before-connect. This runs the SAME default-deny press-go mapping as
+        ``approve_remembered`` (the SAME review inference + the SAME ``map_inferred_to_step``
+        + the SAME WHITELIST gate) but STOPS before execution: it NEVER builds or saves a
+        Goal, NEVER calls ``orchestrator.start_goal`` / ``orchestrator._drive``, NEVER
+        writes a memory note, and NEVER touches the api/browser hands. It only PLANS and
+        SHOWS, so the owner can see his whole day's planned real actions before connecting
+        any account.
+
+        Returns a preview dict:
+          whitelisted line ->
+            {would_execute: True, line_id, intent,
+             tool (e.g. GoogleCalendar.CreateEvent / Gmail.WriteDraftEmail),
+             args (the EXACT args press-go would send), would_do,
+             note: "This runs for real once you connect Google"}
+          non-whitelisted line ->
+            {would_execute: False, line_id, intent: None, handback: <human description>,
+             why: <reason>}
+          vent / narration ->
+            {would_execute: False, line_id, intent: None, why: <vent stop>}
+        """
+        from ..live_memory.review_infer import infer_line
+        from ..live_memory.press_go import WHITELIST, map_inferred_to_step
+
+        cap = self.live_memory.capturer
+        row = next((r for r in cap.remember.all() if r.get("id") == line_id), None)
+        if row is None:
+            return {"would_execute": False, "line_id": line_id, "intent": None,
+                    "why": "unknown remembered line"}
+
+        raw_text = str(row.get("text") or "")
+
+        # STEP A — INFER (reuse the display-only review inference, read-only). A vent yields
+        # an empty task -> preview says nothing would execute (the vent stop, surfaced).
+        inferred = infer_line(raw_text, people_hint=row.get("people"))
+        task = str(inferred.get("task") or "").strip()
+        if not task:
+            self.glassbox.log("dryrun_vent", {"line_id": line_id})
+            return {"would_execute": False, "line_id": line_id, "intent": None,
+                    "inferred": inferred,
+                    "why": "no confident inferred task (vent/narration)"}
+
+        # STEP B — MAP inferred task -> a single intent + pre-built Step (or handback). This
+        # is the IDENTICAL call approve_remembered makes; the raw line grounds a concrete
+        # event time. We read the plan but DO NOT drive it.
+        mapped = map_inferred_to_step(inferred, raw_text=raw_text)
+        intent = mapped.get("intent")
+        step = mapped.get("step")
+
+        # STEP C — WHITELIST GATE preview. Default-deny: only an intent in the set WOULD
+        # execute. Everything else is shown as handback — exactly what approve would return,
+        # minus any execution.
+        if intent not in WHITELIST or step is None:
+            self.glassbox.log("dryrun_handback",
+                              {"line_id": line_id, "intent": intent or "(unmapped)"})
+            return {"would_execute": False, "line_id": line_id, "intent": intent,
+                    "inferred_action": task,
+                    "handback": mapped.get("would_do"),
+                    "why": (mapped.get("non_whitelist_reason")
+                            or "not a provably-safe reversible intent")}
+
+        # WHITELIST branch — show the concrete planned action. We surface the EXACT args the
+        # whitelisted Step carries (the same args approve_remembered would send through the
+        # orchestrator), the tool it WOULD call, and the connect-first note. NOTHING is
+        # executed: no Goal is built or saved, the orchestrator is never invoked.
+        args = dict(step.args)
+        self.glassbox.log("dryrun_preview",
+                          {"line_id": line_id, "intent": intent})
+        return {"would_execute": True, "line_id": line_id, "intent": intent,
+                "tool": self._DRYRUN_TOOL.get(intent, intent),
+                "args": args, "would_do": mapped.get("would_do"),
+                "note": ("This runs for real once you connect Google"
+                         if intent in ("create_event", "send_email_draft")
+                         else "This saves a local note when you press go (no account needed)")}

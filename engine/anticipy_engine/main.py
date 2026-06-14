@@ -484,6 +484,40 @@ async def memory_remembered_approve(body: RememberedApproveIn) -> dict:
     return await core.approve_remembered(body.line_id)
 
 
+@app.post("/memory/remembered/dryrun")
+def memory_remembered_dryrun(body: RememberedApproveIn) -> dict:
+    """LIVE DRY-RUN PREVIEW for ONE remembered line — show EXACTLY what press-go WOULD do
+    WITHOUT doing it (trust-before-connect).
+
+    This runs the SAME default-deny press-go mapping as /memory/remembered/approve (the
+    SAME review inference + the SAME map_inferred_to_step + the SAME WHITELIST gate) but
+    STOPS before execution. It NEVER builds or saves a Goal, NEVER calls
+    orchestrator.start_goal/_drive, NEVER writes a memory note, NEVER touches the api/browser
+    hands. It only PLANS and SHOWS.
+
+    For a whitelisted line it returns {would_execute:true, intent, tool (e.g.
+    GoogleCalendar.CreateEvent / Gmail.WriteDraftEmail), the EXACT args it would send, and
+    "This runs for real once you connect Google"}. For a non-whitelisted line it returns
+    {would_execute:false, handback, why}. This lets the owner see his whole day's planned
+    real actions before connecting anything."""
+    return core.dryrun_remembered(body.line_id)
+
+
+@app.get("/memory/remembered/dryrun-day")
+def memory_remembered_dryrun_day(limit: int = 50) -> dict:
+    """LIVE DRY-RUN PREVIEW for the WHOLE day — preview every remembered line at once so the
+    owner can see his entire day's planned real actions before connecting any account.
+
+    Reuses the inert remembered pull and dry-runs EACH line through the SAME press-go
+    mapping (no execution, no Goal, no orchestrator call). Returns the per-line previews
+    plus a count of how many WOULD execute on connect."""
+    cap = core.live_memory.capturer
+    rows = cap.remember.recent(limit)
+    previews = [core.dryrun_remembered(str(r.get("id"))) for r in rows]
+    would = sum(1 for p in previews if p.get("would_execute"))
+    return {"previews": previews, "count": len(previews), "would_execute_count": would}
+
+
 @app.post("/memory/open-loops/resolve")
 def memory_loop_resolve(body: MemoryLoopResolveIn) -> dict:
     out = core.resolve_memory_loop(body.id, body.status)
