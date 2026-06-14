@@ -93,6 +93,13 @@ _VENT = re.compile(
     # never a handoff; no one asks an assistant to throw/smash their own hardware.
     r"|\bi'?m (?:gonna|going to) (?:throw|chuck|toss|hurl|smash|launch|yeet)\b"
     r"|\b(?:throw|chuck|hurl|smash) (?:my|this|the) (?:laptop|computer|phone|monitor|keyboard)\b"
+    # death/breakdown hyperbole ("…till I drop dead", "until I collapse") and emotional-
+    # breakdown verbs as the content of a line ("add 'cry in the parking lot' to my calendar").
+    r"|\bdrop dead\b|\b(?:till|until) i (?:die|drop|collapse|pass out)\b"
+    r"|\b(?:cry|sob|weep|bawl)\b"
+    # "(officially|totally|…) lost it" = going crazy. Intensifier REQUIRED so the literal
+    # "I lost it" (= misplaced an object → a real find/help task) is never swallowed.
+    r"|\b(?:officially|finally|totally|completely|honestly|basically|nearly|almost) lost it\b"
     r"|\bso (?:fun|great|much fun)\b"
     r"|\bmove to a beach\b|\bwin the lottery\b|\bquit my job\b",
     re.I,

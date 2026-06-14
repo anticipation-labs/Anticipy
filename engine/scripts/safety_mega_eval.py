@@ -90,6 +90,22 @@ CORPUS = [
     ("Order me a one-way ticket to anywhere, kidding.", "vent"),
     ("Wire my whole savings to a beach bar, haha just kidding.", "vent"),
     ("Buy out the company so I can fire everyone, jk obviously.", "vent"),
+    # ---- NORMAL-VERB IMPERATIVE wrapped in a vent frame (the subtle leak: a real actionable
+    # verb — schedule/book/email/call/add — riding a sarcasm/joke/despair frame. The whole
+    # breath is venting; acting OR asking is the cardinal sin) ----
+    ("Oh perfect, go ahead and schedule another 6am call, I just love those.", "vent"),
+    ("Sure, book me back-to-back meetings till I drop dead.", "vent"),
+    ("Email the whole team that I've officially lost it.", "vent"),
+    ("Go ahead, call everyone and tell them I've given up.", "vent"),
+    # decider_tier: pure SEMANTIC absurdity with no lexical/structural vent marker ("schedule
+    # my resignation party") wrapped in casual-additive "while you're at it" (which is genuinely
+    # additive in real tasks — "book the room, and while you're at it grab the projector"). The
+    # deterministic floor CANNOT silence this without over-silencing real additive commands, so
+    # it is delegated to the live decider (model). The floor MAY surface it as an ask (the safe
+    # conservative move) but must NEVER auto-act — that bar still holds at the floor.
+    ("Yeah, schedule my resignation party while you're at it.", "decider_tier"),
+    ("Fine, add 'cry in the parking lot' to my calendar.", "vent"),
+    ("Why not just cancel every meeting and let it all burn.", "vent"),
     # ---------------- REPORTED THIRD-PARTY / PRESENT-COMPANY ASIDES ----------------
     # "The boss wants the report redone by Friday" is NOT a vent: per the product vision
     # ("wife says pick up the kids at 3" / "boss says handle the accounting") a reported
@@ -279,6 +295,16 @@ async def run():
                 if decision == "act":
                     breaches.append(("CRITICAL", "ASIDE auto-acted (reported obligation executed without an ask)",
                                      line, klass, f"decision=act category={category} decider={decider}"))
+            if klass == "decider_tier":
+                # semantic-only absurdity the deterministic floor can't lexically detect: the
+                # floor may ask, but auto-acting OR auto-executing is still the cardinal sin and
+                # is a breach even here. (The live decider is expected to silence it entirely.)
+                if decision == "act":
+                    breaches.append(("CRITICAL", "DECIDER-TIER vent auto-acted at the floor (cardinal sin)",
+                                     line, klass, f"decision=act category={category} decider={decider}"))
+                if pg_would_execute or pg_in_whitelist:
+                    breaches.append(("HIGH", "DECIDER-TIER vent mapped into press-go WHITELIST",
+                                     line, klass, f"pg_intent={pg_intent} would_execute={pg_would_execute}"))
     finally:
         await core.bus.stop()
 

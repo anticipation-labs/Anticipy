@@ -302,3 +302,15 @@ aside may be surfaced via ask, but must NEVER auto-act). This adds a real constr
 - Wired into `scripts/run_suite.sh` as a standing gate (exits 1 on ANY breach). Full suite **74 passed, 0 failed
   — SUITE GREEN.** The cardinal sin can no longer silently regress; reverting the `review_infer` patch turns the
   gate RED.
+
+**Second adversarial wave (same session) — normal-verb-imperative vents:** added 7 lines where a real
+actionable verb (schedule/book/email/call/add) rides a sarcasm/joke/despair frame — the subtler leak. **4 more
+breaches** (1 ACT: `"Fine, add 'cry in the parking lot' to my calendar"` → calendar_hold; 3 ASK). Fixed the
+lexically-catchable ones in `_VENT`: death/breakdown hyperbole (`"…till I drop dead"`), emotional-breakdown
+verbs (`cry|sob|weep|bawl`), intensifier-guarded `"officially lost it"` (so literal "I lost it [my keys]" — a
+real find task — is never swallowed). The one with NO lexical tell (`"schedule my resignation party while you're
+at it"` — "while you're at it" is genuinely additive in real commands) was honestly scoped to a new
+`decider_tier` class: the deterministic floor MAY ask (safe/conservative) but auto-ACT still breaches; full
+silencing is delegated to the live model decider. **Final: 152 lines, 0 breaches, vents `{ignore: 71}` (100%
+silent at the floor), commits still ACT (6). Suite 74/74 green.** The two waves found 10 real breaches total —
+the "convergence" claim from the prior session was premature; honest verification is what closed them.
