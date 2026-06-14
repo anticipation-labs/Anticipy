@@ -14,24 +14,28 @@ before every "place order / pay $X / finish & pay / submit order / place bid" co
 tested). Both are now permanent CI gates. Suite **75/75 green.** Honest takeaway: last session's
 "it's airtight" was premature — this is why we verify. **The safety floor is now genuinely proven.**
 
-**THE ONE THING that unblocks the finish line is still you (~15 min).** The build is healthy and
-safety-proven, but it's stuck at an instrument ceiling: every automated metric is maxed, so the
-nightly loop can't make real progress without *live proof on your real accounts*. It's paused on
-purpose until you do one of these (in leverage order):
+**CORRECTION (2026-06-14, from a verified 9-agent audit):** an earlier version of this note told you
+the #1 unblock was "say phone confirmed." **You already did** — `factory/config/owner_phone.confirmed`
+is dated 2026-06-13. That ask was stale and wrong; sorry. The real remaining unblocks, verified
+against the code:
 
-1. **Say "phone confirmed"** if **+1 604 724 5161** is the right number for Anticipy's reminder
-   calls/SMS. That single word unblocks the P3 voice closure (real 2:45-style call + YES/NO reply),
-   which I'll run supervised while you're awake. (Live calls/SMS stay hard-banned until you confirm —
-   no wrong-number 3am calls, ever.)
-2. **Connect your accounts** (Google Calendar/Gmail via the /connect page, ~5 min) so the loop can
-   prove a real calendar event + Gmail draft end-to-end instead of mock.
-3. (When you have ~20 min) **red-pen the holdout persona keys** — your marks are the honesty bar and
-   they give the saturated metric real headroom again.
-4. (Optional, later) OpenRouter top-up if spend runs low; Apple Developer ID for the signed public
-   download (next plan).
+1. **P3 voice (real 2:45 call):** phone is confirmed and the hard-ban is lifted, but live mode is
+   still OFF (`ANTICIPY_CHANNELS_MODE=mock` in .env.local) and no outbound call/SMS has EVER been
+   placed. Unblock = lift `factory/.halt` + one supervised daytime run with channels=live so
+   `gate_P3.sh` can place the real call and you reply "YES <code>" within ~10 min. **You + me, ~15 min.**
+2. **API arm live proof:** connect Google Calendar/Gmail (the /connect OAuth) AND set `ARCADE_API_KEY`
+   + `ANTICIPY_VAULT_KEY` in the engine env. Today a live call would raise NotFunded/Vault errors. The
+   read-back-gated create_event/draft path has never run on a real account. **~5 min OAuth + keys.**
+3. **Browser arm live proof:** one real signed-in cart run in your actual Chrome producing a
+   re-readable artifact (everything mock is already green).
+4. **Onboarding scrape is UNBUILT** (code work, mine): no code reads your logged-in Chrome to build the
+   per-person API mesh — connections are hand-typed today. This is a real build gap, not an Omar task.
+5. **Signed download** (Apple Developer ID) — and note the audit found anticipy.ai already serves an
+   UNSIGNED .dmg that is NOT this repo's code; that divergence needs reconciling.
+6. (When you have ~20 min) **red-pen the holdout persona keys** — your marks are the honesty bar.
 
-I deliberately did NOT author a new harder persona bank solo overnight — that defines what "done"
-means and you should set that bar. Everything below is prior context.
+I deliberately did NOT author a new harder persona bank solo — that defines what "done" means and you
+should set that bar. Everything below is prior context (some of it now corrected above).
 
 ---
 
