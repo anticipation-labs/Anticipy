@@ -91,6 +91,10 @@ class BrowseReadResult:
     actions: List[str] = field(default_factory=list)
     elapsed_s: Optional[float] = None
     error: Optional[str] = None
+    # The host-scoped navigation wall the runner applied (None = allow-all because
+    # no host could be derived). Surfaced so callers can prove off-domain nav is
+    # blocked by browser-use's security watchdog.
+    allowed_domains: Optional[List[str]] = None
     raw: Dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> Dict[str, Any]:
@@ -106,6 +110,7 @@ class BrowseReadResult:
             "actions": self.actions,
             "elapsed_s": self.elapsed_s,
             "error": self.error,
+            "allowed_domains": self.allowed_domains,
         }
 
 
@@ -229,6 +234,7 @@ def browse_read(
         actions=list(payload.get("actions") or []),
         elapsed_s=payload.get("elapsed_s"),
         error=payload.get("error"),
+        allowed_domains=payload.get("allowed_domains"),
         raw=payload,
     )
 
