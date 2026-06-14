@@ -800,6 +800,23 @@ def _assert_public_source_url(url: str) -> None:
             raise HTTPException(status_code=422, detail="source URL host resolves to a non-public address")
 
 
+def _assert_public_agent_url(url: str) -> None:
+    """SSRF gate for the agent-driving endpoints (/agent/run, /agent/resume, /ws/observe,
+    /ws/act). The URL the agent is pointed at — the start page, the resumed page, or a driven
+    navigate — must be a PUBLIC http(s) host. Reuses the onboarding SSRF classifier so a
+    loopback/link-local (incl. 169.254.169.254 cloud-metadata)/private/file:// target is
+    rejected with 422 before the live browser agent ever touches it. Empty is rejected too;
+    the agent has nowhere safe to go without a URL.
+
+    Note: this is the ENTRY gate. The deeper, code-level navigation WALL (core.navwall) runs
+    at the bridge on EVERY navigate the model emits mid-run and additionally blocks
+    banking/password destinations — so an injected navigate is stopped even if it never came
+    through one of these endpoints."""
+    if not (url or "").strip():
+        raise HTTPException(status_code=422, detail="agent target URL is required")
+    _assert_public_source_url(url)
+
+
 def _profile_browse_reader():
     """The reader the profile builder uses. Tests may inject a fake via
     app.state.profile_browse_reader (no live browser in CI); production binds the
@@ -1060,11 +1077,15 @@ class ActIn(BaseModel):
 @app.post("/ws/observe")
 async def ws_observe(body: ObserveIn) -> dict:
     args = {k: v for k, v in body.model_dump().items() if v is not None}
+    if body.url:
+        _assert_public_agent_url(body.url)  # SSRF: never point the agent at a private/metadata host
     return await core.browser_link.send_browse(new_id(), "observe", args, timeout=40.0)
 
 
 @app.post("/ws/act")
 async def ws_act(body: ActIn) -> dict:
+    if str(body.action or "").strip() == "navigate" and body.url:
+        _assert_public_agent_url(body.url)  # SSRF: a driven navigate must target a public host
     return await core.browser_link.send_browse(new_id(), "act", body.model_dump(), timeout=40.0)
 
 
@@ -1085,6 +1106,10 @@ def _gateway_for(model: Optional[str]) -> ModelGateway:
 
 @app.post("/agent/run")
 async def agent_run(body: AgentRunIn) -> dict:
+    # SSRF: the agent's start page must be a PUBLIC http(s) host. A loopback/link-local
+    # (incl. 169.254.169.254 cloud-metadata)/private/file:// start_url is rejected (422)
+    # before the live browser agent is ever pointed at it.
+    _assert_public_agent_url(body.start_url)
     gw = _gateway_for(body.model)
     agent = WebVoyagerAgent(core.browser_link, gw, max_steps=body.max_steps,
                             notifier=core.notify_user)
@@ -1107,6 +1132,10 @@ class AgentResumeIn(BaseModel):
 
 @app.post("/agent/resume")
 async def agent_resume(body: AgentResumeIn) -> dict:
+    # SSRF: the resumed page (the now-unblocked URL the caller supplies) must be a PUBLIC
+    # http(s) host, exactly like /agent/run — a private/metadata/file:// resume target is
+    # rejected (422) before the agent continues.
+    _assert_public_agent_url(body.start_url)
     # STUB seam: the human cleared the wall and said "go". Restoring the exact
     # mid-plan state (same subgoal/history) is the TODO; for now we continue the
     # task from the now-unblocked page and never re-touch the wall.

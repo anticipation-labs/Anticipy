@@ -374,6 +374,11 @@ export default function Home() {
   // prepared/handback state for a non-whitelisted one). DISPLAY-ONLY; the raw line
   // and inferred task stay visible alongside.
   const [approveResults, setApproveResults] = useState({});
+  // Per-line DRY-RUN preview state keyed by remembered line id: { busy } while in flight,
+  // then the engine's preview ({would_execute, intent, tool, args, handback, why}). This is
+  // trust-before-connect: it shows what press-go WOULD do live WITHOUT executing anything —
+  // no Goal, no orchestrator, no memory write, no account needed.
+  const [previewResults, setPreviewResults] = useState({});
   const [connections, setConnections] = useState({});
   const [tickResult, setTickResult] = useState(null);
   const [events, setEvents] = useState([]);
@@ -665,6 +670,32 @@ export default function Home() {
       await loadStatus();
     } catch (err) {
       setApproveResults((current) => ({
+        ...current,
+        [lineId]: { busy: false, error: err instanceof Error ? err.message : String(err) },
+      }));
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function previewRemembered(lineId) {
+    // DRY-RUN ONE remembered line: ask the engine what press-go WOULD do live, WITHOUT
+    // doing it. The engine runs the SAME default-deny inference + whitelist mapping but
+    // builds no Goal, calls no orchestrator, writes no memory, and touches no api/browser
+    // hands — so this needs no connected account. We just render the planned action.
+    setPreviewResults((current) => ({ ...current, [lineId]: { busy: true } }));
+    setError("");
+    try {
+      const response = await ownerFetch("/api/memory/remembered/dryrun", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ line_id: lineId }),
+      });
+      const data = await response.json();
+      handleOwnerAuthFailure(response, data);
+      if (!response.ok) throw new Error(data.message || data.detail || data.error || "Dry-run failed");
+      setPreviewResults((current) => ({ ...current, [lineId]: { busy: false, result: data } }));
+    } catch (err) {
+      setPreviewResults((current) => ({
         ...current,
         [lineId]: { busy: false, error: err instanceof Error ? err.message : String(err) },
       }));
@@ -1209,6 +1240,13 @@ export default function Home() {
                 const canApprove = Boolean(row.id) && hasTask && conf && conf !== "low";
                 const ar = row.id ? approveResults[row.id] : undefined;
                 const res = ar && ar.result;
+                // DRY-RUN preview is offered for ANY remembered line with an id (even a
+                // non-whitelisted or low-confidence one) so the owner can see what press-go
+                // WOULD do live — the planned intent/tool/args for a whitelisted line, the
+                // handback for the rest, or the vent stop — WITHOUT executing or connecting.
+                const canPreview = Boolean(row.id);
+                const pr = row.id ? previewResults[row.id] : undefined;
+                const pres = pr && pr.result;
                 return (
                 <article className="card" key={row.id || `${row.ts || "remembered"}-${index}`}>
                   <div className="card-head">
@@ -1272,6 +1310,57 @@ export default function Home() {
                         </div>
                       )}
                       {ar && ar.error ? <span className="approve-why">{ar.error}</span> : null}
+                    </div>
+                  ) : null}
+                  {canPreview ? (
+                    <div className="preview-row">
+                      <button
+                        type="button"
+                        className="preview-btn"
+                        onClick={() => previewRemembered(row.id)}
+                        disabled={pr && pr.busy}
+                      >
+                        {pr && pr.busy
+                          ? "Previewing…"
+                          : pres
+                            ? "Refresh preview"
+                            : "Preview (dry-run)"}
+                      </button>
+                      {pres ? (
+                        pres.would_execute ? (
+                          // Whitelisted: show the EXACT planned action press-go would run
+                          // live (intent + tool + args) — nothing executed, no account yet.
+                          <div className="preview-result preview-would">
+                            <span className="preview-badge would">Would run live</span>
+                            <span className="preview-what">{pres.would_do || pres.intent}</span>
+                            <div className="preview-plan">
+                              {pres.tool ? (
+                                <span className="preview-tool">{pres.tool}</span>
+                              ) : null}
+                              {pres.args && Object.keys(pres.args).length ? (
+                                <pre className="preview-args">{JSON.stringify(pres.args, null, 2)}</pre>
+                              ) : null}
+                            </div>
+                            {pres.note ? (
+                              <span className="preview-note">{pres.note}</span>
+                            ) : null}
+                          </div>
+                        ) : pres.handback ? (
+                          // Non-whitelisted: show what would be handed back, not executed.
+                          <div className="preview-result preview-handback">
+                            <span className="preview-badge handback">Handed back — not auto-run</span>
+                            <span className="preview-what">{pres.handback || pres.inferred_action || pres.intent}</span>
+                            {pres.why ? <span className="preview-why">{pres.why}</span> : null}
+                          </div>
+                        ) : (
+                          // Vent / narration: press-go would do nothing at all.
+                          <div className="preview-result preview-handback">
+                            <span className="preview-badge handback">Nothing would run</span>
+                            <span className="preview-why">{pres.why || "no confident task (vent/narration)"}</span>
+                          </div>
+                        )
+                      ) : null}
+                      {pr && pr.error ? <span className="preview-why">{pr.error}</span> : null}
                     </div>
                   ) : null}
                 </article>

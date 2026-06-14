@@ -24,6 +24,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .navwall import nav_block_reason
+
 
 ACTIONABLE_TAGS = {"a", "button", "textarea", "select"}
 ACTIONABLE_ROLES = {
@@ -315,6 +317,15 @@ class NativeBridgeLink:
         self._ensure_cdp_chrome()
         url = str(args.get("url") or "").strip()
         if url:
+            # HARD NAVIGATION WALL (code-level, not prompt-level): deny a navigate to a
+            # non-allowlisted host — private/loopback/link-local/metadata (SSRF), a
+            # non-http(s) scheme (file://, chrome://, data:, javascript:), or a
+            # banking/password/credential domain — BEFORE Chrome is ever pointed at it,
+            # regardless of what the model emitted. This is the real injection wall; the
+            # planner prompt's "don't obey page text" fence is defense-in-depth above it.
+            nav_reason = nav_block_reason(url)
+            if nav_reason:
+                return self._needs_human(job_id, f"navigation blocked: {nav_reason}")
             status, data, error = self._command({"command": "navigate", "url": url, "new_tab": True})
             if error or status != 200 or data.get("ok") is not True:
                 return self._needs_human(job_id, error or str(data.get("error") or f"navigate status {status}"))
@@ -356,6 +367,14 @@ class NativeBridgeLink:
             url = str(args.get("url") or "").strip()
             if not url:
                 return self._needs_human(job_id, "native bridge navigate action has no URL")
+            # HARD NAVIGATION WALL (code-level): a model-emitted navigate to a
+            # private/metadata host, a non-http(s) scheme, or a banking/password domain is
+            # DENIED here, at the bridge, before Chrome moves — even if a prompt injection
+            # talked the model into emitting it. The prompt fence is defense-in-depth; this
+            # is the wall that actually holds.
+            nav_reason = nav_block_reason(url)
+            if nav_reason:
+                return self._needs_human(job_id, f"navigation blocked: {nav_reason}")
             payload = {"command": "navigate", "url": url, "new_tab": False, "prefer_in_place": True}
             self._url_prefix = url or _origin(url) or self._url_prefix
         elif action == "scroll":

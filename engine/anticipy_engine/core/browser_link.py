@@ -11,6 +11,25 @@ import asyncio
 import secrets
 from typing import Dict, Optional
 
+from .navwall import nav_block_reason
+
+
+def _walled_nav_url(intent: str, args: dict) -> Optional[str]:
+    """If this browse job would navigate the browser, return the target URL; else None.
+
+    Both transports funnel navigation through ``send_browse``: an ``observe`` with a ``url``
+    re-points the tab, and an ``act`` with ``action == "navigate"`` carries the model's own
+    ``url``. Either is a navigation the hard wall must vet before it reaches the browser.
+    """
+    args = args or {}
+    if intent == "observe":
+        url = args.get("url")
+        return str(url).strip() if url else None
+    if intent == "act" and str(args.get("action") or "").strip() == "navigate":
+        url = args.get("url")
+        return str(url).strip() if url else None
+    return None
+
 
 class BrowserLink:
     def __init__(self) -> None:
@@ -51,6 +70,23 @@ class BrowserLink:
 
     # ---- job dispatch (used by the browser hand) ----
     async def send_browse(self, job_id: str, intent: str, args: dict, timeout: float) -> dict:
+        # HARD NAVIGATION WALL (code-level), enforced at the transport so it holds for BOTH
+        # the extension WS and the native bridge. A model-emitted navigate (or a re-point
+        # observe) to a private/metadata host, a non-http(s) scheme, or a banking/password
+        # domain is DENIED here before the job is ever sent to the browser — regardless of
+        # what a page-injection talked the model into emitting. The planner prompt fence is
+        # defense-in-depth; this is the wall that actually stops the navigate.
+        nav_url = _walled_nav_url(intent, args)
+        if nav_url is not None:
+            reason = nav_block_reason(nav_url)
+            if reason:
+                return {
+                    "type": "result",
+                    "job_id": job_id,
+                    "status": "needs_human",
+                    "proof": None,
+                    "output": {"reason": f"navigation blocked: {reason}"},
+                }
         if not self.connected or self._ws is None:
             raise ConnectionError("extension not connected")
         loop = asyncio.get_running_loop()

@@ -989,6 +989,95 @@ button {
   overflow-x: auto;
 }
 
+/* DRY-RUN preview: trust-before-connect. A non-destructive secondary action that shows
+   what press-go WOULD do live without executing anything (no account, no Goal). */
+.preview-row {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.preview-btn {
+  justify-self: start;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.preview-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.preview-result {
+  display: grid;
+  gap: 4px;
+}
+
+.preview-badge {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.preview-badge.would {
+  background: var(--ready);
+}
+
+.preview-badge.handback {
+  background: var(--ask);
+}
+
+.preview-what {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.preview-why,
+.preview-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preview-plan {
+  display: grid;
+  gap: 4px;
+}
+
+.preview-tool {
+  justify-self: start;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 2px 8px;
+}
+
+.preview-args {
+  margin: 2px 0 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
 .event {
   display: grid;
   grid-template-columns: 120px 1fr;
