@@ -14,7 +14,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from .core.envelopes import new_id
-from .live_memory.review_infer import is_vent_shape
+from .live_memory.review_infer import is_vent, is_vent_shape
+from .shared.invoice_draft import match_invoice_draft_ask
 
 OwnerSource = Literal["pay_to_try", "start_listening", "mp3", "transcript", "typed", "app", "mac_mic", "pendant_phone"]
 OwnerDisposition = Literal["do", "ask", "remember", "blocked"]
@@ -167,6 +168,25 @@ def _person_hint(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _has_money_signal(text: str) -> bool:
+    """True iff the line MOVES MONEY — the SINGLE SOURCE OF TRUTH for money on the spine is
+    harm.py's recipient-agnostic _MONEY_SIGNAL (a currency-symbol/scale amount or a debt/
+    obligation noun: owe/rent/deposit/invoice/balance/payment/...) plus its spoken _MONEY_IDIOMS
+    (square up, cover the tab, chip in, settle the invoice, ...). owner_mode's own _MONEY regex
+    only knows the spend VERBS, so a payment phrased as "send Priya the five hundred we owe" or
+    "the deposit of 500 dollars" had no money word and slipped past the person+send branch as a
+    benign message. Reusing harm.py's signal closes that. LAZY-imported to avoid any import
+    cycle through the proactive package; fails CLOSED to the local verb regex on import error."""
+    raw = text or ""
+    try:
+        from .proactive.harm import _MONEY_IDIOMS, _MONEY_SIGNAL
+        if _MONEY_SIGNAL.search(raw) or re.search(_MONEY_IDIOMS, raw, re.I):
+            return True
+    except Exception:  # pragma: no cover - defensive; never seen in the suite
+        pass
+    return bool(_MONEY.search(raw))
+
+
 class OwnerMode:
     """Deterministic first pass for messy owner transcript -> task cards.
 
@@ -219,17 +239,26 @@ class OwnerMode:
         if _is_filler(text):
             return None
 
-        # CARDINAL-SIN GUARD (runs FIRST): a vent / sarcasm / self-cancel is NOT a task and
-        # must never become a durable card — including a "remember" profile card. The bare
-        # _PROFILE regex below treats "I hate ..." as a preference; an angry "I hate this,
-        # kill me, I could scream, I should just move to a beach" line would otherwise be
-        # persisted as an ACTIVE profile memory (the cardinal-sin echo, even in preview).
-        # is_vent_shape() is the shared review_infer guard for the _VENT family (emotional
-        # vents + sarcasm), so the owner card path and the display path agree on what is a
-        # vent. It deliberately EXCLUDES the countermand ("don't buy"), which on an owner
-        # command is a no-purchase BOUND on a cart-prep card, not a retraction. The raw line
-        # is still captured upstream as inert memory; refusing to SHAPE a vent loses nothing.
-        if is_vent_shape(text):
+        # CARDINAL-SIN GUARD (runs FIRST): a vent / sarcasm / self-cancel / retraction is NOT
+        # a task and must never become a durable card — including a "remember" profile card.
+        # is_vent() is the SINGLE SOURCE OF TRUTH (shared with the press-go inference and the
+        # display path), so the spine agrees with them on what is a vent. It is the SUPERSET of
+        # is_vent_shape: beyond the emotional-vent/sarcasm family it ALSO catches a trailing
+        # self-cancel hedge ("Remind me to email the landlord, probably.") and a countermand
+        # ("Remind me to book the trip. Never mind, forget it.") — the exact "Remind me that..."
+        # shapes the spine was ACTING on (creating a reminder card for a self-cancelled line, a
+        # Law-2 violation). The ONE carve-out: a cart/research command with an explicit
+        # no-purchase BOUND ("...put it in the cart ... don't buy it") reads as a vent only via
+        # is_vent()'s countermand arm, but it is a real reversible owner command — so when the
+        # line is a browser/cart line with a no-buy bound, the countermand is a deliberate
+        # purchase ceiling, not a retraction, and is handled by the _BROWSER branch below (with
+        # payment_allowed=False). is_vent_shape (no countermand arm) still gates that line out
+        # of the emotional-vent family. The raw line is captured upstream as inert memory
+        # regardless; refusing to SHAPE a vent loses nothing durable.
+        cart_no_purchase = bool(_BROWSER.search(text) and _NO_BUY.search(text))
+        if is_vent(text) and not cart_no_purchase:
+            return None
+        if cart_no_purchase and is_vent_shape(text):
             return None
 
         if _PROFILE.search(text):
@@ -258,6 +287,36 @@ class OwnerMode:
                 args={"task_text": text, "kind": "pickup_or_dropoff"},
                 confidence=0.86,
                 reason="care obligation plus time/reminder signal",
+            )
+
+        # MONEY INTERLOCK (hard stop, runs BEFORE the send/message + browser branches): money
+        # is the one line the engine never auto-crosses (Law 3). A payment can wear a benign
+        # message skin — "email Sam the rent payment of 1200 dollars", "text Priya the five
+        # hundred we owe her" — and the person+send branch below would have shaped it as a
+        # do/ask draft_or_confirm_message, never blocking the money. The interlock uses the
+        # SAME money signal as the harm-line (harm.py's _MONEY_SIGNAL/_MONEY_IDIOMS, the spine's
+        # source of truth), so a payment is always routed to the blocked money card first.
+        # TWO carve-outs mirror the harm-line exactly: (1) the cart-prep "...in the cart ...
+        # don't buy it" line trips the money signal on "buy" but carries payment_allowed=False
+        # and is owned by the _BROWSER branch below; (2) an invoice DRAFT/REVIEW shape
+        # ("Invoice the client today? No, draft it and let Jordan sanity-check the hours") is an
+        # ask-first admin step, not a payment — harm.py strips the bare invoice noun for it, so
+        # here it must FALL THROUGH (card_for_line -> None) to let the spine's invoice_draft ask
+        # path own it. A real spend on an invoice ("pay the invoice") is not a draft shape and
+        # still blocks here.
+        invoice_draft_ask = match_invoice_draft_ask(text)
+        if not cart_no_purchase and not invoice_draft_ask and _has_money_signal(text):
+            return OwnerTaskCard(
+                source=source,
+                line_no=line.line_no,
+                source_text=text,
+                title="Block money action",
+                disposition="blocked",
+                route="browser",
+                action="prepare_purchase_path_without_payment",
+                args={"task_text": text, "payment_allowed": False},
+                confidence=0.78,
+                reason="money or checkout is a hard stop; prepare but do not pay",
             )
 
         person = _person_hint(text)

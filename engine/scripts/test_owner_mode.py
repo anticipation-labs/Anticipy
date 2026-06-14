@@ -111,6 +111,48 @@ def main():
                  "delete my whole calendar today"):
         assert not mode.ingest(vent).cards, (vent, signature(mode.ingest(vent)))
 
+    # ---- Apollo wave 3 SPINE VENT pin: the spine now gates on is_vent() (the SINGLE SOURCE
+    # OF TRUTH, superset of is_vent_shape), so a "Remind me ..." line that self-cancels with a
+    # trailing hedge ("..., probably.") or a countermand ("Never mind, forget it.") makes NO
+    # card. Before this, owner_mode used only is_vent_shape (no hedge/countermand arm) and
+    # SHAPED a reminder card for a self-cancelled line — acting on a self-cancel (Law 2).
+    for spine_vent in ("Remind me to email the landlord, probably.",
+                       "Remind me to book the trip. Never mind, forget it.",
+                       "Remind me to renew the gym, maybe.",
+                       "Remind me that I hate this job, ugh.",
+                       "Remind me to never agree to a 7am meeting again, lol."):
+        assert not mode.ingest(spine_vent).cards, (spine_vent, signature(mode.ingest(spine_vent)))
+    # recall guard: a genuine "Remind me ..." with no self-cancel still shapes a card
+    assert any(c.action == "create_reminder_or_open_loop"
+               for c in mode.ingest("Remind me to call the dentist tomorrow.").cards)
+
+    # ---- Apollo wave 3 SPINE MONEY pin: the money interlock runs BEFORE the person+send
+    # branch and reuses the harm-line money signal (harm.py _MONEY_SIGNAL/_MONEY_IDIOMS), so a
+    # payment wearing a benign message skin ("email Sam the rent payment of 1200 dollars",
+    # "text Priya the five hundred we owe her") is BLOCKED, never a draft_or_confirm_message.
+    for pay in ("email Sam the rent payment of 1200 dollars",
+                "text Priya the five hundred we owe her",
+                "send Jordan the invoice balance of 800",
+                "reply to Maya, send her the 200 bucks we owe",
+                "Send my landlord the deposit over Zelle."):
+        cards_p = mode.ingest(pay).cards
+        assert any(c.disposition == "blocked"
+                   and c.action == "prepare_purchase_path_without_payment" for c in cards_p), \
+            (pay, signature(mode.ingest(pay)))
+        assert not any(c.action == "draft_or_confirm_message" for c in cards_p), \
+            (pay, "money must never shape a benign message", signature(mode.ingest(pay)))
+    # money carve-outs (mirror the harm-line): a real spend on an invoice still BLOCKS, but an
+    # invoice DRAFT/REVIEW ask falls THROUGH (None) to the spine's invoice_draft ask path, and a
+    # cart-prep "...don't buy it" line stays a no-purchase cart card (its "buy" is a bound).
+    assert any(c.disposition == "blocked"
+               for c in mode.ingest("Pay the invoice now with the card on file.").cards)
+    assert not mode.ingest(
+        "Invoice the client today? No, draft it and let Jordan sanity-check the hours first."
+    ).cards
+    assert any(c.action == "find_or_cart_without_purchase" for c in mode.ingest(
+        "That camera strap I liked, put it in the cart if it's there, don't buy it."
+    ).cards)
+
     asyncio.run(control_core_check())
     print("PASS owner_mode: noisy owner transcript -> shared durable action cards")
 
