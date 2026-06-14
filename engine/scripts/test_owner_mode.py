@@ -86,6 +86,31 @@ def main():
     noun_order = mode.ingest("That's a change order. Everything is a change order.")
     assert not noun_order.cards, signature(noun_order)
 
+    # ---- RECALL FALLBACK pin (Apollo wave 2): a bare actionable line — clause-initial
+    # scheduling/contact verb (book/schedule/call/meet) + a concrete time — that none of the
+    # earlier shapes catch must NO LONGER be dropped; it shapes a do/api timed-action card.
+    for bare in ("Book the dentist at 3pm tomorrow.",
+                 "Call the plumber this afternoon.",
+                 "Schedule the design review for Monday.",
+                 "Meet the contractor at 9am Friday."):
+        cards_b = mode.ingest(bare).cards
+        assert any(c.action == "create_calendar_or_reminder" and c.disposition == "do"
+                   and c.route == "api" for c in cards_b), (bare, signature(mode.ingest(bare)))
+    # the time anchor is REQUIRED: a bare verb with no time still falls through (no card)
+    assert not mode.ingest("Book the dentist.").cards
+    # the fallback must NOT preempt the spine's richer catch paths: an open phrasal head
+    # ("Set up ...") and an anaphoric memory-resolved slot ("the Tuesday morning one") stay
+    # UNSHAPED so ControlCore keeps catching+executing them through the proven spine.
+    assert not mode.ingest("Set up a quick review with the vendor for Thursday 2pm.").cards
+    assert not mode.ingest("Book the Tuesday morning one with Marta before she fills up.").cards
+    # CARDINAL-SIN pin: hyperbole/joke versions of a scheduling verb must produce NO card
+    # (is_vent_shape gates them before any shaping) — acting on a vent is the cardinal sin.
+    for vent in ("schedule a vacation for me forever",
+                 "call my therapist forever lol",
+                 "book a one-way ticket to mars tomorrow, lol",
+                 "delete my whole calendar today"):
+        assert not mode.ingest(vent).cards, (vent, signature(mode.ingest(vent)))
+
     asyncio.run(control_core_check())
     print("PASS owner_mode: noisy owner transcript -> shared durable action cards")
 

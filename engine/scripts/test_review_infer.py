@@ -34,7 +34,9 @@ from anticipy_engine.core.workers import BrowserStub, ChannelStub, ConnectorStub
 from anticipy_engine.core.workers.memory import MemoryWorker
 from anticipy_engine.live_memory.brain import LiveMemoryBrain
 from anticipy_engine.live_memory.remember import RememberList
-from anticipy_engine.live_memory.review_infer import ReviewEnricher, infer_line
+from anticipy_engine.live_memory.press_go import map_inferred_to_step
+from anticipy_engine.live_memory.review_infer import (
+    ReviewEnricher, infer_line, is_vent, is_vent_shape)
 from anticipy_engine.memory import Memory
 from anticipy_engine.shared.schema import now_ts
 
@@ -101,6 +103,64 @@ def check_extraction(fails):
     if "Priya" not in priya["people"] or not priya["due_phrase"]:
         fails.append(f"email/priya/tomorrow not extracted: {priya}")
     return examples
+
+
+# ---- Apollo wave 2 regression set: the inference-layer vent + recall holes ----
+# Laugh-hedged jokes, "forever"/destructive hyperbole, and sarcasm retorts that the SEPARATE
+# narrower review guard used to miss (while triage dropped them). is_vent() is now the single
+# source of truth and infer_line() short-circuits on it -> EMPTY task -> press-go hands back.
+LAUGH_HYPERBOLE_SARCASM_VENTS = [
+    "remind me to never agree to a 7am meeting again, lol",   # laugh-hedge (the breach line)
+    "remind me to quit this job haha",
+    "note that I should email the whole team jk",
+    "schedule a vacation for me forever",                     # "forever" hyperbole
+    "delete my whole calendar",                               # destructive whole-scope hyperbole
+    "wipe my entire inbox",
+    "yeah right I will call the dentist back at 3pm",         # sarcasm retort (was HIGH-conf task)
+    "as if I will finish the report by friday",
+]
+# Recall: an optional adverb between the first-person subject and the commit verb must NOT
+# lose the commitment; and the plain (no-adverb) commitment is unchanged.
+RECALL_COMMITMENTS = [
+    "I really need to email the landlord",
+    "I just have to call the dentist back",
+    "I actually need to renew the domain before it lapses",
+    "I definitely should follow up with the landlord on the lease",
+]
+
+
+def check_vent_recall_holes(fails):
+    """Apollo wave 2: laugh/hyperbole/sarcasm vents infer EMPTY (and press-go hands back,
+    executing nothing); 'I <adverb> need to X' recalls a task; no new false-action on a vent."""
+    for v in LAUGH_HYPERBOLE_SARCASM_VENTS:
+        if not is_vent(v):
+            fails.append(f"is_vent() (single source of truth) missed a vent: {v!r}")
+        inf = infer_line(v)
+        if inf["task"]:
+            fails.append(f"VENT over-claimed a task: {v!r} -> {inf}")
+        if inf["confidence"] != "low":
+            fails.append(f"VENT not low-confidence: {v!r} -> {inf}")
+        # the cardinal-sin proof: press-go can build NO executable step from a vent
+        step = map_inferred_to_step(inf, v)["step"]
+        if step is not None:
+            fails.append(f"press-go built an executable step from a VENT: {v!r} -> {step}")
+    # the joke/hyperbole/sarcasm family is also caught by the durable-card guard
+    for v in ("remind me to never agree to a 7am meeting again, lol",
+              "schedule a vacation for me forever", "delete my whole calendar"):
+        if not is_vent_shape(v):
+            fails.append(f"is_vent_shape() (durable-card guard) missed a joke/hyperbole: {v!r}")
+    # recall: the adverb-gapped commitment infers a task; a press-go note step CAN form
+    for c in RECALL_COMMITMENTS:
+        inf = infer_line(c)
+        if not inf["task"]:
+            fails.append(f"RECALL miss — adverb-gapped commitment lost: {c!r} -> {inf}")
+    # a REAL self-directed reminder still maps to a write_memory note (recall preserved)
+    real = infer_line("Remind me to renew the domain before friday")
+    if map_inferred_to_step(real, "Remind me to renew the domain before friday")["step"] is None:
+        fails.append("a REAL reminder no longer maps to a note step (recall regressed)")
+    # a clause-final laugh self-cancels, but a NON-final 'lol' is not a vent (recall guard)
+    if is_vent("lol I really need to email the landlord by friday"):
+        fails.append("mid-line 'lol' wrongly treated as a self-cancel (over-zealous guard)")
 
 
 def check_cache_economics(fails):
@@ -210,6 +270,7 @@ async def check_display_only_inertness(fails):
 async def main():
     fails = []
     examples = check_extraction(fails)
+    check_vent_recall_holes(fails)
     n_cached = check_cache_economics(fails)
     items_n, loops_n = await check_display_only_inertness(fails)
 
@@ -219,6 +280,8 @@ async def main():
         print(f"      {text!r}")
         print(f"          -> task={inf['task']!r} people={inf['people']} "
               f"due_phrase={inf['due_phrase']!r} confidence={inf['confidence']}")
+    print("  (a2) Apollo wave 2: laugh/hyperbole/sarcasm vents infer EMPTY (press-go builds "
+          "NO step); adverb-gapped 'I really need to X' recalls a task; is_vent single source")
     print(f"  (b) economics: cached {n_cached} enrichments once; 2nd pull re-inferred 0; "
           f"only new lines enriched")
     print(f"  (c) inert: cache table has no due/remind/trigger column; items rows={items_n} "

@@ -80,13 +80,48 @@ _VENT = re.compile(
     r"|\bwhatever\b(?!\s+(?:it|you|he|she|they|we|i|works?|costs?|happens?|the|amount|price|else|that|is|sounds?)\b)"
     r"|\bcan'?t wait to (?:waste|sit through|deal with)\b"
     r"|\boh (?:great|sure|wonderful|fantastic|joy)\b"        # sarcasm openers
+    # "yeah right" / "oh sure" sarcasm retorts (triage's _RP_RESOLVED kills these; the
+    # display guard was deaf to them, so "yeah right I'll call the dentist back at 3pm"
+    # was over-claimed as a HIGH-confidence task — the sarcasm-as-task hole).
+    r"|\byeah right\b|\bas if\b|\bsure i (?:will|'?ll)\b"
     r"|\bso (?:fun|great|much fun)\b"
     r"|\bmove to a beach\b|\bwin the lottery\b|\bquit my job\b",
     re.I,
 )
-# A trailing self-cancelling hedge ("... probably.", "we'll see") makes it a non-plan.
+# A trailing self-cancelling hedge ("... probably.", "we'll see") makes it a non-plan. A
+# clause-final LAUGH / JOKE tag does the SAME (this MIRRORS triage's _TRAILING_HEDGE, which
+# this display guard had diverged from): a laugh-hedged commitment self-cancels into a
+# joke/vent ("remind me to never agree to a 7am meeting again, lol"). Kept clause-final
+# only — "lol that meeting" mid-line is not a self-cancel, and every audited breach line
+# CLOSES on the laugh. Without this, infer_line() returned a non-empty task at med/high and
+# press-go mapped it to a real write_memory step — a joke persisted as a task (cardinal sin).
 _TRAILING_HEDGE = re.compile(
-    r"\b(?:probably|maybe|perhaps|hopefully|we'?ll see|i guess|or something)\b[\s.!…\"']*$",
+    r"\b(?:probably|maybe|perhaps|hopefully|we'?ll see|i guess|or something"
+    r"|lol|lmao|lmfao|rofl|haha+|jk|just kidding|kidding)\b[\s.!…\"')]*$",
+    re.I,
+)
+# The LAUGH/JOKE subset of the trailing hedge, clause-final. This is the joke-marker
+# half of the vent FAMILY (so the durable-card / active-drawer guards — is_vent_shape —
+# also catch a laugh-hedged line), kept distinct from the generic "probably/we'll see"
+# hedge which is a self-cancel but not an emotional vent.
+_LAUGH_HEDGE_VENT = re.compile(
+    r"\b(?:lol|lmao|lmfao|rofl|haha+|jk|just kidding|kidding)\b[\s.!…\"')]*$",
+    re.I,
+)
+# Hyperbolic / destructive exasperation no assistant could (or should) run — exasperated
+# venting, not a real handoff (MIRRORS triage's _DELEGATE_VENT). Two shapes: (1) a "forever"
+# / "for the rest of my life" / "and never come back" tail on a schedule/vacation/time-off
+# ask ("schedule a vacation for me forever") is a wish, not a bookable event; (2) a
+# destructive verb over a whole/entire personal life-asset scope ("delete my whole calendar",
+# "wipe my entire inbox", "burn it all down") is hyperbole. Both must yield an EMPTY task.
+_HYPERBOLE = re.compile(
+    r"\b(?:forever|for ?ever|for the rest of my life|for good|and never (?:come back|return)"
+    r"|till the end of time|for eternity|permanently and never)\b"
+    r"|\b(?:delete|wipe|erase|burn|torch|nuke|trash|scrap|blow up|set fire to)\b"
+    r"[\w' ]{0,30}?\b(?:whole|entire|everything|all of|all my"
+    r"|(?:my|this|the|that)\s+(?:calendar|inbox|schedule|email|account|life|day|week|"
+    r"job|career|to-?do list|todos?))\b"
+    r"|\bburn it all down\b",
     re.I,
 )
 # Retraction / countermand — the speaker calls the action OFF; not a standing task.
@@ -100,34 +135,47 @@ _COUNTERMAND = re.compile(
 
 
 def is_vent_shape(text: str) -> bool:
-    """The EMOTIONAL-vent / sarcasm shapes only (the _VENT family): kill-me, I-hate,
-    move-to-a-beach, I-could-scream, ugh/whatever, sarcasm openers. This is the guard the
-    owner CARD shaper uses, because a vent must never become a durable card — but it must
-    NOT include the countermand ("don't buy"), which in an owner command is a deliberate
-    no-purchase BOUND on a cart-prep card, not a retraction of a non-existent task."""
-    raw = (text or "").strip()
-    return bool(raw and _VENT.search(raw))
-
-
-def is_vent(text: str) -> bool:
-    """Single source of truth for 'this line is a vent / sarcasm / self-cancel / retraction,
-    NOT a task'. Acting on a vent — or persisting it as a durable actionable/profile memory —
-    is the cardinal sin, so every path that could create durable state from owner speech
-    (the active-drawer capture gate, the remember-card persister) gates on THIS. It is the
-    SUPERSET of is_vent_shape: it also catches a trailing self-cancel hedge and a countermand
-    ("never mind", "forget it"), which are non-tasks on the inference/persist path."""
+    """The EMOTIONAL-vent / sarcasm / joke / hyperbole shapes (the _VENT family): kill-me,
+    I-hate, move-to-a-beach, I-could-scream, ugh/whatever, sarcasm openers ("yeah right"),
+    a clause-final laugh/joke tag ("..., lol"), and destructive/"forever" hyperbole. This is
+    the guard the owner CARD shaper and the active-drawer capture gate use, because a vent /
+    joke must never become a durable card or active memory. It deliberately does NOT include
+    the countermand ("don't buy"), which in an owner command is a deliberate no-purchase
+    BOUND on a cart-prep card, not a retraction of a non-existent task."""
     raw = (text or "").strip()
     if not raw:
         return False
-    return bool(_VENT.search(raw) or _TRAILING_HEDGE.search(raw) or _COUNTERMAND.search(raw))
+    return bool(_VENT.search(raw) or _LAUGH_HEDGE_VENT.search(raw)
+                or _HYPERBOLE.search(raw))
+
+
+def is_vent(text: str) -> bool:
+    """Single source of truth for 'this line is a vent / sarcasm / joke / self-cancel /
+    retraction, NOT a task'. Acting on a vent — or persisting it as a durable actionable/
+    profile memory — is the cardinal sin, so every path that could create durable state from
+    owner speech (the active-drawer capture gate, the remember-card persister, the press-go
+    inference) gates on THIS. It is the SUPERSET of is_vent_shape: it also catches a trailing
+    self-cancel hedge ("... probably.", "..., lol") and a countermand ("never mind", "forget
+    it"), which are non-tasks on the inference/persist path."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    return bool(is_vent_shape(raw) or _TRAILING_HEDGE.search(raw)
+                or _COUNTERMAND.search(raw))
 
 # A real first-person commitment / task shape. High recall is fine here — the vent guard
 # above runs FIRST, and confidence downgrades anything thin. These are the everyday
 # obligation phrasings (the same family the capturer's _COMMIT and the 5 prior misses use).
+# RECALL FIX: an optional intensity adverb may sit between the first-person subject and the
+# commit verb ("I really need to email the landlord", "I just have to call the dentist") —
+# the bare lexicon was deaf to it and silently dropped the commitment. The adverb is OPTIONAL
+# so the plain "I need to ..." shape is unchanged; the vent guard still runs first.
+_ADV = r"(?:really|actually|just|definitely|totally|gonna|kinda|honestly|seriously)?\s*"
 _COMMIT = re.compile(
-    r"\b(i'?ll|i will|i need to|i have to|i've got to|i gotta|gotta|"
-    r"remind me|don'?t forget|make sure|i told|i promised|i said i'?d|"
-    r"i want to|i'?m going to|i should)\b",
+    r"\bi'?ll\b|\bi will\b|\bi've got to\b|\bi gotta\b|\bgotta\b|"
+    r"\bremind me\b|\bdon'?t forget\b|\bmake sure\b|\bi told\b|\bi promised\b|"
+    r"\bi said i'?d\b|\bi'?m going to\b|"
+    r"\bi\s+" + _ADV + r"(?:need to|have to|want to|should)\b",
     re.I,
 )
 # An explicit standing imperative ("Renew the domain", "Follow up with the landlord").
@@ -153,12 +201,15 @@ _DUE_PHRASE = re.compile(
     re.I,
 )
 
-# Lead-in fillers we trim off the front of a derived task imperative.
+# Lead-in fillers we trim off the front of a derived task imperative. The optional adverb
+# (_ADV) mirrors _COMMIT so "I really need to email the landlord" trims cleanly to "Email
+# the landlord" rather than leaking the adverb into the displayed task.
 _LEADIN = re.compile(
-    r"^(?:i'?ll|i will|i need to|i have to|i've got to|i gotta|gotta|"
-    r"remind me to|don'?t forget to|make sure (?:to|i)|i should|i want to|"
+    r"^(?:i'?ll|i will|i've got to|i gotta|gotta|"
+    r"remind me to|don'?t forget to|make sure (?:to|i)|i should|"
     r"i'?m going to|i told \w+ i'?d|i promised \w+ i'?d|i said i'?d|"
-    r"i told \w+ i would|please)\s+",
+    r"i told \w+ i would|please|"
+    r"i\s+" + _ADV + r"(?:need to|have to|want to|should))\s+",
     re.I,
 )
 _VERB_CAP = {
@@ -210,8 +261,11 @@ def infer_line(text: str, people_hint: Optional[List[str]] = None) -> Dict[str, 
     due_m = _DUE_PHRASE.search(raw)
     due_phrase = re.sub(r"\s+", " ", due_m.group(0)).strip(" ,.;") if due_m else None
 
-    # Honesty guard: refuse to claim a task on a vent / sarcasm / self-cancel / retraction.
-    if _VENT.search(raw) or _TRAILING_HEDGE.search(raw) or _COUNTERMAND.search(raw):
+    # Honesty guard: refuse to claim a task on a vent / sarcasm / joke / self-cancel /
+    # retraction. is_vent() is the SINGLE SOURCE OF TRUTH (shared with the capture gate and
+    # the owner-card shaper), so this display/inference path can never diverge from them and
+    # under-guard a joke ("..., lol") or hyperbole the way the old inline check did.
+    if is_vent(raw):
         return {"task": "", "people": people, "due_phrase": due_phrase,
                 "confidence": CONF_LOW}
 

@@ -88,6 +88,28 @@ _VENT_OR_JOKE = re.compile(
     r"can'?t believe|sarcasm|lol|haha)\b",
     re.I,
 )
+# RECALL FALLBACK: a clause-INITIAL scheduling/contact action verb (the prompt's named set
+# book/schedule/call/meet, plus the reschedule/rebook synonyms) plus an explicit time signal
+# is a bare actionable line ("Book the dentist at 3pm tomorrow", "Call the plumber this
+# afternoon", "Schedule the review for Monday") — these carry no "remind me"/"I need to"
+# lead-in, no person-send shape, and no money/browser word, so every shape above was deaf to
+# them. Clause-initial anchor (after a few spoken lead words) keeps narration out ("the
+# dentist booked me for 3pm" is subject-led, never fires); the time signal (_TIMEISH) is
+# REQUIRED so a bare "call the dentist" with no anchor still falls through. The verb set is
+# kept tight on purpose: open phrasals like "set up ..." stay UNSHAPED so the proven spine
+# keeps catching+executing them as execute_owner_task (the F17 catch path), and an anaphoric
+# "Book the Tuesday morning one" still resolves through the spine's memory slot path. The
+# cardinal-sin guard (is_vent_shape) has already returned above, so a hyperbolic "schedule a
+# vacation for me forever" never reaches here.
+_BARE_ACTION_VERB = re.compile(
+    r"^(?:(?:just|please|also|then|and|so|ok|okay|now|first|hey|oh)[,\s]+)*"
+    r"(book|schedule|reschedule|rebook|call|meet)\b",
+    re.I,
+)
+# An anaphoric booking that defers to memory context ("Book the Tuesday morning ONE with
+# Marta") is resolved by the spine's slot path, not this flat regex card — let it fall
+# through so the spine keeps its richer create_event resolution.
+_ANAPHORIC_SLOT = re.compile(r"\bthe\s+[\w\s]{0,30}?\bone\b", re.I)
 _FILLER = {
     "yeah",
     "yep",
@@ -319,6 +341,26 @@ class OwnerMode:
                 args={"task_text": text},
                 confidence=0.58,
                 reason="possible request but not enough structure to act",
+            )
+
+        # FALLBACK: a bare actionable line — a clause-initial scheduling/contact verb plus a
+        # concrete time — that none of the shapes above caught. Routed to the same api
+        # calendar/reminder action the pickup shape uses; the proven spine (triage -> decider
+        # -> harm-line) still makes the real act/ask/silent call downstream. The time signal
+        # is required so a vague "call the dentist" with no anchor still falls through to None.
+        if (_BARE_ACTION_VERB.search(text) and _TIMEISH.search(text)
+                and not _ANAPHORIC_SLOT.search(text) and not _VENT_OR_JOKE.search(text)):
+            return OwnerTaskCard(
+                source=source,
+                line_no=line.line_no,
+                source_text=text,
+                title="Schedule or place a timed action",
+                disposition="do",
+                route="api",
+                action="create_calendar_or_reminder",
+                args={"task_text": text, "kind": "timed_action"},
+                confidence=0.7,
+                reason="clause-initial scheduling/contact verb with a concrete time",
             )
 
         return None

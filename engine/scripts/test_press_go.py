@@ -50,6 +50,11 @@ SEND = "Send Sam the revised decking file."
 MONEY = "Pay the vendor $500 for the filter today."
 MESSAGE = "Message Priya on Slack about the vendor call."
 VENT = "ugh I should just quit my job and move to a beach"
+# Apollo wave 2 breach line: a laugh-hedged JOKE in a "remind me to ..." shape. Before the
+# fix, review_infer's narrower guard let infer_line().task be non-empty, so the mapper's
+# _NOTE_RAW path built a write_memory step and press-go AUTO-EXECUTED a joke as a task (the
+# cardinal sin). is_vent() is now the single source of truth -> EMPTY task -> handback.
+LAUGH_VENT = "remind me to never agree to a 7am meeting again, lol"
 
 
 async def _seed(core: ControlCore, text: str) -> str:
@@ -213,6 +218,7 @@ async def check_vent_and_no_autofire(fails):
         await _seed_inert(core, CALENDAR)
         await _seed_inert(core, MONEY)
         vent_id = await _seed_inert(core, VENT)
+        laugh_id = await _seed_inert(core, LAUGH_VENT)
 
         vent = await core.approve_remembered(vent_id)
         if vent.get("approved") is not False:
@@ -222,6 +228,15 @@ async def check_vent_and_no_autofire(fails):
         if "vent" not in (vent.get("reason") or "").lower() and \
                 "no confident" not in (vent.get("reason") or "").lower():
             fails.append(f"VENT reason not a vent stop: {vent}")
+
+        # CARDINAL-SIN REGRESSION PIN (Apollo wave 2): the laugh-hedged "remind me to ..."
+        # joke must hand back — denied, NO goal, NO execution — even though it carries the
+        # _NOTE_RAW "remind me to" shape the mapper would otherwise turn into a write_memory.
+        laugh = await core.approve_remembered(laugh_id)
+        if laugh.get("approved") is not False:
+            fails.append(f"LAUGH-HEDGED JOKE was not denied (cardinal sin): {laugh}")
+        if laugh.get("goal_id") or laugh.get("executed"):
+            fails.append(f"LAUGH-HEDGED JOKE executed/created a goal (cardinal sin): {laugh}")
 
         # trigger_tick now AND +10y must fire ZERO off the remembered store, and must not
         # invoke the orchestrator (the only execution trigger is the explicit approve).
