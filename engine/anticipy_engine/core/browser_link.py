@@ -17,18 +17,18 @@ from .navwall import nav_block_reason
 def _walled_nav_url(intent: str, args: dict) -> Optional[str]:
     """If this browse job would navigate the browser, return the target URL; else None.
 
-    Both transports funnel navigation through ``send_browse``: an ``observe`` with a ``url``
-    re-points the tab, and an ``act`` with ``action == "navigate"`` carries the model's own
-    ``url``. Either is a navigation the hard wall must vet before it reaches the browser.
+    EVERY intent that carries a starting ``url`` navigates the tab and MUST be vetted by the
+    hard wall before it reaches Chrome: ``observe`` re-points the tab, ``act``/``navigate``
+    carries the model's own ``url``, and ``read_page`` / ``browse_task`` / ``prepare_form`` all
+    open a starting ``url``. The earlier version vetted only observe + act/navigate, leaving
+    read_page/browse_task/prepare_form as an SSRF hole (a private/metadata/credential URL
+    reached the browser unvetted). Only a non-navigating ``act`` (click/type/scroll) is exempt.
     """
     args = args or {}
-    if intent == "observe":
-        url = args.get("url")
-        return str(url).strip() if url else None
-    if intent == "act" and str(args.get("action") or "").strip() == "navigate":
-        url = args.get("url")
-        return str(url).strip() if url else None
-    return None
+    if intent == "act" and str(args.get("action") or "").strip() != "navigate":
+        return None
+    url = args.get("url")
+    return str(url).strip() if url else None
 
 
 class BrowserLink:
@@ -78,7 +78,11 @@ class BrowserLink:
         # defense-in-depth; this is the wall that actually stops the navigate.
         nav_url = _walled_nav_url(intent, args)
         if nav_url is not None:
-            reason = nav_block_reason(nav_url)
+            # nav_block_reason may do a (blocking) DNS resolve; run it OFF the event loop so a
+            # slow resolver can never stall the engine. nav_block_reason is itself DNS-timeout
+            # bounded (navwall), so this executor call returns promptly either way.
+            _loop = asyncio.get_running_loop()
+            reason = await _loop.run_in_executor(None, nav_block_reason, nav_url)
             if reason:
                 return {
                     "type": "result",

@@ -38,11 +38,26 @@ classes, and is off by default.
 """
 from __future__ import annotations
 
+import concurrent.futures as _cf
 import ipaddress
 import os
 import re
 import socket
 import urllib.parse
+
+# DNS resolution can hang on a slow/hostile resolver. Run it in a tiny bounded thread pool so a
+# single navigate can never stall the engine forever; on timeout we fail SAFE toward "does not
+# resolve" (the exact/suffix internal checks already ran first). Callers on the async path should
+# additionally run nav_block_reason in an executor (the engine browser transport does).
+_RESOLVE_POOL = _cf.ThreadPoolExecutor(max_workers=4, thread_name_prefix="navwall-dns")
+_RESOLVE_TIMEOUT_S = 3.0
+
+
+def _getaddrinfo_bounded(host: str, port: int | None):
+    fut = _RESOLVE_POOL.submit(
+        socket.getaddrinfo, host, port or None, 0, socket.SOCK_STREAM, socket.IPPROTO_TCP
+    )
+    return fut.result(timeout=_RESOLVE_TIMEOUT_S)
 
 # Only these schemes may be navigated. Everything else (file/chrome/data/javascript/blob/
 # about/view-source/devtools/...) is denied at class 1.
@@ -165,10 +180,12 @@ def _name_resolves_nonpublic(host: str, port: int | None) -> bool:
     the browser will fail the navigate honestly. Resolver errors fail safe toward False here
     because the suffix/exact internal checks already ran first."""
     try:
-        infos = socket.getaddrinfo(host, port or None, proto=socket.IPPROTO_TCP)
+        infos = _getaddrinfo_bounded(host, port)
     except socket.gaierror:
         return False
     except Exception:
+        # includes concurrent.futures.TimeoutError on a slow resolver -> fail safe (the
+        # exact/suffix internal checks already ran; an unresolvable name reaches nothing internal)
         return False
     seen = 0
     for info in infos:

@@ -32,10 +32,24 @@ class GoalStore:
 
     def load(self, goal_id: str) -> Optional[Goal]:
         p = self._path(goal_id)
-        return Goal.model_validate_json(p.read_text()) if p.exists() else None
+        if not p.exists():
+            return None
+        try:
+            return Goal.model_validate_json(p.read_text())
+        except Exception:
+            # a corrupt/truncated/partially-written goal file is not loadable -> None, never raise
+            return None
 
     def all(self) -> List[Goal]:
-        return [Goal.model_validate_json(p.read_text()) for p in sorted(self.dir.glob("*.json"))]
+        # ROBUSTNESS: a single corrupt/truncated goal file must NOT crash every scan (approve,
+        # idempotency check, /pending, trigger tick all call this). Skip unreadable files.
+        out: List[Goal] = []
+        for p in sorted(self.dir.glob("*.json")):
+            try:
+                out.append(Goal.model_validate_json(p.read_text()))
+            except Exception:
+                continue
+        return out
 
     def waiting(self) -> List[Goal]:
         return [g for g in self.all() if g.state == GoalState.waiting]

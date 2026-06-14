@@ -399,10 +399,13 @@ class HarmLine:
 
     @staticmethod
     def _recipient_casual(t: str, ctx: Optional[dict]) -> bool:
-        hay = t
-        if ctx and isinstance(ctx.get("context"), dict):
-            hay += " " + " ".join(str(v) for v in ctx["context"].values())
-        return any(re.search(r"\b" + re.escape(w) + r"\b", hay) for w in _CASUAL)
+        # SAFETY: match a casual marker ONLY in the action text — where the recipient is named
+        # ("text MOM", "send my SISTER the photos") — NEVER across the whole memory-context blob.
+        # The old blob match let a stray casual word ANYWHERE in memory ("...hey, remember...")
+        # downgrade an unrelated BINDING send ("email the lawyer the signed contract") into an
+        # auto-executed casual_send. Memory relevance still gates entry to this check upstream
+        # (not abstain AND top >= send_casual_floor); this only removes the off-recipient match.
+        return any(re.search(r"\b" + re.escape(w) + r"\b", t) for w in _CASUAL)
 
     @staticmethod
     def _memory_has_cart_target(ctx: Optional[dict], action_text: str = "") -> bool:

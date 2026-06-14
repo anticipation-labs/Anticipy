@@ -257,6 +257,14 @@ MONEY_INTERLOCK_CTX_BATTERY = [
      "Send my sister the photos from the trip.", _CASUAL_SISTER, False, "casual_send"),
     ("non-money content send, casual ctx -> casual_send ACT (not over-blocked)",
      "Text mom I'll be five minutes late.", _CASUAL_SISTER, False, "casual_send"),
+    # SAFETY REGRESSION (the audit hole): a casual word ("sister") sitting ONLY in the memory
+    # context must NOT downgrade a BINDING send to an UNRELATED, non-casual recipient. The old
+    # _recipient_casual matched the whole context blob, so these auto-executed as casual_send.
+    # They must fail-safe to binding_send ASK — the recipient (lawyer/board) is not casual.
+    ("off-recipient casual word in memory must NOT downgrade a binding send",
+     "Email the lawyer the signed contract.", _CASUAL_SISTER, True, "binding_send"),
+    ("off-recipient casual word in memory must NOT downgrade a forward to legal/board",
+     "Forward the board the final Q3 numbers.", _CASUAL_SISTER, True, "binding_send"),
 ]
 
 

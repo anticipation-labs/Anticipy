@@ -136,13 +136,12 @@ def _allowed_domains(url: str) -> list[str] | None:
     if _is_ip_literal(host):
         return [host]
     bare = host[4:] if host.startswith("www.") else host
+    # Lock to the EXACT host (+ its www/non-www variant). The earlier `*.<last-two-labels>`
+    # wildcard was WRONG for multi-label public suffixes: for `foo.co.uk` it emitted `*.co.uk`,
+    # opening the ENTIRE .co.uk registry as "same-site" (an off-domain wall bypass). A single
+    # read task only ever needs its own host, so no apex wildcard is added for normal domains.
     patterns = {host, bare, f"www.{bare}"}
-    labels = bare.split(".")
-    if len(labels) >= 2:
-        apex = ".".join(labels[-2:])
-        patterns.add(apex)
-        patterns.add(f"*.{apex}")
-    else:
+    if "." not in bare:
         # Single-label host (e.g. localhost): allow exactly it and its subdomains.
         patterns.add(f"*.{bare}")
     return sorted(patterns)
