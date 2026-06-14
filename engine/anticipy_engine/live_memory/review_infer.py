@@ -68,9 +68,16 @@ CONF_LOW = "low"
 # ---------------------------------------------------------------------------
 _VENT = re.compile(
     r"\bi should just\b"                       # "I should just quit my job"
-    r"|\bi'?m (?:gonna|going to) scream\b"
+    # "scream" in any vent framing: gonna/going to/could/want to/wanna/just wanna scream
+    r"|\bi'?(?:m| am)? ?(?:gonna|going to|could|just )?(?:wann?a|want to)? ?scream\b"
     r"|\bi'?d (?:lose|kill|die|scream|cry|murder|strangle)\b"
-    r"|\b(?:ugh|meh|eh|whatever|sigh)\b"
+    r"|\b(?:kill me|shoot me|end me)\b"                       # "kill me now"
+    r"|\bi (?:hate|can'?t stand|loathe|despise)\b"           # "I hate this/my job/everything"
+    r"|\bi(?:'?m| am) so done\b"
+    r"|\b(?:ugh|meh|eh|sigh)\b"
+    # "whatever" as a dismissive interjection ("ugh whatever") — NOT the quantifier
+    # "pay whatever it costs" / "whatever works for you", which is a real instruction.
+    r"|\bwhatever\b(?!\s+(?:it|you|he|she|they|we|i|works?|costs?|happens?|the|amount|price|else|that|is|sounds?)\b)"
     r"|\bcan'?t wait to (?:waste|sit through|deal with)\b"
     r"|\boh (?:great|sure|wonderful|fantastic|joy)\b"        # sarcasm openers
     r"|\bso (?:fun|great|much fun)\b"
@@ -90,6 +97,29 @@ _COUNTERMAND = re.compile(
     r"|\b(?:never ?mind|scratch that|forget it|hold off|on second thought)\b",
     re.I,
 )
+
+
+def is_vent_shape(text: str) -> bool:
+    """The EMOTIONAL-vent / sarcasm shapes only (the _VENT family): kill-me, I-hate,
+    move-to-a-beach, I-could-scream, ugh/whatever, sarcasm openers. This is the guard the
+    owner CARD shaper uses, because a vent must never become a durable card — but it must
+    NOT include the countermand ("don't buy"), which in an owner command is a deliberate
+    no-purchase BOUND on a cart-prep card, not a retraction of a non-existent task."""
+    raw = (text or "").strip()
+    return bool(raw and _VENT.search(raw))
+
+
+def is_vent(text: str) -> bool:
+    """Single source of truth for 'this line is a vent / sarcasm / self-cancel / retraction,
+    NOT a task'. Acting on a vent — or persisting it as a durable actionable/profile memory —
+    is the cardinal sin, so every path that could create durable state from owner speech
+    (the active-drawer capture gate, the remember-card persister) gates on THIS. It is the
+    SUPERSET of is_vent_shape: it also catches a trailing self-cancel hedge and a countermand
+    ("never mind", "forget it"), which are non-tasks on the inference/persist path."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    return bool(_VENT.search(raw) or _TRAILING_HEDGE.search(raw) or _COUNTERMAND.search(raw))
 
 # A real first-person commitment / task shape. High recall is fine here — the vent guard
 # above runs FIRST, and confidence downgrades anything thin. These are the everyday

@@ -6,6 +6,7 @@ layer and the tests drive it through `feed()` and `resume()`.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -227,6 +228,13 @@ class ControlCore:
         # In-memory by design — the durable linkage survives in the record's
         # execution.goal_id field and resolve() falls back to scanning for it (F18).
         self._owner_card_goals: dict = {}
+        # Per-line press-go locks: approve_remembered's load-check-build-drive must be
+        # ATOMIC per line so two concurrent presses of the SAME line cannot both pass the
+        # "prior goal not done yet" check and double-fire a real write. Keyed on the stable
+        # goal_id derived from line_id; created under _press_go_locks_guard so the registry
+        # itself is race-free.
+        self._press_go_locks: dict[str, asyncio.Lock] = {}
+        self._press_go_locks_guard = asyncio.Lock()
 
     async def start(self) -> None:
         await self.bus.start()
@@ -566,8 +574,16 @@ class ControlCore:
             if existing is not None:
                 cards.append(existing)
                 continue
+            persisted = self._persist_card(card, source, execute_actions,
+                                           captured_by_line.get(line.line_no))
+            if not persisted:
+                # vent caught by the persist-side cardinal-sin guard: nothing durable was
+                # written, so it is not a card — treat it as ignored (no active memory).
+                ignored += 1
+                if execute_actions:
+                    ignored_captures.append((captured_by_line.get(line.line_no), line.line_no))
+                continue
             cards.append(card)
-            self._persist_card(card, source, execute_actions, captured_by_line.get(line.line_no))
 
         # Do not close "ignored" captures while later lines in the same messy
         # transcript may still need them as memory context. A line like "I was
@@ -587,10 +603,29 @@ class ControlCore:
         return result.model_dump(mode="json")
 
     def _persist_card(self, card: OwnerTaskCard, source: str, execute_actions: bool,
-                      capture_result: dict | None = None) -> None:
+                      capture_result: dict | None = None) -> bool:
         """Write one card into the real memory drawers and its durable goal-shaped
         record, mirroring REAL execution: done requires a goal that finished with
-        proof (or a read-back memory write) — a card that never ran stays open."""
+        proof (or a read-back memory write) — a card that never ran stays open.
+
+        Returns False (and persists NOTHING durable) when the card is a vent that
+        slipped through as a 'remember' shape — the cardinal-sin guard, defense in depth.
+        """
+        from ..live_memory.review_infer import is_vent_shape
+
+        # CARDINAL-SIN GUARD (defense in depth): a 'remember' card writes the spoken line
+        # into the ACTIVE profile drawer unconditionally. A vent ("I hate this", "kill me",
+        # "I could scream", "I should just move to a beach") must NEVER become a durable
+        # active profile memory — even in preview, persisting it is the cardinal-sin echo.
+        # _card_for_line already drops vents, so this only fires if a remember card reaches
+        # here some other way; it then persists nothing (no profile write, no record). Uses
+        # the _VENT-family shape (not the countermand) so a genuine preference phrased with
+        # "don't" ("I prefer you don't call after 9") is still remembered.
+        if card.disposition == "remember" and is_vent_shape(card.source_text):
+            self.glassbox.log("vent_not_persisted",
+                              {"owner_card_id": card.id, "source": source,
+                               "source_text": card.source_text})
+            return False
         fields = {
             "owner_card_id": card.id,
             "owner_card_dedupe_key": _owner_card_dedupe_key(card),
@@ -699,6 +734,7 @@ class ControlCore:
         }
         record_path.parent.mkdir(parents=True, exist_ok=True)
         record_path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+        return True
 
     def _existing_owner_card(self, card: OwnerTaskCard) -> OwnerTaskCard | None:
         """Return the durable card for an accidental replay, before re-executing."""
@@ -1070,7 +1106,27 @@ class ControlCore:
         STEP C WHITELIST GATE (default-deny, structural): execute ONLY if intent in
         WHITELIST; everything else is prepared-and-handed-back, never executed. Money/send/
         message land in handback because no such intent is in the set.
+
+        CONCURRENCY: the whole load-check-build-drive runs under a per-line lock so two
+        concurrent presses of the SAME line serialize. The second press, once it acquires
+        the lock, finds the first press's goal already done and returns its receipt
+        (idempotent) — exactly ONE real write. The lock is keyed on the stable goal_id
+        derived from line_id, so different lines never block each other.
         """
+        goal_id = "rmb-" + hashlib.sha256(line_id.encode()).hexdigest()[:24]
+        lock = await self._press_go_lock_for(goal_id)
+        async with lock:
+            return await self._approve_remembered_locked(line_id, goal_id)
+
+    async def _press_go_lock_for(self, goal_id: str) -> asyncio.Lock:
+        async with self._press_go_locks_guard:
+            lock = self._press_go_locks.get(goal_id)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._press_go_locks[goal_id] = lock
+            return lock
+
+    async def _approve_remembered_locked(self, line_id: str, goal_id: str) -> dict:
         from ..live_memory.review_infer import infer_line
         from ..live_memory.press_go import WHITELIST, map_inferred_to_step
 
@@ -1125,11 +1181,12 @@ class ControlCore:
         # resolve_ask's already-stepped (_approve_waiting_goal + _drive) path, so no
         # planner can widen the single step into a non-whitelisted write.
         #
-        # Line-level idempotency: derive a STABLE goal id from the line_id so re-pressing
-        # the same line reuses the same goal. If that goal already ran to done, return its
-        # receipt without re-driving — the endpoint is safe to re-press (no double-create
-        # of a calendar hold / draft).
-        goal_id = "rmb-" + hashlib.sha256(line_id.encode()).hexdigest()[:24]
+        # Line-level idempotency: ``goal_id`` is a STABLE id derived from the line_id (by
+        # the locking wrapper) so re-pressing the same line reuses the same goal. If that
+        # goal already ran to done, return its receipt without re-driving — the endpoint is
+        # safe to re-press (no double-create of a calendar hold / draft). The per-line lock
+        # held by the wrapper makes this load-check-build-drive atomic, so a CONCURRENT
+        # second press also lands here only after the first completed and finds it done.
         prior = self.store.load(goal_id)
         if prior is not None and prior.state == GoalState.done:
             self.glassbox.log("press_go_idempotent",

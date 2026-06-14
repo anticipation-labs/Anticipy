@@ -14,6 +14,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from .core.envelopes import new_id
+from .live_memory.review_infer import is_vent_shape
 
 OwnerSource = Literal["pay_to_try", "start_listening", "mp3", "transcript", "typed", "app", "mac_mic", "pendant_phone"]
 OwnerDisposition = Literal["do", "ask", "remember", "blocked"]
@@ -194,6 +195,19 @@ class OwnerMode:
         text = line.text
         lowered = text.lower()
         if _is_filler(text):
+            return None
+
+        # CARDINAL-SIN GUARD (runs FIRST): a vent / sarcasm / self-cancel is NOT a task and
+        # must never become a durable card — including a "remember" profile card. The bare
+        # _PROFILE regex below treats "I hate ..." as a preference; an angry "I hate this,
+        # kill me, I could scream, I should just move to a beach" line would otherwise be
+        # persisted as an ACTIVE profile memory (the cardinal-sin echo, even in preview).
+        # is_vent_shape() is the shared review_infer guard for the _VENT family (emotional
+        # vents + sarcasm), so the owner card path and the display path agree on what is a
+        # vent. It deliberately EXCLUDES the countermand ("don't buy"), which on an owner
+        # command is a no-purchase BOUND on a cart-prep card, not a retraction. The raw line
+        # is still captured upstream as inert memory; refusing to SHAPE a vent loses nothing.
+        if is_vent_shape(text):
             return None
 
         if _PROFILE.search(text):

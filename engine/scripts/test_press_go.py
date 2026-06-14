@@ -220,6 +220,50 @@ async def check_vent_and_no_autofire(fails):
         await core.stop()
 
 
+async def check_concurrent_double_approve(fails):
+    """REGRESSION PIN (Apollo fix A): two CONCURRENT presses of the SAME remembered line
+    must produce EXACTLY ONE real write (no duplicate calendar hold / draft). Before the
+    fix, both presses passed the 'prior goal not done yet' check and both fired the hand;
+    the per-line lock in approve_remembered + the ApiHand in-flight reservation now serialize
+    them, so the second press lands on the first's done goal and returns its receipt."""
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-pressgo-race-"))
+    core = ControlCore(data_dir=tmp)
+    await core.start()
+    try:
+        # count REAL write executions at the hand (the actual mutation site). Widen the
+        # race window with a small sleep so a naive (unlocked) impl would double-fire.
+        hand = core.api_hand
+        writes = {"n": 0}
+        real_execute = hand._execute
+
+        async def counting_execute(job, tool, ikey, *, is_write):
+            if is_write:
+                writes["n"] += 1
+                await asyncio.sleep(0.05)
+            return await real_execute(job, tool, ikey, is_write=is_write)
+
+        hand._execute = counting_execute
+
+        cal_id = await _seed(core, CALENDAR)
+        r1, r2 = await asyncio.gather(
+            core.approve_remembered(cal_id),
+            core.approve_remembered(cal_id),
+        )
+        if writes["n"] != 1:
+            fails.append(f"concurrent double-approve fired {writes['n']} real writes "
+                         f"(must be exactly 1): r1={r1} r2={r2}")
+        if not (r1.get("approved") and r2.get("approved")):
+            fails.append(f"both concurrent presses should be approved: {r1} | {r2}")
+        if not (r1.get("idempotent") or r2.get("idempotent")):
+            fails.append(f"one concurrent press must be the idempotent winner: {r1} | {r2}")
+        if r1.get("goal_id") != r2.get("goal_id"):
+            fails.append(f"concurrent presses produced different goals (double-create): "
+                         f"{r1.get('goal_id')} vs {r2.get('goal_id')}")
+        return writes["n"], r1, r2
+    finally:
+        await core.stop()
+
+
 def check_mapper_units(fails):
     """Pure-mapper sanity: the whitelist is exactly the three reversible intents, and the
     mapper never maps a binding send/money/message INTO the whitelist."""
@@ -240,6 +284,7 @@ async def main():
     cal, draft, note = await check_whitelist_executes(fails)
     hb, counts = await check_nonwhitelist_handback(fails)
     vent, fired_now, fired_future = await check_vent_and_no_autofire(fails)
+    race_writes, race_r1, race_r2 = await check_concurrent_double_approve(fails)
 
     print("==== DEFAULT-DENY PRESS-GO ====")
     print(f"  (1) WHITELIST executes via orchestrator + read-back:")
@@ -255,6 +300,8 @@ async def main():
               f"intent={r.get('intent')} why={r.get('why_handback')!r}")
     print(f"  (3) VENT approved={vent.get('approved')} reason={vent.get('reason')!r}; "
           f"trigger_tick now+10y fired {len(fired_now)}+{len(fired_future)} (must be 0)")
+    print(f"  (4) CONCURRENT double-approve of one line -> {race_writes} real write(s) "
+          f"(must be 1); idempotent winner={race_r1.get('idempotent') or race_r2.get('idempotent')}")
 
     if fails:
         print("==== FAIL ===="); [print("   -", f) for f in fails]; raise SystemExit(1)

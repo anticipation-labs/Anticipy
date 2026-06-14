@@ -320,7 +320,11 @@ async def owner_lane_check():
         for i in core.memory.open_loops.all()
         if not i.fields.get("owner_card_id")
     }
-    assert raw_loop_status.get(NOISE) == "ignored", raw_loop_status
+    # CARDINAL-SIN PIN: a sarcastic vent ("oh sure, I'll just clone myself...") must NEVER
+    # become a durable ACTIVE open_loop. It used to land as an active loop later downgraded
+    # to "ignored"; the capture-side vent guard now blocks the active write entirely, so the
+    # vent leaves NO active raw loop at all (it survives only on the inert remember list).
+    assert NOISE not in raw_loop_status, raw_loop_status
     assert raw_loop_status.get(PICKUP) == "open", raw_loop_status
     assert raw_loop_status.get(MONEY) == "blocked", raw_loop_status
     assert raw_loop_status.get(CLARIFY) == "declined", raw_loop_status
@@ -354,13 +358,49 @@ async def yes_roundtrip_check():
     assert raw_loops and raw_loops[0].status == "done", [i.model_dump(mode="json") for i in raw_loops]
 
 
+async def vent_no_active_memory_check():
+    """REGRESSION PIN (Apollo fix B — cardinal sin, even in preview): an adversarial vent
+    fed via owner-ingest leaves NO durable ACTIVE actionable/profile memory. Before the fix
+    a vent matching the profile/commit shapes ("I hate this", "I should just move to a
+    beach") was written to the ACTIVE profile/open_loop drawer (the cardinal-sin echo). The
+    raw line still survives on the INERT, pull-only remember list (context preserved)."""
+    from anticipy_engine.memory.store import is_active_open_loop
+
+    vents = [
+        "I hate this, kill me",
+        "I could scream",
+        "ugh I should just quit my job and move to a beach",
+        "oh sure, I'll just clone myself, that'll fix the schedule.",
+        "whatever, this is pointless",
+    ]
+    tmp = Path(tempfile.mkdtemp(prefix="anticipy-ownerev-vent-"))
+    core = ControlCore(data_dir=tmp)
+    await core.start()
+    try:
+        for v in vents:
+            out = await core.owner_ingest("transcript", v, execute_actions=True)
+            # no executing/remember card was shaped from a vent
+            assert not out["cards"], (v, out["cards"])
+        active_profile = [i for i in core.memory.profile.all() if i.status == "active"]
+        active_loops = [i for i in core.memory.open_loops.all() if is_active_open_loop(i)]
+        assert not active_profile, [i.text for i in active_profile]
+        assert not active_loops, [i.text for i in active_loops]
+        # context is NOT lost: the raw lines remain on the inert, pull-only remember list
+        inert = {r["text"] for r in core.live_memory.capturer.remember.all()}
+        assert all(v in inert for v in vents), inert
+    finally:
+        await core.stop()
+
+
 def main():
     asyncio.run(default_path_check())
     asyncio.run(owner_lane_check())
     asyncio.run(yes_roundtrip_check())
+    asyncio.run(vent_no_active_memory_check())
     print("PASS owner_ingest_event: ONE BRAIN (F17) — the proven spine rules every owner "
           "line (catches the regex-unshapeable, never a paper act/ask), cards EXECUTE with "
-          "proof write-back, real /pending YES/NO, money never executes; default path untouched")
+          "proof write-back, real /pending YES/NO, money never executes; a vent leaves no "
+          "durable active memory; default path untouched")
 
 
 if __name__ == "__main__":

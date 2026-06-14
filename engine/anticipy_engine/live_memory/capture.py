@@ -17,7 +17,7 @@ from ..memory.store import Memory
 from ..shared.schema import MemoryItem
 from .duetime import REMIND_LEAD_S, anchor_from_meta, parse_due
 from .remember import RememberList
-from .review_infer import ReviewEnricher
+from .review_infer import ReviewEnricher, is_vent_shape
 
 _FILLER = {"um", "uh", "ok", "okay", "yeah", "yep", "yup", "nope", "no", "yes", "thanks",
            "thank", "hi", "hey", "hello", "bye", "cool", "nice", "sure", "right", "mhm",
@@ -154,6 +154,17 @@ class Capturer:
         if not force and not should_keep(text):
             return {"kept": False, "reason": "noise", "smart_calls": 0}
         kind, fields = classify(text)
+        # CARDINAL-SIN GUARD: a vent / sarcasm must NEVER land in a durable ACTIVE drawer
+        # (an active profile fact or an open open_loop). classify() routes on _PROFILE
+        # ("i hate", "i like") and _COMMIT ("i should"), so "I hate this", "I could scream",
+        # "I should just move to a beach" would otherwise persist as active memory — the
+        # cardinal-sin echo the Apollo audit caught. We gate on the _VENT-family SHAPE only
+        # (not the countermand), so a genuine task carrying "don't" ("I need to tell them I
+        # don't want to renew") still persists. The inert remember-list write above already
+        # preserved the raw line (pull-only, can never fire), so a vent stays inert, never
+        # durable+active — no context is lost.
+        if kind in ("profile_fact", "open_loop") and is_vent_shape(text):
+            return {"kept": False, "reason": "vent", "smart_calls": 0}
         if kind == "open_loop":
             # ground the spoken due-time to the utterance's own clock, never engine time
             due_dt = parse_due(text, anchor_from_meta(meta))

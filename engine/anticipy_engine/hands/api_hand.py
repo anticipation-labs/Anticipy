@@ -101,6 +101,15 @@ class ApiHand(Worker):
         self.mode = mode
         self.idem = idem if idem is not None else {}
         self.approval_required = approval_required
+        # Concurrency guard (Law 4: no faked success; here, no DOUBLE real write).
+        # The idempotency check (`ikey in self.idem`) only catches a SEQUENTIAL retry:
+        # `self.idem[ikey]` is populated AFTER the write+read-back, so two CONCURRENT
+        # presses of the same line both pass the check and both fire a real write
+        # (duplicate calendar event / draft). `_inflight` records keys whose write is
+        # underway so a second concurrent write reserves-or-waits on the FIRST, never
+        # double-fires. `_idem_lock` makes reserve-or-wait atomic across coroutines.
+        self._idem_lock = asyncio.Lock()
+        self._inflight: dict = {}
         # Per-person API mesh: an optional TokenBroker (token_vault.py). When set AND
         # this user has connected the app a LIVE call touches, the hand authenticates
         # with THAT user's short-lived vault token instead of the shared ARCADE_API_KEY.
@@ -214,6 +223,56 @@ class ApiHand(Worker):
             return Result(job_id=job.id, status=JobStatus.success,
                           proof=self.idem[ikey], output={"idempotent": True})
 
+        # CONCURRENCY: a write goes through the reserve-or-join guard so two presses of
+        # the SAME line (same ikey) never both fire a real write. Reads never mutate, so
+        # they skip the guard entirely (no contention, no behavior change).
+        if is_write:
+            return await self._run_write_guarded(job, tool, ikey)
+        return await self._execute(job, tool, ikey, is_write=False)
+
+    async def _run_write_guarded(self, job: Job, tool: str, ikey: str) -> Result:
+        """Reserve-or-join the in-flight write for ``ikey`` so a concurrent second press
+        of the same remembered line returns the FIRST write's receipt (idempotent) instead
+        of firing a duplicate real write. The reserve (marker insert) happens under the
+        lock BEFORE the write's first await, closing the read-check-act window that the
+        bare ``ikey in self.idem`` check leaves open (idem is only populated AFTER the
+        write+read-back). A joiner that finds the winner FAILED (nothing durably written,
+        idem unset) is free to run its own write — a failed attempt left no artifact."""
+        while True:
+            winner = False
+            async with self._idem_lock:
+                # The winner may have finished between the fast-path check and the lock.
+                if ikey in self.idem:
+                    return Result(job_id=job.id, status=JobStatus.success,
+                                  proof=self.idem[ikey], output={"idempotent": True})
+                task = self._inflight.get(ikey)
+                if task is None:
+                    # We are the winner: reserve the key (the in-flight task also clears
+                    # the marker in its own finally, so a joiner never sees a stale entry
+                    # for a finished task) and run the real write OUTSIDE this lock.
+                    task = asyncio.ensure_future(self._write_and_release(job, tool, ikey))
+                    self._inflight[ikey] = task
+                    winner = True
+            if winner:
+                return await task
+            # JOINER: wait for the in-flight write to finish, then return idempotent off its
+            # receipt. If the winner FAILED (idem still unset, marker cleared), loop and try
+            # to reserve the key ourselves — nothing real was written, so our write is safe.
+            try:
+                await asyncio.shield(task)
+            except Exception:
+                pass
+
+    async def _write_and_release(self, job: Job, tool: str, ikey: str) -> Result:
+        """Run one real write and ALWAYS clear the in-flight marker when it finishes, so a
+        joiner awaiting this task never observes a stale reservation for a completed write."""
+        try:
+            return await self._execute(job, tool, ikey, is_write=True)
+        finally:
+            async with self._idem_lock:
+                self._inflight.pop(ikey, None)
+
+    async def _execute(self, job: Job, tool: str, ikey: str, *, is_write: bool) -> Result:
         if self.mode == MODE_MOCK:
             mock_id = f"mock-{ikey if is_write else job.id[:8]}"
             proof = {"id": mock_id, "mock": True, "tool": tool}
