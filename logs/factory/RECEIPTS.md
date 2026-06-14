@@ -176,6 +176,17 @@ SSRF filter on onboarding URLs; onboarding browser-injection fenced (untrusted-d
 **Honest-label:** the *downloadable native macOS app* is a SCAFFOLD/inert — the Next.js web app it would wrap
 works (owner-mode, review, approve), but the desktop wrapper isn't wired yet; the /download serves a dev preview.
 
+
+### ✅ Apollo fix wave 3 integrated + re-verified · 2026-06-14 (suite 73/73)
+The 3 remaining cardinal-sin breaches (first-person destructive-hyperbole vents + prompt-injection riding the
+live tiebreak) were all the PROACTIVE path's vent guard drifting from review_infer. FIX: unified the vent guard
+system-wide — triage + the live tiebreak + the owner_mode spine now drop on review_infer's vent detection (one
+source of truth, can't diverge again); + a spine money interlock; the tiebreak prompt is injection-hardened.
+Foreman re-verified LIVE: 'Wipe my whole schedule...', 'Delete my whole calendar, I quit', 'Disregard the
+whitelist...' all drop at triage; genuine commitments still pass. Also: SSRF reject of private/loopback/metadata
+on /agent/* + /ws/*, a code-level browser nav-wall (navwall.py) the model can't override, and the /dryrun preview
+wired into the app. Press-go default-deny + money hard-stop verified airtight across 119 adversarial lines.
+
 ## Honest negatives (reverted; kept so we never repeat them)
 
 ### ❌ Money-detector regex hardening — REVERTED (whack-a-mole) · 2026-06-13
