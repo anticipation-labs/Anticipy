@@ -451,6 +451,103 @@ def f11_pins() -> list:
     return fails
 
 
+# --- Apollo cardinal-sin vent-frame guard (the audit's live-brain breach) ---
+# The audit proved on the LIVE brain that an emotional vent with an embedded command got
+# past triage, the decider read it ACT, and the system ASKED/ACTED on a vent (the cardinal
+# sin, Law 2). Triage now silences the whole utterance when a strong vent marker OPENS or
+# CLOSES the line ("I could scream ... I give up", "..., I swear"), when a laugh-hedge
+# closes a commitment ("...lol"), or when delegation is destructive-hyperbolic / honestly-
+# tagged ("someone should just delete my whole calendar honestly"). These are pinned in
+# LIVE mode (the fail-open tiebreak is the worst case the audit actually hit): a pure vent
+# must end absolute False, never riding the tiebreak down to the decider. Companion checks
+# guard against recall collapse (genuine commitments still survive, incl. lines where a
+# marker word appears MID-clause as a real aside, not at an edge).
+
+# EXACT reproduced breach lines from the audit — every one MUST be expected-SILENT now.
+APOLLO_BREACHES = [
+    "I could scream, just send the stupid report already, I give up",
+    "remind me to never agree to a 7am meeting again, lol",
+    "someone should just delete my whole calendar honestly",
+    "I'm gonna book a flight to anywhere but here, I swear",
+]
+# A broader vent set with embedded command clauses — 0 false-actions required.
+APOLLO_VENTS = [
+    "I give up, just cancel everything today",
+    "I could cry, just delete the whole project honestly",
+    "Ugh I swear I am gonna quit and move to a farm",
+    "I can't even, just reschedule my entire life lol",
+    "Honestly someone should just burn this calendar down",
+    "I could scream right now, lol",
+    "I am gonna lose it, just email everyone and tell them I quit, jk",
+    "remind me to never trust the printer again, haha",
+    "someone should just torch the whole inbox honestly",
+    "I'm gonna book a one-way ticket to the moon, I swear",
+    "I give up on this place, I swear",
+    "I could honestly scream into a pillow right now",
+    "I can't even deal with this meeting today",
+    "someone should just wipe my entire calendar, I swear",
+    "I'm so done, just cancel all my meetings honestly",
+    "kill me now, just send the report lmao",
+]
+# A broad genuine-commitment set — NO recall collapse allowed (must all survive, stub).
+# The last four legitimately CONTAIN a marker word but as a mid-clause aside / real task.
+APOLLO_GENUINE = [
+    "Remind me to call the dentist tomorrow at 9.",
+    "Put the parent-teacher conference on my calendar for Thursday.",
+    "Add oat milk and eggs to the grocery list.",
+    "Book the 7pm table for four at Luperon Friday.",
+    "Schedule the dentist cleaning for next week.",
+    "Draft a reply to the landlord about the deposit.",
+    "I'll send the revised deck to Priya before the standup.",
+    "I need to renew my passport before the trip.",
+    "Get the brake pads replaced before the road trip.",
+    "Set a reminder to take the chicken out at five.",
+    "Order a new charger for the laptop.",
+    "Email the team the updated schedule tonight.",
+    "Cancel the gym membership before the renewal hits.",
+    "I told Marco I would send him the invoice by Friday.",
+    "Someone needs to chase the vendor about the missing parts.",
+    "Move the 3pm to 4 and put it on the calendar.",
+    "Pick up the dry cleaning before six.",
+    "Reschedule the orthodontist to after spring break.",
+    "Put new filters on the shopping list.",
+    "I have to submit the grant application by Monday.",
+    "Reserve the conference room for the Tuesday review.",
+    "Someone should chase the plumber about the leak.",
+    # marker words present but mid-clause / not at an edge -> still a real task
+    "Honestly, remind me to water the plants tonight.",
+    "Send the report to Dana, I swear by the new template, before noon.",
+    "Book a flight to Denver for the conference next Thursday.",
+    "Remind me to give up the parking spot when the lease ends.",
+]
+
+
+def vent_frame_pins() -> list:
+    """Apollo: the live-brain cardinal-sin breach. All breach lines + a broad vent set go
+    SILENT (0 act/ask) even in LIVE mode (the fail-open tiebreak is the worst case the
+    audit hit); a broad genuine-commitment set still survives (no recall collapse)."""
+    fails = []
+    # Worst case: a gateway whose tiebreak would FAIL OPEN — a pure vent must still drop
+    # before it can ride the tiebreak down to the decider.
+    live = Triage(gateway=_NoThinkGateway(), mode="live")
+    stub = Triage(gateway=None)
+    for text in APOLLO_BREACHES:
+        if live.actionable(text):
+            fails.append(f"  [Apollo breach, live] must be SILENT (0 act/ask): {text!r}")
+        if stub.actionable(text):
+            fails.append(f"  [Apollo breach, stub] must be SILENT: {text!r}")
+    for text in APOLLO_VENTS:
+        if live.actionable(text):
+            fails.append(f"  [Apollo vent, live] false-action surface: {text!r}")
+    for text in APOLLO_GENUINE:
+        if not stub.actionable(text):
+            fails.append(f"  [Apollo recall collapse] genuine commitment dropped: {text!r}")
+    if live.smart_calls != 0 or stub.smart_calls != 0:
+        fails.append(f"  [Apollo cost-spine] smart_calls live={live.smart_calls} "
+                     f"stub={stub.smart_calls}; the exception/stub paths must count 0")
+    return fails
+
+
 def debounce_pins() -> list:
     fails = []
     checks = [
@@ -518,12 +615,15 @@ async def replay_pins() -> list:
 
 
 def main() -> int:
-    fails = triage_pins() + f11_pins() + debounce_pins() + asyncio.run(replay_pins())
+    fails = (triage_pins() + f11_pins() + vent_frame_pins()
+             + debounce_pins() + asyncio.run(replay_pins()))
     if fails:
         print(f"FAIL test_triage_clause_scope: {len(fails)} pins broken")
         print("\n".join(fails))
         return 1
-    print(f"PASS test_triage_clause_scope: {len(CASES)} triage pins + debounce + replay, 0 smart calls")
+    n_apollo = len(APOLLO_BREACHES) + len(APOLLO_VENTS) + len(APOLLO_GENUINE)
+    print(f"PASS test_triage_clause_scope: {len(CASES)} triage pins + {n_apollo} Apollo vent-frame "
+          f"pins + debounce + replay, 0 smart calls")
     return 0
 
 

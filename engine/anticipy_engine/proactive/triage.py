@@ -155,10 +155,71 @@ _ALREADY_HANDLED = re.compile(
     r"|\b(?:he|she|they)'?s\s+(?:doing|handling|bundling|covering|got)\b",
     re.I)
 # Trailing hedge: an utterance that ENDS on "probably / hopefully / eh / we'll see"
-# self-cancels the commitment ("I'll read it on the bike. Probably.").
+# self-cancels the commitment ("I'll read it on the bike. Probably."). A trailing
+# LAUGH/JOKE hedge ("lol", "haha", "jk", "just kidding", "kidding") does the same: a
+# laugh-hedged commitment self-cancels ("remind me to never agree to a 7am meeting
+# again, lol") — the laugh marks the line as a joke/vent, not a captured task. Kept
+# clause-final only, like the rest of the hedge: "lol that meeting" mid-line is not a
+# self-cancel, and the audit's breach lines all CLOSE on the laugh.
 _TRAILING_HEDGE = re.compile(
-    r"\b(?:probably|maybe|perhaps|hopefully|eh|meh|we'?ll see|i guess|or something)\b"
-    r"[\s.!…\"']*$",
+    r"\b(?:probably|maybe|perhaps|hopefully|eh|meh|we'?ll see|i guess|or something"
+    r"|lol|lmao|lmfao|rofl|haha+|jk|just kidding|kidding)\b"
+    r"[\s.!…\"')]*$",
+    re.I)
+
+# ---------- utterance-absolute vent frame (the cardinal-sin guard) ----------
+# An emotional VENT whose strong marker opens OR closes the line silences any
+# command-shaped clause inside that same breath. The audit proved on the live brain
+# that vents with an embedded command ("I could scream, just send the stupid report
+# already, I give up") slipped past the clause-scoped _VENT_FRAME — that flag only
+# poisons WEAK first-person-future cues, while an imperative clause ("just send...")
+# deliberately breaks OUT of an open frame. But a vent that brackets a command is the
+# whole utterance venting, not a real handoff with vent decoration: acting OR asking on
+# it is the cardinal sin. So these markers are checked UTTERANCE-ABSOLUTE (the same
+# tier as _COUNTERMAND and _TRAILING_HEDGE), before any clause is judged positive.
+# Markers are strong/unambiguous emotional declarations ("I could scream", "I give up",
+# "I swear", "I can't even", "I'm gonna lose it") — never a bare discourse word. They
+# must SIT AT AN EDGE (the line opens or closes on them) so an aside in the middle of a
+# genuine plan ("send it — I swear by the new template — before noon") does not silence
+# the command; the audit's breach lines all open or close on the marker.
+_VENT_STRONG = (
+    # an optional intensifier adverb may sit between "could" and the vent verb
+    # ("I could honestly scream", "I could just cry")
+    r"i\s+could\s+(?:honestly\s+|just\s+|really\s+|literally\s+|seriously\s+)?"
+    r"(?:scream|cry|die|lose\s+it|throw\s+up|murder\s+someone)"
+    r"|i\s+give\s+up"
+    r"|i\s+swear(?:\s+to\s+god)?"
+    r"|i\s+can'?t\s+(?:even|anymore|deal|with\s+this)"
+    r"|i'?m\s+(?:gonna|going\s+to)\s+lose\s+it"
+    r"|i'?m\s+(?:so\s+)?done(?:\s+with\s+this)?"
+    r"|i\s+wanna\s+scream"
+    r"|kill\s+me\s+now"
+    r"|shoot\s+me\s+now"
+)
+# opens on the marker: "I give up, just cancel everything today"
+_VENT_OPENER = re.compile(r"^(?:ugh,?\s+|oh,?\s+|honestly,?\s+|god,?\s+|ha\.?\s+)?(?:" + _VENT_STRONG + r")\b", re.I)
+# closes on the marker: "...I give up", "..., I swear" (trailing punctuation/laugh allowed)
+_VENT_CLOSER = re.compile(
+    r"\b(?:" + _VENT_STRONG + r")\b[\s.,!…\"')]*$"
+    # a laugh or "honestly" riding behind the marker still closes on the vent
+    r"|\b(?:" + _VENT_STRONG + r")\b[\s.,]*"
+    r"(?:lol|lmao|haha+|honestly|seriously|for real|right now|already)[\s.!…\"')]*$",
+    re.I)
+# Hyperbolic/destructive delegation ("someone should just delete my whole calendar
+# honestly", "someone should torch the whole inbox") is exasperated venting, not a real
+# ownerless handoff — the _DELEGATE family is scoped OUT when the clause is destructive-
+# hyperbolic (wipe/delete/burn/torch + a whole/entire/everything scope) or closes on a
+# bare "honestly"/"I swear" vent tag with no concrete deliverable.
+# "destroy the X" where X is a whole/entire scope OR a personal life-asset (calendar,
+# inbox, schedule, life, account) is hyperbole no assistant could (or should) run; "burn
+# this calendar down" and "wipe my entire calendar" are both exasperation, not handoffs.
+_DELEGATE_VENT = re.compile(
+    r"\b(?:delete|wipe|erase|burn|torch|nuke|trash|cancel|scrap|blow up|set fire to)\b"
+    r"[\w' ]{0,30}?\b(?:whole|entire|everything|all of|all my"
+    r"|(?:my|this|the|that)\s+(?:calendar|inbox|schedule|email|account|life|day|week|"
+    r"job|career|to-?do list|todos?))\b"
+    r"|\bhonestly[\s.!…\"')]*$"
+    r"|\bi\s+swear(?:\s+to\s+god)?[\s.!…\"')]*$",
     re.I)
 
 # ---------- reported promise (ledger F21) ----------
@@ -569,7 +630,13 @@ class Triage:
                 or _CAL_PUT.search(ct) or _CAL_BLOCK.search(ct) or _CART_PUT.search(ct)
                 or _LIST_PUT.search(ct) or _REMIND_REQ.search(ct)):
             return True
-        if _CAUSATIVE_GET.search(ct) or _DELEGATE.search(ct):
+        if _CAUSATIVE_GET.search(ct):
+            return True
+        # delegation ("someone should chase X") is a real ownerless handoff — UNLESS it is
+        # destructive-hyperbolic exasperation ("someone should just delete my whole
+        # calendar honestly", "someone should torch the whole inbox") or closes on a bare
+        # "honestly"/"I swear" vent tag: that is venting, not a task to pick up.
+        if _DELEGATE.search(ct) and not _DELEGATE_VENT.search(ct):
             return True
         if self._directional_get(clause_raw):
             return True
@@ -761,6 +828,13 @@ class Triage:
             return False
         if _TRAILING_HEDGE.search(t):
             return False
+        # utterance-absolute vent frame: a line that OPENS or CLOSES on a strong emotional
+        # vent marker ("I could scream ... I give up", "..., I swear") is the whole breath
+        # venting; the command clause it brackets is decoration, not a handoff. Acting OR
+        # asking on it is the cardinal sin, so it silences the whole utterance (the same
+        # tier as the countermand/hedge above), before any clause can be judged positive.
+        if _VENT_OPENER.search(t) or _VENT_CLOSER.search(t):
+            return False
         if invoice_draft_ask:
             return True
         # clause-scoped pass (ledger F8): each clause is judged on its own — confident
@@ -795,6 +869,13 @@ class Triage:
             if match_schedule_change_hold(clause):
                 return True
             if self._vocative_aside(clause):
+                negative_clauses += 1
+                continue
+            # destructive-hyperbolic / honestly-tagged delegation is exasperated venting,
+            # not an ownerless handoff: count it as a confident negative so an all-vent
+            # utterance returns absolute False (it must never ride the live fail-open
+            # tiebreak down to the decider — the cardinal-sin guard, ledger F11 family).
+            if _DELEGATE.search(ct) and _DELEGATE_VENT.search(ct):
                 negative_clauses += 1
                 continue
             if self._clause_positive(ct, clause, vent_frame):
