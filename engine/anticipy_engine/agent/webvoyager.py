@@ -1910,9 +1910,12 @@ class WebVoyagerAgent:
                         return await self._handoff(out, steps + 1, history, wall_kind,
                                                    "wall after adjacent product URL navigation")
             else:
-                return self._done(out, steps + 1, history, answer="",
-                                  reason="commerce recipe could not identify a matching product",
-                                  page_states=states, commerce_recipe=True)
+                # The search-centric recipe could not find a matching product (e.g. a
+                # CATEGORY-based store with no search box). Nothing was added yet (product is
+                # None -> no mutation), so fall through to the GENERAL agent loop, which can
+                # navigate categories -> product -> add. Returning None hands run() the general
+                # loop instead of dead-ending the whole task here.
+                return None
 
         out, steps, durable_cart = await self._confirm_current_cart_page(
             out, start_url, item, history, states, steps, "fresh_cart_before_product_add"

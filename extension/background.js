@@ -130,7 +130,26 @@ async function ensureDebugger(tabId) {
     if (m.includes("already attached") || m.includes("Another debugger")) attachedTab = tabId;
     else throw e;
   }
+  // Enable Page events so the dialog handler below fires. A native JS dialog
+  // (alert/confirm on add-to-cart) otherwise BLOCKS the page AND the whole CDP session,
+  // hanging the agent forever on a large class of real stores. Best-effort.
+  try { await cdp(tabId, "Page.enable"); } catch (e) {}
 }
+
+// Auto-handle native JS dialogs so they can never freeze the page / CDP session. SAFE policy:
+// dismiss alerts (they have no choice) and allow page-leave (beforeunload), but CANCEL
+// confirm/prompt — the agent must NEVER auto-confirm a destructive/irreversible action, and
+// money is a hard stop. Registered once at module load; fires for any attached tab.
+chrome.debugger.onEvent.addListener((source, method, params) => {
+  if (method !== "Page.javascriptDialogOpening") return;
+  const type = (params && params.type) || "alert";
+  const accept = type === "alert" || type === "beforeunload"; // confirm/prompt -> Cancel
+  try {
+    chrome.debugger.sendCommand(
+      { tabId: source.tabId }, "Page.handleJavaScriptDialog",
+      { accept, promptText: "" }, () => { void chrome.runtime.lastError; });
+  } catch (e) {}
+});
 function cdp(tabId, method, params) {
   // Internal timeout: if the debugger silently detached, sendCommand's callback can
   // never fire and the click would hang forever. Fail fast (12s) and drop the
