@@ -85,14 +85,34 @@ def _app_name(tool: str) -> str:
     return tool.split(".")[0]  # "Gmail.SendEmail" -> "Gmail" (never the word "API")
 
 
+def _default_arcade_client(api_key: str):
+    """Build a real Arcade client from a key. Used for the per-user (vault) auth path;
+    arcadepy does no network at construction, so this is safe to call lazily per call."""
+    from arcadepy import Arcade
+    return Arcade(api_key=api_key)
+
+
 class ApiHand(Worker):
     def __init__(self, *, user_id: str, client=None, mode: str = MODE_MOCK,
-                 idem: Optional[dict] = None, approval_required: bool = True) -> None:
+                 idem: Optional[dict] = None, approval_required: bool = True,
+                 broker=None, client_factory=None) -> None:
         self.user_id = user_id
         self._client = client
         self.mode = mode
         self.idem = idem if idem is not None else {}
         self.approval_required = approval_required
+        # Per-person API mesh: an optional TokenBroker (token_vault.py). When set AND
+        # this user has connected the app a LIVE call touches, the hand authenticates
+        # with THAT user's short-lived vault token instead of the shared ARCADE_API_KEY.
+        # None (the default) keeps the legacy shared-key behavior unchanged (back-compat).
+        self._broker = broker
+        # builds an Arcade client from a per-user token. Default = the real arcadepy
+        # client (no network at construction); injectable so tests prove the per-user
+        # auth path with NO network and NO real OAuth.
+        self._client_factory = client_factory or _default_arcade_client
+        # records which path each (user, app) live call took — for the round-trip proof
+        # and audit. Never stores a token, only the path name + whether the broker was hit.
+        self.last_auth_path: Optional[dict] = None
 
     def handles(self):
         return list(INTENT_MAP.keys())
@@ -107,6 +127,43 @@ class ApiHand(Worker):
         from arcadepy import Arcade
         self._client = Arcade(api_key=key)
         return self._client
+
+    # The vault keys apps by a lowercase short name ("gmail", "googlecalendar", a niche
+    # CRM); Arcade tool names are "Gmail.SendEmail" / "GoogleCalendar.ListEvents". The app
+    # for a (user, tool) is the toolkit prefix, lowercased, so the broker lookup matches
+    # what onboarding stored. General (not per-tool): never the literal word "api".
+    @staticmethod
+    def _vault_app(tool: str) -> str:
+        return _app_name(tool).lower()
+
+    def _live_client(self, tool: str):
+        """Return the Arcade client to use for this LIVE call, and record which auth path
+        was taken. When a per-user broker is configured AND this user has connected the
+        app, build a client bound to THAT user's short-lived token (broker.get_token →
+        SecretToken.reveal() ONLY here, at the real auth handshake — never logged/prompted).
+        Fall back to the shared ARCADE_API_KEY only when no broker is wired or this user
+        hasn't connected the app (back-compat)."""
+        app = self._vault_app(tool)
+        if self._broker is not None:
+            try:
+                secret = self._broker.get_token(self.user_id, app)
+            except Exception:
+                # This user has not connected this app via the vault (TokenNotFound) or
+                # the lease could not be issued — fall back to the shared key. We do NOT
+                # swallow auth errors from the real handshake; only the broker lookup.
+                secret = None
+            if secret is not None:
+                # The ONE place the plaintext is revealed: the per-user auth handshake.
+                # The revealed value never leaves this scope (not logged, not returned).
+                client = self._client_factory(secret.reveal())
+                self.last_auth_path = {"path": "per_user", "app": app,
+                                       "broker_consulted": True, "shared_key": False}
+                return client
+        # no broker, or this user hasn't connected the app -> shared-key path (legacy)
+        self.last_auth_path = {"path": "shared_key", "app": app,
+                               "broker_consulted": self._broker is not None,
+                               "shared_key": True}
+        return self._client_or_build()
 
     def _idem_key(self, job: Job) -> str:
         raw = f"{job.goal_id}|{job.intent}|{json.dumps(job.args, sort_keys=True, default=str)}"
@@ -174,7 +231,9 @@ class ApiHand(Worker):
             return Result(job_id=job.id, status=JobStatus.success, proof=proof, output={"mock": True})
 
         # ---- LIVE ----
-        client = self._client_or_build()
+        # Per-person mesh: pick THIS user's vault-backed client when a broker is wired and
+        # the user has connected the app; otherwise the shared-key client (back-compat).
+        client = self._live_client(tool)
         try:
             auth = client.tools.authorize(tool_name=tool, user_id=self.user_id)
         except Exception as exc:
@@ -361,7 +420,9 @@ class ApiHand(Worker):
             url = None
             try:
                 tool = INTENT_MAP.get(job.intent)
-                auth = self._client.tools.authorize(tool_name=tool, user_id=self.user_id)
+                # Re-auth on the SAME client this user's call used (per-user vault client
+                # when a broker is wired and they connected the app; shared client else).
+                auth = self._live_client(tool).tools.authorize(tool_name=tool, user_id=self.user_id)
                 url = getattr(auth, "url", None)
             except Exception:
                 pass
