@@ -35,7 +35,10 @@ class FakeLink:
 
 async def main():
     assert AGENT_MAX_TOKENS >= 64, "browser planner JSON replies need room to parse"
-    assert set(BrowserHand(FakeLink()).handles()) == {"browse_task", "read_page"}
+    # browse_task/read_page are the read arm; prepare_form is the safe write arm
+    # (fill-to-submit-screen then hand off, covered by test_form_prepare.py).
+    assert {"browse_task", "read_page"} <= set(BrowserHand(FakeLink()).handles())
+    assert "prepare_form" in BrowserHand(FakeLink()).handles()
 
     r = await BrowserHand(FakeLink(behavior="success")).handle(Job(intent="browse_task", args={"task": "x"}))
     assert r.status == JobStatus.success and r.proof.get("screenshot")

@@ -33,7 +33,14 @@ from ..core.browser_link import BrowserLink
 from ..core.envelopes import Job, JobStatus, Result
 from ..core.worker import Worker
 from ..agent.webvoyager import WebVoyagerAgent
+from ..agent.form_prepare import FormPrepareAgent
 from .api_hand import MODE_LIVE, MODE_MOCK
+
+
+def _form_fields(args: dict) -> dict:
+    """Pull the owner's requested {label: value} field map off the job args."""
+    fields = (args or {}).get("fields")
+    return fields if isinstance(fields, dict) else {}
 
 _URL_RE = re.compile(r"https?://[^\s<>\]})\"']+")
 _BARE_DOMAIN_RE = re.compile(
@@ -113,6 +120,7 @@ class BrowserHand(Worker):
         agent_factory=WebVoyagerAgent,
         fallback_link: Optional[Any] = None,
         mode: str = MODE_LIVE,
+        form_agent_factory=FormPrepareAgent,
     ) -> None:
         self.mode = mode
         self.link = link
@@ -123,9 +131,12 @@ class BrowserHand(Worker):
         self.agent_timeout = agent_timeout or float(os.environ.get("ANTICIPY_AGENT_TIMEOUT", "240"))
         self.notifier = notifier
         self.agent_factory = agent_factory
+        self.form_agent_factory = form_agent_factory
 
     def handles(self) -> List[str]:
-        return ["browse_task", "read_page"]
+        # prepare_form is the safe browser WRITE arm: fill a form up to the submit
+        # screen, stop, and hand the filled state back for the owner to submit.
+        return ["browse_task", "read_page", "prepare_form"]
 
     def _active_link(self):
         if getattr(self.link, "connected", False):
@@ -146,9 +157,59 @@ class BrowserHand(Worker):
                     reason = f"{reason}; native bridge unavailable: {err}"
             return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
                           output={"reason": reason})
+        if job.intent == "prepare_form":
+            return await self._handle_prepare_form(job, link)
         if job.intent == "browse_task" and self.gateway is not None:
             return await self._handle_agent(job, link)
         return await self._handle_once(job, link)
+
+    async def _handle_prepare_form(self, job: Job, link) -> Result:
+        """Safe browser WRITE: fill the form to the submit screen, then hand off.
+
+        NEVER returns a plain success — preparing a form is not finishing it. A
+        clean prepare returns needs_human (the owner confirms + submits); the
+        result carries the filled-field read-back proof + screenshot so the owner
+        sees exactly what is staged. No submit, no login, no money are ever taken.
+        """
+        args = job.args if isinstance(job.args, dict) else {}
+        url = str(args.get("url") or "").strip()
+        fields = _form_fields(args)
+        if not url or not _URL_RE.search(url):
+            return Result(job_id=job.id, status=JobStatus.failed, proof=None,
+                          error="prepare_form needs a concrete form url")
+        if not fields:
+            return Result(job_id=job.id, status=JobStatus.failed, proof=None,
+                          error="prepare_form needs a fields map of {label: value}")
+        agent = self.form_agent_factory(link)
+        try:
+            result = await asyncio.wait_for(agent.run(url, fields), timeout=self.timeout * 4)
+        except asyncio.TimeoutError:
+            return Result(job_id=job.id, status=JobStatus.failed, proof=None,
+                          error="form prepare timed out")
+        except ConnectionError:
+            return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
+                          output={"reason": "browser disconnected mid-form-prepare"})
+
+        if result.get("submitted"):
+            # impossible by construction; a hard guard, never trust the loop alone
+            return Result(job_id=job.id, status=JobStatus.failed, proof=None,
+                          error="form-prepare must never submit; refusing to report a submit")
+        if not result.get("filled_fields"):
+            return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
+                          output={"reason": result.get("reason") or "nothing could be prepared",
+                                  **result})
+        proof = {
+            "form_prepare": True,
+            "submitted": False,
+            "url": result.get("final_url"),
+            "screenshot": result.get("final_shot"),
+            "filled_fields": result.get("filled_fields"),
+            "pending_fields": result.get("pending_fields"),
+            "submit_control": result.get("submit_control"),
+        }
+        # prepared, never submitted -> hand back for the owner's confirm + submit
+        return Result(job_id=job.id, status=JobStatus.needs_human, proof=proof,
+                      output=result)
 
     def _handle_mock(self, job: Job) -> Result:
         """Mock tier: the live path's deterministic gates first, then a labeled
