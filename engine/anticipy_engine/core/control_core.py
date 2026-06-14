@@ -1052,3 +1052,103 @@ class ControlCore:
                                   {"card_id": link["card_id"], "ask_id": ask_id,
                                    "approved": approved, "state": record["state"]})
         return out
+
+    async def approve_remembered(self, line_id: str) -> dict:
+        """DEFAULT-DENY press-go: the owner presses go on ONE remembered line.
+
+        This is the ONLY execution trigger for a remembered/inferred item, and only for
+        the three whitelisted reversible intents. It is ADDITIVE: it reuses the review
+        inference (display-only), the orchestrator funnel + GatedApprover (owner_approved),
+        and the Slice-0 read-back gate verbatim. It touches no decision/trigger/harm code.
+
+        STEP A INFER (reuse, read-only): pull the inert row by id and enrich it with the
+        SAME ReviewEnricher.infer_line used by the read-only review. A vent yields an empty
+        task here -> {approved:false} with NO goal, NO orchestrator call (the vent stop).
+
+        STEP B MAP -> ONE intent + a pre-built Step (deterministic, conservative).
+
+        STEP C WHITELIST GATE (default-deny, structural): execute ONLY if intent in
+        WHITELIST; everything else is prepared-and-handed-back, never executed. Money/send/
+        message land in handback because no such intent is in the set.
+        """
+        from ..live_memory.review_infer import infer_line
+        from ..live_memory.press_go import WHITELIST, map_inferred_to_step
+
+        cap = self.live_memory.capturer
+        row = next((r for r in cap.remember.all() if r.get("id") == line_id), None)
+        if row is None:
+            return {"approved": False, "line_id": line_id, "reason": "unknown remembered line"}
+
+        # STEP A — INFER (reuse the display-only review inference, read-only).
+        inferred = infer_line(str(row.get("text") or ""), people_hint=row.get("people"))
+        task = str(inferred.get("task") or "").strip()
+        if not task:
+            # vent / narration: refuse — no goal, no orchestrator, no pending entry.
+            self.glassbox.log("press_go_vent", {"line_id": line_id})
+            return {"approved": False, "line_id": line_id, "inferred": inferred,
+                    "reason": "no confident inferred task (vent/narration)"}
+
+        # STEP B — MAP inferred task -> a single intent + pre-built Step (or handback).
+        # The raw spoken line grounds a concrete event time (the review's due_phrase is
+        # lossy); the whitelist DECISION is keyed off the inferred shape.
+        mapped = map_inferred_to_step(inferred, raw_text=str(row.get("text") or ""))
+        intent = mapped.get("intent")
+        step = mapped.get("step")
+
+        # STEP C — WHITELIST GATE. Default-deny: execute ONLY if the intent is in the set.
+        if intent not in WHITELIST or step is None:
+            # NON-WHITELIST branch: prepared-handback. NO Goal saved, orchestrator NEVER
+            # called, nothing enters proactive.pending. Money/send/message land here.
+            self.glassbox.log("press_go_handback",
+                              {"line_id": line_id, "intent": intent or "(unmapped)",
+                               "reason": mapped.get("non_whitelist_reason")})
+            return {"approved": False, "prepared": True, "line_id": line_id,
+                    "inferred_action": task, "intent": intent,
+                    "would_do": mapped.get("would_do"),
+                    "why_handback": (mapped.get("non_whitelist_reason")
+                                     or "not a provably-safe reversible intent")}
+
+        # Defense in depth: the produced step intent MUST be in WHITELIST before we drive.
+        if step.intent not in WHITELIST:
+            self.glassbox.log("press_go_handback",
+                              {"line_id": line_id, "intent": step.intent,
+                               "reason": "produced step intent not whitelisted"})
+            return {"approved": False, "prepared": True, "line_id": line_id,
+                    "inferred_action": task, "intent": step.intent,
+                    "would_do": mapped.get("would_do"),
+                    "why_handback": "produced step intent not whitelisted"}
+
+        # WHITELIST branch — execute via the EXISTING funnel. Build a goal with ONE
+        # pre-built whitelisted step + owner_approved proof, then drive it through the
+        # orchestrator (GatedApprover reads owner_approved; the api_hand read-back gate
+        # still independently confirms the artifact — Law 4). Same reuse pattern as
+        # resolve_ask's already-stepped (_approve_waiting_goal + _drive) path, so no
+        # planner can widen the single step into a non-whitelisted write.
+        #
+        # Line-level idempotency: derive a STABLE goal id from the line_id so re-pressing
+        # the same line reuses the same goal. If that goal already ran to done, return its
+        # receipt without re-driving — the endpoint is safe to re-press (no double-create
+        # of a calendar hold / draft).
+        goal_id = "rmb-" + hashlib.sha256(line_id.encode()).hexdigest()[:24]
+        prior = self.store.load(goal_id)
+        if prior is not None and prior.state == GoalState.done:
+            self.glassbox.log("press_go_idempotent",
+                              {"line_id": line_id, "goal_id": goal_id})
+            return {"approved": True, "executed": True, "idempotent": True,
+                    "line_id": line_id, "intent": prior.intent, "goal_id": prior.id,
+                    "state": prior.state.value, "would_do": mapped.get("would_do"),
+                    "receipt": prior.proof or {}}
+        goal = Goal(id=goal_id, intent=intent, description=mapped.get("would_do") or task,
+                    steps=[step])
+        goal.proof = {"owner_approved": True, "approved_from": "remembered",
+                      "line_id": line_id}
+        goal.state = GoalState.running
+        self.store.save(goal)
+        self.glassbox.log("press_go_execute",
+                          {"line_id": line_id, "intent": intent, "goal_id": goal.id})
+        goal = await self.orchestrator._drive(goal)
+
+        receipt = goal.proof or {}
+        return {"approved": True, "executed": True, "line_id": line_id, "intent": intent,
+                "goal_id": goal.id, "state": goal.state.value,
+                "would_do": mapped.get("would_do"), "receipt": receipt}

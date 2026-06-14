@@ -174,6 +174,10 @@ class MemoryLoopResolveIn(BaseModel):
     status: str = "done"
 
 
+class RememberedApproveIn(BaseModel):
+    line_id: str
+
+
 class ConnectionAuthorizeIn(BaseModel):
     id: str
 
@@ -332,6 +336,21 @@ def memory_remembered(limit: int = 50) -> dict:
     rows = cap.remember.recent(limit)
     rows = cap.review_enricher.enrich_rows(rows)
     return {"remembered": rows, "count": len(rows)}
+
+
+@app.post("/memory/remembered/approve")
+async def memory_remembered_approve(body: RememberedApproveIn) -> dict:
+    """DEFAULT-DENY press-go: the owner presses go on ONE remembered line by id.
+
+    This is the ONLY new execution trigger and it requires an explicit owner POST (sitting
+    behind the same owner-token middleware as every other owner route). It enriches the
+    line with the SAME review inference, maps it to one closed intent, and executes ONLY
+    the three whitelisted reversible intents (create_event/send_email_draft/write_memory)
+    through the existing orchestrator funnel + read-back gate. Everything else (an actual
+    send, a message/Slack, money/binding, ambiguous) is prepared-and-handed-back, never
+    executed. A vent returns approved=false with no goal. There is no yes/no body that can
+    route a non-whitelisted item to execution."""
+    return await core.approve_remembered(body.line_id)
 
 
 @app.post("/memory/open-loops/resolve")
