@@ -83,7 +83,16 @@ _VENT = re.compile(
     # "yeah right" / "oh sure" sarcasm retorts (triage's _RP_RESOLVED kills these; the
     # display guard was deaf to them, so "yeah right I'll call the dentist back at 3pm"
     # was over-claimed as a HIGH-confidence task — the sarcasm-as-task hole).
-    r"|\byeah right\b|\bas if\b|\bsure i (?:will|'?ll)\b"
+    r"|\byeah right\b|\bas if\b|(?<!make )\bsure,?\s*i'?(?:ll| will)\b"
+    # sarcastic-impossible future: "I'll just magically find ten extra hours". The word
+    # "magically" in a spoken personal-day line is the sarcasm tell — a real task never
+    # asks the assistant to do something "magically". (Closed the cardinal-sin hole where
+    # "Sure, I'll just magically find ten extra hours" rode its "I'll" into an ACT.)
+    r"|\bmagically\b"
+    # threat-of-destruction-of-an-object vent ("I'm going to throw my laptop") — exasperation,
+    # never a handoff; no one asks an assistant to throw/smash their own hardware.
+    r"|\bi'?m (?:gonna|going to) (?:throw|chuck|toss|hurl|smash|launch|yeet)\b"
+    r"|\b(?:throw|chuck|hurl|smash) (?:my|this|the) (?:laptop|computer|phone|monitor|keyboard)\b"
     r"|\bso (?:fun|great|much fun)\b"
     r"|\bmove to a beach\b|\bwin the lottery\b|\bquit my job\b",
     re.I,
@@ -105,7 +114,11 @@ _TRAILING_HEDGE = re.compile(
 # also catch a laugh-hedged line), kept distinct from the generic "probably/we'll see"
 # hedge which is a self-cancel but not an emotional vent.
 _LAUGH_HEDGE_VENT = re.compile(
-    r"\b(?:lol|lmao|lmfao|rofl|haha+|jk|just kidding|kidding)\b[\s.!…\"')]*$",
+    # the laugh/joke token may carry ONE trailing softener ("jk obviously", "lol man") before
+    # the clause ends — an explicit short list, NOT \w+, so "kidding aside, send it" (which
+    # means SERIOUSLY) is never swallowed as a joke.
+    r"\b(?:lol|lmao|lmfao|rofl|haha+|jk|just kidding|kidding)\b"
+    r"(?:\s+(?:obviously|though|lol|haha|guys|ha|man))?[\s.!…\"')]*$",
     re.I,
 )
 # Hyperbolic / destructive exasperation no assistant could (or should) run — exasperated
@@ -122,6 +135,20 @@ _HYPERBOLE = re.compile(
     r"|(?:my|this|the|that)\s+(?:calendar|inbox|schedule|email|account|life|day|week|"
     r"job|career|to-?do list|todos?))\b"
     r"|\bburn it all down\b",
+    re.I,
+)
+# Pure-despair / rhetorical-hopelessness: no task, just hopelessness, which triage was
+# defaulting to ASK (an unnecessary interruption — the small echo of the cardinal sin).
+# Two narrow shapes: (1) the rhetorical "why does everything ... so hard / like this / even
+# matter" frame; (2) a destructive verb over the speaker's LIFE / existence ("cancel my
+# entire life", "ruin my life", "end it all") — deliberately NOT over calendar/inbox/schedule,
+# which are real cancelable objects handled by the normal command path.
+_DESPAIR = re.compile(
+    r"\bwhy (?:does|do|is|are|must|can'?t|cant|would)\b[\w' ,]{0,30}?"
+    r"\b(?:everything|nothing (?:ever )?works?|so hard|this hard|have to be"
+    r"|even matter|matter anymore|like this|so difficult|impossible|my life)\b"
+    r"|\b(?:cancel|delete|end|ruin|escape|abandon|quit) (?:my )?(?:entire |whole |damn )?life\b"
+    r"|\bend it all\b|\bi give up on (?:life|everything|it all)\b",
     re.I,
 )
 # Retraction / countermand — the speaker calls the action OFF; not a standing task.
@@ -146,7 +173,7 @@ def is_vent_shape(text: str) -> bool:
     if not raw:
         return False
     return bool(_VENT.search(raw) or _LAUGH_HEDGE_VENT.search(raw)
-                or _HYPERBOLE.search(raw))
+                or _HYPERBOLE.search(raw) or _DESPAIR.search(raw))
 
 
 def is_vent(text: str) -> bool:
