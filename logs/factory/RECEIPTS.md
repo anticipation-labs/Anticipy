@@ -103,6 +103,22 @@ decision/trigger path untouched; python suite 57/57. Committed (03d79f8). **Next
 (deliverable/person/deadline) from each remembered line for the review (the core inference, display-only/safe);
 then the "prepare + execute on approval" half — which needs Omar's accounts to be real, not staging.
 
+### ✅ Parallel swarm — 4 hard-machinery pieces built simultaneously + integrated · 2026-06-13
+First true parallel build (8 agents: builder+skeptic ×4, isolated worktrees). All 4 skeptics refuted=false;
+foreman lifted each onto the live branch (worktrees branched from a STALE base — see note — so new files were
+cherry-picked + edits hand-applied), suite **62/62 green**:
+- **Two-way voice transport** (6b61967): Twilio ConversationRelay `/cr` WebSocket feeds the SAME decider/brain
+  (spy-proven), streams replies, `<Say>` fallback kept. Dev-proven (simulated CR exchange); live needs Twilio + phone.
+- **Per-user token vault** (0d72c08): replaces the shared ARCADE_API_KEY — scrypt + encrypt-then-MAC, owner-bound,
+  SecretToken redacts everywhere. Skeptic's own 16/16 adversarial: real encryption, cryptographic isolation, no leak.
+- **Onboarding profile-builder** (30e4db4): scrapes public pages via the browser arm → structured profile with
+  per-fact source + cross-check flags. Skeptic verified a real Brian Chesky profile vs an independent fetch.
+- **Browser write arm — prepare-then-handoff** (135e034): fills a form to the submit screen, STOPS, hands off.
+  Skeptic verified live on real httpbin form (7/7 filled, never submitted).
+**NOTE for future swarms:** the worktrees defaulted to a STALE base (ba78048); only the voice builder reset onto
+factory/build HEAD first (so it cherry-picked cleanly). Next swarm: instruct builders to `git reset --hard factory/build`
+onto current HEAD before building, so branches merge instead of needing file-by-file lift.
+
 ## Honest negatives (reverted; kept so we never repeat them)
 
 ### ❌ Money-detector regex hardening — REVERTED (whack-a-mole) · 2026-06-13
