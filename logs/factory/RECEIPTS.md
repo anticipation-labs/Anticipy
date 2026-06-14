@@ -165,6 +165,17 @@ Suite 65/65; every piece skeptic-verified; cardinal-sin + money held throughout 
 draft read-back), live Twilio (the 2:45 call), real onboarding scrape of HIS logged-in Chrome, Apple Developer ID
 (signed download), and the 5 lived days. The mechanism is built; connecting accounts turns mock-proven → proven-real.
 
+
+### ✅ Apollo fix wave 2 integrated + re-verified · 2026-06-14 (suite 72/72)
+Wave-2 audit found deeper holes; all HIGH ones fixed: **vent-guard unified** (review_infer.is_vent is now the
+single source of truth + laugh/hyperbole/sarcasm — the press-go path no longer echoes a joke; foreman re-verified
+4 vents -> empty task -> press-go step=None); **money downgrade closed** (verb-less payment "Send Priya the $500
+we owe her" + idioms now force money, never casual_send ACT — re-verified); press-go datetime crash guarded;
+owner timezone threaded to calendar; content-based idempotency (no double-booking); /cr + endpoint robustness +
+SSRF filter on onboarding URLs; onboarding browser-injection fenced (untrusted-data + allowed_domains).
+**Honest-label:** the *downloadable native macOS app* is a SCAFFOLD/inert — the Next.js web app it would wrap
+works (owner-mode, review, approve), but the desktop wrapper isn't wired yet; the /download serves a dev preview.
+
 ## Honest negatives (reverted; kept so we never repeat them)
 
 ### ❌ Money-detector regex hardening — REVERTED (whack-a-mole) · 2026-06-13
