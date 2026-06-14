@@ -34,11 +34,48 @@ from ..shared.schedule_change import match_schedule_change_hold
 from ..shared.slotbooking import match_context_slot_choice_booking, match_slot_choice_booking
 from ..shared.storesite import derive_store_site
 
+# Money / amount SIGNAL — the recipient-agnostic detector for "this line moves money"
+# without needing a spend verb. Used by (a) the _HARD money idiom set below and (b) the
+# MONEY INTERLOCK inside _assess_send that forbids the casual_send downgrade. Three shapes:
+# a currency-symbol amount ($500, £20), a spelled/numeric amount carrying a money SCALE
+# word (five hundred dollars, 200 dollars, a hundred bucks), and a debt/obligation NOUN
+# (owe/owed/rent/deposit/invoice/balance/payment/retainer/copay/tab/bill/dues/fee/...).
+# Deliberately NOT bare spend verbs (those already gate via the money verb set) and NOT
+# bare cardinals ("send Sam the deck", "table for two") — a scale/obligation word is
+# required, so non-money content sends are never newly money-blocked.
+_MONEY_SIGNAL = re.compile(
+    r"[$£€]\s?\d"                                                  # $500, £20, € 50
+    r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?)\b"
+    r"|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|"
+    r"fifty|sixty|seventy|eighty|ninety|hundred|thousand|couple|few)\b"
+    r"[\w\s-]{0,20}?\b(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?)\b"             # five hundred dollars
+    r"|\b(?:hundred|thousand|grand)\b\s+(?:we|i|they|you|he|she)\s+(?:owe|owed)\b"       # five hundred we owe
+    r"|\b(?:owe|owed|owes|owing|rent|deposit|invoice|balance|payment|payments|"
+    r"retainer|copay|co-pay|tab|bill|bills|dues|fee|fees|tuition|mortgage)\b",
+    re.I,
+)
+# Spoken money IDIOMS that carry no canonical spend verb and were slipping to the weak ASK
+# tier (unclassified) instead of the money category: square up, cover the tab/bill/rent/
+# half/cost, tip, prepay, float (someone N), chip in, settle the invoice, put $N / a
+# hundred bucks on (an account/card/tab). These belong in money so the interlock and the
+# scoreboard treat them as the hard stop.
+_MONEY_IDIOMS = (
+    r"\bsquare up\b"
+    r"|\bcover(?:s|ing)?\s+(?:the|my|his|her|our|your|their)\s+(?:tab|bill|rent|half|cost|costs|share)\b"
+    r"|\btip(?:s|ped|ping)?\s+(?:the|him|her|them|our|your|\$?\d|\d|a |an )"
+    r"|\bprepay(?:s|ing)?\b"
+    r"|\bfloat\s+(?:me|him|her|them|you|us)\b"
+    r"|\bchip(?:s|ping)?\s+in\b"
+    r"|\bsettle\b[^.;!?]{0,20}\b(?:invoice|tab|bill|balance|debt|account)\b"
+    r"|\bput\b\s+(?:\$?\d[\d,]*|a\s+(?:hundred|thousand|couple|few)|(?:one|two|five|ten|twenty|fifty)\b)"
+    r"[\w\s-]{0,20}?\b(?:on|toward|towards)\b"
+)
 # --- hard detrimental (ASK; override everything). Money = SPENDING verbs, not price mentions. ---
 _HARD = [
     ("money", r"\b(pay|paid|buy|buys|buying|bought|purchase|purchasing|wire|transfer|transferring|"
               r"spend|spending|checkout|check out|deposit|withdraw|venmo|zelle|cash ?app|paypal|donate|reimburse)\b"
-              r"|\border (a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffee|\d)"),
+              r"|\border (a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffee|\d)"
+              + "|" + _MONEY_IDIOMS + "|" + _MONEY_SIGNAL.pattern),
     ("destroy", r"\b(delete|deletes|deleting|destroy|destroys|destroying|wipe|wipes|wiping|"
                 r"erase|erases|erasing|unsubscribe|unsubscribes|deactivate|deactivates)\b"
                 r"|\bcancel\w*\b.*\b(subscription|membership|order|account|reservation|booking|plan|"
@@ -210,6 +247,14 @@ class HarmLine:
         hard_text = _MEMORY_DELETE_METAPHOR.sub(" ", _MONEY_GERUND_NOUN.sub(" ", t))
         if _CART_ONLY_ACTION.search(t) and self._memory_has_cart_target(ctx, t):
             hard_text = _NO_PURCHASE_BOUND.sub(" ", hard_text)
+        # An invoice DRAFT/REVIEW shape ("invoice the client? no, draft it and let Jordan
+        # sanity-check the hours") owns its own dedicated ask path (rule 3.5,
+        # match_invoice_draft_ask). The new money-signal obligation noun "invoice" must NOT
+        # absorb it into the generic money branch — strip the bare invoice noun for this
+        # shape ONLY so it routes to the invoice_draft ask. A real spend on an invoice ("pay
+        # the invoice") never matches this shape and still gates as money via the verb.
+        if match_invoice_draft_ask(action_text or ""):
+            hard_text = re.sub(r"\binvoic(?:e|es|ing)\b", " ", hard_text)
         hard = _first_match(hard_text, _HARD)
         if hard is not None:
             return HarmVerdict(True, hard, f"detrimental:{hard} -> ask before acting")
@@ -290,6 +335,18 @@ class HarmLine:
         return bool(_REMINDER_TIME_ANCHOR.search(t[rem.start():clause_end]))
 
     def _assess_send(self, t: str, ctx: Optional[dict]) -> HarmVerdict:
+        # MONEY INTERLOCK (hard stop, money is the line we never auto-cross): a send that
+        # carries a money/amount signal — currency symbol, $N, a spelled/numeric amount with
+        # a scale word ("five hundred"), a debt/obligation noun (owe/rent/deposit/invoice/
+        # balance/payment/retainer/tab/bill/...), or a spoken money idiom — is MONEY even
+        # when it has no canonical spend verb ("Send Priya the five hundred we owe her").
+        # Force money (ASK/BLOCK) BEFORE the casual downgrade so a casual-recipient memory
+        # match can NEVER turn a payment into a casual_send ACT. _HARD already catches these
+        # at the top of assess(); this is the binding second gate on the send path.
+        if _MONEY_SIGNAL.search(t) or re.search(_MONEY_IDIOMS, t, re.I):
+            return HarmVerdict(True, "money",
+                               "send carries a money/amount signal -> money hard stop, ask/block "
+                               "(no casual downgrade)")
         top = float((ctx or {}).get("top_relevance", 0.0) or 0.0)
         abstain = bool((ctx or {}).get("abstain", True))
         if (not abstain) and top >= self.send_casual_floor and self._recipient_casual(t, ctx):

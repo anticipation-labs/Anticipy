@@ -119,6 +119,28 @@ BATTERY = [
     ("Re-read the draft. Now it's good - send the re-email before lunch.", True),
     ("Someone should get that letter drafted and over to Renee.", True),   # delegated outranks draft
     ("Get the package ready to send.", True),                              # purpose tail needs a draft frame
+    # ---- Apollo wave2 MONEY INTERLOCK: a payment phrased WITHOUT a spend verb is still
+    # money. A money/amount signal (currency, $N, spelled amount, owe/rent/deposit/invoice/
+    # balance/payment/retainer/tab/bill/fee/...) forces money even on the send path; a
+    # non-money content send is never newly money-blocked ----
+    ("Send Priya the five hundred we owe her for the design work.", True),  # spelled amount + owe
+    ("Send Priya the $500 we owe her for the design work.", True),          # $N + owe
+    ("Send my brother what we owe for the tab.", True),                     # owe + tab idiom
+    # NON-money content send: with no casual memory a bare send fail-safe asks as
+    # binding_send (NOT money) — the "not newly money-blocked" proof lives in the casual-ctx
+    # MONEY_INTERLOCK_CTX_BATTERY below, where the same line correctly downgrades to act.
+    # ---- Apollo wave2 MONEY IDIOMS: spoken payments with no canonical spend verb that were
+    # slipping to the weak ask tier now classify as money ----
+    ("Square up with the bartender.", True),
+    ("Cover the tab tonight.", True),
+    ("Cover my half of the rent.", True),
+    ("Tip the delivery driver 20 percent.", True),
+    ("Prepay the caterer.", True),
+    ("Float me a hundred bucks until Friday.", True),
+    ("Chip in for the group gift.", True),
+    ("Settle the invoice with the printer.", True),
+    ("Put a hundred bucks on my account.", True),
+    ("Put $50 on the gift card.", True),
     # ---- F28: money gerund-noun compounds are vocabulary, not spending ----
     ("The purchasing window closes soon. Draft the order email to Vicky.", False),
     ("Book a follow-up with the Brightline folks for Thursday 2pm.", False),
@@ -213,6 +235,30 @@ SLOT_CTX_BATTERY = [
      True),
 ]
 
+# ---- Apollo wave2 MONEY INTERLOCK (the load-bearing pin): even with MAXIMAL-confidence
+# casual-recipient memory (high top_relevance, not abstaining, a casual word in context),
+# a money/amount-bearing send must NEVER downgrade to casual_send ACT. Money is the hard
+# stop. A non-money content send to the same casual contact still downgrades to act, so
+# the interlock is scoped to money and does not over-block.
+_CASUAL_SISTER = {"top_relevance": 0.95, "abstain": False,
+                  "context": {"profile": "Priya is my sister; we are close."}}
+MONEY_INTERLOCK_CTX_BATTERY = [
+    # (label, line, ctx, should_ask, expect_category_or_None)
+    ("spelled-amount owe send, casual ctx -> money ASK not casual_send",
+     "Send Priya the five hundred we owe her for the design work.", _CASUAL_SISTER, True, "money"),
+    ("$N owe send, casual ctx -> money ASK not casual_send",
+     "Send Priya the $500 we owe her for the design work.", _CASUAL_SISTER, True, "money"),
+    ("cover-half-rent send, casual ctx -> money ASK",
+     "Send my brother the money to cover his half of the rent.", _CASUAL_SISTER, True, "money"),
+    ("chip-in amount send, casual ctx -> money ASK",
+     "Send my brother a hundred bucks to chip in for the group gift.", _CASUAL_SISTER, True, "money"),
+    # the scope guard: a NON-money content send to the same casual contact still downgrades
+    ("non-money content send, casual ctx -> casual_send ACT (not over-blocked)",
+     "Send my sister the photos from the trip.", _CASUAL_SISTER, False, "casual_send"),
+    ("non-money content send, casual ctx -> casual_send ACT (not over-blocked)",
+     "Text mom I'll be five minutes late.", _CASUAL_SISTER, False, "casual_send"),
+]
+
 
 def main():
     harm = HarmLine()
@@ -282,6 +328,15 @@ def main():
         print(f"  {'ok  ' if ok else 'FAIL'} {label}: detrimental={v.detrimental} ({v.category})")
         if not ok:
             fails.append(f"F36 slot-ctx pin failed: {label} -> {v.category}")
+
+    print("---- Apollo wave2 MONEY INTERLOCK (casual-recipient downgrade is forbidden on money) ----")
+    for label, text, ctx, should_ask, want_cat in MONEY_INTERLOCK_CTX_BATTERY:
+        v = harm.assess(text, ctx)
+        ok = (v.detrimental == should_ask) and (want_cat is None or v.category == want_cat)
+        print(f"  {'ok  ' if ok else 'FAIL'} {label}: detrimental={v.detrimental} ({v.category})")
+        if not ok:
+            fails.append(f"money-interlock pin failed: {label} -> "
+                         f"detrimental={v.detrimental} cat={v.category} (want ask={should_ask}, cat={want_cat})")
 
     if fails:
         print("==== FAIL ===="); [print("   -", f) for f in fails]; sys.exit(1)
