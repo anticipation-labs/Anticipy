@@ -122,11 +122,7 @@ def test_brain_reuse():
 # ----------------------------------------------------------------------------------
 # 4) END TO END: a SIMULATED ConversationRelay websocket exchange (no real Twilio).
 # ----------------------------------------------------------------------------------
-def test_cr_websocket_end_to_end():
-    from fastapi.testclient import TestClient
-
-    from anticipy_engine.main import app
-
+def test_cr_websocket_end_to_end(client):
     def reply_for(ws):
         """Read streamed {type:"text", token} frames until last:true; return the sentence."""
         parts = []
@@ -138,9 +134,10 @@ def test_cr_websocket_end_to_end():
                 break
         return "".join(parts)
 
-    # ONE TestClient (the engine's `core` is a module singleton; a second TestClient would
-    # rebind the bus to a new event loop). Multiple websocket connections within it are fine.
-    with TestClient(app) as client:
+    # ONE TestClient is shared across every WS test (the engine's `core` is a module
+    # singleton; a second TestClient would rebind the bus to a new event loop). Multiple
+    # websocket connections within it are fine.
+    if True:
         with client.websocket_connect("/cr") as ws:
             # Twilio opens with a setup control frame — acknowledged, no reply expected.
             ws.send_json({"type": "setup", "callSid": "CAtest", "from": "+15555550123"})
@@ -179,11 +176,88 @@ def test_cr_websocket_end_to_end():
           "end-frame carries the verdict (NO real Twilio)")
 
 
+# ----------------------------------------------------------------------------------
+# 5) AUTH: when the owner token is configured the /cr WS demands it on the handshake.
+# ----------------------------------------------------------------------------------
+def test_cr_websocket_owner_token_gate(client):
+    """The /cr socket is an owner route; the HTTP owner-token middleware never runs for
+    a WS handshake, so /cr must authenticate itself (like /ws/extension) BEFORE accept().
+
+    Twilio ConversationRelay can't set custom headers, so the token rides as ?token=.
+    Pins: no token configured -> open (dev); token configured -> a connect WITHOUT it is
+    rejected (closed, no brain turn) and a connect WITH it works; a wrong token is rejected."""
+    from starlette.websockets import WebSocketDisconnect
+
+    TOKEN = "owner-cr-token-abcde"
+
+    def turn_ok(ws):
+        """Drive one ACT turn and confirm the brain actually replied (auth let us in)."""
+        ws.send_json({"type": "prompt", "voicePrompt": "remind me to call the dentist tomorrow"})
+        parts = []
+        while True:
+            f = ws.receive_json()
+            assert f["type"] == "text", f
+            parts.append(f["token"])
+            if f.get("last"):
+                break
+        assert "take care of that" in "".join(parts), ("expected ACT reply", parts)
+
+    old = os.environ.get("ANTICIPY_OWNER_API_TOKEN")
+    try:
+        # (a) No token configured -> dev path: /cr stays open with no ?token=.
+        os.environ.pop("ANTICIPY_OWNER_API_TOKEN", None)
+        with client.websocket_connect("/cr") as ws:
+            turn_ok(ws)
+
+        # Token configured for the rest.
+        os.environ["ANTICIPY_OWNER_API_TOKEN"] = TOKEN
+
+        # (b) No token on the handshake -> rejected before accept(): the connect itself
+        # raises WebSocketDisconnect (server closed; the brain never ran a turn).
+        rejected = False
+        try:
+            with client.websocket_connect("/cr") as ws:
+                ws.send_json({"type": "prompt", "voicePrompt": "remind me to call the dentist"})
+                ws.receive_json()  # should never arrive — the socket was closed pre-accept
+        except WebSocketDisconnect:
+            rejected = True
+        assert rejected, "an unauthenticated /cr connect (token configured) must be rejected"
+
+        # (c) Wrong token -> also rejected.
+        rejected_wrong = False
+        try:
+            with client.websocket_connect("/cr?token=not-the-token") as ws:
+                ws.send_json({"type": "prompt", "voicePrompt": "hello"})
+                ws.receive_json()
+        except WebSocketDisconnect:
+            rejected_wrong = True
+        assert rejected_wrong, "a wrong-token /cr connect must be rejected"
+
+        # (d) Correct token on the ?token= query param -> the socket works (Twilio path).
+        with client.websocket_connect(f"/cr?token={TOKEN}") as ws:
+            turn_ok(ws)
+    finally:
+        if old is None:
+            os.environ.pop("ANTICIPY_OWNER_API_TOKEN", None)
+        else:
+            os.environ["ANTICIPY_OWNER_API_TOKEN"] = old
+    print("PASS cr_websocket_auth: /cr demands the owner token on the handshake when configured "
+          "(reject w/o it, reject wrong, accept with ?token=), open in dev (no token set)")
+
+
 def main():
+    from fastapi.testclient import TestClient
+
+    from anticipy_engine.main import app
+
     test_twiml()
     test_stream_tokens()
     test_brain_reuse()
-    test_cr_websocket_end_to_end()
+    # ONE shared TestClient for every WS test: the engine's `core` is a module singleton,
+    # so a second TestClient would rebind its bus to a different event loop and crash.
+    with TestClient(app) as client:
+        test_cr_websocket_owner_token_gate(client)
+        test_cr_websocket_end_to_end(client)
     print("PASS conversation_relay: two-way voice transport (ConversationRelay) dev-proven, "
           "same decider, money=ASK, vent=SILENT")
 

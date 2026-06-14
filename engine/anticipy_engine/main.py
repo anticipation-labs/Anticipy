@@ -117,6 +117,29 @@ def _owner_api_authorized(request: Request, token: str) -> bool:
     return bool(supplied) and secrets.compare_digest(supplied, token)
 
 
+def _owner_ws_authorized(ws: WebSocket) -> bool:
+    """Owner-token gate for owner WebSockets (e.g. Twilio ConversationRelay /cr).
+
+    The HTTP owner-token middleware never runs for the WS handshake, so each owner
+    WS must check the token itself BEFORE ws.accept() — exactly as /ws/extension
+    does. When ANTICIPY_OWNER_API_TOKEN is unset (local dev / deterministic suite),
+    the socket stays open. When it is set, the caller must present the token. Twilio
+    ConversationRelay cannot set custom headers, so we accept it on the handshake as
+    a ?token= query param (header/bearer also honored for other clients)."""
+    token = _owner_api_token()
+    if not token:
+        return True  # no token configured -> dev/local path stays open
+    supplied = (ws.query_params.get("token") or "").strip()
+    if not supplied:
+        header = (ws.headers.get(OWNER_TOKEN_HEADER) or "").strip()
+        auth = (ws.headers.get("authorization") or "").strip()
+        if header:
+            supplied = header
+        elif auth.lower().startswith("bearer "):
+            supplied = auth[7:].strip()
+    return bool(supplied) and secrets.compare_digest(supplied, token)
+
+
 @app.middleware("http")
 async def owner_api_auth(request: Request, call_next):
     """Optional public-deploy guard.
@@ -981,6 +1004,12 @@ async def conversation_relay(ws: WebSocket) -> None:
     The reply is words only — judging a line and speaking the verdict. The real act/ask
     still flows through the proactive spine on the ambient transcript, money stays a hard
     ASK, and a vent stays SILENT, exactly as the decider's contract guarantees."""
+    if not _owner_ws_authorized(ws):
+        # No owner token on the handshake while one is configured: reject before
+        # accept() so an unauthenticated caller can never drive the decider brain.
+        await ws.close(code=1008)  # policy violation
+        core.glassbox.log("conversation_relay", {"event": "rejected_unauthenticated"})
+        return
     await ws.accept()
     brain = _relay_brain()
     core.glassbox.log("conversation_relay", {"event": "connected"})
