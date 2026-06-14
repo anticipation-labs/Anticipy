@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .agent import WebVoyagerAgent, judge
 from .capture.transcribe import is_audio_file, transcribe_audio
+from .channels.conversation_relay import ConversationRelayBrain, stream_tokens
 from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
 from .core.envelopes import EventSource, Job, new_id
@@ -596,6 +597,73 @@ class AgentJudgeIn(BaseModel):
 @app.post("/agent/judge")
 async def agent_judge(body: AgentJudgeIn) -> dict:
     return await judge(gateway_agent, body.task, {"answer": body.answer, "final_url": body.final_url})
+
+
+def _relay_brain() -> ConversationRelayBrain:
+    """The brain for the two-way voice line — the SAME Room 1.5 decider, never a fork.
+
+    Live engines (ANTICIPY_MODEL_PROVIDER=openrouter) already hold a constructed decider on
+    the proactive engine; reuse that exact instance. Stub engines skip the decider for a
+    deterministic suite, so build the very same ``Decider`` class on the engine's own
+    gateway — identical prompt, parse, and verdicts. Either way the voice answers with the
+    same judgment the always-listening loop would make on that line."""
+    decider = getattr(core.proactive, "decider", None)
+    if decider is not None:
+        return ConversationRelayBrain(decider)
+    return ConversationRelayBrain.from_gateway(core.gateway, glassbox=core.glassbox)
+
+
+@app.websocket("/cr")
+async def conversation_relay(ws: WebSocket) -> None:
+    """Twilio ConversationRelay socket — the two-way voice turn loop (the 2:45 call).
+
+    Twilio attaches here (via the <Connect><ConversationRelay url=...> TwiML) and speaks
+    JSON frames. We answer with the SAME decider/brain the proactive engine runs:
+
+      <- {type:"setup", ...}                 (Twilio call metadata; acknowledged, no reply)
+      <- {type:"prompt", voicePrompt:"..."}  (one owner utterance, transcribed by Twilio)
+      -> {type:"text", token:"...", last:false} * N   (the brain's reply, streamed)
+      -> {type:"text", token:"", last:true}           (turn's reply complete)
+      ...repeat for each owner turn...
+      <- {type:"interrupt"} / {type:"dtmf"}  (acknowledged; barge-in stops the turn)
+      -> {type:"end", handoffData:{...}}     (on hang-up: what the brain decided)
+
+    The reply is words only — judging a line and speaking the verdict. The real act/ask
+    still flows through the proactive spine on the ambient transcript, money stays a hard
+    ASK, and a vent stays SILENT, exactly as the decider's contract guarantees."""
+    await ws.accept()
+    brain = _relay_brain()
+    core.glassbox.log("conversation_relay", {"event": "connected"})
+    last_handoff: dict = {"event": "no_prompt"}
+    try:
+        while True:
+            msg = await ws.receive_json()
+            kind = msg.get("type")
+            if kind == "prompt":
+                turn = await brain.turn(msg.get("voicePrompt") or "")
+                last_handoff = turn.handoff_data()
+                # stream the reply as ConversationRelay text tokens; the FINAL frame
+                # carries last:true so Twilio knows the turn's speech is complete
+                tokens = list(stream_tokens(turn.reply))
+                for tok in tokens:
+                    await ws.send_json({"type": "text", "token": tok, "last": False})
+                await ws.send_json({"type": "text", "token": "", "last": True})
+                core.glassbox.log("conversation_relay",
+                                  {"event": "turn", "verdict": turn.verdict})
+            elif kind in ("interrupt", "dtmf", "setup"):
+                # Twilio control frames — nothing to say back; the next prompt drives.
+                continue
+            else:
+                # Unknown frame: stay silent rather than guess (mirrors the decider's bias).
+                continue
+    except WebSocketDisconnect:
+        pass
+    finally:
+        # Close the turn with the brain's last verdict so a downstream Twilio Function
+        # (or the call log) can see what Anticipy decided on this call.
+        with suppress(Exception):
+            await ws.send_json({"type": "end", "handoffData": last_handoff})
+        core.glassbox.log("conversation_relay", {"event": "disconnected"})
 
 
 @app.websocket("/ws/extension")

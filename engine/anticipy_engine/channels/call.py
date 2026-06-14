@@ -40,8 +40,47 @@ class CallChannel(Channel):
     @staticmethod
     def twiml(message: str) -> str:
         """Inline TwiML for the call: say the message. The text is XML-escaped and
-        bounded well under Twilio's 4000-char Twiml parameter cap."""
+        bounded well under Twilio's 4000-char Twiml parameter cap.
+
+        This is the ONE-SHOT, no-LLM FALLBACK: Twilio just speaks one fixed line and
+        hangs up ("calendar event made; I'll call you at 2:45"). Used when there is no
+        public wss URL to attach a ConversationRelay socket — it needs no brain and no
+        live socket, so it can never strand a call mid-turn."""
         return f"<Response><Say>{escape(message[:3000])}</Say></Response>"
+
+    @staticmethod
+    def conversation_relay_twiml(ws_url: str, greeting: str) -> str:
+        """Two-way TwiML: hand the live call to Twilio ConversationRelay over a websocket.
+
+        Researched shape (Twilio ConversationRelay): a <Connect> verb wrapping a single
+        <ConversationRelay> with the websocket ``url`` (must be wss://) and an optional
+        ``welcomeGreeting`` Twilio speaks before the first owner turn. Twilio then runs
+        the ASR+TTS and exchanges JSON frames with that socket — owner speech arrives as
+        {type:"prompt", voicePrompt}, our reply streams back as {type:"text", token}, and
+        the turn closes with {type:"end"}. Attributes are XML-escaped (quotes too, since
+        they sit inside double-quoted attributes); the greeting is bounded like the <Say>
+        path so the whole TwiML stays well under Twilio's 4000-char cap.
+
+        This is the two-way UPGRADE of ``twiml`` — same call, but the owner can answer and
+        be answered instead of only being spoken at. ``twiml`` stays the fallback when no
+        public wss URL exists for the /cr endpoint."""
+        url = escape(ws_url, {'"': "&quot;"})
+        greet = escape(greeting[:1500], {'"': "&quot;"})
+        return (
+            "<Response><Connect>"
+            f'<ConversationRelay url="{url}" welcomeGreeting="{greet}" />'
+            "</Connect></Response>"
+        )
+
+    def call_twiml(self, message: str) -> str:
+        """Pick the TwiML for an outbound call: two-way ConversationRelay when a public
+        websocket URL for the /cr endpoint is configured (ANTICIPY_CR_WSS_URL=wss://...),
+        else the one-shot <Say> fallback. The message doubles as the welcome greeting on
+        the two-way path, so the owner hears the same opening line either way."""
+        ws_url = (os.environ.get("ANTICIPY_CR_WSS_URL") or "").strip()
+        if ws_url.startswith("wss://"):
+            return self.conversation_relay_twiml(ws_url, message)
+        return self.twiml(message)
 
     def send(self, to: str, message: str) -> dict:
         if not self._live():
@@ -57,7 +96,7 @@ class CallChannel(Channel):
         token = os.environ["TWILIO_AUTH_TOKEN"]
         url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Calls.json"
         data = urllib.parse.urlencode({"To": to, "From": os.environ["TWILIO_FROM"],
-                                       "Twiml": self.twiml(message)}).encode()
+                                       "Twiml": self.call_twiml(message)}).encode()
         req = urllib.request.Request(url, data=data)
         # Explicit basic-auth header: HTTPBasicAuthHandler only answers a 401 whose
         # realm matches, which is an avoidable live failure mode for a first call.

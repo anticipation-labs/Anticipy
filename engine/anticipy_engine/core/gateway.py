@@ -323,6 +323,32 @@ def default_stub(task: str, tier: str, caller: str) -> str:
         decision = "ask_first" if risky else ("do_and_notify" if actionable else "ignore")
         return json.dumps({"decision": decision, "reason": f"stub gate read of: {task[:80]}"})
 
+    if caller == "decider":
+        # Room 1.5 commitment verdict, deterministic for the stub suite. The decider
+        # prompt embeds the utterance as a trailing `Line: "..."`; judge THAT line, not
+        # the prompt boilerplate (which itself names ACT/ASK/SILENT). Mirrors the
+        # decider's own bias: money/contact -> ASK, a safe handed-off task -> ACT, else
+        # SILENT (acting on a non-commitment is the cardinal sin). The real model owns
+        # this in live mode; this only keeps the two-way voice + decider tests free.
+        m = re.search(r'line:\s*"(.*)"\s*$', task, flags=re.IGNORECASE | re.DOTALL)
+        line = (m.group(1) if m else task).lower()
+        # Verdict literals match proactive/decider.py (ACT/ASK/SILENT); kept as plain
+        # strings here to avoid importing decider (which imports this module). Ordering
+        # mirrors the decider's bias: money is ALWAYS ASK first; then a safe self-task
+        # (a reminder/list/draft is ACT even when it mentions a person the owner will
+        # contact themselves); then a directly handed-off contact step is ASK; else SILENT.
+        if any(k in line for k in ("pay", "wire", "venmo", "transfer", " $", "send $",
+                                   "buy ", "checkout")):
+            return "ASK"
+        if any(k in line for k in ("remind me", "add ", "put ", "draft ", "schedule ",
+                                   "set a reminder", "to the list", "to the cart",
+                                   "calendar", "note that")):
+            return "ACT"
+        if any(k in line for k in ("text ", "email ", "call the ", "rsvp", "book ",
+                                   "cancel on", "tell ", "message ", "reply to")):
+            return "ASK"
+        return "SILENT"
+
     if caller == "plan":
         goal_line = _goal_line_from_plan(task)
         if _SELF_REMINDER_RE.search(task):
