@@ -22,6 +22,18 @@ function bearerToken(value) {
   return match ? match[1].trim() : "";
 }
 
+function requestHost(request) {
+  const h = request?.headers?.get?.("host") || request?.headers?.get?.("x-forwarded-host") || "";
+  return h.split(":")[0].trim().toLowerCase();
+}
+
+// True only for a same-machine request. Used so a tokenless install stays frictionless for the
+// single owner on their own Mac, while a PUBLIC deploy without a token is NOT wide open.
+export function isLocalRequest(request) {
+  const host = requestHost(request);
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]" || host === "";
+}
+
 function cookieValue(request, name) {
   const nextCookie = request?.cookies?.get?.(name)?.value;
   if (nextCookie) return nextCookie;
@@ -40,17 +52,24 @@ export function ownerTokenMatches(value) {
 
 export function ownerAccessGranted(request) {
   const token = configuredOwnerToken();
-  if (!token) return true;
+  if (!token) {
+    // DEFAULT-SECURE: with no owner token configured, grant ONLY a local (same-machine) request.
+    // A PUBLIC deploy without a token must never hand a stranger full owner control — deny until
+    // ANTICIPY_APP_OWNER_TOKEN is set. (Closes the audit's "owner gate off by default" hole.)
+    return isLocalRequest(request);
+  }
   const headerToken = request?.headers?.get?.("x-anticipy-app-token") || bearerToken(request?.headers?.get?.("authorization"));
   return headerToken === token || cookieValue(request, OWNER_SESSION_COOKIE) === token;
 }
 
 export function ownerAccessStatus(request) {
-  const required = ownerAccessRequired();
-  return {
-    required,
-    authenticated: !required || ownerAccessGranted(request),
-  };
+  const token = configuredOwnerToken();
+  if (!token) {
+    // no token: local is open (single-owner dev), public is locked-out (must configure a token)
+    const local = isLocalRequest(request);
+    return { required: !local, authenticated: local };
+  }
+  return { required: true, authenticated: ownerAccessGranted(request) };
 }
 
 export function requireOwnerRequest(request) {
