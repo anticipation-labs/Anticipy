@@ -32,6 +32,7 @@ from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
 from .core.envelopes import EventSource, Job, new_id
 from .core.gateway import PROVIDER_OPENROUTER, ModelGateway
+from .hands import browser_use_link
 from .owner_onboarding import OwnerOnboardingIn
 
 ENGINE_NAME = "anticipy-engine"
@@ -279,6 +280,123 @@ def _readiness(channels: dict) -> dict:
         else "local_mock"
     )
     return {"overall": overall, "items": items}
+
+
+def _env_present(*names: str) -> bool:
+    """True only if at least one of the named env vars is set to a non-empty value.
+    Reports PRESENCE ONLY — the value is never returned, logged, or compared."""
+    return any((os.environ.get(n) or "").strip() for n in names)
+
+
+def _user_vault_connected() -> bool:
+    """Has THIS engine's configured user connected any app through the per-user token
+    vault? Reads only the vault's app-name index (never a token); returns False on any
+    error so a missing/locked vault never throws into the readiness checklist."""
+    broker = getattr(core.api_hand, "_broker", None)
+    vault = getattr(broker, "vault", None) if broker is not None else None
+    if vault is None:
+        return False
+    try:
+        return bool(vault.apps(core.api_hand.user_id))
+    except Exception:  # noqa: BLE001 — readiness must never fail on vault state
+        return False
+
+
+def _connect_readiness() -> dict:
+    """The guided 'Connect your accounts' checklist. For each capability that unlocks a
+    LIVE owner action, report {capability, status: live|needs_connect, what_to_do} using
+    PRESENCE/ABSENCE of config only — never a secret value, number, or token. This turns
+    the live-unlock into an honest checklist the owner can work through; it grants nothing
+    and connects nothing."""
+    channels = core.channel_status()
+
+    # Google / Arcade — the API hand. Live needs the shared ARCADE_API_KEY OR this user's
+    # per-user vault connection, AND the hand running in live mode.
+    arcade_key = _env_present("ARCADE_API_KEY")
+    per_user_vault = _user_vault_connected()
+    api_live = core.api_hand.mode == "live" and (arcade_key or per_user_vault)
+    if api_live:
+        google_what = "Connected. Google Calendar / Gmail run as live API actions."
+    elif arcade_key or per_user_vault:
+        google_what = (
+            "Credentials present but the API hand is in mock mode. Start the engine with "
+            "ANTICIPY_HANDS_MODE=live to run real Google actions."
+        )
+    else:
+        google_what = (
+            "Sign in to Arcade and authorize Google (Calendar + Gmail), then set "
+            "ARCADE_API_KEY (or connect your account to the per-user vault) and run the "
+            "engine with ANTICIPY_HANDS_MODE=live."
+        )
+
+    # Twilio voice/text — channels mode + creds (presence only via channel_status()).
+    channels_mode = channels.get("mode")
+    channels_status = channels.get("status")
+    twilio_live = channels_mode == "live" and channels_status == "live_ready"
+    if twilio_live:
+        twilio_what = "Connected. The voice/SMS line can text you and call you back."
+    elif channels_status == "ready_to_enable":
+        twilio_what = (
+            "Twilio and your phone are configured; live mode is off. Set "
+            "ANTICIPY_CHANNELS_MODE=live to turn the call/text line on."
+        )
+    elif channels_status == "missing_owner_contact":
+        twilio_what = "Set your phone number (OWNER_PHONE) so the line can reach you."
+    else:
+        twilio_what = (
+            "Create a Twilio account, then set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, "
+            "TWILIO_FROM, and OWNER_PHONE, and run with ANTICIPY_CHANNELS_MODE=live."
+        )
+
+    # Browser bridge — the gitignored 3.11 browser_use venv (engine/.bu-venv).
+    bridge = browser_use_link.available()
+    browser_live = bool(bridge.get("ok"))
+    if browser_live:
+        browser_what = "Connected. The browser hand can run real read/act sessions in your Chrome."
+    else:
+        browser_what = (
+            "Install the browser bridge: create the engine/.bu-venv Python 3.11 venv and "
+            "install browser_use (see scripts), so the browser hand can drive your Chrome."
+        )
+
+    # Apple signing — the live-deferred one-click public download (Omar's Apple account).
+    apple_live = _env_present("APPLE_DEVELOPER_ID")
+    apple_what = (
+        "Set. The desktop app can be code-signed and notarized for a one-click download."
+        if apple_live
+        else "Set APPLE_DEVELOPER_ID (your Apple Developer account) to sign + notarize the "
+        "public download. Until then the dev build opens via right-click -> Open."
+    )
+
+    def _cap(capability: str, label: str, live: bool, what_to_do: str) -> dict:
+        return {
+            "capability": capability,
+            "label": label,
+            "status": "live" if live else "needs_connect",
+            "what_to_do": what_to_do,
+        }
+
+    items = [
+        _cap("google_arcade", "Google (Calendar + Gmail) via Arcade", api_live, google_what),
+        _cap("twilio", "Voice + SMS line (Twilio)", twilio_live, twilio_what),
+        _cap("browser_bridge", "Browser hand (your Chrome)", browser_live, browser_what),
+        _cap("apple_signing", "Signed public download (Apple)", apple_live, apple_what),
+    ]
+    live_count = sum(1 for it in items if it["status"] == "live")
+    return {
+        "overall": "all_live" if live_count == len(items) else "needs_connect",
+        "live_count": live_count,
+        "total": len(items),
+        "capabilities": items,
+    }
+
+
+@app.get("/readiness")
+def readiness() -> dict:
+    """Guided connect-your-accounts checklist: which live capabilities are connected vs
+    need-connecting, with the honest one-liner of what to do — exposing PRESENCE/ABSENCE
+    of config only, never any secret value. Read-only; grants and connects nothing."""
+    return _connect_readiness()
 
 
 @app.get("/health")
