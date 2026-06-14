@@ -54,11 +54,49 @@ _MONEY_SIGNAL = re.compile(
     r"retainer|copay|co-pay|tab|bill|bills|dues|fee|fees|tuition|mortgage)\b",
     re.I,
 )
+# The LEND-MONEY idiom family — a hand-cash request that carries NO scale word ("dollars"/
+# "bucks") and NO currency symbol, only a bare cardinal as the object of a transfer verb:
+# "Spot me forty for the cab", "Lend me fifty", "Front me twenty", "Give the mover fifty",
+# "Slip the valet ten", "Hand the babysitter forty", "Throw the kid twenty", "Kick in fifty".
+# These are binding cash sends, but with no scale word they slipped past _MONEY_SIGNAL to the
+# weak ASK tier (unclassified) — where a YES executes a real transfer. Shape: a transfer verb
+# (spot|lend|loan|front|float|slip|kick in|chip in) with an optional recipient, OR give|hand|
+# throw aimed at a NAMED person (determiner + noun, never "give me ..."), followed by a bare
+# cardinal. The cardinal must be a true money OBJECT: immediately at a clause boundary, a
+# conjunction/new clause, or a money tail (for .../till payday/back/toward/on the tab|bill).
+# If a plain noun follows instead ("give me five minutes", "front the team three laptops",
+# "give the kids ten cookies"), the cardinal is a QUANTIFIER of that noun -> NOT money. The
+# AFTER lookahead is the false-positive guard; "give me a hand"/"hand me the keys" carry no
+# cardinal and never match.
+_LEND_XFER_VERB = (
+    r"(?:spot|lend|lends|lending|lent|loan|loans|loaning|loaned|front|fronts|fronting|fronted|"
+    r"float|floats|floating|floated|slip|slips|slipping|slipped|kick in|kicks in|chip in|chips in)"
+)
+_LEND_GIVE_VERB = r"(?:give|gives|giving|gave|hand|hands|handing|handed|throw|throws|throwing|threw)"
+_LEND_RECIPIENT = r"(?:me|him|her|them|us|you|(?:the|a|an|my|your|his|her|our|their)\s+\w+)"
+_LEND_CARDINAL = (
+    r"(?:\d[\d,]*|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|"
+    r"twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)"
+)
+_LEND_OBJECT_END = (
+    r"(?="
+    r"\s*$"
+    r"|\s*[.,;!?]"
+    r"|\s+(?:and|or|so|then|please|now|i|i'?ll|we|we'?ll|ok|okay)\b"
+    r"|\s+for\b|\s+till\s+payday\b|\s+back\b|\s+toward[s]?\b"
+    r"|\s+on\s+(?:the\s+)?(?:tab|bill)\b"
+    r")"
+)
+_LEND_MONEY_IDIOM = (
+    r"\b" + _LEND_XFER_VERB + r"\b(?:\s+" + _LEND_RECIPIENT + r")?\s+(?:a\s+)?"
+    + _LEND_CARDINAL + _LEND_OBJECT_END
+    + r"|\b" + _LEND_GIVE_VERB + r"\b\s+(?:the|a|an|my|your|his|her|our|their)\s+\w+\s+(?:a\s+)?"
+    + _LEND_CARDINAL + _LEND_OBJECT_END
+)
 # Spoken money IDIOMS that carry no canonical spend verb and were slipping to the weak ASK
 # tier (unclassified) instead of the money category: square up, cover the tab/bill/rent/
 # half/cost, tip, prepay, float (someone N), chip in, settle the invoice, put $N / a
-# hundred bucks on (an account/card/tab). These belong in money so the interlock and the
-# scoreboard treat them as the hard stop.
+# hundred bucks on (an account/card/tab), plus the lend-money family above.
 _MONEY_IDIOMS = (
     r"\bsquare up\b"
     r"|\bcover(?:s|ing)?\s+(?:the|my|his|her|our|your|their)\s+(?:tab|bill|rent|half|cost|costs|share)\b"
@@ -69,6 +107,7 @@ _MONEY_IDIOMS = (
     r"|\bsettle\b[^.;!?]{0,20}\b(?:invoice|tab|bill|balance|debt|account)\b"
     r"|\bput\b\s+(?:\$?\d[\d,]*|a\s+(?:hundred|thousand|couple|few)|(?:one|two|five|ten|twenty|fifty)\b)"
     r"[\w\s-]{0,20}?\b(?:on|toward|towards)\b"
+    r"|" + _LEND_MONEY_IDIOM
 )
 # --- hard detrimental (ASK; override everything). Money = SPENDING verbs, not price mentions. ---
 _HARD = [
