@@ -194,6 +194,19 @@ class OnboardingProfileIn(BaseModel):
     sources: list = Field(default_factory=list)
 
 
+class OnboardingClarifyIn(BaseModel):
+    """Clarifying-call request: same name + PUBLIC sources as the profile build.
+
+    The endpoint builds the profile (read-only) then plans the short list of
+    clarifying questions Anticipy would ask on a phone call. `max_questions`
+    caps the call length ("a couple of questions").
+    """
+
+    name: str
+    sources: list = Field(default_factory=list)
+    max_questions: int = 5
+
+
 def _upload_roots() -> list[Path]:
     raw = os.environ.get("ANTICIPY_UPLOAD_ROOTS") or os.environ.get("ANTICIPY_UPLOAD_ROOT") or str(DEFAULT_UPLOAD_ROOT)
     return [Path(p).expanduser().resolve() for p in raw.split(os.pathsep) if p.strip()]
@@ -584,6 +597,48 @@ def _profile_browse_reader():
     return getattr(app.state, "profile_browse_reader", None)
 
 
+def _normalize_onboarding_sources(raw_name: str, raw_sources) -> tuple[str, list]:
+    """Validate + bound the {name, sources} shared by the profile/clarify routes.
+
+    Rejects empty names and non-public (non-http) sources early so we never
+    attempt a login-walled or file:// read. Raises HTTPException(422) on bad
+    input. Returns (clean_name, bounded_public_sources).
+    """
+    name = (raw_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name is required")
+    bounded = list(raw_sources or [])[:ONBOARDING_MAX_SOURCES]
+    sources: list = []
+    for s in bounded:
+        url = s.get("url") if isinstance(s, dict) else s
+        if not isinstance(url, str):
+            continue
+        url = url.strip()
+        if url.lower().startswith(("http://", "https://")):
+            sources.append(s)
+    if not sources:
+        raise HTTPException(status_code=422, detail="at least one public http(s) source URL is required")
+    return name, sources
+
+
+async def _build_onboarding_profile(name: str, sources: list):
+    """Build a profile (read-only) off the event loop, with the honest browser
+    probe. Shared by the /onboarding/profile and /onboarding/clarify routes so
+    the read path and its honesty signal stay identical.
+    """
+    from fastapi.concurrency import run_in_threadpool
+
+    from .hands.browser_use_link import available as _browser_available
+    from .onboarding.profile_builder import build_profile
+
+    reader = _profile_browse_reader()
+    probe = _browser_available()
+    profile = await run_in_threadpool(build_profile, name, sources, browse_reader=reader)
+    # An injected test reader counts as "available" for the assembly proof.
+    browser_available = bool(probe.get("ok")) or reader is not None
+    return profile, browser_available, probe
+
+
 @app.post("/onboarding/profile")
 async def onboarding_profile(body: OnboardingProfileIn) -> dict:
     """Owner-gated: build a structured, trust-graded profile of a person/entity
@@ -597,40 +652,13 @@ async def onboarding_profile(body: OnboardingProfileIn) -> dict:
     app.state.profile_browse_reader so the assembly path is exercised without a
     live browser.
     """
-    from fastapi.concurrency import run_in_threadpool
+    name, sources = _normalize_onboarding_sources(body.name, body.sources)
+    profile, browser_available, probe = await _build_onboarding_profile(name, sources)
 
-    from .hands.browser_use_link import available as _browser_available
-    from .onboarding.profile_builder import build_profile
-
-    name = (body.name or "").strip()
-    if not name:
-        raise HTTPException(status_code=422, detail="name is required")
-
-    # Bound + normalize sources; reject obviously non-public/non-http inputs early
-    # so we never attempt a login-walled or file:// read.
-    raw_sources = list(body.sources or [])[:ONBOARDING_MAX_SOURCES]
-    sources: list = []
-    for s in raw_sources:
-        url = s.get("url") if isinstance(s, dict) else s
-        if not isinstance(url, str):
-            continue
-        url = url.strip()
-        if url.lower().startswith(("http://", "https://")):
-            sources.append(s)
-    if not sources:
-        raise HTTPException(status_code=422, detail="at least one public http(s) source URL is required")
-
-    reader = _profile_browse_reader()
-    probe = _browser_available()
-
-    # build_profile shells out to the browser bridge (blocking) -> off the loop.
-    profile = await run_in_threadpool(
-        build_profile, name, sources, browse_reader=reader
-    )
     out = profile.as_dict()
     # Honesty signal: was a real browser arm usable for this build? An injected
     # test reader counts as "available" for the purpose of the assembly proof.
-    out["browser_available"] = bool(probe.get("ok")) or reader is not None
+    out["browser_available"] = browser_available
     out["browser_probe"] = {"ok": bool(probe.get("ok")), "runner_exists": bool(probe.get("runner_exists"))}
     core.glassbox.log(
         "onboarding_profile_built",
@@ -641,6 +669,71 @@ async def onboarding_profile(body: OnboardingProfileIn) -> dict:
             "needs_cross_check": out["summary"]["needs_cross_check"],
             "sources_read_ok": out["summary"]["sources_read_ok"],
             "browser_available": out["browser_available"],
+        },
+    )
+    return out
+
+
+@app.api_route("/onboarding/clarify", methods=["GET", "POST"])
+async def onboarding_clarify(request: Request) -> dict:
+    """Owner-gated: plan the CLARIFYING CALL for a built profile.
+
+    Builds the profile (read-only, same path as /onboarding/profile) then runs
+    the deterministic clarify planner over it: the short, ranked list of
+    questions Anticipy would ask on a phone call — disagreements first, then
+    low-confidence confirmations, then unreadable-source gaps, then missing core
+    fields — capped so it's "a couple of questions." The phone delivery itself
+    (Twilio voice) is LIVE-DEFERRED; this is the brain that decides what to ask.
+
+    Accepts the request as a JSON body (POST) or query params (GET:
+    ?name=...&sources=url1&sources=url2&max_questions=5), so a built profile's
+    questions are fetchable either way. Honest by construction: only asks about
+    uncertainty the profile actually records; no live browser is required in CI
+    (an injected reader exercises the assembly path).
+    """
+    from .onboarding.clarify import clarify_payload
+
+    # Parse name/sources/max_questions from JSON body or query string.
+    if request.method == "POST":
+        try:
+            raw = await request.json()
+        except Exception:
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        raw_name = raw.get("name", "")
+        raw_sources = raw.get("sources", [])
+        raw_max = raw.get("max_questions", 5)
+    else:
+        qp = request.query_params
+        raw_name = qp.get("name", "")
+        raw_sources = qp.getlist("sources")
+        raw_max = qp.get("max_questions", 5)
+
+    try:
+        max_questions = int(raw_max)
+    except (TypeError, ValueError):
+        max_questions = 5
+    if max_questions < 0:
+        max_questions = 0
+
+    name, sources = _normalize_onboarding_sources(raw_name, raw_sources)
+    profile, browser_available, probe = await _build_onboarding_profile(name, sources)
+
+    out = clarify_payload(profile, max_questions=max_questions)
+    # Honesty signals mirrored from the build so an empty, honestly-degraded call
+    # plan is never mistaken for "no questions needed."
+    out["browser_available"] = browser_available
+    out["browser_probe"] = {"ok": bool(probe.get("ok")), "runner_exists": bool(probe.get("runner_exists"))}
+    out["blockers"] = list(getattr(profile, "blockers", []) or [])
+    core.glassbox.log(
+        "onboarding_clarify_planned",
+        {
+            "name": name,
+            "sources": len(sources),
+            "questions": out["summary"]["count"],
+            "by_reason": out["summary"]["by_reason"],
+            "browser_available": browser_available,
         },
     )
     return out
