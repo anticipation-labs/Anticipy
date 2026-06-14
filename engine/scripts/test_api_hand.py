@@ -87,6 +87,20 @@ async def main():
     assert r2.status == JobStatus.success and r2.output.get("idempotent") is True
     assert len(fake.executed) == before, "must not re-send (or re-read) on retry"
 
+    # DUPLICATE-SEND GUARD (audit fix): a live write that FIRES but whose read-back FAILS must
+    # NEVER be re-sent on retry — the email already went out. The retry re-verifies (read-back
+    # only) and hands to the human; it does NOT fire a second Gmail.SendEmail.
+    fake_ds = FakeArcade(); fake_ds.readback_finds_id = False
+    hand_ds = ApiHand(user_id="omar@anticipy.ai", client=fake_ds, mode=MODE_LIVE)
+    r_ds1 = await hand_ds.handle(job("send_email", approved=True, recipient="t@x.com", subject="hi", body="yo"))
+    assert r_ds1.status == JobStatus.failed, r_ds1  # wrote, read-back did not re-observe it
+    sends1 = [c for c in fake_ds.executed if c[0] == "Gmail.SendEmail"]
+    assert len(sends1) == 1, ("first attempt should fire exactly one send", fake_ds.executed)
+    r_ds2 = await hand_ds.handle(job("send_email", approved=True, recipient="t@x.com", subject="hi", body="yo"))
+    sends2 = [c for c in fake_ds.executed if c[0] == "Gmail.SendEmail"]
+    assert len(sends2) == 1, ("RETRY RE-SENT A LIVE WRITE (duplicate send!)", fake_ds.executed)
+    assert r_ds2.status == JobStatus.needs_human and r_ds2.output.get("already_fired") is True, r_ds2
+
     # defense in depth: HIGH-RISK write without approval flag -> needs_human, never executes
     fake2 = FakeArcade()
     hand2 = ApiHand(user_id="u", client=fake2, mode=MODE_LIVE)

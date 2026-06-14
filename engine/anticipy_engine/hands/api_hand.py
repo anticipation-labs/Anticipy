@@ -110,6 +110,12 @@ class ApiHand(Worker):
         # double-fires. `_idem_lock` makes reserve-or-wait atomic across coroutines.
         self._idem_lock = asyncio.Lock()
         self._inflight: dict = {}
+        # Writes whose LIVE side-effect already FIRED (execute() returned an id) but whose
+        # independent read-back has NOT yet confirmed. A retry or concurrent joiner must NEVER
+        # re-execute one of these — the email is already sent / the event already created — it
+        # re-verifies (read-back only) instead. Cleared once `idem` holds the confirmed proof.
+        # (Closes the audit's duplicate-send-on-read-back-failure hole.)
+        self._fired: dict = {}
         # Per-person API mesh: an optional TokenBroker (token_vault.py). When set AND
         # this user has connected the app a LIVE call touches, the hand authenticates
         # with THAT user's short-lived vault token instead of the shared ARCADE_API_KEY.
@@ -222,6 +228,10 @@ class ApiHand(Worker):
         if is_write and ikey in self.idem:
             return Result(job_id=job.id, status=JobStatus.success,
                           proof=self.idem[ikey], output={"idempotent": True})
+        # a write whose side-effect already FIRED but wasn't confirmed: re-verify only, NEVER
+        # re-execute (the artifact already exists — re-running would duplicate the real send).
+        if is_write and ikey in self._fired:
+            return await self._reverify_fired(job, tool, ikey)
 
         # CONCURRENCY: a write goes through the reserve-or-join guard so two presses of
         # the SAME line (same ikey) never both fire a real write. Reads never mutate, so
@@ -236,8 +246,10 @@ class ApiHand(Worker):
         of firing a duplicate real write. The reserve (marker insert) happens under the
         lock BEFORE the write's first await, closing the read-check-act window that the
         bare ``ikey in self.idem`` check leaves open (idem is only populated AFTER the
-        write+read-back). A joiner that finds the winner FAILED (nothing durably written,
-        idem unset) is free to run its own write — a failed attempt left no artifact."""
+        write+read-back). A joiner that finds the winner FAILED with NOTHING fired (idem unset
+        AND _fired unset) is free to run its own write — a clean failure left no artifact. But
+        a joiner that finds the winner FIRED-but-unconfirmed (_fired set) must re-verify, NEVER
+        re-write, or it would duplicate the real send."""
         while True:
             winner = False
             async with self._idem_lock:
@@ -245,6 +257,8 @@ class ApiHand(Worker):
                 if ikey in self.idem:
                     return Result(job_id=job.id, status=JobStatus.success,
                                   proof=self.idem[ikey], output={"idempotent": True})
+                if ikey in self._fired:
+                    break  # winner fired the side-effect but didn't confirm -> re-verify, no re-write
                 task = self._inflight.get(ikey)
                 if task is None:
                     # We are the winner: reserve the key (the in-flight task also clears
@@ -255,13 +269,14 @@ class ApiHand(Worker):
                     winner = True
             if winner:
                 return await task
-            # JOINER: wait for the in-flight write to finish, then return idempotent off its
-            # receipt. If the winner FAILED (idem still unset, marker cleared), loop and try
-            # to reserve the key ourselves — nothing real was written, so our write is safe.
+            # JOINER: wait for the in-flight write to finish, then loop. Next pass returns
+            # idempotent (winner confirmed -> idem), re-verifies (winner fired-but-unconfirmed
+            # -> _fired), or reserves its own write (clean failure -> nothing fired).
             try:
                 await asyncio.shield(task)
             except Exception:
                 pass
+        return await self._reverify_fired(job, tool, ikey)
 
     async def _write_and_release(self, job: Job, tool: str, ikey: str) -> Result:
         """Run one real write and ALWAYS clear the in-flight marker when it finishes, so a
@@ -271,6 +286,34 @@ class ApiHand(Worker):
         finally:
             async with self._idem_lock:
                 self._inflight.pop(ikey, None)
+
+    async def _reverify_fired(self, job: Job, tool: str, ikey: str) -> Result:
+        """A write whose side-effect already FIRED but was never confirmed: re-verify via an
+        independent read-back ONLY — never re-execute (the email is already sent / the event
+        already exists). If the read-back now confirms, succeed; otherwise hand to the human
+        and NEVER resend."""
+        rec = self._fired.get(ikey) or {}
+        written_id = rec.get("written_id")
+        if not written_id:
+            return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
+                          output={"reason": "a prior attempt already fired this action but it could "
+                                            "not be verified; not resending — please check manually",
+                                  "already_fired": True})
+        if self.mode == MODE_MOCK:
+            return Result(job_id=job.id, status=JobStatus.success,
+                          proof=self.idem.get(ikey) or {"id": written_id, "readback": True},
+                          output={"idempotent": True})
+        client = self._live_client(tool)
+        result = await self._readback_or_fail(job, client, tool, written_id, rec.get("value"), ikey)
+        if result.status == JobStatus.success:
+            self._fired.pop(ikey, None)
+            return result
+        # read-back still cannot confirm — but the side-effect HAPPENED. Hand to the human;
+        # do NOT resend.
+        return Result(job_id=job.id, status=JobStatus.needs_human, proof=None,
+                      output={"reason": f"already sent (id={written_id}) but could not auto-verify; "
+                                        "NOT resending — please confirm manually",
+                              "already_fired": True, "written_id": written_id})
 
     async def _execute(self, job: Job, tool: str, ikey: str, *, is_write: bool) -> Result:
         if self.mode == MODE_MOCK:
@@ -330,7 +373,15 @@ class ApiHand(Worker):
         # WRITES: the execute() response is the actor grading its own homework. It is NOT
         # trusted as proof on its own. Issue a SECOND, independent read of the artifact and
         # only report success if the written id is re-observed there. Fail closed otherwise.
-        return await self._readback_or_fail(job, client, tool, written_id, value, ikey)
+        #
+        # The write's side-effect HAS happened now (the email is sent / the event created), so
+        # record it BEFORE the read-back. If the read-back below fails, a retry/joiner will see
+        # this marker and re-verify instead of re-executing — never a duplicate real send.
+        self._fired[ikey] = {"written_id": written_id, "tool": tool, "value": value}
+        result = await self._readback_or_fail(job, client, tool, written_id, value, ikey)
+        if result.status == JobStatus.success:
+            self._fired.pop(ikey, None)  # confirmed -> idem now holds the proof
+        return result
 
     # The read the mock read-back "observes". A real artifact store would return the row
     # just written; here it echoes the written id back through the SAME confirm path. A
