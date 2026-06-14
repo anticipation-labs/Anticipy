@@ -57,10 +57,27 @@ Rules:
 - When stuck, change the KIND of action (scroll to reveal new options, press enter to submit, or choose a different element) — not merely a different number.
 - Set subgoal_done=true the moment the CURRENT subgoal is achieved. Use action=answer only when the WHOLE task is done."""
 
-# Real purchase-confirm controls only. NOT "submit order" (that's a generic form
-# submit, e.g. demo forms) — too broad a match was false-stopping legit tasks.
+# Real purchase-CONFIRM controls only — money is the hard stop, so this backstop STOPS the
+# agent before any control that finalizes a payment, and NEVER touches cart/navigation
+# controls (add-to-cart, go-to-cart, proceed/continue-to-checkout) which the cart task needs.
+# Precision rule: every alternative below is an UNAMBIGUOUS final-pay phrasing. Bare "submit"
+# and bare "checkout" are deliberately excluded (generic form submit / checkout-page nav) — a
+# too-broad match was false-stopping legit tasks. "submit ORDER/PAYMENT" (with the noun) and
+# "complete CHECKOUT" (finalize, not navigate) ARE final-pay and are caught. Tested in
+# engine/scripts/test_purchase_guard.py (money controls blocked, cart/nav controls allowed).
 PURCHASE_GUARD = re.compile(
-    r"place\s+(your\s+)?order|buy\s*now|complete\s+(your\s+)?purchase|pay\s+now|confirm\s+(and\s+)?(order|purchase|pay)",
+    r"place\s+(your\s+)?order"
+    r"|buy\s*now"
+    r"|complete\s+(your\s+)?(purchase|order|checkout|payment)"
+    r"|pay\s+now"
+    r"|\bpay\s*\$?\s*\d"                          # "Pay $49.99" / "Pay 49" — a final pay with an amount
+    r"|finish\s+(?:(?:and|&)\s+)?pay(ment)?"
+    r"|proceed\s+to\s+payment"                    # NOT "proceed to checkout" (that is navigation)
+    r"|submit\s+(your\s+)?(order|payment)"        # NOT bare "submit" (demo/generic forms)
+    r"|confirm\s+(?:(?:and|&)\s+)?(order|purchase|pay|payment)"
+    r"|reserve\s+(?:(?:and|&)\s+)?pay"
+    r"|place\s+(your\s+)?bid"                      # auction money commit
+    r"|subscribe\s+(?:(?:and|&)\s+)?pay",
     re.I,
 )
 BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha",

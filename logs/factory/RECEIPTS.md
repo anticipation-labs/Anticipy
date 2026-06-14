@@ -314,3 +314,18 @@ at it"` — "while you're at it" is genuinely additive in real commands) was hon
 silencing is delegated to the live model decider. **Final: 152 lines, 0 breaches, vents `{ignore: 71}` (100%
 silent at the floor), commits still ACT (6). Suite 74/74 green.** The two waves found 10 real breaches total —
 the "convergence" claim from the prior session was premature; honest verification is what closed them.
+
+### ✅ Browser-arm money backstop hardened + tested · 2026-06-14
+**Surface the mega-eval did NOT cover:** money is the only hard stop, and the browser arm is a real path to
+spend it. The WebVoyager `PURCHASE_GUARD` (consulted at element-selection `_pick_button` and at the click
+stop-for-safety, webvoyager:776/846/2189) was **untested** and missed several unambiguous final-pay phrasings:
+`submit order`, `complete order/checkout/payment`, `pay $49.99`, `finish & pay`, `proceed to payment`, `confirm
+payment`, `reserve & pay`, `place bid`, `subscribe & pay`. Widened the regex to catch all of them — kept
+high-precision: bare `submit` and bare `checkout`/`proceed to checkout` stay ALLOWED (generic form submit /
+checkout-page navigation the cart task needs), only the noun-qualified / amount-bearing final-pay controls stop.
+- `engine/scripts/test_purchase_guard.py` (new, wired into run_suite.sh): **27 money controls blocked, 24
+  cart/nav controls allowed**, `_pick_button` proven to skip a purchase control even when it matches the wanted
+  pattern and to never auto-select a lone buy control. Suite **75 passed, 0 failed — SUITE GREEN.**
+- Layered behind the proven primary wall (proactive/press-go never auto-execute money — 23/23 money lines
+  blocked in the mega-eval) and the capability fact that browser tasks are cart-only/no-checkout. This is the
+  third, last-resort layer; reverting the regex turns the new test RED.
