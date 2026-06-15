@@ -449,3 +449,18 @@ cardinal sin, HARD 0), silent_harm_count (money/tripwire executed, HARD 0), inte
 - STILL NEEDS OMAR (the actual Owner Test): real day KEYS in factory/owner/expected/ (his marked days) + a
   runner driving a day through the live engine emitting {decision,executed,proof} → score it. The scorer is
   ready; the days + his red-pen are his.
+
+### ✅ Slice 4: glassbox log is now a true BYTE cap (the disk bug that nearly killed the night) · 2026-06-15
+The runaway glassbox.jsonl (21GB, filled the disk → ENOSPC stalled the whole build for ~30 min) can't recur.
+engine/anticipy_engine/core/glassbox.py rotates on every log(): over the byte cap (default 8MB, env-tunable)
+it atomically rewrites the file with only the most recent lines that FIT the byte budget (old head dropped,
+newest kept).
+- Skeptic (refuted=TRUE first pass) found 3 real defects — ALL FIXED: (1) CRITICAL — int(os.environ...) was
+  OUTSIDE the try, so a malformed env value crashed the engine's hot logging path; now guarded + the whole
+  body is `except Exception` (logging can NEVER crash the engine). (2) KEEP_LINES=0 → lines[-0:] = whole file
+  (unbounded growth returned) → clamped >=1. (3) a huge KEEP_LINES defeated the cap → it's now a TRUE byte cap
+  (trim by bytes, immune to line count/size).
+- Receipt: engine/scripts/test_glassbox_rotation.py (in run_suite.sh) — proves bounded under any KEEP_LINES
+  (0 / huge), survives a malformed env value without crashing, keeps the newest entries, defaults untouched.
+  Suite 81→82 green, floor 0. Known accepted limitation (dev log, not durable state): a concurrent append
+  during rotation can be dropped.

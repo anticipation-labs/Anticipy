@@ -8,10 +8,17 @@ allowed. Local only.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import List
 
 from .envelopes import now_ts
+
+# Size cap so the append-only log can NEVER grow unbounded (a runaway glassbox.jsonl once hit
+# 21GB and filled the disk). On overflow we keep the most recent lines and drop the old head.
+# Tunable via env; this is a dev/activity log surfaced in the app feed, not durable state.
+_DEFAULT_MAX_BYTES = 8 * 1024 * 1024   # 8 MB
+_DEFAULT_KEEP_LINES = 4000
 
 
 class GlassBox:
@@ -24,6 +31,46 @@ class GlassBox:
         entry = {"ts": now_ts(), "kind": kind, "data": data}
         with self.path.open("a") as fh:
             fh.write(json.dumps(entry) + "\n")
+        self._maybe_rotate()
+
+    def _maybe_rotate(self) -> None:
+        """Keep the log bounded: if it exceeds the byte cap, atomically rewrite it with only the
+        most recent lines that FIT the byte budget (old head dropped). A true BYTE cap — immune to
+        a huge / zero KEEP_LINES or long lines — and it NEVER raises into the caller (logging must
+        not crash the engine, even on a malformed env value). Concurrent writers may drop an
+        in-flight append during rotation; acceptable for a dev activity log, not durable state."""
+        try:
+            try:
+                max_bytes = int(os.environ.get("ANTICIPY_GLASSBOX_MAX_BYTES", "") or _DEFAULT_MAX_BYTES)
+            except (TypeError, ValueError):
+                max_bytes = _DEFAULT_MAX_BYTES
+            try:
+                keep_lines = int(os.environ.get("ANTICIPY_GLASSBOX_KEEP_LINES", "") or _DEFAULT_KEEP_LINES)
+            except (TypeError, ValueError):
+                keep_lines = _DEFAULT_KEEP_LINES
+            if max_bytes <= 0:
+                max_bytes = _DEFAULT_MAX_BYTES
+            keep_lines = max(1, keep_lines)  # 0 must never mean "keep everything"
+
+            if self.path.stat().st_size <= max_bytes:
+                return
+            with self.path.open("r") as fh:
+                lines = fh.readlines()
+            # keep newest-first until we hit EITHER keep_lines OR the byte budget; always >=1 line
+            kept, budget = [], max_bytes
+            for ln in reversed(lines):
+                b = len(ln.encode("utf-8", "replace"))
+                if kept and (len(kept) >= keep_lines or budget - b < 0):
+                    break
+                budget -= b
+                kept.append(ln)
+            kept.reverse()
+            tmp = self.path.with_name(self.path.name + ".tmp")
+            with tmp.open("w") as fh:
+                fh.writelines(kept)
+            os.replace(tmp, self.path)  # atomic rename; readers never see a torn file
+        except Exception:
+            pass  # logging must NEVER crash the engine (incl. a malformed env value)
 
     def entries(self) -> List[dict]:
         lines = self.path.read_text().splitlines()
