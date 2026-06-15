@@ -33,7 +33,11 @@ The unacceptable outcome is "the demo is broken / a claim is fake."
 1. Read this file + `git log --oneline -6`. Continue from current state; never redo a finished slice.
 2. If a build is already in flight (a background suite/skeptic running), just check status and let it
    finish — don't start conflicting work.
-3. Do ONE concrete step of the current slice. Verify per the invariants. Commit if green. Log it.
+3. Do ONE concrete step of the current slice. Verify per the invariants. **IMPORTANT: run the green-gate
+   suite and any engine-booting skeptic SEQUENTIALLY — never concurrently.** Concurrent runs cause a
+   FALSE RED on the port/resource-sensitive integration + eval tests (observed 2026-06-14: a skeptic that
+   booted test engines ran alongside the suite → 8 spurious failures; the code was clean). Order:
+   build → suite + floor → THEN the read-only skeptic. Commit only if green AND the skeptic doesn't refute.
 4. Then end the turn — the next heartbeat tick or a background-task completion continues.
 
 ## SLICE QUEUE (build in order; skip any step that needs Omar, note it, move to the next)
@@ -80,3 +84,7 @@ then `CronDelete` the heartbeat job and idle. Do NOT grind no-op ticks.
   discover_connections scrape + the /onboard/discover ingest endpoint + the live proof in Omar's Chrome are
   STILL UNBUILT. Next step: the /onboard/discover endpoint (engine, testable now), then the extension scrape
   (code now, live-proof pending Omar's Chrome).
+- 2026-06-14 night — Slice 1 STEP 2 committed: POST /onboard/discover + core.onboard_discover ingest a scan
+  into the mesh (suite 79/79, floor 0, skeptic refuted=FALSE, 2 defects fixed: size cap + non-list guard).
+  Caught + logged a FALSE-RED from suite/skeptic concurrency (code was clean). Next: extension
+  discover_connections scrape (code now, live-proof pending Omar), then Slice 2 (browser-use CDP).

@@ -393,3 +393,22 @@ scrape will feed.
 - STILL UNBUILT (next ticks / pending): the extension discover_connections DOM scrape in the real Chrome,
   the /onboard/discover ingest endpoint, and the live proof in Omar's logged-in Chrome — "live-proof
   pending Omar".
+
+### 🟡 Slice 1 step 2: /onboard/discover endpoint ingests a Chrome scan into the per-person mesh · 2026-06-14 (night)
+The scrape now has a real engine door. POST /onboard/discover + core.onboard_discover take a discovered
+logged-in-service payload and write the per-person mesh via the SAME build_onboarding_plan path typed
+onboarding uses — each discovered service → a profile card + a "Connect X" open-loop (api route for
+gmail/calendar/outlook/slack/notion/drive, browser route for niche CRMs like Cosmolex); a service Anticipy
+already holds a vault token for is marked connected (no Connect loop). Discovery only — no credentials or
+tokens are entered here.
+- Files: main.py (DiscoverConnectionsIn + POST /onboard/discover), core/control_core.py (onboard_discover).
+  Receipt: engine/scripts/test_onboard_discover.py (in run_suite.sh) — proves the ingest writes the mesh,
+  vault-held→connected, dedupe/skip, AND the skeptic-found defenses (non-list scalar → empty no-crash;
+  oversized payload capped at 100). Suite 78→79 green, floor 0 breaches.
+- Skeptic (Law 5): refuted=FALSE (correct, reuses owner_onboard not a divergent writer, discovery-only —
+  no money/token/SSRF surface, test fails on revert). It found 2 real defects (no size cap → O(n^2);
+  non-list scalar crash) → FIXED (cap 100 + non-list guard) + asserted. NOTE: an earlier gate went falsely
+  RED from running the suite CONCURRENTLY with an engine-booting skeptic; clean re-run = green (lesson logged
+  in NIGHT_BUILD: sequence suite and engine-booting skeptics, never concurrent).
+- STILL UNBUILT: the extension discover_connections DOM scrape that PRODUCES the payload from the real
+  logged-in Chrome, and the live end-to-end proof — "live-proof pending Omar". Next.

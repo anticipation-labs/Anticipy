@@ -841,6 +841,29 @@ class ControlCore:
         return {"source": plan.source, "written": written,
                 "missing_connections": plan.missing_connections}
 
+    async def onboard_discover(self, discovered, source: str = "chrome_scrape") -> dict:
+        """Ingest a logged-in-Chrome connection SCAN (the extension's discover_connections
+        intent) into the per-person mesh, via the SAME path typed onboarding uses. A discovered
+        service Anticipy already holds a vault token for is marked connected; the rest become
+        'Connect X' open-loops (api route for known services, browser for niche CRMs). Discovery
+        only — NO credentials/tokens are entered here."""
+        from ..onboarding.connection_scan import scan_to_onboarding
+        # Bound the work: a real person is logged into a handful of services, not hundreds.
+        # Non-list input -> empty (never crash); the cap also protects owner_onboard's per-item
+        # drawer rescans from an O(n^2) blowup on a pathological payload (skeptic-found).
+        if not isinstance(discovered, (list, tuple)):
+            discovered = []
+        items = [x for x in discovered if isinstance(x, dict)][:100]
+        uid = self.api_hand.user_id
+        onb = scan_to_onboarding(
+            items, source=source,
+            vault_has=lambda key: self.token_vault.has(uid, key),
+        )
+        result = await self.owner_onboard(onb)
+        result["connections"] = [c.model_dump() for c in onb.connections]
+        result["discovered_count"] = len(items)
+        return result
+
     @staticmethod
     def _onboarding_key(fields: dict) -> str:
         kind = str(fields.get("kind") or "").strip().lower()

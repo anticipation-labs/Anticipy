@@ -785,6 +785,20 @@ async def owner_onboard(body: OwnerOnboardingIn) -> dict:
     return await core.owner_onboard(body)
 
 
+class DiscoverConnectionsIn(BaseModel):
+    discovered: list[dict] = Field(default_factory=list)
+    source: str = "chrome_scrape"
+
+
+@app.post("/onboard/discover")
+async def onboard_discover(body: DiscoverConnectionsIn) -> dict:
+    """Ingest a logged-in-Chrome connection scan (the extension's discover_connections intent)
+    and write the per-person mesh via the SAME path typed onboarding uses: each discovered
+    logged-in service becomes a profile card + a 'Connect X' open-loop, and a service Anticipy
+    already holds a vault token for is marked connected. Discovery only — no credentials entered."""
+    return await core.onboard_discover(body.discovered, source=body.source)
+
+
 # Max public source URLs we will read per profile build (keep the read bounded).
 ONBOARDING_MAX_SOURCES = 6
 
