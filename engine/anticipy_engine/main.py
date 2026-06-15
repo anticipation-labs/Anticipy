@@ -70,6 +70,7 @@ REQUEST_SIZE_EXEMPT_PATHS = {"/owner/ingest-file"}
 
 core = ControlCore()
 extension_hello_seen = False
+_mic_source = None  # the always-on Mac-mic CaptureSource when /listen/start is on (None when off)
 # Real reasoning+vision model for the web-agent loop (kept separate from the
 # core's default gateway so the engine/hands tests stay free + deterministic).
 gateway_agent = ModelGateway(
@@ -771,6 +772,55 @@ async def owner_ingest_file(body: OwnerFileIngestIn) -> dict:
 
     core.glassbox.log("owner_upload_ingest", {"filename": filename, "source": source, "kind": meta["upload_kind"]})
     return await core.owner_ingest(source, text, meta, execute_actions=body.execute_actions)
+
+
+# ---- ALWAYS-ON LISTENING: the Mac mic, heard text -> the proactive brain ----
+@app.post("/listen/start")
+async def listen_start() -> dict:
+    """Turn on always-on listening: capture the Mac mic in rolling windows, transcribe locally
+    with Whisper, and feed every heard utterance into owner_ingest (execute=on) so the brain
+    decides act/ask/silent on your real day. Words only until the brain decides; money still asks."""
+    global _mic_source
+    if _mic_source is not None and _mic_source.running:
+        return {"listening": True, "already_running": True, "device": _mic_source._device}
+    loop = asyncio.get_running_loop()
+
+    def _sink(event) -> None:  # called FROM the mic thread; bounce onto the engine loop
+        core.glassbox.log("mic_heard", {"text": (event.text or "")[:200]})
+        try:
+            asyncio.run_coroutine_threadsafe(
+                core.owner_ingest(event.source, event.text, {"capture": "mac_mic"}, execute_actions=True),
+                loop)
+        except Exception as exc:  # noqa: BLE001 — a sink failure must not kill the mic loop
+            core.glassbox.log("mic_sink_error", {"error": f"{type(exc).__name__}: {exc}"})
+
+    from .capture.mac_mic import MacMicSource
+    _mic_source = MacMicSource(_sink)
+    _mic_source.start()
+    core.glassbox.log("listen", {"event": "started", "device": _mic_source._device,
+                                 "window_seconds": _mic_source._window})
+    return {"listening": True, "device": _mic_source._device, "window_seconds": _mic_source._window,
+            "note": "Anticipy is listening on your Mac mic now — just talk; it acts on what it hears."}
+
+
+@app.post("/listen/stop")
+async def listen_stop() -> dict:
+    global _mic_source
+    windows = getattr(_mic_source, "windows", 0)
+    utterances = getattr(_mic_source, "utterances", 0)
+    if _mic_source is not None:
+        _mic_source.stop()
+        core.glassbox.log("listen", {"event": "stopped", "windows": windows, "utterances": utterances})
+    _mic_source = None
+    return {"listening": False, "windows": windows, "utterances": utterances}
+
+
+@app.get("/listen/status")
+async def listen_status() -> dict:
+    s = _mic_source
+    return {"listening": bool(s and s.running), "device": getattr(s, "_device", None),
+            "window_seconds": getattr(s, "_window", None), "windows": getattr(s, "windows", 0),
+            "utterances": getattr(s, "utterances", 0), "last_error": getattr(s, "last_error", None)}
 
 
 @app.get("/owner/cards")
