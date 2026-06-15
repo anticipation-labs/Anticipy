@@ -68,10 +68,12 @@ READ_BACK = {
     "create_event": "GoogleCalendar.ListEvents",
     # send_email: a sent message is read back via ListEmails (confirmed present).
     "send_email": "Gmail.ListEmails",
-    # send_email_draft: a Gmail drafts read tool. The exact Arcade catalog name
-    # (Gmail.ListDrafts / Gmail.GetDraft) is UNVERIFIED in this environment.
-    # TODO(slice-1): confirm the Arcade drafts-read tool name, then wire it here.
-    "send_email_draft": None,
+    # send_email_draft: read back via Gmail.ListDraftEmails — CONFIRMED in the live Arcade
+    # catalog (tools.list, toolkit=gmail) with NO required inputs. The created draft's id is
+    # matched against the listed drafts (same _read_contains_id gate as calendar). Both the
+    # draft WRITE (gmail.compose) and this read need the Gmail scope granted; until then the
+    # whole path is connect-gated, so no draft can be written for this to mis-verify.
+    "send_email_draft": "Gmail.ListDraftEmails",
     # message (Slack): no verified Slack read tool. TODO(slice-1): confirm name.
     "message": None,
 }
