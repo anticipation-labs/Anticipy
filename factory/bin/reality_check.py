@@ -154,6 +154,18 @@ def c_onboarding_scrape_observed():
     return NOT_REAL, "never observed: a real first-run account scrape feeding the per-person mesh"
 
 
+def c_action_executed_with_proof():
+    """The engine doesn't just DECIDE — it EXECUTES a real action and proves it by an independent
+    read-back (never the actor's own write echo). Scans the live glass-box for a write confirmed
+    via read-back (e.g. a calendar event created, then re-observed by ListEvents)."""
+    for ev in reversed(_glassbox_tail()):
+        data = ev.get("data") or {}
+        proof = data.get("proof")
+        if isinstance(proof, dict) and proof.get("verified_by_read") and data.get("status") == "success":
+            return REAL, f"a real action executed + independently read-back-verified (via {proof.get('verified_by_read')})"
+    return NOT_REAL, "no read-back-verified action execution observed in the live glass-box yet"
+
+
 def c_owner_test_5_days():
     return NEEDS_OMAR, "5 consecutive real Omar days through the live system, 0 vent-actions (his call to run)"
 
@@ -163,6 +175,7 @@ def c_owner_test_5_days():
 CRITERIA = [
     ("engine_live",          "The engine is actually running + healthy",                    c_engine_live),
     ("input_inference_live", "Messy speech in -> action cards out, LIVE (the core magic)",   c_input_inference_live),
+    ("action_executed",      "The engine EXECUTES an action + proves it by read-back",       c_action_executed_with_proof),
     ("vent_stays_silent",    "Vents/sarcasm never trigger an action; money always blocked",  c_vent_stays_silent),
     ("reminder_fired_live",  "A time-due reminder was really delivered to a phone",          c_reminder_fired_live),
     ("text_roundtrip",       "A real inbound text was answered by the brain (round-trip)",   c_text_roundtrip_observed),

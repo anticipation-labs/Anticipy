@@ -4,14 +4,15 @@
 > An item is ✅ REAL only because a live check confirmed it this run. "Done" = every
 > me-verifiable item ✅, then the 🙋 owner items finished with Omar.
 
-_Last reality check: 2026-06-15 13:25:47 PDT_
+_Last reality check: 2026-06-15 14:57:01 PDT_
 
-**Real, verified-live: 5/7**  ·  me-verifiable done: 5/6
+**Real, verified-live: 6/8**  ·  me-verifiable done: 6/7
 
 | | criterion | verdict | evidence (live read-back) |
 |---|---|---|---|
 | ✅ | The engine is actually running + healthy | **REAL** | engine up; channels=live |
 | ✅ | Messy speech in -> action cards out, LIVE (the core magic) | **REAL** | live ingest -> 1 action card(s): "Capture reminder or open loop" |
+| ✅ | The engine EXECUTES an action + proves it by read-back | **REAL** | a real action executed + independently read-back-verified (via GoogleCalendar.ListEvents) |
 | ✅ | Vents/sarcasm never trigger an action; money always blocked | **REAL** | 0 breaches across 152 adversarial lines (vents never act, money blocked) |
 | ✅ | A time-due reminder was really delivered to a phone | **REAL** | a reminder NOTIFY was delivered (glass-box sent=true) |
 | ✅ | A real inbound text was answered by the brain (round-trip) | **REAL** | a real inbound text got a real reply (glass-box inbound_agent_reply sent=true) |
