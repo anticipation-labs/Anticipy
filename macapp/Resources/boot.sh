@@ -12,7 +12,7 @@ cd "$REPO" 2>/dev/null || { echo "repo not found: $REPO" >&2; exit 2; }
 
 # 1) engine on 8787
 if ! curl -s -m2 http://127.0.0.1:8787/readiness >/dev/null 2>&1; then
-  ANTICIPY_HANDS_MODE=mock ANTICIPY_CHANNELS_MODE=mock PYTHONPATH="$REPO/engine" \
+  ANTICIPY_HANDS_MODE=mock ANTICIPY_CHANNELS_MODE=live PYTHONPATH="$REPO/engine" \
     nohup "$REPO/engine/.venv/bin/python" -m uvicorn --app-dir "$REPO/engine" \
     anticipy_engine.main:app --port 8787 >/tmp/anticipy_engine.log 2>&1 &
 fi
