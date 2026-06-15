@@ -75,3 +75,8 @@ then `CronDelete` the heartbeat job and idle. Do NOT grind no-op ticks.
 ## PROGRESS LOG (append-only; newest at bottom)
 - 2026-06-14 ~night start — baseline c0925cd green (77/77, floor 0). Loop armed (3-min heartbeat).
   Slice queue set. Building Slice 1 next.
+- 2026-06-14 night, ticks ~1-3 — Slice 1 ENGINE BRIDGE committed (connection_scan.py + test): suite 78/78,
+  floor 0, skeptic refuted=FALSE (2 robustness defects fixed). HONEST: engine half only — the extension
+  discover_connections scrape + the /onboard/discover ingest endpoint + the live proof in Omar's Chrome are
+  STILL UNBUILT. Next step: the /onboard/discover endpoint (engine, testable now), then the extension scrape
+  (code now, live-proof pending Omar's Chrome).

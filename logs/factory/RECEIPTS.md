@@ -372,3 +372,24 @@ slice of the per-person API arm (the MIDDLE — "custom to every person").
   crash edge (reveal() outside the fallback try) — FIXED at api_hand.py:_live_client (caught → shared-key
   fallback) + PROOF 4 added. Suite still green. Remaining for a LIVE per-person proof: onboarding stores a
   real per-user token + a real OAuth tap (Omar) — see PENDING.
+
+### 🟡 Slice 1 (engine half): logged-in-Chrome connection scan → per-person mesh bridge · 2026-06-14 (night)
+Autonomous night build, Slice 1 of 3. HONEST scope (per the independent skeptic): this is the ENGINE-SIDE
+half — it does NOT yet scrape the real Chrome and is wired to no endpoint. It IS the verified bridge the
+scrape will feed.
+- New engine/anticipy_engine/onboarding/connection_scan.py: scan_to_onboarding(discovered, vault_has=) maps
+  a logged-in-service scrape into OwnerOnboardingIn → reuses the EXISTING build_onboarding_plan, so each
+  discovered service becomes a profile card + a "Connect X" open-loop. Known API services
+  (gmail/calendar/outlook/slack/notion/drive) route "api"; everything else the user is logged into (a niche
+  CRM like Cosmolex) routes "browser" (the per-person 10%); a service with a held vault token → connected
+  (no Connect loop); logged-out/junk skipped.
+- Receipt: engine/scripts/test_onboarding_scan.py (in run_suite.sh) — proves the mapping, dedupe (by
+  canonical key), route split, vault-held→connected, junk-skipping, AND robustness (a raising vault_has
+  degrades to needs_auth; non-string fields dropped, not stringified into the mesh). Suite 77→78 green,
+  floor 0 breaches.
+- Skeptic (Law 5): refuted=FALSE on the technical claim (mapping correct, test fails on a mutated mapping,
+  pure/inert/no money/no cardinal-sin). It found + I FIXED two real defects (uncaught vault exception;
+  non-string field coercion). It correctly flagged that I'd OVERSTATED "progress" — recorded honestly here.
+- STILL UNBUILT (next ticks / pending): the extension discover_connections DOM scrape in the real Chrome,
+  the /onboard/discover ingest endpoint, and the live proof in Omar's logged-in Chrome — "live-proof
+  pending Omar".
