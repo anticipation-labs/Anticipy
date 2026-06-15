@@ -32,6 +32,7 @@ import os
 import shutil
 import subprocess
 import sys
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -48,6 +49,18 @@ _RUNNER_PATH = str(Path(__file__).resolve().parent / "browser_use_runner.py")
 # Generous default: a real browser read of a public page typically finishes well
 # under this, but cold Chromium launch + model latency needs headroom.
 _DEFAULT_TIMEOUT_S = 240
+
+
+def _cdp_is_loopback(cdp_url: str) -> bool:
+    """A cdp_url may ONLY point at a loopback Chrome (the user's own browser on THIS machine,
+    started with --remote-debugging-port). Anything else is refused: an arbitrary cdp_url is an
+    SSRF vector — the bridge would GET <cdp_url>/json/version and open a WebSocket to that host."""
+    try:
+        raw = cdp_url if "//" in cdp_url else "http://" + cdp_url
+        host = (urllib.parse.urlparse(raw).hostname or "").lower()
+    except Exception:
+        return False
+    return host in {"127.0.0.1", "localhost", "::1"}
 
 
 def bridge_python() -> str:
@@ -135,13 +148,16 @@ def browse_act(
     url: Optional[str] = None,
     max_steps: int = 16,
     timeout_s: int = _DEFAULT_TIMEOUT_S,
+    cdp_url: Optional[str] = None,
 ) -> BrowseReadResult:
     """Run an ACTION task through the proven open-source agent (browser-use, vision on):
     it may click/type to complete the task (e.g. add-to-cart, fill a form to the review
     step), but money/checkout/login are HARD STOPS enforced in the runner's action guard.
-    Same honest-by-construction result contract as browse_read."""
+    When ``cdp_url`` is set the agent ATTACHES to the user's already-running Chrome over CDP
+    (their real, logged-in session) instead of a throwaway browser. Same honest-by-construction
+    result contract as browse_read."""
     return browse_read(task, url=url, structured=False, max_steps=max_steps,
-                       timeout_s=timeout_s, act=True)
+                       timeout_s=timeout_s, act=True, cdp_url=cdp_url)
 
 
 def browse_read(
@@ -152,6 +168,7 @@ def browse_read(
     max_steps: int = 10,
     timeout_s: int = _DEFAULT_TIMEOUT_S,
     act: bool = False,
+    cdp_url: Optional[str] = None,
 ) -> BrowseReadResult:
     """Run a browser task through the open-source arm and return a proof-bearing result.
     Default is READ-ONLY; ``act=True`` enables the action agent (vision on, money/login
@@ -173,12 +190,21 @@ def browse_read(
             error="browser bridge unavailable: " + "; ".join(missing),
         )
 
+    # SSRF guard: a cdp_url may only be a loopback Chrome. Refuse anything else BEFORE the
+    # subprocess runs (an arbitrary cdp_url would make the bridge fetch an internal host).
+    if cdp_url and not _cdp_is_loopback(cdp_url):
+        return BrowseReadResult(
+            success=False, result=None, url=url, structured=structured,
+            error="cdp_url must be a loopback Chrome (127.0.0.1/localhost) — refused (SSRF guard)",
+        )
+
     req = {
         "task": task,
         "url": url,
         "structured": bool(structured),
         "max_steps": int(max_steps),
         "act": bool(act),
+        "cdp_url": cdp_url,
     }
     cmd = [probe["bridge_python"], _RUNNER_PATH]
     # Pass through the creds the runner needs; the runner also reads .env.local.

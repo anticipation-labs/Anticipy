@@ -412,3 +412,23 @@ tokens are entered here.
   in NIGHT_BUILD: sequence suite and engine-booting skeptics, never concurrent).
 - STILL UNBUILT: the extension discover_connections DOM scrape that PRODUCES the payload from the real
   logged-in Chrome, and the live end-to-end proof — "live-proof pending Omar". Next.
+
+### 🟡 Slice 2 step 1: browser-use ATTACHES to the user's own logged-in Chrome over CDP · 2026-06-14 (night)
+The vision's browser arm = "an open-source agent with OUR model, acting in the user's OWN Chrome." That
+attach path now exists. browser_use_runner.py branches on cdp_url: set → BrowserProfile(cdp_url=...) with NO
+executable_path (browser-use CONNECTS to the user's already-running Chrome, launched with
+--remote-debugging-port, so add-to-cart runs in their real, logged-in session); unset → the original
+throwaway-Chromium path (back-compat, byte-identical). cdp_url is threaded browse_act → browse_read → runner
+request, exposed on POST /agent/act.
+- Safety preserved (skeptic-verified): the action guard (money/checkout/login HARD STOPS) and the nav wall
+  (allowed_domains) apply identically in the CDP branch; the user's real Chrome is NOT killed (the kill path
+  is _subprocess-gated and no subprocess exists in attach mode).
+- SSRF FIX (skeptic-found, real): cdp_url was unvalidated → an arbitrary cdp_url (e.g. 169.254.169.254) would
+  make the bridge fetch an internal host. Now loopback-only (_cdp_is_loopback in browser_use_link), refused
+  BEFORE any subprocess runs.
+- Receipt: engine/scripts/test_browser_use_cdp.py (in run_suite.sh) — proves cdp_url threads end to end, the
+  default stays None/read, AND the SSRF guard refuses a non-loopback cdp_url before invoking the runner.
+  Suite 79→80 green, floor 0. Skeptic refuted=FALSE.
+- STILL UNPROVEN (live-proof pending Omar): the actual CDP handshake against a real Chrome + acting inside
+  his logged-in session. Routing caught browser CARDS to this arm (vs the existing WebVoyager-over-extension
+  arm, which already runs in his logged-in Chrome) is a follow-up enhancement, gated by a flag.

@@ -31,6 +31,10 @@ The unacceptable outcome is "the demo is broken / a claim is fake."
 
 ## PER-TICK PROCEDURE
 1. Read this file + `git log --oneline -6`. Continue from current state; never redo a finished slice.
+   **DISK WATCH:** if writes start failing (ENOSPC) or `df -h /System/Volumes/Data` shows <2GB free, free
+   space SAFELY: `rm -f .anticipy-data/glassbox.jsonl` (it grows UNBOUNDED; the demo uses
+   /tmp/anticipy_demo_data, NOT .anticipy-data — so this is safe) + `rm -rf /private/var/folders/*/*/T/anticipy-*`
+   + `rm -rf .anticipy-data/chrome-*`. Never delete the repo, venvs, /tmp/anticipy_demo_data, or .env.local.
 2. If a build is already in flight (a background suite/skeptic running), just check status and let it
    finish — don't start conflicting work.
 3. Do ONE concrete step of the current slice. Verify per the invariants. **IMPORTANT: run the green-gate
@@ -88,3 +92,16 @@ then `CronDelete` the heartbeat job and idle. Do NOT grind no-op ticks.
   into the mesh (suite 79/79, floor 0, skeptic refuted=FALSE, 2 defects fixed: size cap + non-list guard).
   Caught + logged a FALSE-RED from suite/skeptic concurrency (code was clean). Next: extension
   discover_connections scrape (code now, live-proof pending Omar), then Slice 2 (browser-use CDP).
+- 2026-06-14 night — Slice 2 step 1 BUILT (browser-use CDP-attach path + cdp_url threaded through
+  browse_act/browser_use_link/POST /agent/act + deterministic plumbing test test_browser_use_cdp.py).
+  Research-confirmed API: BrowserProfile(cdp_url=...) connects vs launches. Focused test green; gate in flight.
+- 2026-06-14 night — ⚠️ DISK FILLED to 100% (134Mi free) → ENOSPC blocked ALL writes. Root cause: runaway
+  .anticipy-data/glassbox.jsonl (21GB, unbounded append-only dev log since Jun 9) + 2631 leftover
+  /private/var/folders anticipy-* temp dirs + old .anticipy-data/chrome-* probe artifacts. CLEARED ~23GB
+  SAFELY (demo uses /tmp/anticipy_demo_data, untouched). 26GB free; demo healthy (:8787 connected, :3000=200);
+  repo + uncommitted CDP edits intact. Re-running the CDP gate to re-verify green before committing.
+- 2026-06-14 night — Slice 2 STEP 1 committed: browser-use CDP-attach to the user's logged-in Chrome
+  (BrowserProfile(cdp_url=...)) + cdp_url threaded through browse_act/link/POST /agent/act + a loopback-only
+  SSRF guard (skeptic-found defect, fixed). Suite 80/80, floor 0, skeptic refuted=FALSE. Live attach against
+  a real Chrome = live-proof pending Omar. Next: Slice 3 (5-day Owner Test harness + selftest). Card-routing
+  to browse_act is a flagged follow-up (the WebVoyager-over-extension arm already runs in the logged-in Chrome).

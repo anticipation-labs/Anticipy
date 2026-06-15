@@ -197,7 +197,12 @@ async def _run(req: dict) -> dict:
     )
 
     chrome_bin = os.environ.get("ANTICIPY_BU_CHROME_BIN", CHROME_BIN)
-    if not os.path.exists(chrome_bin):
+    # CDP-ATTACH mode: when a cdp_url is supplied (the user's OWN already-running Chrome,
+    # launched with --remote-debugging-port), browser-use CONNECTS to it instead of launching
+    # a throwaway browser — so add-to-cart etc. run inside the real, logged-in session. No local
+    # chrome binary is needed in that mode.
+    cdp_url = (req.get("cdp_url") or os.environ.get("ANTICIPY_BROWSERUSE_CDP_URL") or "").strip() or None
+    if not cdp_url and not os.path.exists(chrome_bin):
         return {
             "success": False,
             "result": None,
@@ -223,25 +228,36 @@ async def _run(req: dict) -> dict:
     # derived we leave it unset (allow-all), matching prior behavior.
     allowed_domains = _allowed_domains(str(req.get("url") or ""))
 
-    # Unique throwaway profile under the system temp dir; NEVER user's Chrome.
-    prof_dir = tempfile.mkdtemp(prefix="anticipy-bu-profile-")
-    profile_kwargs = dict(
-        executable_path=chrome_bin,
-        user_data_dir=prof_dir,
-        headless=True,
-        chromium_sandbox=False,
-        args=[
-            "--no-zygote",
-            "--single-process",
-            "--disable-dev-shm-usage",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-background-networking",
-        ],
-    )
-    if allowed_domains:
-        profile_kwargs["allowed_domains"] = allowed_domains
-    profile = BrowserProfile(**profile_kwargs)
+    if cdp_url:
+        # ATTACH to the user's already-running Chrome over CDP. Do NOT pass executable_path or
+        # user_data_dir — browser-use CONNECTS when a cdp_url is set and only LAUNCHES a fresh
+        # browser when an executable_path is given, so omitting it is what keeps this an attach
+        # (not a relaunch). The nav wall (allowed_domains) still constrains the attached session.
+        # cdp_url is loopback-validated upstream in browser_use_link (SSRF guard).
+        profile_kwargs = {"cdp_url": cdp_url}
+        if allowed_domains:
+            profile_kwargs["allowed_domains"] = allowed_domains
+        profile = BrowserProfile(**profile_kwargs)
+    else:
+        # Unique throwaway profile under the system temp dir; NEVER the user's Chrome.
+        prof_dir = tempfile.mkdtemp(prefix="anticipy-bu-profile-")
+        profile_kwargs = dict(
+            executable_path=chrome_bin,
+            user_data_dir=prof_dir,
+            headless=True,
+            chromium_sandbox=False,
+            args=[
+                "--no-zygote",
+                "--single-process",
+                "--disable-dev-shm-usage",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-background-networking",
+            ],
+        )
+        if allowed_domains:
+            profile_kwargs["allowed_domains"] = allowed_domains
+        profile = BrowserProfile(**profile_kwargs)
 
     max_steps = int(req.get("max_steps") or 10)
     task = _build_task(req)

@@ -1192,6 +1192,7 @@ class AgentActIn(BaseModel):
     task: str
     start_url: str
     max_steps: int = 16
+    cdp_url: Optional[str] = None  # attach to the user's logged-in Chrome (--remote-debugging-port)
 
 
 @app.post("/agent/act")
@@ -1199,10 +1200,12 @@ async def agent_act(body: AgentActIn) -> dict:
     """The PROVEN action arm: browser-use (vision) completes the task — add-to-cart, fill a
     form to the review step — with money/checkout/login as HARD STOPS in the runner's action
     guard. Far more reliable on arbitrary stores than the bespoke loop. SSRF: the start page
-    must be a PUBLIC http(s) host."""
+    must be a PUBLIC http(s) host. When cdp_url is set the agent runs in the user's OWN
+    already-running Chrome (their real, logged-in session) instead of a throwaway browser."""
     _assert_public_agent_url(body.start_url)
     res = await asyncio.to_thread(
-        browser_use_link.browse_act, body.task, url=body.start_url, max_steps=body.max_steps)
+        browser_use_link.browse_act, body.task, url=body.start_url,
+        max_steps=body.max_steps, cdp_url=body.cdp_url)
     return {
         "success": res.success,
         "answer": res.result,
