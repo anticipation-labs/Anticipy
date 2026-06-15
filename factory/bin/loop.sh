@@ -263,6 +263,9 @@ PY
       >/dev/null 2>&1 || journal "lap $LAP: spend record FAILED (non-fatal)"
   rm -f factory/.lap_in_progress
   journal "lap $LAP done: build_rc=$BUILD_RC gate=$GATE kept=$KEPT $(grep -o '"metric_moved": "[^"]*"' "$LAPDIR/scoreboard.out" | head -1 || true)"
+  # Reality gate (read-only; fully guarded): record real-done progress every lap so the nightly
+  # system is forced toward verified-live "done", never fake-done. Never affects keep/revert.
+  journal "lap $LAP reality: $("$PY" factory/bin/reality_check.py --quiet 2>/dev/null | grep -oE 'REALITY CHECK . [0-9]+/[0-9]+ verified-live' | head -1 || echo 'reality_check unavailable')"
 
   if ! "$PY" factory/bin/treadmill.py; then
     journal "TREADMILL HALT after lap $LAP — ESCALATION.md written, loop stopping"
