@@ -562,3 +562,30 @@ NEVER account contents, an identifier, or a credential — and POSTs {service, l
 - WITH THIS, the buildable-WITHOUT-Omar round-2 queue is EXHAUSTED. Everything remaining genuinely needs Omar
   (his real Chrome to verify the scrape + browser actions, his OAuth tap, his supervised voice run, his notary
   password, his 5 real days + red-pen).
+
+### ✅ Slice 10: a REAL AI agent behind the voice/text line — LIVE & READ-BACK VERIFIED · 2026-06-15
+Omar's feedback ("It's not an AI agent behind the voice... I should be able to text my agent, respond cleanly
+every time... full gateways to the system") is closed. The reply was a canned 4-way dict (no model call);
+it is now the real SMART brain, grounded + safe, live on the text AND voice lines.
+- WHAT CHANGED: proactive/agent_reply.py (new) — the SMART model answers the owner, GROUNDED in what
+  owner_ingest actually did (do=prepared/reversible, ask=held, blocked=money hard-stop, remember), told in-band
+  NEVER to claim an untaken action, self-falling-back so the owner is never unanswered. Wired into
+  channels/inbound.py (a real SMS reply after the act/ask runs) and channels/conversation_relay.py (the two-way
+  voice line speaks the same brain, verdict-grounded; canned phrasing stays as the stub/keyless/error fallback;
+  the Decider verdict still gates money=ASK/vent=SILENT — safety floor unchanged). call.py: neural TTS voice.
+- RECEIPT (independent read-back, NOT the actor's own claim):
+  - Real brain replies against LIVE openrouter (gemini-2.5-flash), words-only, no send:
+    · "remind me to call the dentist at 3" -> "Okay, I've set a reminder for you to call the dentist at 3 PM."
+    · "buy that standing desk" (money) -> "I have the standing desk ready to buy for $420. Just say the word to
+       confirm." (HELD — never claims it bought)
+    · "ugh this week has been brutal" (vent) -> empathy, NO invented task (cardinal sin avoided)
+    · voice ASK ground -> "...set up and waiting for your go-ahead." (held, not done)
+  - Live engine (PID re-launched on the new code, channels=live, model=openrouter, hands=mock, inbound poll 15s).
+  - Outbound SMS to owner DELIVERED — Twilio Messages REST read-back: SID SM7e3b2cd824d491dd09cbba598a6f3ab8,
+    status=delivered, to=+1604…, body "…I've got a real brain behind me now, not a script…".
+  - Time-triggered reminders ALSO firing live (same read-back): SM0ea17ce…/SM97b2b35… status=delivered
+    ("Remind me to email the accountant…", "…call the roofer back…") — the 2:45-call loop, live.
+- GATES: full suite 84/84 green (agent_reply added); safety_mega_eval 152 lines / 0 breaches with the new reply
+  wired in. Committed b569edc, pushed to origin/factory/build.
+- LIVE-PROOF still open: a REAL inbound text FROM Omar -> auto-reply round-trip (the inbound wiring is unit-proven
+  and every leg is live-proven; only Omar texting the number exercises the full composition end to end).
