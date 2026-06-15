@@ -329,3 +329,20 @@ checkout-page navigation the cart task needs), only the noun-qualified / amount-
 - Layered behind the proven primary wall (proactive/press-go never auto-execute money — 23/23 money lines
   blocked in the mega-eval) and the capability fact that browser tasks are cart-only/no-checkout. This is the
   third, last-resort layer; reverting the regex turns the new test RED.
+
+### ✅ Browser ACTION arm — VERIFIED live add-to-cart (independent read-back) · 2026-06-15
+**The headline gap all night was a *verified* complete browser action.** Got it, and verified it the
+honest way (Slice-0 rule: never trust the actor's own claim).
+- Engine `/agent/run` (WebVoyager, live, via the connected extension) started ON a product page
+  (`automationexercise.com/product_details/1`), task "click Add to cart, do not check out" → agent clicked
+  'Add to cart' (1 step) and answered "added".
+- **Independent verification:** a SEPARATE deterministic `/ws/observe` of `…/view_cart` showed the cart
+  genuinely contains **"Blue Top · Women>Tops · Rs.500 · Qty 1"** with Delete + "Proceed To Checkout". The
+  RIGHT product, really in the cart — confirmed by read-back, not by the agent's word.
+- **Safety held:** stopped at the cart; never approached checkout; money untouched.
+**Reliability fixes shipped tonight that made the action arm complete (vs dead-end):** auto-handle JS dialogs
+in the extension (alert stores; needs an extension reload to activate), recipe → general-loop fallthrough on
+no-search/category stores and on listing/non-product surfaces. Honest residual: search-navigation on arbitrary
+stores is still the flaky variable (starting from a resolved product context is reliable); the general loop
+claims "added" on its own judgment (the recipe verifies the cart; the general loop does not — independent
+read-back is the trustworthy check, as used here). Suite 76/76 green.
