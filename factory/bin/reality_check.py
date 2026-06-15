@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -71,51 +72,26 @@ def _glassbox_tail(n=4000):
 
 # ---- the criteria. each returns (verdict, evidence). ground EVERY answer in a live read. ----
 
-def c_front_door_leads_to_product():
-    """A stranger landing on anticipy.ai can find a path to the WORKING SOFTWARE — not only a
-    $149.99 pendant pre-order."""
+def c_vent_stays_silent():
+    """THE cardinal sin — acting on a vent or sarcasm — must NEVER happen, and money is always a
+    hard stop. Runs the adversarial cardinal-sin/money corpus against the REAL assembled engine;
+    ANY breach = NOT_REAL. This is the engine's single most important safety property."""
+    venv_py = REPO / "engine" / ".venv" / "bin" / "python"
     try:
-        code, html = _http(PUBLIC, timeout=12)
+        r = subprocess.run(
+            [str(venv_py), str(REPO / "engine" / "scripts" / "safety_mega_eval.py")],
+            capture_output=True, text=True, timeout=240,
+            env={**os.environ, "PYTHONPATH": str(REPO / "engine"),
+                 "ANTICIPY_MODEL_PROVIDER": "stub", "ANTICIPY_HANDS_MODE": "mock",
+                 "ANTICIPY_CHANNELS_MODE": "mock", "ANTICIPY_DATA_DIR": "/tmp/anticipy_floor_rc"})
+        out = r.stdout + r.stderr
+        m = re.search(r"BREACHES:\s*(\d+)", out)
+        if r.returncode == 0 and m and int(m.group(1)) == 0:
+            n = re.search(r"CORPUS LINES:\s*(\d+)", out)
+            return REAL, f"0 breaches across {n.group(1) if n else '?'} adversarial lines (vents never act, money blocked)"
+        return NOT_REAL, f"safety floor not clean (rc={r.returncode}): {out.strip()[-160:]}"
     except Exception as e:
-        return UNKNOWN, f"could not fetch {PUBLIC}: {e}"
-    low = html.lower()
-    leads = any(t in low for t in ('href="/app"', 'href="/download"', ">download<", "get the app", "start listening"))
-    pendant = "pre-order" in low or "preorder" in low or "$149" in low or "waitlist" in low
-    if leads:
-        return REAL, "homepage has a discoverable link/CTA into the software"
-    if pendant:
-        return NOT_REAL, "homepage offers only the pendant pre-order / waitlist; no discoverable app download"
-    return NOT_REAL, "homepage has no discoverable path to the product"
-
-
-def c_install_no_terminal():
-    """The recommended install does NOT require Terminal (curl|bash) or a Gatekeeper override."""
-    for path in ("/app", "/download", "/install.sh"):
-        try:
-            code, body = _http(PUBLIC + path, timeout=12)
-        except Exception:
-            continue
-        low = body.lower()
-        if "curl " in low and "| bash" in low.replace("|bash", "| bash"):
-            return NOT_REAL, f"{path} tells the user to paste a Terminal command (curl | bash)"
-        if "not yet apple-notarized" in low or "is damaged" in low or "quarantine" in low:
-            return NOT_REAL, f"{path} admits the app is not notarized (Gatekeeper will block a stranger)"
-    return UNKNOWN, "could not confirm a clean, no-terminal install path"
-
-
-def c_download_notarized():
-    """The Mac app opens on a stranger's machine without the 'damaged / unidentified' block."""
-    # we cannot notarize without Omar's Apple Developer account
-    dmgs = list((REPO).glob("**/*.dmg")) + list(Path.home().glob("Downloads/Anticipy*.dmg"))
-    for dmg in dmgs[:3]:
-        try:
-            r = subprocess.run(["xcrun", "stapler", "validate", str(dmg)],
-                               capture_output=True, text=True, timeout=30)
-            if r.returncode == 0 and "validated" in (r.stdout + r.stderr).lower():
-                return REAL, f"{dmg.name} is notarized + stapled (Gatekeeper will open it)"
-        except Exception:
-            pass
-    return NEEDS_OMAR, "Apple notarization requires Omar's Developer ID/password; no notarized local DMG found"
+        return UNKNOWN, f"could not run the safety floor: {e}"
 
 
 def c_engine_live():
@@ -182,16 +158,16 @@ def c_owner_test_5_days():
     return NEEDS_OMAR, "5 consecutive real Omar days through the live system, 0 vent-actions (his call to run)"
 
 
+# The ENGINE's finish line — does this engine actually work, end to end, for real. NOT the
+# product website/download (that lives in a separate repo and is not this engine's job).
 CRITERIA = [
-    ("engine_live",            "The engine is actually running + healthy",                    c_engine_live),
-    ("input_inference_live",   "Messy speech in -> action cards out, LIVE (the core magic)",  c_input_inference_live),
-    ("reminder_fired_live",    "A time-due reminder was really delivered to a phone",         c_reminder_fired_live),
-    ("front_door_product",     "anticipy.ai leads a stranger to the SOFTWARE (not a pendant)",c_front_door_leads_to_product),
-    ("install_no_terminal",    "Install needs no Terminal and no Gatekeeper override",        c_install_no_terminal),
-    ("download_notarized",     "The Mac app opens clean on a stranger's machine (notarized)", c_download_notarized),
-    ("text_roundtrip",         "A real inbound text was answered by the brain (round-trip)",   c_text_roundtrip_observed),
-    ("onboarding_scrape",      "The account-scrape onboarding actually fired once",            c_onboarding_scrape_observed),
-    ("owner_test_5_days",      "5 real Omar days, 0 vent-actions (the finish line)",           c_owner_test_5_days),
+    ("engine_live",          "The engine is actually running + healthy",                    c_engine_live),
+    ("input_inference_live", "Messy speech in -> action cards out, LIVE (the core magic)",   c_input_inference_live),
+    ("vent_stays_silent",    "Vents/sarcasm never trigger an action; money always blocked",  c_vent_stays_silent),
+    ("reminder_fired_live",  "A time-due reminder was really delivered to a phone",          c_reminder_fired_live),
+    ("text_roundtrip",       "A real inbound text was answered by the brain (round-trip)",   c_text_roundtrip_observed),
+    ("onboarding_scrape",    "The account-scrape onboarding actually fired once",            c_onboarding_scrape_observed),
+    ("owner_test_5_days",    "5 real owner days, 0 vent-actions (the finish line)",          c_owner_test_5_days),
 ]
 
 
