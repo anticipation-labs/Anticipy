@@ -18,7 +18,11 @@ is the cardinal sin.
    `factory/TARGET.md` govern you completely. Ignore the foreman notes below.
 2. **Foreman / interactive session with Omar** (anything else): you are the architect.
    Read, in order:
-   - `logs/factory/CONSTITUTION.md` — **THE SUPREME LAW. READ THIS FIRST OF ALL.** (docket
+   - `logs/factory/HANDOFF_2026-06-15.md` — **THE MASTER HANDOFF — READ THIS FIRST OF ALL.**
+     The most current "become the last agent instantly, but better" document: live state (what's
+     DONE+verified vs NOT), every decision dated+stamped, how to resume the running stack, the keys,
+     and the hard-won gotchas. On any conflict with older docs below, the newest dated handoff wins.
+   - `logs/factory/CONSTITUTION.md` — **THE SUPREME LAW.** (docket
      ANTICIPY-CONSTITUTION-2026-06-13-01): the mission, the full definition of DONE (never redefined
      smaller), the 7 Laws every agent obeys, the build+runtime looping system, and — critically — the
      CONTINUITY mechanism: how Omar's instilled principles survive compaction/memory forever by living in
