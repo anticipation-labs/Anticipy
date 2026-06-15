@@ -545,3 +545,20 @@ submit), 2 (navigate-to-pay-URL), and 3 (out-of-list-index click — the URL che
   BACKSTOP — the PRIMARY money protections remain the harm-line blocking money-VERB tasks at intake + the
   prepare-then-park model + money having NO API/voice capability. These residuals are for a session with a real
   browser (live-proof pending Omar's machine).
+
+### 🟡 Slice 6: extension discover_connections scrape — the onboarding Chrome-scrape pipeline is CODE-COMPLETE · 2026-06-15
+The defining "onboarding scrapes you" step now exists end to end in code. extension/background.js handles a
+"discover_connections" message: for each service it opens the landing page in the Anticipy tab group, reads
+ONLY a logged-in vs sign-in signal from the DOM (an account/avatar/sign-out control minus a sign-in wall) —
+NEVER account contents, an identifier, or a credential — and POSTs {service, logged_in, url} to the engine's
+/onboard/discover, which builds the per-person mesh (Slice 1, tested). Privacy-preserving by construction.
+- Receipt: node --check passes (JS syntax valid); the engine endpoint it targets is already tested
+  (test_onboard_discover). The extension JS is NOT in the python suite and cannot affect the running demo
+  (the demo uses the already-loaded extension; the on-disk change takes effect only on reload).
+- LIVE-PROOF PENDING OMAR: the actual DOM scrape of his real logged-in services needs the extension reloaded
+  in his Chrome. The final wiring is the trigger (the engine sends the discover_connections ws message when
+  onboarding starts, or the UI triggers it) — straightforward; the handler + endpoint are done. Default
+  service allowlist: Gmail/Calendar/Drive/Outlook/Slack/Notion (the engine may send its own list).
+- WITH THIS, the buildable-WITHOUT-Omar round-2 queue is EXHAUSTED. Everything remaining genuinely needs Omar
+  (his real Chrome to verify the scrape + browser actions, his OAuth tap, his supervised voice run, his notary
+  password, his 5 real days + red-pen).

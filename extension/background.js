@@ -8,6 +8,18 @@ const ENGINE_HTTP = "http://127.0.0.1:8787";
 const ENGINE_WS = "ws://127.0.0.1:8787/ws/extension";
 const PING_MS = 20000;
 
+// Onboarding scrape: services to probe for an already-logged-in session (the engine may send its
+// own list via the discover_connections message). PRIVACY: we only detect a logged-in vs sign-in
+// signal — never read account contents, never store identifiers, never enter credentials.
+const DEFAULT_DISCOVER_SERVICES = [
+  { name: "Gmail", url: "https://mail.google.com/" },
+  { name: "Google Calendar", url: "https://calendar.google.com/" },
+  { name: "Google Drive", url: "https://drive.google.com/" },
+  { name: "Outlook", url: "https://outlook.live.com/mail/" },
+  { name: "Slack", url: "https://app.slack.com/client" },
+  { name: "Notion", url: "https://www.notion.so/" },
+];
+
 let ws = null;
 let pingTimer = null;
 let reconnectTimer = null;
@@ -71,6 +83,10 @@ async function handleMessage(msg) {
     else r = await executeBrowseJob(msg);
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(r));
   }
+  if (msg.type === "discover_connections") {
+    const r = await doDiscoverConnections(msg);
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(r));
+  }
 }
 
 // Real execution: open the target page in a controlled tab, read it
@@ -115,6 +131,55 @@ async function executeBrowseJob(msg) {
   } catch (e) {
     return result(msg, "needs_human", null, { reason: "browser error: " + String(e) });
   }
+}
+
+// --- onboarding primitive: DISCOVER which services the user is already logged into ---
+// The "scrapes you" onboarding step, done in the user's OWN logged-in Chrome. PRIVACY-PRESERVING:
+// for each service it opens the landing page in the Anticipy tab group, reads ONLY a logged-in vs
+// sign-in signal from the DOM (an account/avatar/sign-out control, minus a sign-in wall) — never
+// account contents, never an identifier, never a credential — then POSTs the {service, logged_in,
+// url} list to the engine's /onboard/discover, which builds the per-person connection mesh.
+async function doDiscoverConnections(msg) {
+  const services = (msg.services && msg.services.length) ? msg.services : DEFAULT_DISCOVER_SERVICES;
+  const discovered = [];
+  for (const svc of services) {
+    const url = svc && svc.url;
+    if (!url) continue;
+    try {
+      const tab = await openInGroup(url);
+      await waitForComplete(tab.id, 20000);
+      await settle(tab.id);
+      const [{ result: page }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => ({
+          url: location.href,
+          // a 1-line auth signal only — NOT account contents
+          authText: (document.body ? document.body.innerText : "").slice(0, 1200),
+          hasAccountChrome: !!document.querySelector(
+            '[aria-label*="Account" i],[aria-label*="profile" i],img[alt*="avatar" i],' +
+            'a[href*="logout" i],a[href*="signout" i],a[href*="sign-out" i],button[aria-label*="sign out" i]'
+          ),
+        }),
+      });
+      const blob = ((page.url || "") + " " + (page.authText || "")).toLowerCase();
+      const signinWall = /\/login|\/signin|\/sign-in|accounts\.|\bsign in\b|\blog in\b|enter your password|create (an )?account|continue with/.test(blob);
+      const logged_in = !!page.hasAccountChrome && !signinWall;
+      discovered.push({ service: svc.name, logged_in: logged_in, identifier: "", url: url });
+    } catch (e) {
+      discovered.push({ service: svc.name, logged_in: false, identifier: "", url: url, error: String(e) });
+    }
+  }
+  // Hand the discovery to the engine; it builds the per-person mesh via /onboard/discover (tested).
+  let posted = false;
+  try {
+    const resp = await fetch(ENGINE_HTTP + "/onboard/discover", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discovered: discovered, source: "chrome_scrape" }),
+    });
+    posted = !!(resp && resp.ok);
+  } catch (e) {}
+  return result(msg, "success", null, { discovered: discovered, count: discovered.length, posted: posted });
 }
 
 // --- trusted input via CDP (chrome.debugger): real isTrusted events that hard
