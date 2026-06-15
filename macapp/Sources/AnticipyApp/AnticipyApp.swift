@@ -5,11 +5,10 @@ struct AnticipyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        WindowGroup("Anticipy") {
-            RootView()
-                .frame(minWidth: 920, minHeight: 640)
+        WindowGroup("Anticipy Execute") {
+            WebRoot()
+                .frame(minWidth: 1040, minHeight: 720)
         }
-        .windowStyle(.hiddenTitleBar)
     }
 }
 

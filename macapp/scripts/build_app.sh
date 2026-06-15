@@ -18,6 +18,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp "$MACAPP/Resources/Info.plist" "$APP/Contents/Info.plist"
+# bundle the launcher so the app can boot the engine + UI on open
+cp "$MACAPP/Resources/boot.sh" "$APP/Contents/Resources/boot.sh"
+chmod +x "$APP/Contents/Resources/boot.sh"
 
 echo "--- PASS: built $APP ---"
 ls -la "$APP/Contents/MacOS"
