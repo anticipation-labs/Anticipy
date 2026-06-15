@@ -1981,9 +1981,11 @@ class WebVoyagerAgent:
                     history[-1],
                     start_url=start_url,
                 ))
-                return self._done(out, steps + 1, history, answer="",
-                                  reason="product page identity did not match the remembered item strongly enough to add safely",
-                                  page_states=states, commerce_recipe=True)
+                # Pre-mutation give-up: the recipe could not confirm this is a single buyable
+                # PRODUCT surface (e.g. it landed on a search/tag/listing page, surface != product).
+                # Nothing was added, so fall through to the GENERAL agent loop, which can click
+                # from the listing into an actual product page and add it — rather than dead-ending.
+                return None
             add = _pick_add_button(
                 out.get("elements") or [], item, skip_names=tried_add_names, start_url=start_url
             )
