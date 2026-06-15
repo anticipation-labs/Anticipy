@@ -17,9 +17,10 @@ if ! curl -s -m2 http://127.0.0.1:8787/readiness >/dev/null 2>&1; then
     anticipy_engine.main:app --port 8787 >/tmp/anticipy_engine.log 2>&1 &
 fi
 
-# 2) web UI on 3000
+# 2) web UI on 3000 — PRODUCTION server (stable; no dev hot-reload cache corruption)
 if ! curl -s -m2 http://127.0.0.1:3000 >/dev/null 2>&1; then
-  ANTICIPY_ENGINE_URL=http://127.0.0.1:8787 nohup npm run dev >/tmp/anticipy_web.log 2>&1 &
+  [ -f "$REPO/.next/BUILD_ID" ] || ANTICIPY_ENGINE_URL=http://127.0.0.1:8787 npm run build >/tmp/anticipy_web_build.log 2>&1
+  ANTICIPY_ENGINE_URL=http://127.0.0.1:8787 nohup npm start >/tmp/anticipy_web.log 2>&1 &
 fi
 
 # 3) wait until the interface answers (engine boots fast; next dev compiles on first hit)
