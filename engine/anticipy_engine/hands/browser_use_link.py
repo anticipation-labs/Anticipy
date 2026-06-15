@@ -198,6 +198,21 @@ def browse_read(
             error="cdp_url must be a loopback Chrome (127.0.0.1/localhost) — refused (SSRF guard)",
         )
 
+    # MONEY HARD STOP: do NOT run ACTIONS in the user's logged-in Chrome (cdp_url). The browser-use
+    # action guard is only a PROMPT instruction, not a code-level click block like the WebVoyager
+    # PURCHASE_GUARD — so a logged-in session (saved cards, one-click buy) would have NO deterministic
+    # money stop. READS may attach (act=False); ACTIONS run only on a throwaway browser (no saved
+    # payment, so money cannot be spent even if the model misbehaves), until a code-level pay-click
+    # guard is built AND verified against a real browser. Money is the hard stop. The guard considers
+    # the ANTICIPY_BROWSERUSE_CDP_URL env too — the runner derives cdp_url from req OR that env, so
+    # checking only the parameter would let an env-set cdp slip an action into the logged-in Chrome.
+    if act and (cdp_url or os.environ.get("ANTICIPY_BROWSERUSE_CDP_URL")):
+        return BrowseReadResult(
+            success=False, result=None, url=url, structured=structured,
+            error="refusing to run an ACTION in the logged-in Chrome (cdp_url): no code-level money "
+                  "guard there yet — money is the hard stop. Run the action without cdp_url (throwaway browser).",
+        )
+
     req = {
         "task": task,
         "url": url,

@@ -202,6 +202,16 @@ async def _run(req: dict) -> dict:
     # a throwaway browser — so add-to-cart etc. run inside the real, logged-in session. No local
     # chrome binary is needed in that mode.
     cdp_url = (req.get("cdp_url") or os.environ.get("ANTICIPY_BROWSERUSE_CDP_URL") or "").strip() or None
+    # MONEY HARD STOP (defense in depth — also catches the env backdoor + direct __main__ invocation):
+    # NEVER run an ACTION (act=True) attached to the user's logged-in Chrome. That session has saved
+    # cards / one-click buy and the action guard here is only a PROMPT instruction, not a code-level
+    # pay-click block. Actions run only on a throwaway browser; reads may attach.
+    if cdp_url and req.get("act"):
+        return {
+            "success": False, "result": None, "steps": 0, "url": req.get("url"),
+            "error": ("refusing to run an ACTION attached to a logged-in Chrome (cdp_url): money has no "
+                      "code-level guard there; run the action on the throwaway browser (no cdp_url)."),
+        }
     if not cdp_url and not os.path.exists(chrome_bin):
         return {
             "success": False,

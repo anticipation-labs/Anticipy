@@ -482,3 +482,47 @@ still needed for the REAL Owner Test is Omar's real days + his ground-truth labe
   0 cardinal-sin / 0 silent-harm with every decision accounted. Suite 82→83 green, floor 0.
 - STILL NEEDS OMAR: his real days + ground-truth labels (which lines are tasks vs vents). The instrument now
   runs end to end; his judgment is the bar.
+
+### 🛑 Slice 7 (card-routing to browse_act) REVERTED on a real money-safety finding · 2026-06-15
+A skeptic refuted the safety claim of routing action cards to the browser-use arm, and it was RIGHT — so
+this was NOT shipped (reverted before commit; HEAD stays safe).
+- THE FINDING: the WebVoyager arm has a DETERMINISTIC, code-level money stop — webvoyager.py PURCHASE_GUARD
+  intercepts every click in Python BEFORE it executes and blocks pay/checkout controls (the model CANNOT
+  click "Place order" even if it decides to). The browser-use arm's money/checkout/login "hard stop" is ONLY
+  a natural-language instruction appended to the task prompt (browser_use_runner _ACTION_GUARD) — there is NO
+  code-level interception. Paired with CDP attach to the user's REAL logged-in Chrome (saved cards, one-click
+  buy), the only thing between the agent and a real charge would be the model choosing to obey. That is a
+  STRICT weakening of the money guarantee (money is THE hard stop). Routing the brain's cards to that arm
+  would let a prompt-injecting page / confused model spend real money the WebVoyager path deterministically blocks.
+- ACTION: reverted Slice 7 entirely (cards keep the deterministic-money-guard WebVoyager path). The browse_act
+  arm + Slice 2's CDP attach also rely on this prompt-only guard — so the next slice adds a real CODE-LEVEL
+  money guard to the browse_act runner before that arm is trusted for actions on a logged-in session.
+- Also noted (broader, pre-existing): the orchestrator's _verify accepts a browser proof on self-report
+  (needs_cross_check is decorative — nothing consumes it). Independent read-back is not enforced for either
+  browser arm. Logged for a future fix.
+
+### ✅ Slice 8: deterministic MONEY hard-stop on the browse_act arm (2-layer, env-backdoor closed) · 2026-06-15
+The browser-use action arm can no longer spend money on the user's logged-in Chrome. browse_act/browse_read
+REFUSE act=True + cdp_url (the logged-in session); the guard is env-aware (ANTICIPY_BROWSERUSE_CDP_URL) AND the
+runner itself refuses act+cdp (defense in depth — covers direct __main__ invocation). Actions run only on a
+throwaway browser (no saved payment); reads may attach.
+- Two skeptic passes: #1 found the arm had only a PROMPT-level money guard (→ this refusal); #2 found an ENV
+  BACKDOOR (guard checked the param; runner derived cdp from param OR env) → FIXED both layers + tested; #2
+  re-verified CLOSED at both layers.
+- Receipt: engine/scripts/test_browser_use_cdp.py (in run_suite.sh) — reads attach; actions with param-cdp,
+  env-cdp, and no-cdp all behave correctly; SSRF/loopback hold. Suite 83/83 green, floor 0.
+
+### 🚨 CRITICAL OPEN (money): the WebVoyager + native-bridge browser arm has UNGUARDED pay paths · 2026-06-15
+The OTHER browser arm — WebVoyager-over-extension + native-bridge, the one the brain's CARDS actually use,
+acting on the user's REAL logged-in Chrome — has an INCOMPLETE execution-layer money guard. Money-VERB tasks
+("buy/pay/checkout") ARE blocked at INTAKE by the harm-line (safe). But an add-to-cart task is classified
+reversible and EXECUTES autonomously (Risk.low, no approval); if it DRIFTS to a pay control, the only backstop
+is WebVoyager PURCHASE_GUARD, which is click-only / DOM-label-only / in-view-list-only. Holes a skeptic proved:
+(1) type+enter submits a pay form (guard fires only on click); (2) navigate to a one-click-buy/order-submit URL
+(guard never runs on navigate; navwall is host-only, retail checkout passes); (3) an out-of-45-list click index
+skips the guard; (4) a generic-labeled pay button ("Continue"/"Confirm"/image-only) passes the label regex.
+The API + voice arms have NO money capability (safe); browse_act is now closed (above). THE FIX (high priority):
+a deterministic money guard at the transport chokepoint (native_bridge_link._act + BrowserLink/extension doAct)
+covering ALL action types (click/type+enter/navigate) — STOP any action when on/navigating to a checkout/payment
+URL or context, not just a click-label match. Until then the browser arm must not autonomously run cart tasks
+that could reach checkout on a logged-in payment-capable session.

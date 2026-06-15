@@ -1,14 +1,14 @@
-"""Slice 2: cdp_url threads through the browser-use action arm to the bridge runner.
+"""browser-use CDP attach + the MONEY hard stop on the logged-in Chrome.
 
-Proves browse_act(cdp_url=...) puts cdp_url into the JSON request the runner receives — so the
-PROVEN agent ATTACHES to the user's already-running, logged-in Chrome over CDP instead of a
-throwaway browser — WITHOUT launching any browser. The subprocess is faked: we capture the stdin
-JSON and return a canned sentinel result. Also proves the default (no cdp_url) stays None and the
-read path stays act=False (back-compat).
-
-The CDP-attach branch itself lives in browser_use_runner.py (3.11 bridge): cdp_url set ->
-BrowserProfile(cdp_url=...) with NO executable_path (browser-use connects, never launches).
-Its LIVE proof against a real Chrome is exercised separately (live-proof pending Omar's Chrome).
+cdp_url lets the proven agent attach to the user's already-running Chrome. But the browser-use action
+guard is only a PROMPT instruction (not a code-level pay-click block like WebVoyager's PURCHASE_GUARD),
+so running ACTIONS on a logged-in session (saved cards, one-click buy) would have no deterministic money
+stop. Policy (money is the hard stop):
+  - READS (act=False) MAY attach to the logged-in Chrome (cdp_url threads through to the runner).
+  - ACTIONS (browse_act / act=True) with cdp_url are REFUSED before the runner — actions run only on a
+    throwaway browser (no saved payment), until a code-level pay-click guard is verified on a real browser.
+  - a non-loopback cdp_url is refused (SSRF) for any call.
+No browser is launched here: the subprocess is faked (we capture the stdin JSON).
 
 Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_browser_use_cdp.py
 """
@@ -36,34 +36,54 @@ def _fake_run(cmd, input=None, **kwargs):
 
 
 def main():
-    # the bridge python + runner exist in this repo, so available() passes
     assert bul.available()["ok"], bul.available()
-    # fake the subprocess so NO browser launches; keep TimeoutExpired for the except path
     bul.subprocess = types.SimpleNamespace(run=_fake_run,
                                            TimeoutExpired=_real_subprocess.TimeoutExpired)
 
-    # ACTION task WITH cdp_url -> the runner request must carry cdp_url + act=True
-    r = bul.browse_act("add the item to the cart", url="https://example.org",
-                       cdp_url="http://localhost:9222")
-    assert CAPTURED["req"]["cdp_url"] == "http://localhost:9222", CAPTURED["req"]
-    assert CAPTURED["req"]["act"] is True, CAPTURED["req"]
+    # READ with a loopback cdp_url THREADS THROUGH (attaching for a read is allowed — no actions)
+    CAPTURED.clear()
+    r = bul.browse_read("read the page title", url="https://example.org", cdp_url="http://127.0.0.1:9222")
+    assert CAPTURED["req"]["cdp_url"] == "http://127.0.0.1:9222", CAPTURED["req"]
+    assert CAPTURED["req"]["act"] is False, CAPTURED["req"]
     assert r.success is True and r.result == "ok", r
 
-    # default (no cdp_url) -> None, read path act=False (back-compat unchanged)
-    bul.browse_read("read the page title", url="https://example.org")
-    assert CAPTURED["req"]["cdp_url"] is None, CAPTURED["req"]
-    assert CAPTURED["req"]["act"] is False, CAPTURED["req"]
-
-    # SSRF guard: a NON-loopback cdp_url is REFUSED before the runner is ever invoked
+    # ACTION (browse_act) with a loopback cdp_url is REFUSED (money hard stop) — never reaches the runner
     CAPTURED.clear()
-    bad = bul.browse_act("add to cart", url="https://example.org", cdp_url="http://169.254.169.254/")
-    assert bad.success is False and "loopback" in (bad.error or ""), bad
-    assert "req" not in CAPTURED, "must refuse a non-loopback cdp_url BEFORE invoking the runner"
-    # a loopback cdp_url is allowed through (already proven above with http://localhost:9222)
+    bad = bul.browse_act("add the item to the cart", url="https://example.org", cdp_url="http://127.0.0.1:9222")
+    err = (bad.error or "").lower()
+    assert bad.success is False and ("money" in err or "logged-in" in err), bad
+    assert "req" not in CAPTURED, "an action in the logged-in Chrome must be refused BEFORE the runner"
+
+    # ACTION WITHOUT cdp_url -> runs on the throwaway browser (act threads through; no saved payment)
+    CAPTURED.clear()
+    ok = bul.browse_act("add the item to the cart", url="https://example.org")
+    assert CAPTURED["req"]["act"] is True and CAPTURED["req"]["cdp_url"] is None, CAPTURED["req"]
+    assert ok.success is True, ok
+
+    # ENV BACKDOOR closed: an ACTION with NO param cdp_url but ANTICIPY_BROWSERUSE_CDP_URL set must
+    # STILL be refused (the runner derives cdp_url from req OR that env, so a param-only guard would
+    # let an env-set cdp slip an action into the logged-in Chrome).
+    import os as _os
+    CAPTURED.clear()
+    _os.environ["ANTICIPY_BROWSERUSE_CDP_URL"] = "http://127.0.0.1:9222"
+    try:
+        env_bad = bul.browse_act("add to cart", url="https://example.org")  # no param cdp_url
+        e2 = (env_bad.error or "").lower()
+        assert env_bad.success is False and ("money" in e2 or "logged-in" in e2), env_bad
+        assert "req" not in CAPTURED, "an env-set cdp must refuse an action BEFORE the runner"
+    finally:
+        _os.environ.pop("ANTICIPY_BROWSERUSE_CDP_URL", None)
+
+    # a non-loopback cdp_url is refused (SSRF) even for a read
+    CAPTURED.clear()
+    ssrf = bul.browse_read("x", url="https://example.org", cdp_url="http://169.254.169.254/")
+    assert ssrf.success is False and "loopback" in (ssrf.error or ""), ssrf
+    assert "req" not in CAPTURED, "a non-loopback cdp_url must be refused before the runner"
+
     assert bul._cdp_is_loopback("http://127.0.0.1:9222") and not bul._cdp_is_loopback("http://evil.com")
 
-    print("PASS: cdp_url threads through browse_act -> runner request (CDP-attach plumbing)")
-    print("  set -> attaches to the user's logged-in Chrome; unset -> throwaway browser (back-compat)")
+    print("PASS: cdp_url attaches for READS; ACTIONS in the logged-in Chrome are REFUSED (money hard stop); "
+          "actions run on a throwaway browser; SSRF + loopback guards hold")
 
 
 if __name__ == "__main__":

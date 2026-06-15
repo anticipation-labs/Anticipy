@@ -134,3 +134,14 @@ real Chrome session, or his 5 real days + red-pen — NOTHING else counts as a r
   caught a CATASTROPHIC false-negative (timestamped/split lines could hide a cardinal sin) → FIXED (engine's
   own clean/split + strongest-disposition + unaccounted-decision backstop) + positively proven. Suite 83/83,
   floor 0. Next: Slice 7 (route action cards to browse_act, verifiable) then Slice 6 (extension scrape JS).
+- 2026-06-15 — Slice 7 (card-routing to browse_act) BUILT, gate green, but a skeptic REFUTED its safety:
+  browse_act's money stop is PROMPT-ONLY (no code-level pay-click block like WebVoyager's PURCHASE_GUARD), so
+  routing cards to it — esp. CDP-attached to the logged-in Chrome with saved cards — weakens the money guard.
+  REVERTED before commit (HEAD stays safe; cards keep the deterministic WebVoyager guard). The right call:
+  shipping a money-guard weakening is worse than not shipping the feature.
+- 2026-06-15 — Slice 8 committed: MONEY HARD STOP on the browse_act arm. ACTIONS (act=True) in the logged-in
+  Chrome (cdp_url) are now REFUSED (no saved payment on the throwaway browser → money can't be spent even if
+  the prompt guard fails); READS may still attach. Corrects Slice 2's over-reach. The proper fix (a code-level
+  pay-click guard via browser-use's step callback / Tools override) needs a REAL browser to verify, so it +
+  re-enabling logged-in actions + card-routing are deferred to a session with Omar's machine.
+  STOP CHECK: after Slice 6 (extension scrape), the buildable-without-Omar queue is exhausted.
