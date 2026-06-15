@@ -105,3 +105,8 @@ then `CronDelete` the heartbeat job and idle. Do NOT grind no-op ticks.
   SSRF guard (skeptic-found defect, fixed). Suite 80/80, floor 0, skeptic refuted=FALSE. Live attach against
   a real Chrome = live-proof pending Omar. Next: Slice 3 (5-day Owner Test harness + selftest). Card-routing
   to browse_act is a flagged follow-up (the WebVoyager-over-extension arm already runs in the logged-in Chrome).
+- 2026-06-15 night — Slice 3 committed: Owner Test scorer (engine/scripts/owner_test.py, self-proving).
+  Skeptic caught a CRITICAL false-green (case/vocab mismatch let a 'do'/'ACT' cardinal sin score PASS) →
+  FIXED (normalize engine vocab + reject unknowns; selftest now plants the attack). Suite 81/81, floor 0.
+  GOTCHA: glassbox.jsonl regrows ~2GB per suite run → clear it before gates / run floors with a temp
+  ANTICIPY_DATA_DIR. BUILDABLE SLICE QUEUE (1,2,3) DONE → next: write MORNING_REPORT + CronDelete (STOP).

@@ -432,3 +432,20 @@ request, exposed on POST /agent/act.
 - STILL UNPROVEN (live-proof pending Omar): the actual CDP handshake against a real Chrome + acting inside
   his logged-in session. Routing caught browser CARDS to this arm (vs the existing WebVoyager-over-extension
   arm, which already runs in his logged-in Chrome) is a follow-up enhancement, gated by a flag.
+
+### ✅ Slice 3: the Owner Test scorer — the P5 finish-line instrument (self-proving) · 2026-06-15 (night)
+The finish line (5 real Omar days, zero vent-actions) now has a deterministic, self-proving scorer.
+engine/scripts/owner_test.py: score_day(key, observed) → catch_rate, false_action_count (vents acted on =
+cardinal sin, HARD 0), silent_harm_count (money/tripwire executed, HARD 0), interrupt_cost, e2e_completion,
++ a hard PASS verdict. Zero model calls.
+- CRITICAL skeptic catch (refuted=TRUE, FIXED): the first version matched decision strings exactly/
+  case-sensitively, but the engine emits "do" (owner_mode) and UPPERCASE "ACT" (gateway) — so a vent acted
+  on as "do"/"ACT" would have scored false_action=0, PASS: a CERTIFIED CARDINAL SIN. Fixed: normalize ALL
+  engine vocabularies (do/ACT/" act " → act), reject unknown labels/decisions (a malformed day can NEVER
+  silently PASS), and the selftest now PLANTS that exact attack (do/ACT/whitespace/unknown) so it can't regress.
+- Receipt: owner_test.py --selftest (in run_suite.sh) — plants caught/missed/vent-silent + 4 cardinal-sin
+  vocab variants + silent-harm + unknown-rejection + clean-day-PASS; voids itself (EVAL_BROKEN, exit 2) if it
+  grades any wrong. Suite 80→81 green, floor 0 breaches (153 lines).
+- STILL NEEDS OMAR (the actual Owner Test): real day KEYS in factory/owner/expected/ (his marked days) + a
+  runner driving a day through the live engine emitting {decision,executed,proof} → score it. The scorer is
+  ready; the days + his red-pen are his.
