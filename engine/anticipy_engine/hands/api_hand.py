@@ -388,17 +388,19 @@ class ApiHand(Worker):
                           error=f"execute error: {err or 'empty output'}")
 
         proof = self._proof_from(value, tool)
+
+        # READS / non-write actions: the execute() response IS the artifact (a LIST of events/
+        # emails, a fetched doc) — there is nothing to read back. A list read has no single
+        # top-level id, so requiring one here wrongly failed EVERY calendar/email READ as
+        # 'invalid proof'. The value is the proof; an id is only needed for a WRITE's read-back.
+        if not is_write:
+            return Result(job_id=job.id, status=JobStatus.success, proof=(proof or {"read": tool}),
+                          output={"value": value if isinstance(value, dict) else str(value)})
+
         written_id = proof.get("id")
         if not written_id:
             return Result(job_id=job.id, status=JobStatus.failed, proof=None,
                           error="no id in tool output (invalid proof)")
-
-        # READS / non-write actions: the execute() response IS the artifact (a list of
-        # emails, a fetched doc) — there is nothing further to read back, and these are
-        # not self-attested write echoes. Proof passes as before.
-        if not is_write:
-            return Result(job_id=job.id, status=JobStatus.success, proof=proof,
-                          output={"value": value if isinstance(value, dict) else str(value)})
 
         # WRITES: the execute() response is the actor grading its own homework. It is NOT
         # trusted as proof on its own. Issue a SECOND, independent read of the artifact and
