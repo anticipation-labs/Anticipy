@@ -799,6 +799,22 @@ async def onboard_discover(body: DiscoverConnectionsIn) -> dict:
     return await core.onboard_discover(body.discovered, source=body.source)
 
 
+class ScanIn(BaseModel):
+    services: list[dict] = Field(default_factory=list)  # optional [{name,url}]; empty -> extension defaults
+
+
+@app.post("/onboard/scan")
+async def onboard_scan(body: ScanIn) -> dict:
+    """TRIGGER the onboarding account-scan in the user's connected Chrome. This is the wiring the
+    'scrapes you' step was missing: the engine tells the extension to scan; the extension reads a
+    logged-in-vs-signin signal per service and POSTs results back to /onboard/discover. Returns
+    triggered=False (no error) when no extension is connected to drive."""
+    triggered = await core.browser_link.discover_connections(body.services or None)
+    core.glassbox.log("onboard_scan", {"triggered": triggered, "services": len(body.services or [])})
+    return {"triggered": triggered, "note": ("scan started in your Chrome; results arrive via "
+            "/onboard/discover" if triggered else "no browser extension connected")}
+
+
 # Max public source URLs we will read per profile build (keep the read bounded).
 ONBOARDING_MAX_SOURCES = 6
 

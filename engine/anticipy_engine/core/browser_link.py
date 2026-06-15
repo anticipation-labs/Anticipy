@@ -102,6 +102,18 @@ class BrowserLink:
         finally:
             self._pending.pop(job_id, None)
 
+    # ---- onboarding: trigger the logged-in-Chrome account scan ----
+    async def discover_connections(self, services: Optional[list] = None) -> bool:
+        """Tell the extension to run its privacy-preserving account scan (the onboarding
+        'scrapes you' step): for each service it reads ONLY a logged-in-vs-signin signal in the
+        user's own Chrome and POSTs the result to /onboard/discover itself. Fire-and-forget —
+        the scan reports back over /onboard/discover, not the browse-job result channel — so this
+        only needs the socket open. Returns False if no extension is connected to drive."""
+        if not self.connected or self._ws is None:
+            return False
+        await self._ws.send_json({"type": "discover_connections", "services": services or []})
+        return True
+
     # ---- dev hot-reload ----
     async def reload(self) -> bool:
         if self._ws is None:
