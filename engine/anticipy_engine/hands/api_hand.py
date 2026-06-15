@@ -199,12 +199,35 @@ class ApiHand(Worker):
                             "to_email": "recipient", "address": "recipient"},
     }
 
+    @staticmethod
+    def _listevents_window(args: dict | None, *, tight: bool) -> dict:
+        """The time window GoogleCalendar.ListEvents@3.x REQUIRES (min_end_datetime /
+        max_start_datetime). Without it the call 400s — which silently broke EVERY calendar
+        read AND the create_event read-back (so real events were marked 'not done'). When a
+        write carries the event's own start_datetime we center a TIGHT window on it so the
+        read-back's result set is small and definitely contains the just-created event; the id
+        match remains the hard gate. Otherwise a wide now-anchored span. RFC3339 / tz-aware."""
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+        start = _parse_iso_dt(_calendar_value(args or {}, "start_datetime"))
+        if tight and start is not None:
+            lo, hi = start - datetime.timedelta(days=1), start + datetime.timedelta(days=1)
+        else:
+            lo, hi = now - datetime.timedelta(days=1), now + datetime.timedelta(days=730)
+        return {"min_end_datetime": lo.replace(microsecond=0).isoformat(),
+                "max_start_datetime": hi.replace(microsecond=0).isoformat()}
+
     @classmethod
     def _tool_input(cls, job: Job) -> dict:
+        tool = INTENT_MAP.get(job.intent) or ""
         out = {k: v for k, v in job.args.items() if k != "approved"}
-        for src, dst in cls._ALIASES.get(INTENT_MAP.get(job.intent) or "", {}).items():
+        for src, dst in cls._ALIASES.get(tool, {}).items():
             if src in out and dst not in out:
                 out[dst] = out.pop(src)
+        # ListEvents@3.x requires a time window — fill it only if the caller didn't.
+        if tool == "GoogleCalendar.ListEvents":
+            for k, v in cls._listevents_window(out, tight=False).items():
+                out.setdefault(k, v)
         return out
 
     async def handle(self, job: Job) -> Result:
@@ -465,14 +488,12 @@ class ApiHand(Worker):
 
     @classmethod
     def _readback_input(cls, job: Job, written_id) -> dict:
-        """Input for the read-back call. Best-effort narrowing; the id match is the real gate."""
+        """Input for the read-back call. ListEvents@3.x REQUIRES min_end_datetime/max_start_datetime,
+        so for create_event we always supply a window TIGHT around the just-created event (the id
+        match is still the hard gate). Was returning start/end only -> the read 400'd and every
+        calendar write was wrongly marked 'not done'."""
         if job.intent == "create_event":
-            # ListEvents is time-windowed; pass through any window the write carried so the
-            # read returns the just-created event. The id match below is the hard check.
-            win = {k: _calendar_value(job.args, k)
-                   for k in ("start_datetime", "end_datetime")
-                   if _calendar_value(job.args, k) is not None}
-            return win or {}
+            return cls._listevents_window(job.args, tight=True)
         return {}
 
     @classmethod
@@ -591,6 +612,19 @@ def _calendar_value(args: dict, key: str):
     if isinstance(event, dict) and key in event:
         return event.get(key)
     return None
+
+
+def _parse_iso_dt(value):
+    """Parse an ISO-8601/RFC3339 datetime string to a tz-aware datetime (UTC if naive); None on
+    anything unparseable. Used to anchor the ListEvents read-back window on a created event."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    import datetime
+    try:
+        dt = datetime.datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt.replace(tzinfo=datetime.timezone.utc) if dt.tzinfo is None else dt
 
 
 def _has_concrete_calendar_window(args: dict) -> bool:
