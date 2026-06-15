@@ -88,21 +88,40 @@ async def main():
     assert fake2.wrote is True, "the write DID fire; only the read-back failed"
     assert fake2.read_tool in fake2.calls, "the second independent read WAS attempted"
 
-    # (3) Unverified read tool (send_email_draft has no wired read-back yet) -> the live
-    # path CANNOT confirm -> needs_human, NEVER success on the write echo alone.
-    assert READ_BACK["send_email_draft"] is None, "drafts read tool intentionally TODO"
+    # (3) Drafts NOW have a wired read-back (Gmail.ListDraftEmails): a draft write is confirmed
+    # by re-observing its id in the listed drafts — the same gate as calendar.
+    assert READ_BACK["send_email_draft"] == "Gmail.ListDraftEmails", "drafts read-back must be wired"
 
     class DraftFake:
         def __init__(self):
             self.tools = SimpleNamespace(
                 authorize=lambda tool_name, user_id: SimpleNamespace(status="completed", url=None),
+                # the write echoes the new draft id; ListDraftEmails returns it among the drafts
                 execute=lambda tool_name, input, user_id: SimpleNamespace(
-                    output=SimpleNamespace(value={"draft_id": "draft-1"}, error=None)))
+                    output=SimpleNamespace(
+                        value=({"drafts": [{"id": "draft-1"}]} if "List" in tool_name else {"id": "draft-1"}),
+                        error=None)))
     hand3 = ApiHand(user_id="u", client=DraftFake(), mode=MODE_LIVE)
     r = await hand3.handle(Job(intent="send_email_draft", risk=Risk.low, goal_id="g1",
                                args={"recipient": "t@x.com", "subject": "hi", "body": "yo"}))
-    assert r.status == JobStatus.needs_human and r.proof is None, r
-    assert r.output.get("unverified_write") is True
+    assert r.status == JobStatus.success and r.proof and r.proof.get("readback"), r
+    assert r.proof.get("verified_by_read") == "Gmail.ListDraftEmails", r.proof
+
+    # (3b) An intent with NO wired read tool (Slack 'message') MUST still fail closed:
+    # needs_human, never success on the write echo alone. (Proves the fail-closed gate survives.)
+    assert READ_BACK.get("message") is None, "Slack read tool intentionally TODO (keeps the gate honest)"
+
+    class MsgFake:
+        def __init__(self):
+            self.tools = SimpleNamespace(
+                authorize=lambda tool_name, user_id: SimpleNamespace(status="completed", url=None),
+                execute=lambda tool_name, input, user_id: SimpleNamespace(
+                    output=SimpleNamespace(value={"id": "msg-1"}, error=None)))
+    hand_m = ApiHand(user_id="u", client=MsgFake(), mode=MODE_LIVE)
+    rm = await hand_m.handle(Job(intent="message", risk=Risk.low, goal_id="g2",
+                                 args={"channel": "#x", "text": "hi"}))
+    assert rm.status == JobStatus.needs_human and rm.proof is None, rm
+    assert rm.output.get("unverified_write") is True
 
     # (4) orchestrator._verify rejects a self-attested-only proof, and accepts a
     # read-backed one. This is the central gate; it must not be silently weakened.
