@@ -589,3 +589,30 @@ it is now the real SMART brain, grounded + safe, live on the text AND voice line
   wired in. Committed b569edc, pushed to origin/factory/build.
 - LIVE-PROOF still open: a REAL inbound text FROM Omar -> auto-reply round-trip (the inbound wiring is unit-proven
   and every leg is live-proven; only Omar texting the number exercises the full composition end to end).
+
+### ✅ Slice 11: the engine ACTUALLY EXECUTES + PROVES actions (API + browser arms) · 2026-06-15
+The engine made the right cards but its action arms were silently failing verification. Found +
+fixed live, all on main, suite green throughout (87/87). Reality gate now 6/8 verified-live.
+- **Calendar create was silently failing** — Arcade's GoogleCalendar.ListEvents@3.4.0 now REQUIRES
+  a min_end_datetime/max_start_datetime window the read-back didn't send -> every calendar write
+  marked "not done" (and the retry-on-not-done was the duplicate-events root cause). Fixed in TWO
+  layers: (1) supply the required window; (2) anchor it on the created event's ACTUAL start from the
+  CreateEvent response (robust to the execute_owner_task planner path that doesn't surface
+  start_datetime) + max_results=250 (the default ~10-cap hid near-future events). RECEIPT: live
+  ingest "Set up a focus block ..." -> status=success, proof.verified_by_read=GoogleCalendar.ListEvents,
+  real event created + independently re-observed + deleted. (commits fa6ba3b, eab3375; test
+  test_api_calendar_window.)
+- **Reading calendar/email was failing** — the read path demanded a single id from a LIST result.
+  Fixed (reads pass with the value as proof). RECEIPT: read_calendar -> success, 10 real events. (5329738)
+- **Gmail draft read-back wired** (Gmail.ListDraftEmails, catalog-confirmed) — ready on the gmail
+  scope grant (Omar's one Arcade tap). Gmail read/draft are connect-gated until then. (6ad742a,1cb045b)
+- **Browser arm verified live**: READ (example.com -> real text + screenshot proof via /ws/browse),
+  ACTION (/agent/act add-to-cart on scrapeme.live -> "added Bulbasaur, cart 1 item", 5 steps).
+- **Onboarding scan TRIGGER wired** (the missing "scrapes you" piece): BrowserLink.discover_connections
+  + POST /onboard/scan tell the extension to scan. Engine side verified (scan triggered). LIVE scrape
+  blocked: the extension loaded in Omar's Chrome predates today's discover_connections handler — needs
+  the current ~/Anticipy/extension loaded/reloaded at chrome://extensions. (ee661c9; test_onboard_scan)
+- Reality gate (factory/bin/reality_check.py) re-aimed at the ENGINE working (dropped the product-
+  website criteria — that's the separate Anticipy-DEV-FINAL repo, hands-off). Now: engine live,
+  inference, ACTION-EXECUTED-WITH-PROOF, vent-silent/money-blocked, reminder delivered, text round-trip
+  all ✅; onboarding-scrape ❌ (extension load); 5-day owner test 🙋 (Omar). (becb4a1, aeb8e67)
