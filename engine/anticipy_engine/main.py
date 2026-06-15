@@ -1174,6 +1174,33 @@ class AgentRunIn(BaseModel):
     model: Optional[str] = None  # per-run brain override (model bake-off); None = default ladder
 
 
+class AgentActIn(BaseModel):
+    task: str
+    start_url: str
+    max_steps: int = 16
+
+
+@app.post("/agent/act")
+async def agent_act(body: AgentActIn) -> dict:
+    """The PROVEN action arm: browser-use (vision) completes the task — add-to-cart, fill a
+    form to the review step — with money/checkout/login as HARD STOPS in the runner's action
+    guard. Far more reliable on arbitrary stores than the bespoke loop. SSRF: the start page
+    must be a PUBLIC http(s) host."""
+    _assert_public_agent_url(body.start_url)
+    res = await asyncio.to_thread(
+        browser_use_link.browse_act, body.task, url=body.start_url, max_steps=body.max_steps)
+    return {
+        "success": res.success,
+        "answer": res.result,
+        "steps": res.steps,
+        "final_url": res.url,
+        "actions": res.actions,
+        "allowed_domains": res.allowed_domains,
+        "error": res.error,
+        "agent": "browser-use",
+    }
+
+
 def _gateway_for(model: Optional[str]) -> ModelGateway:
     if not model:
         return gateway_agent

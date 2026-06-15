@@ -129,6 +129,21 @@ def _parse_runner_output(stdout: str) -> Optional[Dict[str, Any]]:
     return payload
 
 
+def browse_act(
+    task: str,
+    *,
+    url: Optional[str] = None,
+    max_steps: int = 16,
+    timeout_s: int = _DEFAULT_TIMEOUT_S,
+) -> BrowseReadResult:
+    """Run an ACTION task through the proven open-source agent (browser-use, vision on):
+    it may click/type to complete the task (e.g. add-to-cart, fill a form to the review
+    step), but money/checkout/login are HARD STOPS enforced in the runner's action guard.
+    Same honest-by-construction result contract as browse_read."""
+    return browse_read(task, url=url, structured=False, max_steps=max_steps,
+                       timeout_s=timeout_s, act=True)
+
+
 def browse_read(
     task: str,
     *,
@@ -136,9 +151,11 @@ def browse_read(
     structured: bool = False,
     max_steps: int = 10,
     timeout_s: int = _DEFAULT_TIMEOUT_S,
+    act: bool = False,
 ) -> BrowseReadResult:
-    """Run a READ-ONLY browser read through the open-source arm and return a
-    proof-bearing result. Honest by construction: any blocker (missing bridge,
+    """Run a browser task through the open-source arm and return a proof-bearing result.
+    Default is READ-ONLY; ``act=True`` enables the action agent (vision on, money/login
+    hard-stopped in the runner). Honest by construction: any blocker (missing bridge,
     subprocess failure, timeout, runner error) yields success=False with a clear
     `error`, never a faked success."""
     probe = available()
@@ -161,6 +178,7 @@ def browse_read(
         "url": url,
         "structured": bool(structured),
         "max_steps": int(max_steps),
+        "act": bool(act),
     }
     cmd = [probe["bridge_python"], _RUNNER_PATH]
     # Pass through the creds the runner needs; the runner also reads .env.local.
