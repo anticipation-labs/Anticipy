@@ -11,7 +11,7 @@ Run: PYTHONPATH=engine engine/.venv/bin/python engine/scripts/test_purchase_guar
 """
 import re
 
-from anticipy_engine.agent.webvoyager import PURCHASE_GUARD, _pick_add_button, _pick_button
+from anticipy_engine.agent.webvoyager import CHECKOUT_URL_RE, PURCHASE_GUARD, _pick_add_button, _pick_button
 
 # Final money-purchase controls — clicking ANY of these spends money. Must be caught.
 BLOCK = [
@@ -64,6 +64,48 @@ def main():
     # a product page whose ONLY buyable control is a final-pay button -> add nothing (never buy)
     only_buy_page = [{"name": "Buy now", "role": "button", "inView": True, "idx": 0}]
     assert _pick_add_button(only_buy_page, item="shoes") is None
+
+    # CONTEXT-level money guard: the agent STOPS on/at a checkout/payment/order-submit URL regardless
+    # of action type — closing the type+enter / navigate-to-pay / out-of-list / generic-label holes.
+    PAY_URLS = [
+        "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+        "https://www.amazon.com/checkout/p/anything",
+        "https://shop.example.com/placeorder",
+        "https://shop.example.com/place-order",
+        "https://store.example.com/payment",
+        "https://store.example.com/payment/method",
+        "https://store.example.com/billing",
+        "https://store.example.com/order-submit",
+        "https://store.example.com/order/confirm",
+        "https://m.example.com/buy/spc",
+        "https://x.example.com/cart?checkout=1",
+        "https://anyshopify.example.com/checkouts/c/abc123",   # Shopify hosted checkout (skeptic-found MISS)
+        "https://store.example.com/checkouts",
+        "https://store.example.com/order/complete",
+        "https://store.example.com/place_order",
+        "https://store.example.com/purchase",
+        "https://store.example.com/spc",
+        "https://store.example.com/order-confirmation",
+        "https://store.example.com/cart?orderId=Z9",
+    ]
+    SAFE_URLS = [
+        "https://shop.example.com/product/12345",
+        "https://shop.example.com/cart",
+        "https://shop.example.com/view_cart",
+        "https://www.amazon.com/dp/B0XYZ",
+        "https://duckduckgo.com/?q=billing+software",
+        "https://shop.example.com/s?k=payment+gateway+book",
+        "https://store.example.com/account/orders",
+        "https://store.example.com/",
+        "https://store.example.com/confirm-email",      # generic confirm, not order/checkout -> not money
+        "https://store.example.com/complete-profile",
+        "https://store.example.com/purchases",          # order history, not the purchase action
+        "https://store.example.com/checking-account",   # 'check' but not 'checkout'
+    ]
+    missed_urls = [u for u in PAY_URLS if not CHECKOUT_URL_RE.search(u)]
+    assert not missed_urls, f"checkout/pay URLs NOT caught (money could be spent there): {missed_urls}"
+    false_url = [u for u in SAFE_URLS if CHECKOUT_URL_RE.search(u)]
+    assert not false_url, f"safe URLs FALSE-stopped (cart task would stall): {false_url}"
 
     print(f"PASS purchase_guard: {len(BLOCK)} money controls blocked, {len(ALLOW)} cart/nav "
           "controls allowed, _pick_button skips purchase controls and never auto-selects a buy")

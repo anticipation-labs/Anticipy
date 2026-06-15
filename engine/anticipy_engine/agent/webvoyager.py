@@ -80,6 +80,21 @@ PURCHASE_GUARD = re.compile(
     r"|subscribe\s+(?:(?:and|&)\s+)?pay",
     re.I,
 )
+# MONEY HARD STOP at the CONTEXT level (closes the holes the click-label PURCHASE_GUARD misses:
+# type+enter submit, navigate-to-pay-URL, out-of-list-index click, generic-labeled pay button).
+# You cannot finalize a payment without being on a checkout/payment/order-submit page — so once the
+# agent is ON (or navigating TO) such a URL, it takes NO money-capable action and parks for the human
+# (prepare-then-park: fill the cart, stop at checkout). Errs toward stopping (safe for money).
+CHECKOUT_URL_RE = re.compile(
+    r"(?:^|/|[?&#])(?:"
+    r"check-?outs?|payments?|billing|"                       # /checkout /check-out /checkouts (Shopify)
+    r"place[-_]?order|placeorder|submit[-_]?order|purchase|"
+    r"gp/buy|buy/spc|spc|"                                   # Amazon single-page checkout
+    r"(?:order|payment|checkout)[-/](?:submit|place|review|confirm|confirmation|complete|summary|payment)"
+    r")(?:[/?#=]|$)"
+    r"|[?&](?:checkout|payment|placeorder|orderid|order_id)\b",
+    re.I,
+)
 BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha",
                  "are you a robot", "are you a human", "unusual traffic", "verify you are human",
                  "press & hold", "access denied", "checking your browser")
@@ -2205,6 +2220,18 @@ class WebVoyagerAgent:
 
             if action.get("action") == "answer":
                 return self._done(out, step + 1, history, answer=action.get("answer", ""))
+
+            # MONEY HARD STOP (deterministic, ALL action types): refuse any money-capable action
+            # (click / type+enter submit / navigate) when on OR navigating to a checkout/payment page.
+            # Placing an order requires that context, so parking here closes the type+enter,
+            # navigate-to-pay, out-of-list-index, and generic-label holes the click-label guard missed.
+            if action.get("action") in ("click", "type", "navigate", "submit"):
+                _here = out.get("url", "") or ""
+                _target = (action.get("url") or action.get("text") or "") if action.get("action") == "navigate" else ""
+                if CHECKOUT_URL_RE.search(_here) or (_target and CHECKOUT_URL_RE.search(_target)):
+                    return self._done(out, step + 1, history, stopped_for_safety=True,
+                                      answer="STOPPED at a checkout/payment page — did NOT place the order or "
+                                             "pay. Handed back for your confirmation (money is the hard stop).")
 
             if action.get("action") == "click":
                 el = next((e for e in els if e.get("idx") == action.get("index")), None)

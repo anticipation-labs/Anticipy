@@ -526,3 +526,22 @@ a deterministic money guard at the transport chokepoint (native_bridge_link._act
 covering ALL action types (click/type+enter/navigate) — STOP any action when on/navigating to a checkout/payment
 URL or context, not just a click-label match. Until then the browser arm must not autonomously run cart tasks
 that could reach checkout on a logged-in payment-capable session.
+
+### ✅ Slice 9: deterministic CHECKOUT-CONTEXT money guard in the WebVoyager loop (closes 3 of the 4 holes) · 2026-06-15
+Added CHECKOUT_URL_RE (webvoyager.py) + a guard in the action loop BEFORE every action dispatch: any
+money-capable action (click / type+enter / navigate) is REFUSED when on OR navigating to a checkout/payment/
+order-submit URL → the agent parks at checkout (prepare-then-park). Closes the skeptic's Paths 1 (type+enter
+submit), 2 (navigate-to-pay-URL), and 3 (out-of-list-index click — the URL check is index-independent).
+- Skeptic verified placement (fires before _act; out.url is the observed page) AND found the first regex MISSED
+  Shopify /checkouts/ (the most common hosted checkout!) + /order/complete /purchase /place_order /spc — the
+  test's URLs only included patterns it already caught (false confidence). WIDENED the regex to catch all of
+  them + the test now exercises Shopify/Stripe-style/complete/confirm/orderId URLs, with safe URLs
+  (/confirm-email, /complete-profile, /purchases, /checking-account) proven NOT false-stopped. Suite 83/83, floor 0.
+- HONEST RESIDUALS (real-browser verification or further hardening needed): (a) Path 4 — a generic-labeled
+  ("Continue"/"Confirm"/image-only) one-click-buy / AJAX charge on a NON-checkout URL (e.g. a product page) is
+  NOT caught by URL or label regex; needs DOM-context detection (a credit-card field / price near a pay button).
+  (b) This guard is in the WebVoyager planner loop (covers the autonomous CARD path); a transport-level guard
+  (native_bridge_link._act + extension doAct) would also cover any direct _act caller. (c) URL-regex is a
+  BACKSTOP — the PRIMARY money protections remain the harm-line blocking money-VERB tasks at intake + the
+  prepare-then-park model + money having NO API/voice capability. These residuals are for a session with a real
+  browser (live-proof pending Omar's machine).

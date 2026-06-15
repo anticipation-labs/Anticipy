@@ -145,3 +145,9 @@ real Chrome session, or his 5 real days + red-pen — NOTHING else counts as a r
   pay-click guard via browser-use's step callback / Tools override) needs a REAL browser to verify, so it +
   re-enabling logged-in actions + card-routing are deferred to a session with Omar's machine.
   STOP CHECK: after Slice 6 (extension scrape), the buildable-without-Omar queue is exhausted.
+- 2026-06-15 — Slice 9 committed: a deterministic CHECKOUT-CONTEXT money guard in the WebVoyager loop after a
+  skeptic found the WebVoyager arm could spend money via type+enter / navigate-to-pay / out-of-list holes.
+  CHECKOUT_URL_RE + an all-action-types stop before dispatch (parks at checkout). Skeptic round 2 found the
+  regex missed Shopify /checkouts/ + others → WIDENED + tested. Residuals (real-browser/transport-level,
+  pending Omar): Path-4 generic-label one-click on a non-checkout URL; transport-level guard for direct callers.
+  Suite 83/83, floor 0. This was the most important safety work of the night (money is the hard stop).
