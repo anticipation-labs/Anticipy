@@ -130,3 +130,7 @@ real Chrome session, or his 5 real days + red-pen — NOTHING else counts as a r
 - 2026-06-15 — Slice 4 committed: glassbox.jsonl is now a TRUE byte cap (fixes the 21GB disk bug at the
   source). Skeptic found 3 real defects (env-crash on a bad value, KEEP_LINES=0 unbounded, byte-cap bypass) —
   ALL fixed + tested. Suite 82/82, floor 0. Next: Slice 5 (Owner Test RUNNER — synthetic day → mock engine → score).
+- 2026-06-15 — Slice 5 committed: Owner Test RUNNER (drive a day through a mock engine → score). Skeptic
+  caught a CATASTROPHIC false-negative (timestamped/split lines could hide a cardinal sin) → FIXED (engine's
+  own clean/split + strongest-disposition + unaccounted-decision backstop) + positively proven. Suite 83/83,
+  floor 0. Next: Slice 7 (route action cards to browse_act, verifiable) then Slice 6 (extension scrape JS).

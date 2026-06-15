@@ -39,6 +39,7 @@ run memory_eval_selftest "$PY" "$REPO/engine/scripts/memory_eval.py" --selftest 
 run proactive_eval_selftest "$PY" "$REPO/engine/scripts/proactive_eval.py" --selftest  # proactive report-card instrument (zero model calls)
 run journey_eval_selftest "$PY" "$REPO/engine/scripts/journey_eval.py" --selftest  # journey gauge soundness (zero model calls)
 run owner_test_selftest "$PY" "$REPO/engine/scripts/owner_test.py" --selftest  # P5 finish-line scorer self-proof (zero model calls)
+run owner_test_run_selftest "$PY" "$REPO/engine/scripts/owner_test_run.py" --selftest  # P5 RUNNER: a real day through the engine, scored (0 cardinal-sin end to end)
 
 echo "== integration (boot engine/extension; free/stub) =="
 run brain_loop      bash "$REPO/scripts/brain_loop.sh"

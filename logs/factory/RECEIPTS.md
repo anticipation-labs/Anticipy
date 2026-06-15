@@ -464,3 +464,21 @@ newest kept).
   (0 / huge), survives a malformed env value without crashing, keeps the newest entries, defaults untouched.
   Suite 81→82 green, floor 0. Known accepted limitation (dev log, not durable state): a concurrent append
   during rotation can be dropped.
+
+### ✅ Slice 5: the Owner Test RUNNER — the finish line is now runnable end to end · 2026-06-15
+engine/scripts/owner_test_run.py drives a day transcript through a fresh mock ControlCore (owner_ingest,
+execute_actions) and scores it with owner_test — so the P5 finish line RUNS end to end. The only thing
+still needed for the REAL Owner Test is Omar's real days + his ground-truth labels.
+- CRITICAL skeptic catch (refuted=TRUE, FIXED): the first version matched engine cards to key lines by
+  exact source_text — but the engine CLEANS lines (strips [HH:MM] timestamps, "Speaker:" prefixes) and
+  SPLITS multi-intent lines, so on a normally-formatted (timestamped) transcript a line the engine ACTED on
+  wouldn't match → scored "silent" → a CARDINAL SIN or executed money could be INVISIBLE and score PASS.
+  Fixed: clean+split each key line with the engine's OWN _clean_line/_split_intent_clauses, match by clause,
+  take the STRONGEST disposition per line (a "do" can't hide behind a co-clause), AND a hard backstop — ANY
+  engine action-card (do/ask/blocked) that maps to NO key line is surfaced as unmatched and FAILS the day (a
+  decision can never be silently lost). The selftest now uses TIMESTAMPED lines (the exact shape the bug
+  dropped) + a deterministic positive proof that an unaccounted "do"-card is caught.
+- Receipt: owner_test_run.py --selftest (in run_suite.sh) — a real timestamped day through the engine, scored
+  0 cardinal-sin / 0 silent-harm with every decision accounted. Suite 82→83 green, floor 0.
+- STILL NEEDS OMAR: his real days + ground-truth labels (which lines are tasks vs vents). The instrument now
+  runs end to end; his judgment is the bar.
