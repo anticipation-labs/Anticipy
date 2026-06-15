@@ -32,6 +32,7 @@ from ..agent import site_hints
 from ..channels.text import TextChannel
 from ..hands import ApiHand, BrowserHand, MODE_LIVE, MODE_MOCK, NotFundedError
 from ..hands.api_hand import INTENT_MAP
+from ..hands.token_vault import TokenBroker, TokenVault
 from ..live_memory.brain import LiveMemoryBrain
 from ..memory.store import Memory, is_active_open_loop
 from ..owner_mode import OwnerIngestResult, OwnerMode, OwnerObservedLine, OwnerTaskCard
@@ -177,7 +178,15 @@ class ControlCore:
         hands_mode = os.environ.get("ANTICIPY_HANDS_MODE", MODE_MOCK)
         # Arcade user_id must match the signed-in Arcade.dev account ("users only" mode)
         user_id = os.environ.get("ARCADE_USER_ID") or os.environ.get("ADMIN_EMAIL", "omar@anticipy.ai")
-        self.api_hand = ApiHand(user_id=user_id, mode=hands_mode)
+        # Per-person API mesh (hands/token_vault.py): back the hand with the encrypted
+        # per-user token vault so a user who connected their OWN app (Gmail, a niche CRM
+        # like Cosmolex) authenticates with THEIR short-lived token, not the shared
+        # ARCADE_API_KEY. No connected app / absent ANTICIPY_VAULT_KEY -> safe fallback to
+        # the shared key (back-compat), never a fake token. The broker is plain Python the
+        # model cannot reach into; SecretToken redacts the plaintext on every leak path.
+        self.token_vault = TokenVault(data_dir=base)
+        self.api_hand = ApiHand(user_id=user_id, mode=hands_mode,
+                                broker=TokenBroker(self.token_vault))
         agent_gateway = self.gateway if self.gateway.provider == PROVIDER_OPENROUTER else None
         native_bridge = None
         if (os.environ.get("ANTICIPY_NATIVE_BRIDGE_FALLBACK", "1") or "").strip().lower() not in {"0", "false", "no", "off"}:

@@ -160,17 +160,22 @@ class ApiHand(Worker):
         hasn't connected the app (back-compat)."""
         app = self._vault_app(tool)
         if self._broker is not None:
+            revealed = None
             try:
                 secret = self._broker.get_token(self.user_id, app)
-            except Exception:
-                # This user has not connected this app via the vault (TokenNotFound) or
-                # the lease could not be issued — fall back to the shared key. We do NOT
-                # swallow auth errors from the real handshake; only the broker lookup.
-                secret = None
-            if secret is not None:
                 # The ONE place the plaintext is revealed: the per-user auth handshake.
-                # The revealed value never leaves this scope (not logged, not returned).
-                client = self._client_factory(secret.reveal())
+                # reveal() can raise VaultError if the lease / at-rest token has EXPIRED —
+                # kept inside the try so a stale token degrades to the shared key, never
+                # crashes the call. The revealed value never leaves this scope.
+                revealed = secret.reveal()
+            except Exception:
+                # This user has not connected this app (TokenNotFound), the lease could not
+                # be issued, or the stored token expired — fall back to the shared key. We do
+                # NOT swallow auth errors from the real handshake (authorize/execute, below);
+                # only token ACQUISITION here.
+                revealed = None
+            if revealed is not None:
+                client = self._client_factory(revealed)
                 self.last_auth_path = {"path": "per_user", "app": app,
                                        "broker_consulted": True, "shared_key": False}
                 return client

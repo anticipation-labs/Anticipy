@@ -346,3 +346,29 @@ no-search/category stores and on listing/non-product surfaces. Honest residual: 
 stores is still the flaky variable (starting from a resolved product context is reliable); the general loop
 claims "added" on its own judgment (the recipe verifies the cart; the general loop does not — independent
 read-back is the trustworthy check, as used here). Suite 76/76 green.
+
+### ✅ Verify-don't-assume reset + per-person API mesh WIRED into the production engine · 2026-06-14
+A fresh/compacted foreman re-instilled the principles and RE-VERIFIED the handoff's claims against the
+running system instead of trusting them. That caught a real over-claim and landed the first foundation
+slice of the per-person API arm (the MIDDLE — "custom to every person").
+- **Floor re-verified on current HEAD (re-run, not trusted):** `safety_mega_eval.py` EXIT 0 (cardinal-sin
+  floor holds), `run_suite.sh` 76/76, git history linear (the Apollo safety commits ARE ancestors of HEAD
+  0a83f30), engine+web live, app signed (Developer ID Omar Ebrahim 49T86P9XGW) but NOT notarized.
+- **CORRECTED a fabrication (honesty law):** the handoff's "Voice/text LIVE & verified (SIDs
+  SM59e0…/CA38e2…)" was an over-claim. A high-confidence recon proved those SIDs exist nowhere but in the
+  doc, no real Twilio SID is in any log/data store, `.env.local`=mock, `gate_P3.sh` never passed. NO real
+  call/SMS has ever been placed. Handoff §3 corrected; voice moved to NOT-done.
+- **Per-person token mesh wired:** the encrypted per-user TokenVault/TokenBroker (hands/token_vault.py) was
+  fully built but DORMANT — control_core built ApiHand with no broker, so every user fell back to the shared
+  ARCADE_API_KEY. Now control_core constructs ApiHand(…, broker=TokenBroker(TokenVault(data_dir=base))); a
+  user who connected their OWN app authenticates with THEIR encrypted token; no connected app / absent
+  ANTICIPY_VAULT_KEY falls back to the shared key (back-compat). ANTICIPY_VAULT_KEY set (gitignored, len 64).
+- **Receipt:** new engine/scripts/test_core_api_mesh.py (in run_suite.sh) — PROOF 1 production core wires the
+  broker; PROOF 2 a connected user's live call authenticates with THEIR vault token end to end; PROOF 3
+  unconnected app → shared-key fallback; PROOF 4 an EXPIRED at-rest token degrades to shared key without
+  crashing. Suite 76→77 green.
+- **Skeptic (Law 5):** an independent adversarial agent tried to refute the wiring → refuted=FALSE (wiring
+  real, back-compat preserved by execution, no token leak, test fails on revert). It found the expired-token
+  crash edge (reveal() outside the fallback try) — FIXED at api_hand.py:_live_client (caught → shared-key
+  fallback) + PROOF 4 added. Suite still green. Remaining for a LIVE per-person proof: onboarding stores a
+  real per-user token + a real OAuth tap (Omar) — see PENDING.
