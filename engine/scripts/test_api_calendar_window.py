@@ -24,14 +24,27 @@ def main():
     assert all(k in ti for k in WIN), ti
     assert _parse_iso_dt(ti["min_end_datetime"]) < _parse_iso_dt(ti["max_start_datetime"]), ti
 
+    # the window ALWAYS sets a high max_results — the default ~10-result cap was the second half of
+    # the miss (a wide-window read-back never saw a near-future event behind today's events)
+    assert ti.get("max_results", 0) >= 100, ti
+
     # 2) the create_event READ-BACK (the bug) supplies the window, TIGHT around the event so the
-    #    just-created event is inside ListEvents' 10-result cap
+    #    just-created event is inside ListEvents' result cap
     start, end = "2026-09-10T16:00:00+00:00", "2026-09-10T16:30:00+00:00"
     rb = ApiHand._readback_input(_job("create_event", {"start_datetime": start, "end_datetime": end}), "evid123")
     assert all(k in rb for k in WIN), rb
     lo, hi, s = _parse_iso_dt(rb["min_end_datetime"]), _parse_iso_dt(rb["max_start_datetime"]), _parse_iso_dt(start)
     assert lo < s < hi, ("the window must contain the created event", rb)
-    assert (hi - lo).days <= 3, ("read-back window must be TIGHT (beats the 10-result cap)", rb)
+    assert (hi - lo).days <= 3 and rb.get("max_results", 0) >= 100, ("read-back window must be TIGHT + uncapped", rb)
+
+    # 2b) THE execute_owner_task FIX: the request args DON'T carry start_datetime, but the CreateEvent
+    #     RESPONSE does ({"event": {"start": {"dateTime": ...}}}). The read-back must anchor on THAT,
+    #     not fall back to a wide window the 10-cap would defeat.
+    wv = {"event": {"id": "e1", "start": {"dateTime": "2027-03-04T09:00:00-08:00", "timeZone": "America/Vancouver"}}}
+    rb2 = ApiHand._readback_input(_job("create_event", {"task_text": "set up a block"}), "e1", wv)
+    es = _parse_iso_dt("2027-03-04T09:00:00-08:00")
+    lo2, hi2 = _parse_iso_dt(rb2["min_end_datetime"]), _parse_iso_dt(rb2["max_start_datetime"])
+    assert lo2 < es < hi2 and (hi2 - lo2).days <= 3, ("must anchor the window on the WRITE RESPONSE start", rb2)
 
     # 3) a window the caller already supplied is NOT overridden
     custom = {"min_end_datetime": "2030-01-01T00:00:00+00:00", "max_start_datetime": "2030-02-01T00:00:00+00:00"}

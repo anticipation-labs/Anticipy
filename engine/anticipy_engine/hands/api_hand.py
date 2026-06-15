@@ -202,22 +202,36 @@ class ApiHand(Worker):
     }
 
     @staticmethod
-    def _listevents_window(args: dict | None, *, tight: bool) -> dict:
-        """The time window GoogleCalendar.ListEvents@3.x REQUIRES (min_end_datetime /
-        max_start_datetime). Without it the call 400s — which silently broke EVERY calendar
-        read AND the create_event read-back (so real events were marked 'not done'). When a
-        write carries the event's own start_datetime we center a TIGHT window on it so the
-        read-back's result set is small and definitely contains the just-created event; the id
-        match remains the hard gate. Otherwise a wide now-anchored span. RFC3339 / tz-aware."""
+    def _event_start_from_write(write_value) -> Optional[str]:
+        """The created event's ACTUAL start (RFC3339) out of the CreateEvent response
+        ({"event": {"start": {"dateTime": ...}}}). Used so the read-back window sits tightly on the
+        real event no matter how the planner keyed the request args."""
+        if not isinstance(write_value, dict):
+            return None
+        ev = write_value.get("event") if isinstance(write_value.get("event"), dict) else write_value
+        start = ev.get("start") if isinstance(ev, dict) else None
+        if isinstance(start, dict):
+            return start.get("dateTime") or start.get("date")
+        return start if isinstance(start, str) else None
+
+    @staticmethod
+    def _listevents_window(start_hint=None) -> dict:
+        """The window GoogleCalendar.ListEvents@3.x REQUIRES (min_end_datetime / max_start_datetime).
+        Without it the call 400s — which silently broke EVERY calendar read AND the create_event
+        read-back (real events marked 'not done'). TIGHT around a known event start (so the result
+        set is small + contains it); else a wide now-anchored span. ALSO sets max_results high: the
+        default ~10-result cap was the *second* half of the miss — a wide-window read-back never saw
+        a near-future event hidden behind today's events. RFC3339 / tz-aware; the id match is the gate."""
         import datetime
         now = datetime.datetime.now(datetime.timezone.utc)
-        start = _parse_iso_dt(_calendar_value(args or {}, "start_datetime"))
-        if tight and start is not None:
+        start = _parse_iso_dt(start_hint)
+        if start is not None:
             lo, hi = start - datetime.timedelta(days=1), start + datetime.timedelta(days=1)
         else:
             lo, hi = now - datetime.timedelta(days=1), now + datetime.timedelta(days=730)
         return {"min_end_datetime": lo.replace(microsecond=0).isoformat(),
-                "max_start_datetime": hi.replace(microsecond=0).isoformat()}
+                "max_start_datetime": hi.replace(microsecond=0).isoformat(),
+                "max_results": 250}
 
     @classmethod
     def _tool_input(cls, job: Job) -> dict:
@@ -228,7 +242,7 @@ class ApiHand(Worker):
                 out[dst] = out.pop(src)
         # ListEvents@3.x requires a time window — fill it only if the caller didn't.
         if tool == "GoogleCalendar.ListEvents":
-            for k, v in cls._listevents_window(out, tight=False).items():
+            for k, v in cls._listevents_window(_calendar_value(out, "start_datetime")).items():
                 out.setdefault(k, v)
         return out
 
@@ -442,7 +456,7 @@ class ApiHand(Worker):
                                              f"'{job.intent}' yet"),
                                   "unverified_write": True})
 
-        read_input = self._readback_input(job, written_id)
+        read_input = self._readback_input(job, written_id, write_value)
         last_read_value: dict = {}
 
         async def read_once():
@@ -491,13 +505,16 @@ class ApiHand(Worker):
                               "verified_by_read": read_tool})
 
     @classmethod
-    def _readback_input(cls, job: Job, written_id) -> dict:
+    def _readback_input(cls, job: Job, written_id, write_value=None) -> dict:
         """Input for the read-back call. ListEvents@3.x REQUIRES min_end_datetime/max_start_datetime,
-        so for create_event we always supply a window TIGHT around the just-created event (the id
-        match is still the hard gate). Was returning start/end only -> the read 400'd and every
-        calendar write was wrongly marked 'not done'."""
+        so for create_event we always supply a window. We anchor it on the just-created event's
+        ACTUAL start from the write response (robust to however the planner keyed the request args —
+        the execute_owner_task path doesn't surface start_datetime, which made the window fall back to
+        wide + miss the event behind the 10-result cap), falling back to the request args. The id
+        match is still the hard gate."""
         if job.intent == "create_event":
-            return cls._listevents_window(job.args, tight=True)
+            start = cls._event_start_from_write(write_value) or _calendar_value(job.args, "start_datetime")
+            return cls._listevents_window(start)
         return {}
 
     @classmethod
