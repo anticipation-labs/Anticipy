@@ -119,6 +119,9 @@ class InboundPoller:
                     "sms", body, {"inbound_sid": sid, "from": "owner"}, execute_actions=True)
                 self._log("inbound_ingested", {"sid": sid, "cards": len(res.get("cards", []))})
                 out["ingested"].append({"sid": sid, "cards": len(res.get("cards", []))})
+                # The agent ANSWERS — a real conversational reply from the brain, grounded in what
+                # the engine just did, texted back. Words only; the act/ask already ran above.
+                await self._reply_to_owner(body, res, owner, sid, out)
         return out
 
     async def _resolve_reply(self, sid: str, reply: re.Match, out: dict, owner: str) -> None:
@@ -142,6 +145,24 @@ class InboundPoller:
                                        "approved": approved,
                                        "resolved": res.get("resolved", True)})
         out["resolved"].append({"sid": sid, "ask_id": matches[0]["ask_id"], "approved": approved})
+
+    # ---- the agent ANSWERS: a real conversational reply, texted back ----
+    async def _reply_to_owner(self, body: str, res: dict, owner: str, sid: str, out: dict) -> None:
+        """The agent's conversational reply to an owner SMS — the brain answering, grounded in what
+        the engine just did, texted back. Words only (the act/ask already ran via owner_ingest);
+        never crashes the poll pass, and never leaves the owner unanswered (agent_reply self-falls-back)."""
+        gateway = getattr(self.core, "gateway", None)
+        if gateway is None:
+            return
+        try:
+            from ..proactive.agent_reply import agent_reply
+            reply = await agent_reply(gateway, body, result=res)
+            r = await self.core.notify_user(reply, recipient=owner)
+            sent = (r or {}).get("status") == "success"
+            self._log("inbound_agent_reply", {"sid": sid, "sent": sent, "reply": reply[:160]})
+            out.setdefault("replied", []).append({"sid": sid, "sent": sent})
+        except Exception as e:
+            self._log("inbound_agent_reply_failed", {"sid": sid, "error": str(e)})
 
     # ---- F20: the owner answered and nothing happened — say so, bounded ----
     async def _clarify(self, sid: str, code: str, pending: list, owner: str, out: dict) -> None:

@@ -39,7 +39,8 @@ assert out["sent"] is False and out["stub"] is True, out
 
 # TwiML: escaped + bounded (the Twiml param caps at 4000 chars)
 twiml = CallChannel.twiml('Reply <YES> & "go"')
-assert twiml.startswith("<Response><Say>") and twiml.endswith("</Say></Response>"), twiml
+assert twiml.startswith("<Response><Say") and twiml.endswith("</Say></Response>"), twiml  # <Say voice=...>
+assert 'voice="' in twiml, twiml  # a natural neural voice, not the robotic default
 assert "<YES>" not in twiml and "&amp;" in twiml and "&lt;YES&gt;" in twiml, twiml
 assert len(CallChannel.twiml("x" * 10000)) < 4000, "Twiml parameter bound violated"
 

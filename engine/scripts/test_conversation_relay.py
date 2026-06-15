@@ -50,7 +50,8 @@ def test_twiml():
     # Fallback: no public wss URL -> the no-LLM one-shot <Say>.
     os.environ.pop("ANTICIPY_CR_WSS_URL", None)
     fb = ch.call_twiml("calendar event made; I'll call you at 2:45")
-    assert fb.startswith("<Response><Say>") and fb.endswith("</Say></Response>"), fb
+    assert fb.startswith("<Response><Say") and fb.endswith("</Say></Response>"), fb  # <Say voice=...>
+
     assert "ConversationRelay" not in fb, fb
 
     # Two-way: a wss URL configured -> <Connect><ConversationRelay url=...>.
@@ -117,6 +118,53 @@ def test_brain_reuse():
     silent = asyncio.run(verdict_of("ugh this traffic is unbelievable today"))
     assert silent.verdict == SILENT and "keep that in mind" in silent.reply, silent
     print("PASS brain_reuse: the relay answers with the SAME decider verdicts (ACT/ASK/SILENT)")
+
+
+# ----------------------------------------------------------------------------------
+# 3b) The LIVE brain SPEAKS: with a real model behind the line the spoken reply is a
+#     natural model sentence (Omar's ask), GROUNDED in the verdict, never the canned line.
+#     Stub/keyless/error still falls back to the deterministic verdict phrasing.
+# ----------------------------------------------------------------------------------
+def test_live_brain_speaks():
+    class FakeLiveGateway:
+        """A 'real' provider: the decider's think (caller=decider) returns the verdict word;
+        the reply's think (caller=agent) returns a live, natural sentence + records its prompt."""
+        provider = "openrouter"
+
+        def __init__(self):
+            self.reply_prompt = None
+
+        async def think(self, task, tier, caller, **k):
+            if caller == "decider":
+                return ASK if "pay" in task.lower() or "transfer" in task.lower() else ACT
+            self.reply_prompt = task
+            return "Sure thing — I'll hold the landlord transfer until you give me the word."
+
+    from anticipy_engine.proactive.decider import Decider
+
+    gw = FakeLiveGateway()
+    brain = ConversationRelayBrain(Decider(gw))
+    turn = asyncio.run(brain.turn("transfer $200 to my landlord"))
+    # Money is still ASK (the safety gate is unchanged); but the SPOKEN words are the live
+    # model sentence, NOT the canned ASK render — a real AI behind the voice.
+    assert turn.verdict == ASK, turn
+    assert turn.reply == "Sure thing — I'll hold the landlord transfer until you give me the word."
+    assert turn.reply != ConversationRelayBrain.render(ASK), "live reply must not be the canned line"
+    # The reply was grounded in the ASK verdict (held for money), so it can't over-claim.
+    assert "held until the owner" in gw.reply_prompt and "transfer $200 to my landlord" in gw.reply_prompt
+
+    # A model error on the reply -> deterministic verdict fallback (owner never hears a hiccup).
+    class FlakyGateway(FakeLiveGateway):
+        async def think(self, task, tier, caller, **k):
+            if caller == "decider":
+                return SILENT
+            raise RuntimeError("brain down")
+
+    brain2 = ConversationRelayBrain(Decider(FlakyGateway()))
+    t2 = asyncio.run(brain2.turn("ugh what a week"))
+    assert t2.verdict == SILENT and t2.reply == ConversationRelayBrain.render(SILENT), t2
+    print("PASS live_brain_speaks: a real model speaks a natural, verdict-grounded reply; "
+          "money stays ASK; stub/error falls back to the deterministic phrasing")
 
 
 # ----------------------------------------------------------------------------------
@@ -253,6 +301,7 @@ def main():
     test_twiml()
     test_stream_tokens()
     test_brain_reuse()
+    test_live_brain_speaks()
     # ONE shared TestClient for every WS test: the engine's `core` is a module singleton,
     # so a second TestClient would rebind its bus to a different event loop and crash.
     with TestClient(app) as client:

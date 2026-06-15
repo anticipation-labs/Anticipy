@@ -45,8 +45,12 @@ class CallChannel(Channel):
         This is the ONE-SHOT, no-LLM FALLBACK: Twilio just speaks one fixed line and
         hangs up ("calendar event made; I'll call you at 2:45"). Used when there is no
         public wss URL to attach a ConversationRelay socket — it needs no brain and no
-        live socket, so it can never strand a call mid-turn."""
-        return f"<Response><Say>{escape(message[:3000])}</Say></Response>"
+        live socket, so it can never strand a call mid-turn.
+
+        Voice: a NATURAL Twilio Polly neural voice (not the robotic default), tunable via
+        ANTICIPY_CALL_VOICE. Donna-from-Suits is female, so the default is Joanna-Neural."""
+        voice = (os.environ.get("ANTICIPY_CALL_VOICE") or "Polly.Joanna-Neural").strip()
+        return f'<Response><Say voice="{escape(voice)}">{escape(message[:3000])}</Say></Response>'
 
     @staticmethod
     def conversation_relay_twiml(ws_url: str, greeting: str) -> str:
