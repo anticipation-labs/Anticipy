@@ -442,8 +442,8 @@ class ProactiveEngine:
         ask_id = goal.id
         # The short code lets an SMS reply name THIS ask (channels/inbound.py matches
         # it as an ask-id prefix); decision-inert — the body is never scored.
-        msg = (f"Anticipy wants to: {action}\nWhy it paused: {reason}\n"
-               f"Reply YES {ask_id[:6]} to proceed, NO {ask_id[:6]} to skip.")
+        from .voice import ask_line
+        msg = ask_line(action, ask_id[:6], category=category, reason=reason)
         self.pending[ask_id] = {"goal_id": goal.id, "action": action, "reason": reason, "category": category}
         self._persist_pending()
         channel_name = getattr(self.channel, "name", "unknown")
@@ -607,7 +607,9 @@ class ProactiveEngine:
                                                  "reason": suppress, "action": task})
             return {"decision": "suppressed", "category": verdict.category, "reason": suppress,
                     "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None}
-        sent = self.channel.send(self.user_contact, f"Reminder: {task}")
+        from .voice import humanize_reminder
+        text = await humanize_reminder(self.gateway, task)
+        sent = self.channel.send(self.user_contact, text)
         self.budget.record_interruption(now)
         self.guard.record(now)
         await self.bus.submit_job(Job(intent="mark_loop",
