@@ -1,5 +1,14 @@
 # Anticipy — session bootstrap (auto-loaded; survives compaction and fresh sessions)
 
+> 🔴 **READ `THE_MISSION.md` (repo root) FIRST, BEFORE ANYTHING ELSE.** It is the standing,
+> harsh-toned mission Omar instilled: build Anticipy to INVESTOR-READY, fully autonomously, via a
+> self-loop that does NOT stop until the done-gate is green. It carries the purity rules (verify
+> never assume · never fake done · the brain is the anti-spam not a cap · never act on a vent · money
+> is the only hard stop · don't stop but don't grind busywork) and the exact definition of "done".
+> If you are a fresh/compacted agent, that file + `logs/factory/FOREMAN_STATE.md` make you the last
+> agent instantly, with the same rules in the same tone. Do not soften it. Do not assume. Do not
+> claim done without a check that can fail. Re-arm the self-loop every cycle (ScheduleWakeup → YOU).
+
 This file is the router. It is loaded into every Claude session in this repo. Whatever you
 remember or don't remember, the durable truth lives in the files below — read them, never
 trust memory of them.
