@@ -56,11 +56,24 @@ _INTERROGATIVE_ASIDE = re.compile(
     r"^\s*(did|didn'?t|do|does|doesn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|"
     r"were|weren'?t|was|wasn'?t|are|aren'?t|is|isn'?t)\s+(you|we|they|he|she|it|u|your|the)\b",
     re.I)
+# A PAST/PERFECT completion-check aimed at the listener — "did you ...", "have you ...",
+# "didn't you ..." — anywhere in a question, so real-speech lead-ins ("hey did you ...?",
+# "anyway, did you ...?", "um so have you ...?") and rambling multi-clause questions are caught
+# too (the audit found "hey did you remind Jenny to send the slides at 4 like I asked" leaking a
+# fabricated timed reminder). Present-tense requests to the assistant ("can you remind me ...?")
+# do NOT match (no did/have/had), so they stay catchable.
+_QUESTION_TO_OTHER = re.compile(
+    r"\b(did|didn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|were|weren'?t|was|wasn'?t)\s+(you|u|ya)\b",
+    re.I)
 
 
 def _is_interrogative_aside(text: str) -> bool:
+    # A "did/have you ..." completion-check aimed at the listener is silent whether or not the
+    # spoken line kept its question mark ("hey did you remind Jenny to send the slides at 4 like
+    # I asked" has none) — plus any start-anchored interrogative. Present-tense requests to the
+    # assistant ("can you remind me ...") never match (no did/have/had aux), so they stay catchable.
     t = (text or "").strip()
-    return t.endswith("?") and bool(_INTERROGATIVE_ASIDE.match(t))
+    return bool(_INTERROGATIVE_ASIDE.match(t)) or bool(_QUESTION_TO_OTHER.search(t))
 
 
 def _parse_iso_dt_local(value):
@@ -703,7 +716,11 @@ class ControlCore:
         # confirm-first ASK. The ONLY hard overrides stay: the spine BLOCKED it (money/wall ->
         # decision != ignore, handled above) or the deterministic vent/harm floor flags it a vent or
         # money/detrimental line — those stay silent. Never an auto-act.
-        if getattr(line, "moat_task", False) and decision == "ignore":
+        # Rescue on ANY silent outcome (ignore / suppressed / deferred), not just "ignore": the
+        # decider model returns these intermittently for the same loose self-commitment, which made
+        # a real task drop ~1-in-5 runs (audit gap). "blocked" is the money/wall hard-stop and is
+        # the ONE silent-branch decision we never rescue (handled by the category!=money guard too).
+        if getattr(line, "moat_task", False) and decision != "blocked":
             from ..live_memory.review_infer import is_vent_shape
             if not is_vent_shape(line.text):
                 verdict = self.proactive.harm.assess(line.text, {})
