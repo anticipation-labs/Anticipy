@@ -32,6 +32,13 @@ class OwnerObservedLine(BaseModel):
     # the lever that lets a vent-adjacent task be surfaced WITHOUT ever committing the
     # cardinal sin (a vent producing an act). Pure-vent clauses never become a line.
     force_ask: bool = False
+    # When True the MOAT model CONFIDENTLY extracted this as a clean real task (vent=False) from
+    # casual/vague speech ("I owe my mom a call" -> "call mom"; "I gotta do that email of the thing
+    # next weekend"). The model is the brain; the deterministic regex triage must NOT silently VETO
+    # a model-caught task into nothing. If the spine would otherwise drop it (triage too conservative
+    # on loose phrasing), it is surfaced as a confirm-first ASK instead — UNLESS the deterministic
+    # floor flags it a vent or money/detrimental (the only hard overrides). Never an auto-act.
+    moat_task: bool = False
 
 
 class OwnerTaskCard(BaseModel):

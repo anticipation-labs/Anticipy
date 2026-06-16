@@ -695,6 +695,33 @@ class ControlCore:
             card.reason = out.get("reason") or card.reason or "proven spine verdict"
             card.execution = execution
             return card
+        # THE MODEL DRIVES (Omar's core directive): the MOAT confidently extracted this as a clean
+        # real task, but the deterministic regex triage just voted SILENT because the phrasing is
+        # loose ("call mom", "do that email of the thing next weekend"). A regex must NEVER silently
+        # VETO a model-caught task into nothing — that is the exact failure ("you keep dropping the
+        # real tasks because they aren't phrased like a command"). Surface the model's catch as a
+        # confirm-first ASK. The ONLY hard overrides stay: the spine BLOCKED it (money/wall ->
+        # decision != ignore, handled above) or the deterministic vent/harm floor flags it a vent or
+        # money/detrimental line — those stay silent. Never an auto-act.
+        if getattr(line, "moat_task", False) and decision == "ignore":
+            from ..live_memory.review_infer import is_vent_shape
+            if not is_vent_shape(line.text):
+                verdict = self.proactive.harm.assess(line.text, {})
+                # MONEY is the only hard-stop that must never surface as an actionable ask
+                # (it stays blocked/Left-for-you). Every other harm category (binding_send=email,
+                # casual_send, auth_wall, unclassified=call/book/sort-out) is exactly a
+                # confirm-first ASK — surface it, don't drop it. (detrimental=True covers ALL of
+                # these, which is why gating on it wrongly suppressed real tasks.)
+                if getattr(verdict, "category", None) != "money":
+                    self.glassbox.log("moat_task_rescued",
+                                      {"line": line.text[:140],
+                                       "reason": "model caught a real task the triage silenced"})
+                    return OwnerTaskCard(
+                        source=source, line_no=line.line_no, source_text=line.text,
+                        title=f"Confirm task: {line.text[:80]}", disposition="ask",
+                        route="voice_text", action="confirm_owner_task",
+                        args={"task_text": line.text}, confidence=0.7,
+                        reason="caught this from how you said it — confirm before I act")
         # spine says silent: regex shaping may still add SILENT memory (a remember
         # card or a durable open-loop record) — never a paper act or ask
         if shaped is None:
@@ -756,21 +783,15 @@ class ControlCore:
                 n += 1
                 out.append(OwnerObservedLine(line_no=n, text=line.text))   # thin read -> don't lose the line
                 continue
-            # DETERMINISTIC ASIDE/REPORT FLOOR (model-independent): the MOAT model can over-extract
-            # a clean task from a REPORTED situation or aside the owner never asked to handle ("My
-            # wife told me the dishwasher is leaking again", "Did you grab the dry cleaning?"). The
-            # SAME deterministic triage that silences the proactive path is the floor here: if it
-            # judges the WHOLE original line non-actionable, the model may NOT resurrect a clean
-            # task from it. Compound real-task lines stay actionable (verified), so the catch-rate
-            # moat is intact; only a deterministic aside/vent is suppressed. The worst failure is
-            # acting on a vent — fail toward silence when the floor and the model disagree.
-            if not self.proactive.triage.actionable(line.text):
-                self.glassbox.log("extract_aside_silenced",
-                                  {"line": line.text[:140], "guard": "triage_floor"})
-                continue
+            # NOTE: do NOT gate clean tasks on triage.actionable() here. The triage marks a RELAYED
+            # or IMPLIED task ("Maya said can you pick up Leila at 3:15", "my sister mentioned mom's
+            # prescription needs picking up Friday") as non-actionable too — and those are EXACTLY
+            # the unspoken tasks the MOAT exists to catch (the product). Gating on triage silenced
+            # them. The aside/report-vs-task distinction is the MOAT model's job (extract.py prompt);
+            # the cheap deterministic floor here is only the narrow interrogative-aside guard above.
             for t in tasks:
                 n += 1
-                out.append(OwnerObservedLine(line_no=n, text=t["task"]))
+                out.append(OwnerObservedLine(line_no=n, text=t["task"], moat_task=True))
             self.glassbox.log("extract_tasks", {"line": line.text[:140],
                               "tasks": [t["task"] for t in tasks]})
         return out
