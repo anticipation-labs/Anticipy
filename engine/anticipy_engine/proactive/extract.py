@@ -44,9 +44,13 @@ Set "vent": true when ANY part of the breath carries real emotion/anger/despair/
 
 kind: "act" (clean reversible task in a CALM line: a reminder, a calendar hold), "ask" (touches another person / money / hard to reverse, OR any real task in a vented line), "hold" (a real action voiced inside emotion — surface later, cold, never now).
 
+RESOLVE VAGUE REFERENCES FROM CONTEXT. Earlier lines of the SAME person's day are given as CONTEXT. When THIS line refers to something vaguely — "that thing", "it", "that", "the whole thing", "that situation", "her", "him", "them" — look back through the CONTEXT and rewrite the task with the CONCRETE referent. Example — CONTEXT: "the Henderson contract came in this morning"; LINE: "I need to get that thing reviewed before Friday" -> {"task":"review the Henderson contract before Friday","kind":"ask"}; then LINE: "send it back to legal once I'm done" -> {"task":"send the Henderson contract back to legal","kind":"ask"}. If the context does NOT name the referent, keep the speaker's own words ("that thing") rather than inventing one — never fabricate a referent that was not said.
+
 Return STRICT JSON ONLY, no prose. tasks holds ONLY real tasks (vent clauses are omitted, never listed):
-{"tasks":[{"task":"<short imperative>","kind":"act|ask|hold"}],"vent":true|false}
-Line: %s
+{"tasks":[{"task":"<short imperative, with vague references resolved from context>","kind":"act|ask|hold"}],"vent":true|false}
+CONTEXT (earlier in their day; for resolving references only — do NOT extract tasks from it):
+%s
+LINE (extract tasks from THIS line only): %s
 JSON:'''
 
 _KIND = {"act", "ask", "hold"}
@@ -117,15 +121,21 @@ def _parse(raw: str) -> ExtractResult:
     return ExtractResult(tasks=tasks, vent=vent, available=True)
 
 
-async def extract(gateway: ModelGateway, line: str) -> ExtractResult:
-    """One cheap-model call to decompose + judge a line. available=False on any read failure."""
+async def extract(gateway: ModelGateway, line: str, context: str = "") -> ExtractResult:
+    """One cheap-model call to decompose + judge a line. available=False on any read failure.
+
+    `context` is the EARLIER lines of the same person's day (most recent last). It is used ONLY
+    to resolve vague references in THIS line ("that thing" -> "the Henderson contract"); tasks are
+    NEVER extracted from the context (the caller already processed those lines). Empty context (a
+    single line / the proactive path / the safety eval) leaves behavior identical to before."""
     line = (line or "").strip()
     if not line:
         return ExtractResult(available=False)
     if getattr(gateway, "provider", None) != "openrouter":
         return ExtractResult(available=False)   # stub/no-model -> deterministic path owns it
+    ctx = (context or "").strip() or "(none)"
     try:
-        raw = await gateway.think(_PROMPT % line, tier=CHEAP, caller="extract", temperature=0)
+        raw = await gateway.think(_PROMPT % (ctx, line), tier=CHEAP, caller="extract", temperature=0)
     except Exception:
         return ExtractResult(available=False)
     return _parse(raw)

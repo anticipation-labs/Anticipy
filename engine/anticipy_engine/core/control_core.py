@@ -744,7 +744,14 @@ class ControlCore:
             return observed
         from ..proactive.extract import extract
         out, n = [], 0
+        # Rolling CONTEXT of the earlier lines in this same transcript, so the model can resolve
+        # vague references in a later line ("that thing" -> "the Henderson contract" named earlier).
+        # Bounded to the last few lines (recent referents); empty for a single-line/proactive call,
+        # which keeps that path (and the safety eval) byte-identical to before.
+        prior_lines: list[str] = []
         for line in observed:
+            context = "\n".join(prior_lines[-8:])
+            prior_lines.append(line.text)
             # DETERMINISTIC ASIDE FLOOR: a question to someone else ("Did you grab the dry
             # cleaning?") is never the owner's task. Drop it BEFORE the model can strip the
             # interrogative wrapper and over-extract a bare imperative -> an ASK on a vent/aside.
@@ -752,7 +759,7 @@ class ControlCore:
                 self.glassbox.log("extract_aside_silenced", {"line": line.text[:140]})
                 continue
             try:
-                res = await extract(self.gateway, line.text)
+                res = await extract(self.gateway, line.text, context=context)
             except Exception:
                 res = None
             if res is None or not res.available:
