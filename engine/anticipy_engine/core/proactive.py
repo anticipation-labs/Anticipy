@@ -458,11 +458,21 @@ class ProactiveEngine:
         self.pending[ask_id] = {"goal_id": goal.id, "action": action, "reason": reason, "category": category}
         self._persist_pending()
         channel_name = getattr(self.channel, "name", "unknown")
-        try:
-            sent = self.channel.send(self.user_contact, msg)
-        except Exception as exc:  # delivery is best-effort; /pending remains authoritative
-            sent = {"sent": False, "channel": channel_name,
-                    "to": self.user_contact, "message": msg, "error": str(exc)}
+        # IN-APP asks must NOT also text the owner. When an ask originates from an /owner/ingest
+        # (the app shows it in "Waiting for your yes"), texting it too is exactly the spam Omar
+        # banned — every caught task would buzz the phone. The owner-ingest path sets
+        # _suppress_ask_delivery for its duration; the ask still registers in /pending (resolvable
+        # in-app), it just isn't delivered over SMS. Time-due REMINDERS (trigger_tick -> _fire_reminder)
+        # and the SMS-first flow are untouched and still reach the phone.
+        if getattr(self, "_suppress_ask_delivery", False):
+            sent = {"sent": False, "channel": channel_name, "to": self.user_contact,
+                    "message": msg, "suppressed": "in_app"}
+        else:
+            try:
+                sent = self.channel.send(self.user_contact, msg)
+            except Exception as exc:  # delivery is best-effort; /pending remains authoritative
+                sent = {"sent": False, "channel": channel_name,
+                        "to": self.user_contact, "message": msg, "error": str(exc)}
         if self.glassbox is not None:
             self.glassbox.log("ask_sent", {"ask_id": ask_id, "goal_id": goal.id, "channel": channel_name,
                                            "to": self.user_contact, "sent": bool(sent.get("sent")),

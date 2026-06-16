@@ -588,13 +588,53 @@ class ControlCore:
     def _generic_force_ask_card(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
         """A confirm-first ASK card for a vent-adjacent real task the regex preview didn't shape
         (a bare task like "call the dentist"). Shared by the execute spine AND the preview path so
-        a preview never shows FEWER tasks than the real run catches."""
+        a preview never shows FEWER tasks than the real run catches.
+
+        Deliberately display-only (no backing goal / no ask_id): a task voiced inside a VENT is
+        HELD per the mission ("a real task voiced inside emotion is held/asked, never auto-acted in
+        the heat") — surfaced so the owner sees it, but never wired to auto-execute, which keeps the
+        cardinal-sin floor (safety_mega_eval: a vent must produce nothing actionable). Clean
+        (non-vent) model-caught tasks get a real executable goal via the moat_task rescue instead."""
         return OwnerTaskCard(
             source=source, line_no=line.line_no, source_text=line.text,
             title=f"Confirm task: {line.text[:80]}", disposition="ask", route="voice_text",
             action="confirm_owner_task", args={"task_text": line.text}, confidence=0.7,
             reason="real task voiced inside a vent — confirm before acting",
         )
+
+    def _confirm_task_goal(self, line: OwnerObservedLine) -> tuple[str, str, str]:
+        """Build a PAUSED, resolvable goal for a model-caught task so the app's YES actually
+        EXECUTES it — instead of a dead display card that does nothing on press (the "where's the
+        action engine / I press yes and nothing happens" bug). Mirrors approve_remembered's proven
+        funnel but leaves the goal WAITING: it is NEVER driven here (no auto-act — the cardinal-sin
+        guard holds for vent-adjacent tasks), only /resolve (an explicit human YES) drives it.
+
+        Maps the task the same way press-go does: a concrete calendar hold -> create_event (real,
+        read-back-verified on YES); everything else (a call, a vague to-do) -> a write_memory
+        open-loop so YES at least puts it on the durable list. Money/vent never reach here — money
+        is pre-gated to a blocked card and a pure vent yields no task. Returns (ask_id, goal_id,
+        would_do)."""
+        import datetime as dt
+        from ..live_memory.press_go import map_inferred_to_step, WHITELIST
+        from .envelopes import Goal, GoalState, Step, Risk
+        task = (line.text or "").strip()
+        tz, _name = self._owner_timezone()
+        owner_now = dt.datetime.now(tz)
+        inferred = {"task": task, "people": [], "due_phrase": "", "confidence": "high"}
+        mapped = map_inferred_to_step(inferred, raw_text=task, now=owner_now, tz=tz)
+        intent = mapped.get("intent")
+        step = mapped.get("step")
+        would = mapped.get("would_do") or f"Do: {task}"
+        if intent not in WHITELIST or step is None:
+            # not auto-executable (a call, a message, a vague to-do) -> on YES record it as a
+            # durable tracked commitment so it shows on the list; honest (we can't place the call).
+            step = Step(intent="write_memory",
+                        args={"kind": "open_loop", "text": task, "approved": True}, risk=Risk.low)
+            would = f"Keep this on your list: {task}"
+        goal = Goal(intent=task, description=would, steps=[step], state=GoalState.waiting)
+        self.store.save(goal)
+        ask_id = self.proactive._send_ask(goal, task, "confirm before I act", category="")
+        return ask_id, goal.id, would
 
     @staticmethod
     def _timed_reminder_card(line: OwnerObservedLine, source: str,
@@ -645,7 +685,7 @@ class ControlCore:
             if shaped is not None:
                 shaped.disposition = "ask"
                 shaped.reason = "real task voiced inside a vent — confirm before acting"
-                shaped.execution = None
+                shaped.execution = None   # vent-adjacent task is HELD (display-only), never auto-acts
                 return shaped
             return self._generic_force_ask_card(line, source)
         shaped = self.owner_mode.card_for_line(line, source)
@@ -733,12 +773,17 @@ class ControlCore:
                     self.glassbox.log("moat_task_rescued",
                                       {"line": line.text[:140],
                                        "reason": "model caught a real task the triage silenced"})
+                    # back it with a PAUSED resolvable goal so the app's YES actually executes it
+                    # (real calendar hold / tracked commitment) — never a dead display card.
+                    ask_id, goal_id, _w = self._confirm_task_goal(line)
                     return OwnerTaskCard(
                         source=source, line_no=line.line_no, source_text=line.text,
                         title=f"Confirm task: {line.text[:80]}", disposition="ask",
                         route="voice_text", action="confirm_owner_task",
                         args={"task_text": line.text}, confidence=0.7,
-                        reason="caught this from how you said it — confirm before I act")
+                        reason="caught this from how you said it — confirm before I act",
+                        execution={"decision": "ask", "goal_id": goal_id,
+                                   "ask_id": ask_id, "goal_state": "waiting"})
         # spine says silent: regex shaping may still add SILENT memory (a remember
         # card or a durable open-loop record) — never a paper act or ask
         if shaped is None:
@@ -833,6 +878,17 @@ class ControlCore:
         proof of their memory write.
         """
         meta = meta or {}
+        # Asks caught from THIS app paste show in-app ("Waiting for your yes"); they must NOT also
+        # SMS the owner (that is the banned spam — every task buzzing the phone). Suppress ask
+        # delivery for the duration of the ingest; time-due reminders (trigger_tick) still text.
+        self.proactive._suppress_ask_delivery = True
+        try:
+            return await self._owner_ingest_inner(
+                source, text, meta, execute_actions, observed=None)
+        finally:
+            self.proactive._suppress_ask_delivery = False
+
+    async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         observed = self.owner_mode.observe(text)
         observed = await self._expand_tasks_with_model(observed)   # THE MOAT: model splits + judges
         captured_by_line: dict[int, dict] = {}
