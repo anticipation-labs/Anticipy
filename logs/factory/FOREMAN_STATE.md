@@ -20,9 +20,23 @@ Omar BANNED per-day message caps (I'd shipped one as "NF8" — REVERTED). The re
 Omar's calendar; NO delete-event intent exists, so Omar/cleanup must remove it) vent-silent✅ onboarding✅.
 reminder_fired❌ + text_roundtrip❌ are GONE from the glass-box (it was reset) and can ONLY be re-proven
 with LIVE Twilio = real texts to Omar — DO NOT do autonomously (the 31-text history). owner_5_days🙋 = Omar.
-**Genuinely-buildable-autonomously remaining:** (a) onboarding KNOWS you — read calendar/contacts via the
-live API → profile facts (the wow: "you talk to Dana most"); (b) the naive-user end-to-end flow drivable;
-(c) premium polish. **Needs-Omar (flag, don't fake):** live-channel run for reminder/text + the 2:45 call;
+**THE BUILDABLE CORE IS DONE + VERIFIED END-TO-END (through the app, not just the engine):**
+- Onboarding knows you — b38190b (/onboard/scan_api reads real calendar) + 448e6ed (wired into the app
+  /connect "Get to know me" → recap; naive-user contradictor confirmed real facts + premium clean; its
+  BROKEN verdict was a corrupted .next cache, FIXED by a clean rebuild).
+- THE PRODUCT WORKS on a real messy day (verified via the app's /api/owner/ingest): the paragraph
+  "grab the kids at 3 ... I should just quit and move to the woods ... email Sarah ... told my sister I
+  still have to pick up Mom's prescription" → CAUGHT grab-kids + email-Sarah(ask) + prescription(implied),
+  SILENT on the quit-vent. The capture box → /api/owner/ingest → moat → cards path is live. All app
+  routes 200, premium-copy CLEAN, suite GREEN 90/90.
+**Handoff for Omar's return: WHEN_OMAR_RETURNS.md** (top-level) — what works + how to see it + the 4 things
+that need him.
+**REMAINING = genuinely Omar-gated (do NOT fake, do NOT do autonomously):** (1) live channels for the 2:45
+call/reminder/text (real Twilio to his phone — the 31-text history); (2) off-localhost (exposes his
+data/accounts publicly — his call); (3) the 5 real days (the Owner Test); (4) delete the [Anticipy test]
+focus block on his calendar tomorrow 2-2:30pm (no delete-event intent). Low-value buildable polish left:
+/api/readiness raw copy leaks vendor names (the app scrubs it before render, so user never sees it).
+The autonomous buildable list is essentially EXHAUSTED of high-value items — do NOT invent busywork. **Needs-Omar (flag, don't fake):** live-channel run for reminder/text + the 2:45 call;
 off-localhost domain/deploy; the 5 real days. Engine SAFE: channels=mock, inbound poll=0, mic OFF.
 
 ---
