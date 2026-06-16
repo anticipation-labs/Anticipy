@@ -865,6 +865,14 @@ async def onboard_scan(body: ScanIn) -> dict:
             "/onboard/discover" if triggered else "no browser extension connected")}
 
 
+@app.post("/onboard/scan_api")
+async def onboard_scan_api() -> dict:
+    """SERVER-SIDE onboarding (no Chrome-extension dependency): discover the user's connected
+    accounts straight from the live API mesh and feed the per-person mesh. The reliable 'it knows
+    you' step — works even when the extension round-trip doesn't."""
+    return await core.onboard_scan_api()
+
+
 # Max public source URLs we will read per profile build (keep the read bounded).
 ONBOARDING_MAX_SOURCES = 6
 

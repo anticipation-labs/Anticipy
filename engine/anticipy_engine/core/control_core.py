@@ -880,6 +880,44 @@ class ControlCore:
         return {"source": plan.source, "written": written,
                 "missing_connections": plan.missing_connections}
 
+    async def onboard_scan_api(self) -> dict:
+        """SERVER-SIDE onboarding — the reliable 'it knows you' step, no Chrome-extension round-trip.
+        Discovers the user's CONNECTED accounts straight from the live API mesh (the vault holds
+        their real OAuth tokens) and feeds them to the per-person mesh via the same onboard_discover
+        path (source 'api_scan'). A connected account is real and provable — Anticipy already acts
+        through it — so this is honest onboarding, not a Chrome scrape pretending to be one."""
+        uid = self.api_hand.user_id
+        # service label -> a representative Arcade tool whose authorization == the account being
+        # connected. (Live API runs through Arcade's managed OAuth, not the local vault, so the
+        # vault can be empty while the account is fully connected — authorize is the real signal.)
+        PROBE = {"Google Calendar": "GoogleCalendar.ListEvents", "Gmail": "Gmail.ListEmails",
+                 "Slack": "Slack.SendMessageToChannel", "Notion": "Notion.GetPageContentById"}
+        discovered = []
+        if self.api_hand.mode == MODE_LIVE:
+            try:
+                client = self.api_hand._client_or_build()
+            except Exception as exc:
+                client = None
+                self.glassbox.log("onboard_scan_api_error", {"error": f"{type(exc).__name__}: {exc}"})
+            if client is not None:
+                for label, tool in PROBE.items():
+                    try:
+                        auth = client.tools.authorize(tool_name=tool, user_id=uid)
+                        if getattr(auth, "status", None) == "completed":
+                            discovered.append({"service": label, "logged_in": True})
+                    except Exception:
+                        continue   # a single service probe failing must never abort onboarding
+        # fall back to any locally-vaulted services too (covers a vault-backed deployment)
+        for key, label in {"gmail": "Gmail", "googlecalendar": "Google Calendar",
+                           "slack": "Slack", "notion": "Notion"}.items():
+            if self.token_vault.has(uid, key) and not any(d["service"] == label for d in discovered):
+                discovered.append({"service": label, "logged_in": True})
+        result = await self.onboard_discover(discovered, source="api_scan")
+        self.glassbox.log("onboard_scan_api", {"connected": len(discovered),
+                          "services": [d["service"] for d in discovered], "mode": self.api_hand.mode})
+        result["scan"] = "api"
+        return result
+
     async def onboard_discover(self, discovered, source: str = "chrome_scrape") -> dict:
         """Ingest a logged-in-Chrome connection SCAN (the extension's discover_connections
         intent) into the per-person mesh, via the SAME path typed onboarding uses. A discovered
