@@ -28,6 +28,7 @@ from typing import Optional, Tuple
 
 from ..channels.text import TextChannel
 from ..proactive.budget import AnnoyanceBudget, InterruptGuard
+from ..proactive.digest import DigestQueue
 from ..proactive.debounce import AskDebounce
 from ..proactive.decider import (
     ASK as DECIDER_ASK,
@@ -80,6 +81,7 @@ class ProactiveEngine:
         decider=None,
         deferred_path=None,
         pending_path=None,
+        digest_path=None,
     ) -> None:
         self.bus = bus
         self.gateway = gateway
@@ -101,6 +103,7 @@ class ProactiveEngine:
         self.pending = {}                       # ask_id -> {goal_id, action, reason, category} (awaiting reply)
         self.budget = AnnoyanceBudget()         # Room 5: cap proactive interruptions; learn from declines
         self.guard = InterruptGuard()           # Room 5: HARD global cap — a cold-boot backlog never floods
+        self.digest = DigestQueue(digest_path)  # NF10: budget-overflow non-urgent items land in ONE daily digest
         self.debounce = AskDebounce()           # Room 2.6: ambient money transfers wait out the retraction
         self.memory_forced_asks = 0             # Deferred-2: asks forced by weak memory confidence
         self.decider_deferred = []              # Room 1.5 outage queue: [{event, due}] awaiting a retry tick
@@ -246,7 +249,15 @@ class ProactiveEngine:
                 suppress = self.guard.blocked(now)
             if suppress:
                 decision = "suppressed"   # not executed AND not asked -> no silent harm, no annoyance
-                if self.glassbox is not None:
+                # NF10: a non-urgent item suppressed by the interrupt BUDGET/cap is not dropped or
+                # spammed — it lands in the ONE daily digest (draws ZERO budget). A DECLINED
+                # action-type stays dropped (the user said no — never re-surface it).
+                if "declined" not in suppress:
+                    self.digest.defer(event.text, reason=reason, category=verdict.category, ts=now)
+                    if self.glassbox is not None:
+                        self.glassbox.log("deferred_to_digest", {"goal_id": goal_id,
+                                          "category": verdict.category, "action": event.text})
+                elif self.glassbox is not None:
                     self.glassbox.log("suppressed", {"goal_id": goal_id, "category": verdict.category,
                                                      "reason": suppress, "action": event.text})
             elif self.debounce.should_hold(event.text, verdict.category, event.meta):
@@ -458,6 +469,23 @@ class ProactiveEngine:
                                            "error": sent.get("error"),
                                            "action": action, "reason": reason, "category": category})
         return ask_id
+
+    def deliver_digest(self, now: Optional[float] = None) -> dict:
+        """NF10: deliver the day's accumulated non-urgent items as ONE message, drawing ZERO
+        interrupt budget, then clear. A quiet day sends NOTHING (stays quiet — no filler). The
+        digest only relays already-paused asks; it executes nothing."""
+        count = self.digest.count()
+        msg = self.digest.deliver()
+        if not msg:
+            return {"sent": False, "count": 0, "reason": "quiet day"}
+        try:
+            sent = self.channel.send(self.user_contact, msg)
+        except Exception as exc:  # a digest send failure must never crash the loop
+            sent = {"sent": False, "error": f"{type(exc).__name__}: {exc}"}
+        ok = bool(sent.get("sent")) if isinstance(sent, dict) else bool(sent)
+        if self.glassbox is not None:
+            self.glassbox.log("digest_delivered", {"count": count, "sent": ok})
+        return {"sent": ok, "count": count, "message": msg}
 
     async def resolve_ask(self, ask_id: str, approved: bool) -> dict:
         """The reply round-trip: YES resumes the EXACT paused goal to done; NO drops it and writes
