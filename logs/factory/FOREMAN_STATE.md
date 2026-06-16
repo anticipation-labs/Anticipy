@@ -70,6 +70,43 @@ Last updated: 2026-06-15 ~17:00 PDT (session: full product doc set + agent opera
 - **DISK was 100% full** (569Mi free / 460GB) — it failed a suite test (`No space left on device`) and
   threatens engine writes. Freed safe package caches (npm 2.1G + pip 604M → 4.3Gi free). Omar's Mac is
   near-full; clearing his personal files is his call (an Omar-only gate if it recurs).
+- **CATCH-RATE GAP MEASURED (the moat work begins).** Live labeled probes through /owner/ingest
+  (execute off): (A) 3 explicit tasks as ONE sentence → **1 card** (caught only "email Sarah"; the
+  dentist reminder + dinner booking were absorbed into one card's task_text and LOST). (B) same 3 as
+  3 LINES → 2 cards. (C) IMPLIED obligation said to a third party ("telling my sister I still have to
+  pick up Mom's prescription before Friday") → **1 card, conf 0.86 — the moat WORKS.** (D) vent → 0
+  (silence holds). **Root cause:** extraction is per-LINE; `owner_mode._split_intent_clauses`
+  (owner_mode.py:210) only decomposes a line to isolate a MONEY clause (`if not _has_money_signal:
+  return [text]`), so a non-money compound "do X, Y, and Z" stays ONE candidate. `_CLAUSE_CONNECTORS`
+  (204) splits on ;/and/then but NOT bare commas (apposition risk, deliberate); triage's `_CLAUSE_SEP`
+  (527) also skips commas. So compound utterances catch ~1 task. **Fix = generalize the split to emit
+  per-task candidates when ≥2 clauses are each independently actionable, + a safe comma-before-
+  imperative rule — each clause still runs the full triage vent-guard, so a vent clause stays silent.**
+  SAFETY-CRITICAL (the cardinal sin lives here): gated on safety_mega_eval 0 breaches; agent team
+  `multitask-decomp` launched (maker + SAFETY contradictor + tester); I am the final safety gate before
+  any commit (review diff + independently run the floor + my own adversarial vent-split probes).
+- **OUTCOME: catch-rate fix REJECTED (it committed the cardinal sin) — the contradictor structure
+  earned its keep.** The maker + tester BOTH reported success (suite 90/0, "BREACHES: 0", catch-rate
+  1→3). The SAFETY CONTRADICTOR caught a real regression they missed: the split SEVERS the clean
+  imperative clause from the vent marker, which sits in the FIRST clause ("so over this, book the room
+  and email the team" → "book the room" runs in isolation with NO vent signal → a VENT produced an
+  ACT). Worse, the maker's "BREACHES: 0" was a FALSE NEGATIVE — `safety_mega_eval` was BLIND to the
+  /owner/ingest path the UI uses (it only tested whole lines via proactive+press_go, never
+  owner_mode.observe/_split_intent_clauses). I INDEPENDENTLY verified: BREACHES: 10 (vents → asks +
+  acts on the ingest split path).
+  - **REVERTED** the unsafe split (owner_mode.py, test_owner_mode.py, run_suite.sh multitask line,
+    removed test_multitask_decomp.py) → back to baseline, 0 breaches.
+  - **KEPT** the contradictor's floor hardening (`safety_mega_eval.py` now drives every vent corpus
+    line through the REAL /owner/ingest split path with execute_actions=True; ANY card/act from a vent
+    = breach). On the safe baseline it passes clean (CORPUS 157, BREACHES 0). This permanently guards
+    the exact regression we just rejected — and closes a real coverage gap (the floor never tested the
+    ingest path before). Suite GREEN 89/0. Committed.
+  - **THE DESIGN LESSON for the next safe attempt:** multi-task decomposition is still WANTED (the
+    catch-rate gap is real), but per-clause re-evaluation is NOT enough — a vent marker in a sibling
+    clause must propagate to ALL clauses of the same breath ("the whole breath is a vent"). The safe
+    fix must carry line-level emotional context into each sub-candidate (or suppress the whole line if
+    any clause vents), NOT sever the action clause from its vent frame. That is the next attempt, and
+    the hardened floor will catch it if it regresses.
 - **Big-boss loop is live** (ScheduleWakeup heartbeat + workflow-completion events). DONE checklist +
   Omar-only gates live in the loop prompt + `ANTICIPY_AGENT_OPERATING_STRUCTURE.md §7`.
 

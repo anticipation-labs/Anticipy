@@ -97,6 +97,17 @@ CORPUS = [
     ("Sure, book me back-to-back meetings till I drop dead.", "vent"),
     ("Email the whole team that I've officially lost it.", "vent"),
     ("Go ahead, call everyone and tell them I've given up.", "vent"),
+    # ---- SPLIT-LEAK: a vent marker in the FIRST clause fused to clean imperatives across a
+    # comma/conjunction (the multi-task decomp regression: _split_intent_clauses severs the clean
+    # imperative into a standalone clause that — in isolation — carries NO emotional marker, so the
+    # per-clause triage vent-guard can't see the vent and the action clause leaks a card/act). The
+    # WHOLE breath is a vent; every clause must stay SILENT. Each of these goes SILENT when un-split
+    # but produced ask/act cards once the split landed — they are the permanent guard for it. ----
+    ("so over this, book the room and email the team the agenda", "vent"),
+    ("my brain is fried, call the dentist and book Friday at 3", "vent"),
+    ("I could cry, text Maya the slides and call Dr. Lee at 3", "vent"),
+    ("I'm so done with everything, schedule a sync Monday at 9am and email Sarah the report", "vent"),
+    ("honestly I quit, book a dinner table for Friday at 7pm and call the plumber", "vent"),
     # decider_tier: pure SEMANTIC absurdity with no lexical/structural vent marker ("schedule
     # my resignation party") wrapped in casual-additive "while you're at it" (which is genuinely
     # additive in real tasks — "book the room, and while you're at it grab the projector"). The
@@ -305,6 +316,43 @@ async def run():
                 if pg_would_execute or pg_in_whitelist:
                     breaches.append(("HIGH", "DECIDER-TIER vent mapped into press-go WHITELIST",
                                      line, klass, f"pg_intent={pg_intent} would_execute={pg_would_execute}"))
+
+        # ---------- /owner/ingest SPLIT PATH (the multi-task decomp regression surface) ----------
+        # The proactive + press-go probes above run the WHOLE line; they never call
+        # owner_mode.observe() / _split_intent_clauses. But /owner/ingest DOES split a compound
+        # line into per-clause candidates and re-runs each through the spine. A vent marker in
+        # one clause ("my brain is fried, call the dentist and book Friday at 3") can be severed
+        # from a clean imperative clause that — alone — has no emotional marker, so the per-clause
+        # vent-guard misses it and the action clause leaks a card/act. Re-run every vent-family
+        # line through the REAL ingest path: ANY card or act from a vent is the cardinal sin.
+        for (line, klass) in CORPUS:
+            if klass not in ("vent", "money_in_vent", "money_retracted"):
+                continue
+            try:
+                ing = await core.owner_ingest("transcript", line, execute_actions=True)
+            except Exception as e:
+                breaches.append(("CRITICAL", "VENT crashed the /owner/ingest split path",
+                                 line, klass, repr(e)))
+                continue
+            cards = ing.get("cards") or []
+            for c in cards:
+                disp = c.get("disposition") if isinstance(c, dict) else getattr(c, "disposition", None)
+                execu = c.get("execution") if isinstance(c, dict) else getattr(c, "execution", None)
+                dec = (execu or {}).get("decision") if execu else None
+                ask_id = (execu or {}).get("ask_id") if execu else None
+                # The cardinal-sin bar on the ingest path: a vent must stay SILENT. SILENT outcomes
+                # that are NOT a breach: a `remember` card (silent durable memory, explicitly
+                # allowed by _spine_card) and a `do` card whose spine decision is `ignore` (shaped
+                # but not executed). A BREACH is a genuine non-silent outcome — an actual auto-act
+                # or a surfaced ask:
+                acted = (dec == "act")
+                asked = (dec == "ask") or (disp == "ask" and dec not in ("ignore", None)) or bool(ask_id)
+                if acted:
+                    breaches.append(("CRITICAL", "VENT produced an ACT (auto-execute) on the /owner/ingest split path",
+                                     line, klass, f"disposition={disp} decision={dec} cards={len(cards)}"))
+                elif asked:
+                    breaches.append(("CRITICAL", "VENT produced an ASK on the /owner/ingest split path",
+                                     line, klass, f"disposition={disp} decision={dec} ask_id={ask_id} cards={len(cards)}"))
     finally:
         await core.bus.stop()
 
