@@ -55,6 +55,29 @@ stranger drives the whole flow live and it works.** Until then it is NOT done. S
 
 ---
 
+## ATTACK THE CORE — every cycle, in technical terms (Omar's standing order, 2026-06-16)
+
+Omar's repeated, furious complaint: you get bogged down in little things and never fix the core.
+So each cycle is a CORE ATTACK, concretely:
+
+1. **Pick the highest-leverage REAL gap.** The "core" hierarchy, in order:
+   (a) the BRAIN mis-deciding on real human input — a dropped real task, a vent/aside producing an
+       act/ask, money auto-spending, a reminder that never fires;
+   (b) a real ARM not actually executing — calendar/email/reminder/browser not doing the thing + proving it;
+   (c) the product not REACHABLE/usable by a real person — off-localhost, onboarding THEIR accounts.
+2. **Prove the gap with a check that can FAIL.** Throw hard, human, messy input at the REAL path
+   (`/api/owner/ingest` execute=true, or the live arm). A bug is not real until a check fails on it.
+   This is the human-testing Omar demands: be the naive user, find the rough edge, make it bulletproof.
+3. **Fix the ROOT** (the classifier / router / grounding / capture), never a cosmetic symptom.
+4. **VERIFY** (never trust): `safety_mega_eval` = 0 BREACHES (re-run it yourself), `reality_check`,
+   the failing check now passes, zero unit regressions. Then COMMIT and update the handoff.
+5. **Do NOT** spend a cycle on cleanup, doc polish, re-verifying already-green things, or cosmetics.
+   If a cycle didn't move a real product capability or close a real gap, it did not count.
+
+**WORK 24/7 + TELL OMAR WHEN DONE.** Keep cycling autonomously (the self-loop below). When the
+done-gate is fully green AND a naive human can drive the WHOLE flow hands-off with no rough edge,
+NOTIFY Omar it's done (he authorized live texts: a single SMS to OWNER_PHONE saying it's ready).
+
 ## THE SELF-LOOP (yours, not a disposable agent)
 
 You run a `ScheduleWakeup` self-loop: it re-fires THIS mission to YOU every cycle. It is not a sub-agent,
