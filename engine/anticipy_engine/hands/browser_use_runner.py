@@ -251,19 +251,28 @@ async def _run(req: dict) -> dict:
     else:
         # Unique throwaway profile under the system temp dir; NEVER the user's Chrome.
         prof_dir = tempfile.mkdtemp(prefix="anticipy-bu-profile-")
+        # Headless by default (server/background runs); set ANTICIPY_BU_HEADLESS=0 to show the
+        # window so a human can WATCH the agent drive the site (the "I didn't see it open" proof).
+        _headless = os.environ.get("ANTICIPY_BU_HEADLESS", "1").strip().lower() not in ("0", "false", "no")
         profile_kwargs = dict(
             executable_path=chrome_bin,
             user_data_dir=prof_dir,
-            headless=True,
+            headless=_headless,
             chromium_sandbox=False,
-            args=[
+            # --no-zygote/--single-process are headless-server flags that BREAK a visible window;
+            # only apply them headless. Visible mode gets a normal, watchable window.
+            args=([
                 "--no-zygote",
                 "--single-process",
                 "--disable-dev-shm-usage",
                 "--no-first-run",
                 "--no-default-browser-check",
                 "--disable-background-networking",
-            ],
+            ] if _headless else [
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--start-maximized",
+            ]),
         )
         if allowed_domains:
             profile_kwargs["allowed_domains"] = allowed_domains

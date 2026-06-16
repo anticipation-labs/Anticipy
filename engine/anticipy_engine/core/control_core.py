@@ -637,6 +637,86 @@ class ControlCore:
         return ask_id, goal.id, would
 
     @staticmethod
+    def _web_start_url(task: str) -> str:
+        """Pick the site for a web task from plain language. Known sites start directly there (most
+        reliable); otherwise a Google search lets the agent navigate. Never the user's logged-in
+        Chrome — the throwaway browser, where the runner's money/checkout/login guard applies."""
+        t = (task or "").lower()
+        sites = {
+            "amazon": "https://www.amazon.com", "opentable": "https://www.opentable.com",
+            "doordash": "https://www.doordash.com", "ubereats": "https://www.ubereats.com",
+            "uber eats": "https://www.ubereats.com", "yelp": "https://www.yelp.com",
+            "instacart": "https://www.instacart.com", "walmart": "https://www.walmart.com",
+            "best buy": "https://www.bestbuy.com", "target": "https://www.target.com",
+            "google": "https://www.google.com",
+        }
+        for key, url in sites.items():
+            if key in t:
+                return url
+        return "https://www.google.com"
+
+    def _browser_action_ask(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
+        """THE BROWSER ACTION ROUND-TRIP (Omar's centerpiece): a web task ("find me a standing desk
+        on Amazon") is surfaced as a TEXTED, plain-English ask the owner answers by SMS — "Hey, I
+        heard you want to … — want me to take a look? Reply YES." On YES (core.resolve) the working
+        browser agent runs on the real site and the result is TEXTED back. Never auto-runs (confirm
+        first); the runner's money/checkout/login guard means it can find/read but never buys."""
+        task = (line.text or "").strip()
+        url = self._web_start_url(task)
+        from .envelopes import new_id
+        ask_id = new_id()
+        # Register the pending ask directly (resolvable by the app YES button AND by an SMS "YES");
+        # category=browser_action routes the YES to the browser agent in core.resolve.
+        self.proactive.pending[ask_id] = {
+            "goal_id": ask_id, "action": task, "reason": "browser task — confirm before I look",
+            "category": "browser_action", "browser_task": task, "browser_url": url}
+        self.proactive._persist_pending()
+        # Text the owner the plain-English ask NOW (bypasses the in-app suppression — for a web
+        # action the owner wants the text). One ask at a time -> a bare "YES" resolves it.
+        msg = (f"Hey — I heard you want to {task}. Want me to take a look and report back? "
+               f"Just reply YES or NO.")
+        try:
+            self.text_channel.send(self._user_contact(), msg)
+            self.glassbox.log("browser_ask_sent", {"ask_id": ask_id, "task": task, "url": url})
+        except Exception as exc:
+            self.glassbox.log("browser_ask_send_error", {"ask_id": ask_id, "error": str(exc)})
+        return OwnerTaskCard(
+            source=source, line_no=line.line_no, source_text=line.text,
+            title=f"Look this up for you: {task[:70]}", disposition="ask", route="browser",
+            action="browser_action", args={"task_text": task, "start_url": url}, confidence=0.8,
+            reason="I'll handle this on the web once you say yes",
+            execution={"decision": "ask", "goal_id": ask_id, "ask_id": ask_id, "goal_state": "waiting"})
+
+    async def _run_browser_and_confirm(self, task: str, url: str, ask_id: str) -> None:
+        """Run the browser agent on the real site and TEXT the owner the result (the confirmation
+        leg of the round-trip). Kicked from core.resolve on a YES so it never blocks the reply."""
+        from ..hands.browser_use_link import browse_act
+        self.glassbox.log("browser_action_start", {"ask_id": ask_id, "task": task, "url": url})
+        # BEFORE text: tell the owner it's starting (Omar wants a message right before AND after).
+        try:
+            self.text_channel.send(self._user_contact(), f"On it — I'm looking into \"{task}\" on the web now. I'll text you what I find.")
+        except Exception:
+            pass
+        try:
+            res = await asyncio.to_thread(browse_act, task, url=url, max_steps=16)
+            ok = bool(getattr(res, "success", False))
+            answer = (getattr(res, "result", "") or "").strip()
+        except Exception as exc:
+            ok, answer = False, ""
+            self.glassbox.log("browser_action_error", {"ask_id": ask_id, "error": str(exc)})
+        if ok and answer:
+            msg = f"Done — {answer[:500]}"
+        else:
+            msg = (f"I tried to {task} but couldn't finish it on the site. Want me to try again "
+                   f"or hand it to you?")
+        try:
+            self.text_channel.send(self._user_contact(), msg)
+        except Exception:
+            pass
+        self.glassbox.log("browser_action_done", {"ask_id": ask_id, "success": ok,
+                                                  "result": (answer[:200] if answer else None)})
+
+    @staticmethod
     def _timed_reminder_card(line: OwnerObservedLine, source: str,
                              capture_result: dict | None) -> OwnerTaskCard | None:
         """A self-reminder the spine has nothing to DO about right now ("take my meds at 9pm",
@@ -922,6 +1002,18 @@ class ControlCore:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
             # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
             card = self._apply_force_ask(card, line)
+            # BROWSER ACTION (Omar's centerpiece): a web task ("find me a standing desk on Amazon")
+            # becomes a TEXTED plain-English ask; on YES (app or SMS) the browser agent runs on the
+            # real site and texts the result. Money browser cards stay blocked (never reach here as
+            # a do/ask). Only on the real execute path; not for a vent-adjacent held card.
+            if (execute_actions and card is not None
+                    and getattr(card, "route", None) == "browser"
+                    and getattr(card, "disposition", None) not in ("blocked", "remember")
+                    and getattr(card, "action", None) != "browser_action"
+                    and not getattr(line, "force_ask", False)):
+                card = self._browser_action_ask(line, source)
+                cards.append(card)
+                continue
             if card is None:
                 # A self-reminder the spine silences NOW ("take my meds at 9pm") is still a real
                 # TIMED reminder when the capture grounded a remind_ts: show it as Ready and KEEP
@@ -1759,6 +1851,23 @@ class ControlCore:
         """The app's approve/deny -> resolves the REAL paused goal (mirrors the text/call round-trip).
         If the goal came from an owner card, the resolution outcome (state + proof on
         YES, declined on NO) is written back onto the durable card record."""
+        # BROWSER-ACTION round-trip: a YES (from the app OR an SMS "YES") kicks the browser agent on
+        # the real site and texts the result back. Handled here, before the goal funnel, because it
+        # runs async (1-3 min) and must not block the reply.
+        p = self.proactive.pending.get(ask_id)
+        if isinstance(p, dict) and p.get("category") == "browser_action":
+            self.proactive.pending.pop(ask_id, None)
+            self.proactive._persist_pending()
+            if approved:
+                asyncio.create_task(self._run_browser_and_confirm(
+                    p.get("browser_task") or p.get("action") or "",
+                    p.get("browser_url") or "https://www.google.com", ask_id))
+                self.glassbox.log("browser_action_approved", {"ask_id": ask_id})
+                return {"ask_id": ask_id, "approved": True, "browser_action": True,
+                        "state": "running", "goal_id": ask_id}
+            self.glassbox.log("browser_action_declined", {"ask_id": ask_id})
+            return {"ask_id": ask_id, "approved": False, "declined_action": p.get("action"),
+                    "goal_id": ask_id}
         out = await self.proactive.resolve_ask(ask_id, approved)
         link = self._owner_card_goals.pop(out.get("goal_id"), None) if isinstance(out, dict) else None
         if link is None and isinstance(out, dict) and out.get("goal_id"):

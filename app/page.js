@@ -1090,11 +1090,25 @@ export default function Home() {
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+    // BUGFIX (the "hello x 4 trillion" duplication): event.results is CUMULATIVE and includes
+    // unstable interim results that fire many times per word. The old handler joined ALL of them
+    // and APPENDED on every event, so one word ballooned into thousands. Walk only from
+    // event.resultIndex and append each FINAL segment exactly once.
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0]?.transcript || "")
-        .join(" ");
-      setText((current) => `${current.trim()}\n${transcript}`.trim());
+      let finalChunk = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (result && result.isFinal) {
+          finalChunk += (result[0]?.transcript || "") + " ";
+        }
+      }
+      const clean = finalChunk.trim();
+      if (clean) {
+        setText((current) => (current.trim() ? `${current.trim()} ${clean}` : clean));
+      }
+    };
+    recognition.onerror = (event) => {
+      setError(`Listening hit a snag (${event.error || "unknown"}). You can also type it.`);
     };
     recognition.onend = () => {
       recognitionRef.current = null;
