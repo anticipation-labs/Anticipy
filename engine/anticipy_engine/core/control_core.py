@@ -862,6 +862,20 @@ class ControlCore:
         result = await self.owner_onboard(onb)
         result["connections"] = [c.model_dump() for c in onb.connections]
         result["discovered_count"] = len(items)
+        # Glass-box the real scrape so it is PROVABLE the onboarding "scrapes you" step fired
+        # and fed the per-person mesh. Emit ONLY when the scan actually ingested connections —
+        # an empty/no-op scan is not an onboarding event and must never look like one (honesty:
+        # the reality gate reads this back, so it can only ever say REAL when a real scan landed).
+        if onb.connections:
+            self.glassbox.log("onboard_discover", {
+                "source": source,
+                "discovered_count": len(items),
+                "connected_count": sum(1 for c in onb.connections if c.status == "connected"),
+                "connections": [
+                    {"name": c.name, "status": c.status, "route": c.route}
+                    for c in onb.connections
+                ],
+            })
         return result
 
     @staticmethod

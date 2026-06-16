@@ -1,6 +1,40 @@
 # FOREMAN STATE — updated at the end of every foreman session
 
-Last updated: 2026-06-14 ~04:00 PDT (session: Apollo safety re-verification + browser money backstop)
+Last updated: 2026-06-15 ~17:00 PDT (session: full product doc set + agent operating structure + big-boss loop; onboarding-scrape provable)
+
+## 2026-06-15 (foreman + autonomous big-boss loop) — docs delivered, onboarding-scrape emit wired
+- **Full product DOC SET delivered + verified** (grounded at file:line, adversarially de-slopped via
+  two completed workflows whb3fcdsy + w0py1ck3t): `ANTICIPY_PRD.md` (F1–F17 + NF1–NF15 + Owner Test
+  OT1–OT9, honest MET/PARTIAL/NOT-MET), `ANTICIPY_UX_SPEC.md` (design tokens, the 4 states, the digest,
+  banned-strings gate §6 A1–A15), `ANTICIPY_ARCHITECTURE.md`, `ANTICIPY_EXECUTION_PLAN.md`,
+  `ANTICIPY_DONE_VISION_2026-06-15.md`, and **`ANTICIPY_AGENT_OPERATING_STRUCTURE.md`** (the rulebook:
+  North Star block §0 in every agent brief + a contradictor per maker, right-sized; merged my governance
+  with the workflow's research depth — ~15× multi-agent cost, ~64.5% self-critique blind-spot → anchor
+  every "done" on a failable check).
+- **Reality gate this session: 6/8 verified-live (6/7 me-verifiable).** REAL: engine_live,
+  input_inference_live, action_executed (read-back), vent_stays_silent (mega-eval 0 breaches),
+  reminder_fired_live, text_roundtrip. The ONE me-verifiable miss: **onboarding_scrape**.
+- **Root cause found + fixed (real code gap):** `core.onboard_discover` ingested the scan but **never
+  logged a `onboard_discover` glassbox event** — the gate's signal was emitted by NOBODY, so even a
+  perfect scan could never register. Added an honest emit in `control_core.onboard_discover` (fires ONLY
+  when a real scan ingested ≥1 connection; empty/no-op scans log nothing — no false proof). Extended
+  `engine/scripts/test_onboard_discover.py`: real-scan logs exactly one event, connected_count tracks the
+  vault, empty scan logs none. **Test PASSES.** Deployed on the live engine (safe restart, same env).
+- **Live gate-flip still BLOCKED (honest):** the gate stays 6/7 because the extension's
+  `discover_connections` → POST `/onboard/discover` round-trip does not complete in this environment
+  (0 `onboard_discover` in all glassbox history; the extension opens 6 default-service tabs but never
+  POSTs back). Endpoint + payload shape verified correct (`{discovered,source}` → `DiscoverConnectionsIn`),
+  so the bug is extension-side scan execution. NOT debugged further autonomously — it opens tabs in Omar's
+  Chrome (intrusive) and is a candidate for a focused extension-debug task or Omar running onboarding live.
+  Did NOT fake the event with synthetic/vault data (that would game the gate).
+- **Engine left SAFE:** restarted on new code with channels=live (confirmations only),
+  ANTICIPY_INBOUND_POLL_SECONDS=0 (no auto-reply spam vector), mic OFF, hands=live. /status healthy,
+  api_hands ready (vault tokens preserved). DATA_DIR=/tmp/anticipy_demo_data (gate reads same glassbox).
+- **Big-boss loop is live** (ScheduleWakeup heartbeat + workflow-completion events). DONE checklist +
+  Omar-only gates live in the loop prompt + `ANTICIPY_AGENT_OPERATING_STRUCTURE.md §7`.
+
+---
+## Earlier — 2026-06-14 ~04:00 PDT (session: Apollo safety re-verification + browser money backstop)
 
 ## Apollo safety re-verification (2026-06-14, foreman, autonomous) — DON'T trust "converged"
 - **The prior session's "proactive path airtight / converged" claim was PREMATURE.** Instead of

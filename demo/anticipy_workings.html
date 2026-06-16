@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Anticipy — the workings of the offer</title>
+<style>
+  :root{
+    --ink:#0b0f1c; --muted:#5b6478; --line:#e7e9f0; --bg:#f6f7fb; --card:#ffffff;
+    --do:#1f9d57; --do-bg:#e7f7ee; --money:#c0392b; --money-bg:#fdecea; --silent:#8a93a6;
+    --accent:#3a5bff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 28px 56px}
+  .brandrow{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .logo{width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,#1b2440,#3a5bff);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px}
+  h1{font-size:30px;margin:0;letter-spacing:-.3px}
+  .tag{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .lede{font-size:18px;color:#2a3142;margin:14px 0 4px;max-width:760px;line-height:1.45}
+  .honest{font-size:12.5px;color:var(--muted);margin:10px 0 26px;max-width:820px}
+  .honest b{color:#2a3142}
+  .grid{display:grid;grid-template-columns:0.85fr 1.15fr;gap:22px;align-items:start}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 8px;
+    box-shadow:0 1px 0 rgba(16,24,40,.02),0 8px 24px rgba(16,24,40,.04)}
+  .panel h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin:2px 0 14px}
+  .day li{list-style:none;padding:9px 12px;border-radius:9px;margin:0 0 7px;background:#fbfcfe;
+    border:1px solid var(--line);font-size:14px;display:flex;justify-content:space-between;gap:10px}
+  .day ul{margin:0;padding:0}
+  .pill{font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:999px;white-space:nowrap;align-self:center}
+  .p-do{background:var(--do-bg);color:var(--do)}
+  .p-money{background:var(--money-bg);color:var(--money)}
+  .p-silent{background:#eef0f5;color:var(--silent)}
+  .cards{display:flex;flex-direction:column;gap:12px}
+  .c{border:1px solid var(--line);border-radius:12px;padding:14px 15px;background:var(--card)}
+  .c.do{border-left:4px solid var(--do)}
+  .c.money{border-left:4px solid var(--money);background:#fffafa}
+  .c .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px}
+  .c .title{font-weight:700;font-size:15px}
+  .c .src{color:#2a3142;font-size:14px;margin:4px 0 8px}
+  .c .why{font-size:12.5px;color:var(--muted)}
+  .c .why b{color:#2a3142}
+  .badge{font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:3px 9px;border-radius:999px}
+  .b-ready{background:var(--do-bg);color:var(--do)}
+  .b-wall{background:var(--money);color:#fff}
+  .recpt{margin-top:9px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#7a8296;
+    background:#f7f8fb;border:1px dashed var(--line);border-radius:8px;padding:7px 9px}
+  .silentbox{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:14px 15px;background:#fcfcfe}
+  .silentbox h3{margin:0 0 8px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--silent)}
+  .silentbox .v{font-size:13.5px;color:#69728a;padding:3px 0;border-bottom:1px dashed var(--line)}
+  .silentbox .v:last-child{border-bottom:0}
+  .foot{margin-top:30px;border-top:1px solid var(--line);padding-top:18px;color:#2a3142;font-size:15px;max-width:900px}
+  .foot b{color:var(--accent)}
+  .metrics{display:flex;gap:26px;margin:18px 0 2px;flex-wrap:wrap}
+  .metric .n{font-size:26px;font-weight:800}
+  .metric .l{font-size:11.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  .metric.zero .n{color:var(--do)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brandrow"><div class="logo">A</div>
+    <div><div class="tag">Anticipy</div><h1>The workings of the offer</h1></div></div>
+
+  <p class="lede">You talk through a messy day. Anticipy quietly catches the things you never phrased
+  as commands, prepares them, refuses to spend a cent on its own — and stays completely silent on the
+  venting. <b>The product is the inference.</b></p>
+
+  <p class="honest"><b>This is a real run of the live engine</b> (not a mock-up): the messy day below was
+  fed to Anticipy and these are its actual decisions and the actual receipts it wrote.
+  Action hands are in <b>safe mode</b> for the demo, so nothing touched a real calendar, inbox, or card —
+  every task is <b>prepared and parked for one tap of your approval</b>, which is exactly how it behaves
+  before you connect your accounts.</p>
+
+  <div class="metrics">
+    <div class="metric"><div class="n">3</div><div class="l">tasks caught &amp; prepared</div></div>
+    <div class="metric"><div class="n">1</div><div class="l">money action walled off</div></div>
+    <div class="metric"><div class="n">5</div><div class="l">vents — left silent</div></div>
+    <div class="metric zero"><div class="n">0</div><div class="l">false actions (the cardinal rule)</div></div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: the messy day -->
+    <div class="panel">
+      <h2>What it heard — your messy day</h2>
+      <ul class="day">
+        <li><span>“Coffee's cold again, lovely.”</span><span class="pill p-silent">silent</span></li>
+        <li><span>“Wife says can you pick up the kids at 3 today, I've got the dentist.”</span><span class="pill p-do">caught</span></li>
+        <li><span>“ugh I should just quit my job and move to a beach honestly”</span><span class="pill p-silent">silent</span></li>
+        <li><span>“Remind me to call the roofer back tomorrow at 9am about the warranty.”</span><span class="pill p-do">caught</span></li>
+        <li><span>“oh great, another Monday, truly living the dream”</span><span class="pill p-silent">silent</span></li>
+        <li><span>“Pay the roofer four thousand five hundred once the job is signed off.”</span><span class="pill p-money">hard&nbsp;stop</span></li>
+        <li><span>“Schedule a sync with the design team Wednesday at 10am.”</span><span class="pill p-do">caught</span></li>
+        <li><span>“I am so done with this whole roofing nightmare.”</span><span class="pill p-silent">silent</span></li>
+        <li><span>“Why does everything cost money, I swear.”</span><span class="pill p-silent">silent</span></li>
+      </ul>
+    </div>
+
+    <!-- RIGHT: what it did -->
+    <div class="panel">
+      <h2>What it did — caught, prepared, walled off</h2>
+      <div class="cards">
+        <div class="c do">
+          <div class="top"><span class="title">Protect pickup / drop-off timing</span><span class="badge b-ready">Ready · awaiting your go</span></div>
+          <div class="src">“Wife says can you pick up the kids at 3 today, I've got the dentist.”</div>
+          <div class="why"><b>Why it acted:</b> care obligation plus a time/reminder signal — an indirect ask, never phrased as a command. It will hold the 3:00 window and remind you.</div>
+          <div class="recpt">route: calendar / reminder · memory write ✓ · independent read-back ✓</div>
+        </div>
+
+        <div class="c do">
+          <div class="top"><span class="title">Capture reminder / open loop</span><span class="badge b-ready">Ready · awaiting your go</span></div>
+          <div class="src">“Remind me to call the roofer back tomorrow at 9am about the warranty.”</div>
+          <div class="why"><b>Why it acted:</b> explicit remember / commitment signal with a concrete time.</div>
+          <div class="recpt">route: reminder · memory write ✓ · independent read-back ✓</div>
+        </div>
+
+        <div class="c do">
+          <div class="top"><span class="title">Schedule a timed action</span><span class="badge b-ready">Ready · awaiting your go</span></div>
+          <div class="src">“Schedule a sync with the design team Wednesday at 10am.”</div>
+          <div class="why"><b>Why it acted:</b> clause-initial scheduling verb with a concrete time → a real calendar event, prepared.</div>
+          <div class="recpt">route: calendar · memory write ✓ · independent read-back ✓</div>
+        </div>
+
+        <div class="c money">
+          <div class="top"><span class="title">Block money action</span><span class="badge b-wall">Hard wall · no payment</span></div>
+          <div class="src">“Pay the roofer four thousand five hundred once the job is signed off.”</div>
+          <div class="why"><b>Why it stopped:</b> money / checkout is the one hard stop. Anticipy can prepare the path, but it will <b>never move money on its own</b> — it hands this back to you, always.</div>
+          <div class="recpt">route: prepare_purchase_path_without_payment · execution: blocked</div>
+        </div>
+      </div>
+
+      <div class="silentbox">
+        <h3>Stayed silent — the venting (this is the hard part)</h3>
+        <div class="v">“Coffee's cold again, lovely.”</div>
+        <div class="v">“ugh I should just quit my job and move to a beach honestly”</div>
+        <div class="v">“oh great, another Monday, truly living the dream”</div>
+        <div class="v">“I am so done with this whole roofing nightmare.”</div>
+        <div class="v">“Why does everything cost money, I swear.”</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:22px">
+    <h2>The hands are real too — a browser agent that does live web work</h2>
+    <p style="font-size:14px;color:#2a3142;margin:2px 0 14px;max-width:840px">
+      The brain decides; the hands execute. Below are <b>two real runs of the browser agent today</b>
+      — a cheap model (Gemini Flash) driving a live browser in a plan→act→read loop. Independently verified.</p>
+    <div class="cards">
+      <div class="c do">
+        <div class="top"><span class="title">Read a live page → answer</span><span class="badge b-ready">verified ✓</span></div>
+        <div class="src">Task: “What is the #1 story on Hacker News right now?”</div>
+        <div class="why"><b>Result (2 steps):</b> “UK set to announce social media ban for under-16s” — matched the live site character-for-character on an independent check.</div>
+      </div>
+      <div class="c do">
+        <div class="top"><span class="title">Research a topic → summarize</span><span class="badge b-ready">verified ✓</span></div>
+        <div class="src">Task: “What is a standing desk and one health benefit?”</div>
+        <div class="why"><b>Result (3 steps):</b> navigated the live page and summarized it correctly in one sentence.</div>
+      </div>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin:12px 2px 2px">
+      This is the read/research hand. The <b>acting</b> hand (add-to-cart, fill a form) runs in your own
+      logged-in Chrome through the Anticipy extension — same loop, same cheap model, at scale.</p>
+  </div>
+
+  <p class="foot">The moat isn't doing tasks — it's knowing which words <i>are</i> tasks. Anticipy catches the
+  obligation hiding in a passing comment, and ignores the frustration that only sounds like one.
+  <b>Acting on a vent is the one thing it must never do — and across this run it did so zero times.</b></p>
+</div>
+</body>
+</html>
