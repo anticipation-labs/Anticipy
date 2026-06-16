@@ -30,6 +30,17 @@ Last updated: 2026-06-15 ~17:00 PDT (session: full product doc set + agent opera
 - **Engine left SAFE:** restarted on new code with channels=live (confirmations only),
   ANTICIPY_INBOUND_POLL_SECONDS=0 (no auto-reply spam vector), mic OFF, hands=live. /status healthy,
   api_hands ready (vault tokens preserved). DATA_DIR=/tmp/anticipy_demo_data (gate reads same glassbox).
+- **Premium-shell gate built (the next DONE item's failable check):** `factory/bin/check_premium_copy.py`
+  — the UX_SPEC §4.8/R4.1/A14 banned-strings gate (checks the live rendered DOM at :3000 with
+  script/style stripped to avoid __NEXT_DATA__ false positives, plus a source backstop for client-
+  hydrated copy). It currently **FAILS with 10 real leaks** (the honest baseline): "Owner Mode" (H1/
+  title/role, DOM + layout.js:4 + page.js:875/887/913), "Press Go" (page.js:836), "Arcade"/"Twilio"
+  (connect/page.js:11/19/20). NOT wired into run_suite yet (it's a TARGET gate — would make the suite
+  RED until the reskin clears it). **NEXT TICK: the premium reskin** — rewrite app/page.js + globals.css
+  + layout.js to the UX_SPEC tokens (charcoal #0C0C0C / cream #F5F0EB / DM Serif, one moment per screen,
+  the 4 ambient states, the digest) DONE BROWSER-IN-THE-LOOP (render :3000 in Chrome, verify each
+  screen vs the §2 wireframes), gated by: this copy-gate → 0 leaks, the app builds, palette has no
+  #000/#fff. Then wire the gate into run_suite.
 - **Big-boss loop is live** (ScheduleWakeup heartbeat + workflow-completion events). DONE checklist +
   Omar-only gates live in the loop prompt + `ANTICIPY_AGENT_OPERATING_STRUCTURE.md §7`.
 
