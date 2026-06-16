@@ -43,6 +43,26 @@ def _base(data_dir=None) -> Path:
     return Path(data_dir or os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
 
 
+# DETERMINISTIC ASIDE FLOOR (model-independent). A past/perfect interrogative directed at
+# someone else — "Did you grab the dry cleaning on the way home?", "Have you emailed Sarah
+# yet?", "Didn't you already call the dentist?" — is a CHECK on another person's action, never
+# the owner's own new task. The MOAT model strips the "did you …?" wrapper and over-extracts a
+# bare imperative ("grab the dry cleaning") that then reads as actionable, so the /owner/ingest
+# split path turned a question into an ASK (the cardinal sin: a vent/aside must stay silent).
+# The proactive path's deterministic triage already silences these; this makes the SAME guard a
+# hard floor on the model path. Scoped to PAST/PERFECT auxiliaries only, so a present/future
+# request to the assistant ("Can you remind me to call mom at 3?") is untouched. Fails to silence.
+_INTERROGATIVE_ASIDE = re.compile(
+    r"^\s*(did|didn'?t|do|does|doesn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|"
+    r"were|weren'?t|was|wasn'?t|are|aren'?t|is|isn'?t)\s+(you|we|they|he|she|it|u|your|the)\b",
+    re.I)
+
+
+def _is_interrogative_aside(text: str) -> bool:
+    t = (text or "").strip()
+    return t.endswith("?") and bool(_INTERROGATIVE_ASIDE.match(t))
+
+
 def _parse_iso_dt_local(value):
     """Parse an RFC3339/ISO-8601 datetime to a tz-aware UTC datetime; None if unparseable.
 
@@ -563,6 +583,32 @@ class ControlCore:
             reason="real task voiced inside a vent — confirm before acting",
         )
 
+    @staticmethod
+    def _timed_reminder_card(line: OwnerObservedLine, source: str,
+                             capture_result: dict | None) -> OwnerTaskCard | None:
+        """A self-reminder the spine has nothing to DO about right now ("take my meds at 9pm",
+        "set a focus block at 2pm") is still a REAL timed reminder: the capture grounded a
+        remind_ts and the trigger fires it at the due time (the 2:45-call use case). The caller
+        previously marked such a line 'ignored', which DEACTIVATED its loop -> the reminder
+        silently never fired. Surface it as a Ready card ('I'll remind you when it's due') and —
+        critically — keep its loop ACTIVE (the caller skips the ignored-sync when this returns a
+        card). Money/vent never reach here: a money line is a blocked card, a vent never captures
+        an open_loop (capture's vent guard), so only a clean reversible timed task qualifies."""
+        item = (capture_result or {}).get("item")
+        if getattr(item, "kind", None) != "open_loop":
+            return None
+        fields = getattr(item, "fields", None) or {}
+        if not fields.get("remind_ts"):
+            return None
+        return OwnerTaskCard(
+            source=source, line_no=line.line_no, source_text=line.text,
+            title=f"Reminder set: {line.text[:80]}", disposition="do", route="api",
+            action="timed_reminder", args={"task_text": line.text,
+                                            "remind_ts": fields.get("remind_ts")},
+            confidence=0.8, reason="timed action — I'll remind you when it's due",
+            status="open",
+        )
+
     async def _spine_card(self, line: OwnerObservedLine, source: str, meta: dict) -> OwnerTaskCard | None:
         """F17 'one brain': the proven spine (triage -> decider -> harm-line ->
         orchestrator/hands) is the ONLY act/ask/silent decision-maker for owner
@@ -672,6 +718,12 @@ class ControlCore:
         from ..proactive.extract import extract
         out, n = [], 0
         for line in observed:
+            # DETERMINISTIC ASIDE FLOOR: a question to someone else ("Did you grab the dry
+            # cleaning?") is never the owner's task. Drop it BEFORE the model can strip the
+            # interrogative wrapper and over-extract a bare imperative -> an ASK on a vent/aside.
+            if _is_interrogative_aside(line.text):
+                self.glassbox.log("extract_aside_silenced", {"line": line.text[:140]})
+                continue
             try:
                 res = await extract(self.gateway, line.text)
             except Exception:
@@ -703,6 +755,18 @@ class ControlCore:
             if not tasks:
                 n += 1
                 out.append(OwnerObservedLine(line_no=n, text=line.text))   # thin read -> don't lose the line
+                continue
+            # DETERMINISTIC ASIDE/REPORT FLOOR (model-independent): the MOAT model can over-extract
+            # a clean task from a REPORTED situation or aside the owner never asked to handle ("My
+            # wife told me the dishwasher is leaking again", "Did you grab the dry cleaning?"). The
+            # SAME deterministic triage that silences the proactive path is the floor here: if it
+            # judges the WHOLE original line non-actionable, the model may NOT resurrect a clean
+            # task from it. Compound real-task lines stay actionable (verified), so the catch-rate
+            # moat is intact; only a deterministic aside/vent is suppressed. The worst failure is
+            # acting on a vent — fail toward silence when the floor and the model disagree.
+            if not self.proactive.triage.actionable(line.text):
+                self.glassbox.log("extract_aside_silenced",
+                                  {"line": line.text[:140], "guard": "triage_floor"})
                 continue
             for t in tasks:
                 n += 1
@@ -758,6 +822,19 @@ class ControlCore:
             # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
             card = self._apply_force_ask(card, line)
             if card is None:
+                # A self-reminder the spine silences NOW ("take my meds at 9pm") is still a real
+                # TIMED reminder when the capture grounded a remind_ts: show it as Ready and KEEP
+                # its loop active so the trigger fires it — never deactivate it (that silently
+                # killed the 2:45-call use case). Only fires on execute (preview has no capture).
+                if execute_actions:
+                    rcard = self._timed_reminder_card(
+                        line, source, captured_by_line.get(line.line_no))
+                    if rcard is not None:
+                        self.glassbox.log("timed_reminder_kept",
+                                          {"line": line.text[:140],
+                                           "remind_ts": rcard.args.get("remind_ts")})
+                        cards.append(rcard)
+                        continue
                 ignored += 1
                 if execute_actions:
                     ignored_captures.append((captured_by_line.get(line.line_no), line.line_no))

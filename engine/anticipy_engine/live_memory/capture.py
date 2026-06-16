@@ -26,6 +26,19 @@ _COMMIT = re.compile(
     r"\b(i'?ll|i will|i need to|i have to|i've got to|gotta|remind me|don'?t forget|"
     r"make sure|i should|schedule|book|call|email|text|send|pay|finish|submit|"
     r"follow up|reply|pick up|drop off|renew|cancel|confirm)\b", re.I)
+# A BARE IMPERATIVE TASK with a concrete time ("take my meds at 9pm", "set a focus block
+# tomorrow at 2pm", "grab the kids at 3"). The MOAT strips the "remind me to" lead-in, so
+# these reversible task verbs no longer match _COMMIT and were mis-filed as history -> no
+# due-time grounding -> the reminder NEVER fired (the 2:45-call use case, silently dropped).
+# REQUIRES the verb at the imperative START (after an optional "please"/"to") AND a concrete
+# _TIME, so narration that merely mentions a clock ("nice weather at 3pm today") is NOT
+# promoted. Money verbs (buy/order/pay/...) are deliberately EXCLUDED — those are owned by
+# the harm-line/blocked card path, never auto-scheduled here.
+_ACTION_START = re.compile(
+    r"^\s*(please\s+|to\s+)?(take|set|grab|get|bring|return|move|clean|fix|wash|water|"
+    r"feed|walk|lock|charge|pack|print|sign|review|prep|prepare|check|update|post|watch|"
+    r"read|write|draft|meet|visit|drop|collect|fetch|attend|put|make|remember|wrap|mail|"
+    r"refill|restock|reschedule|stretch|swap|replace|email|call|text|book|schedule)\b", re.I)
 _TIME = re.compile(
     r"\b(today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
     r"next week|this week|this weekend|by \w+|at \d{1,2}(:\d\d)?\s*(am|pm)?|"
@@ -74,7 +87,7 @@ def should_remember(text: str) -> bool:
 
 def classify(text: str) -> Tuple[str, Dict[str, object]]:
     """Route a kept utterance to a drawer (rules; cheap model in live mode)."""
-    if _COMMIT.search(text):
+    if _COMMIT.search(text) or (_ACTION_START.match(text) and _TIME.search(text)):
         fields: Dict[str, object] = {"task": text.strip()}
         m = _TIME.search(text)
         if m:
