@@ -25,6 +25,13 @@ OwnerRoute = Literal["api", "browser", "voice_text", "memory"]
 class OwnerObservedLine(BaseModel):
     line_no: int
     text: str
+    # When True this line is a REAL task the model pulled out of a VENTED breath
+    # ("email Sarah the budget" inside "...honestly I should just quit..."). It must
+    # be CAUGHT — but it may NEVER auto-act in the heat: the spine/preview downgrade
+    # any do/act disposition to ask (confirm-first), and it is never executed. This is
+    # the lever that lets a vent-adjacent task be surfaced WITHOUT ever committing the
+    # cardinal sin (a vent producing an act). Pure-vent clauses never become a line.
+    force_ask: bool = False
 
 
 class OwnerTaskCard(BaseModel):

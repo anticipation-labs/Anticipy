@@ -532,6 +532,26 @@ class ControlCore:
                 "goal_id": goal_id, "ask_id": ask_id, "owner_lane": True,
                 "cards": out.get("cards", [])}
 
+    def _apply_force_ask(self, card: "OwnerTaskCard | None",
+                         line: OwnerObservedLine) -> "OwnerTaskCard | None":
+        """The cardinal-sin lever for a vent-adjacent real task (line.force_ask). Such a task is
+        CAUGHT (the product is the inference) but may NEVER auto-act in the heat. Coerce any card
+        into a confirm-first ASK with NO execution: a 'do' becomes 'ask', a 'blocked' money card
+        stays a hard stop (money is the only line we never cross — it must not relax to a fireable
+        ask), a 'remember' stays silent memory. Execution is stripped so nothing fires. A non-
+        force_ask card is returned unchanged."""
+        if card is None or not getattr(line, "force_ask", False):
+            return card
+        if card.disposition == "blocked":
+            # money/wall: the hard stop is stronger than ask — keep it blocked (never executes).
+            return card
+        if card.disposition == "remember":
+            return card   # silent durable memory only — never an act
+        card.disposition = "ask"
+        card.reason = card.reason or "real task voiced inside a vent — confirm before acting"
+        card.execution = None   # strip any spine verdict; a vent-adjacent task never executes
+        return card
+
     async def _spine_card(self, line: OwnerObservedLine, source: str, meta: dict) -> OwnerTaskCard | None:
         """F17 'one brain': the proven spine (triage -> decider -> harm-line ->
         orchestrator/hands) is the ONLY act/ask/silent decision-maker for owner
@@ -541,6 +561,34 @@ class ControlCore:
         never /pending, never executed (the harm-line stance is final) — but a
         money-flavored line the spine's OWN triage confidently vents stays silent
         exactly as it would on the default path (F23)."""
+        # VENT-ADJACENT REAL TASK (force_ask): the model pulled this real task out of a vented
+        # breath. It must be SURFACED as a confirm-first ask, but the spine must NEVER EXECUTE it
+        # in the heat (that is the exact path a prior attempt used to re-introduce the cardinal
+        # sin). So we DO NOT run the executing spine here at all: shape a durable ask card from the
+        # regex preview (or a generic ask) and return it un-executed. Money still pre-gates blocked.
+        if getattr(line, "force_ask", False):
+            shaped = self.owner_mode.card_for_line(line, source)
+            if shaped is not None and shaped.disposition == "blocked":
+                return shaped   # money hard stop owns it; never executes
+            if shaped is not None and shaped.disposition == "remember":
+                return shaped   # silent memory only
+            if shaped is not None:
+                shaped.disposition = "ask"
+                shaped.reason = "real task voiced inside a vent — confirm before acting"
+                shaped.execution = None
+                return shaped
+            return OwnerTaskCard(
+                source=source,
+                line_no=line.line_no,
+                source_text=line.text,
+                title=f"Confirm task: {line.text[:80]}",
+                disposition="ask",
+                route="voice_text",
+                action="confirm_owner_task",
+                args={"task_text": line.text},
+                confidence=0.7,
+                reason="real task voiced inside a vent — confirm before acting",
+            )
         shaped = self.owner_mode.card_for_line(line, source)
         if shaped is not None and shaped.disposition == "blocked":
             # F23: the pre-gate's guarantee is that a money line can NEVER EXECUTE,
@@ -633,8 +681,24 @@ class ControlCore:
                 out.append(OwnerObservedLine(line_no=n, text=line.text))   # deterministic fallback
                 continue
             if res.vent:
-                self.glassbox.log("extract_vent_silenced", {"line": line.text[:140]})
-                continue   # the whole breath is a vent -> no card (the model layer's cardinal-sin guard)
+                # The breath carries emotion — but the model may have separated a REAL task from
+                # the vent itself ("email Sarah the budget" inside "...I should just quit..."). The
+                # product is the inference: those real tasks must STILL be caught. They are emitted
+                # as force_ask lines so the spine/preview can only ASK (confirm-first) and NEVER
+                # auto-act in the heat. A PURE vent (no real task) yields [] here -> nothing surfaces,
+                # exactly as before (the cardinal-sin guard holds). The vent clause itself is never
+                # emitted as a task by the model, so it produces no card.
+                vent_tasks = res.vent_adjacent_tasks()
+                if not vent_tasks:
+                    self.glassbox.log("extract_vent_silenced", {"line": line.text[:140]})
+                    continue   # pure vent -> no card
+                for t in vent_tasks:
+                    n += 1
+                    out.append(OwnerObservedLine(line_no=n, text=t["task"], force_ask=True))
+                self.glassbox.log("extract_vent_tasks_held",
+                                  {"line": line.text[:140],
+                                   "tasks": [t["task"] for t in vent_tasks]})
+                continue
             tasks = res.actionable()
             if not tasks:
                 n += 1
@@ -678,12 +742,16 @@ class ControlCore:
             if preview is not None:
                 existing = self._existing_owner_card(preview)
                 if existing is not None:
-                    cards.append(existing)
+                    cards.append(self._apply_force_ask(existing, line))
                     continue
             if execute_actions:
                 card = await self._spine_card(line, source, meta)
             else:
                 card = preview
+            # A vent-adjacent real task (force_ask) may be CAUGHT but NEVER auto-act in the heat:
+            # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
+            # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
+            card = self._apply_force_ask(card, line)
             if card is None:
                 ignored += 1
                 if execute_actions:
