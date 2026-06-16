@@ -552,6 +552,17 @@ class ControlCore:
         card.execution = None   # strip any spine verdict; a vent-adjacent task never executes
         return card
 
+    def _generic_force_ask_card(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
+        """A confirm-first ASK card for a vent-adjacent real task the regex preview didn't shape
+        (a bare task like "call the dentist"). Shared by the execute spine AND the preview path so
+        a preview never shows FEWER tasks than the real run catches."""
+        return OwnerTaskCard(
+            source=source, line_no=line.line_no, source_text=line.text,
+            title=f"Confirm task: {line.text[:80]}", disposition="ask", route="voice_text",
+            action="confirm_owner_task", args={"task_text": line.text}, confidence=0.7,
+            reason="real task voiced inside a vent — confirm before acting",
+        )
+
     async def _spine_card(self, line: OwnerObservedLine, source: str, meta: dict) -> OwnerTaskCard | None:
         """F17 'one brain': the proven spine (triage -> decider -> harm-line ->
         orchestrator/hands) is the ONLY act/ask/silent decision-maker for owner
@@ -577,18 +588,7 @@ class ControlCore:
                 shaped.reason = "real task voiced inside a vent — confirm before acting"
                 shaped.execution = None
                 return shaped
-            return OwnerTaskCard(
-                source=source,
-                line_no=line.line_no,
-                source_text=line.text,
-                title=f"Confirm task: {line.text[:80]}",
-                disposition="ask",
-                route="voice_text",
-                action="confirm_owner_task",
-                args={"task_text": line.text},
-                confidence=0.7,
-                reason="real task voiced inside a vent — confirm before acting",
-            )
+            return self._generic_force_ask_card(line, source)
         shaped = self.owner_mode.card_for_line(line, source)
         if shaped is not None and shaped.disposition == "blocked":
             # F23: the pre-gate's guarantee is that a money line can NEVER EXECUTE,
@@ -748,6 +748,11 @@ class ControlCore:
                 card = await self._spine_card(line, source, meta)
             else:
                 card = preview
+                # PREVIEW == REALITY: a vent-adjacent real task whose regex preview is empty (a bare
+                # "call the dentist") still surfaces as a confirm-first ask, exactly as the execute
+                # spine catches it — so a preview never shows FEWER tasks than the real run would.
+                if card is None and getattr(line, "force_ask", False):
+                    card = self._generic_force_ask_card(line, source)
             # A vent-adjacent real task (force_ask) may be CAUGHT but NEVER auto-act in the heat:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
             # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
