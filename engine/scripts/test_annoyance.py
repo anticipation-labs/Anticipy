@@ -98,7 +98,7 @@ async def main():
     print(f"  PART 1 budget(cap=3): 6 proactive detrimental -> {len(asks)} asked, {len(supp)} suppressed (<= cap)")
     print(f"  PART 2 decline-learning: declined 'email investor' -> same type suppressed; different type still asks")
     print(f"  PART 3 user-initiated ask bypasses budget (cap 0); proactive ask suppressed")
-    print(f"  NOTE: the cap NUMBER is DECISIONS-ONLY-OMAR (research ceiling 3-5/day; default 3 per PRD NF8, env ANTICIPY_PROACTIVE_MAX_PER_DAY)")
+    print(f"  NOTE: a per-day message CAP is NOT the anti-spam mechanism (Omar banned it); the brain only speaks when it should. This is a blunt flood backstop only.")
     if fails:
         print("==== FAIL ===="); [print("   -", f) for f in fails]; raise SystemExit(1)
     print("==== PASS ====")

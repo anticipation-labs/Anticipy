@@ -560,6 +560,44 @@ class ControlCore:
             shaped.execution = execution
         return shaped
 
+    async def _expand_tasks_with_model(self, observed):
+        """THE MOAT — the REAL anti-spam: the brain surfaces only what is genuinely there, so there
+        is nothing to throttle. For each observed line the funded model splits it into its distinct
+        tasks AND judges the whole breath vent-or-not (the nuanced call a regex cannot make). A
+        VENTED line yields NOTHING (emotion only suppresses — the cardinal-sin guard at the model
+        layer). A clean multi-task line yields ONE candidate per task ("call the dentist, book
+        dinner, email Sarah" -> 3, the catch-rate win). Model unavailable (stub/error) -> the line
+        passes through UNCHANGED, so the deterministic path and the whole test suite are untouched.
+        Every emitted task still runs the full downstream pipeline (triage vent-guard + harm-line),
+        so the model is the PRIMARY guard with the deterministic guards as a backstop."""
+        if self.gateway.provider != PROVIDER_OPENROUTER:
+            return observed
+        from ..proactive.extract import extract
+        out, n = [], 0
+        for line in observed:
+            try:
+                res = await extract(self.gateway, line.text)
+            except Exception:
+                res = None
+            if res is None or not res.available:
+                n += 1
+                out.append(OwnerObservedLine(line_no=n, text=line.text))   # deterministic fallback
+                continue
+            if res.vent:
+                self.glassbox.log("extract_vent_silenced", {"line": line.text[:140]})
+                continue   # the whole breath is a vent -> no card (the model layer's cardinal-sin guard)
+            tasks = res.actionable()
+            if not tasks:
+                n += 1
+                out.append(OwnerObservedLine(line_no=n, text=line.text))   # thin read -> don't lose the line
+                continue
+            for t in tasks:
+                n += 1
+                out.append(OwnerObservedLine(line_no=n, text=t["task"]))
+            self.glassbox.log("extract_tasks", {"line": line.text[:140],
+                              "tasks": [t["task"] for t in tasks]})
+        return out
+
     async def owner_ingest(self, source: str, text: str, meta: dict | None = None,
                            execute_actions: bool = False) -> dict:
         """Shared owner path for transcript/MP3/listening/pay-to-try.
@@ -574,6 +612,7 @@ class ControlCore:
         """
         meta = meta or {}
         observed = self.owner_mode.observe(text)
+        observed = await self._expand_tasks_with_model(observed)   # THE MOAT: model splits + judges
         captured_by_line: dict[int, dict] = {}
         for line in observed:
             captured_by_line[line.line_no] = self.live_memory.capturer.capture(
