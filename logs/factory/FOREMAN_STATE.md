@@ -1,5 +1,33 @@
 # FOREMAN STATE — updated at the end of every foreman session
 
+## ⚡ AUTONOMOUS BUILD-TO-DONE — LIVE RESUME STATE (read this FIRST if resuming)
+Omar is away (3+ hrs), will NOT read chat; only a genuinely-working product counts. A relentless
+ScheduleWakeup loop is running — KEEP looping + re-scheduling until the failable done-gate ALL passes;
+do NOT stop, do NOT declare done early. The done-gate + full mission are in the wakeup prompt.
+**Big correction this session:** the model is FUNDED + fast (½s) — I was wrong it was blocked. And
+Omar BANNED per-day message caps (I'd shipped one as "NF8" — REVERTED). The real anti-spam is the BRAIN.
+**Shipped (latest commits):**
+- THE MOAT is LIVE (f1691d4): owner_ingest expands each line through the funded model (proactive/extract.py)
+  → splits a compound line into its distinct tasks AND judges the whole breath vent-or-not (the nuance a
+  regex can't). Live-proven: "call dentist, book dinner, email Sarah" → 3 cards; vent → 0; implied caught.
+  Stub falls back to deterministic (suite untouched). Model = primary guard, deterministic+harm-line = backstop.
+- NF8 message cap REVERTED (f1691d4) — the brain is the anti-spam, not a throttle.
+- Server-side ONBOARDING (committing as of this write): POST /onboard/scan_api discovers connected accounts
+  via Arcade tools.authorize(completed) — no extension dependency. Live-proven: Google Calendar connected,
+  onboard_discover logged (the reality-gate signal).
+**REALITY GATE — honest autonomous ceiling ~5/7** (verified): engine✅ inference✅ action_executed✅
+(regenerated via a live calendar create — NOTE: left a [Anticipy test] focus block tomorrow 2–2:30pm on
+Omar's calendar; NO delete-event intent exists, so Omar/cleanup must remove it) vent-silent✅ onboarding✅.
+reminder_fired❌ + text_roundtrip❌ are GONE from the glass-box (it was reset) and can ONLY be re-proven
+with LIVE Twilio = real texts to Omar — DO NOT do autonomously (the 31-text history). owner_5_days🙋 = Omar.
+**Genuinely-buildable-autonomously remaining:** (a) onboarding KNOWS you — read calendar/contacts via the
+live API → profile facts (the wow: "you talk to Dana most"); (b) the naive-user end-to-end flow drivable;
+(c) premium polish. **Needs-Omar (flag, don't fake):** live-channel run for reminder/text + the 2:45 call;
+off-localhost domain/deploy; the 5 real days. Engine SAFE: channels=mock, inbound poll=0, mic OFF.
+
+---
+
+
 Last updated: 2026-06-15 ~17:00 PDT (session: full product doc set + agent operating structure + big-boss loop; onboarding-scrape provable)
 
 ## 2026-06-15 (foreman + autonomous big-boss loop) — docs delivered, onboarding-scrape emit wired

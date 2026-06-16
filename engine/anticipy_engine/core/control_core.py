@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .browser_link import BrowserLink
 from .bus import Bus
 from .env import load_local_env
-from .envelopes import Event, EventSource, Goal, GoalState, Job
+from .envelopes import Event, EventSource, Goal, GoalState, Job, JobStatus
 from .gateway import ModelGateway, PROVIDER_OPENROUTER
 from .glassbox import GlassBox
 from .native_bridge_link import NativeBridgeLink
@@ -41,6 +41,55 @@ from ..owner_onboarding import OwnerOnboardingIn, build_onboarding_plan
 
 def _base(data_dir=None) -> Path:
     return Path(data_dir or os.environ.get("ANTICIPY_DATA_DIR", ".anticipy-data")).expanduser()
+
+
+def _parse_iso_dt_local(value):
+    """Parse an RFC3339/ISO-8601 datetime to a tz-aware UTC datetime; None if unparseable.
+
+    Used to time-window a real calendar read for the onboarding profile. A naive value is
+    treated as UTC. Anything that isn't a parseable string yields None (and so is dropped, not
+    guessed) — the anti-fabrication discipline applies even to a single bad timestamp."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def _iter_message_lists(value):
+    """Yield each list-of-messages found one level into a Gmail read result.
+
+    Gmail.ListThreads / ListEmails wrap their rows under a key like 'threads' / 'emails' /
+    'messages'. We yield any top-level list value so the parser stays robust to the exact key
+    without inventing structure. Non-dict input yields nothing."""
+    if not isinstance(value, dict):
+        return
+    for v in value.values():
+        if isinstance(v, list):
+            yield v
+
+
+def _gmail_counterparty(item) -> str:
+    """Best-effort sender/correspondent address from a Gmail thread/email row, or "" if absent.
+
+    Reads only fields Gmail actually returns ('from'/'sender'/'from_email'); never fabricates a
+    name. Empty string when the row carries no usable address — that row then contributes no
+    correspondent fact."""
+    if not isinstance(item, dict):
+        return ""
+    for key in ("from", "sender", "from_email", "fromAddress", "from_address"):
+        val = item.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+        if isinstance(val, dict):
+            addr = val.get("email") or val.get("address")
+            if isinstance(addr, str) and addr.strip():
+                return addr.strip()
+    return ""
 
 
 def _card_step_receipts(steps: list[dict]) -> list[dict]:
@@ -904,7 +953,9 @@ class ControlCore:
                     try:
                         auth = client.tools.authorize(tool_name=tool, user_id=uid)
                         if getattr(auth, "status", None) == "completed":
-                            discovered.append({"service": label, "logged_in": True})
+                            # Arcade CONFIRMED connected -> mark connected (the local vault is empty
+                            # in managed-OAuth mode, so 'connected' tells the mesh the truth).
+                            discovered.append({"service": label, "logged_in": True, "connected": True})
                     except Exception:
                         continue   # a single service probe failing must never abort onboarding
         # fall back to any locally-vaulted services too (covers a vault-backed deployment)
@@ -913,10 +964,218 @@ class ControlCore:
             if self.token_vault.has(uid, key) and not any(d["service"] == label for d in discovered):
                 discovered.append({"service": label, "logged_in": True})
         result = await self.onboard_discover(discovered, source="api_scan")
+        # Now that the CONNECTED accounts are known, actually READ them and derive honest
+        # profile facts so the brain knows the user from day one (the North Star). Best-effort:
+        # a read failure must never crash onboarding. Each fact traces to a real read — if the
+        # reads come back thin, we invent NOTHING and say so verbatim (the cardinal-sin guard).
+        try:
+            profile_facts = await self._read_onboarding_profile()
+        except Exception as exc:  # noqa: BLE001 — onboarding must survive any read failure
+            self.glassbox.log("onboard_scan_api_profile_error",
+                              {"error": f"{type(exc).__name__}: {exc}"})
+            profile_facts = []
+        result["profile_facts"] = profile_facts
+        if not profile_facts:
+            # Thin-data: surface the exact honest line. NOTHING was invented.
+            result["profile_summary"] = "No facts assembled. Nothing was invented."
         self.glassbox.log("onboard_scan_api", {"connected": len(discovered),
-                          "services": [d["service"] for d in discovered], "mode": self.api_hand.mode})
+                          "services": [d["service"] for d in discovered], "mode": self.api_hand.mode,
+                          "profile_facts": len(profile_facts)})
         result["scan"] = "api"
         return result
+
+    async def _read_onboarding_profile(self) -> list:
+        """READ the user's real connected accounts through the live api_hand and derive a few
+        HONEST profile facts so the brain knows the user from day one. The onboarding cardinal
+        sin is fabricating a fact: every fact returned here traces to real read data — we derive
+        NOTHING from nothing. If the reads are empty/error/not-connected, we return [] and invent
+        nothing (the caller then surfaces "No facts assembled. Nothing was invented.").
+
+        Reads (via api_hand): read_calendar -> GoogleCalendar.ListEvents,
+        read_contacts -> Gmail.ListThreads, read_email -> Gmail.ListEmails. Each read returns its
+        artifact in Result.output['value']; a not-connected account comes back needs_human and is
+        simply skipped (no fact, no crash). The derived facts are WRITTEN to the profile drawer
+        (the same path owner onboarding uses) and the list is returned."""
+        facts: list[dict] = []
+
+        cal_value = await self._onboarding_read_value("read_calendar")
+        facts.extend(self._calendar_profile_facts(cal_value))
+
+        contacts_value = await self._onboarding_read_value("read_contacts")
+        email_value = await self._onboarding_read_value("read_email")
+        facts.extend(self._correspondent_profile_facts(contacts_value, email_value))
+
+        written = [self._write_profile_fact(f) for f in facts]
+        return [w for w in written if w is not None]
+
+    async def _onboarding_read_value(self, intent: str):
+        """Run ONE real read via the live api_hand and return its artifact value, or None.
+
+        None means: the read failed, the account is not connected (needs_human / connect), or the
+        artifact was empty. A None never becomes a fact — that is the anti-fabrication guard. Never
+        raises (best-effort): any exception degrades to None so onboarding can't crash on a read."""
+        try:
+            job = Job(intent=intent)
+            result = await self.api_hand.handle(job)
+        except Exception as exc:  # noqa: BLE001 — a single read must never abort onboarding
+            self.glassbox.log("onboard_profile_read_error",
+                              {"intent": intent, "error": f"{type(exc).__name__}: {exc}"})
+            return None
+        # Only a real success carries an artifact. needs_human (account not connected) /failed
+        # carry no value, so they contribute no facts — exactly the thin-data path.
+        if result.status != JobStatus.success:
+            return None
+        value = (result.output or {}).get("value")
+        if isinstance(value, str):
+            # Reads normally return a dict; a stringified value is unparseable structure -> no fact.
+            try:
+                value = json.loads(value)
+            except (ValueError, TypeError):
+                return None
+        return value if isinstance(value, dict) else None
+
+    def _calendar_profile_facts(self, value) -> list:
+        """Honest facts from a REAL GoogleCalendar.ListEvents read. Empty/missing -> no facts.
+
+        We count events in the NEXT TWO WEEKS (a claim we can stand behind), name the busiest
+        weekday in that window, and — only when someone genuinely RECURS (appears as a non-self
+        attendee on >= 2 events) — name the most frequent contact. Each fact carries its own
+        evidence count so it can never outrun the data."""
+        if not isinstance(value, dict):
+            return []
+        events = value.get("events")
+        if not isinstance(events, list) or not events:
+            return []
+        import collections
+        now = dt.datetime.now(dt.timezone.utc)
+        horizon = now + dt.timedelta(days=14)
+        in_window = 0
+        weekday = collections.Counter()
+        attendees: "collections.Counter" = collections.Counter()
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            start = ev.get("start") or {}
+            raw = start.get("dateTime") or start.get("date") if isinstance(start, dict) else None
+            when = _parse_iso_dt_local(raw)
+            if when is not None and now <= when <= horizon:
+                in_window += 1
+                weekday[when.strftime("%A")] += 1
+            for att in (ev.get("attendees") or []):
+                if not isinstance(att, dict):
+                    continue
+                email = att.get("email")
+                # the user themselves is not a "contact"; skip self + the organizer-is-self rows
+                if email and not att.get("self"):
+                    attendees[email] += 1
+        facts: list[dict] = []
+        if in_window > 0:
+            facts.append({
+                "key": "calendar:upcoming_events",
+                "text": f"You have {in_window} event{'s' if in_window != 1 else ''} "
+                        f"in the next two weeks.",
+                "evidence": {"source": "GoogleCalendar.ListEvents", "count": in_window,
+                             "window_days": 14},
+            })
+            top_day, top_n = weekday.most_common(1)[0]
+            if top_n >= 1:
+                facts.append({
+                    "key": "calendar:busiest_weekday",
+                    "text": f"Your busiest day in the next two weeks is {top_day} "
+                            f"({top_n} event{'s' if top_n != 1 else ''}).",
+                    "evidence": {"source": "GoogleCalendar.ListEvents", "weekday": top_day,
+                                 "count": top_n},
+                })
+        # Only claim "frequent contact" when someone TRULY recurs (>= 2 events). One shared event
+        # is not a relationship — claiming it would be the fabrication that ends trust.
+        if attendees:
+            name, n = attendees.most_common(1)[0]
+            if n >= 2:
+                facts.append({
+                    "key": "calendar:frequent_contact",
+                    "text": f"You're in frequent contact with {name} "
+                            f"({n} shared events).",
+                    "evidence": {"source": "GoogleCalendar.ListEvents", "contact": name,
+                                 "count": n},
+                })
+        return facts
+
+    def _correspondent_profile_facts(self, contacts_value, email_value) -> list:
+        """Honest facts from REAL Gmail reads (ListThreads / ListEmails). When Gmail is not
+        connected both values are None and this returns [] — no fact, no fabrication. When
+        connected, name the most frequent correspondent only if they genuinely recur (>= 2)."""
+        import collections
+        senders: "collections.Counter" = collections.Counter()
+        total = 0
+        for value in (contacts_value, email_value):
+            if not isinstance(value, dict):
+                continue
+            for items in _iter_message_lists(value):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    total += 1
+                    addr = _gmail_counterparty(item)
+                    if addr:
+                        senders[addr] += 1
+        facts: list[dict] = []
+        if total > 0:
+            facts.append({
+                "key": "email:recent_volume",
+                "text": f"You have {total} recent email thread{'s' if total != 1 else ''} "
+                        f"in your inbox.",
+                "evidence": {"source": "Gmail", "count": total},
+            })
+        if senders:
+            name, n = senders.most_common(1)[0]
+            if n >= 2:
+                facts.append({
+                    "key": "email:frequent_correspondent",
+                    "text": f"You're in frequent email contact with {name} "
+                            f"({n} recent threads).",
+                    "evidence": {"source": "Gmail", "correspondent": name, "count": n},
+                })
+        return facts
+
+    def _write_profile_fact(self, fact: dict):
+        """Upsert ONE derived profile fact into the profile drawer (the same drawer owner
+        onboarding writes to, so the brain reads it through the normal inject path). Keyed by a
+        stable onboarding_key so re-running the scan updates rather than duplicates. Returns the
+        fact text on success, None on a write failure (best-effort; never crashes onboarding)."""
+        text = fact.get("text")
+        if not text:
+            return None
+        key = f"onboarding_profile:{fact.get('key')}"
+        fields = {
+            "kind": "onboarding_profile_fact",
+            "onboarding_key": key,
+            "source": "api_scan",
+            "derived_from": "live_account_read",
+            "evidence": fact.get("evidence", {}),
+        }
+        try:
+            drawer = self.memory.profile
+            existing = None
+            for item in drawer.all():
+                if (item.fields or {}).get("onboarding_key") == key:
+                    existing = item
+                    break
+            if existing is None:
+                drawer.write_text(text, fields=fields, provenance="owner:api_scan",
+                                  confidence=1.0, importance=0.7, status="active")
+            else:
+                existing.text = text
+                existing.fields = fields
+                existing.provenance = "owner:api_scan"
+                existing.confidence = 1.0
+                existing.importance = 0.7
+                existing.status = "active"
+                drawer.update(existing)
+        except Exception as exc:  # noqa: BLE001 — a write failure must not crash onboarding
+            self.glassbox.log("onboard_profile_write_error",
+                              {"key": key, "error": f"{type(exc).__name__}: {exc}"})
+            return None
+        return text
 
     async def onboard_discover(self, discovered, source: str = "chrome_scrape") -> dict:
         """Ingest a logged-in-Chrome connection SCAN (the extension's discover_connections

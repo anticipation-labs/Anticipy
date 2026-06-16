@@ -63,7 +63,12 @@ def scan_to_onboarding(
         seen.add(key)
         route = "api" if canon in _API_SERVICES else "browser"
         connected = False
-        if callable(vault_has):
+        if item.get("connected"):
+            # the caller already CONFIRMED this account is connected (e.g. an Arcade
+            # tools.authorize == completed in the api_scan path) — the managed-OAuth setup
+            # holds the token, so the local vault is empty yet the account is fully connected.
+            connected = True
+        elif callable(vault_has):
             try:
                 connected = bool(vault_has(key))
             except Exception:
