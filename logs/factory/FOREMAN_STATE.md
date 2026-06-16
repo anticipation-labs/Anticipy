@@ -1,5 +1,33 @@
 # FOREMAN STATE — updated at the end of every foreman session
 
+## 🔵 LATEST SESSION — 2026-06-16 (Omar PRESENT, interactive; read this FIRST)
+Omar's core directive crystallized: **the MODEL must understand vague, casual, real speech using
+context + memory; hardcoded regex verbs are ONLY the safety floor, never a veto on a real task.**
+People say "oh yeah I gotta do that email of the thing next weekend", NOT "email Sarah the budget".
+
+**Real core fixes this session, each committed + verified (safety_mega_eval 0 BREACHES, kept):**
+- `62bbcbf` — DROPPED REMINDERS fixed: the MOAT strips "remind me to", so "take my meds at 9pm" was
+  filed as history → no remind_ts → reminder NEVER fired (the 2:45 use case). `_ACTION_START` +
+  `_timed_reminder_card` (keep the loop ACTIVE) → it fires. Also closed an interrogative-aside hole.
+- `ebe1a33` — **THE BIG ONE (model-driven):** the funded model CORRECTLY extracts vague tasks
+  ("I owe my mom a call"→"call mom"; "I gotta do that email of the thing"→caught) but the downstream
+  regex triage (`triage.actionable=False` on loose phrasing) was SILENTLY DROPPING them. Added
+  `OwnerObservedLine.moat_task` + a `_spine_card` RESCUE: a model-caught task the triage voted silent
+  on becomes a confirm-first ASK — regex can no longer veto a model catch. Hard floors kept: money
+  (`category==money` stays blocked) + deterministic vent (`is_vent_shape`). Vague battery 6/6 (was 3/6).
+- `463c0e2` — THE_MISSION.md now encodes "ATTACK THE CORE each cycle (technical), work 24/7, text when done".
+
+**PROVEN LIVE this session (real, not mock):** real GoogleCalendar.CreateEvent executed + read-back-verified
++ DeleteEvent (3 test artifacts cleaned off Omar's calendar). A time-due reminder DELIVERED to Omar's phone
+(Twilio SID, status=delivered, exactly one). reality_check = 6/8 (6/7 me-verifiable). Only me-verifiable gap:
+inbound-text round-trip (needs Omar to text the Anticipy # +16196584447, or a 2nd number — 1 number on account).
+
+**NEXT CORE TARGET (not yet done):** CONTEXT/MEMORY resolution of vague references — extract.py is per-LINE,
+so "the thing"/"that situation"/"the whatsit" stay unresolved. Omar wants them resolved from the surrounding
+conversation + memory. That's the next attack: context-aware extraction.
+
+**A 24/7 ScheduleWakeup self-loop is armed** (core-attack prompt; re-arm each cycle; text Omar when done-gate green).
+
 ## ⚡ AUTONOMOUS BUILD-TO-DONE — LIVE RESUME STATE (read this FIRST if resuming)
 Omar is away (3+ hrs), will NOT read chat; only a genuinely-working product counts. A relentless
 ScheduleWakeup loop is running — KEEP looping + re-scheduling until the failable done-gate ALL passes;
