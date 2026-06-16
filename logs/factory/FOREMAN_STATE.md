@@ -29,8 +29,18 @@ with LIVE Twilio = real texts to Omar — DO NOT do autonomously (the 31-text hi
   still have to pick up Mom's prescription" → CAUGHT grab-kids + email-Sarah(ask) + prescription(implied),
   SILENT on the quit-vent. The capture box → /api/owner/ingest → moat → cards path is live. All app
   routes 200, premium-copy CLEAN, suite GREEN 90/90.
-**Handoff for Omar's return: WHEN_OMAR_RETURNS.md** (top-level) — what works + how to see it + the 4 things
-that need him.
+**MOAT RELIABILITY FIXED + committed (c900303 + f2fb73c THE_MISSION + self-loop):** the bug that made it
+"not investor-ready" — a run-on line mixing a vent with real tasks dropped EVERYTHING — is fixed. Now a
+vented breath's REAL tasks are caught as confirm-first ASKs (force_ask path in control_core/_spine_card
+NEVER executes; money stays blocked; pure vent → 0). Independently verified by me on the LIVE engine:
+bug line → grab-kids+email-Sarah as ask, exec None, no quit-card; pure vent → 0; money-in-vent → blocked.
+safety_mega_eval BREACHES 0, suite GREEN 90/90, contradictor SAFE. Engine now restarted SAFE+LIVE:
+hands=live (onboarding/actions work), channels=mock (can't text), inbound poll=0, mic OFF.
+**Auth verified default-secure** (app/api/_engine.js: privateEngineRequest → requireOwnerRequest; a public
+deploy with no token DENIES everyone — no hole). Off-localhost = 2 commands for OMAR (set
+ANTICIPY_APP_OWNER_TOKEN + cloudflared tunnel; both tools installed) — exposes his accounts, so HIS call;
+I did NOT tunnel autonomously.
+**Handoff for Omar's return: WHEN_OMAR_RETURNS.md** (top-level) — what works + how to see it + what needs him.
 **REMAINING = genuinely Omar-gated (do NOT fake, do NOT do autonomously):** (1) live channels for the 2:45
 call/reminder/text (real Twilio to his phone — the 31-text history); (2) off-localhost (exposes his
 data/accounts publicly — his call); (3) the 5 real days (the Owner Test); (4) delete the [Anticipy test]
