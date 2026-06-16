@@ -36,6 +36,15 @@ NEVER executes; money stays blocked; pure vent → 0). Independently verified by
 bug line → grab-kids+email-Sarah as ask, exec None, no quit-card; pure vent → 0; money-in-vent → blocked.
 safety_mega_eval BREACHES 0, suite GREEN 90/90, contradictor SAFE. Engine now restarted SAFE+LIVE:
 hands=live (onboarding/actions work), channels=mock (can't text), inbound poll=0, mic OFF.
+**MOAT STRESS-TESTED + verified reliable on the REAL path (the app uses execute=true by default).** A
+varied-corpus stress test (8 messy lines) on execute=FALSE looked like it dropped ~half the tasks — but
+that was a FALSE ALARM from my test using the preview mode: the CHEAP model extracts every task correctly
+(verified CHEAP-vs-SMART; SMART tier is misconfigured/errors — keep CHEAP); execute=TRUE catches them all
+(#1→2 cards, #2→registration caught after a vent, #4→all 3), all as confirm-first asks, zero auto-acts,
+money blocked, vents 0. The only real bug was preview≠reality: card_for_line lacked the force_ask fallback
+_spine_card has → FIXED (_generic_force_ask_card shared by both paths; preview now matches). Non-user-facing
+(app uses execute=true) but kills the verification false-alarm. LESSON for the next me: verify the moat with
+execute=TRUE (the real path), not false.
 **Auth verified default-secure** (app/api/_engine.js: privateEngineRequest → requireOwnerRequest; a public
 deploy with no token DENIES everyone — no hole). Off-localhost = 2 commands for OMAR (set
 ANTICIPY_APP_OWNER_TOKEN + cloudflared tunnel; both tools installed) — exposes his accounts, so HIS call;
