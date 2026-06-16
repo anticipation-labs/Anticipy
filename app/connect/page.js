@@ -140,6 +140,57 @@ function StatusBadge({ status }) {
   );
 }
 
+// A connected account, in one human line. The engine reports a real account name
+// (which may carry a vendor/implementation word); humanCopy turns it into plain words
+// the user understands ("Calendar — connected.") and never a brand. Anything that
+// can't be made human is dropped rather than shown raw (§4.8).
+function connectionLine(conn) {
+  const human = humanCopy(conn?.name);
+  if (!human) return "";
+  return `${human} — connected.`;
+}
+
+// The "get to know me" recap: the accounts I'm signed into, plus a few honest facts I
+// could actually read from them. The facts arrive as plain strings already written for
+// a person — I still pass them through the copy guard so an implementation word can
+// never slip through. If there are no facts, I say so verbatim and invent nothing.
+function KnowYouRecap({ result }) {
+  if (!result) return null;
+  const connections = (Array.isArray(result.connections) ? result.connections : [])
+    .map(connectionLine)
+    .filter(Boolean);
+  const facts = (Array.isArray(result.profile_facts) ? result.profile_facts : [])
+    .map((f) => humanCopy(f))
+    .filter(Boolean);
+  return (
+    <div className="recap settle">
+      <div className="recap-head">
+        <strong>Here&apos;s what I picked up</strong>
+      </div>
+      {connections.length ? (
+        <ul className="recap-facts" style={{ marginTop: 12 }}>
+          {connections.map((line, index) => (
+            <li className="recap-fact" key={`conn-${index}`}>
+              <p className="recap-value">{line}</p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {facts.length ? (
+        <ul className="recap-facts" style={{ marginTop: connections.length ? 4 : 12 }}>
+          {facts.map((fact, index) => (
+            <li className="recap-fact" key={`fact-${index}`}>
+              <p className="recap-value">{fact}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="recap-empty">No facts assembled. Nothing was invented.</p>
+      )}
+    </div>
+  );
+}
+
 function CapabilityRow({ cap }) {
   const live = cap.status === "live";
   const link = CONNECT_LINKS[cap.capability] || { href: null, label: "Connect", external: false };
@@ -181,6 +232,35 @@ export default function ConnectPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  // The "get to know me" scan: what I could read from the accounts you're already
+  // signed into. Held separately from the readiness checklist so a slow scan never
+  // blocks the connect list, and so an empty result still shows the honest "nothing
+  // invented" line rather than nothing at all.
+  const [knowYou, setKnowYou] = useState(null);
+  const [knowBusy, setKnowBusy] = useState(false);
+  const [knowError, setKnowError] = useState("");
+
+  const getToKnowMe = useCallback(async () => {
+    setKnowBusy(true);
+    setKnowError("");
+    try {
+      const res = await fetch("/api/onboard_scan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({}),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body?.message || body?.error || "I lost the thread for a moment.");
+      }
+      setKnowYou(body);
+    } catch (err) {
+      setKnowError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setKnowBusy(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -255,6 +335,37 @@ export default function ConnectPage() {
               <CapabilityRow key={cap.capability} cap={cap} />
             ))}
           </ul>
+        )}
+
+        {/* ---- "get to know me": look at what's already connected and read back a few
+            honest facts, so it feels like Anticipy already knows you. Invents nothing. ---- */}
+        {!loading && !error && (
+          <div className="block settle" style={{ marginTop: 40 }}>
+            <div className="surface-head" style={{ marginBottom: 16 }}>
+              <h2 className="block-title">Want me to get to know you?</h2>
+              <p className="surface-sub" style={{ marginTop: 8 }}>
+                I&apos;ll take a quick look at what you&apos;ve connected and tell you what I can
+                already see. I only read — I never send, spend, or change a thing.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={getToKnowMe}
+              className="primary"
+              disabled={knowBusy}
+              style={{ width: "fit-content" }}
+            >
+              {knowBusy ? "Getting to know you" : knowYou ? "Look again" : "Get to know me"}
+            </button>
+            {knowError ? <p className="error" style={{ marginTop: 16 }}>{knowError}</p> : null}
+            {knowBusy && !knowYou ? (
+              <div className="orb-wrap settle" style={{ marginTop: 16 }}>
+                <div className="orb" />
+                <p className="orb-word">Getting to know you</p>
+              </div>
+            ) : null}
+            {knowYou ? <div style={{ marginTop: 20 }}><KnowYouRecap result={knowYou} /></div> : null}
+          </div>
         )}
 
         <p className="block-note" style={{ marginTop: 40 }}>
