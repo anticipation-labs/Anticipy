@@ -35,6 +35,7 @@ run owner_app_product_path bash "$REPO/scripts/test_owner_app_product_path.sh"
 run download_route bash "$REPO/scripts/test_download_route.sh"
 
 run safety_mega_eval "$PY" "$REPO/engine/scripts/safety_mega_eval.py"  # 145-line adversarial cardinal-sin/money corpus vs the REAL assembled engine (proactive + press-go); exits 1 on ANY breach
+run premium_copy "$PY" "$REPO/factory/bin/check_premium_copy.py" --quiet  # UX_SPEC §4.8/R4.1 banned-strings gate: no dev-console leaks (Owner Mode/Press Go/route tags/raw engine fields) reach the surface; source backstop + raw-JSX check run even without :3000
 run memory_eval_selftest "$PY" "$REPO/engine/scripts/memory_eval.py" --selftest  # instrument soundness (zero model calls)
 run proactive_eval_selftest "$PY" "$REPO/engine/scripts/proactive_eval.py" --selftest  # proactive report-card instrument (zero model calls)
 run journey_eval_selftest "$PY" "$REPO/engine/scripts/journey_eval.py" --selftest  # journey gauge soundness (zero model calls)

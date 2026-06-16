@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Anticipy Owner Mode",
-  description: "Messy life input into safe task cards with receipts.",
+  title: "Anticipy",
+  description: "It hears your day, remembers everything, and quietly gets the small things handled.",
 };
 
 export default function RootLayout({ children }) {
@@ -12,30 +12,20 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>
       <body>
-        <nav
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 18,
-            padding: "8px 18px",
-            fontSize: 13,
-            fontWeight: 500,
-            borderBottom: "1px solid var(--line)",
-            background: "var(--panel)",
-            color: "var(--muted)",
-          }}
-        >
-          <a href="/" style={{ color: "var(--ink)", fontWeight: 700, textDecoration: "none" }}>
+        <nav className="nav">
+          <a href="/" className="wordmark">
             Anticipy
           </a>
-          <a href="/" style={{ color: "var(--muted)", textDecoration: "none" }}>Owner</a>
-          <a href="/connect" style={{ color: "var(--muted)", textDecoration: "none" }}>Connect accounts</a>
-          <a href="/download" style={{ color: "var(--muted)", textDecoration: "none" }}>Download</a>
+          {/* The wordmark is "home" (your day). The two secondary steps follow in the
+              order a first-timer takes them: connect, then take it with you. */}
+          <span className="nav-spacer" />
+          <a href="/connect">Connect</a>
+          <a href="/download">Download</a>
         </nav>
         {children}
       </body>

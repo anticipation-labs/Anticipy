@@ -41,6 +41,35 @@ Last updated: 2026-06-15 ~17:00 PDT (session: full product doc set + agent opera
   the 4 ambient states, the digest) DONE BROWSER-IN-THE-LOOP (render :3000 in Chrome, verify each
   screen vs the §2 wireframes), gated by: this copy-gate → 0 leaks, the app builds, palette has no
   #000/#fff. Then wire the gate into run_suite.
+- **PREMIUM RESKIN LANDED + verified (agent-team build, the way Omar set it up).** Workflow
+  `wfk7n7lkx` (premium-reskin): one maker + three contradictors (premium-feel, naive-user,
+  wiring-integrity), every agent on the North Star. The contradictors did their job — they caught a
+  FALSE "done": the maker's "gate CLEAN" was passing only because `check_premium_copy.py`'s DOM scan
+  sees the *unauthenticated* gate page, NOT the client-rendered dashboard behind owner-auth, which
+  still leaked raw engine fields + a 98× vent-storm. The fix phase then humanized it for real.
+  - `app/*` reskinned to UX_SPEC: charcoal #0C0C0C / cream #F5F0EB / DM Serif (assistant voice) + Inter
+    (data), no #000/#fff, no monospace, one-moment-per-screen, settle/breathe motion, the digest IA.
+    Card internals now pass through humanizers (`cleanText`/`humanTitle`/`humanWhy`/`shortText`/
+    `dedupeKey`, page.js:101-218) that strip "Owner task:"/"[Anticipy test]"/timestamps/route-tags and
+    collapse the duplicate-truncation vent-storm. All :8787 wiring preserved.
+  - `factory/bin/check_premium_copy.py` HARDENED by the team: added `check_raw_jsx()` (fails on any raw
+    `card.title/reason/...` rendered in JSX without a humanizer) + route-tag/test-label/impl patterns.
+    Proven failable (reintroduce `{card.reason}` → exit 1). Now a STANDING suite gate.
+  - **Verified 3 independent ways:** the team's adversarial Playwright (leaks 14→0, vent-storm 98→1,
+    amber asks 45→1, wiring intact), the hardened gate (CLEAN), and my own auth-free unit test running
+    the real humanizers against the exact leaked strings I observed live (ALL stripped).
+  - **Suite GREEN 89/0** with `premium_copy` wired into run_suite.sh; safety_mega_eval 0 breaches.
+    Committed.
+  - **HONEST CAVEAT (the maker's own self-critique, kept):** this is a RENDER-LAYER SCRUB, not an
+    engine cure. The engine STILL emits rule-name titles, route-tag reasons, `[Anticipy test]` labels,
+    and persists ~89 progressively-truncated copies of one vent (the dinner-storm) → the proactive
+    engine over-generated dozens of asks from one rambling vent. The UI now humanizes/dedupes/caps
+    them, but a new unmapped reason string falls through to "" (safe-but-lossy). **The durable fix is
+    engine-side and connects directly to the cadence + cardinal-sin/over-asking work (PRD NF8-NF12,
+    F8-F11).** That's the next real build, not cosmetic.
+- **DISK was 100% full** (569Mi free / 460GB) — it failed a suite test (`No space left on device`) and
+  threatens engine writes. Freed safe package caches (npm 2.1G + pip 604M → 4.3Gi free). Omar's Mac is
+  near-full; clearing his personal files is his call (an Omar-only gate if it recurs).
 - **Big-boss loop is live** (ScheduleWakeup heartbeat + workflow-completion events). DONE checklist +
   Omar-only gates live in the loop prompt + `ANTICIPY_AGENT_OPERATING_STRUCTURE.md §7`.
 

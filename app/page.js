@@ -16,16 +16,21 @@ const DEFAULT_MEMORY = {
   phone: "",
   email: "",
   preferences: "Ask before sending messages to real people.\nNever buy anything.",
-  people: "Maya | wife | sms | school pickup changes\nSam | contractor | email | revised deck",
-  connections: "Google Calendar | connected | api | calendar | reminders and events\nGmail | needs_auth | api | gmail.compose | drafts and approvals\nChrome | needs_setup | browser | chrome | browser tasks",
-  stores: "Staples | https://www.staples.com | office supplies\nTarget | https://www.target.com | birthday gifts",
+  people: "Maya, wife, sms, school pickup changes\nSam, contractor, email, revised deck",
+  connections: "",
+  stores: "",
   notes: "Weekday afternoons are usually packed.",
 };
 
+// People/connection/store fields accept comma- OR pipe-separated columns, so the
+// seed copy can stay human (no raw pipe-delimited data on screen) while the parser
+// keeps working unchanged for either separator.
+const FIELD_SEP = /\s*[|,]\s*/;
+
 const sources = [
-  ["typed", "Typed"],
-  ["transcript", "Transcript"],
-  ["upload", "Upload"],
+  ["typed", "Type it"],
+  ["transcript", "Paste a transcript"],
+  ["upload", "Upload audio"],
   ["start_listening", "Listen"],
 ];
 
@@ -37,7 +42,7 @@ function lines(value) {
 }
 
 function pipeParts(line) {
-  return line.split("|").map((part) => part.trim());
+  return line.split(FIELD_SEP).map((part) => part.trim());
 }
 
 function normalizeConnectionStatus(value) {
@@ -82,54 +87,228 @@ function cardBucket(card) {
   return "ready";
 }
 
+// ---- copy guards (§4.8): the user never sees a codebase artifact ----
+// Every string that originates in the engine passes through one of these before it
+// reaches the DOM. Test scaffolding ("[Anticipy test]"), orphan transcript timestamps
+// ("00:00:03]"), internal role prefixes ("Owner task:"), and engine route/disposition
+// tags ("reversible:research -> act", "fail-safe ask", "cannot confirm safe -> ...")
+// are scrubbed here, never rendered. If a string is ONLY machine noise, the caller
+// drops the line rather than show it.
+
+// Strip test labels, orphan timestamps, internal role prefixes, and ASCII arrows from
+// any user text, then collapse a runaway rambling line (a vent dictated as one long
+// run-on) down to its first clean clause so a title never shows a mid-word transcript dump.
+function cleanText(value) {
+  if (value == null) return "";
+  let s = String(value)
+    .replace(/\[Anticipy[^\]]*\]\s*/gi, "")            // "[Anticipy test]" scaffolding
+    .replace(/^\s*\d{1,2}:\d{2}:\d{2}\]\s*/g, "")      // orphan "00:00:03]" timestamp head
+    .replace(/\b\d{1,2}:\d{2}:\d{2}\]\s*/g, "")        // ...or mid-string
+    .replace(/^\s*(?:Owner task|Owner|Follow up on your commitment)\s*:\s*/i, "")
+    .replace(/\s*-+>\s*/g, " to ")                     // never a literal ASCII "->"
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return s;
+}
+
+// A title-safe version of cleanText: caps an over-long / rambling string so it never
+// shows as a wall of run-on transcript. Cuts at the first sentence end, else first 8
+// words, with an ellipsis — but only when the line is genuinely too long.
+function shortText(value, max = 72) {
+  const s = cleanText(value);
+  if (s.length <= max) return s;
+  const sentence = s.match(/^.{12,72}?[.!?](?:\s|$)/);
+  if (sentence) return sentence[0].trim();
+  return s.split(/\s+/).slice(0, 9).join(" ") + "…";
+}
+
+// A reason string is internal machine noise (a route/disposition/triage tag) if it
+// matches any of these — those must never reach the user (§4.8). When it does, the
+// "why" line is dropped entirely rather than humanized into a guess.
+const ROUTE_TAG_RE = /reversible:|->|\bfail-safe\b|re-gated|\bdecider\b|\bsignal\b|\broute\b|\bdisposition\b|goal_state|requires approval|planned step|\bact\b|\bask\b|\bcheckout\b(?!\s)/i;
+
+// Engine triage reasons → one plain human sentence. Anything not in the map (or that
+// looks like a raw route tag) returns "" so the caller drops the line.
+const REASON_HUMAN = [
+  [/explicit remember|commitment signal/i, "You said you'd remember this."],
+  [/stated preference|identity|relationship fact/i, "Something about you, worth keeping."],
+  [/care obligation|pickup|drop-?off/i, "A pickup that matters — I'll keep the timing safe."],
+  [/scheduling|contact verb|concrete time|timed action/i, "There's a time on this, so I lined it up."],
+  [/third-party communication|before sending/i, "I'll check with you before messaging someone."],
+  [/money|checkout|pay/i, "Money's involved, so the last step stays yours."],
+  [/item\/source context|exact item|source before/i, "I need the exact item before I can add it to a cart."],
+];
+
+function humanWhy(reason) {
+  const text = cleanText(reason);
+  if (!text) return "";
+  for (const [re, say] of REASON_HUMAN) {
+    if (re.test(text)) return say;
+  }
+  // Unknown reason: only keep it if it reads like a plain sentence (no route tags,
+  // no arrows, no bare engine words). Otherwise stay silent.
+  if (ROUTE_TAG_RE.test(text)) return "";
+  return text;
+}
+
+// Rule-name titles the engine emits → clean human labels. If the engine already sent
+// a humane title (e.g. "Prepare message for Sam"), we keep it; if it sent a rule name
+// or a raw transcript, we map/repair it here. Never a truncated transcript, never a
+// test label, never the "Owner task:" prefix.
+const TITLE_HUMAN = [
+  [/capture reminder|open loop/i, "A reminder you set"],
+  [/schedule|timed action/i, "Something with a time on it"],
+  [/protect pickup|drop-?off/i, "A pickup to protect"],
+  [/block money|money action/i, "A payment — left for you"],
+  [/resolve browser task/i, "Something to find online"],
+];
+
+// A line is vent-like / rambling (the dictated run-on filler) if it's long and has the
+// telltale repetition of a vent rather than a crisp task. We never use it as a title.
+function isRamble(s) {
+  if (!s) return false;
+  if (s.length > 90) return true;
+  if (/\boh yeah\b.*\boh yeah\b/i.test(s)) return true;
+  return false;
+}
+
+function humanTitle(card) {
+  const raw = cleanText(card.title || card.action || "");
+  // A rule-name title: map it to a clean label.
+  for (const [re, label] of TITLE_HUMAN) {
+    if (re.test(raw)) {
+      // Prefer the real task text if it's a short, clean sentence.
+      const src = cleanText(card.source_text || "");
+      if (src && !isRamble(src) && !ROUTE_TAG_RE.test(src)) return shortText(src);
+      return label;
+    }
+  }
+  // An engine-humanized title we trust (e.g. "Prepare message for Sam"): keep as-is.
+  if (raw && !isRamble(raw)) return shortText(raw);
+  // Anything long/rambling (a raw transcript leaked as a title): fall back to a short
+  // clean source, or a calm generic — never a truncated mid-word vent dump.
+  const src = cleanText(card.source_text || "");
+  if (src && !isRamble(src) && !ROUTE_TAG_RE.test(src)) return shortText(src);
+  return "Something I caught";
+}
+
+// Is this card's source_text genuine user transcript (worth showing) or just the
+// classifier rationale / a rambling vent? Show only short, clean, non-tag source.
+function cardSourceLine(card) {
+  const src = cleanText(card.source_text || "");
+  if (!src) return "";
+  if (ROUTE_TAG_RE.test(src)) return "";
+  // A rambling vent / filler line is not a clean "source" — drop it entirely.
+  if (isRamble(src)) return "";
+  // If the title already IS the source, don't echo it twice.
+  if (src === humanTitle(card)) return "";
+  return src;
+}
+
+// A stable de-dup key for a caught item: collapse near-identical / progressively-
+// truncated transcript variants (the "oh yeah we should go for dinner..." storm) into
+// ONE. We key on the first handful of normalized words so all the truncations match.
+function dedupeKey(card) {
+  const base = cleanText(card.source_text || card.title || card.action || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return base.split(" ").slice(0, 8).join(" ") || card.id;
+}
+
+// Collapse a list of cards to one card per dedupeKey (first wins, since the list is
+// ordered freshest-first by the time it reaches here).
+function dedupeCards(list) {
+  const seen = new Set();
+  const out = [];
+  for (const card of list) {
+    const key = dedupeKey(card);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(card);
+  }
+  return out;
+}
+
+
+// Turn a machine proof object into one plain, human receipt line. Never JSON, never
+// a raw id or null — the spec's banned-string rule (§4.8). If there's nothing human
+// to say, we say nothing (the caller drops empty receipts).
 function proofValue(proof) {
   if (!proof) return "";
-  if (proof.type === "memory_resolution") return [proof.item, proof.site].filter(Boolean).join(" @ ");
-  if (proof.type === "browser_receipt") return [proof.answer || "browser verified", proof.url].filter(Boolean).join(" @ ");
-  if (proof.decision) return [proof.decision, proof.goal_state].filter(Boolean).join(" / ");
-  if (proof.memory_id) return proof.memory_id;
-  if (proof.path) return proof.path;
-  if (proof.type) return proof.type;
-  return JSON.stringify(proof);
+  if (proof.type === "memory_resolution") return cleanText([proof.item, proof.site].filter(Boolean).join(" at "));
+  if (proof.type === "browser_receipt") return cleanText([proof.answer || "Checked it in the browser", proof.url].filter(Boolean).join(" — "));
+  if (proof.decision) {
+    // A resolution proof: ONE human phrase. "You said yes" already implies the outcome,
+    // so we don't also append the raw/humanized goal_state (that's what produced the
+    // doubled "You said yes — waiting on you" the critics flagged).
+    if (proof.decision === "approved") return "You said yes";
+    if (proof.decision === "declined") return "You passed";
+    // Anything else (a raw token) is mapped, never shown raw.
+    return humanState(proof.decision) || "";
+  }
+  // Never surface a filesystem path or a raw token to the user.
+  return "";
 }
 
 function proofLabel(proof) {
-  if (proof?.type === "memory_resolution") return "used memory";
-  if (proof?.type === "browser_receipt") return "browser receipt";
-  const type = proof?.type || "proof";
-  return type.replaceAll("_", " ");
+  if (proof?.type === "memory_resolution") return "Remembered";
+  if (proof?.type === "browser_receipt") return "Checked";
+  if (proof?.type === "resolution") return "Your call";
+  return "Note";
+}
+
+// Engine goal-states → words a person reads. Never surfaces goal_state/disposition raw.
+function humanState(state) {
+  const map = {
+    done: "handled",
+    waiting: "waiting on you",
+    blocked: "left for you",
+    declined: "set aside",
+    prepared: "prepared, not sent",
+    held: "held",
+  };
+  return state ? (map[state] || "") : "";
 }
 
 function visibleProofs(proofs = []) {
   if (!Array.isArray(proofs)) return [];
+  // Only the three proof types that map to a plain human receipt are ever shown. The
+  // rest (engine_execution with its raw act/ask disposition, card_record file paths,
+  // memory_write/read_back internals) carry machine noise §4.8 bans, and the card's
+  // own status dot already says whether it's handled/waiting — so we drop them.
   const userProof = new Set(["memory_resolution", "browser_receipt", "resolution"]);
-  const humanReceipts = proofs.filter((proof) => userProof.has(proof?.type));
-  const execution = proofs.filter((proof) => proof?.type === "engine_execution");
-  const fallback = proofs.filter((proof) => {
-    const type = proof?.type;
-    return !userProof.has(type) && type !== "engine_execution" && type !== "card_record";
-  });
-  return [...humanReceipts, ...execution, ...fallback].slice(0, 4);
+  return proofs.filter((proof) => userProof.has(proof?.type)).slice(0, 2);
 }
 
-function outcomeText(card, pendingAsk) {
+// A human one-word state for a card, mapped to the dot color in the row. No raw
+// ids, no "Waiting for Omar" role-speak — the words the spec asks for (§4.8).
+function outcomeWord(card) {
   const bucket = cardBucket(card);
-  if (card.status === "declined") return "Declined by Omar";
-  if (bucket === "blocked") return "Hard wall: no payment executed";
-  if (bucket === "ask") return pendingAsk ? `Waiting for Omar: ${pendingAsk.ask_id.slice(0, 6)}` : "Waiting for Omar";
-  if (bucket === "done") return "Done with receipt";
-  return "Ready";
+  if (card.status === "declined") return { label: "Set aside", tone: "" };
+  if (bucket === "blocked") return { label: "Left for you", tone: "held" };
+  if (bucket === "ask") return { label: "Waiting for your yes", tone: "waiting" };
+  if (bucket === "done") return { label: "Handled", tone: "handled" };
+  return { label: "Ready", tone: "" };
 }
 
 function receiptText(entry) {
-  return entry.summary || entry.message || JSON.stringify(entry.data || entry);
+  // Only ever a human sentence. If the event has no summary/message, we describe it
+  // plainly rather than dumping JSON (which would leak {...}/null to the user).
+  if (entry.summary) return cleanText(entry.summary);
+  if (entry.message) return cleanText(entry.message);
+  if (entry.data && typeof entry.data === "object") {
+    const note = entry.data.summary || entry.data.message || entry.data.note;
+    if (note) return cleanText(note);
+  }
+  return "Noted.";
 }
 
 function firedLoopText(item) {
-  const pieces = [item.task || item.text || "loop", item.decision || "checked"];
-  if (item.category) pieces.push(item.category);
-  if (item.ask_id) pieces.push(`ask ${item.ask_id.slice(0, 6)}`);
-  return pieces.join(" / ");
+  const what = cleanText(item.task || item.text || "") || "a loop";
+  const did = item.decision === "approved" ? "took it on" : item.decision === "declined" ? "left it for you" : "checked on it";
+  return `Looked back at "${what}" and ${did}.`;
 }
 
 // The remember-list ts is a unix epoch in seconds (RememberList writes time.time()).
@@ -141,49 +320,18 @@ function formatRememberTs(ts) {
   return date.toLocaleString();
 }
 
-const readinessOrder = [
-  "app_input",
-  "proactive_engine",
-  "memory",
-  "browser",
-  "api_hands",
-  "voice_text",
-  "approvals",
-  "money_wall",
-  "owner_api",
-];
-
-const readinessNames = {
-  app_input: "Input",
-  proactive_engine: "Engine",
-  memory: "Memory",
-  browser: "Browser",
-  api_hands: "APIs",
-  voice_text: "Text/Call",
-  approvals: "Approvals",
-  money_wall: "Money",
-  owner_api: "Access",
-};
-
-function readinessEntries(readiness) {
-  const items = readiness?.items || {};
-  return readinessOrder
-    .map((key) => (items[key] ? { key, name: readinessNames[key] || key, ...items[key] } : null))
-    .filter(Boolean);
-}
-
-function readinessTone(state) {
-  if (state === "ready" || state === "protected") return "ok";
-  if (state === "setup" || state === "warning" || state === "ready_to_enable") return "warn";
-  if (state === "mock" || state === "local") return "muted";
-  return "muted";
-}
+// (The readiness checklist now lives only on /connect; its render helpers were removed
+// from the home surface so the day view stays a single calm moment, not a status console.)
 
 function loopMeta(loop) {
+  // The "why this is open" line, in human words — never the raw route/action/
+  // disposition fields (those are engine internals, §4.8).
   const fields = loop.fields || {};
-  return [fields.route, fields.action, fields.disposition || fields.kind]
-    .filter(Boolean)
-    .join(" / ");
+  const action = fields.action;
+  if (action === "connect_account") return "Waiting on an account connection.";
+  if (action === "follow_up") return "Worth a follow-up.";
+  if (fields.kind === "reminder") return "A reminder you set.";
+  return "Still open.";
 }
 
 function MemoryField({ label, value, onChange, multiline = false, placeholder = "" }) {
@@ -208,60 +356,60 @@ function ProfileView({ profile }) {
   const blockers = profile.blockers || [];
   const browserOff = profile.browser_available === false;
   return (
-    <div className="profile-view">
-      <div className="profile-head">
+    <div className="recap">
+      <div className="recap-head">
         <strong>{profile.name}</strong>
-        {profile.role ? <span className="profile-role">{profile.role}</span> : null}
+        {profile.role ? <span className="recap-role">{profile.role}</span> : null}
         {browserOff ? (
-          <span className="tag ask" title="No browser arm was available, so nothing was scraped. No facts were invented.">
-            browser unavailable
+          <span className="row-state" title="I couldn't open a browser, so I read nothing. I didn't invent anything.">
+            <span className="state-dot waiting" /> couldn&apos;t look further
           </span>
         ) : null}
       </div>
       {(profile.org || profile.location) ? (
-        <div className="profile-sub">
+        <div className="recap-sub">
           {profile.org ? <span>{profile.org}</span> : null}
           {profile.location ? <span>{profile.location}</span> : null}
         </div>
       ) : null}
-      <div className="profile-counts">
-        <span className="tag">{summary.facts ?? facts.length} facts</span>
-        <span className="tag">{summary.needs_cross_check ?? 0} need cross-check</span>
-        <span className="tag">
-          {summary.sources_read_ok ?? 0}/{summary.sources_total ?? (profile.sources || []).length} sources read
+      <div className="recap-sub">
+        <span>{summary.facts ?? facts.length} things I picked up</span>
+        {(summary.needs_cross_check ?? 0) ? <span>{summary.needs_cross_check} I&apos;d double-check</span> : null}
+        <span>
+          read {summary.sources_read_ok ?? 0} of {summary.sources_total ?? (profile.sources || []).length}
         </span>
       </div>
       {facts.length ? (
-        <ul className="profile-facts">
+        <ul className="recap-facts">
           {facts.map((fact, index) => (
-            <li className="profile-fact" key={`${fact.field}-${index}`}>
-              <div className="profile-fact-head">
-                <span className="profile-field">{fact.field}</span>
+            <li className="recap-fact" key={`${fact.field}-${index}`}>
+              <div className="recap-fact-head">
+                <span className="recap-field">{fact.field}</span>
                 {fact.needs_cross_check ? (
-                  <span className="tag ask" title="Low-trust single-page pull — confirm with a second source.">
-                    needs cross-check
+                  <span className="row-state" title="I only saw this on one page — worth confirming.">
+                    <span className="state-dot waiting" /> worth a check
                   </span>
                 ) : (
-                  <span className="tag done" title="Whole-page read — a tier higher trust.">
-                    {fact.confidence || fact.trust}
+                  <span className="row-state" title="I read the whole page — I'm fairly sure.">
+                    <span className="state-dot handled" /> fairly sure
                   </span>
                 )}
               </div>
-              <p className="profile-value">{fact.value}</p>
+              <p className="recap-value">{fact.value}</p>
               {fact.source_url ? (
-                <a className="profile-source" href={fact.source_url} target="_blank" rel="noopener noreferrer">
-                  {fact.source_url}
+                <a className="recap-source" href={fact.source_url} target="_blank" rel="noopener noreferrer">
+                  where I saw it
                 </a>
               ) : null}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="profile-empty">No facts assembled. Nothing was invented.</p>
+        <p className="recap-empty">No facts assembled. Nothing was invented.</p>
       )}
       {blockers.length ? (
-        <div className="profile-blockers">
-          <span className="profile-field">Blockers</span>
+        <div className="recap-blockers">
+          <span className="recap-field">What stopped me</span>
           <ul>
             {blockers.map((b, index) => (
               <li key={`blocker-${index}`}>{b}</li>
@@ -273,60 +421,68 @@ function ProfileView({ profile }) {
   );
 }
 
-function TaskCard({ card, pendingAsk, onResolve }) {
+function TaskCard({ card, pendingAsk, onResolve, accent: showAccent = true }) {
   const bucket = cardBucket(card);
-  const proofs = visibleProofs(card.proof);
+  const word = outcomeWord(card);
+  // Only the human receipts that actually have something to say (proofValue !== "").
+  const proofs = visibleProofs(card.proof)
+    .map((proof) => ({ label: proofLabel(proof), value: proofValue(proof) }))
+    .filter((p) => p.value);
+  // Only the lead waiting/blocked row carries a status color (R1.2 / R2.11); queued
+  // rows after it render plain so a single screen shows one accent at most.
+  const accent = !showAccent ? "" : bucket === "ask" ? "accent-ask" : bucket === "blocked" ? "accent-blocked" : "";
+  const title = humanTitle(card);
+  const why = humanWhy(card.reason);
+  const sourceLine = cardSourceLine(card);
   return (
-    <article className={`card ${bucket}`}>
-      <div className="card-head">
-        <h4>{card.title || card.action || "Owner task"}</h4>
-        <span className={`outcome ${bucket}`}>{outcomeText(card, pendingAsk)}</span>
+    <article className={`row settle ${accent}`}>
+      <div className="row-head">
+        <h4 className="row-title">{title}</h4>
+        <span className="row-state">
+          <span className={`state-dot ${word.tone}`} />
+          {word.label}
+        </span>
       </div>
-      <p className="source-text">{card.source_text}</p>
-      <div className="meta">
-        <span className={`tag ${bucket}`}>{card.disposition}</span>
-        <span className="tag">{card.route}</span>
-        <span className="tag">{card.action}</span>
-        {card.status ? <span className={`tag ${bucket}`}>{card.status}</span> : null}
-        {card.execution?.goal_state ? <span className={`tag ${bucket}`}>{card.execution.goal_state}</span> : null}
-      </div>
-      {card.reason ? <p>{card.reason}</p> : null}
+      {sourceLine ? <p className="row-source">{sourceLine}</p> : null}
+      {why ? <p className="row-why">{why}</p> : null}
       {proofs.length ? (
-        <div className="proof">
-          {proofs.map((proof, index) => (
-            <div className="proof-row" key={`${card.id}-proof-${index}`}>
-              <span>{proofLabel(proof)}</span>
-              <code title={proofValue(proof)}>{proofValue(proof)}</code>
-            </div>
-          ))}
+        <div className="row-receipt">
+          <dl>
+            {proofs.map((proof, index) => (
+              <div key={`${card.id}-proof-${index}`} style={{ display: "contents" }}>
+                <dt>{proof.label}</dt>
+                <dd>{proof.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       ) : null}
       {pendingAsk ? (
-        <div className="pending-actions">
-          <button onClick={() => onResolve(pendingAsk.ask_id, true)}>Approve</button>
-          <button onClick={() => onResolve(pendingAsk.ask_id, false)}>Decline</button>
+        <div className="row-actions">
+          <button onClick={() => onResolve(pendingAsk.ask_id, true)}>Yes</button>
+          <button onClick={() => onResolve(pendingAsk.ask_id, false)}>Not now</button>
         </div>
       ) : null}
     </article>
   );
 }
 
-function PendingAsk({ ask, onResolve }) {
+function PendingAsk({ ask, onResolve, accent = true }) {
+  const title = shortText(ask.action) || "Something I caught";
+  const why = humanWhy(ask.reason);
   return (
-    <article className="card ask">
-      <div className="card-head">
-        <h4>{ask.action}</h4>
-        <span className="outcome ask">Waiting for Omar: {ask.ask_id.slice(0, 6)}</span>
+    <article className={`row settle ${accent ? "accent-ask" : ""}`}>
+      <div className="row-head">
+        <h4 className="row-title">{title}</h4>
+        <span className="row-state">
+          <span className="state-dot waiting" />
+          Waiting for your yes
+        </span>
       </div>
-      <p className="source-text">{ask.reason}</p>
-      <div className="meta">
-        <span className="tag ask">needs yes</span>
-        <span className="tag">{ask.category || "ask"}</span>
-        <span className="tag">{ask.ask_id}</span>
-      </div>
-      <div className="pending-actions">
-        <button onClick={() => onResolve(ask.ask_id, true)}>Approve</button>
-        <button onClick={() => onResolve(ask.ask_id, false)}>Decline</button>
+      {why ? <p className="row-why">{why}</p> : null}
+      <div className="row-actions">
+        <button onClick={() => onResolve(ask.ask_id, true)}>Yes</button>
+        <button onClick={() => onResolve(ask.ask_id, false)}>Not now</button>
       </div>
     </article>
   );
@@ -337,21 +493,24 @@ function MemoryLoop({ loop, onResolve, onConnect, connection }) {
   const canResolve = !loop.fields?.owner_card_id;
   const canConnect = canResolve && loop.fields?.action === "connect_account";
   return (
-    <article className={`loop-item ${loop.status || "open"}`}>
-      <div className="loop-head">
-        <strong>{loop.text}</strong>
-        <span className="tag ask">{loop.status || "open"}</span>
-      </div>
-      {meta ? <span className="loop-meta">{meta}</span> : null}
-      {connection ? (
-        <span className="loop-meta">
-          {connection.status}: {connection.message || connection.connect_url || connection.name}
+    <article className="row settle">
+      <div className="row-head">
+        <h4 className="row-title">{shortText(loop.text) || "An open thread"}</h4>
+        <span className="row-state">
+          <span className="state-dot waiting" />
+          Open
         </span>
+      </div>
+      {meta ? <p className="row-why">{meta}</p> : null}
+      {connection ? (
+        <p className="row-why">
+          {connection.message || (connection.connect_url ? "Opening where you finish connecting." : connection.name)}
+        </p>
       ) : null}
       {canResolve ? (
-        <div className="loop-actions">
+        <div className="row-actions">
           {canConnect ? <button type="button" onClick={() => onConnect(loop.id)}>Connect</button> : null}
-          <button type="button" onClick={() => onResolve(loop.id)}>Done</button>
+          <button type="button" onClick={() => onResolve(loop.id)}>Mark done</button>
         </div>
       ) : null}
     </article>
@@ -412,7 +571,14 @@ export default function Home() {
   const buckets = useMemo(() => {
     const next = { ready: [], ask: [], blocked: [], done: [] };
     for (const card of cards) next[cardBucket(card)].push(card);
-    return next;
+    // Collapse near-identical / progressively-truncated duplicates so a real user sees
+    // ONE decision per real thing, never a wall of copies (the dinner-vent storm).
+    return {
+      ready: dedupeCards(next.ready),
+      ask: dedupeCards(next.ask),
+      blocked: dedupeCards(next.blocked),
+      done: dedupeCards(next.done),
+    };
   }, [cards]);
   const pendingByGoal = useMemo(() => {
     const next = new Map();
@@ -430,8 +596,78 @@ export default function Home() {
     }
     return ids;
   }, [cards, pendingByGoal]);
-  const unmatchedPending = pending.filter((ask) => !matchedPendingIds.has(ask.ask_id));
   const hasLatestRunStats = observed.length > 0 || ignored > 0;
+  // Everything waiting for a yes, from BOTH sources (cards bucketed as "ask" and raw
+  // pending asks with no card), merged into ONE list and deduped ACROSS both so a single
+  // vent can't show up once as a card and once as a pending ask. Capped to a short list.
+  const WAITING_CAP = 6;
+  const waiting = useMemo(() => {
+    const keyOf = (text) =>
+      cleanText(text || "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 8).join(" ");
+    const seen = new Set();
+    const out = [];
+    for (const card of buckets.ask) {
+      const k = keyOf(card.source_text || card.title || card.action);
+      if (k && seen.has(k)) continue;
+      if (k) seen.add(k);
+      out.push({ kind: "card", id: card.id, card, ask: pendingByGoal.get(card.id) || pendingByGoal.get(card.execution?.ask_id) });
+    }
+    const unmatched = pending.filter((a) => !matchedPendingIds.has(a.ask_id));
+    for (const ask of unmatched) {
+      const k = keyOf(ask.action);
+      if (k && seen.has(k)) continue;
+      if (k) seen.add(k);
+      out.push({ kind: "ask", id: ask.ask_id, ask });
+    }
+    return out;
+  }, [buckets.ask, pending, pendingByGoal, matchedPendingIds]);
+  const waitingVisible = waiting.slice(0, WAITING_CAP);
+  const waitingHidden = Math.max(0, waiting.length - waitingVisible.length);
+  // The "Here's what I caught" digest shows a short list, not the whole backlog (§2.3):
+  // a handful of the most recent handled/ready items, with the rest summarized in one
+  // calm line below rather than scrolled as a flat wall.
+  const HANDLED_CAP = 6;
+  const handledAll = [...buckets.done, ...buckets.ready];
+  const handledCount = handledAll.length;
+  const handledVisible = handledAll.slice(0, HANDLED_CAP);
+  const handledHidden = Math.max(0, handledCount - handledVisible.length);
+  // First run = the surface is genuinely empty (nothing caught, nothing waiting, nothing
+  // open). We greet a newcomer with one calm first step instead of a populated dashboard.
+  const isFirstRun =
+    cards.length === 0 && pending.length === 0 && loops.length === 0 && remembered.length === 0;
+  // "Things you said you'd do" — collapse the truncation storm and drop empty/vent rows
+  // so it's a short readable list, not a wall. Keyed on the first words like the cards.
+  const rememberedView = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const row of remembered) {
+      const said = cleanText(row.text || "");
+      if (!said) continue;
+      const key = said.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 8).join(" ");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+    }
+    return out.slice(0, 12);
+  }, [remembered]);
+  // "Still open" loops: collapse the same dictated vent repeated as many open threads,
+  // and cap the list so it's a short tail, not a 47-row scroll.
+  const loopsView = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const loop of loops) {
+      const said = cleanText(loop.text || "");
+      const key = said.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().split(" ").slice(0, 8).join(" ") || loop.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(loop);
+    }
+    return out;
+  }, [loops]);
+  const loopsVisible = loopsView.slice(0, 8);
+  const loopsHidden = Math.max(0, loopsView.length - loopsVisible.length);
+  // The ledger ("What I did and heard") is a short recent tail, not the whole log.
+  const eventsVisible = events.slice(0, 10);
 
   function ownerFetch(url, options = {}) {
     return fetch(url, { ...options, credentials: "same-origin" });
@@ -833,7 +1069,7 @@ export default function Home() {
     if (file.type.startsWith("text/") || /\.(txt|md|vtt|srt|json|csv)$/i.test(file.name)) {
       setText(await file.text());
     } else {
-      setText(`Uploaded ${file.name}. Press Go to transcribe and create task cards.`);
+      setText(`Ready: ${file.name}. Hit "Read my day" and I'll listen through it.`);
     }
   }
 
@@ -869,11 +1105,12 @@ export default function Home() {
 
   if (!access.checked) {
     return (
-      <main className="shell owner-locked">
-        <section className="owner-gate">
-          <div className="mark">A</div>
-          <h1>Anticipy Owner Mode</h1>
-          <p>Checking owner access.</p>
+      <main className="shell">
+        <section className="gate-screen">
+          <div className="gate orb-wrap">
+            <div className="orb" />
+            <p className="orb-word">One moment</p>
+          </div>
         </section>
       </main>
     );
@@ -881,80 +1118,73 @@ export default function Home() {
 
   if (access.required && !access.authenticated) {
     return (
-      <main className="shell owner-locked">
-        <form className="owner-gate" onSubmit={unlockOwner}>
-          <div className="mark">A</div>
-          <h1>Anticipy Owner Mode</h1>
-          <label className="owner-token-field">
-            <span>Owner token</span>
-            <input
-              autoComplete="current-password"
-              autoFocus
-              onChange={(event) => setAccessToken(event.target.value)}
-              type="password"
-              value={accessToken}
-            />
-          </label>
-          <button className="primary" disabled={accessBusy || !accessToken.trim()} type="submit">
-            {accessBusy ? "Unlocking" : "Unlock"}
-          </button>
-          {accessError ? <div className="error">{accessError}</div> : null}
-        </form>
+      <main className="shell">
+        <section className="gate-screen">
+          <form className="gate settle" onSubmit={unlockOwner}>
+            <p className="gate-line">Welcome back.</p>
+            <label className="token-field">
+              <span>Your key</span>
+              <input
+                autoComplete="current-password"
+                autoFocus
+                onChange={(event) => setAccessToken(event.target.value)}
+                type="password"
+                value={accessToken}
+              />
+            </label>
+            <button className="primary" disabled={accessBusy || !accessToken.trim()} type="submit">
+              {accessBusy ? "One moment" : "Come in"}
+            </button>
+            {accessError ? <div className="error">{accessError}</div> : null}
+          </form>
+        </section>
       </main>
     );
   }
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="mark">A</div>
-          <div>
-            <h1>Anticipy Owner Mode</h1>
-            <p>Local engine path: input, cards, actions, receipts.</p>
-          </div>
+      <div className="column">
+        <div className="surface-head settle">
+          <h1 className="surface-title">{isFirstRun ? "Hi. Let's begin." : "Here’s your day."}</h1>
+          <p className="surface-sub">
+            {isFirstRun
+              ? "Tell me about your day below — type it, paste it, or just talk. When you’re ready, connect your accounts so I can actually help."
+              : "I’m listening, remembering, and getting the small things handled. You only see what needs you."}
+          </p>
         </div>
-        <div className="status-strip">
-          <span className={`dot ${engine.ok ? "ok" : "bad"}`} />
-          <span>{engine.label}</span>
-          {typeof engine.openLoops === "number" ? <span>{engine.openLoops} active loops</span> : null}
-          {typeof engine.pendingCount === "number" ? <span>{engine.pendingCount} waiting</span> : null}
-          {engine.memoryRecovered ? <span>memory recovered</span> : null}
+
+        <div className="presence settle">
+          <span className={`pulse ${engine.ok ? "on" : ""}`} />
+          <span>{engine.ok ? "Listening" : "Resting for a moment"}</span>
           {access.required ? (
             <button className="quiet-link" onClick={lockOwner} type="button">
-              Lock
+              Step away
             </button>
           ) : null}
         </div>
-        {engine.readiness ? (
-          <div className="readiness-grid" aria-label="System readiness">
-            {readinessEntries(engine.readiness).map((item) => (
-              <span className={`readiness-pill ${readinessTone(item.state)}`} key={item.key} title={item.label}>
-                <strong>{item.name}</strong>
-                <small>{item.state}</small>
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </header>
 
-      <section className="workspace">
-        <aside className="panel">
-          <div className="panel-head">
-            <h2>Input</h2>
+        {/* The readiness checklist lives on /connect, not here — the home screen is one
+            calm moment (the day), never a second status console competing with it (R1.7). */}
+
+        {/* ---- capture: type, paste, upload, or listen ---- */}
+        <section className="block">
+          <div className="block-head">
+            <h2 className="block-title">Tell me about your day</h2>
             <button
-              className="quiet-button"
+              className="quiet-link"
+              type="button"
               onClick={() => {
                 setUploadedFile(null);
                 setSource("typed");
                 setText(SAMPLE);
               }}
             >
-              Reset
+              start over
             </button>
           </div>
 
-          <div className="source-row" role="tablist" aria-label="Input source">
+          <div className="source-row" role="tablist" aria-label="How to share">
             {sources.map(([value, label]) => (
               <button
                 className={source === value ? "active" : ""}
@@ -988,12 +1218,12 @@ export default function Home() {
               onChange={loadFile}
             />
             <button className="secondary" type="button" onClick={startListening}>
-              {recognitionRef.current ? "Stop" : "Listen"}
+              {recognitionRef.current ? "Stop listening" : "Listen"}
             </button>
           </div>
           {uploadedFile ? (
             <div className="upload-note">
-              <span>Selected</span>
+              <span>Ready</span>
               <strong>{uploadedFile.name}</strong>
               <button className="quiet-link" type="button" onClick={() => setUploadedFile(null)}>
                 use typed text
@@ -1008,22 +1238,22 @@ export default function Home() {
                 checked={executeActions}
                 onChange={(event) => setExecuteActions(event.target.checked)}
               />
-              Run safe actions
+              Let me handle the reversible ones
             </label>
             <button className="primary" type="button" onClick={runIngest} disabled={busy || (!text.trim() && !uploadedFile)}>
-              {busy ? "Working" : "Go"}
+              {busy ? "Reading" : "Read my day"}
             </button>
           </div>
           {error ? <div className="error">{error}</div> : null}
 
-          <details className="memory-primer">
+          <details className="fold">
             <summary>
-              <span>Memory</span>
+              <span>What I know about you</span>
               {memoryResult ? <small>{memoryResult.written?.length || 0} saved</small> : null}
             </summary>
-            <div className="memory-grid">
+            <div className="field-grid">
               <MemoryField
-                label="Owner"
+                label="Your name"
                 value={memoryForm.ownerName}
                 onChange={(value) => updateMemoryField("ownerName", value)}
               />
@@ -1043,63 +1273,63 @@ export default function Home() {
                 onChange={(value) => updateMemoryField("email", value)}
               />
               <MemoryField
-                label="Preferences"
+                label="How I should behave"
                 value={memoryForm.preferences}
                 onChange={(value) => updateMemoryField("preferences", value)}
                 multiline
               />
               <MemoryField
-                label="People"
+                label="People in your life"
                 value={memoryForm.people}
                 onChange={(value) => updateMemoryField("people", value)}
                 multiline
               />
               <MemoryField
-                label="Apps"
+                label="Accounts to reach"
                 value={memoryForm.connections}
                 onChange={(value) => updateMemoryField("connections", value)}
                 multiline
               />
               <MemoryField
-                label="Stores"
+                label="Places you shop"
                 value={memoryForm.stores}
                 onChange={(value) => updateMemoryField("stores", value)}
                 multiline
               />
               <MemoryField
-                label="Notes"
+                label="Anything else"
                 value={memoryForm.notes}
                 onChange={(value) => updateMemoryField("notes", value)}
                 multiline
               />
             </div>
-            <div className="control-row">
+            <div className="control-row" style={{ marginTop: 18 }}>
               <button className="secondary" type="button" onClick={saveMemory} disabled={memoryBusy}>
-                {memoryBusy ? "Saving" : "Save memory"}
+                {memoryBusy ? "Saving" : "Remember this"}
               </button>
               {memoryResult?.missing_connections?.length ? (
-                <span className="memory-result">Missing: {memoryResult.missing_connections.join(", ")}</span>
+                <span className="fold-result">Still to connect: {memoryResult.missing_connections.join(", ")}</span>
               ) : memoryResult ? (
-                <span className="memory-result">Memory saved</span>
+                <span className="fold-result">Got it.</span>
               ) : null}
             </div>
             {memoryError ? <div className="error">{memoryError}</div> : null}
           </details>
 
-          <details className="memory-primer">
+          <details className="fold">
             <summary>
-              <span>Build my profile</span>
-              {profileResult ? <small>{profileResult.summary?.facts || 0} facts</small> : null}
+              <span>Look someone up</span>
+              {profileResult ? <small>{profileResult.summary?.facts || 0} things found</small> : null}
             </summary>
-            <form className="profile-form" onSubmit={buildProfile}>
+            <form className="stack" onSubmit={buildProfile}>
               <MemoryField
-                label="Name or entity"
+                label="Name"
                 value={profileName}
                 onChange={setProfileName}
                 placeholder="e.g. Ada Lovelace"
               />
               <MemoryField
-                label="Public source URLs (one per line)"
+                label="Public pages to read (one per line)"
                 value={profileSources}
                 onChange={setProfileSources}
                 placeholder="https://en.wikipedia.org/wiki/Ada_Lovelace"
@@ -1107,129 +1337,129 @@ export default function Home() {
               />
               <div className="control-row">
                 <button className="secondary" type="submit" disabled={profileBusy}>
-                  {profileBusy ? "Reading" : "Build my profile"}
+                  {profileBusy ? "Reading" : "Read them up"}
                 </button>
-                <span className="memory-result">Read-only, public pages — no login, no writes.</span>
+                <span className="fold-result">Public pages only — no sign-in, nothing changed.</span>
               </div>
             </form>
             {profileError ? <div className="error">{profileError}</div> : null}
             {profileResult ? <ProfileView profile={profileResult} /> : null}
           </details>
-        </aside>
+        </section>
 
-        <section className="board">
-          <div className="board-title">
-            <h2>Task Board</h2>
-            <button className="secondary" type="button" onClick={loadStatus}>
-              Refresh
+        {/* ---- what I caught (the digest) ---- */}
+        <section className="block">
+          <div className="block-head">
+            <h2 className="block-title">Here&apos;s what I caught</h2>
+            <button className="quiet-link" type="button" onClick={loadStatus}>
+              refresh
             </button>
           </div>
 
-          <div className="metrics">
-            <div className="metric">
-              <strong>{hasLatestRunStats ? observed.length : "—"}</strong>
-              <span>latest run lines</span>
-            </div>
-            <div className="metric">
-              <strong>{cards.length}</strong>
-              <span>visible cards</span>
-            </div>
-            <div className="metric">
-              <strong>{pending.length}</strong>
-              <span>waiting asks</span>
-            </div>
-            <div className="metric">
-              <strong>{buckets.blocked.length}</strong>
-              <span>hard walls</span>
-            </div>
-            <div className="metric">
-              <strong>{hasLatestRunStats ? ignored : "—"}</strong>
-              <span>latest ignored</span>
-            </div>
-          </div>
+          {hasLatestRunStats ? (
+            <p className="glance">
+              I read <strong>{observed.length}</strong> {observed.length === 1 ? "line" : "lines"} and let{" "}
+              <strong>{ignored}</strong> throwaway {ignored === 1 ? "one" : "ones"} pass.
+            </p>
+          ) : null}
 
-          <div className="columns">
-            <div className="task-column">
-              <h3>Ready</h3>
-              {buckets.ready.length ? buckets.ready.map((card) => <TaskCard card={card} key={card.id} />) : (
-                <div className="empty">No ready cards.</div>
-              )}
-            </div>
-            <div className="task-column">
-              <h3>Needs Omar</h3>
-              {buckets.ask.map((card) => (
-                <TaskCard
-                  card={card}
-                  key={card.id}
-                  pendingAsk={pendingByGoal.get(card.id) || pendingByGoal.get(card.execution?.ask_id)}
-                  onResolve={resolveAsk}
-                />
-              ))}
-              {unmatchedPending.map((ask) => (
-                <PendingAsk ask={ask} key={ask.ask_id} onResolve={resolveAsk} />
-              ))}
-              {!unmatchedPending.length && !buckets.ask.length ? <div className="empty">No asks waiting.</div> : null}
-            </div>
-            <div className="task-column">
-              <h3>Blocked</h3>
-              {buckets.blocked.length ? buckets.blocked.map((card) => <TaskCard card={card} key={card.id} />) : (
-                <div className="empty">No blocked cards.</div>
-              )}
-            </div>
-            <div className="task-column">
-              <h3>Done</h3>
-              {buckets.done.length ? buckets.done.map((card) => <TaskCard card={card} key={card.id} />) : (
-                <div className="empty">No receipts yet.</div>
-              )}
-            </div>
-          </div>
-
-          <section className="ledger">
-            <div className="ledger-head">
-              <h2>Active Loops</h2>
-              <div className="ledger-actions">
-                <span className="status-strip">{loops.length} visible</span>
-                <button className="secondary" type="button" onClick={scanLoops} disabled={busy}>
-                  Scan
-                </button>
-              </div>
-            </div>
-            {tickResult ? (
-              <div className="scan-result">
-                <span>
-                  Proactive scan: {(tickResult.fired || []).length} loop{(tickResult.fired || []).length === 1 ? "" : "s"} fired.
-                </span>
-                {(tickResult.fired || []).length ? (
-                  <div className="scan-fired">
-                    {(tickResult.fired || []).map((item, index) => (
-                      <span key={item.loop_id || `${item.task || "loop"}-${index}`}>
-                        {firedLoopText(item)}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+          <div className="rows">
+            {handledVisible.map((card) => <TaskCard card={card} key={card.id} accent={false} />)}
+            {!handledCount ? (
+              <div className="empty">Nothing handled yet — share your day above and I&apos;ll get started.</div>
             ) : null}
-            <div className="loop-list">
-              {loops.length ? loops.map((loop) => (
-                <MemoryLoop
-                  loop={loop}
-                  key={loop.id}
-                  onConnect={connectLoop}
-                  onResolve={resolveLoop}
-                  connection={connections[loop.id]}
-                />
-              )) : <div className="empty">No active memory loops.</div>}
+          </div>
+          {handledHidden > 0 ? (
+            <p className="glance">…and {handledHidden} more, all handled. Nothing there needs you.</p>
+          ) : null}
+        </section>
+
+        {/* ---- waiting for your yes (R2.11: ONE amber row, the rest plain below) ---- */}
+        {waiting.length ? (
+          <section className="block">
+            <h2 className="block-title">Waiting for your yes</h2>
+            {waiting.length > 1 ? (
+              <p className="block-note">One thing wants your yes. The rest can wait.</p>
+            ) : null}
+            <div className="rows">
+              {/* Only the lead row carries the amber accent; the rest render plain so a
+                  single screen shows one status color at most (R1.2 / R2.11). */}
+              {waitingVisible.map((item, index) =>
+                item.kind === "card" ? (
+                  <TaskCard
+                    card={item.card}
+                    key={item.id}
+                    pendingAsk={item.ask}
+                    onResolve={resolveAsk}
+                    accent={index === 0}
+                  />
+                ) : (
+                  <PendingAsk
+                    ask={item.ask}
+                    key={item.id}
+                    onResolve={resolveAsk}
+                    accent={index === 0}
+                  />
+                ),
+              )}
+            </div>
+            {waitingHidden > 0 ? (
+              <p className="glance">…and {waitingHidden} more waiting quietly below.</p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {/* ---- left for you (the only hard stop) ---- */}
+        {buckets.blocked.length ? (
+          <section className="block">
+            <h2 className="block-title">Left for you</h2>
+            <p className="block-note">I got these to the last step. The final move is yours — I won&apos;t spend or sign in for you.</p>
+            <div className="rows">
+              {buckets.blocked.map((card, index) => <TaskCard card={card} key={card.id} accent={index === 0} />)}
             </div>
           </section>
+        ) : null}
 
-          <section className="ledger">
-            <div className="ledger-head">
-              <h2>Review — what you said you&apos;d do</h2>
-              <span className="status-strip">{remembered.length} remembered</span>
+        {/* ---- still open (loops) ---- */}
+        <section className="block">
+          <div className="block-head">
+            <h2 className="block-title">Still open</h2>
+            <button className="quiet-link" type="button" onClick={scanLoops} disabled={busy}>
+              look back now
+            </button>
+          </div>
+          {tickResult ? (
+            <div className="glance">
+              {(tickResult.fired || []).length
+                ? (tickResult.fired || []).map((item, index) => (
+                    <p className="row-why" key={item.loop_id || `${item.task || "loop"}-${index}`} style={{ margin: 0 }}>
+                      {firedLoopText(item)}
+                    </p>
+                  ))
+                : <span>I looked back and nothing needed me.</span>}
             </div>
-            <div className="loop-list">
-              {remembered.length ? remembered.map((row, index) => {
+          ) : null}
+          <div className="rows">
+            {loopsVisible.length ? loopsVisible.map((loop) => (
+              <MemoryLoop
+                loop={loop}
+                key={loop.id}
+                onConnect={connectLoop}
+                onResolve={resolveLoop}
+                connection={connections[loop.id]}
+              />
+            )) : <div className="empty">Nothing left open.</div>}
+          </div>
+          {loopsHidden > 0 ? (
+            <p className="glance">…and {loopsHidden} more open, nothing urgent.</p>
+          ) : null}
+        </section>
+
+        {/* ---- review: what you said you'd do ---- */}
+        <section className="block">
+          <h2 className="block-title">Things you said you&apos;d do</h2>
+            <div className="rows">
+              {rememberedView.length ? rememberedView.map((row, index) => {
                 // DISPLAY-ONLY inference: the inferred task is shown ABOVE the raw line.
                 // The raw line stays visible as the ground truth the owner can check.
                 const inf = row.inferred;
@@ -1248,143 +1478,121 @@ export default function Home() {
                 const pr = row.id ? previewResults[row.id] : undefined;
                 const pres = pr && pr.result;
                 return (
-                <article className="card" key={row.id || `${row.ts || "remembered"}-${index}`}>
-                  <div className="card-head">
+                <article className="row settle" key={row.id || `${row.ts || "remembered"}-${index}`}>
+                  <div className="row-head">
                     {hasTask
-                      ? <h4 className="inferred-task">{inf.task}</h4>
-                      : <h4>{row.text}</h4>}
-                    {row.ts ? <span className="status-strip">{formatRememberTs(row.ts)}</span> : null}
+                      ? <h4 className="row-title">{shortText(inf.task)}</h4>
+                      : <h4 className="row-title">{shortText(row.text)}</h4>}
+                    {row.ts ? <span className="row-when">{formatRememberTs(row.ts)}</span> : null}
                   </div>
                   {hasTask ? (
-                    <p className="inferred-raw" title="What you actually said (ground truth)">
-                      <span className="inferred-raw-label">you said</span> {row.text}
+                    <p className="row-why" title="What you actually said">
+                      You said: {shortText(row.text, 120)}
                     </p>
                   ) : null}
                   {(conf || (inf && inf.due_phrase) || (inf && inf.people && inf.people.length)) ? (
-                    <div className="inferred-meta">
-                      {conf ? <span className={`conf conf-${conf}`}>{conf} confidence</span> : null}
-                      {inf && inf.due_phrase ? <span className="conf-due">{inf.due_phrase}</span> : null}
+                    <div className="row-meta">
+                      {conf ? <span>{conf === "high" ? "I'm fairly sure" : conf === "med" ? "fairly likely" : "just a hunch"}</span> : null}
+                      {inf && inf.due_phrase ? <span>by {inf.due_phrase}</span> : null}
                       {inf && inf.people && inf.people.length
-                        ? <span className="conf-people">{inf.people.join(", ")}</span> : null}
+                        ? <span>{inf.people.join(", ")}</span> : null}
                     </div>
                   ) : null}
                   {(row.source || (row.people && row.people.length)) ? (
-                    <div className="loop-meta">
-                      {[row.source, (row.people || []).join(", ")].filter(Boolean).join(" / ")}
-                    </div>
+                    <p className="row-source">
+                      {cleanText([row.source, (row.people || []).join(", ")].filter(Boolean).join(" — "))}
+                    </p>
                   ) : null}
                   {canApprove ? (
-                    <div className="approve-row">
+                    <div className="row-actions">
                       {!res ? (
                         <button
                           type="button"
-                          className="approve-btn"
                           onClick={() => approveRemembered(row.id)}
                           disabled={ar && ar.busy}
                         >
-                          {ar && ar.busy ? "Working…" : "Approve & do it"}
+                          {ar && ar.busy ? "On it" : "Yes, handle it"}
                         </button>
                       ) : res.executed ? (
-                        // Whitelisted reversible action ran: show the read-back receipt.
-                        <div className="approve-done">
-                          <span className="approve-badge done">Done{res.idempotent ? " (already)" : ""}</span>
-                          <span className="approve-what">{res.would_do || res.intent}</span>
-                          {res.receipt && Object.keys(res.receipt).length ? (
-                            <pre className="approve-receipt">{JSON.stringify(res.receipt, null, 2)}</pre>
-                          ) : null}
-                        </div>
+                        // Whitelisted reversible action ran: read-back receipt, in words.
+                        <span className="row-state">
+                          <span className="state-dot handled" />
+                          {res.idempotent ? "Already handled" : "Handled"} — {cleanText(res.would_do) || "done"}
+                        </span>
                       ) : res.prepared ? (
                         // Non-whitelisted: prepared and handed back, never executed.
-                        <div className="approve-handback">
-                          <span className="approve-badge handback">Prepared — your turn</span>
-                          <span className="approve-what">{res.would_do || res.inferred_action || res.intent}</span>
-                          {res.why_handback ? (
-                            <span className="approve-why">{res.why_handback}</span>
-                          ) : null}
-                        </div>
+                        <span className="row-state">
+                          <span className="state-dot waiting" />
+                          Prepared — your turn. {cleanText(res.why_handback || res.would_do || res.inferred_action || "")}
+                        </span>
                       ) : (
                         // Refused at the engine (e.g. re-inferred as a vent): no action.
-                        <div className="approve-handback">
-                          <span className="approve-badge handback">Not acted on</span>
-                          <span className="approve-why">{res.reason || "no confident task"}</span>
-                        </div>
+                        <span className="row-state">
+                          <span className="state-dot" />
+                          Left it alone. {cleanText(res.reason) || "Sounded like a passing comment."}
+                        </span>
                       )}
-                      {ar && ar.error ? <span className="approve-why">{ar.error}</span> : null}
+                      {ar && ar.error ? <span className="row-why">{ar.error}</span> : null}
                     </div>
                   ) : null}
                   {canPreview ? (
-                    <div className="preview-row">
+                    <div className="row-actions">
                       <button
                         type="button"
-                        className="preview-btn"
                         onClick={() => previewRemembered(row.id)}
                         disabled={pr && pr.busy}
                       >
                         {pr && pr.busy
-                          ? "Previewing…"
+                          ? "Looking"
                           : pres
-                            ? "Refresh preview"
-                            : "Preview (dry-run)"}
+                            ? "Look again"
+                            : "Show me what you'd do"}
                       </button>
-                      {pres ? (
-                        pres.would_execute ? (
-                          // Whitelisted: show the EXACT planned action press-go would run
-                          // live (intent + tool + args) — nothing executed, no account yet.
-                          <div className="preview-result preview-would">
-                            <span className="preview-badge would">Would run live</span>
-                            <span className="preview-what">{pres.would_do || pres.intent}</span>
-                            <div className="preview-plan">
-                              {pres.tool ? (
-                                <span className="preview-tool">{pres.tool}</span>
-                              ) : null}
-                              {pres.args && Object.keys(pres.args).length ? (
-                                <pre className="preview-args">{JSON.stringify(pres.args, null, 2)}</pre>
-                              ) : null}
-                            </div>
-                            {pres.note ? (
-                              <span className="preview-note">{pres.note}</span>
-                            ) : null}
-                          </div>
-                        ) : pres.handback ? (
-                          // Non-whitelisted: show what would be handed back, not executed.
-                          <div className="preview-result preview-handback">
-                            <span className="preview-badge handback">Handed back — not auto-run</span>
-                            <span className="preview-what">{pres.handback || pres.inferred_action || pres.intent}</span>
-                            {pres.why ? <span className="preview-why">{pres.why}</span> : null}
-                          </div>
-                        ) : (
-                          // Vent / narration: press-go would do nothing at all.
-                          <div className="preview-result preview-handback">
-                            <span className="preview-badge handback">Nothing would run</span>
-                            <span className="preview-why">{pres.why || "no confident task (vent/narration)"}</span>
-                          </div>
-                        )
-                      ) : null}
-                      {pr && pr.error ? <span className="preview-why">{pr.error}</span> : null}
                     </div>
                   ) : null}
+                  {pres ? (
+                    pres.would_execute ? (
+                      // Whitelisted: describe the planned action in plain words. Never the
+                      // raw tool name or a JSON args blob (§4.8 — no machine noise).
+                      <p className="row-why">
+                        <span className="row-state"><span className="state-dot handled" /> I&apos;d go ahead</span>
+                        {" — "}{cleanText(pres.would_do) || "handle this"}{pres.note ? `. ${cleanText(pres.note)}` : ""}
+                      </p>
+                    ) : pres.handback ? (
+                      <p className="row-why">
+                        <span className="row-state"><span className="state-dot waiting" /> I&apos;d hand it back</span>
+                        {" — "}{cleanText(pres.handback || pres.inferred_action) || "prepare it and leave the last step to you"}
+                        {pres.why ? `. ${cleanText(pres.why)}` : ""}
+                      </p>
+                    ) : (
+                      // Vent / narration: press-go would do nothing at all.
+                      <p className="row-why">
+                        <span className="row-state"><span className="state-dot" /> I&apos;d stay quiet</span>
+                        {" — "}{cleanText(pres.why) || "this sounded like a passing comment, not a task"}
+                      </p>
+                    )
+                  ) : null}
+                  {pr && pr.error ? <p className="row-why">{pr.error}</p> : null}
                 </article>
                 );
-              }) : <div className="empty">Nothing remembered yet.</div>}
+              }) : <div className="empty">Nothing to look back on yet.</div>}
             </div>
-          </section>
-
-          <section className="ledger">
-            <div className="ledger-head">
-              <h2>Receipts</h2>
-              <span className="status-strip">{events.length} events</span>
-            </div>
-            <div className="events">
-              {events.length ? events.map((entry, index) => (
-                <div className="event" key={`${entry.ts || index}-${entry.kind || "event"}`}>
-                  <strong>{entry.kind || "event"}</strong>
-                  <span title={JSON.stringify(entry)}>{receiptText(entry)}</span>
-                </div>
-              )) : <div className="empty">No engine events loaded.</div>}
-            </div>
-          </section>
         </section>
-      </section>
+
+        {/* ---- the ledger: everything I did and heard ---- */}
+        <section className="block">
+          <h2 className="block-title">What I did and heard</h2>
+          <div className="rows">
+            {eventsVisible.length ? eventsVisible.map((entry, index) => (
+              <div className="row" key={`${entry.ts || index}-${entry.kind || "event"}`}>
+                <p className="row-why" style={{ margin: 0 }}>{receiptText(entry)}</p>
+              </div>
+            )) : <div className="empty">Nothing logged yet.</div>}
+          </div>
+        </section>
+
+        <p className="close-line">That&apos;s everything. Nothing else needs you right now.</p>
+      </div>
     </main>
   );
 }

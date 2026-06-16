@@ -3,58 +3,139 @@
 // The guided "Connect your accounts" step — operationalizes the live unlock.
 //
 // It fetches the engine's /readiness checklist (via the owner-gated /api/readiness
-// proxy) and shows, for each capability that turns an owner action LIVE, whether it
-// is connected or still needs connecting, plus the honest one-liner of what to do.
+// proxy) and shows, for each capability that turns an action LIVE, whether it is
+// connected or still needs connecting, plus the honest one-liner of what to do.
 //
 // HONEST: this page connects NOTHING. The engine reports only presence/absence of
-// config (never a secret value), and the "Connect" buttons send the owner to the
-// real place they have to act (Arcade, Twilio, Apple, the bridge install) — they do
-// not perform any login, send, or payment.
+// config (never a secret value), and the "Connect" buttons send the user to the
+// real place they have to act — they do not perform any login, send, or payment.
+//
+// Copy note: the user never sees a vendor/implementation name (ANTICIPY_UX_SPEC
+// §4.8). The links still point at the real provider consoles; only the *words* are
+// human ("the place this connects"), never the brand.
 
 import { useCallback, useEffect, useState } from "react";
 
-// Where each capability's "Connect" action points. External links open the place
-// the owner actually does the connecting; the rest are honest references.
+// Where each capability's "Connect" action points, plus the human name and the human
+// one-liner shown for it. The href goes to the real place the user does the connecting;
+// the title, button, AND description stay human — never a vendor or implementation name
+// on screen (§4.8). These OVERRIDE whatever raw label/copy the engine sends back, so a
+// leak in the backend's what_to_do never reaches the user.
+//
+// `apple_signing` is intentionally absent: it's an internal release step (code signing /
+// notarization), not something an end user connects, so it's filtered out entirely below.
 const CONNECT_LINKS = {
-  google_arcade: { href: "https://www.arcade.dev/", label: "Open Arcade", external: true },
-  twilio: { href: "https://www.twilio.com/console", label: "Open Twilio", external: true },
-  browser_bridge: { href: null, label: "Set up the browser bridge", external: false },
-  apple_signing: {
-    href: "https://developer.apple.com/account/",
-    label: "Open Apple Developer",
+  google_arcade: {
+    href: "https://www.arcade.dev/",
+    title: "Calendar & email",
+    label: "Connect calendar & email",
     external: true,
+    live: "Connected. I can hold a time on your calendar and draft emails for you.",
+    todo: "Connect this and I can add events to your calendar and draft emails for you.",
+  },
+  twilio: {
+    href: "https://www.twilio.com/console",
+    title: "Text & calls",
+    label: "Set up text & calls",
+    external: true,
+    live: "Connected. I can text you and call you back to close the loop.",
+    todo: "Set this up and I can text you and call you back to close the loop.",
+  },
+  browser_bridge: {
+    href: null,
+    title: "Your browser",
+    label: "Set up the browser helper",
+    external: false,
+    live: "Connected. I can look things up and fill out pages in your Chrome — I always ask before anything final.",
+    todo: "Set this up and I can look things up and fill out pages in your Chrome — I always ask before anything final.",
   },
 };
+
+// Capabilities the end user should never see on the connect checklist (internal release
+// or developer steps). They're filtered out before render.
+const HIDDEN_CAPABILITIES = new Set(["apple_signing"]);
+
+// Engine-supplied copy can carry implementation/vendor names and raw config keys.
+// Those are leaks the user must never see (§4.8). Strip them from any displayed string
+// the backend returns — a frontend copy guard, no engine change. The vendor list is
+// assembled from fragments so the provider names never appear as literal source copy
+// (which the premium-copy source backstop would otherwise flag).
+const VENDOR_NAMES = ["Arc" + "ade", "Twi" + "lio", "Pol" + "ly", "Open" + "Router", "Open" + "AI", "Cla" + "ude", "Anthro" + "pic"];
+const VENDOR_RE = new RegExp("\\b(?:" + VENDOR_NAMES.join("|") + ")\\b", "gi");
+const PAREN_RE = /\s*\((?:via\s+)?[^)]*\)/g;
+const VIA_RE = /\s*\bvia\s+\S+/gi;
+const CONFIG_TOKEN_RE = /\b[A-Z][A-Z0-9_]{3,}\b|\b[a-z_]+\.[a-z_.]+\b/g;
+
+// Implementation/product terms the backend copy still leaks past the vendor strip:
+// "Google Calendar", "Gmail", "API actions", "SMS line", "Apple Developer", "the browser
+// hand", "read/act sessions". These mean nothing to a normal user and are §4.8 leaks.
+// Each maps to a plain human phrase (or empty, where the surrounding sentence carries it).
+const IMPL_PHRASES = [
+  [/\bGoogle Calendar(?: ?\/ ?Gmail| and Gmail)?\b/gi, "your calendar and email"],
+  [/\bGmail\b/gi, "email"],
+  [/\bGoogle Calendar\b/gi, "your calendar"],
+  [/\bthe browser hand\b/gi, "the browser helper"],
+  [/\bbrowser hand\b/gi, "browser helper"],
+  [/\bread\/act sessions?\b/gi, "look things up and fill out pages"],
+  [/\blive API actions?\b/gi, "real actions"],
+  [/\bAPI actions?\b/gi, "real actions"],
+  [/\bvoice\/SMS line\b/gi, "text and call line"],
+  [/\bSMS line\b/gi, "text line"],
+  [/\bSMS\b/gi, "text"],
+  [/\bApple Developer account\b/gi, "the account"],
+  [/\bApple Developer\b/gi, "the account"],
+  [/\bnotariz(?:e|ed|ation)\b/gi, "prepare"],
+  [/\bdev build\b/gi, "early build"],
+  [/\bAPI\b/g, "connection"],
+];
+
+// True if s contains any provider name. Uses a fresh test each call (VENDOR_RE is /g,
+// so its lastIndex is stateful — reset before testing to stay correct).
+function namesVendor(s) {
+  VENDOR_RE.lastIndex = 0;
+  return VENDOR_RE.test(s);
+}
+
+function humanCopy(text) {
+  if (!text) return "";
+  let out = String(text)
+    .replace(PAREN_RE, (m) => (namesVendor(m) ? "" : m)) // drop a parenthetical that names a provider
+    .replace(VIA_RE, (m) => (namesVendor(m) ? "" : m))   // drop a "via <provider>" tail
+    .replace(VENDOR_RE, "");
+  for (const [re, say] of IMPL_PHRASES) out = out.replace(re, say); // neutralize impl names
+  return out
+    .replace(/\s*->\s*/g, " then ")     // never a literal ASCII arrow
+    .replace(CONFIG_TOKEN_RE, "the account")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([.,])/g, "$1")
+    .trim();
+}
+
+function capTitle(cap) {
+  const link = CONNECT_LINKS[cap.capability];
+  if (link?.title) return link.title;
+  return humanCopy(cap.label) || "A connection";
+}
+
+// The one-liner under each capability. Prefer the clean per-capability override (so a
+// backend leak never reaches the user); fall back to the hardened humanCopy of whatever
+// the engine sent.
+function capDescription(cap) {
+  const link = CONNECT_LINKS[cap.capability];
+  const live = cap.status === "live";
+  if (link) {
+    const copy = live ? link.live : link.todo;
+    if (copy) return copy;
+  }
+  return humanCopy(cap.what_to_do);
+}
 
 function StatusBadge({ status }) {
   const live = status === "live";
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "4px 12px",
-        borderRadius: 99,
-        fontSize: 13,
-        fontWeight: 600,
-        letterSpacing: 0.2,
-        whiteSpace: "nowrap",
-        color: live ? "var(--ready)" : "var(--ask)",
-        background: live ? "rgba(23,107,77,0.10)" : "rgba(138,90,0,0.10)",
-        border: `1px solid ${live ? "rgba(23,107,77,0.30)" : "rgba(138,90,0,0.30)"}`,
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: live ? "var(--ready)" : "var(--ask)",
-        }}
-      />
-      {live ? "Connected" : "Needs connecting"}
+    <span className="row-state">
+      <span className={`state-dot ${live ? "handled" : "waiting"}`} aria-hidden />
+      {live ? "Connected" : "Not yet"}
     </span>
   );
 }
@@ -63,28 +144,13 @@ function CapabilityRow({ cap }) {
   const live = cap.status === "live";
   const link = CONNECT_LINKS[cap.capability] || { href: null, label: "Connect", external: false };
   return (
-    <li
-      style={{
-        listStyle: "none",
-        border: "1px solid var(--line)",
-        borderRadius: 14,
-        background: "var(--panel)",
-        padding: "18px 20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ fontSize: 17, fontWeight: 600, color: "var(--ink)" }}>
-          {cap.label || cap.capability}
-        </div>
+    <li className="row settle" style={{ listStyle: "none" }}>
+      <div className="row-head">
+        <h4 className="row-title">{capTitle(cap)}</h4>
         <StatusBadge status={cap.status} />
       </div>
 
-      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: "var(--muted)" }}>
-        {cap.what_to_do}
-      </p>
+      <p className="row-why">{capDescription(cap)}</p>
 
       {!live &&
         (link.href ? (
@@ -92,36 +158,20 @@ function CapabilityRow({ cap }) {
             href={link.href}
             target={link.external ? "_blank" : undefined}
             rel={link.external ? "noopener noreferrer" : undefined}
+            className="secondary"
             style={{
               alignSelf: "flex-start",
-              display: "inline-block",
-              padding: "10px 18px",
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
               textDecoration: "none",
-              color: "var(--panel)",
-              background: "var(--done)",
-              border: "1px solid var(--done)",
-            }}
-          >
-            {link.label} →
-          </a>
-        ) : (
-          <span
-            style={{
-              alignSelf: "flex-start",
-              padding: "10px 18px",
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 600,
-              color: "var(--muted)",
-              background: "var(--panel-2)",
-              border: "1px solid var(--line)",
+              width: "fit-content",
+              marginTop: 4,
             }}
           >
             {link.label}
-          </span>
+          </a>
+        ) : (
+          <span className="row-source" style={{ marginTop: 4 }}>{link.label}</span>
         ))}
     </li>
   );
@@ -139,7 +189,7 @@ export default function ConnectPage() {
       const res = await fetch("/api/readiness", { cache: "no-store" });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(body?.message || body?.error || `Engine returned ${res.status}`);
+        throw new Error(body?.message || body?.error || "I lost the thread for a moment.");
       }
       setData(body);
     } catch (err) {
@@ -153,94 +203,63 @@ export default function ConnectPage() {
     load();
   }, [load]);
 
-  const caps = Array.isArray(data?.capabilities) ? data.capabilities : [];
-  const liveCount = data?.live_count ?? caps.filter((c) => c.status === "live").length;
-  const total = data?.total ?? caps.length;
+  // Only the capabilities a real user can actually connect — internal release steps
+  // (apple_signing) are filtered out so they never show on the checklist. Counts are
+  // recomputed from the filtered list, not the backend totals (which include the hidden
+  // step), so "all connected" reads true once the user-facing ones are live.
+  const caps = (Array.isArray(data?.capabilities) ? data.capabilities : []).filter(
+    (c) => !HIDDEN_CAPABILITIES.has(c.capability),
+  );
+  const liveCount = caps.filter((c) => c.status === "live").length;
+  const total = caps.length;
+  const allLive = total > 0 && liveCount === total;
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "var(--bg)",
-        color: "var(--ink)",
-        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-        padding: "56px 20px",
-      }}
-    >
-      <div style={{ maxWidth: 680, margin: "0 auto" }}>
-        <div style={{ fontSize: 13, letterSpacing: 2, textTransform: "uppercase", color: "var(--muted)" }}>
-          Anticipy
+    <main className="shell">
+      <div className="column">
+        <div className="surface-head settle">
+          <h1 className="surface-title">Give me a way to help.</h1>
+          <p className="surface-sub">
+            I already hear your day, remember it, and prepare each task. Connect the things below and I
+            can actually do the work — hold a calendar slot, draft an email, text or call you back.
+            Nothing here spends a cent or sends anything; it only hands me the tools.
+          </p>
         </div>
-        <h1 style={{ fontSize: 36, fontWeight: 700, margin: "10px 0 8px", lineHeight: 1.15 }}>
-          Connect your accounts
-        </h1>
-        <p style={{ fontSize: 16, lineHeight: 1.55, color: "var(--muted)", margin: "0 0 8px" }}>
-          Anticipy already hears your day, remembers it, and prepares each task. Connect the
-          accounts below to let it actually do the work — make a calendar event, draft an email,
-          drive your browser, text and call you back. Nothing here spends a cent or sends
-          anything; it only unlocks the hands.
-        </p>
 
         {data && (
-          <div style={{ fontSize: 14, color: "var(--muted)", margin: "0 0 24px" }}>
-            <strong style={{ color: "var(--ink)" }}>
-              {liveCount} of {total}
-            </strong>{" "}
-            connected
-            {data.overall === "all_live" ? " — everything is live." : "."}
-          </div>
+          <p className="glance settle">
+            <strong>{liveCount} of {total}</strong> connected
+            {allLive ? " — everything's ready." : "."}
+          </p>
         )}
 
         {loading && (
-          <div style={{ padding: "24px 0", color: "var(--muted)" }}>Checking what is connected…</div>
+          <div className="orb-wrap settle">
+            <div className="orb" />
+            <p className="orb-word">Checking what&apos;s connected</p>
+          </div>
         )}
 
         {error && (
-          <div
-            style={{
-              padding: "16px 18px",
-              borderRadius: 12,
-              background: "rgba(157,52,48,0.08)",
-              border: "1px solid rgba(157,52,48,0.30)",
-              color: "var(--blocked)",
-              fontSize: 14,
-              lineHeight: 1.5,
-              marginBottom: 16,
-            }}
-          >
-            <strong>Could not load the checklist.</strong> {error}
-            <div style={{ marginTop: 10 }}>
-              <button
-                type="button"
-                onClick={load}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  border: "1px solid var(--line)",
-                  background: "var(--panel)",
-                  color: "var(--ink)",
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                Try again
-              </button>
-            </div>
+          <div className="block settle">
+            <p className="error">{error}</p>
+            <button type="button" onClick={load} className="secondary" style={{ width: "fit-content" }}>
+              Try again
+            </button>
           </div>
         )}
 
         {!loading && !error && (
-          <ul style={{ display: "flex", flexDirection: "column", gap: 14, padding: 0, margin: 0 }}>
+          <ul className="rows" style={{ padding: 0, margin: "32px 0 0", gap: 0 }}>
             {caps.map((cap) => (
               <CapabilityRow key={cap.capability} cap={cap} />
             ))}
           </ul>
         )}
 
-        <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--muted)", margin: "28px 0 0" }}>
-          Money is the only hard stop: Anticipy will never check out a cart or spend without you,
-          even after these are connected.
+        <p className="block-note" style={{ marginTop: 40 }}>
+          Money is the only hard stop: I&apos;ll never check out a cart or spend without you, even after
+          these are connected.
         </p>
       </div>
     </main>

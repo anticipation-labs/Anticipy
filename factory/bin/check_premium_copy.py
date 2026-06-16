@@ -52,6 +52,17 @@ BANNED_DOM = [
     (r"\b(?:Polly|Twilio|Arcade|OpenRouter|OpenAI)\b", "vendor leak", "(never shown)"),
     (r"\| (?:api|calendar|connected)\b", "raw pipe data dump", "'Calendar — connected.' sentences"),
     (r"\bnull\b|\bundefined\b", "failure leak",                "'I lost the thread for a moment.'"),
+    # route/disposition/triage tags + test scaffolding the card surface leaked (the
+    # adversarial-critic findings): if any reach the rendered DOM, that's a hard fail.
+    (r"reversible:|re-gated|\bfail-safe\b|cannot confirm safe", "engine route tag", "a plain 'why' sentence"),
+    (r"\bdecider\b\s*:", "engine internal",                    "a plain 'why' sentence"),
+    (r"->|→", "ASCII/route arrow",                        "'to' / a plain sentence"),
+    (r"\[Anticipy[^\]]*\]", "test scaffolding label",          "(strip before render)"),
+    (r"Owner task\s*:", "internal role prefix",                "(strip before render)"),
+    (r"\b\d{1,2}:\d{2}:\d{2}\]", "orphan transcript timestamp", "(strip before render)"),
+    (r"\bHandled (?:act|ask|ignore)\b", "raw disposition in receipt", "'Handled' / 'Waiting for your yes'"),
+    (r"care obligation|clause-initial|third-party communication", "classifier rationale", "a plain 'why' sentence"),
+    (r"Google Calendar|\bGmail\b|API actions?|browser hand", "implementation leak", "'calendar and email' / 'the browser helper'"),
 ]
 # SOURCE-banned: only unambiguous user-copy that hydrates client-side (absent from initial HTML).
 # Kept narrow so every hit is a genuine displayed-string leak, never a code identifier.
@@ -117,11 +128,61 @@ def check_source() -> list:
     return hits
 
 
+# RAW-FIELD backstop: the leak the adversarial critics caught was raw ENGINE fields
+# (card.title / card.reason / card.source_text / ask.action / loop.text) rendered bare in
+# JSX — they hydrate client-side, so the DOM/HTML grep can't see them, and they're the exact
+# §4.8 disposition/route/test-label leak. This catches that defect class at the source: a raw
+# engine field interpolated in JSX ({field}) WITHOUT first passing through a humanizer. It is
+# deliberately scoped to JSX interpolation so it never fires on the guard helpers themselves
+# (which reference these fields inside function bodies, not as bare {field} render expressions).
+RAW_ENGINE_FIELDS = [
+    r"card\.title", r"card\.reason", r"card\.source_text", r"card\.action",
+    r"ask\.action", r"ask\.reason", r"loop\.text",
+]
+# Helpers that make a raw field safe to render. If the interpolation calls one of these
+# (or the field is used as a prop/condition, not rendered text), it's fine.
+SAFE_WRAP = r"(?:cleanText|shortText|humanTitle|humanWhy|humanCopy|capDescription|cardSourceLine)"
+
+
+def check_raw_jsx() -> list:
+    """Flag a raw engine field rendered directly as JSX text, e.g. `>{card.title}<` or
+    `<h4>{card.reason}</h4>` — never wrapped in a humanizer. Returns one hit per offending line."""
+    hits = []
+    if not APP.exists():
+        return hits
+    field_re = re.compile(r"\{[^{}]*(?:" + "|".join(RAW_ENGINE_FIELDS) + r")[^{}]*\}")
+    safe_re = re.compile(SAFE_WRAP)
+    for f in sorted(APP.rglob("*.js")):
+        try:
+            text = f.read_text(errors="replace")
+        except Exception:
+            continue
+        for i, line in enumerate(text.splitlines(), 1):
+            # Only consider JSX interpolations that are RENDERED (sit between tags or inside
+            # a JSX text position): the expression is `{ ... field ... }` AND the line is JSX
+            # (contains a tag char on the same line is a good-enough heuristic for this codebase).
+            for m in field_re.finditer(line):
+                expr = m.group(0)
+                if safe_re.search(expr):
+                    continue  # humanized — safe
+                # Skip non-render uses: prop assignments (key=, ={), conditionals, and the
+                # title="..." tooltip attr are not user-visible body text.
+                before = line[: m.start()].rstrip()
+                if before.endswith("=") or before.endswith("({") or "title=" in before:
+                    continue
+                # A bare rendered field: flag it.
+                hits.append((f"{f.relative_to(REPO)}:{i}", expr.strip(), "raw engine field rendered (no humanizer)",
+                             "wrap in cleanText/shortText/humanTitle/humanWhy"))
+                break
+    return hits
+
+
 def main() -> int:
     quiet = "--quiet" in sys.argv
     dom_hits, reachable = check_dom()
     src_hits = check_source()
-    all_hits = dom_hits + src_hits
+    jsx_hits = check_raw_jsx()
+    all_hits = dom_hits + src_hits + jsx_hits
 
     if not quiet:
         print("\n=== PREMIUM COPY GATE (ANTICIPY_UX_SPEC §4.8 / R4.1) ===")
