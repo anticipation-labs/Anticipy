@@ -107,6 +107,23 @@ Last updated: 2026-06-15 ~17:00 PDT (session: full product doc set + agent opera
     fix must carry line-level emotional context into each sub-candidate (or suppress the whole line if
     any clause vents), NOT sever the action clause from its vent frame. That is the next attempt, and
     the hardened floor will catch it if it regresses.
+- **Cadence NF8 shipped (bbcbec8):** AnnoyanceBudget defaults to 3/day (was 5), env-overridable
+  (ANTICIPY_PROACTIVE_MAX_PER_DAY); explicit arg still wins. Strictly less spammy. Suite GREEN.
+- **Multi-task decomposition (catch-rate) is BLOCKED on the funded model — proven, not assumed.** The
+  safe-design re-attempt (gate decomposition on vents) FAILS at the detector level: `is_vent()` misses
+  6/8 of the dangerous emotional fragments ("so over this", "my brain is fried", "honestly I quit",
+  "I'm losing my mind") even in isolation — it only flags vents that already look like tasks. The
+  baseline "silences" compound vents only INCIDENTALLY (too messy to parse as a clean command), not by
+  recognizing emotion. So no deterministic gate is safe: distinguishing "tired but the dentist call is
+  real" from "I quit, book dinner" is the nuanced real-task-inside-emotion judgment (the email-Dana
+  case) that needs a capable model. DO NOT ship a regex heuristic here (cardinal-sin stakes). This is
+  the recurring OQ2 wall: **funding the model is the lever that unblocks the moat's hardest part.**
+- **SAFETY DRIFT FIXED (durable):** an agent restarted the :8787 engine with the bare command →
+  channels=mock + inbound poll=15 (the spam vector re-enabled; harmless in mock but a latent risk).
+  Appended `ANTICIPY_INBOUND_POLL_SECONDS=0` to .env.local (gitignored, NEVER committed) so EVERY
+  future restart comes up inbound-OFF. Restarted clean: channels=mock (cannot send), inbound poll=0,
+  mic off. NOTE: channels=mock = text off (Omar wanted live); safe autonomous default — flip to live
+  per-launch (ANTICIPY_CHANNELS_MODE=live) when Omar is testing confirmations.
 - **Big-boss loop is live** (ScheduleWakeup heartbeat + workflow-completion events). DONE checklist +
   Omar-only gates live in the loop prompt + `ANTICIPY_AGENT_OPERATING_STRUCTURE.md §7`.
 
