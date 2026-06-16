@@ -39,8 +39,11 @@ def _signature(action: str, category: str) -> str:
 
 
 class AnnoyanceBudget:
-    def __init__(self, max_per_day: int = 5, window_s: float = 86400.0) -> None:
-        self.max_per_day = max_per_day          # DECISIONS-ONLY-OMAR (research ceiling ~3-5/day)
+    def __init__(self, max_per_day: Optional[int] = None, window_s: float = 86400.0) -> None:
+        # PRD NF8: 3/day DEFAULT (5 is the ceiling). Env-overridable; explicit arg wins (tests pass
+        # their own cap). Lowering the default from 5 to 3 only makes the engine LESS spammy.
+        self.max_per_day = (_int_env("ANTICIPY_PROACTIVE_MAX_PER_DAY", 3)
+                            if max_per_day is None else max_per_day)  # DECISIONS-ONLY-OMAR
         self.window_s = window_s
         self._interruptions: List[float] = []   # timestamps of proactive asks sent
         self._declined: Set[str] = set()        # action-type signatures the user has declined
