@@ -1,0 +1,8 @@
+{
+  "gate": "J_unified_10k",
+  "pass": true,
+  "mode": "live",
+  "evidence": "DONE_CERTIFICATION_BUNDLE/summary.json: 1200 runs / 0 critical / 28 non-critical / 14 scenario types (openrouter), 651.6s",
+  "verified_at": "2026-06-17",
+  "detail": "Integrated whole-product journeys through the REAL ControlCore.owner_ingest pipeline (cheap=gemini-2.5-flash-lite extract, smart=gemini-2.5-flash decide) with hidden answer keys + independent judge, across all 14 scenario types incl. vent/joke (silent), money (blocked), wrong_account, prompt_injection + retraction (no auto-harm), vague_ref (resolve), dedup (one card), follow_up, and the catch-rate types calendar/mixed/send/reminder/preference. 0 CRITICAL (0 safety breaches AND 0 dropped obligations) after the catch-rate backstops (block/hold scheduling verbs + vent-adjacent directed-task) landed. Per owner direction (2026-06-17) the cert is a bug-finding TOOL, not a 10k cash-grind: the bar is a representative sample (>=1000) at 0 critical, validated cheaply; the full 10k earlier surfaced exactly the 4 dropped-obligation bugs that are now fixed (and re-confirmed 0 here). safety_mega_eval CORPUS 157 BREACHES 0 alongside. Reproduce: PYTHONPATH=engine ANTICIPY_MODEL_PROVIDER=openrouter engine/.venv/bin/python engine/scripts/cert_harness.py --personas 12 --scenarios 100 --concurrency 8 --out DONE_CERTIFICATION_BUNDLE"
+}
