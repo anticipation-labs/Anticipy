@@ -2,24 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const SAMPLE = `[08:02] Omar: yeah okay no the coffee machine is being weird again and I do not care.
-[08:04] Maya: school moved pickup to 3 today, please remind me before I forget.
-[08:05] Omar: oh sure, I'll just clone myself, that'll fix the schedule.
-[09:12] Sam needs the revised deck before Friday; I told him I'd send it.
-[11:22] that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.
-[12:10] order the replacement filter today and just pay whatever it costs.
-[13:00] My wife Maya prefers texts after lunch.`;
+// NO demo scaffolding: a real user never inherits someone else's day or someone else's
+// people. The capture box opens empty with a human placeholder; the onboarding form opens
+// empty so the first profile written is genuinely the owner's. (First-run setup lives at
+// /welcome — the guided front door.)
+const SAMPLE = "";
+
+const SAMPLE_PLACEHOLDER =
+  "Just talk. Paste a transcript, or type what your day sounds like — the small stuff you'd forget, the things you said you'd do. I'll sort out what matters.";
 
 const DEFAULT_MEMORY = {
-  ownerName: "Omar",
-  timezone: "America/Vancouver",
+  ownerName: "",
+  timezone: "",
   phone: "",
   email: "",
-  preferences: "Ask before sending messages to real people.\nNever buy anything.",
-  people: "Maya, wife, sms, school pickup changes\nSam, contractor, email, revised deck",
+  preferences: "",
+  people: "",
   connections: "",
   stores: "",
-  notes: "Weekday afternoons are usually packed.",
+  notes: "",
 };
 
 // People/connection/store fields accept comma- OR pipe-separated columns, so the
@@ -1187,6 +1188,15 @@ export default function Home() {
               ? "Tell me about your day below — type it, paste it, or just talk. When you’re ready, connect your accounts so I can actually help."
               : "I’m listening, remembering, and getting the small things handled. You only see what needs you."}
           </p>
+          {isFirstRun ? (
+            <a
+              href="/welcome"
+              className="primary"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", marginTop: 16, width: "fit-content" }}
+            >
+              Set me up first
+            </a>
+          ) : null}
         </div>
 
         <div className="presence settle">
@@ -1212,10 +1222,10 @@ export default function Home() {
               onClick={() => {
                 setUploadedFile(null);
                 setSource("typed");
-                setText(SAMPLE);
+                setText(""); // blank the box — never restore a sample world
               }}
             >
-              start over
+              clear
             </button>
           </div>
 
@@ -1238,6 +1248,7 @@ export default function Home() {
           <textarea
             className="transcript"
             value={text}
+            placeholder={SAMPLE_PLACEHOLDER}
             onChange={(event) => {
               setUploadedFile(null);
               setText(event.target.value);

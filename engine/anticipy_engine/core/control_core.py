@@ -1932,7 +1932,23 @@ class ControlCore:
 
     def memory_open_loops(self, limit: int = 50) -> dict:
         """Visible memory backlog: open/waiting loops the owner should be able to inspect."""
-        active = [i for i in self.memory.open_loops.all() if is_active_open_loop(i)]
+        import time as _t
+        _now = _t.time()
+
+        def _surfaced(i) -> bool:
+            if not is_active_open_loop(i):
+                return False
+            # A SCHEDULED, not-yet-due follow-up is not ACTIVE work yet: it surfaces as a NUDGE
+            # when it fires (proactive._fire_reminder at remind_ts), and the owner sees the
+            # planned check-in on the card itself (card.follow_up). Showing it now would make a
+            # done/parked task look open again and echo its raw source_text into the active list.
+            if i.fields.get("kind") == "follow_up" and not i.fields.get("fired_at"):
+                rt = i.fields.get("remind_ts")
+                if rt is not None and float(rt) > _now:
+                    return False
+            return True
+
+        active = [i for i in self.memory.open_loops.all() if _surfaced(i)]
         # DEDUPE — one dictated task -> exactly ONE backlog row. The owner-ingest path
         # writes two open_loops for one commitment: a RAW capture loop (the speaker's words,
         # the live reminder grounding) and an OWNER-CARD loop (the card-board record). When

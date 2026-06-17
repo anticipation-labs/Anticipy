@@ -21,9 +21,10 @@ export default function RootLayout({ children }) {
           <a href="/" className="wordmark">
             Anticipy
           </a>
-          {/* The wordmark is "home" (your day). The two secondary steps follow in the
-              order a first-timer takes them: connect, then take it with you. */}
+          {/* The wordmark is "home" (your day). The secondary steps follow in the order a
+              first-timer takes them: get set up, connect, then take it with you. */}
           <span className="nav-spacer" />
+          <a href="/welcome">Set up</a>
           <a href="/connect">Connect</a>
           <a href="/download">Download</a>
         </nav>

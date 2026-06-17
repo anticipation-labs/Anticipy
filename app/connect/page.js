@@ -16,20 +16,29 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-// Where each capability's "Connect" action points, plus the human name and the human
-// one-liner shown for it. The href goes to the real place the user does the connecting;
-// the title, button, AND description stay human — never a vendor or implementation name
+// Where each capability's "Connect" action goes, plus the human name and one-liner.
+// The title, button, AND description stay human — never a vendor or implementation name
 // on screen (§4.8). These OVERRIDE whatever raw label/copy the engine sends back, so a
 // leak in the backend's what_to_do never reaches the user.
 //
 // `apple_signing` is intentionally absent: it's an internal release step (code signing /
 // notarization), not something an end user connects, so it's filtered out entirely below.
+//
+// `oauth: true` means this row connects FOR REAL in-app: it launches the provider's own
+// consent screen (not a dead vendor-console deep-link) and polls until the account
+// actually completes authorization. `accounts` are the per-account connect targets the
+// engine writes a "connect_account" open-loop for (name -> the connector's authorize()).
 const CONNECT_LINKS = {
   google_arcade: {
-    href: "https://www.arcade.dev/",
+    href: null,
+    oauth: true,
     title: "Calendar & email",
     label: "Connect calendar & email",
-    external: true,
+    external: false,
+    accounts: [
+      { key: "calendar", name: "Google Calendar", identifier: "googlecalendar" },
+      { key: "gmail", name: "Gmail", identifier: "gmail.compose" },
+    ],
     live: "Connected. I can hold a time on your calendar and draft emails for you.",
     todo: "Connect this and I can add events to your calendar and draft emails for you.",
   },
@@ -191,7 +200,54 @@ function KnowYouRecap({ result }) {
   );
 }
 
-function CapabilityRow({ cap }) {
+// The real in-app connect action for an OAuth capability (calendar + email). Each account
+// launches the PROVIDER's own consent in a new tab (the approval tap is the user's), then
+// we poll the engine until it confirms authorization actually completed. No dead vendor
+// deep-link, no fake "connected".
+function OauthConnect({ link, oauthState, onConnect, onRecheck }) {
+  return (
+    <div className="stack" style={{ marginTop: 8, gap: 8 }}>
+      {(link.accounts || []).map((acct) => {
+        const st = oauthState[acct.key] || {};
+        const status = st.status || "not_connected";
+        const connected = status === "connected";
+        const waiting = status === "launching" || status === "polling";
+        return (
+          <div key={acct.key} className="control-row" style={{ gap: 12, justifyContent: "flex-start" }}>
+            <span className="row-source" style={{ minWidth: 0 }}>
+              {humanCopy(acct.name) || "An account"}
+              {connected ? " — connected." : null}
+            </span>
+            {!connected ? (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => onConnect(acct)}
+                disabled={waiting}
+                style={{ width: "fit-content" }}
+              >
+                {status === "launching" ? "Opening…" : status === "polling" ? "Waiting for your approval" : "Connect"}
+              </button>
+            ) : null}
+            {status === "polling" ? (
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() => onRecheck(acct)}
+                style={{ width: "fit-content" }}
+              >
+                I&apos;ve approved it
+              </button>
+            ) : null}
+            {st.error ? <p className="error" style={{ margin: 0 }}>{humanCopy(st.error)}</p> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CapabilityRow({ cap, oauthState, onConnect, onRecheck }) {
   const live = cap.status === "live";
   const link = CONNECT_LINKS[cap.capability] || { href: null, label: "Connect", external: false };
   return (
@@ -203,7 +259,9 @@ function CapabilityRow({ cap }) {
 
       <p className="row-why">{capDescription(cap)}</p>
 
-      {!live &&
+      {!live && link.oauth ? (
+        <OauthConnect link={link} oauthState={oauthState} onConnect={onConnect} onRecheck={onRecheck} />
+      ) : !live &&
         (link.href ? (
           <a
             href={link.href}
@@ -239,6 +297,125 @@ export default function ConnectPage() {
   const [knowYou, setKnowYou] = useState(null);
   const [knowBusy, setKnowBusy] = useState(false);
   const [knowError, setKnowError] = useState("");
+  // Per-account real-connect state, keyed by account key (calendar/gmail):
+  // { status: not_connected|launching|polling|connected, error }.
+  const [oauthState, setOauthState] = useState({});
+  // memory_id of each account's "connect_account" open-loop, captured from /owner/onboard.
+  const [loopIds, setLoopIds] = useState({});
+
+  // Ensure the engine has a "connect_account" open-loop for each OAuth account, returning
+  // the memory_id map. Idempotent: re-onboarding the same connections re-points to the same
+  // loops (the engine upserts), so this is safe to call before every connect.
+  const ensureConnectLoops = useCallback(async () => {
+    const accounts = (CONNECT_LINKS.google_arcade.accounts || []);
+    const res = await fetch("/api/owner/onboard", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        source: "connect_page",
+        connections: accounts.map((a) => ({
+          name: a.name,
+          status: "needs_auth",
+          route: "api",
+          identifier: a.identifier,
+        })),
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.message || body?.detail || body?.error || "I couldn't prepare the connection.");
+    }
+    const ids = {};
+    for (const w of Array.isArray(body?.written) ? body.written : []) {
+      if (w?.drawer === "open_loops" && w?.fields?.action === "connect_account") {
+        const acct = accounts.find((a) => a.name === w.fields.name);
+        if (acct) ids[acct.key] = w.memory_id;
+      }
+    }
+    setLoopIds((cur) => ({ ...cur, ...ids }));
+    return ids;
+  }, []);
+
+  // Re-ask the engine whether an account finished authorizing (it asks the connector).
+  const recheckAccount = useCallback(
+    async (acct, idOverride) => {
+      const id = idOverride || loopIds[acct.key];
+      if (!id) return false;
+      try {
+        const res = await fetch("/api/connections/authorize", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ id }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.status === "connected") {
+          setOauthState((s) => ({ ...s, [acct.key]: { status: "connected" } }));
+          return true;
+        }
+      } catch {
+        /* a transient poll failure is not fatal — keep waiting */
+      }
+      return false;
+    },
+    [loopIds],
+  );
+
+  const pollAccount = useCallback(
+    (acct, id) => {
+      let tries = 0;
+      const timer = setInterval(async () => {
+        tries += 1;
+        const done = await recheckAccount(acct, id);
+        if (done || tries >= 30) clearInterval(timer);
+      }, 4000);
+    },
+    [recheckAccount],
+  );
+
+  // Launch the provider's real consent for one account, then poll until connected.
+  const connectAccount = useCallback(
+    async (acct) => {
+      setOauthState((s) => ({ ...s, [acct.key]: { status: "launching" } }));
+      try {
+        const ids = await ensureConnectLoops();
+        const id = ids[acct.key] || loopIds[acct.key];
+        if (!id) throw new Error("This account isn't ready to connect yet.");
+        const res = await fetch("/api/connections/authorize", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ id }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body?.message || body?.detail || body?.error || "I couldn't open the sign-in.");
+        }
+        if (body.status === "connected") {
+          setOauthState((s) => ({ ...s, [acct.key]: { status: "connected" } }));
+          return;
+        }
+        const url = body.connect_url;
+        if (url) {
+          if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+          setOauthState((s) => ({ ...s, [acct.key]: { status: "polling" } }));
+          pollAccount(acct, id);
+        } else {
+          setOauthState((s) => ({
+            ...s,
+            [acct.key]: { status: "not_connected", error: body.message || "This account isn't ready to connect yet." },
+          }));
+        }
+      } catch (err) {
+        setOauthState((s) => ({
+          ...s,
+          [acct.key]: { status: "not_connected", error: err instanceof Error ? err.message : String(err) },
+        }));
+      }
+    },
+    [ensureConnectLoops, loopIds, pollAccount],
+  );
 
   const getToKnowMe = useCallback(async () => {
     setKnowBusy(true);
@@ -332,7 +509,13 @@ export default function ConnectPage() {
         {!loading && !error && (
           <ul className="rows" style={{ padding: 0, margin: "32px 0 0", gap: 0 }}>
             {caps.map((cap) => (
-              <CapabilityRow key={cap.capability} cap={cap} />
+              <CapabilityRow
+                key={cap.capability}
+                cap={cap}
+                oauthState={oauthState}
+                onConnect={connectAccount}
+                onRecheck={recheckAccount}
+              />
             ))}
           </ul>
         )}
