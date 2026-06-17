@@ -1,5 +1,23 @@
 # PENDING_FOR_OMAR
 
+## 🔴 LATEST (2026-06-16) — release-certification owner-gated unblocks
+The hard middle is built + Tier-1 certified: autonomy modes (6), intent-shaped memory handoff, dedup,
+safety floor (0 breaches), and the **10,000-run whole-product certification harness (0 critical)**.
+Suite GREEN 92/0. The remaining certification gates are physically yours — each is one tap/decision;
+I continue automatically after each:
+1. **Gmail (drafts):** authorize Gmail (Arcade/Google) → I create+read-back a real `[Anticipy test]`
+   draft (never sent). Only Calendar is connected today.
+2. **Live test phone number** for Twilio voice/SMS read-back (31-text history → no unattended sends).
+3. **Off-localhost:** approve exposing the app on a real URL behind the owner token (publishes account
+   access — your call; cloudflared installed).
+4. **Packaged download:** Mac signing needs your Apple Developer creds; else I ship an UNSIGNED dev
+   build for local proof — say which.
+5. **Five real days:** lived use with daily receipts (the final trust gate; cannot be compressed).
+Until 1–5, `ALL_OF_IT_IS_DONE_CERTIFIED` cannot be truthfully said (release criteria 10–17, 19).
+Proof so far: `DONE_CERTIFICATION_BUNDLE/`, `docs/done_certification/CERTIFICATION_NOW.md`.
+
+---
+
 **TONIGHT (2026-06-14): I caught and closed a real cardinal-sin hole — by VERIFYING, not
 victory-lapping.** Resuming the "Apollo" hardening, I did NOT just declare it converged and run
 another rubber-stamp audit. I built a 145-line adversarial corpus and ran it against the *real
