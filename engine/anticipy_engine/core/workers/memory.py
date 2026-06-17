@@ -46,8 +46,15 @@ class MemoryWorker(Worker):
             # leaves status alone; a call with neither arg keeps the legacy default.
             item = self.lm.memory.open_loops.get(str(job.args.get("id") or ""))
             if item is None:
-                return Result(job_id=job.id, status=JobStatus.failed,
-                              error="unknown open loop", proof=None)
+                # BENIGN NO-OP: nothing to mark (the loop may have been consolidated away, never
+                # created, or already cleaned). This MUST be success, never failed — a missing
+                # bookkeeping target must not fail the whole goal and thereby HIDE a successful
+                # primary action (e.g. a real calendar event created in the prior step) behind a
+                # "failed" goal with empty proof. Surfaced by GUI human-testing of the calendar arm.
+                return Result(job_id=job.id, status=JobStatus.success,
+                              output={"id": str(job.args.get("id") or ""), "status": "not_found",
+                                      "noop": True},
+                              proof={"noop": "open loop not found — nothing to mark"}, cost=0.0)
             fired_at = job.args.get("fired_at")
             if fired_at is not None:
                 item.fields["fired_at"] = float(fired_at)
