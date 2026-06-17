@@ -27,10 +27,15 @@ Guardrails honored:
 import asyncio
 import json
 import os
+import random
+import shutil
+import socket
+import subprocess
 import sys
 import tempfile
 import time
 import urllib.parse
+import urllib.request
 
 # Sentinel so the engine can find OUR json line amid any browser-use log noise.
 RESULT_SENTINEL = "__ANTICIPY_BU_RESULT__"
@@ -43,6 +48,45 @@ CHROME_BIN = (
     "/Users/omarebrahim/Library/Caches/ms-playwright/chromium-1161/"
     "chrome-mac/Chromium.app/Contents/MacOS/Chromium"
 )
+
+# Newer-Chromium THROWAWAY launch path (chromium-1161 ABSENT fallback).
+# WHY: browser-use 0.13.1's own launcher (LocalBrowserWatchdog) hangs >30s when it
+# tries to spawn + CDP-detect a Chrome-for-Testing 148 / chromium-1223 build on macOS
+# (the documented browser-use<->newer-CFT incompatibility: BrowserStartEvent/Navigate
+# watchdog timeout, and with --single-process CFT emits duplicate CDP responses that
+# stall the navigation watchdog exactly 30s). Playwright's OWN launcher drives the same
+# CFT-148 binary fine in ~1.5s. So when the proven 1161 build is gone, WE launch the
+# THROWAWAY browser via playwright (a fresh empty profile — no saved cards, same money
+# posture as before) with a loopback --remote-debugging-port, then let browser-use ATTACH
+# over that internal cdp_url, bypassing its broken local launcher. This is a throwaway
+# browser, NOT the user's logged-in Chrome, so the money posture is unchanged: an action
+# can never reach a saved payment instrument. Auto-on when chrome_bin is not the pinned
+# 1161 path; force on/off with ANTICIPY_BU_PRELAUNCH=1/0.
+def _is_pinned_1161(chrome_bin: str) -> bool:
+    """True when chrome_bin is the proven chromium-1161 build (browser-use's own
+    launcher works with it, so no prelaunch needed)."""
+    return "chromium-1161" in (chrome_bin or "")
+
+
+def _want_prelaunch(chrome_bin: str) -> bool:
+    """Decide whether to pre-launch the throwaway browser ourselves (playwright) and
+    have browser-use ATTACH, instead of using browser-use's hang-prone local launcher.
+    Default: ON unless the pinned 1161 build is in use. Env override wins."""
+    env = (os.environ.get("ANTICIPY_BU_PRELAUNCH") or "").strip().lower()
+    if env in ("1", "true", "yes"):
+        return True
+    if env in ("0", "false", "no"):
+        return False
+    return not _is_pinned_1161(chrome_bin)
+
+
+def _free_loopback_port() -> int:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
+    finally:
+        s.close()
 
 # Appended to every task so the model is told, in-band, this is read-only.
 _READONLY_GUARD = (
@@ -172,6 +216,76 @@ def _is_ip_literal(host: str) -> bool:
     return len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts)
 
 
+async def _prelaunch_throwaway(chrome_bin: str, headless: bool):
+    """Launch a THROWAWAY Chrome (fresh empty profile, NO saved cards/logins) via
+    PLAYWRIGHT with a loopback --remote-debugging-port, and return
+    ``(cdp_url, async_playwright_ctx_mgr, context, profile_dir)`` so the caller can
+    attach browser-use to it and tear it all down.
+
+    This exists because browser-use 0.13.1's own local launcher hangs on the newer
+    Chrome-for-Testing 148 / chromium-1223 build (LocalBrowserWatchdog / navigate
+    watchdog 30s timeout). Playwright drives the SAME binary fine, so we let
+    playwright spawn it and hand browser-use only the loopback CDP endpoint.
+
+    Returns (None, None, None, profile_dir) if the CDP port never comes up."""
+    pw_cm = None
+    ctx = None
+    prof_dir = tempfile.mkdtemp(prefix="anticipy-bu-profile-")
+    try:
+        from playwright.async_api import async_playwright
+
+        port = _free_loopback_port()
+        # Args mirror the previous throwaway launch; --remote-debugging-port exposes a
+        # LOOPBACK-ONLY CDP endpoint (127.0.0.1) that ONLY browser-use on this host
+        # attaches to. No external exposure (no --remote-debugging-address).
+        if headless:
+            args = [
+                f"--remote-debugging-port={port}",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-dev-shm-usage",
+                "--disable-background-networking",
+            ]
+        else:
+            args = [
+                f"--remote-debugging-port={port}",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--start-maximized",
+            ]
+        pw_cm = async_playwright()
+        pw = await pw_cm.__aenter__()
+        ctx = await pw.chromium.launch_persistent_context(
+            prof_dir,
+            executable_path=chrome_bin,
+            headless=headless,
+            chromium_sandbox=False,
+            args=args,
+        )
+        cdp_url = f"http://127.0.0.1:{port}"
+        # Wait for the CDP endpoint to answer (cold launch can take a couple seconds).
+        for _ in range(40):
+            try:
+                with urllib.request.urlopen(cdp_url + "/json/version", timeout=1):
+                    return cdp_url, pw_cm, ctx, prof_dir
+            except Exception:
+                await asyncio.sleep(0.25)
+        return None, pw_cm, ctx, prof_dir
+    except Exception:
+        # Best-effort teardown of anything we opened before returning the failure.
+        try:
+            if ctx is not None:
+                await ctx.close()
+        except Exception:
+            pass
+        try:
+            if pw_cm is not None:
+                await pw_cm.__aexit__(None, None, None)
+        except Exception:
+            pass
+        return None, None, None, prof_dir
+
+
 async def _run(req: dict) -> dict:
     # Import here (not at module top) so a malformed request still produces a
     # clean json error without paying browser-use import cost first.
@@ -238,6 +352,11 @@ async def _run(req: dict) -> dict:
     # derived we leave it unset (allow-all), matching prior behavior.
     allowed_domains = _allowed_domains(str(req.get("url") or ""))
 
+    # Prelaunch teardown handles (only populated on the playwright-prelaunch throwaway path).
+    _pre_pw_cm = None
+    _pre_ctx = None
+    _pre_prof_dir = None
+
     if cdp_url:
         # ATTACH to the user's already-running Chrome over CDP. Do NOT pass executable_path or
         # user_data_dir — browser-use CONNECTS when a cdp_url is set and only LAUNCHES a fresh
@@ -248,7 +367,42 @@ async def _run(req: dict) -> dict:
         if allowed_domains:
             profile_kwargs["allowed_domains"] = allowed_domains
         profile = BrowserProfile(**profile_kwargs)
+    elif _want_prelaunch(chrome_bin):
+        # THROWAWAY-via-PRELAUNCH (newer Chromium / chromium-1161 absent): browser-use 0.13.1's
+        # own launcher hangs spawning Chrome-for-Testing 148 (LocalBrowserWatchdog / navigate
+        # watchdog 30s timeout). So WE launch a THROWAWAY browser (fresh empty profile — NO saved
+        # cards or logins; same money posture as the old self-launch) via playwright with a
+        # loopback --remote-debugging-port, then browser-use ATTACHES over that internal cdp_url.
+        # This is NOT the user's logged-in Chrome — the external-cdp/user-Chrome money guard above
+        # deliberately does NOT trip here, because there is no payment instrument in this profile.
+        _headless = os.environ.get("ANTICIPY_BU_HEADLESS", "1").strip().lower() not in ("0", "false", "no")
+        _internal_cdp, _pre_pw_cm, _pre_ctx, _pre_prof_dir = await _prelaunch_throwaway(chrome_bin, _headless)
+        if not _internal_cdp:
+            # Clean up anything we opened, then report an honest blocker (never fake success).
+            try:
+                if _pre_ctx is not None:
+                    await _pre_ctx.close()
+            except Exception:
+                pass
+            try:
+                if _pre_pw_cm is not None:
+                    await _pre_pw_cm.__aexit__(None, None, None)
+            except Exception:
+                pass
+            if _pre_prof_dir:
+                shutil.rmtree(_pre_prof_dir, ignore_errors=True)
+            return {
+                "success": False, "result": None, "steps": 0, "url": req.get("url"),
+                "error": "prelaunch throwaway browser failed: CDP endpoint did not come up",
+            }
+        # Attach browser-use to OUR throwaway browser's loopback CDP. No executable_path/user_data_dir
+        # (those would make browser-use relaunch instead of attach).
+        profile_kwargs = {"cdp_url": _internal_cdp}
+        if allowed_domains:
+            profile_kwargs["allowed_domains"] = allowed_domains
+        profile = BrowserProfile(**profile_kwargs)
     else:
+        # Proven path (chromium-1161 present): let browser-use launch its own throwaway browser.
         # Unique throwaway profile under the system temp dir; NEVER the user's Chrome.
         prof_dir = tempfile.mkdtemp(prefix="anticipy-bu-profile-")
         # Headless by default (server/background runs); set ANTICIPY_BU_HEADLESS=0 to show the
@@ -353,6 +507,21 @@ async def _run(req: dict) -> dict:
             await session.kill()
         except Exception:
             pass
+        # Tear down the prelaunched throwaway browser (if we launched one): close the
+        # playwright context, exit the playwright driver, and delete the temp profile so
+        # no Chrome process or profile dir leaks after the run.
+        try:
+            if _pre_ctx is not None:
+                await _pre_ctx.close()
+        except Exception:
+            pass
+        try:
+            if _pre_pw_cm is not None:
+                await _pre_pw_cm.__aexit__(None, None, None)
+        except Exception:
+            pass
+        if _pre_prof_dir:
+            shutil.rmtree(_pre_prof_dir, ignore_errors=True)
     return out
 
 
