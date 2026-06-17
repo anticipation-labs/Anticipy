@@ -54,6 +54,22 @@ Deep history: `logs/factory/FAILURES.md` + `logs/factory/FAILURE_MODES.md` + `FO
 - **Tripwire:** every cycle moves a real gate or it didn't count. 3 cycles with no receipt → halt + re-aim.
   Research must end in a decision (RESEARCH_LEDGER), not a dump.
 
+### F-012 — Duplicate over-extraction: one real task surfaces as 2–3 cards (spam) [OPEN — next gate]
+- **Found 2026-06-16** driving Omar's test transcript through the real app UI. The same underlying task
+  produced multiple cards: Amazon plant → "call Amazon about the plant I ordered" + "call Amazon about
+  that plant" + "Confirm task: handle the Amazon plant order" (×3); Sam deck → "Clarify possible request"
+  + "get Sam the deck by Friday" (×2); pickup → "Ready" card + "Confirm task: pickup moved to 3 today" (×2).
+- **Cause (hypothesis, to verify):** the moat (`proactive/extract.py` + `_spine_card`) extracts a task
+  per line AND from confirmations ("Yeah, I'll handle it" → its own task) AND emits a separate
+  "Confirm task:" variant — with no semantic dedup/consolidation across a breath. So a 2-line exchange
+  about ONE action becomes 3 cards.
+- **Why it matters:** this is exactly the spam Omar bans ("the brain is the anti-spam, not a cap"). It is
+  NOT a safety breach (all asks/parked, vents silent, money parked) but it makes the product feel dumb.
+- **Tripwire (to build):** an eval transcript where one action is stated + confirmed across ≥2 lines must
+  yield exactly ONE card. Dedup must be semantic (same action/target), not just exact-text.
+- **Also found:** the running :8787 engine was a STALE process (old code) 500ing on execute=true; always
+  verify the LIVE engine serves the committed code (restart on a clean checkout when in doubt). Fixed.
+
 ### F-011 — Browser round-trip refactor (b82e660) regressed the suite + introduced spam-adjacent defects
 - **Found 2026-06-16** by re-running the suite (it was RED 86/4, not the imported "90/90 GREEN" — verify,
   never trust). The "confirm-first browser round-trip" (Omar's centerpiece, `control_core.py`) landed

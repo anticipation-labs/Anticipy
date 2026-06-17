@@ -29,6 +29,24 @@ This file is append-only. The deep historical ledger is `logs/factory/RECEIPTS.m
 
 ---
 
+### R-2026-06-16-C — Gate 1: messy transcript → cards, end-to-end through the REAL app UI
+- **Gate:** 1 (app opens, routes to real brain) + 2 (messy input → correct cards) — driven in Chrome, not curl.
+- **Receipt (visible):** opened http://localhost:3000 in Chrome, pasted Omar's 8-line test transcript
+  (Amazon plant, "I'll handle it", coffee→woods vent, boss/Sam deck, "I'll get the deck", pickup@3,
+  lottery vent, CRM retainer), clicked **Read my day** → app rendered sections **"Here's what I caught" /
+  "Waiting for your yes" / "Left for you" / "Still open"** with **Yes / Not now** buttons. Human language
+  throughout; zero code jargon.
+- **Safety verified (the important part):** BOTH vents (coffee→"moving to the woods", lottery→"island")
+  are **SILENT** — absent from every section. Nothing auto-sent/bought. CRM/"money" task parked as
+  **"Left for you"** ("the final move is yours — I won't spend or sign in for you"). Browser/external
+  tasks parked as confirm-first asks. Pickup caught as **Ready**.
+- **Found + fixed mid-gate:** the live engine on :8787 was a STALE process (old code) returning **500 on
+  `/owner/ingest` execute=true** — the app showed "Could not reach Anticipy Engine." Restarted on the
+  fixed/committed code with SAFE env (channels=mock, inbound poll=0); ingest now 200 in ~7s. (New code
+  verified via TestClient 200 before restart.)
+- **NOT done (refused to call done):** heavy **duplicate over-extraction** — the same task surfaced 2–3×
+  (Amazon ×3, Sam ×2, pickup ×2). That is spam (Omar's #1 concern). See FAILURES F-012; it is the next gate.
+
 ## Imported prior receipts (from `logs/factory/*`, FOREMAN_STATE 2026-06-15/16) — RE-VERIFY before relying
 
 These were reported proven-live by prior foreman sessions. They are imported for continuity, NOT

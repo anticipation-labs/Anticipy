@@ -6,7 +6,20 @@
 - **Browser arm "prepare when confident"** (Omar's decision) + b82e660 regression fixes landed (`f05d453`).
   See R-2026-06-16-B + FAILURES F-011.
 
-## ACTIVE candidates (foreman pick — several are Omar-gated; he offered to authenticate)
+## ✅ CLOSED 2026-06-16 (cont.)
+- **Gate 1 — app → real brain → visible cards:** driven in Chrome at localhost:3000, transcript →
+  Caught/Waiting/Left-for-you sections, vents silent, money parked. See R-2026-06-16-C. (Engine was a
+  stale 500ing process; restarted on fixed code, channels=mock.)
+
+## 🎯 ACTIVE: dedup over-extraction (finish Gate 2) — one task = one card
+- **Why:** the live UI shows the same task 2–3× (Amazon ×3, Sam ×2, pickup ×2) = spam (Omar's #1 ban).
+  See FAILURES F-012. Safe (all parked, vents silent) but feels dumb.
+- **Receipt:** an eval transcript where one action is stated + confirmed across ≥2 lines yields exactly
+  ONE card; suite stays GREEN; `safety_mega_eval` 0 breaches; re-driven in the UI shows no duplicates.
+- **Where:** `engine/anticipy_engine/proactive/extract.py` (moat split) + `control_core._spine_card`
+  (the "Confirm task:" variant + confirmation-as-new-task). Dedup must be SEMANTIC (same action/target).
+
+## OTHER candidates (Omar-gated; he gave blanket approval + Chrome auth)
 - **Gate D — Gmail draft prepare-and-park (live):** create a `[Anticipy test]` Gmail DRAFT (reversible,
   never sent), re-read by ID, delete. **BLOCKED:** only Google Calendar is connected; needs Omar to
   authorize Gmail (Arcade `gmail.compose`) — he offered to tap an auth tab. Receipt: draft ID + read-back.

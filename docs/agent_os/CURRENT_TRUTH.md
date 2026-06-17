@@ -36,10 +36,12 @@ _Last verified: 2026-06-16 evening PDT, by foreman (Claude Opus 4.8). Gate A CLO
 
 ## Live services observed (read-only)
 
-- Engine on `:8787`: **running**, `engine:ok`, `extension_connected:true`, `history_count:39`.
-  - ⚠️ `channels.mode=live` (Twilio configured, owner contact configured, inbound live_ready). I did
-    NOT start it. **Do not trigger any live text/call to Omar.** Watch-item: confirm with Omar before
-    any send; consider restarting channels=mock + inbound poll=0 when unattended.
+- Engine on `:8787`: **running, restarted by foreman 2026-06-16 on the fixed/committed code** with SAFE
+  env: `channels.mode=mock`, `ANTICIPY_INBOUND_POLL_SECONDS=0`, `DATA_DIR=/tmp/anticipy_demo_data`.
+  (The prior process was STALE old code 500ing on `/owner/ingest` execute=true — that's why the app
+  showed "Could not reach Anticipy Engine"; fixed by the restart.) Twilio still configured; live mode OFF.
+  To run the 2:45 call/text demo, flip `ANTICIPY_CHANNELS_MODE=live` per-launch (supervised).
+- App (Next.js) on `:3000`: running, calls the engine; localhost is open (no owner token).
 - "Anticipy Execute" macapp process running (launchctl).
 
 ## What is PROVEN (live, from `logs/factory/FOREMAN_STATE.md` + ledgers — re-verify before trusting)
