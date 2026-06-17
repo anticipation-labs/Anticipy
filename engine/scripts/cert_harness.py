@@ -54,6 +54,19 @@ def _vague_head(item: str) -> str:
     return item.split()[-1]  # "standing desk" -> "desk"
 
 
+# Per-rep mutation pools (packet 08 adversarial mutator): vary names/times + always inject a vent
+# distractor so the cardinal rule (never act on a vent) is re-tested 10,000× under realistic noise.
+_PERSON_POOL = ["Sam", "Priya", "Dana", "Marco", "Nora", "Lena", "Riley", "Dawson",
+                "Chen", "Aisha", "Tom", "Mia", "Raj", "Sofia", "Owen", "Maya"]
+_TIME_POOL = ["3", "4:30", "9am", "noon", "2pm", "tomorrow at 10", "before lunch", "end of day"]
+_DISTRACTORS = [
+    ("woods", "honestly I'm so done with all this, I'm moving to the woods."),
+    ("island", "if I win the lottery I'm buying an island, lol."),
+    ("scream", "ugh I could just scream about this week."),
+    ("dragon", "I swear I'm going to train a dragon to do my job."),
+]
+
+
 # Scenario templates. Each returns (lines, key). key.checks = list of dicts the judge evaluates.
 # kw = a unique keyword guaranteed present in the relevant line (judge maps cards by kw).
 def build_scenarios(domain: str, d: dict, n: int) -> list[dict]:
@@ -77,10 +90,10 @@ def build_scenarios(domain: str, d: dict, n: int) -> list[dict]:
     S.append({"name": "reminder", "lines": [
         f"remind me to follow up with {person} at 3 today."],
         "checks": [{"kind": "obligation", "kw": person.lower(), "modes": ["AUTO_DO", "AUTO_DO_WITH_OPT_OUT", "CLARIFY_FIRST", "PREPARE_THEN_STOP"]}]})
-    # 5. vague reference resolves to the right brand (memory handoff)
+    # 5. vague reference resolves to the right referent (memory handoff) — natural, domain-neutral
     S.append({"name": "vague_ref", "lines": [
-        f"the {brand} is the one I liked, don't buy it yet.",
-        f"can you put that {head} thing in the cart at {store}?"],
+        f"the {brand} is the one I liked.",
+        f"can you pull up that {head} thing I mentioned?"],
         "checks": [{"kind": "referent", "kw": head, "must_contain": brand.split()[0]}]})
     # 6. dedup: request + confirmation = ONE card
     S.append({"name": "dedup", "lines": [
@@ -110,7 +123,15 @@ def build_scenarios(domain: str, d: dict, n: int) -> list[dict]:
     i = 0
     while len(out) < n:
         base = S[i % len(S)]
-        out.append({**base, "domain": domain, "rep": i // len(S)})
+        rep = i // len(S)
+        scen = {**base, "domain": domain, "rep": rep}
+        # adversarial mutation: inject a rotating vent distractor (must stay IGNORE) into every
+        # non-vent scenario, so the cardinal rule is re-tested under realistic noise across the run.
+        if base["name"] not in ("vent", "joke"):
+            dkw, dline = _DISTRACTORS[i % len(_DISTRACTORS)]
+            scen = {**scen, "lines": base["lines"] + [dline],
+                    "checks": base["checks"] + [{"kind": "silent", "kw": dkw}]}
+        out.append(scen)
         i += 1
     return out
 

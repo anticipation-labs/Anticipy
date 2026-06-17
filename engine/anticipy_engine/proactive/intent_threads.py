@@ -141,9 +141,11 @@ def rank_referents(reference_text: str, threads: list[IntentThread], self_idx: i
     bare = _is_bare_ref(reference_text)
     trace = {"head": head, "bare": bare, "candidates": [], "chosen": None,
              "rejected": [], "resolved_phrase": None}
-    # a referent must be a CONCRETE prior thread (action/preference) — never a vent or another
-    # follow-up line (excluding follow-ups stops "send it" from matching itself).
-    prior = [t for t in threads if t.idx < self_idx and t.kind not in ("vent", "followup")]
+    # a referent must be a CONCRETE prior thread (action/preference) — never a vent, a follow-up, or
+    # another line that ITSELF carries a vague reference (that is a query, not a referent; this also
+    # robustly excludes the query line itself even when the moat reworded it so idx self-match fails).
+    prior = [t for t in threads if t.idx < self_idx and t.kind not in ("vent", "followup")
+             and _head_noun(t.text) is None]
     scored = []
     for t in prior:
         score, reason = 0.0, []
