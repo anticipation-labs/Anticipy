@@ -9,7 +9,8 @@ again, with the same mission and the same rules.
 
 1. `CONSTITUTION.md` — the supreme law (mission + hard stops + no-slop).
 2. `DEFINITION_OF_DONE.md` — the finish line; never shrink it.
-3. `CURRENT_TRUTH.md` — what is proven vs not, right now (mutable, updated every run).
+3. `CURRENT_REALITY_CHECK.md` — the exact app/repo/engine/routes Omar tests + mock-vs-live map.
+4. `CURRENT_TRUTH.md` — what is proven vs not, right now (mutable, updated every run).
 4. `RECEIPTS.md` — append-only ledger of what is actually proven done.
 5. `FAILURES.md` — failure modes + tripwires; do not repeat them.
 6. `DECISIONS.md` — product/architecture decisions with dates.
