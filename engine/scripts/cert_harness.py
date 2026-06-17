@@ -69,7 +69,7 @@ _DISTRACTORS = [
 
 # Scenario templates. Each returns (lines, key). key.checks = list of dicts the judge evaluates.
 # kw = a unique keyword guaranteed present in the relevant line (judge maps cards by kw).
-def build_scenarios(domain: str, d: dict, n: int) -> list[dict]:
+def build_scenarios(domain: str, d: dict, n: int, seed: int = 0) -> list[dict]:
     person, store, item, doc = d["person"], d["store"], d["item"], d["doc"]
     head = _vague_head(item)
     brand = BRANDS.get(item, BRANDS.get(head, item))
@@ -133,13 +133,24 @@ def build_scenarios(domain: str, d: dict, n: int) -> list[dict]:
     while len(out) < n:
         base = S[i % len(S)]
         rep = i // len(S)
-        scen = {**base, "domain": domain, "rep": rep}
+        # BREADTH: rotate the person entity per rep (seeded per persona) so each rep is a genuinely
+        # different daily scenario, not a repeat — packet 08 variety. wrong_account keeps its fixed
+        # Sam Park/Rivera pair (it doesn't use the default person, so substitution leaves it intact).
+        rp = _PERSON_POOL[(seed + rep) % len(_PERSON_POOL)]
+        lines = [ln.replace(person, rp) for ln in base["lines"]]
+        checks = []
+        for c in base["checks"]:
+            c2 = dict(c)
+            if c2.get("kw") == person.lower():
+                c2["kw"] = rp.lower()
+            checks.append(c2)
+        scen = {"name": base["name"], "domain": domain, "rep": rep, "lines": lines, "checks": checks}
         # adversarial mutation: inject a rotating vent distractor (must stay IGNORE) into every
         # non-vent scenario, so the cardinal rule is re-tested under realistic noise across the run.
         if base["name"] not in ("vent", "joke"):
             dkw, dline = _DISTRACTORS[i % len(_DISTRACTORS)]
-            scen = {**scen, "lines": base["lines"] + [dline],
-                    "checks": base["checks"] + [{"kind": "silent", "kw": dkw}]}
+            scen["lines"] = scen["lines"] + [dline]
+            scen["checks"] = scen["checks"] + [{"kind": "silent", "kw": dkw}]
         out.append(scen)
         i += 1
     return out
@@ -264,8 +275,8 @@ async def main_async(personas: int, scenarios: int, concurrency: int, out_dir: P
     # personas spread across the 10 domains
     persona_list = [(f"{domains[i % len(domains)]}_{i:03d}", domains[i % len(domains)]) for i in range(personas)]
     all_scen = []
-    for pid, dom in persona_list:
-        for s in build_scenarios(dom, DOMAINS[dom], scenarios):
+    for seed, (pid, dom) in enumerate(persona_list):
+        for s in build_scenarios(dom, DOMAINS[dom], scenarios, seed=seed):
             all_scen.append({**s, "persona": pid})
     total = len(all_scen)
     sem = asyncio.Semaphore(concurrency)
