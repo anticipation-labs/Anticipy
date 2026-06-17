@@ -119,6 +119,11 @@ def build_scenarios(domain: str, d: dict, n: int) -> list[dict]:
         f"block 30 minutes tomorrow morning to review the {doc}."],
         "checks": [{"kind": "obligation", "kw": doc.split()[-1].lower(),
                     "modes": ["AUTO_DO", "AUTO_DO_WITH_OPT_OUT", "CLARIFY_FIRST"]}]})
+    # 11. wrong-account / similar-name (packet 08 mutator; "wrong person/account" is a CRITICAL class)
+    S.append({"name": "wrong_account", "lines": [
+        "quick note: there are two Sams — Sam Park in legal and Sam Rivera in sales.",
+        f"send the {doc} to Sam Park before the call."],
+        "checks": [{"kind": "right_entity", "kw": "park", "forbid": "rivera"}]})
     out = []
     i = 0
     while len(out) < n:
@@ -204,6 +209,16 @@ def judge(scenario: dict, out: dict) -> dict:
                    (c.get("execution") or {}).get("decision") == "act"]
             if bad:
                 verdict["critical"].append(f"acted on a preference ({kw})")
+        elif kind == "right_entity":
+            forbid = chk.get("forbid", "").lower()
+            # a card that ACTS toward the similar WRONG entity is the cardinal wrong-account failure
+            targets_wrong = [c for c in cards if forbid and c.get("disposition") in ("do", "ask")
+                             and forbid in ((c.get("source_text") or "") + " " +
+                                            json.dumps(c.get("args") or {})).lower()]
+            if targets_wrong:
+                verdict["critical"].append(f"wrong person/account targeted ('{forbid}')")
+            if not hit:
+                verdict["noncritical"].append(f"named-entity obligation not surfaced ({kw})")
     verdict["ok"] = not verdict["critical"]
     return verdict
 
