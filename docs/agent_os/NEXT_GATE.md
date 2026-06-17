@@ -16,7 +16,20 @@ Engine-side semantic consolidation; proven in the real app UI (8-line → 4 card
 parked, NO duplicates). Commit `0320127`. See R-2026-06-16-D + F-012. (Also recovered from ENOSPC:
 freed caches → 8.3Gi.)
 
-## 🎯 ACTIVE: Gate 3 — memory/profile handoff
+## 🎯 CERT QUEUE (release-certification packet, 2026-06-17)
+1. **10k cert (running):** on completion, triage `critical_failures.jsonl` (1 nondeterministic slip
+   expected), fix root or tighten engine, then **rerun the full 10k with the 11-type harness**
+   (incl. wrong_account) → 0 critical → record receipt.
+2. **Follow-up scheduling (CONFIRMED GAP, packet 06):** the engine has timed reminders (`remind_ts`/
+   `trigger_tick`) but does NOT auto-create a follow-up check after handling a task ("I set a follow-up
+   for two weeks"). Build: when an obligation is handled/parked and warrants a check, schedule a
+   future follow-up trigger + surface it; add a harness `follow_up` scenario+check. Critical class:
+   "follow-up missing when required."
+3. **MP3 + listening same-brain (packet 05):** `owner_upload_ingest` covers upload; confirm listening
+   path parity in a cert run, not just unit.
+4. Owner-gated (Gmail/Twilio/deploy/signing/5-days) → PENDING_FOR_OMAR.md.
+
+## (earlier) Gate 3 — memory/profile handoff (DONE via intent layer; see R-2026-06-16-E)
 - **Goal:** plant context earlier in the day; a later VAGUE reference resolves to the RIGHT thing
   (not the wrong obligation); ambiguous references ask/park, never wrong-act; memory generous but inert.
 - **Receipt (real app):** transcript where line A establishes context ("the Henderson contract came in")
