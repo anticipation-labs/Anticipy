@@ -1,5 +1,5 @@
 {
-  "status": "SOFTWARE_CERTIFIED_READY_FOR_OWNER_5DAY",
+  "status": "SOFTWARE_NOT_YET_CERTIFIED_human_tested_owner_gated_remainder",
   "dated": "2026-06-17",
   "commit_at_cert": "2ddbc57",
   "method": "GUI-first: messy day driven through the real web UI (localhost:3000 -> engine :8787); live arms via the engine's real Arcade/Twilio/browser execution; deterministic + representative-sample testing. NOT curl-only, NOT mock where a funded arm exists.",
@@ -75,5 +75,35 @@
   "honest_caveats": [
     "assert_done.py (the stricter internal gate) reports G + H as FAIL because it requires FULL pass; under the Phase-5 'OR exact blocker remains' allowance they are met-with-recorded-blocker.",
     "Live ARM execution was proven via the engine's real arms (Arcade/Twilio/browser-runner) \u2014 the same paths the UI buttons trigger; the act/ask/silent SPINE + onboarding were driven through the actual web UI."
+  ],
+  "retraction": "The earlier SOFTWARE_CERTIFIED claim was premature: it leaned on standalone scripts, not genuine human use of every piece through the app. Corrected by a full GUI human walkthrough on 2026-06-17 which found + fixed two real bugs (below).",
+  "human_walkthrough_2026-06-17": {
+    "tested_through_the_real_UI": [
+      "Download -> real Anticipy.app.zip (unsigned dev preview)",
+      "front door opens",
+      "onboarding 4-step -> sourced profile written + used",
+      "typed transcript",
+      "MP3 upload via the app's /api/owner/upload -> local Whisper transcribe -> correct cards",
+      "the full spine + autonomy law (Amazon AUTO_DO_WITH_OPT_OUT 'On it/Stop', vents silent, Sam-deck one card, desk->Jarvis, CRM note not money, money never buys)",
+      "a LIVE Calendar action driven through the UI -> real event on the owner's calendar -> 'Handled' (verified live + cleaned up)"
+    ],
+    "bugs_found_and_fixed_by_human_testing": [
+      "mark_loop: a missing open-loop returned status=failed and the orchestrator failed the WHOLE goal, hiding a successful live calendar create behind 'failed' with empty proof -> now a benign no-op (commit b669189).",
+      "no-buy drop: the moat reworded 'cart it, don't buy it' and dropped the no-buy bound, money-BLOCKING a cart-prep -> single-line no-buy bound now preserved (commit 5325ea4)."
+    ],
+    "live_arms": {
+      "calendar": "live through UI + scripts",
+      "browser": "live on a demo store (real commerce hits CAPTCHA which is not solvable)",
+      "voice": "SMS+call delivered, owner-confirmed; inbound poller live"
+    }
+  },
+  "genuinely_remaining_owner_gated": [
+    "Five real owner days (lived).",
+    "Live browser on real commerce THROUGH the UI: real sites bot-detect/CAPTCHA (un-solvable) or need the owner's logged-in session.",
+    "SMS inbound loop close needs the owner's 'YES' reply (human); the poller is live and ready.",
+    "Two-way live voice: a public wss URL (cloudflared tunnel / deploy).",
+    "Listen/mic live: real spoken audio.",
+    "Gmail draft: enable the Gmail toolkit for the project in the Arcade dashboard.",
+    "One-click signed download: Apple Developer signing/notarization."
   ]
 }
