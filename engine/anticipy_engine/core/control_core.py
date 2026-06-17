@@ -1421,6 +1421,20 @@ class ControlCore:
                 # spine catches it — so a preview never shows FEWER tasks than the real run would.
                 if card is None and getattr(line, "force_ask", False):
                     card = self._generic_force_ask_card(line, source)
+                # PREVIEW == REALITY (moat_task): the model CONFIDENTLY caught a real task the regex
+                # didn't shape ("remind me to refill the inhaler", "send the deck to Sequoia by EOD",
+                # "cancel the WeWork"). On the EXECUTE path _spine_card's moat-task rescue surfaces it
+                # as a confirm-first ask; PREVIEW must do the SAME or it silently DROPS real tasks and
+                # shows fewer than the live run (the 'you keep dropping my tasks' bug, found by the
+                # relentless bug-hunt: ~half of moat_task lines vanished in preview). Mirror the execute
+                # conditions exactly: not a vent shape, and not the money wall (money stays blocked via
+                # card_for_line's interlock above / handled below; never auto-acted).
+                elif card is None and getattr(line, "moat_task", False):
+                    from ..live_memory.review_infer import is_vent_shape as _ivs
+                    if not _ivs(line.text):
+                        _verdict = self.proactive.harm.assess(line.text, {})
+                        if getattr(_verdict, "category", None) != "money":
+                            card = self._generic_force_ask_card(line, source)
             # A vent-adjacent real task (force_ask) may be CAUGHT but NEVER auto-act in the heat:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
             # is the absolute lever that keeps a vent from ever producing an act (the cardinal sin).
