@@ -1072,14 +1072,16 @@ class ControlCore:
             return self._generic_force_ask_card(line, source)
         shaped = self.owner_mode.card_for_line(line, source)
         if shaped is not None and shaped.disposition == "blocked":
-            # F23: the pre-gate's guarantee is that a money line can NEVER EXECUTE,
-            # not that a money-flavored vent must interrupt. The consult is the
-            # spine's own Room-1 triage instance — pure classification, no decider,
-            # no harm-line, no orchestrator, no goal, no /pending — so the vent
-            # judgment stays one brain (F17), and silence vs blocked are both
-            # non-executing outcomes. Uncertainty keeps the ask: the live
-            # ambiguity tiebreak fails OPEN (returns True on any error).
-            if not self.proactive.triage.actionable(line.text):
+            # A real MONEY line must ALWAYS surface as blocked ("Left for you") — money is the hard
+            # stop and must be VISIBLE, never silently dropped. card_for_line's is_vent guard already
+            # drops money-FLAVORED VENTS before they ever become a blocked card; the old
+            # triage.actionable() gate here ADDITIONALLY dropped REAL money lines that triage
+            # misjudged as not-actionable, so "refund the customer $50" / "reimburse the client 1100"
+            # VANISHED on the execute path while preview correctly blocked them (relentless bug-hunt).
+            # Keep only the vent-shape belt-and-suspenders: a genuine vent shape stays silent, every
+            # real money line surfaces as a non-executing blocked card. Money never executes either way.
+            from ..live_memory.review_infer import is_vent_shape as _ivs2
+            if _ivs2(line.text):
                 return None
             return shaped
         # THE AUTONOMY LAW (SEAM 1): a reversible external-service chore — contact a company /

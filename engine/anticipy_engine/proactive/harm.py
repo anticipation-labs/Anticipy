@@ -50,6 +50,13 @@ _MONEY_SIGNAL = re.compile(
     r"fifty|sixty|seventy|eighty|ninety|hundred|thousand|couple|few)\b"
     r"[\w\s-]{0,20}?\b(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?)\b"             # five hundred dollars
     r"|\b(?:hundred|thousand|grand)\b\s+(?:we|i|they|you|he|she)\s+(?:owe|owed)\b"       # five hundred we owe
+    # MONEY OUT via refund/reimburse/credit — "refund the overpayment back to his card",
+    # "reimburse the client 1100", "credit her account". Money MOVING is the hard stop; the
+    # bug-hunt found these surfacing as a plain ask (or dropped) instead of the visible money block
+    # because no scale word ("dollars") nor a debt noun was present. Anchored to a money TARGET
+    # (card/account/overpayment/payment) or an amount so "I got a refund" / "refund my library book"
+    # never trips it.
+    r"|\b(?:refund|reimburse|credit)\b[^.;!?]{0,30}?\b(?:card|account|overpayment|payment|venmo|paypal|zelle|\d)"
     r"|\b(?:owe|owed|owes|owing|rent|deposit|invoice|balance|payment|payments|"
     r"retainer|copay|co-pay|tab|bill|bills|dues|fee|fees|tuition|mortgage)\b",
     re.I,
