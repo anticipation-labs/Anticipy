@@ -1199,8 +1199,15 @@ class ControlCore:
         for c in out.get("cards", []):
             a = classify_autonomy(c)
             c["autonomy_mode"] = a["mode"]
-            autonomy.append({"source_text": (c.get("source_text") or "")[:80],
-                             "mode": a["mode"], "why": a["why"]})
+            # full classification proof (packet 02): input span, chosen mode, REJECTED modes,
+            # action plan, result, proof types.
+            autonomy.append({
+                "input_span": (c.get("source_text") or "")[:120],
+                "chosen_mode": a["mode"], "why": a["why"], "rejected_modes": a["rejected"],
+                "action_plan": {"route": c.get("route"), "action": c.get("action")},
+                "result": c.get("disposition"),
+                "proof": [p.get("type") for p in (c.get("proof") or []) if isinstance(p, dict)],
+            })
         out["middle_trace"]["autonomy"] = autonomy
         return out
 
