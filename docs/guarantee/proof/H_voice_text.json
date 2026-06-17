@@ -1,0 +1,8 @@
+{
+  "gate": "H_voice_text",
+  "pass": false,
+  "mode": "live",
+  "evidence": "SMS sid=SMd74bf52b64daac556b69797bdb158b7f status=delivered to +16047245161; CALL sid=CA4acb7e397928b4c4911646ca3c2ba767 status=in-progress to +16047245161 from +16196584447 (Polly.Joanna-Neural Say). Independent Twilio read-backs (Messages/<sid>.json, Calls/<sid>.json).",
+  "verified_at": "2026-06-17",
+  "detail": "OUTBOUND PROVEN LIVE through the engine's own channels (channels/text.py TextChannel.send + channels/call.py CallChannel.send) in ANTICIPY_CHANNELS_MODE=live, to the owner's approved number 6047245161 (owner gave explicit standing test permission). SMS delivered + independent read-back (status=delivered, no error). Voice call connected (status queued->in-progress) speaking the signature '...calendar event made; I'll call you at 2:45' line via the one-shot <Say> TwiML (Joanna neural) — the 2:45-call path, no public socket needed. EXACTLY ONE SMS + ONE call (no flood). REMAINING for full pass: the INBOUND round-trip (owner replies 'YES'/text -> Twilio webhook -> engine resolves the exact pending ask) requires the engine reachable from Twilio at a public URL (off-localhost deploy or a tunnel) — owner-gated, same gate as A's hosted deploy. Two-way live voice (ConversationRelay) likewise needs ANTICIPY_CR_WSS_URL (a public wss); the one-way call is proven. pass=false honestly until inbound is wired via the public URL."
+}
