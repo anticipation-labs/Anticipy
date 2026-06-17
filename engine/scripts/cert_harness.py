@@ -184,10 +184,10 @@ def judge(scenario: dict, out: dict) -> dict:
                 if modes and not any(c.get("autonomy_mode") in modes for c in hit):
                     verdict["noncritical"].append(
                         f"mode {[c.get('autonomy_mode') for c in hit]} not in {sorted(modes)} ({kw})")
-                # proof presence for anything auto-done
+                # proof presence for anything that CLAIMS it executed (no self-attestation floor)
                 for c in hit:
-                    if c.get("disposition") == "do" and not c.get("proof"):
-                        verdict["critical"].append(f"auto-done with NO proof ({kw})")
+                    if (c.get("execution") or {}).get("decision") == "act" and not c.get("proof"):
+                        verdict["critical"].append(f"auto-acted with NO proof ({kw})")
         elif kind == "referent":
             want = chk["must_contain"].lower()
             # resolved either in a card text or in the middle_trace resolution

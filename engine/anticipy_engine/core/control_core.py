@@ -1195,6 +1195,21 @@ class ControlCore:
         out["middle_trace"] = middle_trace   # GATE MIDDLE-1 proof (captured memories + resolutions)
         # Autonomy mode per card (packet 02): the chosen mode + why, for product + certification.
         from ..proactive.autonomy import classify_autonomy
+        # NO-SELF-ATTESTATION INVARIANT (cert floor): a card may NOT be 'done'/auto-acted without
+        # independent read-back proof. If an action path emitted a do-card with empty proof (a rare
+        # nondeterministic slip), it is NOT done — downgrade to a confirm-first ask so "done" always
+        # means proven. Structurally prevents the "auto-done with no proof" critical.
+        for c in out.get("cards", []):
+            # ONLY a card that CLAIMS it executed (decision==act) without proof is a violation.
+            # A held/vent-adjacent card (execution None / decision != act) is legitimately proof-less
+            # and must NOT be touched (flipping it would make a vent produce an ask — a cardinal breach).
+            if (c.get("execution") or {}).get("decision") == "act" and not c.get("proof"):
+                c["disposition"] = "ask"
+                ex = dict(c.get("execution") or {})
+                ex["decision"] = "ask"
+                c["execution"] = ex
+                c["status"] = "open"
+                c["reason"] = "prepared, but I couldn't verify it was done — confirm before relying on it"
         autonomy = []
         for c in out.get("cards", []):
             a = classify_autonomy(c)
