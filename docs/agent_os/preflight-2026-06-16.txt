@@ -1,0 +1,38 @@
+===================== ANTICIPY PREFLIGHT =====================
+repo:   /Users/omarebrahim/Desktop/Anticipy-executor-working
+branch: factory/build
+head:   b82e660 Browser-action round-trip live: web task -> texted ask -> YES -> visible browser -> result text
+
+--- concurrency ---
+  [32m✓[0m no factory/.lock — safe to commit
+  [33m![0m factory/.halt present — nightly factory loop is paused
+
+--- git cleanliness ---
+  uncommitted changes: 5 file(s)
+
+--- secret hygiene (must be NONE tracked) ---
+  [31m✗[0m TRACKED .env files: .env.example
+
+--- Memory Dock present ---
+  [32m✓[0m docs/agent_os/CONSTITUTION.md
+  [32m✓[0m docs/agent_os/DEFINITION_OF_DONE.md
+  [32m✓[0m docs/agent_os/CURRENT_TRUTH.md
+  [32m✓[0m docs/agent_os/RECEIPTS.md
+  [32m✓[0m docs/agent_os/FAILURES.md
+  [32m✓[0m docs/agent_os/DECISIONS.md
+  [32m✓[0m docs/agent_os/NEXT_GATE.md
+  [32m✓[0m docs/agent_os/RESEARCH_LEDGER.md
+  [32m✓[0m docs/agent_os/HANDOFF_NOW.md
+
+--- toolchain ---
+  [32m✓[0m codex: codex-cli 0.133.0
+  [32m✓[0m node: v22.22.0
+  [32m✓[0m engine venv present
+
+--- live engine (read-only) ---
+  [32m✓[0m engine :8787 reachable
+    channels "mode":"live"
+  [33m![0m channels=LIVE — do NOT trigger live text/call to Omar (31-text history)
+
+Reminders: verify never assume · receipts only · never act on a vent · money = hard stop.
+=============================================================

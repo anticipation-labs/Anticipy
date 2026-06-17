@@ -13,6 +13,13 @@ This file is the router. It is loaded into every Claude session in this repo. Wh
 remember or don't remember, the durable truth lives in the files below — read them, never
 trust memory of them.
 
+> 📒 **MEMORY DOCK — the Agent OS (installed 2026-06-16): `docs/agent_os/`.** After `THE_MISSION.md`,
+> read the Memory Dock FIRST-READ ORDER in `docs/agent_os/README.md`:
+> CONSTITUTION → DEFINITION_OF_DONE → CURRENT_TRUTH → RECEIPTS → FAILURES → DECISIONS → NEXT_GATE →
+> RESEARCH_LEDGER → HANDOFF_NOW. It routes to and reconciles the factory ledgers below (does not replace
+> them; newest dated wins). Run `bash scripts/agent_os/preflight.sh` before building. Every spawned
+> agent (Claude subagent / Codex worker) must receive `scripts/agent_os/context_pack.sh` output first.
+
 ## What this project is
 Anticipy: an always-listening assistant (typed transcript / MP3 now, pendant later) that
 hears a person's messy day, infers the unspoken tasks (sarcasm and vents are NOT tasks),

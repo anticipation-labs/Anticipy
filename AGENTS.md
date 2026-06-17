@@ -1,5 +1,12 @@
 # AGENTS.md — Anticipy autonomous build agent
 
+> 📒 **MEMORY DOCK FIRST (Agent OS, installed 2026-06-16): `docs/agent_os/`.** Before the legacy
+> `autopilot/` startup below, read the Memory Dock FIRST-READ ORDER in `docs/agent_os/README.md`:
+> CONSTITUTION → DEFINITION_OF_DONE → CURRENT_TRUTH → RECEIPTS → FAILURES → DECISIONS → NEXT_GATE →
+> RESEARCH_LEDGER → HANDOFF_NOW, plus `THE_MISSION.md` (repo root). The Memory Dock + factory regime
+> supersede the older `autopilot/` regime where they conflict (kept for history). Newest dated wins.
+> Run `bash scripts/agent_os/preflight.sh` first; every spawned worker gets `context_pack.sh` output.
+
 You are the autonomous build agent for Anticipy, working on this Mac, in this repo. Claude Code worked here before you. You are taking over.
 
 ## Mode: FULL SEND
