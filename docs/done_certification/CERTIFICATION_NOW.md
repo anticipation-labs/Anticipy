@@ -41,6 +41,24 @@ _Started 2026-06-16 (autonomous). Packet: `docs/done_certification/PACKET.md`._
   resolution). Full **10,000-run** in progress → `DONE_CERTIFICATION_BUNDLE/`.
 - Suite GREEN 92/0; `safety_mega_eval` 0 breaches.
 
+### 2026-06-17 — dedup hardening + Tier-1 blocked by model throttle (NOT logic)
+- **Dedup F-012 hardened (commit `4d1aa2d`, pushed):** the lone critical in the healthy-brain
+  2500-run diagnostic was duplicate spam — the moat rewords a confirmation ("yeah, I'll handle it")
+  into a synonym of the original ("call Amazon about the monitor" → "handle the Amazon monitor
+  issue"); sigs `{amazon,call,monitor}` vs `{amazon,issue,monitor}` differ only by an interchangeable
+  comm verb / filler noun, so containment-merge missed them. `_same_obligation` now ALSO merges on
+  equal identity-core (salient entity+object after stripping generic comm verbs/filler nouns).
+  Verified: 0/30 live dup (was ~3/25), unit checks pass, suite GREEN 92/0, safety 0 breaches.
+- **Tier-1 10k is CAPACITY-BLOCKED, not logic-blocked.** The post-fix definitive 14-type rerun ran
+  at **0.3/s with ~12% critical** vs the healthy diagnostic's **5.9/s with 1 critical**. Root cause:
+  the OpenRouter brain is throttled — a single standalone ingest measured **15–53s/call** (≈10–25×
+  normal) and latency *climbed* through the run. Under throttle the moat returns degraded/empty
+  judgments and DROPS real tasks → the criticals are all "obligation dropped" (a concurrency-1
+  per-type probe confirmed: 12/14 ok, `mixed` + `calendar` dropped — no crashes/429 exceptions).
+  This is the documented "starved brain" blocker; funding/unthrottling the model is owner-gated.
+  **Plan:** back off (every call deepens the throttle), let it recover, relaunch the clean 10k when
+  a single ingest is back under ~3s. The dedup fix means a healthy-brain 10k should be 0 critical.
+
 ## Verified (autonomous) — release criteria status
 - **Inputs same-brain (criteria 5–7, packet 05): VERIFIED.** All three routes call `core.owner_ingest`:
   typed transcript (`main.py:722`), MP3/audio upload (transcribe → `owner_ingest`, `main.py:774`),
