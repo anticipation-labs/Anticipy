@@ -1172,6 +1172,19 @@ class ControlCore:
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
         observed = await self._expand_tasks_with_model(raw_observed)   # THE MOAT: model splits + judges
+        # DETERMINISTIC VENT-ADJACENT BACKSTOP: when the moat fails to split a vent-prefixed line
+        # ("ugh my brain is fried, but remind me to send Maya the email before Friday") into its
+        # embedded obligation, the cardinal-sin guard would drop the whole line and the real task
+        # is lost (the lone 'mixed' miss in the 10k cert). If a vented line carries a CONCRETE
+        # directed task (a send to a NAMED person, or a pickup with a time), mark it force_ask so
+        # the proven held-ask path surfaces it as a confirm-first ASK — never an auto-act, so the
+        # vent floor is preserved. Tight signal: a pure emotional vent never qualifies.
+        from ..live_memory.review_infer import is_vent as _is_vent
+        from ..owner_mode import vent_adjacent_directed_task as _vent_adj
+        for _ln in observed:
+            if (not getattr(_ln, "force_ask", False)
+                    and _is_vent(_ln.text) and _vent_adj(_ln.text)):
+                _ln.force_ask = True
         observed, middle_trace = self._intent_resolve(observed, raw_lines)  # GATE MIDDLE-1: ranked recall
         observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
         captured_by_line: dict[int, dict] = {}

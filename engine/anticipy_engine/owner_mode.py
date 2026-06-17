@@ -121,7 +121,7 @@ _VENT_OR_JOKE = re.compile(
 # vacation for me forever" never reaches here.
 _BARE_ACTION_VERB = re.compile(
     r"^(?:(?:just|please|also|then|and|so|ok|okay|now|first|hey|oh)[,\s]+)*"
-    r"(book|schedule|reschedule|rebook|call|meet)\b",
+    r"(book|schedule|reschedule|rebook|call|meet|block|hold|reserve|set aside)\b",
     re.I,
 )
 # An anaphoric booking that defers to memory context ("Book the Tuesday morning ONE with
@@ -298,6 +298,26 @@ def _person_hint(text: str) -> str | None:
         return m.group(1)
     m = re.search(r"\b([A-Z][a-z]+)\s+(?:needs|asked|is waiting|wanted)\b", text)
     return m.group(1) if m else None
+
+
+# A STRONG directed-send shape (send/email/text/draft, not the weak tell/reply) — used by the
+# vent-adjacent backstop so a sarcastic "I'll tell Karen off" never qualifies.
+_DIRECTED_SEND = re.compile(r"\b(send|email|text|draft)\b", re.I)
+
+
+def vent_adjacent_directed_task(text: str) -> bool:
+    """A CONCRETE, recipient/time-bound task embedded in a VENTED line — a directed send to a
+    NAMED person ("...but remind me to send Maya the email"), or a pickup/drop-off with a time.
+    Deliberately TIGHT: a pure emotional vent (no recipient, no scheduling structure) never
+    matches, so promoting such a line to a confirm-first ASK (held, never an auto-act) cannot
+    turn a vent into an action — the cardinal-sin floor is preserved. This is the deterministic
+    backstop for when the moat fails to split a vent-prefixed line into its embedded obligation
+    (the lone 'mixed' miss in the 10k cert); it only ever raises an ASK, never executes."""
+    if _DIRECTED_SEND.search(text) and _person_hint(text):
+        return True
+    if _PICKUP.search(text) and _TIMEISH.search(text):
+        return True
+    return False
 
 
 def _has_money_signal(text: str) -> bool:
