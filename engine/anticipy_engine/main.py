@@ -829,6 +829,17 @@ def owner_cards(limit: int = 50) -> dict:
     return core.owner_cards(limit=limit)
 
 
+class OwnerStopIn(BaseModel):
+    card_id: str
+
+
+@app.post("/owner/stop")
+def owner_stop(body: OwnerStopIn) -> dict:
+    """STOP control for an AUTO_DO_WITH_OPT_OUT chore: the owner pressed STOP / replied 'stop'.
+    Halts the in-flight reversible chore and flips the durable card to 'stopped'."""
+    return core.stop_owner_card(body.card_id)
+
+
 @app.post("/owner/onboard")
 async def owner_onboard(body: OwnerOnboardingIn) -> dict:
     """First-run setup writes people, preferences, apps, stores, and gates into memory."""

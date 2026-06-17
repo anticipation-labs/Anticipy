@@ -17,7 +17,7 @@ MODES = ("AUTO_DO", "AUTO_DO_WITH_OPT_OUT", "PREPARE_THEN_STOP",
 _AUTO_ACTIONS = {
     "create_calendar_or_reminder", "timed_reminder", "write_memory", "write_profile_memory",
     "execute_owner_task", "find_or_cart_without_purchase", "browse_task", "research_or_find_item",
-    "ask_clarifying_question",
+    "ask_clarifying_question", "prepare_internal_note",
 }
 
 

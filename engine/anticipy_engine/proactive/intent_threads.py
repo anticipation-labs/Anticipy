@@ -49,6 +49,15 @@ _VAGUE_HEAD = re.compile(r"\b(?:that|this|the)\s+([a-z]+)\s+thing\b", re.I)   # 
 _VAGUE_HEAD2 = re.compile(r"\b(?:that|this)\s+([a-z]+)\b(?!\s+thing)", re.I)   # "that desk"
 _BARE_REF = re.compile(r"\b(it|that thing|the thing|that one|this one|that|this)\b", re.I)
 _SENDABLE = re.compile(r"\b(send|email|deliver|submit|share)\b", re.I)
+# A DELIVERABLE object — the thing a "send it" refers to even when the source thread used a
+# get/finish/revise verb instead of a send verb ("get Sam the revised DECK by Friday" is the
+# referent of "remind me before I send it"). A prior action naming one of these is a valid
+# referent for a bare send-reference, so the followup folds into that obligation (SEAM 4: one
+# thread, no duplicate). Kept to concrete sendable artifacts so a random noun never matches.
+_DELIVERABLE = re.compile(
+    r"\b(deck|slides?|doc|docs|document|report|memo|brief|file|files|email|"
+    r"summary|outline|proposal|contract|invoice|update|draft|attachment|"
+    r"presentation|spreadsheet|paper|letter|package|order|note)\b", re.I)
 
 
 def _content_tokens(text: str) -> frozenset:
@@ -155,6 +164,13 @@ def rank_referents(reference_text: str, threads: list[IntentThread], self_idx: i
                 score += 10; reason.append(f"names '{head}'")
         if bare and _SENDABLE.search(reference_text) and _SENDABLE.search(t.text):
             score += 6; reason.append("both about sending")
+        # SEAM 4: "remind me before I send it" -> the prior obligation about a DELIVERABLE
+        # (the revised deck), even though that thread says "get Sam the revised deck", not
+        # "send". A bare send-reference resolves to the most recent deliverable obligation so
+        # the followup folds into it (one thread, no duplicate card). Weighted below the
+        # explicit head-noun match so a named referent always wins.
+        elif bare and _SENDABLE.search(reference_text) and _DELIVERABLE.search(t.text):
+            score += 6; reason.append("send refers to a prior deliverable")
         # recency: closer prior line ranks higher (small weight, only a tie-breaker)
         score += (t.idx + 1) * 0.01
         if t.kind in ("action", "preference"):

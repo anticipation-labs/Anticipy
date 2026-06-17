@@ -701,10 +701,33 @@ a {
 .state-dot.handled  { background: var(--act); }
 .state-dot.waiting  { background: var(--ask); }
 .state-dot.held     { background: var(--blocked); }
+/* "On it" — a reversible chore the assistant STARTED on its own (the autonomy law).
+   The green pulse reads as work-in-progress, not a pending decision. */
+.state-dot.onit     { background: var(--act); }
 
 /* the single amber/clay "waiting" row — a 1px left border, never a fill (R1.2) */
 .row.accent-ask    { border-left: 1px solid var(--ask);     padding-left: 16px; }
 .row.accent-blocked { border-left: 1px solid var(--blocked); padding-left: 16px; }
+.row.accent-onit   { border-left: 1px solid var(--act);     padding-left: 16px; }
+
+/* the "I'm on it … — tell me to stop" line: same calm meta type as the why line */
+.row-onit {
+  margin: 0;
+  color: var(--warm-gray);
+  font-size: var(--t-meta);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* STOP control on an on-it chore — quiet, in the clay/blocked tone (the only "undo" button) */
+.row-actions .btn-stop {
+  border-color: var(--blocked);
+  color: var(--blocked);
+}
+.row-actions .btn-stop:hover {
+  border-color: var(--blocked);
+  background: rgba(181, 101, 74, 0.08);
+}
 
 .row-actions {
   display: flex;

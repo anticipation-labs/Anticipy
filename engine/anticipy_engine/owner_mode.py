@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from .core.envelopes import new_id
 from .live_memory.review_infer import is_vent, is_vent_shape
 from .shared.invoice_draft import match_invoice_draft_ask
+from .shared.note_task import match_internal_note
 
 OwnerSource = Literal["pay_to_try", "start_listening", "mp3", "transcript", "typed", "app", "mac_mic", "pendant_phone"]
 OwnerDisposition = Literal["do", "ask", "remember", "blocked"]
@@ -58,6 +59,11 @@ class OwnerTaskCard(BaseModel):
     # Execution outcome (STAGE B item 2): what the engine actually DID with this card —
     # {decision, goal_id, ask_id, goal_state}. None until an execution path runs it.
     execution: dict[str, Any] | None = None
+    # Autonomy mode (packet 02) the engine assigned this card — one of autonomy.MODES, with a
+    # one-line reason. Persisted onto the durable record (SEAM 2) so GET /owner/cards carries it
+    # and the UI board can pick the lane/verb (the "On it — you can stop me" vs Yes/Not-now split).
+    autonomy_mode: str | None = None
+    autonomy_why: str | None = None
 
 
 class OwnerIngestResult(BaseModel):
@@ -456,6 +462,29 @@ class OwnerMode:
         # here it must FALL THROUGH (card_for_line -> None) to let the spine's invoice_draft ask
         # path own it. A real spend on an invoice ("pay the invoice") is not a draft shape and
         # still blocks here.
+        # INTERNAL NOTE (NOT money), runs BEFORE the money interlock: "make sure the retainer NOTE
+        # is in the CRM before the call", "add a note in the client file about the retainer". A
+        # money/obligation word (retainer/invoice/...) names the SUBJECT of an internal record
+        # entry — recording a note ABOUT a retainer is reversible admin, never a payment. The word
+        # "retainer" alone tripped the money wall and blocked the lawyer's admin note (the seam).
+        # match_internal_note refuses any line with a spend/transaction verb, so a real payment
+        # ("pay/wire/chase the retainer") never matches here and still blocks below. Routed to a
+        # non-binding internal-note prep (prepare-then-stop): the engine has no generic CRM/notes
+        # arm wired yet, so this is an honest "here's the note I'd write" prep, not a money block.
+        internal_note = match_internal_note(text)
+        if not cart_no_purchase and internal_note is not None:
+            return OwnerTaskCard(
+                source=source,
+                line_no=line.line_no,
+                source_text=text,
+                title="Prepare internal note",
+                disposition="do",
+                route="api",
+                action="prepare_internal_note",
+                args={"task_text": text, "destination": "crm_or_record", "binding": False},
+                confidence=0.74,
+                reason="internal note/record entry — reversible admin, not a payment",
+            )
         invoice_draft_ask = match_invoice_draft_ask(text)
         if not cart_no_purchase and not invoice_draft_ask and _has_money_signal(text):
             return OwnerTaskCard(

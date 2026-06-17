@@ -80,7 +80,20 @@ function onboardingPayload(form) {
   };
 }
 
+// AUTO_DO_WITH_OPT_OUT (the autonomy law): a reversible chore the assistant STARTED on its own
+// ("call Amazon about the plant"). It is NOT an approval ask — it shows "I'm on it … — tell me to
+// stop", with a STOP control, never Yes/Not-now. Detected by the persisted autonomy_mode (SEAM 2).
+function isOptOut(card) {
+  if (!card) return false;
+  if (card.status === "stopped") return false; // a stopped chore drops out of the on-it lane
+  if (card.status === "declined" || card.status === "done") return false;
+  return card.autonomy_mode === "AUTO_DO_WITH_OPT_OUT" || card.execution?.opt_out === true;
+}
+
 function cardBucket(card) {
+  // An in-flight opt-out chore is its own lane (started, stoppable) — never an approval ask.
+  if (isOptOut(card)) return "onit";
+  if (card.status === "stopped") return "done";
   if (card.status === "declined") return "done";
   if (card.status === "done" || card.disposition === "remember") return "done";
   if (card.disposition === "blocked" || card.status === "blocked") return "blocked";
@@ -287,7 +300,9 @@ function visibleProofs(proofs = []) {
 // ids, no "Waiting for Omar" role-speak — the words the spec asks for (§4.8).
 function outcomeWord(card) {
   const bucket = cardBucket(card);
+  if (card.status === "stopped") return { label: "Stopped", tone: "" };
   if (card.status === "declined") return { label: "Set aside", tone: "" };
+  if (bucket === "onit") return { label: "On it", tone: "onit" };
   if (bucket === "blocked") return { label: "Left for you", tone: "held" };
   if (bucket === "ask") return { label: "Waiting for your yes", tone: "waiting" };
   if (bucket === "done") return { label: "Handled", tone: "handled" };
@@ -441,20 +456,38 @@ function ProfileView({ profile }) {
   );
 }
 
-function TaskCard({ card, pendingAsk, onResolve, accent: showAccent = true }) {
+// The plain-English "I'm on it … — tell me to stop" line for an AUTO_DO_WITH_OPT_OUT chore.
+// Pulls the chore's own words from the source line so it reads like a person, not a status code.
+function onItLine(card) {
+  const what = shortText(card.source_text || card.title || "") || "this";
+  return `I'm on it with ${what} — tell me to stop.`;
+}
+
+function TaskCard({ card, pendingAsk, onResolve, onStop, accent: showAccent = true }) {
   const bucket = cardBucket(card);
   const word = outcomeWord(card);
+  const optOut = bucket === "onit";
   // Only the human receipts that actually have something to say (proofValue !== "").
   const proofs = visibleProofs(card.proof)
     .map((proof) => ({ label: proofLabel(proof), value: proofValue(proof) }))
     .filter((p) => p.value);
-  // Only the lead waiting/blocked row carries a status color (R1.2 / R2.11); queued
+  // Only the lead waiting/blocked/on-it row carries a status color (R1.2 / R2.11); queued
   // rows after it render plain so a single screen shows one accent at most.
-  const accent = !showAccent ? "" : bucket === "ask" ? "accent-ask" : bucket === "blocked" ? "accent-blocked" : "";
+  const accent = !showAccent
+    ? ""
+    : bucket === "ask"
+      ? "accent-ask"
+      : bucket === "blocked"
+        ? "accent-blocked"
+        : bucket === "onit"
+          ? "accent-onit"
+          : "";
   const title = humanTitle(card);
-  const why = humanWhy(card.reason);
+  // For an opt-out chore the "I'm on it … — tell me to stop" line replaces the why blurb so the
+  // card reads as STARTED work, not a pending decision.
+  const why = optOut ? onItLine(card) : humanWhy(card.reason);
   const followUp = followUpNote(card);
-  const sourceLine = cardSourceLine(card);
+  const sourceLine = optOut ? "" : cardSourceLine(card);
   return (
     <article className={`row settle ${accent}`}>
       <div className="row-head">
@@ -465,7 +498,7 @@ function TaskCard({ card, pendingAsk, onResolve, accent: showAccent = true }) {
         </span>
       </div>
       {sourceLine ? <p className="row-source">{sourceLine}</p> : null}
-      {why ? <p className="row-why">{why}</p> : null}
+      {why ? <p className={optOut ? "row-onit" : "row-why"}>{why}</p> : null}
       {followUp ? <p className="row-followup">{followUp}</p> : null}
       {proofs.length ? (
         <div className="row-receipt">
@@ -479,7 +512,14 @@ function TaskCard({ card, pendingAsk, onResolve, accent: showAccent = true }) {
           </dl>
         </div>
       ) : null}
-      {pendingAsk ? (
+      {optOut && onStop ? (
+        <div className="row-actions">
+          {/* The autonomy law: an opt-out chore is STARTED, not pending. The only control is
+              STOP — never a Yes/Not-now approval. */}
+          <button className="btn-stop" onClick={() => onStop(card.id)}>Stop</button>
+        </div>
+      ) : null}
+      {!optOut && pendingAsk ? (
         <div className="row-actions">
           <button onClick={() => onResolve(pendingAsk.ask_id, true)}>Yes</button>
           <button onClick={() => onResolve(pendingAsk.ask_id, false)}>Not now</button>
@@ -591,11 +631,12 @@ export default function Home() {
   const recognitionRef = useRef(null);
 
   const buckets = useMemo(() => {
-    const next = { ready: [], ask: [], blocked: [], done: [] };
+    const next = { onit: [], ready: [], ask: [], blocked: [], done: [] };
     for (const card of cards) next[cardBucket(card)].push(card);
     // Collapse near-identical / progressively-truncated duplicates so a real user sees
     // ONE decision per real thing, never a wall of copies (the dinner-vent storm).
     return {
+      onit: dedupeCards(next.onit),
       ready: dedupeCards(next.ready),
       ask: dedupeCards(next.ask),
       blocked: dedupeCards(next.blocked),
@@ -1082,6 +1123,38 @@ export default function Home() {
     }
   }
 
+  async function stopCard(cardId) {
+    // The autonomy law's opt-out: the owner pressed STOP on an "On it — you can stop me" chore.
+    setBusy(true);
+    setError("");
+    try {
+      const response = await ownerFetch("/api/owner/stop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ card_id: cardId }),
+      });
+      const data = await response.json();
+      handleOwnerAuthFailure(response, data);
+      if (!response.ok) throw new Error(data.message || data.error || "Stop failed");
+      setCards((current) =>
+        current.map((card) =>
+          card.id === cardId
+            ? {
+                ...card,
+                status: "stopped",
+                execution: { ...(card.execution || {}), goal_state: "stopped" },
+              }
+            : card,
+        ),
+      );
+      await loadStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1419,6 +1492,21 @@ export default function Home() {
             <p className="glance">…and {handledHidden} more, all handled. Nothing there needs you.</p>
           ) : null}
         </section>
+
+        {/* ---- On it — you can stop me (the autonomy law: reversible chores STARTED, not asked) ---- */}
+        {buckets.onit.length ? (
+          <section className="block">
+            <h2 className="block-title">On it — you can stop me</h2>
+            <p className="block-note">
+              These are reversible — I&apos;ve already started. Tell me to stop any one and I will.
+            </p>
+            <div className="rows">
+              {buckets.onit.map((card, index) => (
+                <TaskCard card={card} key={card.id} onStop={stopCard} accent={index === 0} />
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {/* ---- waiting for your yes (R2.11: ONE amber row, the rest plain below) ---- */}
         {waiting.length ? (

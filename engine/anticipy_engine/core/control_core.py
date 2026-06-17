@@ -245,7 +245,7 @@ def _obligation_sig(text: str) -> frozenset:
 # and kept DELIBERATELY small + concrete so genuinely different objects (monitor vs desk) never merge.
 _OBLIGATION_GENERIC = {
     "call", "email", "text", "contact", "ping", "reach", "phone", "ring",
-    "message", "messag", "msg",
+    "message", "messag", "msg", "send", "sent", "deliver", "share",
     "issue", "problem", "matter", "regard", "situation", "stuff",
 }
 
@@ -257,15 +257,25 @@ def _obligation_core(sig: frozenset) -> frozenset:
 
 
 def _same_obligation(a: frozenset, b: frozenset) -> bool:
-    """Same real-world obligation when both signatures are non-empty and EITHER one contains the other
-    ("amazon plant" == "amazon plant order") OR their identity cores are equal and non-empty
-    ("call Amazon about the monitor" == "handle the Amazon monitor issue" -> both core {amazon, monitor})."""
+    """Same real-world obligation when both signatures are non-empty and ANY of:
+    - one SIGNATURE contains the other ("amazon plant" == "amazon plant order"); OR
+    - their identity CORES are equal ("call Amazon about the monitor" == "handle the Amazon monitor
+      issue" -> both core {amazon, monitor}); OR
+    - the smaller core (an OBJECT-bearing core, >=2 salient tokens) is fully contained in the other —
+      a reminder/followup about the SAME deliverable folds into its thread ("get Sam the revised deck"
+      core {sam,revised,deck} swallows "remind me before I send the revised deck" core {revised,deck}).
+      The >=2 floor stops a bare person-only core ({sam}) from over-merging two distinct tasks."""
     if not a or not b:
         return False
     if a <= b or b <= a:
         return True
-    ca = _obligation_core(a)
-    return bool(ca) and ca == _obligation_core(b)
+    ca, cb = _obligation_core(a), _obligation_core(b)
+    if not ca or not cb:
+        return False
+    if ca == cb:
+        return True
+    small, big = (ca, cb) if len(ca) <= len(cb) else (cb, ca)
+    return len(small) >= 2 and small <= big
 
 
 _CONNECT_TOOL_BY_IDENTIFIER = {
@@ -824,6 +834,94 @@ class ControlCore:
             reason="I'll handle this on the web once you say yes",
             execution={"decision": "ask", "goal_id": ask_id, "ask_id": ask_id, "goal_state": "waiting"})
 
+    def _support_chore_opt_out(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
+        """THE AUTONOMY LAW (AUTO_DO_WITH_OPT_OUT): a reversible external-service chore — contact a
+        company / support about an order/refund/return/delivery/cancellation/issue ("call Amazon
+        about that plant I ordered") — must START, not wait for a yes. This is the ANTI-approval-
+        machine path: disposition=do (started), route=browser, action=browser_action (autonomy.py
+        maps browser_action -> AUTO_DO_WITH_OPT_OUT), so the card shows "I'm on it … — tell me to
+        stop", never a Yes/Not-now approval. A STOP control is registered (proactive.pending keyed
+        by the card id, category=opt_out_stop) so /owner/stop can halt it.
+
+        It still hard-stops at the true irreversible boundary: match_support_chore excludes any
+        spend verb, money still blocks, and a third-party SEND to a person is a different class.
+        In MOCK hands it prepares (shows "I'm on it (preparing) — tell me to stop"); in LIVE hands
+        it drives the support/browser arm on the real site and texts the result back."""
+        task = (line.text or "").strip()
+        url = self._web_start_url(task)
+        # Deterministic id so a replay of the same chore reuses the same card / running job.
+        card_id = "oc_" + hashlib.sha256(f"opt_out|{source}|{task}".encode("utf-8")).hexdigest()[:18]
+        live = self.browser_hand.mode == MODE_LIVE
+        # Register the STOP control. opt_out chores run unless the owner stops them; this is what
+        # /owner/stop cancels (and what the UI's STOP button hits).
+        self.proactive.pending[card_id] = {
+            "goal_id": card_id, "action": task, "reason": "reversible chore — started, stop me if you want",
+            "category": "opt_out_stop", "browser_task": task, "browser_url": url, "stopped": False}
+        self.proactive._persist_pending()
+        msg = (f"On it — I'm handling \"{task}\" for you now. Tell me to stop if you'd rather I didn't.")
+        try:
+            self.text_channel.send(self._user_contact(), msg)
+            self.glassbox.log("opt_out_started", {"card_id": card_id, "task": task, "url": url,
+                                                  "live": live})
+        except Exception as exc:
+            self.glassbox.log("opt_out_send_error", {"card_id": card_id, "error": str(exc)})
+        if live:
+            # LIVE: drive the support/browser arm now (async, so it never blocks the ingest reply).
+            # The result is texted back and landed on the card, exactly like the confirm-first arm.
+            state = "running"
+            reason = "I'm on it — tell me to stop"
+            try:
+                asyncio.create_task(self._run_browser_and_confirm(task, url, card_id))
+            except RuntimeError:
+                # no running loop (unit/preview) -> stay prepared; nothing fires
+                state = "preparing"
+                reason = "I'm on it (preparing) — tell me to stop"
+        else:
+            # MOCK hands: prepare only (no real site drive). Honest copy: preparing, opt-out open.
+            state = "preparing"
+            reason = "I'm on it (preparing) — tell me to stop"
+        return OwnerTaskCard(
+            id=card_id,
+            source=source, line_no=line.line_no, source_text=line.text,
+            title=f"On it: {task[:70]}", disposition="do", route="browser",
+            action="browser_action",
+            args={"task_text": task, "start_url": url, "opt_out": True, "stop_id": card_id},
+            confidence=0.8, status=state,
+            reason=reason,
+            execution={"decision": "act", "goal_id": card_id, "ask_id": None,
+                       "goal_state": state, "opt_out": True})
+
+    def stop_owner_card(self, card_id: str) -> dict:
+        """STOP control for an AUTO_DO_WITH_OPT_OUT chore: the owner said 'stop'. Marks the pending
+        opt-out stopped (so any in-flight/queued work halts) and flips the durable card record to
+        'stopped' so the board reflects it. Reversible chores are the ONLY thing this touches."""
+        p = self.proactive.pending.get(card_id)
+        if isinstance(p, dict) and p.get("category") == "opt_out_stop":
+            p["stopped"] = True
+            self.proactive.pending.pop(card_id, None)
+            self.proactive._persist_pending()
+        path = self.data_dir / "owner_cards" / f"{card_id}.json"
+        stopped = False
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            record = None
+        if isinstance(record, dict):
+            record["state"] = "stopped"
+            if isinstance(record.get("owner_card"), dict):
+                record["owner_card"]["status"] = "stopped"
+                ex = record["owner_card"].get("execution")
+                if isinstance(ex, dict):
+                    ex["goal_state"] = "stopped"
+            try:
+                path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+                stopped = True
+            except Exception:
+                stopped = False
+            self._sync_owner_loop_status(card_id, "stopped")
+        self.glassbox.log("opt_out_stopped", {"card_id": card_id, "stopped": stopped})
+        return {"card_id": card_id, "stopped": stopped}
+
     async def _run_browser_and_confirm(self, task: str, url: str, ask_id: str) -> None:
         """Run the browser agent on the real site and TEXT the owner the result (the confirmation
         leg of the round-trip). Kicked from core.resolve on a YES so it never blocks the reply."""
@@ -983,6 +1081,35 @@ class ControlCore:
             # ambiguity tiebreak fails OPEN (returns True on any error).
             if not self.proactive.triage.actionable(line.text):
                 return None
+            return shaped
+        # THE AUTONOMY LAW (SEAM 1): a reversible external-service chore — contact a company /
+        # support about an order/refund/return/delivery/cancellation/issue ("call Amazon about that
+        # plant I ordered") — must START, not wait for a yes. It is NOT an approval ask: route it to
+        # the support/browser arm as AUTO_DO_WITH_OPT_OUT ("I'm on it — tell me to stop"). Checked
+        # AFTER the money pre-gate so money/pay/checkout still BLOCKS first; match_support_chore
+        # itself excludes any spend verb, and a third-party SEND to a person is a different class
+        # (it carries no company+issue pair). Runs only on the executing spine path (not preview).
+        from ..shared.support_chore import match_support_chore
+        if match_support_chore(line.text) is not None:
+            self.glassbox.log("support_chore_opt_out",
+                              {"line": line.text[:140], "reason": "reversible service chore -> AUTO_DO_WITH_OPT_OUT"})
+            return self._support_chore_opt_out(line, source)
+        # INTERNAL NOTE (SEAM 3): "the retainer note is in the CRM" is reversible internal admin, not
+        # money. owner_mode shaped it as a confident do (prepare_internal_note). There is no generic
+        # CRM/notes arm wired yet, so the honest AUTO_DO is to PREPARE the note (capture what we'd
+        # write) and surface it as a do-card — never a money block, never a dead clarify. Handled
+        # directly (not via the decider, which silences this loose admin phrasing -> the moat_task
+        # rescue then mislabels it a clarify). The capture path already wrote the line as durable
+        # memory; _persist_card records the prep with read-back proof.
+        if shaped is not None and shaped.action == "prepare_internal_note":
+            self.glassbox.log("internal_note_prepared",
+                              {"line": line.text[:140],
+                               "reason": "internal note/record -> reversible admin (no money)"})
+            shaped.disposition = "do"
+            shaped.reason = ("CRM/notes not connected — I've kept the note text ready; "
+                             "I'd write this in the record")
+            shaped.execution = {"decision": "act", "goal_id": None, "ask_id": None,
+                                "goal_state": "open", "internal_note": True}
             return shaped
         if shaped is not None and shaped.action == "find_or_cart_without_purchase":
             # PREPARE WHEN CONFIDENT (Omar's law, 2026-06-16 decision): if memory/onboarding resolves
@@ -1377,6 +1504,11 @@ class ControlCore:
             # ONLY a card that CLAIMS it executed (decision==act) without proof is a violation.
             # A held/vent-adjacent card (execution None / decision != act) is legitimately proof-less
             # and must NOT be touched (flipping it would make a vent produce an ask — a cardinal breach).
+            # An AUTO_DO_WITH_OPT_OUT chore is legitimately IN FLIGHT (started, not done) — it is not
+            # claiming a verified 'done', so it is exempt (flipping it back to an ask is the exact
+            # approval-machine bug the autonomy law forbids).
+            if (c.get("execution") or {}).get("opt_out"):
+                continue
             if (c.get("execution") or {}).get("decision") == "act" and not c.get("proof"):
                 c["disposition"] = "ask"
                 ex = dict(c.get("execution") or {})
@@ -1388,6 +1520,14 @@ class ControlCore:
         for c in out.get("cards", []):
             a = classify_autonomy(c)
             c["autonomy_mode"] = a["mode"]
+            c["autonomy_why"] = a["why"]
+            # SEAM 2: PERSIST autonomy_mode (+ why) onto the DURABLE card record. classify_autonomy
+            # runs here, AFTER _persist_card wrote the record — so the record (what GET /owner/cards
+            # returns, which the UI board reads) carried autonomy_mode=None. Stamp it onto the record
+            # now so the board can pick the lane/verb (the "On it — you can stop me" vs Yes/Not-now
+            # split). Best-effort: a missing record (preview / replay) is simply skipped.
+            if execute_actions:
+                self._stamp_autonomy_on_record(c.get("id"), a["mode"], a["why"])
             # full classification proof (packet 02): input span, chosen mode, REJECTED modes,
             # action plan, result, proof types.
             autonomy.append({
@@ -1399,6 +1539,27 @@ class ControlCore:
             })
         out["middle_trace"]["autonomy"] = autonomy
         return out
+
+    def _stamp_autonomy_on_record(self, card_id: str | None, mode: str, why: str) -> None:
+        """Write the classified autonomy mode (+why) onto the durable owner-card record so
+        GET /owner/cards (the board source of truth) carries it. Idempotent; best-effort."""
+        if not card_id:
+            return
+        path = self.data_dir / "owner_cards" / f"{card_id}.json"
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        if not isinstance(record, dict):
+            return
+        record["autonomy_mode"] = mode
+        if isinstance(record.get("owner_card"), dict):
+            record["owner_card"]["autonomy_mode"] = mode
+            record["owner_card"]["autonomy_why"] = why
+        try:
+            path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+        except Exception:
+            return
 
     def _persist_card(self, card: OwnerTaskCard, source: str, execute_actions: bool,
                       capture_result: dict | None = None) -> bool:
@@ -1509,6 +1670,18 @@ class ControlCore:
             if execute_actions:
                 self.glassbox.log("blocked", {"goal_id": card.id, "category": "money",
                                               "reason": card.reason, "action": card.source_text})
+        elif execution.get("opt_out"):
+            # AUTO_DO_WITH_OPT_OUT (SEAM 1): a reversible external-service chore that STARTED (not an
+            # approval ask). There is no paused goal — the work is in flight (live) or prepared
+            # (mock); the card carries its own preparing/running state. Honor it and record a START
+            # receipt so the no-self-attestation invariant (which flips a proof-less act->ask) does
+            # NOT mistake an in-flight chore for an unproven 'done'. The browser arm lands the real
+            # receipt on the record when it finishes (live), exactly like the confirm-first arm.
+            state = card.status or execution.get("goal_state") or "preparing"
+            card.proof.append({"type": "opt_out_started",
+                               "goal_id": execution.get("goal_id"),
+                               "state": state, "stop_id": (card.args or {}).get("stop_id")})
+            card.proof.append({"type": "engine_execution", **execution})
         elif execution:
             # the spine already ran this line (F17 one brain, _spine_card): the
             # record mirrors what it actually DID. Spine refusal (ignore/suppressed/
@@ -1992,10 +2165,15 @@ class ControlCore:
 
     # ---- Room 6: the "needs you" surface (decisions flow brain -> app -> back) ----
     def pending_asks(self) -> list:
-        """Detrimental actions paused awaiting the user's yes/no — what the app surfaces."""
+        """Detrimental actions paused awaiting the user's yes/no — what the app surfaces.
+
+        Excludes opt_out_stop entries: an AUTO_DO_WITH_OPT_OUT chore is STARTED, not awaiting a
+        yes — its pending entry is only the STOP handle (resolved by /owner/stop). Surfacing it
+        here would wrongly render it as a Yes/Not-now approval (the approval-machine bug)."""
         return [{"ask_id": aid, "action": p["action"], "reason": p["reason"],
                  "category": p.get("category", ""), "goal_id": p["goal_id"]}
-                for aid, p in self.proactive.pending.items()]
+                for aid, p in self.proactive.pending.items()
+                if p.get("category") != "opt_out_stop"]
 
     def memory_open_loops(self, limit: int = 50) -> dict:
         """Visible memory backlog: open/waiting loops the owner should be able to inspect."""
@@ -2163,6 +2341,9 @@ class ControlCore:
                 continue
             state = record.get("state") or card.get("status") or "open"
             card = {**card, "status": state}
+            # SEAM 2: surface the persisted autonomy mode so the board can pick the lane/verb.
+            if not card.get("autonomy_mode") and record.get("autonomy_mode"):
+                card["autonomy_mode"] = record.get("autonomy_mode")
             execution = card.get("execution")
             if isinstance(execution, dict):
                 card["execution"] = {

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from ..shared.invoice_draft import match_invoice_draft_ask
-from ..shared.note_task import match_note_task
+from ..shared.note_task import match_internal_note, match_note_task
 from ..shared.schedule_change import match_schedule_change_hold
 from ..shared.slotbooking import match_context_slot_choice_booking, match_slot_choice_booking
 from ..shared.storesite import derive_store_site
@@ -294,6 +294,19 @@ class HarmLine:
         # the invoice") never matches this shape and still gates as money via the verb.
         if match_invoice_draft_ask(action_text or ""):
             hard_text = re.sub(r"\binvoic(?:e|es|ing)\b", " ", hard_text)
+        # INTERNAL NOTE (NOT money): "make sure the retainer NOTE is in the CRM", "add a note in
+        # the client file about the retainer". A money/obligation noun (retainer/invoice/...) can
+        # be the SUBJECT of an internal record entry without the line ever moving money — the
+        # _MONEY_SIGNAL obligation-noun catch wrongly read the bare word as money and blocked the
+        # admin note (the lawyer seam). Strip those obligation nouns for this note shape ONLY so it
+        # falls through to the reversible `note` branch (rule 3). The note detector itself refuses
+        # any line carrying a spend/transaction verb, so a real payment ("pay/wire/chase the
+        # retainer") never matches and still gates as money below.
+        if match_internal_note(action_text or ""):
+            hard_text = re.sub(
+                r"\b(?:retainer|copay|co-pay|invoice|invoices|balance|deposit|dues|fee|fees|"
+                r"tuition|mortgage|payment|payments|bill|bills|tab|rent)\b",
+                " ", hard_text)
         hard = _first_match(hard_text, _HARD)
         if hard is not None:
             return HarmVerdict(True, hard, f"detrimental:{hard} -> ask before acting")
@@ -326,6 +339,11 @@ class HarmLine:
                                "reversible:time-anchored forget-hold -> act (re-gated on fire)")
         if match_note_task(action_text or "") is not None:
             return HarmVerdict(False, "note", "reversible:note capture -> act")
+        # An INTERNAL note in a CRM/file/record whose subject mentions a money word ("the retainer
+        # note is in the CRM") is reversible internal admin, not a payment. The note detector
+        # already excludes any line with a spend verb, so a real money move never reaches here.
+        if match_internal_note(action_text or "") is not None:
+            return HarmVerdict(False, "note", "reversible:internal note/record -> act")
         if match_invoice_draft_ask(action_text or ""):
             return HarmVerdict(True, "invoice_draft",
                                "invoice/client financial draft needs confirmation -> ask")
