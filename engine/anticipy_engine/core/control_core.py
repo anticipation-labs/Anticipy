@@ -1022,6 +1022,44 @@ class ControlCore:
         finally:
             self.proactive._suppress_ask_delivery = False
 
+    def _intent_resolve(self, observed, raw_lines):
+        """GATE MIDDLE-1: intent-shaped memory handoff. Build ranked INTENT THREADS from the raw
+        transcript, resolve each task's VAGUE reference against them ("that desk thing" -> the Jarvis
+        standing desk, not Mia pickup; "send it" -> the Sam deck), and drop preference/referent
+        statements from the action path (remembered, never a card). An ambiguous reference is left
+        un-resolved so the downstream asks the smallest clarification — never a wrong guess.
+        Returns (filtered_observed, middle_trace) with the seven proof fields per resolution."""
+        from ..proactive.intent_threads import (
+            build_threads, classify, resolve_reference, _head_noun, _is_bare_ref,
+        )
+        threads = build_threads(raw_lines)
+        captured = [{"text": t.text, "kind": t.kind} for t in threads]
+        resolutions, kept = [], []
+        for line in observed:
+            text = getattr(line, "text", "") or ""
+            if classify(text) == "preference":
+                resolutions.append({"line": text, "kind": "preference",
+                                    "decision": "remembered as referent — no card"})
+                continue
+            if _head_noun(text) or _is_bare_ref(text):
+                self_idx = next((t.idx for t in threads if t.text == text), len(threads))
+                resolved, tr = resolve_reference(text, threads, self_idx)
+                if resolved != text:
+                    line.text = resolved
+                resolutions.append({
+                    "line": text, "resolved_to": resolved, "head": tr.get("head"),
+                    "ranked_candidates": tr.get("candidates"), "chosen_referent": tr.get("chosen"),
+                    "rejected_referents": tr.get("rejected"),
+                    "decision": "resolved" if resolved != text else "ambiguous — ask smallest clarification",
+                })
+            kept.append(line)
+        trace = {"captured_memories": captured, "resolutions": resolutions}
+        try:
+            self.glassbox.log("intent_middle_trace", trace)
+        except Exception:
+            pass
+        return kept, trace
+
     @staticmethod
     def _consolidate_obligations(observed):
         """F-012 anti-spam: collapse moat-expanded lines that name the SAME real-world obligation so
@@ -1052,8 +1090,10 @@ class ControlCore:
         return [entry[0] for entry in kept]
 
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
-        observed = self.owner_mode.observe(text)
-        observed = await self._expand_tasks_with_model(observed)   # THE MOAT: model splits + judges
+        raw_observed = self.owner_mode.observe(text)
+        raw_lines = [l.text for l in raw_observed]
+        observed = await self._expand_tasks_with_model(raw_observed)   # THE MOAT: model splits + judges
+        observed, middle_trace = self._intent_resolve(observed, raw_lines)  # GATE MIDDLE-1: ranked recall
         observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
         captured_by_line: dict[int, dict] = {}
         for line in observed:
@@ -1151,7 +1191,9 @@ class ControlCore:
         )
         result = OwnerIngestResult(source=source, observed_lines=observed, cards=cards,
                                    ignored_line_count=ignored)
-        return result.model_dump(mode="json")
+        out = result.model_dump(mode="json")
+        out["middle_trace"] = middle_trace   # GATE MIDDLE-1 proof (captured memories + resolutions)
+        return out
 
     def _persist_card(self, card: OwnerTaskCard, source: str, execute_actions: bool,
                       capture_result: dict | None = None) -> bool:

@@ -62,6 +62,26 @@ This file is append-only. The deep historical ledger is `logs/factory/RECEIPTS.m
 - **NOT done:** Sam card title is generic ("Clarify possible request"); CRM "Money's involved" reason is a
   mild misclassification (outcome is correct/safe); cross-ingest live re-submit dedup is exact-text only.
 
+### R-2026-06-16-E — Gate Middle-1: intent-shaped memory handoff (real owner-ingest path)
+- **Gate:** the hard middle — vague reference → ranked recall → right intent → prepared/parked action.
+- **Code:** new `engine/anticipy_engine/proactive/intent_threads.py` (IntentThread layer: classify each
+  line vent/preference/action/followup; resolve vague refs against RANKED prior threads, deterministic);
+  wired into `control_core._owner_ingest_inner` (`_intent_resolve` before consolidation); `middle_trace`
+  returned on `/owner/ingest` + glassbox `intent_middle_trace`. Commit `Gate Middle-1 …`.
+- **Real trace** (7-line scenario via `/owner/ingest`, channels=mock, fresh DATA_DIR):
+  - captured memories: pickup=action · Jarvis desk=**preference** · coffee=**vent** · "that desk thing"=action
+    · lottery=**vent** · Sam deck=action · "remind me"=**followup**.
+  - "that desk thing" → ranked candidates [Jarvis desk (names 'desk', 10.5), Mia pickup (0.5)] →
+    **chosen: Jarvis standing desk · rejected: Mia pickup** → rewritten "put Jarvis standing desk in the cart".
+  - "remind me before I send it" → **chosen: the Sam revised-deck thread** (both about sending) → merged.
+  - **3 cards** (Mia pickup ask · Jarvis-desk browser confirm-first, parks before checkout · Sam deck ask);
+    Jarvis preference = **no card**; coffee + lottery = **0 cards**. Nothing external fired.
+- **Proof fields present:** captured_memories, ranked_candidates, chosen_referent, rejected_referents,
+  formed intent (resolved task), action plan (card route/action), result (disposition/parked).
+- **Verification:** `test_memory_handoff` PASS (deterministic); suite **GREEN 92/0**; `safety_mega_eval` 0 breaches.
+- **Still open (honest):** cross-ingest live re-submit dedup is exact-text; card titles are plain
+  (drop names); classification is deterministic-heuristic (moat model vent-guard is the safety backstop).
+
 ## Imported prior receipts (from `logs/factory/*`, FOREMAN_STATE 2026-06-15/16) — RE-VERIFY before relying
 
 These were reported proven-live by prior foreman sessions. They are imported for continuity, NOT
