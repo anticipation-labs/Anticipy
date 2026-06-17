@@ -94,6 +94,17 @@ This file is append-only. The deep historical ledger is `logs/factory/RECEIPTS.m
   (live API/voice, owner Mac, 5 real days) + packaged download/signing are OWNER-GATED →
   `ALL_OF_IT_IS_DONE_CERTIFIED` cannot truthfully be claimed yet (release criteria 10–17, 19).
 
+### R-2026-06-17-G — Tier-1 10,000-run cert: 0 critical (11-type), definitive 14-type rerun in progress
+- **Gate:** packet 07, Tier-1 (synthetic whole-product), criteria 15–16.
+- **Receipt:** `cert_harness.py --personas 100 --scenarios 100` through the real `owner_ingest` pipeline,
+  openrouter, 11 scenario types incl. wrong_account: **10,000 runs / 0 critical / 90 non-critical / 2610s**
+  (`/tmp/cert_10k3.log` superseding; bundle was `DONE_CERTIFICATION_BUNDLE`). The prior run's lone critical
+  (rare auto-acted-no-proof) was root-fixed by the no-self-attestation invariant → now 0 across 10k.
+- **In progress:** the DEFINITIVE rerun adds follow_up + prompt_injection + retraction + per-rep person
+  rotation (14 types) — the version that closes Tier-1.
+- **Non-critical (90/10000 = 0.9%):** autonomy mode mismatches (over-cautious on `calendar`), tracked, safe.
+- **Ceiling:** Tiers 2–4 (live API/voice, owner Mac, 5 real days) + packaged signing are OWNER-GATED.
+
 ## Imported prior receipts (from `logs/factory/*`, FOREMAN_STATE 2026-06-15/16) — RE-VERIFY before relying
 
 These were reported proven-live by prior foreman sessions. They are imported for continuity, NOT
