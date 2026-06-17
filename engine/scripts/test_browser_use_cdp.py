@@ -36,6 +36,18 @@ def _fake_run(cmd, input=None, **kwargs):
 
 
 def main():
+    import os as _os
+    import sys as _sys
+    import tempfile as _tempfile
+    # This test FAKES the subprocess (no real browser is ever launched) and exists to prove the
+    # cdp/money/SSRF logic, NOT browser readiness. available() is now HONEST: it reports ok=False
+    # when the cached Chromium binary is absent (the false-ready fix). So we make the two non-browser
+    # prerequisites genuinely satisfiable here — point the bridge python at a real interpreter and the
+    # chrome-bin env at a real existing file — so available() is legitimately ok and browse_read does
+    # not (correctly) short-circuit on a missing browser before exercising the cdp logic.
+    _fake_chrome = _tempfile.NamedTemporaryFile(prefix="anticipy-cdp-test-chrome-", delete=False).name
+    _os.environ["ANTICIPY_BU_CHROME_BIN"] = _fake_chrome
+    _os.environ["ANTICIPY_BROWSERUSE_PYTHON"] = _sys.executable
     assert bul.available()["ok"], bul.available()
     bul.subprocess = types.SimpleNamespace(run=_fake_run,
                                            TimeoutExpired=_real_subprocess.TimeoutExpired)
@@ -81,6 +93,11 @@ def main():
     assert "req" not in CAPTURED, "a non-loopback cdp_url must be refused before the runner"
 
     assert bul._cdp_is_loopback("http://127.0.0.1:9222") and not bul._cdp_is_loopback("http://evil.com")
+
+    try:
+        _os.unlink(_fake_chrome)
+    except OSError:
+        pass
 
     print("PASS: cdp_url attaches for READS; ACTIONS in the logged-in Chrome are REFUSED (money hard stop); "
           "actions run on a throwaway browser; SSRF + loopback guards hold")

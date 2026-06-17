@@ -1,0 +1,24 @@
+{
+  "gate": "G_api",
+  "pass": false,
+  "mode": "live",
+  "evidence": "event id=l5rjhdvrskbh45vv3nr8dr2628 read-back OK + deleted | gmail needs OAuth tap: https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&client_id=826965503-pci56f36oeot675h17vic7rsc370til4.apps.googleusercontent.com&include_granted_scopes=true&prompt=consent&redirect_uri=https%3A%2F%2Fcloud.arcade.dev%2Fapi%2Fv1%2Foauth%2Ff4c6b_aps_arcade-google%2Fcallback&response_type=code&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.compose&state=a69fc0bc-600e-4198-8008-7fb536d673e5",
+  "verified_at": "2026-06-17",
+  "detail": "calendar: created id=l5rjhdvrskbh45vv3nr8dr2628 read-back OK, deleted OK | gmail: needs OAuth tap: https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&client_id=826965503-pci56f36oeot675h17vic7rsc370til4.apps.googleusercontent.com&include_granted_scopes=true&prompt=consent&redirect_uri=https%3A%2F%2Fcloud.arcade.dev%2Fapi%2Fv1%2Foauth%2Ff4c6b_aps_arcade-google%2Fcallback&response_type=code&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.compose&state=a69fc0bc-600e-4198-8008-7fb536d673e5",
+  "calendar": {
+    "pass": true,
+    "event_id": "l5rjhdvrskbh45vv3nr8dr2628",
+    "title": "[Anticipy test] gate G calendar",
+    "start": "2026-06-18T15:00:00-07:00",
+    "end": "2026-06-18T15:30:00-07:00",
+    "detail": "created id=l5rjhdvrskbh45vv3nr8dr2628, read-back OK, deleted, read-back-gone OK"
+  },
+  "gmail": {
+    "pass": false,
+    "step": "auth",
+    "connect_url": "https://accounts.google.com/o/oauth2/v2/auth?access_type=offline&client_id=826965503-pci56f36oeot675h17vic7rsc370til4.apps.googleusercontent.com&include_granted_scopes=true&prompt=consent&redirect_uri=https%3A%2F%2Fcloud.arcade.dev%2Fapi%2Fv1%2Foauth%2Ff4c6b_aps_arcade-google%2Fcallback&response_type=code&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fgmail.compose&state=a69fc0bc-600e-4198-8008-7fb536d673e5",
+    "status": "pending",
+    "detail": "gmail not authorized (status=pending); connect_url captured \u2014 owner must tap to grant gmail.compose. NOTHING written, NOTHING sent."
+  },
+  "nothing_sent": true
+}

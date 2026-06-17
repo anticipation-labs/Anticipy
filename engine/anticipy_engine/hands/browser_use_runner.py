@@ -292,6 +292,9 @@ async def _run(req: dict) -> dict:
         "structured": bool(req.get("structured")),
         # Echo the navigation wall so callers can prove off-domain nav is blocked.
         "allowed_domains": allowed_domains,
+        # Screenshot receipt fields (always present; populated after a real run).
+        "screenshot": False,
+        "screenshot_path": None,
     }
     try:
         agent = Agent(
@@ -315,6 +318,21 @@ async def _run(req: dict) -> dict:
             out["actions"] = history.action_names()
         except Exception:
             pass
+        # Screenshot RECEIPT (parity with the API arm's read-back proof): capture
+        # the last screenshot browser-use took. We surface a boolean `screenshot`
+        # flag (proof a real frame was captured) and `screenshot_path` (where the
+        # png lives on disk) — never inventing one. A cart-prep run thus produces
+        # a screenshot+DOM+URL receipt the caller can land on the durable card.
+        try:
+            paths = [p for p in (history.screenshot_paths() or []) if p]
+            if paths:
+                out["screenshot_path"] = paths[-1]
+                out["screenshot"] = True
+            else:
+                shots = [s for s in (history.screenshots() or []) if s]
+                out["screenshot"] = bool(shots)
+        except Exception:
+            out.setdefault("screenshot", False)
         try:
             out["steps"] = len(history.urls() or [])
         except Exception:

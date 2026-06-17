@@ -46,6 +46,24 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_BRIDGE_PY = str(_REPO_ROOT / "engine" / ".bu-venv" / "bin" / "python")
 _RUNNER_PATH = str(Path(__file__).resolve().parent / "browser_use_runner.py")
 
+# Default cached-Chromium path the runner LAUNCHES (throwaway browser). Kept in
+# sync by VALUE with browser_use_runner.CHROME_BIN — we do NOT import the runner
+# (that file is executed by the 3.11 bridge venv; importing it from the 3.10
+# engine is exactly what this module is built to avoid). available() probes this
+# so it cannot report ready when the binary is absent (the false-ready bug:
+# the chromium-1161 cache can be gone while bridge-python + runner still exist).
+_DEFAULT_CHROME_BIN = (
+    "/Users/omarebrahim/Library/Caches/ms-playwright/chromium-1161/"
+    "chrome-mac/Chromium.app/Contents/MacOS/Chromium"
+)
+
+
+def chrome_binary() -> str:
+    """The chrome/chromium binary the runner LAUNCHES for a throwaway browser.
+    Env override wins (mirrors the runner's ANTICIPY_BU_CHROME_BIN); else the
+    durable cached-Chromium path. Not needed in CDP-attach mode (cdp_url)."""
+    return os.environ.get("ANTICIPY_BU_CHROME_BIN", _DEFAULT_CHROME_BIN)
+
 # Generous default: a real browser read of a public page typically finishes well
 # under this, but cold Chromium launch + model latency needs headroom.
 _DEFAULT_TIMEOUT_S = 240
@@ -70,18 +88,49 @@ def bridge_python() -> str:
 
 
 def available() -> Dict[str, Any]:
-    """Cheap, import-free readiness probe: does the bridge python + runner exist?
-    The engine can call this to decide whether the browser arm is usable at all
-    without ever launching a browser."""
+    """Cheap, import-free readiness probe — HONEST about every prerequisite the
+    runner actually needs before it can drive a browser:
+      1. the 3.11 bridge python exists,
+      2. the runner script exists, AND
+      3. a real browser is reachable — EITHER the cached Chromium binary the
+         runner LAUNCHES exists, OR a CDP-attach URL is configured (attach mode
+         needs no local binary, mirroring browser_use_runner._run).
+
+    The old probe checked only (1)+(2) and returned ok=True even when the
+    chromium-1161 cache was ABSENT — a false-ready signal: the runner then fails
+    at "chrome binary missing". We now probe the binary too so `ok` cannot lie.
+    Still launches nothing (a stat, not a browser)."""
     py = bridge_python()
     py_ok = bool(py) and (os.path.exists(py) or shutil.which(py) is not None)
     runner_ok = os.path.exists(_RUNNER_PATH)
+
+    chrome_bin = chrome_binary()
+    chrome_ok = bool(chrome_bin) and os.path.exists(chrome_bin)
+    # CDP-attach mode (the user's already-running Chrome) needs no local binary —
+    # the runner skips the chrome check when a cdp_url/env is set. Mirror that so
+    # an attach-configured engine isn't falsely reported unavailable.
+    cdp_url = (os.environ.get("ANTICIPY_BROWSERUSE_CDP_URL") or "").strip() or None
+    browser_ok = chrome_ok or bool(cdp_url)
+
+    reasons: List[str] = []
+    if not py_ok:
+        reasons.append(f"bridge python not found: {py}")
+    if not runner_ok:
+        reasons.append(f"runner not found: {_RUNNER_PATH}")
+    if not browser_ok:
+        reasons.append(f"chrome binary missing: {chrome_bin}")
+
     return {
-        "ok": py_ok and runner_ok,
+        "ok": py_ok and runner_ok and browser_ok,
         "bridge_python": py,
         "bridge_python_exists": py_ok,
         "runner": _RUNNER_PATH,
         "runner_exists": runner_ok,
+        "chrome_bin": chrome_bin,
+        "chrome_bin_exists": chrome_ok,
+        "cdp_attach": bool(cdp_url),
+        "browser_ready": browser_ok,
+        "reason": "; ".join(reasons) if reasons else "",
     }
 
 
@@ -104,6 +153,11 @@ class BrowseReadResult:
     actions: List[str] = field(default_factory=list)
     elapsed_s: Optional[float] = None
     error: Optional[str] = None
+    # Screenshot RECEIPT (parity with the API arm's read-back proof): `screenshot`
+    # is True only when the runner captured a real frame; `screenshot_path` is
+    # where that png lives on disk. Never invented.
+    screenshot: bool = False
+    screenshot_path: Optional[str] = None
     # The host-scoped navigation wall the runner applied (None = allow-all because
     # no host could be derived). Surfaced so callers can prove off-domain nav is
     # blocked by browser-use's security watchdog.
@@ -124,6 +178,8 @@ class BrowseReadResult:
             "elapsed_s": self.elapsed_s,
             "error": self.error,
             "allowed_domains": self.allowed_domains,
+            "screenshot": self.screenshot,
+            "screenshot_path": self.screenshot_path,
         }
 
 
@@ -177,17 +233,15 @@ def browse_read(
     `error`, never a faked success."""
     probe = available()
     if not probe["ok"]:
-        missing = []
-        if not probe["bridge_python_exists"]:
-            missing.append(f"bridge python not found: {probe['bridge_python']}")
-        if not probe["runner_exists"]:
-            missing.append(f"runner not found: {probe['runner']}")
+        # `reason` now covers all three prerequisites (bridge python, runner,
+        # AND a reachable browser — cached Chromium binary or a CDP-attach url).
+        reason = probe.get("reason") or "browser arm not ready"
         return BrowseReadResult(
             success=False,
             result=None,
             url=url,
             structured=structured,
-            error="browser bridge unavailable: " + "; ".join(missing),
+            error="browser bridge unavailable: " + reason,
         )
 
     # SSRF guard: a cdp_url may only be a loopback Chrome. Refuse anything else BEFORE the
@@ -294,6 +348,8 @@ def browse_read(
         elapsed_s=payload.get("elapsed_s"),
         error=payload.get("error"),
         allowed_domains=payload.get("allowed_domains"),
+        screenshot=bool(payload.get("screenshot")),
+        screenshot_path=payload.get("screenshot_path"),
         raw=payload,
     )
 

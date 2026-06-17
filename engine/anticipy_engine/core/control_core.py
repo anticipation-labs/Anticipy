@@ -834,6 +834,7 @@ class ControlCore:
             self.text_channel.send(self._user_contact(), f"On it — I'm looking into \"{task}\" on the web now. I'll text you what I find.")
         except Exception:
             pass
+        res = None
         try:
             res = await asyncio.to_thread(browse_act, task, url=url, max_steps=16)
             ok = bool(getattr(res, "success", False))
@@ -841,6 +842,16 @@ class ControlCore:
         except Exception as exc:
             ok, answer = False, ""
             self.glassbox.log("browser_action_error", {"ask_id": ask_id, "error": str(exc)})
+        # LAND THE RESULT ON THE DURABLE CARD (parity with the API arm's read-back proof):
+        # the card was flipped to 'running' on YES; now write the resolved browser receipt
+        # (final url + screenshot flag/path + the answer) back onto the record and persist,
+        # so the board shows the OUTCOME of the web task, not a stranded 'running'.
+        final_url = (getattr(res, "url", None) or url) if res is not None else url
+        screenshot = bool(getattr(res, "screenshot", False)) if res is not None else False
+        screenshot_path = getattr(res, "screenshot_path", None) if res is not None else None
+        self._land_browser_result_on_card(
+            ask_id, success=ok, answer=answer, url=final_url,
+            screenshot=screenshot, screenshot_path=screenshot_path)
         if ok and answer:
             msg = f"Done — {answer[:500]}"
         else:
@@ -852,6 +863,62 @@ class ControlCore:
             pass
         self.glassbox.log("browser_action_done", {"ask_id": ask_id, "success": ok,
                                                   "result": (answer[:200] if answer else None)})
+
+    def _land_browser_result_on_card(self, ask_id: str, *, success: bool, answer: str,
+                                     url: str | None, screenshot: bool,
+                                     screenshot_path: str | None = None) -> None:
+        """Write the resolved BROWSER RECEIPT onto the durable owner card record (card.id == ask_id):
+        a `proof` (url + screenshot flag/path) plus a `browser_result` block (answer + success) and the
+        final state (done on a real answer, else failed). This is the browser arm's equivalent of the
+        API arm's `record['proof'] = goal.proof` write-back — without it the card stays at 'running'
+        forever and the found result/screenshot/URL never land where the board reads them. Persists the
+        record (the centerpiece path previously skipped this), and syncs the owner-loop status."""
+        path = self.data_dir / "owner_cards" / f"{ask_id}.json"
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        state = "done" if (success and (answer or "").strip()) else "failed"
+        proof = {
+            "type": "browser_receipt",
+            "url": url,
+            "screenshot": bool(screenshot),
+            "answer": (answer or "")[:1000],
+        }
+        if screenshot_path:
+            proof["screenshot_path"] = screenshot_path
+        record["state"] = state
+        record["proof"] = proof
+        record["browser_result"] = {
+            "success": bool(success),
+            "answer": (answer or "")[:1000],
+            "url": url,
+            "screenshot": bool(screenshot),
+            "screenshot_path": screenshot_path,
+        }
+        if isinstance(record.get("owner_card"), dict):
+            record["owner_card"]["status"] = state
+            # Mirror the receipt onto the card body so owner_cards() surfaces it on the board.
+            self._set_card_execution_proof(record["owner_card"], proof, state)
+        try:
+            path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+        except Exception:
+            return
+        self._sync_owner_loop_status(ask_id, state)
+        self.glassbox.log("browser_result_on_card",
+                          {"card_id": ask_id, "state": state, "success": bool(success),
+                           "url": url, "screenshot": bool(screenshot)})
+
+    @staticmethod
+    def _set_card_execution_proof(owner_card: dict, proof: dict, state: str) -> None:
+        """Attach the browser receipt to the card's execution block so the durable
+        card carries proof (mirrors how the API arm's proof rides the card)."""
+        execution = owner_card.get("execution")
+        if not isinstance(execution, dict):
+            execution = {}
+            owner_card["execution"] = execution
+        execution["proof"] = proof
+        execution["goal_state"] = state
 
     @staticmethod
     def _timed_reminder_card(line: OwnerObservedLine, source: str,
