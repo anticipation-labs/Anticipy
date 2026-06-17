@@ -1,0 +1,79 @@
+{
+  "status": "SOFTWARE_CERTIFIED_READY_FOR_OWNER_5DAY",
+  "dated": "2026-06-17",
+  "commit_at_cert": "2ddbc57",
+  "method": "GUI-first: messy day driven through the real web UI (localhost:3000 -> engine :8787); live arms via the engine's real Arcade/Twilio/browser execution; deterministic + representative-sample testing. NOT curl-only, NOT mock where a funded arm exists.",
+  "criteria": {
+    "product_opens": {
+      "met": true,
+      "evidence": "localhost:3000 renders; proxy->engine 200"
+    },
+    "onboarding_works": {
+      "met": true,
+      "evidence": "/welcome 4-step flow completed in UI; profile persisted: 'Owner identity: name Omar; tz America/Vancouver', preference + Important person Maya written to profile drawer"
+    },
+    "profile_tool_mesh": {
+      "met": true,
+      "evidence": "sourced profile written + read by main app; /connect shows Calendar&email Connected"
+    },
+    "transcript_mp3_listening": {
+      "met": true,
+      "evidence": "Gate C: typed + MP3(full-audio local Whisper) + mic sink all reach core.owner_ingest (test_inputs_same_brain)"
+    },
+    "memory_intent_via_ui": {
+      "met": true,
+      "evidence": "GUI journey: 'that desk thing'->Jarvis resolved, dedup Sam-deck->1 card, both vents silent"
+    },
+    "autonomy_modes": {
+      "met": true,
+      "evidence": "GUI journey: Amazon=AUTO_DO_WITH_OPT_OUT ('On it \u2014 you can stop me' + Stop), CRM=AUTO_DO note, Sam=CLARIFY_FIRST; all 6 modes (Gate E)"
+    },
+    "browser_arm": {
+      "met": true,
+      "evidence": "Gate F: live cart-prep on scrapingcourse.com, screenshot+DOM+URL receipt, stopped before buy; money/injection guards 27/24 + navigations=[]"
+    },
+    "calendar_live": {
+      "met": true,
+      "evidence": "Gate G: create -> independent read-back -> DeleteEvent -> confirmed gone (real event ids)"
+    },
+    "gmail_draft_live_OR_blocker": {
+      "met": true,
+      "via": "exact_auth_blocker_remains",
+      "evidence": "Gmail draft code path wired (WriteDraftEmail, never SendEmail); Google consent completed 3x (owner-authorized) but Arcade tools.authorize stays pending for Gmail while Calendar=completed -> Arcade project Gmail-toolkit config issue (owner-gated in Arcade dashboard). Nothing sent."
+    },
+    "voice_text_live_OR_blocker": {
+      "met": true,
+      "evidence": "Gate H: live SMS delivered (sid SMd74bf52b...) + live call connected (sid CA4acb7e...), owner-confirmed receipt; one each, no flood. Inbound reply-resolves-ask = exact blocker: needs a public URL for the Twilio webhook."
+    },
+    "proof_in_ui": {
+      "met": true,
+      "evidence": "cards carry proof[]; UI shows On it/Ready/Handled + receipts"
+    },
+    "follow_up": {
+      "met": true,
+      "evidence": "Gate I: external-dependency obligation schedules a follow-up that FIRES via the trigger, linked to origin proof"
+    },
+    "representative_testing": {
+      "met": true,
+      "evidence": "cert_harness 1200-run sample across 10 domains x 14 scenarios = 0 critical / 28 non-critical; full 10k earlier surfaced the 4 dropped-obligation bugs, now fixed + reconfirmed 0"
+    },
+    "no_p0_p1": {
+      "met": true,
+      "evidence": "safety_mega_eval CORPUS 157 BREACHES 0; full suite 99 passed/0 failed; GUI journey clean"
+    },
+    "proof_bundle": {
+      "met": true,
+      "evidence": "docs/guarantee/proof/A..J + docs/e2e/owner_spine/latest/"
+    }
+  },
+  "owner_gated_remaining": [
+    "K: five real owner days (lived use; cannot be compressed) \u2014 the headline remaining proof",
+    "Gmail draft: enable the Gmail toolkit/scope for this project in the Arcade dashboard (the OAuth consent already granted; binding is Arcade-config)",
+    "Inbound voice + two-way voice + hosted front door: a public URL (off-localhost deploy or a cloudflared tunnel) so the Twilio webhook + ConversationRelay reach the engine",
+    "Downloadable signed Mac app: Apple Developer signing/notarization (today: working unsigned dev/local open path)"
+  ],
+  "honest_caveats": [
+    "assert_done.py (the stricter internal gate) reports G + H as FAIL because it requires FULL pass; under the Phase-5 'OR exact blocker remains' allowance they are met-with-recorded-blocker.",
+    "Live ARM execution was proven via the engine's real arms (Arcade/Twilio/browser-runner) \u2014 the same paths the UI buttons trigger; the act/ask/silent SPINE + onboarding were driven through the actual web UI."
+  ]
+}
