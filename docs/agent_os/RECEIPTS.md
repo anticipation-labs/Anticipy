@@ -82,6 +82,18 @@ This file is append-only. The deep historical ledger is `logs/factory/RECEIPTS.m
 - **Still open (honest):** cross-ingest live re-submit dedup is exact-text; card titles are plain
   (drop names); classification is deterministic-heuristic (moat model vent-guard is the safety backstop).
 
+### R-2026-06-16-F — Release certification: autonomy modes + 10,000-run Tier-1 harness
+- **Gate:** packet 02 (autonomy modes) + packet 07 (10,000 whole-product runs).
+- **Code:** `proactive/autonomy.py` (6 modes per card + middle_trace.autonomy); `scripts/cert_harness.py`
+  (personas×scenarios through real `owner_ingest`, hidden keys, adversarial vent distractors, independent
+  judge, `DONE_CERTIFICATION_BUNDLE/`). Resolver hardened: lowercase referents + self-exclusion.
+- **Receipt:** repeated 100-run openrouter batches = **0 critical** (vents silent under noise, money
+  blocked, referents correct, no dup, proof present). Full 10,000-run in progress → bundle. Commits
+  `07a830b`, `b0cd291`. Suite GREEN 92/0; `safety_mega_eval` 0 breaches.
+- **Autonomous ceiling (honest):** Tier-1 (synthetic) is the bar reachable without Omar. Tiers 2–4
+  (live API/voice, owner Mac, 5 real days) + packaged download/signing are OWNER-GATED →
+  `ALL_OF_IT_IS_DONE_CERTIFIED` cannot truthfully be claimed yet (release criteria 10–17, 19).
+
 ## Imported prior receipts (from `logs/factory/*`, FOREMAN_STATE 2026-06-15/16) — RE-VERIFY before relying
 
 These were reported proven-live by prior foreman sessions. They are imported for continuity, NOT

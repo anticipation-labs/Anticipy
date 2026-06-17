@@ -30,6 +30,22 @@ _Started 2026-06-16 (autonomous). Packet: `docs/done_certification/PACKET.md`._
 - Live Gmail/Calendar unattended writes, live Twilio number, app signing/download, the 5 real days.
   These cannot be done autonomously; tracked for `HUMAN_CLICK_REQUIRED` at the autonomous ceiling.
 
-## Next certification gate
-Build autonomy-mode classifier → build Tier-1 harness → run batch → drive critical failures to 0 →
-scale toward 10,000 → assemble bundle.
+## Progress (autonomous)
+- **Autonomy modes (packet 02): DONE.** `proactive/autonomy.py` labels every card AUTO_DO /
+  AUTO_DO_WITH_OPT_OUT / PREPARE_THEN_STOP / CLARIFY_FIRST / REMEMBER_ONLY / IGNORE; carried on each
+  card + in `middle_trace.autonomy`.
+- **Tier-1 harness (packet 07): BUILT + GREEN at batch scale.** `engine/scripts/cert_harness.py` —
+  templated personas across 10 domains + hidden answer keys + adversarial vent distractor on every
+  scenario, run through the REAL `ControlCore.owner_ingest` pipeline, independent judge. 100-run
+  openrouter batches = **0 critical** (after fixing referent self-exclusion + lowercase-referent
+  resolution). Full **10,000-run** in progress → `DONE_CERTIFICATION_BUNDLE/`.
+- Suite GREEN 92/0; `safety_mega_eval` 0 breaches.
+
+## Autonomous ceiling — what genuinely needs Omar (HUMAN_CLICK_REQUIRED at the end)
+Tier-1 (synthetic whole-product, 10,000 runs) is the autonomous bar. These CANNOT be done without Omar:
+- **Tier 2 (controlled live):** live Gmail/Calendar writes + a live Twilio test number (the 31-text
+  history forbids unattended sends). Needs auth taps + an approved number.
+- **Tier 3 (owner Mac live):** runs on Omar's real accounts/Chrome/phone with approvals.
+- **Tier 4 (five real days):** cannot be compressed — lived use.
+- **Download/packaged app:** Mac signing/notarization = Apple Developer creds (or accept unsigned dev).
+- Until these, `ALL_OF_IT_IS_DONE_CERTIFIED` cannot truthfully be said (release criteria 10–17, 19).
