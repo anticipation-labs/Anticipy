@@ -663,8 +663,10 @@ class ControlCore:
         first); the runner's money/checkout/login guard means it can find/read but never buys."""
         task = (line.text or "").strip()
         url = self._web_start_url(task)
-        from .envelopes import new_id
-        ask_id = new_id()
+        # Deterministic ask id: re-ingesting the same web task reuses the SAME pending ask (and the
+        # same card id), so a replayed transcript never spawns duplicate browser asks (idempotent
+        # round-trip — guards the re-ingest-spam regression; see docs/agent_os/FAILURES.md F-011).
+        ask_id = "br_" + hashlib.sha256(f"browser_action|{source}|{task}".encode("utf-8")).hexdigest()[:18]
         # Register the pending ask directly (resolvable by the app YES button AND by an SMS "YES");
         # category=browser_action routes the YES to the browser agent in core.resolve.
         self.proactive.pending[ask_id] = {
@@ -681,6 +683,7 @@ class ControlCore:
         except Exception as exc:
             self.glassbox.log("browser_ask_send_error", {"ask_id": ask_id, "error": str(exc)})
         return OwnerTaskCard(
+            id=ask_id,
             source=source, line_no=line.line_no, source_text=line.text,
             title=f"Look this up for you: {task[:70]}", disposition="ask", route="browser",
             action="browser_action", args={"task_text": task, "start_url": url}, confidence=0.8,
@@ -781,21 +784,17 @@ class ControlCore:
                 return None
             return shaped
         if shaped is not None and shaped.action == "find_or_cart_without_purchase":
+            # PREPARE WHEN CONFIDENT (Omar's law, 2026-06-16 decision): if memory/onboarding resolves
+            # the exact item + store, auto-prepare the cart — it falls through to execute as a
+            # browse_task in a THROWAWAY browser (the runner's money/checkout guard means it can
+            # find/cart but NEVER buys) and carries a memory_resolution receipt. When the item/source
+            # is NOT resolvable, fall back to the confirm-first browser round-trip (Omar's centerpiece):
+            # ONE deterministic texted ask, answered by YES — no duplicate ask, no stray goal (F-011).
             ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": line.text}))
             if not self._has_external_context(ctx.output, line.text):
-                goal = Goal(intent=line.text, description=shaped.title, state=GoalState.waiting)
-                self.store.save(goal)
-                ask_id = self.proactive._send_ask(
-                    goal,
-                    line.text,
-                    "browser cart prep needs the exact item or source before acting",
-                    "browser",
-                )
-                shaped.disposition = "ask"
-                shaped.reason = "missing item/source context before carting"
-                shaped.execution = {"decision": "ask", "goal_id": goal.id,
-                                    "ask_id": ask_id, "goal_state": None}
-                return shaped
+                return self._browser_action_ask(line, source)
+            # Resolved -> mark so the confirm-first gate SKIPS it; fall through to auto-execute below.
+            shaped.args["resolved_cart"] = True
         execution_text = (
             self.owner_mode.execution_text_for_card(shaped)
             if shaped is not None else line.text
@@ -1010,7 +1009,12 @@ class ControlCore:
                     and getattr(card, "route", None) == "browser"
                     and getattr(card, "disposition", None) not in ("blocked", "remember")
                     and getattr(card, "action", None) != "browser_action"
+                    and not (getattr(card, "args", None) or {}).get("resolved_cart")
                     and not getattr(line, "force_ask", False)):
+                # An UNRESOLVED web task (no confident item/store) becomes ONE deterministic
+                # confirm-first browser ask. A RESOLVED cart (args.resolved_cart) skips this and
+                # auto-prepares the cart (Omar's "prepare when confident"). One web task -> one ask;
+                # the deterministic ask id keeps re-ingest idempotent. See docs/agent_os/FAILURES.md F-011.
                 card = self._browser_action_ask(line, source)
                 cards.append(card)
                 continue
@@ -1831,6 +1835,28 @@ class ControlCore:
             cards.append(card)
         return {"cards": cards, "count": len(cards)}
 
+    def _resolve_browser_card_record(self, ask_id: str, approved: bool) -> None:
+        """Write a browser round-trip resolution onto its durable owner card (card.id == ask_id):
+        YES -> 'running' (the agent runs async + texts the result), NO -> 'declined'. owner_cards()
+        derives status / execution.goal_state / the resolution proof from record state+resolution,
+        so a declined web task shows 'declined' on the board, not a stranded 'open' (F-011)."""
+        path = self.data_dir / "owner_cards" / f"{ask_id}.json"
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        state = "running" if approved else "declined"
+        record["state"] = state
+        record["resolution"] = {"ask_id": ask_id, "approved": approved}
+        if isinstance(record.get("owner_card"), dict):
+            record["owner_card"]["status"] = state
+        try:
+            path.write_text(json.dumps(record, indent=2, sort_keys=True), encoding="utf-8")
+        except Exception:
+            return
+        if not approved:
+            self._sync_owner_loop_status(ask_id, "declined")
+
     def _find_card_record(self, goal_id: str) -> dict | None:
         """Scan the durable owner card records for one whose execution targeted
         goal_id (ledger F18 fallback; only runs when the in-memory map missed)."""
@@ -1858,6 +1884,9 @@ class ControlCore:
         if isinstance(p, dict) and p.get("category") == "browser_action":
             self.proactive.pending.pop(ask_id, None)
             self.proactive._persist_pending()
+            # Reflect the resolution on the durable owner card (card.id == ask_id) so the board shows
+            # the outcome: YES -> running (the agent runs async + texts back), NO -> declined (F-011).
+            self._resolve_browser_card_record(ask_id, approved)
             if approved:
                 asyncio.create_task(self._run_browser_and_confirm(
                     p.get("browser_task") or p.get("action") or "",

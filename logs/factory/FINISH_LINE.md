@@ -4,13 +4,13 @@
 > An item is ✅ REAL only because a live check confirmed it this run. "Done" = every
 > me-verifiable item ✅, then the 🙋 owner items finished with Omar.
 
-_Last reality check: 2026-06-16 09:08:44 PDT_
+_Last reality check: 2026-06-16 18:43:37 PDT_
 
 **Real, verified-live: 6/8**  ·  me-verifiable done: 6/7
 
 | | criterion | verdict | evidence (live read-back) |
 |---|---|---|---|
-| ✅ | The engine is actually running + healthy | **REAL** | engine up; channels=mock |
+| ✅ | The engine is actually running + healthy | **REAL** | engine up; channels=live |
 | ✅ | Messy speech in -> action cards out, LIVE (the core magic) | **REAL** | live ingest -> 1 action card(s): "Schedule or place a timed action" |
 | ✅ | The engine EXECUTES an action + proves it by read-back | **REAL** | a real action executed + independently read-back-verified (via GoogleCalendar.ListEvents) |
 | ✅ | Vents/sarcasm never trigger an action; money always blocked | **REAL** | 0 breaches across 157 adversarial lines (vents never act, money blocked) |

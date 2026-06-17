@@ -54,6 +54,38 @@ Deep history: `logs/factory/FAILURES.md` + `logs/factory/FAILURE_MODES.md` + `FO
 - **Tripwire:** every cycle moves a real gate or it didn't count. 3 cycles with no receipt → halt + re-aim.
   Research must end in a decision (RESEARCH_LEDGER), not a dump.
 
+### F-011 — Browser round-trip refactor (b82e660) regressed the suite + introduced spam-adjacent defects
+- **Found 2026-06-16** by re-running the suite (it was RED 86/4, not the imported "90/90 GREEN" — verify,
+  never trust). The "confirm-first browser round-trip" (Omar's centerpiece, `control_core.py`) landed
+  without updating 3 tests AND introduced real defects:
+  1. **Duplicate ask:** a no-memory cart line registered a cart-prep ask (category `browser`) AND the
+     unified round-trip gate fired a second `browser_action` ask — one web task → two pending asks.
+  2. **Non-idempotent re-ingest:** the browser ask used a random `new_id()`, so replaying the same
+     transcript spawned new browser asks + a stray saved goal each time (pending/goals grew).
+  3. **Capability dropped:** the prior memory-grounded auto-cart (resolve store+item → auto-execute to
+     e.g. staples.com with a `browser_receipt`, ask only when unsure) was replaced by uniform
+     confirm-first. This is more conservative/safer but loses "prepare generously" auto-prep and
+     over-catches some context lines (e.g. a Lowe's "was comparing…" line) as browser asks.
+- **Resolution — Omar chose "prepare when confident" (2026-06-16):** restored the Donna magic + kept the
+  safe round-trip. Final engine state (`control_core.py`, `owner_mode.py`):
+  1. **Resolved cart auto-prepares:** when memory/onboarding resolves the exact item+store, the cart
+     auto-executes (browse_task in a THROWAWAY browser, money/checkout guard → never buys) with a
+     `memory_resolution` receipt. `_spine_card` checks `_has_external_context`; resolved → `args.resolved_cart`
+     → the round-trip gate skips it; unresolved → `_browser_action_ask`.
+  2. **Unresolved → confirm-first round-trip:** ONE deterministic ask id (`br_<sha256(source|task)>`),
+     so re-ingest reuses the same pending entry (idempotent — no duplicate ask, no stray goal).
+  3. **Context-line over-catch fixed at the root:** `_BROWSER` matched the noun "grab" in "grab **bars**"
+     (a bathroom rail) → a descriptive line shaped as a browser task. Added a negative lookahead
+     (`grab(?!\s+bars?\b)`) — keeps the verb, drops the product-noun. lowes_context now ignores like its siblings.
+  4. **Decline/approve write-back:** declining a browser ask now marks its durable card `declined`
+     (was stranded `open`); YES marks `running`. `_resolve_browser_card_record`.
+- **Verification:** suite GREEN 90/0; `safety_mega_eval` BREACHES 0 (independently re-run); the 4
+  originally-red tests (owner_ingest_event, public_backend_path, messy_proactive_handoff,
+  owner_app_product_path) all pass against the real behavior.
+- **Tripwire:** suite must be GREEN and re-run (not trusted) every session; one web task = one pending
+  ask; re-ingesting an identical transcript must not grow pending/goals; resolved carts auto-prepare,
+  unresolved ask.
+
 ### F-010 — Verifying the moat on the wrong path (preview vs reality)
 - **Cause:** stress-testing with `execute=false` (preview) showed dropped tasks; the real app path uses
   `execute=true` and caught them. Wasted a cycle on a false alarm.

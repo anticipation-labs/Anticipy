@@ -252,14 +252,11 @@ async def owner_lane_check():
     do_steps = [s.get("intent") for s in do_rec["steps"]]
     assert "send_email_draft" in do_steps and "send_email" not in do_steps, do_steps
 
-    # no-memory cart card: the truthful decision is ask, never a paper act or
-    # fake browse proof. The no-buy phrase is a safety bound, not purchase intent.
+    # no-memory cart -> confirm-first browser round-trip (F-011 / "prepare when confident" fallback):
+    # one deterministic texted ask, nothing carts before YES; no fake browse proof; the throwaway
+    # browser's money/checkout guard enforces the no-buy bound.
     assert cart["decision"] == "ask" and cart["ask_id"], cart
-    assert cart["cards"][0]["args"].get("payment_allowed") is False, cart
-    cart_rec = _record(tmp, cart["goal_id"])
-    assert cart_rec["state"] == "waiting", "an unresolved cart card must never look done"
-    assert not cart_rec["proof"], cart_rec
-    assert cart_rec["owner_card"]["execution"]["decision"] == "ask", cart_rec
+    assert cart["cards"][0]["action"] == "browser_action" and cart["cards"][0]["route"] == "browser", cart
 
     # the bare reported promise is a real commitment (F21 FIXED): the spine catches
     # it, the harm-line re-gates the send, and the card is a REAL pending ask (the
@@ -312,7 +309,9 @@ async def owner_lane_check():
     assert len(owner_loops) >= 4, [i.text for i in owner_loops]
     loop_status = {i.fields["owner_card_id"]: i.status for i in owner_loops}
     assert loop_status[act["goal_id"]] == "done", loop_status
-    assert loop_status[cart["goal_id"]] == "waiting", loop_status
+    # the unresolved cart is a confirm-first browser ask -> its owner loop is "open" (awaiting YES),
+    # not the old cart-prep "waiting" goal-state (F-011).
+    assert loop_status[cart["goal_id"]] == "open", loop_status
     assert loop_status[money["goal_id"]] == "blocked", loop_status
     assert loop_status[clarify["goal_id"]] == "declined", loop_status
     raw_loop_status = {

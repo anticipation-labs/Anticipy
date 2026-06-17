@@ -189,10 +189,12 @@ assert onboarded_resolution["site"] == "https://www.target.com", onboarded_resol
 assert "black compact travel umbrella" in onboarded_resolution["item"].lower(), onboarded_resolution
 assert "target" in onboarded_resolution["matched_hints"], onboarded_resolution
 
+# UNRESOLVED cart -> confirm-first browser round-trip (F-011): a browser_action ask (status "open"),
+# resolvable by YES/NO; resolved carts above auto-prepare ("prepare when confident").
 unresolved_cart = one("random gadget")
-assert unresolved_cart["status"] == "waiting", unresolved_cart
 assert unresolved_cart["execution"]["decision"] == "ask", unresolved_cart
 assert unresolved_cart["execution"]["ask_id"], unresolved_cart
+assert unresolved_cart["action"] == "browser_action", unresolved_cart
 
 money = one("pay whatever")
 assert money["status"] == "blocked", money

@@ -86,7 +86,10 @@ _SEND = re.compile(r"\b(send|email|text|tell|reply|follow up|circle back|draft)\
 # "order lunch"), never the bare noun — "the supply order", "a change order" and
 # "the order email" are work vocabulary, not purchases (requested-action scope).
 _ORDER_VERB = r"order (?:a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffee|\d)"
-_BROWSER = re.compile(r"\b(grab|buy|" + _ORDER_VERB + r"|purchase|checkout|cart|find|look up|research)\b", re.I)
+# "grab" is a shopping verb ("grab me a coffee maker") but NOT in the noun "grab bar(s)" (a bathroom
+# safety rail) — the bare-noun false match used to shape a descriptive context line as a browser task
+# (F-011 over-catch). The negative lookahead keeps the verb, drops the product-noun.
+_BROWSER = re.compile(r"\b(grab(?!\s+bars?\b)|buy|" + _ORDER_VERB + r"|purchase|checkout|cart|find|look up|research)\b", re.I)
 _MONEY = re.compile(r"\b(pay|buy|" + _ORDER_VERB + r"|purchase|checkout|wire|venmo|zelle|cashapp|credit card|payment)\b", re.I)
 _NO_BUY = re.compile(
     r"\b(don'?t buy|do not buy|no buying|don'?t checkout|do not checkout|"

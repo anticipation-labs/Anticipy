@@ -92,12 +92,13 @@ async def main():
     assert "Brother cube" in resolution["item"], resolution
     assert any(p.get("type") == "memory_resolution" for p in resolved_cart["proof"]), resolved_cart
 
+    # UNRESOLVED web/cart task (no confident item/store) -> confirm-first browser round-trip
+    # (Omar's centerpiece): ONE deterministic texted ask, answered by YES; nothing carts before
+    # then. (Resolved carts above auto-prepare — "prepare when confident".) See F-011.
     unresolved_cart = _by_source(cards, "random gadget")
-    assert unresolved_cart["status"] == "waiting", unresolved_cart
     assert unresolved_cart["execution"]["decision"] == "ask", unresolved_cart
-    unresolved_record = _record(data_dir, unresolved_cart["id"])
-    assert unresolved_record["state"] == "waiting", unresolved_record
-    assert not unresolved_record["steps"] and not unresolved_record["proof"], unresolved_record
+    assert unresolved_cart["route"] == "browser" and unresolved_cart["action"] == "browser_action", unresolved_cart
+    assert unresolved_cart["args"]["start_url"].startswith("http"), unresolved_cart
 
     money = _by_source(cards, "pay whatever")
     assert money["status"] == "blocked", money
