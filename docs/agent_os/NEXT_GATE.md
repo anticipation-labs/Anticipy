@@ -1,6 +1,22 @@
 # NEXT GATE — exactly one, with objective receipts
 
-## ACTIVE: Gate A — Truth & continuity (closing now)
+## ✅ CLOSED 2026-06-16
+- **Gate A — Truth & continuity:** Memory Dock committed; route/suite/safety/reality re-verified
+  (suite GREEN 90/0, `safety_mega_eval` 0 breaches, reality 6/7 me-verifiable). See R-2026-06-16-A.
+- **Browser arm "prepare when confident"** (Omar's decision) + b82e660 regression fixes landed (`f05d453`).
+  See R-2026-06-16-B + FAILURES F-011.
+
+## ACTIVE candidates (foreman pick — several are Omar-gated; he offered to authenticate)
+- **Gate D — Gmail draft prepare-and-park (live):** create a `[Anticipy test]` Gmail DRAFT (reversible,
+  never sent), re-read by ID, delete. **BLOCKED:** only Google Calendar is connected; needs Omar to
+  authorize Gmail (Arcade `gmail.compose`) — he offered to tap an auth tab. Receipt: draft ID + read-back.
+- **Gate E live — real-site browser auto-cart:** prove the throwaway-browser auto-cart actually runs on a
+  real site (read/cart only, money/checkout guard). Receipt: final URL + screenshot/DOM + guard log.
+- **Off-localhost / inbound-text / 5-day owner test:** Omar-gated (see CURRENT_TRUTH).
+
+---
+
+## (historical) Gate A — Truth & continuity — receipts that were required
 
 **Goal:** the Memory Dock exists, the mission cannot be forgotten, and the claimed-proven state is
 re-verified by failable checks (not trusted from prior reports).

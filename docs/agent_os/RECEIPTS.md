@@ -6,13 +6,26 @@ This file is append-only. The deep historical ledger is `logs/factory/RECEIPTS.m
 
 ---
 
-### R-2026-06-16-A — Memory Dock (Gate A continuity) installed
-- **Gate:** A — Truth & continuity.
-- **Commit:** (this session — see git log for SHA).
-- **Artifact:** `docs/agent_os/{README,CONSTITUTION,DEFINITION_OF_DONE,CURRENT_TRUTH,RECEIPTS,FAILURES,DECISIONS,NEXT_GATE,RESEARCH_LEDGER,HANDOFF_NOW}.md` + `scripts/agent_os/*.sh` + `CODEX.md` + updated `CLAUDE.md`/`AGENTS.md` first-read pointers. Imported kit in `docs/agent_os/imported/`.
-- **Receipt:** `bash scripts/agent_os/preflight.sh` output committed under `docs/agent_os/` (see preflight log) — repo/branch/lock-halt/engine-status/suite captured.
-- **Skeptic verdict:** pending integrator pass; see HANDOFF_NOW.
-- **Limitation:** docs route to existing factory ledgers; they do not re-prove past receipts.
+### R-2026-06-16-A — Memory Dock (Gate A continuity) installed + state re-verified
+- **Gate:** A — Truth & continuity. **CLOSED.**
+- **Commits:** Memory Dock (see git log) + `f05d453` (browser gate).
+- **Artifact:** `docs/agent_os/*` + `scripts/agent_os/*.sh` + `CODEX.md` + CLAUDE/AGENTS first-read pointers; imported kit in `docs/agent_os/imported/`; `docs/agent_os/preflight-2026-06-16.txt`.
+- **Receipt (failable checks I ran, not trusted):** OpenRouter route live (provider=openrouter, base url correct; reality_check "messy→cards LIVE" = a real model call); `safety_mega_eval` BREACHES 0; `reality_check` 6/8 (6/7 me-verifiable); suite GREEN 90/0; Codex CLI authenticated.
+- **Skeptic finding (real):** the imported "suite GREEN 90/90" claim was FALSE — suite was RED 86/4 on arrival. Caught by re-running, not trusting. See R-2026-06-16-B.
+- **Limitation:** imported prior receipts (below) are claimed-live, not re-proven this session.
+
+### R-2026-06-16-B — Browser arm: prepare-when-confident + b82e660 regression fixes
+- **Gate:** C/E (core messy-day + browser arm), brain/anti-spam.
+- **Commit:** `f05d453`.
+- **Artifact / receipt:** suite GREEN **90/0** (`/tmp/anticipy_suite3.log`); the 4 previously-RED tests
+  (owner_ingest_event, public_backend_path, messy_proactive_handoff, owner_app_product_path) pass against
+  REAL behavior; `safety_mega_eval` BREACHES 0; resolved carts auto-prepare with `memory_resolution`
+  receipt; unresolved → one deterministic confirm-first ask; re-ingest idempotent; declined web task → durable `declined`.
+- **Skeptic verdict (me):** safety floor independently re-run = 0 breaches; money/vent assertions preserved
+  verbatim; engine changes are browser-routing only (no decision/harm-line edits).
+- **Decision basis:** Omar chose "prepare when confident" (2026-06-16) over uniform confirm-first.
+- **Limitation:** browser auto-prep verified in stub/mock (throwaway browser, money/checkout guard). A
+  LIVE browser auto-cart on a real site (Gate E live) is not yet proven.
 
 ---
 

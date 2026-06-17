@@ -1,6 +1,12 @@
 # CURRENT TRUTH — mutable; update every run
 
-_Last verified: 2026-06-16 evening PDT, by foreman (Claude Opus 4.8) at session start._
+_Last verified: 2026-06-16 evening PDT, by foreman (Claude Opus 4.8). Gate A CLOSED; browser arm gate landed._
+
+> **This session's headline:** the imported "suite GREEN 90/90" was FALSE — suite was secretly RED
+> 86/4 on arrival (4 stale browser tests + 2 real anti-spam bugs from the last refactor). Re-verified,
+> fixed, and restored Omar's "prepare when confident" browser behavior. Suite now **GREEN 90/0**,
+> `safety_mega_eval` **0 breaches** (independently re-run twice). Commit `f05d453`. Disk freed (cleared
+> 6736 stale temp dirs; 334Mi→685Mi). Codex CLI confirmed authenticated.
 
 ## Repo map (verified by inspection this session)
 
@@ -41,8 +47,12 @@ _Last verified: 2026-06-16 evening PDT, by foreman (Claude Opus 4.8) at session 
 - The **moat** (proactive extraction via funded model) live through `/api/owner/ingest`: a run-on line
   mixing a vent with real tasks catches the real tasks (incl. implied/third-party), silent on the vent,
   money blocked. Context-aware extraction of vague references committed (`e716014`).
-- `safety_mega_eval` = **0 BREACHES** (cardinal-sin floor, drives the real ingest split path).
-- Suite **~89–90/90 green** (`scripts/run_suite.sh`), incl. `premium_copy` + `purchase_guard` gates.
+- `safety_mega_eval` = **0 BREACHES** (cardinal-sin floor; independently re-run this session, twice).
+- Suite **GREEN 90/0** (`scripts/run_suite.sh`), incl. `premium_copy` + `purchase_guard` + the 4
+  browser tests fixed this session.
+- **Browser arm = "prepare when confident"** (Omar's 2026-06-16 decision, commit `f05d453`): a cart/web
+  task auto-prepares (throwaway browser, never buys) when memory/onboarding resolves item+store, with a
+  `memory_resolution` receipt; otherwise a deterministic confirm-first texted round-trip.
 - Real **Google Calendar** create + read-back + delete proven live (3 test artifacts cleaned).
 - A **time-due reminder delivered** to Omar's phone (Twilio SID, status=delivered, exactly one).
 - Server-side **onboarding** `/onboard/scan_api` reads real connected accounts (Google Calendar).
