@@ -236,11 +236,36 @@ def _obligation_sig(text: str) -> frozenset:
     return frozenset(sig)
 
 
+# Generic verbs/nouns that name HOW (communication channel) or a vague WHAT, never the obligation's
+# identity. Two obligations that differ ONLY by these tokens are the SAME real obligation: the moat
+# rewords a backchannel confirmation ("yeah, I'll handle it") into a synonym of the original task
+# ("call Amazon about the monitor" -> "handle the Amazon monitor issue"); the identity that survives is
+# the salient entity+object {amazon, monitor}, so {amazon,call,monitor} and {amazon,issue,monitor} must
+# collapse to one card (anti-spam, Omar's #1). Stored in STEMMED form (matching _obligation_sig's stem)
+# and kept DELIBERATELY small + concrete so genuinely different objects (monitor vs desk) never merge.
+_OBLIGATION_GENERIC = {
+    "call", "email", "text", "contact", "ping", "reach", "phone", "ring",
+    "message", "messag", "msg",
+    "issue", "problem", "matter", "regard", "situation", "stuff",
+}
+
+
+def _obligation_core(sig: frozenset) -> frozenset:
+    """The identity tokens of an obligation: salient entity/object only, with generic communication
+    verbs + filler problem-nouns removed. {amazon,call,monitor} and {amazon,issue,monitor} both -> {amazon,monitor}."""
+    return frozenset(t for t in sig if t not in _OBLIGATION_GENERIC)
+
+
 def _same_obligation(a: frozenset, b: frozenset) -> bool:
-    """Same real-world obligation when both signatures are non-empty and one contains the other."""
+    """Same real-world obligation when both signatures are non-empty and EITHER one contains the other
+    ("amazon plant" == "amazon plant order") OR their identity cores are equal and non-empty
+    ("call Amazon about the monitor" == "handle the Amazon monitor issue" -> both core {amazon, monitor})."""
     if not a or not b:
         return False
-    return a <= b or b <= a
+    if a <= b or b <= a:
+        return True
+    ca = _obligation_core(a)
+    return bool(ca) and ca == _obligation_core(b)
 
 
 _CONNECT_TOOL_BY_IDENTIFIER = {
