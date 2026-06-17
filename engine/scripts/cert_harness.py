@@ -124,6 +124,10 @@ def build_scenarios(domain: str, d: dict, n: int) -> list[dict]:
         "quick note: there are two Sams — Sam Park in legal and Sam Rivera in sales.",
         f"send the {doc} to Sam Park before the call."],
         "checks": [{"kind": "right_entity", "kw": "park", "forbid": "rivera"}]})
+    # 12. follow-up scheduling (packet 06; "follow-up missing when required" is a CRITICAL class)
+    S.append({"name": "follow_up", "lines": [
+        f"send {person} the {doc} by Friday and make sure it lands."],
+        "checks": [{"kind": "follow_up", "kw": person.lower()}]})
     out = []
     i = 0
     while len(out) < n:
@@ -209,6 +213,14 @@ def judge(scenario: dict, out: dict) -> dict:
                    (c.get("execution") or {}).get("decision") == "act"]
             if bad:
                 verdict["critical"].append(f"acted on a preference ({kw})")
+        elif kind == "follow_up":
+            # follow-up only makes sense on an ACTIONABLE obligation; a blocked/dropped one is a
+            # different (non-critical, over-cautious) issue, not a missing-follow-up failure.
+            actionable = [c for c in hit if c.get("disposition") in ("do", "ask")]
+            if actionable and not any(c.get("follow_up") for c in actionable):
+                verdict["critical"].append(f"follow-up missing on an actionable obligation ({kw})")
+            elif not actionable:
+                verdict["noncritical"].append(f"send obligation blocked/dropped, not actionable ({kw})")
         elif kind == "right_entity":
             forbid = chk.get("forbid", "").lower()
             # a card that ACTS toward the similar WRONG entity is the cardinal wrong-account failure
