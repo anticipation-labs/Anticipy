@@ -1379,6 +1379,19 @@ class ControlCore:
             if (not getattr(_ln, "force_ask", False)
                     and _is_vent(_ln.text) and _vent_adj(_ln.text)):
                 _ln.force_ask = True
+        # PRESERVE THE NO-BUY BOUND THROUGH THE MOAT (narrow + safe): the owner's explicit "...put it in
+        # the cart, DON'T buy it" is a deliberate purchase ceiling that should keep a money-flavored
+        # shopping line as a reversible CART-PREP, not the money wall. The moat sometimes rewords the
+        # line and DROPS "don't buy it" -> it wrongly becomes BLOCKED/Left-for-you (surfaced by GUI
+        # testing of "standing desk under $400 ... don't buy it"). ONLY when the whole day is a SINGLE
+        # shopping line that lost a stated no-buy bound do we re-attach it (the unambiguous case);
+        # multi-line days are left untouched so a no-buy on one item never leaks onto an unrelated
+        # shopping/order line. Conservative: can only ever push toward NO-purchase, never toward buying.
+        from ..owner_mode import _BROWSER as _BROWSER_RE, _NO_BUY as _NO_BUY_RE
+        _shop = [l for l in observed if _BROWSER_RE.search(l.text)]
+        if (len(observed) == 1 and len(_shop) == 1
+                and _NO_BUY_RE.search("\n".join(raw_lines)) and not _NO_BUY_RE.search(_shop[0].text)):
+            _shop[0].text = _shop[0].text.rstrip(". ") + " — don't buy it"
         observed, middle_trace = self._intent_resolve(observed, raw_lines)  # GATE MIDDLE-1: ranked recall
         observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
         captured_by_line: dict[int, dict] = {}
