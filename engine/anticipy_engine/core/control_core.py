@@ -188,6 +188,61 @@ def _owner_card_dedupe_key(card: OwnerTaskCard) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
 
 
+# --- Semantic obligation consolidation (F-012: one real-world obligation = one card) -------------
+# The moat can extract the SAME obligation from several lines — a relayed request ("Mom: call Amazon
+# about the plant") plus the speaker's confirmation ("Yeah, I'll handle it" -> "handle the Amazon
+# plant order") plus a reworded variant. Exact-text dedupe (_owner_card_dedupe_key) can't see these
+# as the same. We collapse on an OBJECT SIGNATURE: drop filler + pronouns + time + generic light
+# verbs, keep the entity/object tokens (crudely singularized). Two tasks are the same obligation when
+# one object-signature CONTAINS the other (so "amazon plant" == "amazon plant order"), which merges
+# the dup forms WITHOUT merging genuinely different objects ("Sarah budget" vs "Sarah deck").
+_OBLIGATION_STOP = {
+    # articles / pronouns / determiners
+    "a", "an", "the", "this", "that", "these", "those", "it", "its", "i", "im", "me", "my", "mine",
+    "you", "your", "yours", "he", "him", "his", "she", "her", "hers", "they", "them", "their",
+    "we", "us", "our", "one", "some", "any",
+    # prepositions / conjunctions
+    "to", "for", "of", "on", "in", "at", "by", "with", "about", "from", "into", "over", "before",
+    "after", "and", "or", "but", "so", "as", "up", "out", "off", "down", "re",
+    # auxiliaries / modals / politeness / filler
+    "is", "are", "was", "were", "be", "been", "am", "do", "does", "did", "will", "would", "can",
+    "could", "should", "shall", "may", "might", "must", "please", "yeah", "yes", "yep", "ok", "okay",
+    "sure", "just", "really", "gotta", "gonna", "wanna", "need", "needs", "got", "get", "gets",
+    "getting", "let", "lets", "make", "makes", "making", "want", "wants", "okayy", "hey", "hi",
+    "thanks", "pls", "confirm", "task", "owner",
+    # generic light action verbs (the OBJECT identifies the obligation, not the verb)
+    "handle", "handled", "deal", "dealt", "sort", "sorted", "take", "takes", "taking", "care",
+    "look", "looks", "looking", "manage", "managed", "remember", "remind", "reminded", "set", "put",
+    "go", "going", "keep", "kept", "ensure", "check",
+    # time words
+    "today", "tomorrow", "tonight", "now", "later", "soon", "morning", "afternoon", "evening",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "week", "weekend",
+    "am", "pm",
+}
+
+
+def _obligation_sig(text: str) -> frozenset:
+    """Object signature of a task: the entity/object tokens, filler+verbs+time stripped, crudely
+    singularized. Empty when the task is too thin to key on (then it is never auto-merged)."""
+    sig = set()
+    for tok in re.findall(r"[a-z0-9]+", (text or "").lower()):
+        if tok in _OBLIGATION_STOP:
+            continue
+        if len(tok) <= 2 and not tok.isdigit():
+            continue
+        if len(tok) > 4:  # crude stem so plurals/tenses match: ordered->order, plants->plant
+            tok = re.sub(r"(ings|ing|ed|es|s)$", "", tok)
+        sig.add(tok)
+    return frozenset(sig)
+
+
+def _same_obligation(a: frozenset, b: frozenset) -> bool:
+    """Same real-world obligation when both signatures are non-empty and one contains the other."""
+    if not a or not b:
+        return False
+    return a <= b or b <= a
+
+
 _CONNECT_TOOL_BY_IDENTIFIER = {
     "calendar": "GoogleCalendar.CreateEvent",
     "google_calendar": "GoogleCalendar.CreateEvent",
@@ -967,9 +1022,39 @@ class ControlCore:
         finally:
             self.proactive._suppress_ask_delivery = False
 
+    @staticmethod
+    def _consolidate_obligations(observed):
+        """F-012 anti-spam: collapse moat-expanded lines that name the SAME real-world obligation so
+        one obligation yields one card. "Mom: call Amazon about the plant" + "Yeah, I'll handle it"
+        (-> "handle the Amazon plant order") + a reworded variant all share the object signature
+        {amazon, plant} and collapse to ONE line (the earliest/original wording kept). Genuinely
+        different objects never merge. Safety is preserved: if ANY clustered line is vent-adjacent
+        (force_ask), the kept line stays force_ask (the vent guard can only get stricter, never lost).
+        Thin/empty-signature lines are never auto-merged (kept as-is)."""
+        kept = []          # list of [line, sig]
+        for line in observed:
+            sig = _obligation_sig(getattr(line, "text", ""))
+            merged = False
+            if sig:
+                for entry in kept:
+                    if _same_obligation(sig, entry[1]):
+                        # fold into the existing obligation; propagate the stricter guards
+                        if getattr(line, "force_ask", False):
+                            entry[0].force_ask = True
+                        if getattr(line, "moat_task", False):
+                            entry[0].moat_task = True
+                        # keep the broader signature so further variants still match
+                        entry[1] = entry[1] | sig
+                        merged = True
+                        break
+            if not merged:
+                kept.append([line, sig])
+        return [entry[0] for entry in kept]
+
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         observed = self.owner_mode.observe(text)
         observed = await self._expand_tasks_with_model(observed)   # THE MOAT: model splits + judges
+        observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
         captured_by_line: dict[int, dict] = {}
         for line in observed:
             captured_by_line[line.line_no] = self.live_memory.capturer.capture(
