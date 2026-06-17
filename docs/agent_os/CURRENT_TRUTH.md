@@ -2,11 +2,12 @@
 
 _Last verified: 2026-06-16 evening PDT, by foreman (Claude Opus 4.8). Gate A CLOSED; browser arm gate landed._
 
-> **This session's headline:** the imported "suite GREEN 90/90" was FALSE — suite was secretly RED
-> 86/4 on arrival (4 stale browser tests + 2 real anti-spam bugs from the last refactor). Re-verified,
-> fixed, and restored Omar's "prepare when confident" browser behavior. Suite now **GREEN 90/0**,
-> `safety_mega_eval` **0 breaches** (independently re-run twice). Commit `f05d453`. Disk freed (cleared
-> 6736 stale temp dirs; 334Mi→685Mi). Codex CLI confirmed authenticated.
+> **This session's headline:** caught the suite was secretly RED + fixed the b82e660 browser
+> regressions (restored "prepare when confident"); recovered from **ENOSPC** (Data volume was 100%
+> full — freed regenerable caches → **8.3Gi**; durable hog is Omar's Downloads/Developer/Trash);
+> **fixed the duplicate-spam (Gate 2)** engine-side and proved it through the real app (8-line → 4
+> cards, vents silent, money parked, no dups). Suite **GREEN 91/0**, `safety_mega_eval` **0 breaches**.
+> Engine restarted on fixed code, **channels=mock** (safe). Latest commits: `f05d453`, `f5b265c`, `0320127`.
 
 ## Repo map (verified by inspection this session)
 

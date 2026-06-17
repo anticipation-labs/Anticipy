@@ -11,7 +11,21 @@
   Caught/Waiting/Left-for-you sections, vents silent, money parked. See R-2026-06-16-C. (Engine was a
   stale 500ing process; restarted on fixed code, channels=mock.)
 
-## 🎯 ACTIVE: dedup over-extraction (finish Gate 2) — one task = one card
+## ✅ CLOSED 2026-06-16 — Gate 2: duplicate-obligation collapse
+Engine-side semantic consolidation; proven in the real app UI (8-line → 4 cards, vents silent, money
+parked, NO duplicates). Commit `0320127`. See R-2026-06-16-D + F-012. (Also recovered from ENOSPC:
+freed caches → 8.3Gi.)
+
+## 🎯 ACTIVE: Gate 3 — memory/profile handoff
+- **Goal:** plant context earlier in the day; a later VAGUE reference resolves to the RIGHT thing
+  (not the wrong obligation); ambiguous references ask/park, never wrong-act; memory generous but inert.
+- **Receipt (real app):** transcript where line A establishes context ("the Henderson contract came in")
+  and line B refers vaguely ("get that thing reviewed by Friday") → ONE card "review the Henderson
+  contract", NOT a kid-pickup or a fabricated referent. A truly-ambiguous reference → clarify/park, not act.
+- **Where:** `proactive/extract.py` already resolves references from rolling context; verify + harden,
+  add a deterministic test, prove in the UI. Keep suite GREEN + `safety_mega_eval` 0.
+
+## (superseded) earlier active note — dedup over-extraction
 - **Why:** the live UI shows the same task 2–3× (Amazon ×3, Sam ×2, pickup ×2) = spam (Omar's #1 ban).
   See FAILURES F-012. Safe (all parked, vents silent) but feels dumb.
 - **Receipt:** an eval transcript where one action is stated + confirmed across ≥2 lines yields exactly

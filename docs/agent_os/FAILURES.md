@@ -54,7 +54,21 @@ Deep history: `logs/factory/FAILURES.md` + `logs/factory/FAILURE_MODES.md` + `FO
 - **Tripwire:** every cycle moves a real gate or it didn't count. 3 cycles with no receipt → halt + re-aim.
   Research must end in a decision (RESEARCH_LEDGER), not a dump.
 
-### F-012 — Duplicate over-extraction: one real task surfaces as 2–3 cards (spam) [OPEN — next gate]
+### F-012 — Duplicate over-extraction: one real task surfaced as 2–3 cards (spam) [RESOLVED 2026-06-16]
+- **Resolution:** engine-side semantic consolidation after moat expansion
+  (`control_core._consolidate_obligations` + `_obligation_sig`): drop filler/pronouns/time/generic
+  verbs, key on the object-noun signature, merge when one obligation's signature contains the other.
+  "Mom: call Amazon about the plant" + "Yeah, I'll handle it" (→ "handle the Amazon plant order") +
+  reworded variants collapse to ONE; distinct objects never merge; the vent guard (force_ask)
+  propagates on merge (safety only gets stricter). Proven through the REAL app UI (R-2026-06-16-D):
+  8-line transcript → 4 cards (Amazon/Sam/pickup/CRM), both vents silent, money parked, NO duplicates.
+  `test_owner_duplicate_collapse` (deterministic); suite GREEN 91/0; `safety_mega_eval` 0 breaches.
+- **Known limitation (open):** consolidation is WITHIN one ingest. Cross-ingest live re-submit can still
+  reword (model nondeterminism) → `_existing_owner_card` is exact-text, so a reworded re-submit could
+  add a near-dup. Stub re-ingest is idempotent (public_backend_path replay). A semantic
+  `_existing_owner_card` is the durable follow-up.
+
+### (original) F-012 detail
 - **Found 2026-06-16** driving Omar's test transcript through the real app UI. The same underlying task
   produced multiple cards: Amazon plant → "call Amazon about the plant I ordered" + "call Amazon about
   that plant" + "Confirm task: handle the Amazon plant order" (×3); Sam deck → "Clarify possible request"

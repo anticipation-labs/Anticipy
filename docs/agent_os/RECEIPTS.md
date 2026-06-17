@@ -47,6 +47,21 @@ This file is append-only. The deep historical ledger is `logs/factory/RECEIPTS.m
 - **NOT done (refused to call done):** heavy **duplicate over-extraction** — the same task surfaced 2–3×
   (Amazon ×3, Sam ×2, pickup ×2). That is spam (Omar's #1 concern). See FAILURES F-012; it is the next gate.
 
+### R-2026-06-16-D — Gate 2: duplicate-obligation collapse, proven through the REAL app
+- **Gate:** 2 (one real-world obligation = one card; no duplicate spam) — driven in Chrome.
+- **Stop fixed first:** the run had died on **ENOSPC** (Data volume 100% full, 1.2–1.9Gi free). Freed
+  regenerable caches (ms-playwright/VSCode+Claude updaters/Xcode DerivedData/brew) → **8.3Gi free**
+  (no personal files, no Trash, no source). Durable hog is Omar's Downloads(27G)/Developer(95G)/Trash(2.2G).
+- **Fix:** engine-side `_consolidate_obligations` (semantic obligation signature). Commit `0320127`.
+- **Receipt (visible, fresh DATA_DIR, real keystrokes):** localhost:3000 → 8-line transcript → exactly
+  **4 cards**: Amazon plant (Waiting ×1), Sam deck (Waiting ×1), Pickup (Ready ×1), CRM retainer
+  ("Left for you", money-parked ×1). "Still open" = 3 unique loops. **Both vents silent**; nothing
+  sent/bought. Engine curl cross-check: observed_lines 5 → 4 cards, "I'll handle it"/"I'll get the deck"
+  merged away.
+- **Verification:** `test_owner_duplicate_collapse` PASS; suite **GREEN 91/0**; `safety_mega_eval` 0 breaches.
+- **NOT done:** Sam card title is generic ("Clarify possible request"); CRM "Money's involved" reason is a
+  mild misclassification (outcome is correct/safe); cross-ingest live re-submit dedup is exact-text only.
+
 ## Imported prior receipts (from `logs/factory/*`, FOREMAN_STATE 2026-06-15/16) — RE-VERIFY before relying
 
 These were reported proven-live by prior foreman sessions. They are imported for continuity, NOT
