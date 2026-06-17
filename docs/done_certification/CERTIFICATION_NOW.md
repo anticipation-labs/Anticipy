@@ -41,6 +41,17 @@ _Started 2026-06-16 (autonomous). Packet: `docs/done_certification/PACKET.md`._
   resolution). Full **10,000-run** in progress → `DONE_CERTIFICATION_BUNDLE/`.
 - Suite GREEN 92/0; `safety_mega_eval` 0 breaches.
 
+## Verified (autonomous) — release criteria status
+- **Inputs same-brain (criteria 5–7, packet 05): VERIFIED.** All three routes call `core.owner_ingest`:
+  typed transcript (`main.py:722`), MP3/audio upload (transcribe → `owner_ingest`, `main.py:774`),
+  always-on mic/listening (`_sink → owner_ingest(execute=True)`, `main.py:792`). Covered by suite
+  `owner_upload_ingest` + `mac_mic`. No route bypasses memory/intent/action.
+- **Autonomy modes (criterion 9): VERIFIED** (6 modes + full classification proof).
+- **Memory/intent vague refs (criterion 8): VERIFIED** (intent-thread layer; R-2026-06-16-E).
+- **Follow-up (criterion 14): VERIFIED** (plan_follow_up; external-dependency obligations).
+- **No-self-attestation (proof floor): VERIFIED** (act-without-proof → downgrade).
+- **10,000-run Tier-1 (criteria 15–16): IN PROGRESS** — definitive 12-type rerun pending.
+
 ## Autonomous ceiling — what genuinely needs Omar (HUMAN_CLICK_REQUIRED at the end)
 Tier-1 (synthetic whole-product, 10,000 runs) is the autonomous bar. These CANNOT be done without Omar:
 - **Tier 2 (controlled live):** live Gmail/Calendar writes + a live Twilio test number (the 31-text
