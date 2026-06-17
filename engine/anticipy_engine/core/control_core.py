@@ -1193,6 +1193,15 @@ class ControlCore:
                                    ignored_line_count=ignored)
         out = result.model_dump(mode="json")
         out["middle_trace"] = middle_trace   # GATE MIDDLE-1 proof (captured memories + resolutions)
+        # Autonomy mode per card (packet 02): the chosen mode + why, for product + certification.
+        from ..proactive.autonomy import classify_autonomy
+        autonomy = []
+        for c in out.get("cards", []):
+            a = classify_autonomy(c)
+            c["autonomy_mode"] = a["mode"]
+            autonomy.append({"source_text": (c.get("source_text") or "")[:80],
+                             "mode": a["mode"], "why": a["why"]})
+        out["middle_trace"]["autonomy"] = autonomy
         return out
 
     def _persist_card(self, card: OwnerTaskCard, source: str, execute_actions: bool,

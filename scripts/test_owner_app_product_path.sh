@@ -177,7 +177,7 @@ assert pickup["status"] == "done", pickup
 send = one("Sam needs")
 assert send["status"] == "waiting" and send["execution"]["ask_id"], send
 
-resolved_cart = one("label thing")
+resolved_cart = one("compact label")
 assert resolved_cart["status"] == "done", resolved_cart
 assert any(p.get("type") == "memory_resolution" for p in resolved_cart["proof"]), resolved_cart
 
@@ -279,7 +279,7 @@ import sys
 
 cards = json.load(open(sys.argv[1], encoding="utf-8"))["cards"]
 statuses = {c["source_text"]: c["status"] for c in cards}
-assert any("label thing" in text and status == "done" for text, status in statuses.items()), statuses
+assert any("compact label" in text and status == "done" for text, status in statuses.items()), statuses
 assert any("umbrella thing" in text and status == "done" for text, status in statuses.items()), statuses
 assert any("random gadget" in text and status == "declined" for text, status in statuses.items()), statuses
 assert any("pay whatever" in text and status == "blocked" for text, status in statuses.items()), statuses
@@ -331,7 +331,7 @@ def one(needle):
     assert len(matches) == 1, (needle, matches, cards)
     return matches[0]
 
-umbrella = one("umbrella thing")
+umbrella = one("travel umbrella")
 assert umbrella["status"] == "done", umbrella
 assert any(p.get("type") == "memory_resolution" for p in umbrella["proof"]), umbrella
 

@@ -81,7 +81,9 @@ async def main():
     assert send["status"] == "waiting" and send["execution"]["ask_id"], send
     assert any(item["ask_id"] == send["execution"]["ask_id"] for item in pending), pending
 
-    resolved_cart = _by_source(cards, "label thing")
+    # "that label thing" now resolves to "compact label ..." via the intent layer (more concrete),
+    # so match on the resolved item word, not the vague phrase.
+    resolved_cart = _by_source(cards, "compact label")
     assert resolved_cart["status"] == "done", resolved_cart
     resolved_record = _record(data_dir, resolved_cart["id"])
     assert resolved_record["state"] == "done", resolved_record

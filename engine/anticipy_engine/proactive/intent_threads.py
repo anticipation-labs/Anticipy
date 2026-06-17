@@ -186,12 +186,13 @@ def resolve_reference(reference_text: str, threads: list[IntentThread], self_idx
     phrase = trace["resolved_phrase"]
     head = trace["head"]
     if head:
-        # Only REWRITE when the referent adds a proper noun / brand the line does not already name
-        # ("that desk thing" -> "Jarvis standing desk" adds "Jarvis"). If the line is already concrete
-        # ("that label thing ... at Staples"), leave it — the referent is recorded in the trace but
-        # the text is not churned. Prevents over-rewriting concrete lines.
+        # REWRITE only when the referent adds specificity — a content word the line does not already
+        # name ("that desk thing" -> "Jarvis standing desk" adds "Jarvis"; "that plant thing" ->
+        # "fiddle leaf plant" adds "fiddle"/"leaf"). If it adds nothing new, leave the line (the
+        # referent is still recorded in the trace) so we never churn an already-concrete line.
         ref_low = reference_text.lower()
-        adds_specificity = any(w[:1].isupper() and w.lower() not in ref_low for w in phrase.split())
+        adds_specificity = any(w.lower() not in ref_low and w.lower() not in _STOP
+                               for w in phrase.split())
         if not adds_specificity:
             trace["decision_note"] = "referent recorded; line already concrete — not rewritten"
             return reference_text, trace
