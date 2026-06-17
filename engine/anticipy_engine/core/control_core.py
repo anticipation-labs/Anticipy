@@ -551,6 +551,60 @@ class ControlCore:
         self.memory.open_loops.update(item)
         return True
 
+    def _follow_up_loop_id(self, card_id: str) -> str:
+        """Stable, per-card id for the follow-up fire-site loop, so re-ingesting the same
+        obligation rewrites the SAME row (INSERT OR REPLACE) — never a duplicate, never a
+        second trigger firing for one obligation."""
+        return f"followup:{card_id}"
+
+    def _schedule_follow_up(self, card: dict, plan: dict, now: float) -> dict:
+        """FIRE-SITE for follow-ups: turn the computed plan into a durable, fireable open_loop
+        carrying remind_ts == when_ts, linked to the originating card id + its proof. The
+        existing trigger system (proactive.trigger_tick -> _fire_reminder) then delivers the
+        nudge at when_ts over the SAME TextChannel reminders use — no parallel scheduler.
+
+        Returns the (possibly time-corrected) plan to surface on the card so the card and the
+        ledger agree. IDEMPOTENT: if a follow-up loop already exists for this card, its
+        already-scheduled when_ts is preserved (re-ingest never churns the time), and it is
+        only re-armed if it has not yet fired.
+        """
+        card_id = card.get("id") or ""
+        if not card_id:
+            return plan
+        loop_id = self._follow_up_loop_id(card_id)
+        existing = self.memory.open_loops.get(loop_id)
+        if existing is not None:
+            # Already scheduled. Preserve the original when_ts (no churn). If it has already
+            # fired, do NOT re-arm it — fire-once holds across re-ingests too.
+            kept_when = existing.fields.get("remind_ts", plan["when_ts"])
+            plan = {**plan, "when_ts": kept_when,
+                    "in_days": max(0, round((kept_when - now) / (24 * 3600)))}
+            return plan
+        task = plan.get("note") or (card.get("source_text") or "Follow up")
+        # carry the originating card's proof + id so the fired nudge is provably LINKED to the
+        # exact obligation it is chasing (not a free-floating reminder).
+        self.memory.open_loops.write_text(
+            task,
+            id=loop_id,
+            fields={
+                "task": task,
+                "kind": "follow_up",
+                "remind_ts": float(plan["when_ts"]),   # the trigger's due condition
+                "follow_up_for_card_id": card_id,
+                "follow_up_for_source_text": card.get("source_text") or "",
+                "follow_up_reason": plan.get("reason") or "",
+                "origin_proof": card.get("proof") or [],
+            },
+            provenance="follow_up_schedule",
+            importance=0.6,
+            status="open",          # active + fireable until the trigger fires it
+        )
+        self.glassbox.log("follow_up_scheduled",
+                          {"loop_id": loop_id, "card_id": card_id,
+                           "when_ts": plan["when_ts"], "in_days": plan.get("in_days"),
+                           "task": task[:120]})
+        return plan
+
     def _sync_captured_loop_from_record(self, record: dict, state: str) -> None:
         owner_card = record.get("owner_card") if isinstance(record, dict) else None
         if not isinstance(owner_card, dict):
@@ -1224,10 +1278,16 @@ class ControlCore:
         import time as _time
         _now = _time.time()
         # FOLLOW-UP SCHEDULING (packet 06): an obligation whose outcome depends on someone else gets a
-        # follow-up check, surfaced on the card. Conservative — never for vents/prefs/money.
+        # follow-up check, surfaced on the card AND scheduled as a durable, fireable open_loop so the
+        # SAME trigger system that fires reminders delivers the nudge at when_ts. Conservative —
+        # never for vents/prefs/money. Idempotent: a re-ingest of the same line reuses the existing
+        # scheduled when_ts (no churn) and never double-schedules (stable loop id per card).
         for c in out.get("cards", []):
             fu = plan_follow_up(c, _now)
             if fu:
+                # write/refresh the fire-site loop FIRST so the persisted (preserved) when_ts is
+                # the one surfaced on the card — the card and the ledger never disagree.
+                fu = self._schedule_follow_up(c, fu, _now)
                 c["follow_up"] = fu
         # NO-SELF-ATTESTATION INVARIANT (cert floor): a card may NOT be 'done'/auto-acted without
         # independent read-back proof. If an action path emitted a do-card with empty proof (a rare

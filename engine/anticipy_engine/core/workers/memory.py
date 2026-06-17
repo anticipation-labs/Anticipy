@@ -32,7 +32,10 @@ class MemoryWorker(Worker):
             out = [{"id": l.id, "task": l.fields.get("task", l.text), "due": l.fields.get("due", ""),
                     "due_ts": l.fields.get("due_ts"), "remind_ts": l.fields.get("remind_ts"),
                     "created_ts": l.timestamp, "text": l.text,
-                    "fired_at": l.fields.get("fired_at")}
+                    "fired_at": l.fields.get("fired_at"),
+                    # the full structured fields ride along so the trigger path can read the
+                    # loop's kind (e.g. a scheduled follow_up) + its link to the original card.
+                    "fields": l.fields}
                    for l in loops]
             return Result(job_id=job.id, status=JobStatus.success, output={"loops": out},
                           proof={"loops": len(out)}, cost=0.0)

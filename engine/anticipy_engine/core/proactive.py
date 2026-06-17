@@ -631,9 +631,17 @@ class ProactiveEngine:
         safe/reversible reminder goes straight out over the channel (budget-capped, counted
         as an interruption) and the loop is marked waiting. Detrimental text re-enters
         the same pipeline: money blocks; other human-impacting work asks first."""
+        fields = loop.get("fields") or {}
+        is_follow_up = fields.get("kind") == "follow_up"
         ctx = await self.bus.submit_job(Job(intent="read_context", args={"about": task}))
         verdict = self.harm.assess(task, ctx.output or {})
-        if verdict.detrimental:
+        # A FOLLOW-UP nudge is a CHECK-IN, never a fresh action: the originating obligation
+        # already passed the harm-line at ingest, and follow_up.warrants_follow_up already
+        # excluded vents/prefs/money. So even though the nudge text ECHOES the original send
+        # (which the harm-line would re-read as binding), firing it is purely informational —
+        # "I'm checking back on this" — and must NOT re-open a new ask/goal. Route it straight
+        # to notify (still budget-capped), carrying the link to the original card + its proof.
+        if verdict.detrimental and not is_follow_up:
             ev = Event(source=EventSource.system, text=f"{FOLLOWUP_PREFIX} {task}")
             return await self.on_event(ev, now=now)
         suppress = self.budget.suppressed(task, verdict.category, now)
@@ -652,16 +660,23 @@ class ProactiveEngine:
         self.guard.record(now)
         await self.bus.submit_job(Job(intent="mark_loop",
                                       args={"id": loop.get("id"), "status": "waiting"}))
+        # the delivered nudge is provably LINKED to the obligation it chases: for a follow-up
+        # loop, carry the original card id + its proof straight onto the notify receipt.
+        link = ({"follow_up_for_card_id": fields.get("follow_up_for_card_id"),
+                 "origin_proof": fields.get("origin_proof")} if is_follow_up else {})
         if self.glassbox is not None:
             self.glassbox.log("notify", {"loop_id": loop.get("id"), "task": task,
                                          "channel": self.channel.name, "to": self.user_contact,
-                                         "sent": bool(sent.get("sent"))})
+                                         "sent": bool(sent.get("sent")),
+                                         "kind": fields.get("kind"), **link})
         if self.scorecard is not None:
             self.scorecard.record_decision("notify", loop.get("id") or "",
                                            "time-grounded reminder fired -> notify")
         return {"decision": "notify", "category": verdict.category,
-                "reason": "time-grounded reminder fired -> notify (no ask)",
-                "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None}
+                "reason": ("follow-up check fired -> notify (linked to original)"
+                           if is_follow_up else "time-grounded reminder fired -> notify (no ask)"),
+                "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None,
+                **link}
 
     # ---- steps ----
     def _goal_description(self, event: Event) -> str:

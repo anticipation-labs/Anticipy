@@ -293,6 +293,22 @@ function outcomeWord(card) {
   return { label: "Ready", tone: "" };
 }
 
+// The follow-up line for a card, read from the ATTACHED PLAN DICT (card.follow_up), not
+// from any action literal. When an obligation's outcome depends on someone else, the engine
+// schedules a check at follow_up.when_ts; this tells the user, in plain words, when we'll
+// circle back. Returns "" when there is no plan (most cards) so nothing extra renders.
+function followUpNote(card) {
+  const fu = card?.follow_up;
+  if (!fu || typeof fu !== "object") return "";
+  const days = Number(fu.in_days);
+  if (Number.isFinite(days)) {
+    if (days <= 0) return "I'll check back on this shortly.";
+    if (days === 1) return "I'll check back on this tomorrow.";
+    return `I'll check back on this in ${days} days.`;
+  }
+  return "I'll check back on this and nudge you if it stalls.";
+}
+
 function receiptText(entry) {
   // Only ever a human sentence. If the event has no summary/message, we describe it
   // plainly rather than dumping JSON (which would leak {...}/null to the user).
@@ -329,7 +345,10 @@ function loopMeta(loop) {
   const fields = loop.fields || {};
   const action = fields.action;
   if (action === "connect_account") return "Waiting on an account connection.";
-  if (action === "follow_up") return "Worth a follow-up.";
+  // A follow-up is a SCHEDULED check the engine set on a card whose outcome depends on
+  // someone else — recognized by the loop's kind (the scheduled fire-site row), not by an
+  // action literal. The card that spawned it shows the human "I'll check back…" line.
+  if (fields.kind === "follow_up") return "A follow-up I'll circle back on.";
   if (fields.kind === "reminder") return "A reminder you set.";
   return "Still open.";
 }
@@ -433,6 +452,7 @@ function TaskCard({ card, pendingAsk, onResolve, accent: showAccent = true }) {
   const accent = !showAccent ? "" : bucket === "ask" ? "accent-ask" : bucket === "blocked" ? "accent-blocked" : "";
   const title = humanTitle(card);
   const why = humanWhy(card.reason);
+  const followUp = followUpNote(card);
   const sourceLine = cardSourceLine(card);
   return (
     <article className={`row settle ${accent}`}>
@@ -445,6 +465,7 @@ function TaskCard({ card, pendingAsk, onResolve, accent: showAccent = true }) {
       </div>
       {sourceLine ? <p className="row-source">{sourceLine}</p> : null}
       {why ? <p className="row-why">{why}</p> : null}
+      {followUp ? <p className="row-followup">{followUp}</p> : null}
       {proofs.length ? (
         <div className="row-receipt">
           <dl>
