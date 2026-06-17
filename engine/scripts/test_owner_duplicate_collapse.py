@@ -82,8 +82,24 @@ def main():
                                 _obligation_sig("email Sarah the deck"))
     assert not _same_obligation(_obligation_sig("ok"), _obligation_sig("yeah"))
 
+    # 8) REGRESSION (2026-06-17): the moat rewords a confirmation into a SYNONYM of the original
+    #    where the obligations differ only by an interchangeable comm verb / filler problem-noun:
+    #    "call Amazon about the monitor" {amazon,call,monitor} vs "handle the Amazon monitor issue"
+    #    {amazon,issue,monitor}. Neither contains the other (call vs issue), so the old containment-
+    #    only merge missed them -> 2 cards = duplicate spam (the lone critical in the 14-type 10k cert).
+    #    The identity-core merge ({amazon,monitor} == {amazon,monitor}) collapses them to ONE.
+    synonym = [L("call Amazon about the monitor"), L("handle the Amazon monitor issue")]
+    assert len(ControlCore._consolidate_obligations(synonym)) == 1, "synonym-reworded dup must collapse"
+    assert _same_obligation(_obligation_sig("call Amazon about the monitor"),
+                            _obligation_sig("handle the Amazon monitor issue"))
+    # but a DIFFERENT object (verb-only-different is fine to merge; object-different is NOT) stays split.
+    assert not _same_obligation(_obligation_sig("call Amazon about the monitor"),
+                                _obligation_sig("call Amazon about the desk"))
+    diff_obj = [L("call Amazon about the monitor"), L("handle the Amazon desk issue")]
+    assert len(ControlCore._consolidate_obligations(diff_obj)) == 2, "different objects must not merge"
+
     print("PASS owner_duplicate_collapse: one real obligation = one card; distinct stay separate; "
-          "vent guard propagates on merge")
+          "synonym-reworded dups collapse; vent guard propagates on merge")
 
 
 if __name__ == "__main__":
