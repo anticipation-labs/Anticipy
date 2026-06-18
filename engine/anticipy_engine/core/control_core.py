@@ -205,9 +205,15 @@ def _is_money_action(text: str) -> bool:
 
 _TASK_PREFIX = re.compile(
     r"^\s*(?:please\s+|just\s+|actually\s+|also\s+|oh\s+|and\s+)*"
-    r"(?:set (?:a |myself a )?reminder to|reminder to|remind me (?:to|that|about)|"
-    r"need(?:ing)? to remember to|need to remember to|remember to|need to|have to|"
-    r"make sure to|don'?t forget to|i should(?: really)?|i gotta|i need to|gotta|i'?ll|i will)\s+",
+    r"(?:"
+    # reminder framings, allowing an optional time/when phrase before 'to' ("set a reminder for Friday
+    # to ...", "remind me Sunday night to ...", "add a reminder for 2pm to ...")
+    r"(?:(?:set|add)\s+(?:a |an |myself a )?reminder|reminder|remind me)"
+    r"(?:\s+(?:for|at|on|by|this|next|tonight|tomorrow|today|in|sunday|monday|tuesday|wednesday|"
+    r"thursday|friday|saturday|morning|afternoon|evening|night)[^,.;!?]{0,22}?)?\s+(?:to|that|about)"
+    r"|need(?:ing)? to remember to|need to remember to|remember to|need to|have to"
+    r"|make sure to|don'?t forget to|i should(?: really)?|i gotta|i need to|gotta|i'?ll|i will"
+    r")\s+",
     re.I)
 
 
@@ -222,7 +228,15 @@ def _task_key(text: str) -> frozenset:
         if nt == t:
             break
         t = nt
-    return frozenset(w for w in re.findall(r"[a-z0-9]+", t.lower()) if len(w) > 2)
+    return frozenset(w for w in re.findall(r"[a-z0-9]+", t.lower())
+                     if len(w) > 2 and w not in _TASK_STOPWORDS)
+
+
+_TASK_STOPWORDS = frozenset({
+    "the", "and", "for", "you", "your", "this", "that", "with", "out", "off", "get", "got", "have",
+    "her", "his", "him", "them", "they", "she", "are", "was", "were", "but", "not", "any", "all",
+    "before", "after", "today", "tomorrow", "tonight", "week", "month", "morning", "night", "soon",
+})
 
 
 def _is_explicit_reversible_task(text: str) -> bool:
@@ -1445,21 +1459,38 @@ class ControlCore:
         so a truncated money fragment still blocks. All safety floors run downstream regardless."""
         out, n = [], 0
         ex_toks = []
-        seen_keys: set = set()
+        kept_keys: list = []   # [(prefix-stripped key, OwnerObservedLine)] for CONTAINMENT dedup
         for t in day_tasks:
             task = (t.get("task") or "").strip()
             if not task or _is_directed_question_to_named_person(task):
                 continue   # a request aimed at another named person is THEIR task, never the owner's
-            key = _task_key(task)
-            if key and key in seen_keys:
-                continue   # duplicate-spam: same obligation as 'X' and 'remind me to X' -> keep one
-            if key:
-                seen_keys.add(key)
+            key = _task_key(task)   # reminder-prefix-stripped salient tokens
+            # CONTAINMENT dedup: the whole-day model emits the same obligation twice with extra detail —
+            # "back up the folder" vs "Remind me Sunday night to back up the folder before the new week".
+            # If one key is contained in the other (>=2 shared salient tokens, the >=2 floor stops a
+            # single-token over-merge like 'mom'), it's one obligation -> keep the LONGER (most complete)
+            # text. The LLM dedup downstream then catches reworded near-dups ('Okafor' vs 'him').
+            dup = None
+            for entry in kept_keys:
+                ek = entry[0]
+                if key and ek and len(key & ek) >= 2 and (key <= ek or ek <= key):
+                    dup = entry
+                    break
+            if dup is not None:
+                if len(task) > len(dup[1].text or ""):
+                    dup[1].text = task          # keep the more complete wording (with the time/detail)
+                    dup[0] |= key
+                if bool(t.get("vent")) or t.get("kind") == "hold":
+                    dup[1].force_ask = True
+                if _is_money_action(task):
+                    dup[1].money_src = True
+                continue
             n += 1
             o = OwnerObservedLine(line_no=n, text=task, moat_task=True)
             o.force_ask = bool(t.get("vent")) or t.get("kind") == "hold"
             o.money_src = _is_money_action(task)
             out.append(o)
+            kept_keys.append([set(key), o])
             ex_toks.append({w for w in re.findall(r"[a-z0-9]+", task.lower()) if len(w) > 2})
         for src_idx, line in enumerate(observed):
             raw = line.text or ""
@@ -1712,63 +1743,59 @@ class ControlCore:
         return [entry[0] for entry in kept]
 
     async def _semantic_dedup_same_source(self, observed):
-        """LLM SAME-SOURCE-LINE dedup (anti-spam, Omar's #1 ban). When the moat splits ONE sentence into
-        multiple tasks, some are the SAME obligation said twice — one is the MEANS/DETAIL/PURPOSE of the
-        other: "renew my ACLS cert" + "sign up for the recert course"; "look up the Datadog plan" + "find
-        out what tier we're on"; "book Mia's dentist appt" + "call about her cleaning". Signature dedup
-        can't merge these (they share <2 salient tokens / different verbs), but they came from ONE breath.
-        A bounded SMART model call clusters each same-source group and keeps ONE card per real obligation.
-        SAFE: scoped to tasks sharing a src_idx (NEVER merges across separate lines); stub provider /
-        model error / a non-confident reply -> NO merge, so a genuinely distinct task is never dropped on
-        a guess. Keeps the longest (most complete) text and propagates the stricter force_ask guard."""
+        """LLM semantic dedup (anti-spam, Omar's #1 ban) over ALL the day's tasks at once. The whole-day
+        extractor sometimes emits the SAME obligation twice — a reminder and its action ('invoice
+        Brightwave' + 'set a reminder Friday to invoice Brightwave'), the same thing reworded ('get back
+        to Okafor' + 'get back to him'), a means and its goal ('renew the cert' + 'sign up for the recert
+        course'), or a sentence-tail fragment ('...so I don't lose track of it'). Token/signature dedup
+        cannot catch near-duplicates; ONE bounded SMART call clusters same-obligation tasks. SAFE: the
+        prompt + keep-longest never merge genuinely-different tasks; stub/error/non-confident reply -> NO
+        merge (a real task is never dropped on a guess); guards (force_ask/money_src) propagate to the kept."""
         if self.gateway.provider != PROVIDER_OPENROUTER:
             return observed
-        from collections import defaultdict
         import json as _json
-        groups: dict = defaultdict(list)
-        for ln in observed:
-            groups[getattr(ln, "src_idx", -1)].append(ln)
+        cand = [m for m in observed if getattr(m, "moat_task", False)]
+        if len(cand) < 2:
+            return observed
+        listing = "\n".join(f"{i}. {m.text}" for i, m in enumerate(cand))
+        prompt = (
+            "Below are tasks an assistant extracted from ONE person's day. Some are DUPLICATES — the SAME "
+            "single obligation surfaced twice: a reminder and its action ('invoice Brightwave' & 'set a "
+            "reminder Friday to invoice Brightwave'), the same thing reworded ('get back to Okafor' & 'get "
+            "back to him'), a means and its goal ('renew the cert' & 'sign up for the recert course'), or a "
+            "sentence fragment of another ('...so I don't lose track of it'). Group items that are the SAME "
+            "obligation. GENUINELY DIFFERENT tasks ('call mom' & 'call the dentist'; 'invoice Acme' & "
+            "'invoice Brightwave') must EACH be their own group. Reply with ONLY a JSON list of lists of "
+            "item numbers, e.g. [[0,3],[1],[2,4]]; every number 0..N-1 appears exactly once.\n"
+            f"Tasks:\n{listing}"
+        )
+        try:
+            raw = await self.gateway.think(prompt, tier="smart", caller="gate")
+            m = re.search(r"\[.*\]", raw or "", re.S)
+            clusters = _json.loads(m.group(0)) if m else []
+        except Exception:
+            return observed
+        if not isinstance(clusters, list):
+            return observed
         drop_ids: set = set()
-        for sidx, members in groups.items():
-            if sidx is None or sidx < 0:
+        for cluster in clusters:
+            if not isinstance(cluster, list):
                 continue
-            cand = [m for m in members if getattr(m, "moat_task", False)]
-            if len(cand) < 2:
+            idxs = [c for c in cluster if isinstance(c, int) and 0 <= c < len(cand)]
+            if len(idxs) < 2:
                 continue
-            listing = "\n".join(f"{i}. {m.text}" for i, m in enumerate(cand))
-            prompt = (
-                "These tasks were ALL extracted from ONE sentence the owner spoke. Some may be the SAME "
-                "single obligation said twice — where one item is the MEANS, DETAIL, or PURPOSE of another "
-                "(e.g. 'renew the cert' & 'sign up for the recert course'; 'look up the plan' & 'find out "
-                "the tier'; 'book the dentist' & 'call about the cleaning'). Others are GENUINELY SEPARATE "
-                "tasks (e.g. 'call the dentist' & 'email Sarah the deck') and must NOT be merged. Group "
-                "ONLY items that are the same single obligation. Reply with ONLY a JSON list of lists of "
-                "the item numbers (e.g. [[0,2],[1]]). If every item is separate, return [[0],[1],...].\n"
-                f"Tasks:\n{listing}"
-            )
-            try:
-                raw = await self.gateway.think(prompt, tier="smart", caller="gate")
-                m = re.search(r"\[.*\]", raw or "", re.S)
-                clusters = _json.loads(m.group(0)) if m else []
-            except Exception:
-                continue   # uncertainty -> no merge (never drop a real task on a guess)
-            for cluster in clusters:
-                if not isinstance(cluster, list):
+            keep = max((cand[i] for i in idxs), key=lambda mm: len(mm.text or ""))
+            for i in idxs:
+                mm = cand[i]
+                if mm is keep:
                     continue
-                idxs = [c for c in cluster if isinstance(c, int) and 0 <= c < len(cand)]
-                if len(idxs) < 2:
-                    continue
-                keep = max((cand[i] for i in idxs), key=lambda mm: len(mm.text or ""))
-                for i in idxs:
-                    mm = cand[i]
-                    if mm is keep:
-                        continue
-                    if getattr(mm, "force_ask", False):
-                        keep.force_ask = True
-                    drop_ids.add(id(mm))
-                self.glassbox.log("semantic_dedup_merged", {
-                    "kept": (keep.text or "")[:80],
-                    "dropped": [(cand[i].text or "")[:60] for i in idxs if cand[i] is not keep]})
+                if getattr(mm, "force_ask", False):
+                    keep.force_ask = True
+                if getattr(mm, "money_src", False):
+                    keep.money_src = True
+                drop_ids.add(id(mm))
+        if drop_ids:
+            self.glassbox.log("semantic_dedup_merged", {"dropped": len(drop_ids), "kept": len(cand) - len(drop_ids)})
         return [ln for ln in observed if id(ln) not in drop_ids]
 
     async def _completeness_sweep(self, text: str, observed: list, raw_lines: list):
@@ -1892,8 +1919,10 @@ class ControlCore:
             _shop[0].text = _shop[0].text.rstrip(". ") + " — don't buy it"
         observed, middle_trace = self._intent_resolve(observed, raw_lines)  # GATE MIDDLE-1: ranked recall
         observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
-        observed = await self._semantic_dedup_same_source(observed)  # anti-spam: one sentence -> one obligation
-        observed = await self._completeness_sweep(text, observed, raw_lines)  # catch-rate: recover dropped tasks
+        observed = await self._semantic_dedup_same_source(observed)  # anti-spam: one obligation -> one card
+        # NOTE: the old _completeness_sweep is retired — whole-day extraction (_expand_tasks_with_model)
+        # is now the PRIMARY recall pass, so a second "what did we miss" pass only RE-ADDED the reminder
+        # form of an already-caught task (duplicate-spam) after the dedup had run.
         captured_by_line: dict[int, dict] = {}
         for line in observed:
             captured_by_line[line.line_no] = self.live_memory.capturer.capture(
