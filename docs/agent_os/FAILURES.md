@@ -166,3 +166,25 @@ Deep history: `logs/factory/FAILURES.md` + `logs/factory/FAILURE_MODES.md` + `FO
   runs (was ~3/5 breached); suite 102/0.
 - **Tripwire:** never trust a single safety_mega_eval run — it is model-non-deterministic; run it ≥5×
   with the real model after any moat/aside change. An ASK/DO card from a "Name, can you …?" line is this bug.
+
+### F-016 — 20-life × 5-day gauntlet: 5 defect families found + fixed (2026-06-17)
+A 20-distinct-lives × 5-day-in-the-life test (real engine, real brain, independent adversarial judges)
+scored 5/20 PASS, 21 criticals — the hard honest signal. Root-caused into 5 families, all fixed at the
+DETERMINISTIC layer (so the model's coin-flip can't reopen them) and re-verified on the EXACT failing
+inputs (15/15 specific criticals resolved; the 1 apparent miss was a checker keyword artifact):
+- **Money holes (cardinal):** refund-far-from-card (window 30→80), 'transfer 1.2M to the SPV' (added
+  million/billion + transfer-to-account; was DROPPED entirely → added a deterministic MONEY BACKSTOP that
+  re-injects any moat-dropped money-action line), paid renewal. F-016a.
+- **Third-party floor (cardinal):** 'Sam can you…' (no-comma names) + 'Marcus, can you grab MY
+  prescription' (removed the wrong owner-beneficiary carve-out). F-016b.
+- **Vent-chore (cardinal):** 'do three loads of laundry' in a complaint (vent-tasks must be
+  assistant-actionable). F-016c.
+- **Dropped drafts (trust):** 'draft an email… don't send' / 'cart 200 menus… don't order' were
+  classified 'preference' and dropped → recognize draft/cart-prep as reversible tasks; a preference
+  classification can't veto a moat/prep task. F-016d.
+- **Duplicate-spam:** one sentence → 2 cards → bounded same-source-line semantic dedup. F-016e.
+**Strengths the gauntlet confirmed:** cross-day continuity had ZERO wrong-referent attachments across 20
+lives; recall ~96%; the dangerous direction (under-caution) was clean everywhere.
+**Known remaining (non-critical, all 20 lives):** systematic OVER-CAUTION — reversible tasks default to
+CLARIFY_FIRST/ask instead of AUTO_DO. Safe but nagging; the autonomy-retune is the next pass (separate).
+Commits: 7a35845 (families 1-4), 07466d9 (dedup). Suite 103/0; safety 0 breaches.

@@ -626,3 +626,10 @@ fixed live, all on main, suite green throughout (87/87). Reality gate now 6/8 ve
   resolved, retainer honest CRM blocker, money blocked, follow-up scheduled. docs/e2e/current_gate/RESULT.md.
 - Browser arm: rotted chromium pin fixed (self-heal auto-discovery), locked by test; live receipt =
   Amazon cart-prep + subtotal read-back, no checkout. Commit f503753. Suite 101/0, safety 0.
+
+## R-2026-06-17-B — 20-life × 5-day gauntlet drove 5 real defect families to fixed+locked
+20 distinct lives × 5 days through the real engine, adversarially judged: found 5/20 pass / 21 criticals.
+Fixed all cardinal (money/third-party/vent) + trust (dropped-drafts) + spam (dedup) families at the
+deterministic layer; re-ran the EXACT failing inputs → 15/15 specific criticals resolved. Locked by
+test_twentylife_floor_fixes + test_directed_question_aside; safety corpus +4 money lines. Suite 103/0,
+safety 0. Remaining: over-caution autonomy retune (non-critical). Commits 7a35845, 07466d9.
