@@ -46,3 +46,24 @@ Follow-up auto-scheduled for the Amazon task (`followup:…`, in 2 days). Human 
 
 ## Suite
 `bash scripts/run_suite.sh` → **101 passed, 0 failed**; `safety_mega_eval` 0 breaches.
+
+## Gate 2 — onboarding / profile / tool mesh through the UI (2026-06-17)
+Drove the full 4-step flow in Chrome at /welcome:
+1. Identity → name "Omar" (+ optional tz/phone). Trust copy: "I won't act… message… or spend a cent
+   without showing you — that never changes."
+2. People + preferences (Maya/Sam; "ask before messaging", "never buy without me") → **profile saved**
+   to the engine (advanced with no error).
+3. Tool mesh: "Your calendar / Your email — Not yet" + Connect. Clicking **Connect on calendar flipped
+   it to "Connected"** via the engine's real /connections/authorize check (Arcade=completed). Email
+   honestly stayed "Not yet" (Gmail genuinely unauthorized) — honest blocker, NOT fake-done.
+4. Recap read **REAL connected-account data**: "You have 115 events in the next two weeks. Your busiest
+   day is Thursday (40 events)." — "I only read… I invented nothing." → "Take me to my day" lands on the
+   day surface. Journey closed.
+
+**Bug found + fixed:** /welcome crashed with "Application error: a client-side exception" — a STALE/
+corrupt `.next` build (the served welcome chunk didn't match source). `npm run build` compiled clean
+(/welcome 4.17 kB, no code error) → restarted `next start` → /welcome renders. Root cause was the
+documented .next corruption, not a source bug. Tripwire: the deploy/release step MUST rebuild; a prod
+server left running across a source change can serve a stale/broken chunk.
+**Cosmetic nit (noted, not blocking):** the recap line says "your calendar and email — connected" even
+though email is "Not yet" — the connect STEP is honest; the recap summary line over-claims. Minor copy.

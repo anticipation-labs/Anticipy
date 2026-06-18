@@ -120,3 +120,30 @@ Deep history: `logs/factory/FAILURES.md` + `logs/factory/FAILURE_MODES.md` + `FO
 - **Cause:** stress-testing with `execute=false` (preview) showed dropped tasks; the real app path uses
   `execute=true` and caught them. Wasted a cycle on a false alarm.
 - **Tripwire:** verify the moat with `execute=true` (the real path the app uses), not preview.
+
+### F-013 — Browser arm: rotted Chromium pin → every opt-out web task instant-failed (2026-06-17)
+- **Cause:** `hands/browser_use_link.py` (and the runner) pinned `chromium-1161`; Playwright had updated
+  the cache to `chromium-1223` (1161 deleted). `chrome_binary()` returned the dead path → `available()`
+  reported "chrome binary missing" → `browse_act` returned success=False in ~0.0s WITHOUT launching.
+  Surfaced by driving the directive's Gate-3 messy day in the real UI: the Amazon AUTO_DO_WITH_OPT_OUT
+  card was correct (human copy, follow-up scheduled) but its browser execution showed status=failed,
+  screenshot=false, start→fail in 0.2s.
+- **Fix:** `chrome_binary()` auto-discovers the newest installed chromium-* in the ms-playwright cache
+  when the env override is absent and the pin is gone; resolved binary injected into the runner child env.
+  Self-heals future Playwright bumps. Locked by `test_browser_binary_selfheal.py` (in run_suite).
+- **Verification:** suite 101/0, safety 0; live receipt through the full engine opt-out path — navigated
+  Amazon, searched 'plant', added to cart, read back subtotal CAD 33.62, never checked out. Commit f503753.
+- **Tripwire:** never re-pin a single chromium version as the only path; the resolver must survive a cache
+  bump. An opt-out web task that start→fails in <1s with screenshot:false is this bug returning.
+- **Observation (not a gate blocker):** the running engine's data dir has accumulated ~860 pending /
+  ~9800 history from months of tests, so the UI "Here's what I caught" feed mixes old cards with new. A
+  real owner starts fresh; for clean demos use a fresh DATA_DIR. Worth a returning-user feed-scoping pass later.
+
+### F-014 — Onboarding front door crashed on a stale .next build (2026-06-17)
+- **Cause:** /welcome rendered "Application error: a client-side exception" while the home page worked.
+  A clean `npm run build` compiled /welcome with NO code error (4.17 kB) — so the running prod server was
+  serving a stale/corrupt welcome chunk (the documented `.next` corruption). Restart on the fresh build fixed it.
+- **Fix:** rebuild + restart `next start`. No source change. Full onboarding flow then proven in the UI
+  (profile saved, calendar really Connected, recap read 115 real calendar events).
+- **Tripwire:** the deploy/release step MUST rebuild and restart; never leave a prod server running across a
+  source change. A page that 200s but client-crashes while a sibling works = stale chunk; rebuild before debugging code.
