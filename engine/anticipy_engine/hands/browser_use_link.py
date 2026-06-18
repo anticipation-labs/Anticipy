@@ -58,11 +58,49 @@ _DEFAULT_CHROME_BIN = (
 )
 
 
+def _discover_cached_chromium(cache_dir: Optional[str] = None) -> Optional[str]:
+    """Find the NEWEST installed Playwright Chromium binary in the ms-playwright cache.
+    SELF-HEALS across Playwright version bumps: the pinned chromium-NNNN path rots the
+    moment the cache updates (the live bug — 1161 was gone, only 1223 remained, so the
+    throwaway browser failed instantly with 'chrome binary missing'). Returns the
+    executable path of the highest-numbered installed build, or None if none exist.
+    Excludes chromium_headless_shell-* (no underscore-prefixed match by the hyphen glob).
+    cache_dir is injectable for tests; defaults to the real ms-playwright cache."""
+    import glob
+    import re
+
+    cache = cache_dir or os.path.expanduser("~/Library/Caches/ms-playwright")
+
+    def _ver(path: str) -> int:
+        m = re.search(r"chromium-(\d+)", os.path.basename(path))
+        return int(m.group(1)) if m else -1
+
+    for base in sorted(glob.glob(os.path.join(cache, "chromium-*")), key=_ver, reverse=True):
+        for rel in (
+            "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+            "chrome-mac/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+            "chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium",
+            "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+        ):
+            p = os.path.join(base, rel)
+            if os.path.exists(p):
+                return p
+    return None
+
+
 def chrome_binary() -> str:
     """The chrome/chromium binary the runner LAUNCHES for a throwaway browser.
-    Env override wins (mirrors the runner's ANTICIPY_BU_CHROME_BIN); else the
-    durable cached-Chromium path. Not needed in CDP-attach mode (cdp_url)."""
-    return os.environ.get("ANTICIPY_BU_CHROME_BIN", _DEFAULT_CHROME_BIN)
+    Resolution order: (1) ANTICIPY_BU_CHROME_BIN env override (mirrors the runner);
+    (2) the pinned default path IF it still exists; (3) auto-discover the newest
+    installed Chromium in the ms-playwright cache (self-heals a rotted pin); (4) the
+    pinned default (so available()/the runner still report an honest 'missing' error
+    when nothing is installed). Not needed in CDP-attach mode (cdp_url)."""
+    env = os.environ.get("ANTICIPY_BU_CHROME_BIN")
+    if env:
+        return env
+    if os.path.exists(_DEFAULT_CHROME_BIN):
+        return _DEFAULT_CHROME_BIN
+    return _discover_cached_chromium() or _DEFAULT_CHROME_BIN
 
 # Generous default: a real browser read of a public page typically finishes well
 # under this, but cold Chromium launch + model latency needs headroom.
@@ -278,6 +316,12 @@ def browse_read(
     cmd = [probe["bridge_python"], _RUNNER_PATH]
     # Pass through the creds the runner needs; the runner also reads .env.local.
     child_env = dict(os.environ)
+    # Hand the runner the SAME binary the link resolved (env > pinned > auto-discovered).
+    # The runner reads ANTICIPY_BU_CHROME_BIN and otherwise falls back to its own pinned
+    # (rot-prone) default — without this injection an auto-discovered binary on the link
+    # side would not reach the runner subprocess, and it would relaunch the dead pin.
+    if not cdp_url:
+        child_env["ANTICIPY_BU_CHROME_BIN"] = chrome_binary()
 
     try:
         proc = subprocess.run(
