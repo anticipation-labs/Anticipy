@@ -1662,6 +1662,69 @@ class ControlCore:
                     "dropped": [(cand[i].text or "")[:60] for i in idxs if cand[i] is not keep]})
         return [ln for ln in observed if id(ln) not in drop_ids]
 
+    async def _completeness_sweep(self, text: str, observed: list, raw_lines: list):
+        """MODEL-LAYER completeness backstop — the real fix for the catch-rate long tail. Five rounds of
+        the 20-life gauntlet proved the per-line moat drops a chunk of CLEAN reversible tasks inside dense
+        multi-line days (rolling vent context contaminates a line's read), and no finite set of regexes
+        can cover the infinite phrasings ('block two hours Thursday', 'hold the 9:40am flight', 'pull
+        their cap table', 'set up a cart'). So after the per-line pass, ONE model call reads the WHOLE
+        transcript and lists the EXPLICIT reversible tasks we MISSED. Recovered tasks re-enter as moat_task
+        lines and STILL pass every floor downstream (vent guard, money hard-stop, third-party silence), so
+        this only ever ADDS genuine catches — never weakens safety. Multi-line only (single-line/proactive
+        and the safety eval stay byte-identical). Stub/error/hallucination-guard -> no-op."""
+        if self.gateway.provider != PROVIDER_OPENROUTER or len(raw_lines) < 2:
+            return observed
+        import json as _json
+        caught = [getattr(o, "text", "") for o in observed]
+        prompt = (
+            "Below is a person's spoken day, then the tasks an assistant already caught. List every "
+            "EXPLICIT, reversible task the person clearly asked for that is MISSING from the caught list:\n"
+            "- reminders ('remind me to X', 'don't let me forget X'), calendar holds ('block/hold time "
+            "for X', 'lock X on my calendar'), lookups ('pull up / look up / find out / check X'), "
+            "drafts ('draft an email/note to X, don't send'), cart-prep ('cart X, don't buy').\n"
+            "EXCLUDE: vents/jokes/sarcasm/figures of speech; questions directed AT another named person "
+            "(their task, e.g. 'Sam, can you...'); and money transfers/payments ('wire/pay/refund $X') — "
+            "those are handled separately. Quote each missed task in the person's own words (a short "
+            "phrase). Reply with ONLY a JSON array of strings; [] if nothing was missed.\n\n"
+            f"DAY:\n{text}\n\nALREADY CAUGHT:\n" + "\n".join(f"- {c}" for c in caught)
+        )
+        try:
+            raw = await self.gateway.think(prompt, tier="smart", caller="gate")
+            m = re.search(r"\[.*\]", raw or "", re.S)
+            missed = _json.loads(m.group(0)) if m else []
+        except Exception:
+            return observed
+        if not isinstance(missed, list):
+            return observed
+        low_text = (text or "").lower()
+        caught_toks = {w for c in caught for w in re.findall(r"[a-z0-9]+", c.lower()) if len(w) > 2}
+        from ..live_memory.review_infer import is_vent_shape as _ivs
+        added = 0
+        n = max([getattr(o, "line_no", 0) for o in observed], default=0)
+        for cand in missed:
+            if not isinstance(cand, str) or not cand.strip() or added >= 8:
+                continue
+            ctoks = {w for w in re.findall(r"[a-z0-9]+", cand.lower()) if len(w) > 2}
+            if not ctoks:
+                continue
+            # ANTI-HALLUCINATION: most of the candidate's salient words must actually appear in the day.
+            if len(ctoks & set(re.findall(r"[a-z0-9]+", low_text))) < max(1, len(ctoks) // 2):
+                continue
+            # already covered by a caught task (token overlap) -> skip (no dup)
+            if len(ctoks & caught_toks) >= max(2, len(ctoks) - 1):
+                continue
+            # the downstream floors still gate it, but cheaply skip an obvious vent / third-party here
+            if _ivs(cand) or _is_directed_question_to_named_person(cand):
+                continue
+            n += 1
+            _o = OwnerObservedLine(line_no=n, text=cand.strip(), moat_task=True)
+            observed.append(_o)
+            caught_toks |= ctoks
+            added += 1
+        if added:
+            self.glassbox.log("completeness_sweep_recovered", {"count": added})
+        return observed
+
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
@@ -1721,6 +1784,7 @@ class ControlCore:
         observed, middle_trace = self._intent_resolve(observed, raw_lines)  # GATE MIDDLE-1: ranked recall
         observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
         observed = await self._semantic_dedup_same_source(observed)  # anti-spam: one sentence -> one obligation
+        observed = await self._completeness_sweep(text, observed, raw_lines)  # catch-rate: recover dropped tasks
         captured_by_line: dict[int, dict] = {}
         for line in observed:
             captured_by_line[line.line_no] = self.live_memory.capturer.capture(
