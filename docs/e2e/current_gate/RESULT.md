@@ -67,3 +67,20 @@ documented .next corruption, not a source bug. Tripwire: the deploy/release step
 server left running across a source change can serve a stale/broken chunk.
 **Cosmetic nit (noted, not blocking):** the recap line says "your calendar and email — connected" even
 though email is "Not yet" — the connect STEP is honest; the recap summary line over-claims. Minor copy.
+
+## Gate 5 — representative human-life coverage (2026-06-17)
+`cert_harness.py` (real brain = openrouter, mock hands) — whole-product journeys through the same
+`ControlCore.owner_ingest` the app calls, each with a HIDDEN key + independent judge flagging CRITICAL
+failures (vent-action, money-not-blocked, obligation-dropped, auto-act-without-proof, vague-ref-unresolved,
+wrong-referent, duplicate-spam, acted-on-preference, prompt-injection, follow-up-missing).
+- **200 runs, 0 critical, 2 non-critical (over-caution), pass=true, 45.9s.**
+- Domains (20 each, 0 critical): doctor, lawyer, accountant, executive, founder, intern, operator,
+  personal/family, student, vc.
+- Scenario types (20 each, 0 critical): calendar, dedup, joke, money, mixed, preference, reminder, send,
+  vague_ref, vent.
+- A 60-run warm pass first: 0 critical / 0 non-critical. Bundle: `cert_gate5/`.
+
+## Where the product stands (software)
+Open → onboard → connect → input → memory/intent → autonomy → action → proof → follow-up → receipt is
+proven through the real UI and the real brain. Live arms: Calendar + Browser (read-back). Owner-gated to
+finish: Gmail toolkit, Twilio live + public URL, hosted deploy, Apple signing, the 5 lived days.

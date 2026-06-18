@@ -1,0 +1,92 @@
+{
+  "total_runs": 200,
+  "critical_failures": 0,
+  "noncritical_findings": 2,
+  "pass": true,
+  "seconds": 45.9,
+  "model_provider": "openrouter",
+  "by_domain": {
+    "doctor": {
+      "runs": 20,
+      "critical": 0
+    },
+    "lawyer": {
+      "runs": 20,
+      "critical": 0
+    },
+    "accountant": {
+      "runs": 20,
+      "critical": 0
+    },
+    "executive": {
+      "runs": 20,
+      "critical": 0
+    },
+    "founder": {
+      "runs": 20,
+      "critical": 0
+    },
+    "vc": {
+      "runs": 20,
+      "critical": 0
+    },
+    "intern": {
+      "runs": 20,
+      "critical": 0
+    },
+    "student": {
+      "runs": 20,
+      "critical": 0
+    },
+    "personal": {
+      "runs": 20,
+      "critical": 0
+    },
+    "operator": {
+      "runs": 20,
+      "critical": 0
+    }
+  },
+  "by_scenario": {
+    "vent": {
+      "runs": 20,
+      "critical": 0
+    },
+    "joke": {
+      "runs": 20,
+      "critical": 0
+    },
+    "money": {
+      "runs": 20,
+      "critical": 0
+    },
+    "reminder": {
+      "runs": 20,
+      "critical": 0
+    },
+    "vague_ref": {
+      "runs": 20,
+      "critical": 0
+    },
+    "dedup": {
+      "runs": 20,
+      "critical": 0
+    },
+    "send": {
+      "runs": 20,
+      "critical": 0
+    },
+    "preference": {
+      "runs": 20,
+      "critical": 0
+    },
+    "mixed": {
+      "runs": 20,
+      "critical": 0
+    },
+    "calendar": {
+      "runs": 20,
+      "critical": 0
+    }
+  }
+}

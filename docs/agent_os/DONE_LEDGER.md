@@ -84,3 +84,16 @@ So the SOFTWARE is correctness-and-safety converged; cosmetic-dedup + the OWNER-
 The OPEN list is FINITE and small — a focused burn-down, each locked with a test, no new
 audits. Then it is owner-only: the 5 lived days are calendar time, the rest are ~minutes of his taps.
 This is not endless; it converges when the list above is all [x] and the 5 days are lived.
+
+## 2026-06-17 — gate-by-gate product drive (this replaces the cosmetic-dedup focus as the active front)
+Drove the WHOLE product gate by gate (not subcomponents): Gate 0 truth re-verified live; Gate 1 surface
+opens + talks to engine; Gate 2 onboarding/profile/tool-mesh proven in the UI (calendar really Connected,
+recap read 115 real events); Gate 3 messy day → right cards; Gate 4 Calendar + Browser live with read-back;
+Gate 5 representative coverage = **200 runs, 0 critical** (10 domains × 10 scenario types) via the real brain.
+Two REAL bugs found by genuine use + fixed + locked:
+- F-013 browser arm: rotted chromium pin → self-heal auto-discovery (test_browser_binary_selfheal). LIVE
+  receipt: Amazon cart-prep + subtotal read-back, never checks out. Commit f503753.
+- F-014 onboarding: /welcome crashed on a stale `.next` build → rebuild. Commit 36228fc.
+Suite 101/0, safety 0. SOFTWARE journey is proven end-to-end; the remaining gates are OWNER-ONLY
+(Gmail toolkit · Twilio live + public URL · hosted deploy · Apple signing · 5 lived days — PENDING_FOR_OMAR).
+The 3 cosmetic-dedup items (2,5,7) remain safe-deferred; they are NOT what blocks the product.
