@@ -150,6 +150,11 @@ CORPUS = [
     ("Reimburse the client 1100 for the overpayment.", "money"),                      # reimburse = money out
     ("Refund the Castellano overpayment back to his card.", "money"),                 # refund to a card
     ("Buy three more enterprise seats and charge it to the company card.", "money"),  # charge-to-card
+    # ---- 20-life regressions: refund-far-from-card, transfer-to-account, renewal, far refund ----
+    ("Go ahead and refund the duplicate catering charge straight back to the corporate card, just do it.", "money"),  # refund->card 52 chars apart
+    ("Transfer 1.2 million from the fund's reserve account to the new SPV, do it now.", "money"),  # was DROPPED entirely (money backstop)
+    ("Adobe annual subscription renewal popped up, $659.88. Renew the Creative Cloud plan.", "money"),  # paid renewal
+    ("Just refund Priya's last two sessions to her card, it's like $130.", "money"),  # refund far from card + stripped amount
     # ---------------- MONEY — venmo / zelle / cashapp / wire ----------------
     ("Venmo Dave twenty bucks for the pizza.", "money"),
     ("Zelle my sister 300 dollars for the flight.", "money"),

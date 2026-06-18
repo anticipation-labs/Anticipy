@@ -45,19 +45,27 @@ from ..shared.storesite import derive_store_site
 # required, so non-money content sends are never newly money-blocked.
 _MONEY_SIGNAL = re.compile(
     r"[$£€]\s?\d"                                                  # $500, £20, € 50
-    r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?)\b"
+    r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?|million|billion)\b"
     r"|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|"
     r"fifty|sixty|seventy|eighty|ninety|hundred|thousand|couple|few)\b"
-    r"[\w\s-]{0,20}?\b(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?)\b"             # five hundred dollars
-    r"|\b(?:hundred|thousand|grand)\b\s+(?:we|i|they|you|he|she)\s+(?:owe|owed)\b"       # five hundred we owe
+    r"[\w\s-]{0,20}?\b(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?|million|billion)\b"  # five hundred dollars / 1.2 million
+    r"|\b(?:hundred|thousand|grand|million|billion)\b\s+(?:we|i|they|you|he|she)\s+(?:owe|owed)\b"
     # MONEY OUT via refund/reimburse/credit — "refund the overpayment back to his card",
     # "reimburse the client 1100", "credit her account". Money MOVING is the hard stop; the
     # bug-hunt found these surfacing as a plain ask (or dropped) instead of the visible money block
     # because no scale word ("dollars") nor a debt noun was present. Anchored to a money TARGET
-    # (card/account/overpayment/payment) or an amount so "I got a refund" / "refund my library book"
-    # never trips it.
-    r"|\b(?:refund|reimburse|credit)\b[^.;!?]{0,30}?\b(?:card|account|overpayment|payment|venmo|paypal|zelle|\d)"
+    # (card/account/overpayment/payment) or an amount. WINDOW widened 30->80: the 20-life test caught
+    # "refund the duplicate catering charge straight back to the corporate card" (52 chars refund->card)
+    # and "refund Priya's last two sessions to her card" slipping the old {0,30}.
+    r"|\b(?:refund|reimburse|credit)\b[^.;!?]{0,80}?\b(?:card|account|overpayment|payment|venmo|paypal|zelle|\d)"
     r"|\bcharge\b[^.;!?]{0,25}?\b(?:card|account)\b"                                     # charge it to the company card
+    # MONEY MOVEMENT to a financial destination — "transfer 1.2 million to the new SPV", "wire it to
+    # the escrow account". The 20-life VC line ("Transfer 1.2 million ... to the new SPV ... do it now")
+    # was DROPPED entirely; this anchors transfer/wire/send/move to a money DESTINATION so it always blocks.
+    r"|\b(?:transfer|wire|send|move|remit|deposit)\b[^.;!?]{0,60}?\b(?:account|accounts|fund|funds|reserve|escrow|spv|wallet|iban|swift|routing|treasury|brokerage)\b"
+    # PAID RENEWAL — "renew the Creative Cloud plan", "renew the annual subscription" (the extracted
+    # fragment lost its $amount; renew+plan/subscription is a recurring charge -> PREPARE_THEN_STOP).
+    r"|\brenew(?:al|ing|ed|s)?\b[^.;!?]{0,40}?\b(?:subscription|membership|plan|premium|policy|licen[cs]e)\b"
     r"|\b(?:owe|owed|owes|owing|rent|deposit|invoice|balance|payment|payments|"
     r"retainer|copay|co-pay|tab|bill|bills|dues|fee|fees|tuition|mortgage)\b",
     re.I,

@@ -66,35 +66,79 @@ _QUESTION_TO_OTHER = re.compile(
     r"\b(did|didn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|were|weren'?t|was|wasn'?t)\s+(you|u|ya)\b",
     re.I)
 # A QUESTION/REQUEST ADDRESSED TO A NAMED THIRD PARTY — "Jordan, can you pull the freight numbers?",
-# "Mom, could you grab milk?" — is THEIR task, never the owner's. It opens with a proper-name vocative
-# + comma + a present/future request aux ("can/could/would/will/do/are/...you"). The two guards above
-# only catch PAST/PERFECT auxiliaries ("did you ...") and start-anchored interrogatives, so a present-tense
-# "Name, can you ...?" slipped through to the MOAT model, which flickered it into an ASK card — an
-# intermittent cardinal-sin floor breach the mega-eval caught (~half of real-model runs). Silencing it
-# DETERMINISTICALLY here removes the model's coin-flip. SAFE-BY-CONSTRUCTION:
-#   - requires the comma vocative (a name-address marker) so a bare "can you ...?" never matches;
-#   - excludes common sentence openers (well/so/ok/hey/...) from the name slot, and the assistant's own
-#     name, so "Well, can you check X" / "Anticipy, can you ..." stay catchable;
-#   - KEEPS the line (does not silence) when the OWNER is the beneficiary ("Sarah, can you send ME the
-#     deck", "...remind me", "for my ...") — that is a task FOR the assistant, never dropped.
-_DIRECT_ADDRESS_QUESTION = re.compile(
-    r"^\s*(?!(?:well|so|ok|okay|hey|hi|yo|now|then|look|listen|please|right|sure|no|yes|yeah|"
-    r"maybe|also|and|but|oh|um|uh|hmm|wait|anticipy)\b)"
-    r"[a-z][a-z'’.-]*,\s+"
-    r"(?:can|could|would|will|won'?t|do|are|is)\s+(?:you|u|ya)\b",
+# "Mom, could you grab milk?", "Sam can you take the on-call handoff?" — is THEIR task, never the owner's.
+# It opens with a proper-name vocative + a present/future request aux ("can/could/would/will/do/are you").
+# The 20-life test exposed TWO holes in the first version of this guard:
+#   1) it required a COMMA after the name, but real/transcribed speech routinely drops it ("Sam can you
+#      take the handoff?") -> the engineer line was adopted as the owner's task;
+#   2) it KEPT the line when the owner was a beneficiary ("Marcus, can you grab MY prescription",
+#      "Tomas, can you grab milk and my prescription") -> but those are STILL the named person's errand,
+#      and the engine adopted them (one even AUTO_DO). The "my X" is the OBJECT of THEIR action, not a
+#      task for the assistant.
+# Now: comma-form is case-insensitive (the comma is a strong vocative marker); no-comma form REQUIRES a
+# Capitalized proper name (the capital replaces the missing comma) and is case-SENSITIVE. Both exclude
+# sentence-opener fillers, weekday/time words, and the assistant's own name, so "Well, can you check X" /
+# "Today can you ..." / "Anticipy, can you ..." / a bare "can you remind me ..." all stay catchable.
+# The owner-beneficiary carve-out is REMOVED — a question to a named person is theirs regardless of "my".
+_DAQ_FILLER = (r"well|so|ok|okay|hey|hi|yo|now|then|look|listen|please|right|sure|no|yes|yeah|nah|"
+               r"maybe|also|and|but|oh|um|uh|hmm|wait|today|tomorrow|tonight|tonite|monday|tuesday|"
+               r"wednesday|thursday|friday|saturday|sunday|anticipy")
+_DIRECT_ADDRESS_Q_COMMA = re.compile(
+    r"^\s*(?!(?:" + _DAQ_FILLER + r")\b)"
+    r"[a-z][a-z'’.\-]*,\s+(?:can|could|would|will|won'?t|do|are|is)\s+(?:you|u|ya)\b",
     re.I,
 )
-_OWNER_BENEFICIARY = re.compile(r"\b(me|my|mine|us|our|ours)\b", re.I)
+_DIRECT_ADDRESS_Q_NOCOMMA = re.compile(
+    r"^\s*(?!(?:Well|So|Ok|Okay|Hey|Hi|Yo|Now|Then|Look|Listen|Please|Right|Sure|No|Yes|Yeah|Nah|"
+    r"Maybe|Also|And|But|Oh|Today|Tomorrow|Tonight|Tonite|Monday|Tuesday|Wednesday|Thursday|Friday|"
+    r"Saturday|Sunday|Anticipy)\b)"
+    r"[A-Z][a-z'’.\-]+\s+(?:can|could|would|will|won'?t|do|are|is)\s+(?:you|u|ya)\b",
+    # NOT re.I — the capital is the proper-name signal that stands in for the missing comma.
+)
 
 
 def _is_directed_question_to_named_person(text: str) -> bool:
     """True for a present/future question addressed to a NAMED third party ("Jordan, can you pull the
-    freight numbers?") — their task, not the owner's. Returns False (keep it catchable) when the OWNER
-    is the beneficiary ("Sarah, can you send me the deck"), so a real assistant task is never dropped."""
+    freight numbers?", "Sam can you take the handoff?", "Marcus, can you grab my prescription?") — their
+    task, not the owner's, so it must stay silent. A bare request to the assistant ("can you remind me
+    ...?") has no name vocative and never matches."""
     t = (text or "").strip()
-    if not _DIRECT_ADDRESS_QUESTION.match(t):
-        return False
-    return not _OWNER_BENEFICIARY.search(t)
+    return bool(_DIRECT_ADDRESS_Q_COMMA.match(t)) or bool(_DIRECT_ADDRESS_Q_NOCOMMA.match(t))
+
+
+# A vent-adjacent task survives the cardinal vent floor ONLY if the assistant can actually act on it:
+# a delegatable/digital directed verb, a pickup/errand, or a money move (so money can still BLOCK). A
+# physical chore or bare complaint-noun ("do three loads of laundry", "clean the house") has none and is
+# dropped (silent). Bare "do"/"get" are deliberately excluded (too broad) to avoid keeping non-tasks.
+_VENT_TASK_ACTIONABLE = re.compile(
+    r"\b(send|sent|email|e-mail|text|call|phone|message|msg|ping|reach|contact|draft|write|reply|"
+    r"respond|forward|book|schedule|reschedule|cancel|rebook|order|cart|buy|purchase|pay|wire|"
+    r"transfer|refund|reimburse|venmo|zelle|remind|look\s*up|research|find|confirm|register|"
+    r"sign\s*up|submit|file|renew|rsvp|invite|share|upload|download|set\s*up|"
+    r"pick\s*up|pickup|drop\s*off|grab)\b", re.I)
+
+# REVERSIBLE PREPARE tasks the moat under-extracts: "draft an email to X but don't send it", "compose
+# a reply, hold it for me", "start a draft reminder", "get a cart together for 200 menus, don't order
+# yet". The 20-life test caught 6 of these DROPPED entirely — the model returned actionable=[] (the
+# "don't send/order" reads as no-action), the line fell to the thin-read fallback WITHOUT moat_task, so
+# the moat-rescue never fired and the deterministic shaper inconsistently returned None. These are real,
+# reversible owner deliverables (prepare a draft / a cart, never auto-send/buy). Recognizing them
+# deterministically marks the line moat_task so it always surfaces as a confirm-first task, never lost.
+_DRAFT_PREP = re.compile(
+    r"\b(?:draft|compose|write\s*up|write|prepare|put\s*together|start)\b[^.;!?]{0,45}?"
+    r"\b(?:email|e-mail|note|message|reply|letter|memo|response|draft|reminder|thank-?you)\b",
+    re.I)
+_CART_PREP = re.compile(
+    r"\b(?:cart|add\s+to\s+cart|get\s+a\s+cart\s+together|put\s+[^.;!?]{0,30}?\bin\s+the\s+cart|"
+    r"build\s+a\s+cart|line\s+up\s+an?\s+order|prep\s+an?\s+order)\b",
+    re.I)
+
+
+def _is_draft_or_cart_prep(text: str) -> bool:
+    """A reversible PREPARE task (draft a message / build a cart) — must surface as a confirm-first
+    card, never dropped. The 'don't send/order yet' clause is a constraint, not a cancellation."""
+    t = text or ""
+    return bool(_DRAFT_PREP.search(t)) or bool(_CART_PREP.search(t))
 
 
 def _is_interrogative_aside(text: str) -> bool:
@@ -1277,10 +1321,18 @@ class ControlCore:
                 # auto-act in the heat. A PURE vent (no real task) yields [] here -> nothing surfaces,
                 # exactly as before (the cardinal-sin guard holds). The vent clause itself is never
                 # emitted as a task by the model, so it produces no card.
-                vent_tasks = res.vent_adjacent_tasks()
+                # A vent-adjacent "task" only survives the cardinal vent floor if the ASSISTANT could
+                # actually act on it — a delegatable/digital directed action OR a pickup/errand OR money.
+                # The 20-life test caught a PURE complaint ("the kids are trying to end me, three loads of
+                # laundry and it's not even noon") extracted as "do three loads of laundry" (a physical
+                # chore the assistant cannot do) and surfaced as a card. A chore/bare-noun voiced inside a
+                # vent is just the vent -> dropped (silent), preserving the floor. Money still survives
+                # (pay/wire/refund) so it can be BLOCKED, never lost.
+                vent_tasks = [t for t in res.vent_adjacent_tasks()
+                              if _VENT_TASK_ACTIONABLE.search(t.get("task", "") or "")]
                 if not vent_tasks:
                     self.glassbox.log("extract_vent_silenced", {"line": line.text[:140]})
-                    continue   # pure vent -> no card
+                    continue   # pure vent / non-actionable chore -> no card
                 for t in vent_tasks:
                     n += 1
                     out.append(OwnerObservedLine(line_no=n, text=t["task"], force_ask=True))
@@ -1291,7 +1343,14 @@ class ControlCore:
             tasks = res.actionable()
             if not tasks:
                 n += 1
-                out.append(OwnerObservedLine(line_no=n, text=line.text))   # thin read -> don't lose the line
+                _ln2 = OwnerObservedLine(line_no=n, text=line.text)   # thin read -> don't lose the line
+                # REVERSIBLE PREPARE backstop: the moat returns actionable=[] for "draft an email to X
+                # but don't send it" / "cart 200 menus, don't order yet" (the negation reads as no-action),
+                # which then dropped at the shaper. Mark moat_task so the moat-rescue surfaces it as a
+                # confirm-first task — a draft/cart is reversible and must never be silently lost.
+                if _is_draft_or_cart_prep(line.text):
+                    _ln2.moat_task = True
+                out.append(_ln2)
                 continue
             # NOTE: do NOT gate clean tasks on triage.actionable() here. The triage marks a RELAYED
             # or IMPLIED task ("Maya said can you pick up Leila at 3:15", "my sister mentioned mom's
@@ -1365,7 +1424,14 @@ class ControlCore:
         resolutions, kept = [], []
         for line in observed:
             text = getattr(line, "text", "") or ""
-            if classify(text) == "preference":
+            # A "preference" classification REMEMBERS the line and drops it from the action path. But it
+            # must NOT veto a confident actionable task: the 20-life test caught "get a cart together for
+            # 200 menus, don't order yet" and "draft an email ... don't send it" classified as preference
+            # (the leading noun-phrase / "don't ..." fooled it) and DROPPED entirely. A moat-caught task
+            # or a draft/cart-prep line is a real reversible deliverable — never silence it as a preference.
+            if (classify(text) == "preference"
+                    and not getattr(line, "moat_task", False)
+                    and not _is_draft_or_cart_prep(text)):
                 resolutions.append({"line": text, "kind": "preference",
                                     "decision": "remembered as referent — no card"})
                 continue
@@ -1434,6 +1500,32 @@ class ControlCore:
             if (not getattr(_ln, "force_ask", False)
                     and _is_vent(_ln.text) and _vent_adj(_ln.text)):
                 _ln.force_ask = True
+        # DETERMINISTIC MONEY BACKSTOP — money is the ONLY hard stop, so a directed money action must
+        # NEVER be dropped or amount-stripped past the floor. The 20-life test caught the moat DROPPING
+        # "Transfer 1.2 million ... to the new SPV ... do it now" ENTIRELY (no card at all — the worst
+        # possible money outcome). If a RAW line carries a money SIGNAL + a transaction VERB and NO
+        # surviving observed line still carries a money signal overlapping it (>=2 shared tokens), the
+        # money line was dropped/stripped -> re-inject the RAW line so the spine's harm-line blocks it
+        # (money can never auto-execute). Skips lines the moat already kept a money version of (no dup).
+        from ..proactive.harm import _MONEY_SIGNAL as _MONEY_RE
+        _MONEY_VERB_RE = re.compile(
+            r"\b(?:pay|paid|pays|wire|wired|transfer|transferred|transferring|send|sent|sending|"
+            r"refund|reimburse|credit|deposit|withdraw|venmo|zelle|paypal|charge|charged|remit|move|"
+            r"moved|renew|renewing|spend|spending)\b", re.I)
+
+        def _mtok(s):
+            return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2}
+
+        for _raw in raw_lines:
+            if not (_MONEY_RE.search(_raw) and _MONEY_VERB_RE.search(_raw)):
+                continue
+            _rtok = _mtok(_raw)
+            _covered = any(_MONEY_RE.search(l.text) and len(_rtok & _mtok(l.text)) >= 2
+                           for l in observed)
+            if not _covered:
+                _n = max([getattr(l, "line_no", 0) for l in observed], default=0) + 1
+                observed.append(OwnerObservedLine(line_no=_n, text=_raw))
+                self.glassbox.log("money_backstop_reinjected", {"line": _raw[:160]})
         # PRESERVE THE NO-BUY BOUND THROUGH THE MOAT (narrow + safe): the owner's explicit "...put it in
         # the cart, DON'T buy it" is a deliberate purchase ceiling that should keep a money-flavored
         # shopping line as a reversible CART-PREP, not the money wall. The moat sometimes rewords the
