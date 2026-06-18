@@ -1215,7 +1215,7 @@ class ControlCore:
         # money-VENTS never reach here — the moat's vent guard drops them upstream.) Keyed on a money
         # ACTION (signal + spend verb), NOT the broad harm money-CATEGORY, so benign money-noun lines
         # ("log the payment in the CRM", "review the invoice") keep their nuanced carve-outs.
-        if _is_money_action(line.text):
+        if _is_money_action(line.text) or getattr(line, "money_src", False):
             blk = self.owner_mode.card_for_line(line, source)
             if blk is not None and blk.disposition == "blocked":
                 return blk
@@ -1396,6 +1396,10 @@ class ControlCore:
         for src_idx, line in enumerate(observed):
             context = "\n".join(prior_lines[-8:])
             prior_lines.append(line.text)
+            # Money truth of the RAW line — propagated onto every task split from it so a moat
+            # truncation ("refund X back to my card" -> "refund X") can never strip a fragment past
+            # the money gate. Money is the hard stop; the spine blocks any fragment whose source was money.
+            _msrc = _is_money_action(line.text)
             # DETERMINISTIC ASIDE FLOOR: a question to someone else ("Did you grab the dry
             # cleaning?") is never the owner's task. Drop it BEFORE the model can strip the
             # interrogative wrapper and over-extract a bare imperative -> an ASK on a vent/aside.
@@ -1414,6 +1418,7 @@ class ControlCore:
                 n += 1
                 _ot = OwnerObservedLine(line_no=n, text=line.text, moat_task=True)
                 _ot.src_idx = src_idx
+                _ot.money_src = _msrc
                 out.append(_ot)
                 self.glassbox.log("reminder_hold_backstop", {"line": line.text[:140]})
                 continue
@@ -1424,6 +1429,7 @@ class ControlCore:
             if res is None or not res.available:
                 n += 1
                 _ln0 = OwnerObservedLine(line_no=n, text=line.text)   # deterministic fallback
+                _ln0.money_src = _msrc
                 # Even when the model reads the line as thin/unavailable, an EXPLICIT reminder /
                 # calendar-hold / draft-cart is a real reversible task that must never silently drop.
                 if _is_reminder_or_hold(line.text) or _is_draft_or_cart_prep(line.text):
@@ -1452,7 +1458,9 @@ class ControlCore:
                     continue   # pure vent / non-actionable chore -> no card
                 for t in vent_tasks:
                     n += 1
-                    out.append(OwnerObservedLine(line_no=n, text=t["task"], force_ask=True))
+                    _vt = OwnerObservedLine(line_no=n, text=t["task"], force_ask=True)
+                    _vt.money_src = _msrc
+                    out.append(_vt)
                 self.glassbox.log("extract_vent_tasks_held",
                                   {"line": line.text[:140],
                                    "tasks": [t["task"] for t in vent_tasks]})
@@ -1461,6 +1469,7 @@ class ControlCore:
             if not tasks:
                 n += 1
                 _ln2 = OwnerObservedLine(line_no=n, text=line.text)   # thin read -> don't lose the line
+                _ln2.money_src = _msrc
                 # REVERSIBLE PREPARE backstop: the moat returns actionable=[] for "draft an email to X
                 # but don't send it" / "cart 200 menus, don't order yet" (the negation reads as no-action),
                 # which then dropped at the shaper. Mark moat_task so the moat-rescue surfaces it as a
@@ -1479,6 +1488,7 @@ class ControlCore:
                 n += 1
                 _ot = OwnerObservedLine(line_no=n, text=t["task"], moat_task=True)
                 _ot.src_idx = src_idx   # which raw line this task was split from (for same-source dedup)
+                _ot.money_src = _msrc   # raw-line money truth (truncation-proof money gate)
                 out.append(_ot)
             self.glassbox.log("extract_tasks", {"line": line.text[:140],
                               "tasks": [t["task"] for t in tasks]})
@@ -1809,7 +1819,8 @@ class ControlCore:
                 card = preview
                 # PREVIEW == REALITY for the MONEY hard-stop: a money ACTION must show BLOCKED in preview
                 # too, never remember/None/dropped (mirrors _spine_card's absolute money-block).
-                if _is_money_action(line.text) and (card is None or card.disposition != "blocked"):
+                if (_is_money_action(line.text) or getattr(line, "money_src", False)) and (
+                        card is None or card.disposition != "blocked"):
                     card = self._money_blocked_card(line, source)
                 # PREVIEW == REALITY: a vent-adjacent real task whose regex preview is empty (a bare
                 # "call the dentist") still surfaces as a confirm-first ask, exactly as the execute

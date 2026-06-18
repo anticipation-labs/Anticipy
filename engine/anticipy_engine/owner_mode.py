@@ -43,6 +43,11 @@ class OwnerObservedLine(BaseModel):
     # Index of the RAW transcript line this task was split from by the moat — lets the same-source
     # semantic-dedup merge sub-clauses of ONE sentence without ever merging across separate lines.
     src_idx: int = -1
+    # True when the RAW source line was a money ACTION (refund/wire/pay + signal). The moat sometimes
+    # TRUNCATES the money target off a fragment ("refund X back to my card" -> "refund X"), which would
+    # let the fragment escape the money gate; this flag carries the raw-line money truth so the spine
+    # ALWAYS blocks the fragment. Money is the hard stop — it can never be lost to truncation.
+    money_src: bool = False
 
 
 class OwnerTaskCard(BaseModel):
