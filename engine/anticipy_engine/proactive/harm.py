@@ -57,6 +57,7 @@ _MONEY_SIGNAL = re.compile(
     # (card/account/overpayment/payment) or an amount so "I got a refund" / "refund my library book"
     # never trips it.
     r"|\b(?:refund|reimburse|credit)\b[^.;!?]{0,30}?\b(?:card|account|overpayment|payment|venmo|paypal|zelle|\d)"
+    r"|\bcharge\b[^.;!?]{0,25}?\b(?:card|account)\b"                                     # charge it to the company card
     r"|\b(?:owe|owed|owes|owing|rent|deposit|invoice|balance|payment|payments|"
     r"retainer|copay|co-pay|tab|bill|bills|dues|fee|fees|tuition|mortgage)\b",
     re.I,

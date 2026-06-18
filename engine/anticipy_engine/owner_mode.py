@@ -433,7 +433,13 @@ class OwnerMode:
                 reason="stated preference, identity, or relationship fact",
             )
 
-        if _PICKUP.search(text) and (_TIMEISH.search(text) or _REMEMBER.search(text)):
+        # MONEY BEATS PICKUP: "drop the rent check off, $1,450" reads as a 'drop off' care chore but
+        # it is a PAYMENT. Money is the hard stop and must be caught FIRST — a pickup/drop-off line
+        # carrying any money signal falls through to the money interlock below (blocked), never an
+        # auto-executed pickup chore (the relentless bug-hunt's worst breach: a $1,450 rent payment
+        # auto-handled as a reversible drop-off). A real pickup ("grab the kids at 3") has no money.
+        if (_PICKUP.search(text) and (_TIMEISH.search(text) or _REMEMBER.search(text))
+                and not _has_money_signal(text)):
             return OwnerTaskCard(
                 source=source,
                 line_no=line.line_no,
