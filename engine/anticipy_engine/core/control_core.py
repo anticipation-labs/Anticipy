@@ -65,15 +65,47 @@ _INTERROGATIVE_ASIDE = re.compile(
 _QUESTION_TO_OTHER = re.compile(
     r"\b(did|didn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|were|weren'?t|was|wasn'?t)\s+(you|u|ya)\b",
     re.I)
+# A QUESTION/REQUEST ADDRESSED TO A NAMED THIRD PARTY — "Jordan, can you pull the freight numbers?",
+# "Mom, could you grab milk?" — is THEIR task, never the owner's. It opens with a proper-name vocative
+# + comma + a present/future request aux ("can/could/would/will/do/are/...you"). The two guards above
+# only catch PAST/PERFECT auxiliaries ("did you ...") and start-anchored interrogatives, so a present-tense
+# "Name, can you ...?" slipped through to the MOAT model, which flickered it into an ASK card — an
+# intermittent cardinal-sin floor breach the mega-eval caught (~half of real-model runs). Silencing it
+# DETERMINISTICALLY here removes the model's coin-flip. SAFE-BY-CONSTRUCTION:
+#   - requires the comma vocative (a name-address marker) so a bare "can you ...?" never matches;
+#   - excludes common sentence openers (well/so/ok/hey/...) from the name slot, and the assistant's own
+#     name, so "Well, can you check X" / "Anticipy, can you ..." stay catchable;
+#   - KEEPS the line (does not silence) when the OWNER is the beneficiary ("Sarah, can you send ME the
+#     deck", "...remind me", "for my ...") — that is a task FOR the assistant, never dropped.
+_DIRECT_ADDRESS_QUESTION = re.compile(
+    r"^\s*(?!(?:well|so|ok|okay|hey|hi|yo|now|then|look|listen|please|right|sure|no|yes|yeah|"
+    r"maybe|also|and|but|oh|um|uh|hmm|wait|anticipy)\b)"
+    r"[a-z][a-z'’.-]*,\s+"
+    r"(?:can|could|would|will|won'?t|do|are|is)\s+(?:you|u|ya)\b",
+    re.I,
+)
+_OWNER_BENEFICIARY = re.compile(r"\b(me|my|mine|us|our|ours)\b", re.I)
+
+
+def _is_directed_question_to_named_person(text: str) -> bool:
+    """True for a present/future question addressed to a NAMED third party ("Jordan, can you pull the
+    freight numbers?") — their task, not the owner's. Returns False (keep it catchable) when the OWNER
+    is the beneficiary ("Sarah, can you send me the deck"), so a real assistant task is never dropped."""
+    t = (text or "").strip()
+    if not _DIRECT_ADDRESS_QUESTION.match(t):
+        return False
+    return not _OWNER_BENEFICIARY.search(t)
 
 
 def _is_interrogative_aside(text: str) -> bool:
     # A "did/have you ..." completion-check aimed at the listener is silent whether or not the
     # spoken line kept its question mark ("hey did you remind Jenny to send the slides at 4 like
-    # I asked" has none) — plus any start-anchored interrogative. Present-tense requests to the
-    # assistant ("can you remind me ...") never match (no did/have/had aux), so they stay catchable.
+    # I asked" has none) — plus any start-anchored interrogative, plus a present/future question
+    # addressed to a NAMED third party ("Jordan, can you ...?"). Present-tense requests to the
+    # assistant ("can you remind me ...") never match (no name vocative / owner is beneficiary).
     t = (text or "").strip()
-    return bool(_INTERROGATIVE_ASIDE.match(t)) or bool(_QUESTION_TO_OTHER.search(t))
+    return (bool(_INTERROGATIVE_ASIDE.match(t)) or bool(_QUESTION_TO_OTHER.search(t))
+            or _is_directed_question_to_named_person(t))
 
 
 def _parse_iso_dt_local(value):
