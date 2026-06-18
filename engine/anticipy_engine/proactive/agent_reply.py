@@ -53,6 +53,43 @@ def summarize_actions(result: dict | None) -> str:
     return "WHAT HAPPENED:\n" + "\n".join(lines)
 
 
+_FINDS_FALLBACK = "Heads up — I caught a few things that need your okay before I can act. They're ready in the app whenever you are."
+
+
+async def notify_finds(gateway, cards: list[dict]) -> str | None:
+    """Proactive, HUMAN text telling the owner what the engine just found that it CANNOT act on
+    without their okay (money / a send to a person / anything irreversible) — and that it's ready
+    and waiting. Words only; it never acted. Returns None when there is nothing gated to report (so
+    no needless text). One consolidated message (never one-per-item -> no flood). Model-written in
+    the product voice, grounded in the actual gated cards, never claiming it did them."""
+    gated = [c for c in (cards or [])
+             if c.get("disposition") in ("blocked", "ask")
+             or (c.get("autonomy_mode") in ("PREPARE_THEN_STOP", "CLARIFY_FIRST"))]
+    if not gated:
+        return None
+    items = []
+    for c in gated[:5]:
+        what = (c.get("title") or c.get("source_text") or "").strip()[:120]
+        why = "money — your hard stop" if c.get("disposition") == "blocked" else "needs your okay"
+        items.append(f"- {what}  ({why})")
+    if gateway is None:
+        return _FINDS_FALLBACK
+    prompt = (_SYSTEM
+              + "\n\nYou just quietly went through your owner's day. These are the ONLY things you "
+              "could NOT do on your own — each touches money, another person, or something you can't "
+              "undo, so you prepared them and STOPPED, waiting for their okay. You did NOT do any of "
+              "them.\n\nWAITING FOR THEIR OKAY:\n" + "\n".join(items)
+              + "\n\nText them ONE short, warm, human heads-up (1-2 sentences): tell them plainly what "
+              "you caught that's waiting on their go, and that you've got it ready but won't act "
+              "without their okay. Be specific about the items, never robotic, never a list dump, "
+              "never claim you did them. Your text:")
+    try:
+        out = await gateway.think(prompt, tier=SMART, caller="agent", temperature=0.5, max_tokens=160)
+    except Exception:
+        return _FINDS_FALLBACK
+    return (out or "").strip() or _FINDS_FALLBACK
+
+
 async def agent_reply(gateway, message: str, *, result: dict | None = None, recall: str = "",
                       ground: str = "", caller: str = "agent") -> str:
     """Generate the agent's reply to the owner's message (SMS or voice). Words only; never executes.

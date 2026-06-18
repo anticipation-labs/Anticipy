@@ -1292,10 +1292,31 @@ class ControlCore:
         # delivery for the duration of the ingest; time-due reminders (trigger_tick) still text.
         self.proactive._suppress_ask_delivery = True
         try:
-            return await self._owner_ingest_inner(
+            out = await self._owner_ingest_inner(
                 source, text, meta, execute_actions, observed=None)
         finally:
             self.proactive._suppress_ask_delivery = False
+        # PROACTIVE FIND-NOTIFICATION (owner directive): when the engine FINDS something it can't act
+        # on without the owner's okay — money (the hard stop), a send to a person, anything
+        # irreversible — it must IDENTIFY it and TELL the owner over text, in real human words (never
+        # a canned script), and it CANNOT act without their explicit approval. ONE consolidated heads-
+        # up (no per-item flood). Words only — nothing is executed here. Only for AMBIENT capture
+        # (mic / audio / listening / pendant) where the owner isn't already watching the app; a typed
+        # in-app paste shows the same finds in the UI, so we don't double-buzz the phone. Best-effort:
+        # a notify failure never breaks ingest.
+        _AMBIENT = {"mac_mic", "start_listening", "audio_upload", "mp3", "pendant_phone"}
+        if execute_actions and source in _AMBIENT:
+            try:
+                from ..proactive.agent_reply import notify_finds
+                msg = await notify_finds(self.gateway, out.get("cards") or [])
+                if msg and self.text_channel.configured():
+                    sent = self.text_channel.send(self._user_contact(), msg)
+                    self.glassbox.log("finds_notified",
+                                      {"to": self._user_contact(), "text": msg,
+                                       "live": (sent or {}).get("mock") is False})
+            except Exception as e:  # pragma: no cover - never let a notify break ingest
+                self.glassbox.log("finds_notify_failed", {"error": str(e)})
+        return out
 
     def _intent_resolve(self, observed, raw_lines):
         """GATE MIDDLE-1: intent-shaped memory handoff. Build ranked INTENT THREADS from the raw
