@@ -98,6 +98,21 @@ for t in REVERSIBLE_YES:
 for t in REVERSIBLE_NO:
     check(not _is_explicit_reversible_task(t), f"vent/rhetorical wrongly flagged (vent-floor breach risk): {t!r}")
 
+# ---- cart-without-checkout shapes (re-run #3: many dropped) ----
+for t in ["Start a cart at Costco for the office snacks but don't check out",
+          "get the cart ready but do NOT check out",
+          "Set up a cart for the data-room software, do not check out",
+          "reorder the Zyrtec into the cart but do NOT check out",
+          "add the soccer cleats to my cart"]:
+    check(_is_draft_or_cart_prep(t), f"cart-prep NOT recognized (drop risk): {t!r}")
+
+# ---- absolute money hard-stop trigger: harm must categorize these as money (-> blocked at spine) ----
+from anticipy_engine.proactive.harm import HarmLine  # noqa: E402
+_h = HarmLine()
+for t in ["Better wire the deposit to my daughter-in-law, it's four hundred dollars.",
+          "Pay the firm's quarterly estimated taxes today, it's $14,200 to EFTPS, do not let me forget."]:
+    check(_h.assess(t, {}).category == "money", f"money action NOT categorized money (block-bypass risk): {t!r}")
+
 if fails:
     for f in fails:
         print("FAIL:", f)

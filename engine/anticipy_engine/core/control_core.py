@@ -130,8 +130,13 @@ _DRAFT_PREP = re.compile(
     r"\b(?:email|e-mail|note|message|text|reply|letter|memo|response|draft|reminder|thank-?you)\b",
     re.I)
 _CART_PREP = re.compile(
-    r"\b(?:cart|add\s+to\s+cart|get\s+a\s+cart\s+together|put\s+[^.;!?]{0,30}?\bin\s+the\s+cart|"
-    r"build\s+a\s+cart|line\s+up\s+an?\s+order|prep\s+an?\s+order)\b",
+    r"\b(?:start|set\s*up|get|build|fill|prep|line\s*up|put\s*together)\s+(?:a|an|the)\s+cart\b"
+    r"|\badd\s+(?:.{0,30}?\s+)?to\s+(?:the\s+|my\s+)?cart\b"
+    r"|\bput\s+[^.;!?]{0,30}?\b(?:in|into)\s+(?:the|my)\s+cart\b"
+    r"|\b(?:order|reorder|add)\s+[^.;!?]{0,40}?\binto\s+(?:the|my)\s+cart\b"
+    r"|\binto\s+(?:the|my)\s+cart\b"
+    r"|\bcart\b[^.;!?]{0,45}?\b(?:do ?n'?t|do not)\s+(?:check\s*out|buy|order|purchase)\b"
+    r"|\bline\s+up\s+an?\s+order\b|\bprep\s+an?\s+order\b",
     re.I)
 
 
@@ -175,6 +180,24 @@ def _is_reminder_or_hold(text: str) -> bool:
     "hold time Sat 2pm", "put it on my list", "don't (let me) forget / lose track of ...", "nail that
     down", "set a hold", "make sure ... on my calendar", "add ... to calendar"."""
     return bool(_REMINDER_OR_HOLD.search(text or ""))
+
+
+# A money ACTION = a real money signal (amount / account / transfer-to / debt noun) AND a spend/move
+# VERB. This is STRICTER than the harm "money" CATEGORY (which also fires on bare money NOUNS like
+# "invoice"/"payment"/"fee" that are benign in "log the payment in the CRM" / "review the invoice").
+# The absolute spine money-block keys off THIS so it force-blocks real money moves (wire $400, pay
+# $14,200) without over-blocking benign money-noun mentions (which keep their nuanced carve-outs:
+# internal-note, cart-no-buy, invoice-draft).
+_MONEY_ACTION_VERB = re.compile(
+    r"\b(?:pay|paid|pays|paying|wire|wired|wiring|transfer|transferred|transferring|send|sent|sending|"
+    r"refund|reimburse|credit|deposit|withdraw|venmo|zelle|cashapp|cash\s?app|paypal|charge|charged|"
+    r"remit|buy|buying|bought|purchase|purchasing|spend|spending|renew|renewing)\b", re.I)
+
+
+def _is_money_action(text: str) -> bool:
+    """A real money MOVE — a money signal plus a spend/transfer verb — which must always be blocked."""
+    t = text or ""
+    return bool(_MONEY_SIGNAL.search(t)) and bool(_MONEY_ACTION_VERB.search(t))
 
 
 def _is_explicit_reversible_task(text: str) -> bool:
@@ -1166,6 +1189,15 @@ class ControlCore:
             status="open",
         )
 
+    def _money_blocked_card(self, line: OwnerObservedLine, source: str) -> OwnerTaskCard:
+        """The absolute money hard-stop card — visible ("Left for you"), never executes."""
+        return OwnerTaskCard(
+            source=source, line_no=line.line_no, source_text=line.text,
+            title="Left for you (money)", disposition="blocked",
+            route="browser", action="prepare_purchase_path_without_payment",
+            args={"task_text": line.text, "payment_allowed": False}, confidence=0.85,
+            reason="money or checkout is a hard stop; prepare but do not pay")
+
     async def _spine_card(self, line: OwnerObservedLine, source: str, meta: dict) -> OwnerTaskCard | None:
         """F17 'one brain': the proven spine (triage -> decider -> harm-line ->
         orchestrator/hands) is the ONLY act/ask/silent decision-maker for owner
@@ -1175,6 +1207,19 @@ class ControlCore:
         never /pending, never executed (the harm-line stance is final) — but a
         money-flavored line the spine's OWN triage confidently vents stays silent
         exactly as it would on the default path (F23)."""
+        # ABSOLUTE MONEY HARD-STOP (deterministic, beats EVERY model/decider/shaper path): a line the
+        # harm-line categorizes as a money ACTION is ALWAYS a blocked PREPARE_THEN_STOP card — it can
+        # never be routed to remember/ask/do or silently dropped. The 20-life run caught a $400
+        # wire-to-a-person landing as REMEMBER_ONLY and a $14,200 tax payment DROPPED ENTIRELY; this is
+        # the one gate the product exists to enforce, so it runs first and unconditionally. (Pure
+        # money-VENTS never reach here — the moat's vent guard drops them upstream.) Keyed on a money
+        # ACTION (signal + spend verb), NOT the broad harm money-CATEGORY, so benign money-noun lines
+        # ("log the payment in the CRM", "review the invoice") keep their nuanced carve-outs.
+        if _is_money_action(line.text):
+            blk = self.owner_mode.card_for_line(line, source)
+            if blk is not None and blk.disposition == "blocked":
+                return blk
+            return self._money_blocked_card(line, source)
         # VENT-ADJACENT REAL TASK (force_ask): the model pulled this real task out of a vented
         # breath. It must be SURFACED as a confirm-first ask, but the spine must NEVER EXECUTE it
         # in the heat (that is the exact path a prior attempt used to re-introduce the cardinal
@@ -1698,6 +1743,10 @@ class ControlCore:
                 card = await self._spine_card(line, source, meta)
             else:
                 card = preview
+                # PREVIEW == REALITY for the MONEY hard-stop: a money ACTION must show BLOCKED in preview
+                # too, never remember/None/dropped (mirrors _spine_card's absolute money-block).
+                if _is_money_action(line.text) and (card is None or card.disposition != "blocked"):
+                    card = self._money_blocked_card(line, source)
                 # PREVIEW == REALITY: a vent-adjacent real task whose regex preview is empty (a bare
                 # "call the dentist") still surfaces as a confirm-first ask, exactly as the execute
                 # spine catches it — so a preview never shows FEWER tasks than the real run would.
