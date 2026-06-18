@@ -136,6 +136,9 @@ _CART_PREP = re.compile(
     r"|\b(?:order|reorder|add)\s+[^.;!?]{0,40}?\binto\s+(?:the|my)\s+cart\b"
     r"|\binto\s+(?:the|my)\s+cart\b"
     r"|\bcart\b[^.;!?]{0,45}?\b(?:do ?n'?t|do not)\s+(?:check\s*out|buy|order|purchase)\b"
+    # "order/buy/reorder X ... don't (actually) check out / buy / pay yet" — a cart-without-checkout
+    # even when the word 'cart' is absent ("order a replacement stand, but don't actually check out").
+    r"|\b(?:order|reorder|buy|purchase|add)\b[^.;!?]{0,70}?\b(?:do ?n'?t|do not)\s+(?:actually\s+)?(?:check\s*out|buy|order|purchase|pay)\b"
     r"|\bline\s+up\s+an?\s+order\b|\bprep\s+an?\s+order\b",
     re.I)
 

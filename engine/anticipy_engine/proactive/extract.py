@@ -131,9 +131,18 @@ _DAY_PROMPT = '''You read a person's WHOLE messy spoken day (many lines at once)
 
 WHAT IS A REAL TASK (list every one): a concrete obligation/action the SPEAKER must do or be reminded of — reminders ("remind me to X", "don't let me forget X"), calendar holds ("block 2pm for X", "lock the trial date on my calendar", "hold the 9:40am flight"), look-ups ("pull up / look up / find out / check X"), drafts ("draft an email/note to X, don't send"), cart-prep ("start/set up a cart for X, don't check out"), calls/emails/errands/follow-ups ("nudge my advisor", "follow up on the Delgado filing"), and money moves ("pay the $14,200 taxes", "wire $400 to her", "refund X to my card"). Casual/fuzzy/filler phrasing is STILL a real task: "I gotta deal with that thing", "I owe my mom a call", "I keep meaning to sort the car out". Keep the speaker's own words for fuzzy parts. Missing a real task is the worst failure here.
 
+ONE TASK PER OBLIGATION. Emit each real obligation EXACTLY ONCE. Do NOT split a reminder into two —
+"remind me to call the title company at 9" is ONE task ("call the title company at 9"), never both
+"remind me to call..." AND "call...". "set a reminder to read the data room" -> one task ("read the
+data room"). Combine a means-clause with its goal ("renew the cert by signing up for the course" -> one).
+
 WHO PERFORMS IT decides everything. List a task ONLY when the SPEAKER must act / is reminded:
  - "Maya said pick up Leila at 3" / "the boss wants the report by Friday" -> the speaker acts -> TASK.
- - "Sam, can you take the handoff?" / "babe can you grab milk?" -> a request AT ANOTHER NAMED PERSON -> their task -> DROP.
+ - An imperative to SEND / TEXT / EMAIL / CALL a named person is the SPEAKER's OWN task (THEY do the
+   sending) -> LIST IT: "send Theo a reminder text that the flight lands Sunday" -> {"task":"text Theo
+   that the flight lands Sunday"}; "shoot Mara the address" -> list it; "call my mom back" -> list it.
+ - Only a QUESTION/REQUEST aimed AT the person is dropped: "Sam, can you take the handoff?" / "babe can
+   you grab milk?" -> a request AT ANOTHER NAMED PERSON to do something -> their task -> DROP.
  - "did you ever email Sarah back?" -> a check on someone else -> DROP.
 AMBIENT reports of others' state/needs with no instruction to the speaker ("the dishwasher is leaking", "the vendor wants the contract") -> DROP.
 
