@@ -84,3 +84,19 @@ wrong-referent, duplicate-spam, acted-on-preference, prompt-injection, follow-up
 Open → onboard → connect → input → memory/intent → autonomy → action → proof → follow-up → receipt is
 proven through the real UI and the real brain. Live arms: Calendar + Browser (read-back). Owner-gated to
 finish: Gmail toolkit, Twilio live + public URL, hosted deploy, Apple signing, the 5 lived days.
+
+## Gate 4 cont. — Twilio outbound LIVE (2026-06-17) + Gmail escalated
+- **Twilio SMS LIVE + read-back:** flipped channels live, sent a `[Anticipy test]` SMS to the owner
+  number; `sent:true, mock:false`; **independent Twilio API read-back: status=`delivered`** (sid SM4f14da6a…).
+  The voice/text arm's outbound leg is real. (Inbound "YES" + two-way voice still need the poller live +
+  a public wss; not run now — restarting the full engine in live mode risks a reminder backlog flood.)
+- **Gmail — ESCALATED (precise):** drove the `gmail.compose` Google consent to completion in the owner's
+  Chrome (granted "Manage drafts and send emails" for omarkebrahim@gmail.com), but
+  `tools.authorize(Gmail.WriteDraftEmail)` STILL returns `pending` (Calendar returns `completed`). The
+  OAuth callback bounces to the Arcade dashboard login, and Arcade reports omarkebrahim@gmail.com (Google)
+  "is already used by another account" whose sign-in is **GitHub** — so the token never binds to the
+  project. ROOT: the Gmail binding needs the OWNER's GitHub-authenticated Arcade dashboard + the project's
+  Gmail toolkit/scope enabled (Calendar already has it). I did NOT blind-link identities or edit his
+  production project. EXACT NEXT MOVE (owner): sign into cloud.arcade.dev via GitHub → open the project
+  holding ARCADE_API_KEY → enable the Gmail toolkit / gmail.compose scope → re-run connect; then I prove
+  a live draft with read-back.
