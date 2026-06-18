@@ -40,6 +40,9 @@ class OwnerObservedLine(BaseModel):
     # on loose phrasing), it is surfaced as a confirm-first ASK instead — UNLESS the deterministic
     # floor flags it a vent or money/detrimental (the only hard overrides). Never an auto-act.
     moat_task: bool = False
+    # Index of the RAW transcript line this task was split from by the moat — lets the same-source
+    # semantic-dedup merge sub-clauses of ONE sentence without ever merging across separate lines.
+    src_idx: int = -1
 
 
 class OwnerTaskCard(BaseModel):

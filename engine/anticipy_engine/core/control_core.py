@@ -1296,7 +1296,7 @@ class ControlCore:
         # Bounded to the last few lines (recent referents); empty for a single-line/proactive call,
         # which keeps that path (and the safety eval) byte-identical to before.
         prior_lines: list[str] = []
-        for line in observed:
+        for src_idx, line in enumerate(observed):
             context = "\n".join(prior_lines[-8:])
             prior_lines.append(line.text)
             # DETERMINISTIC ASIDE FLOOR: a question to someone else ("Did you grab the dry
@@ -1360,7 +1360,9 @@ class ControlCore:
             # the cheap deterministic floor here is only the narrow interrogative-aside guard above.
             for t in tasks:
                 n += 1
-                out.append(OwnerObservedLine(line_no=n, text=t["task"], moat_task=True))
+                _ot = OwnerObservedLine(line_no=n, text=t["task"], moat_task=True)
+                _ot.src_idx = src_idx   # which raw line this task was split from (for same-source dedup)
+                out.append(_ot)
             self.glassbox.log("extract_tasks", {"line": line.text[:140],
                               "tasks": [t["task"] for t in tasks]})
         return out
@@ -1483,6 +1485,66 @@ class ControlCore:
                 kept.append([line, sig])
         return [entry[0] for entry in kept]
 
+    async def _semantic_dedup_same_source(self, observed):
+        """LLM SAME-SOURCE-LINE dedup (anti-spam, Omar's #1 ban). When the moat splits ONE sentence into
+        multiple tasks, some are the SAME obligation said twice — one is the MEANS/DETAIL/PURPOSE of the
+        other: "renew my ACLS cert" + "sign up for the recert course"; "look up the Datadog plan" + "find
+        out what tier we're on"; "book Mia's dentist appt" + "call about her cleaning". Signature dedup
+        can't merge these (they share <2 salient tokens / different verbs), but they came from ONE breath.
+        A bounded SMART model call clusters each same-source group and keeps ONE card per real obligation.
+        SAFE: scoped to tasks sharing a src_idx (NEVER merges across separate lines); stub provider /
+        model error / a non-confident reply -> NO merge, so a genuinely distinct task is never dropped on
+        a guess. Keeps the longest (most complete) text and propagates the stricter force_ask guard."""
+        if self.gateway.provider != PROVIDER_OPENROUTER:
+            return observed
+        from collections import defaultdict
+        import json as _json
+        groups: dict = defaultdict(list)
+        for ln in observed:
+            groups[getattr(ln, "src_idx", -1)].append(ln)
+        drop_ids: set = set()
+        for sidx, members in groups.items():
+            if sidx is None or sidx < 0:
+                continue
+            cand = [m for m in members if getattr(m, "moat_task", False)]
+            if len(cand) < 2:
+                continue
+            listing = "\n".join(f"{i}. {m.text}" for i, m in enumerate(cand))
+            prompt = (
+                "These tasks were ALL extracted from ONE sentence the owner spoke. Some may be the SAME "
+                "single obligation said twice — where one item is the MEANS, DETAIL, or PURPOSE of another "
+                "(e.g. 'renew the cert' & 'sign up for the recert course'; 'look up the plan' & 'find out "
+                "the tier'; 'book the dentist' & 'call about the cleaning'). Others are GENUINELY SEPARATE "
+                "tasks (e.g. 'call the dentist' & 'email Sarah the deck') and must NOT be merged. Group "
+                "ONLY items that are the same single obligation. Reply with ONLY a JSON list of lists of "
+                "the item numbers (e.g. [[0,2],[1]]). If every item is separate, return [[0],[1],...].\n"
+                f"Tasks:\n{listing}"
+            )
+            try:
+                raw = await self.gateway.think(prompt, tier="smart", caller="gate")
+                m = re.search(r"\[.*\]", raw or "", re.S)
+                clusters = _json.loads(m.group(0)) if m else []
+            except Exception:
+                continue   # uncertainty -> no merge (never drop a real task on a guess)
+            for cluster in clusters:
+                if not isinstance(cluster, list):
+                    continue
+                idxs = [c for c in cluster if isinstance(c, int) and 0 <= c < len(cand)]
+                if len(idxs) < 2:
+                    continue
+                keep = max((cand[i] for i in idxs), key=lambda mm: len(mm.text or ""))
+                for i in idxs:
+                    mm = cand[i]
+                    if mm is keep:
+                        continue
+                    if getattr(mm, "force_ask", False):
+                        keep.force_ask = True
+                    drop_ids.add(id(mm))
+                self.glassbox.log("semantic_dedup_merged", {
+                    "kept": (keep.text or "")[:80],
+                    "dropped": [(cand[i].text or "")[:60] for i in idxs if cand[i] is not keep]})
+        return [ln for ln in observed if id(ln) not in drop_ids]
+
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
@@ -1541,6 +1603,7 @@ class ControlCore:
             _shop[0].text = _shop[0].text.rstrip(". ") + " — don't buy it"
         observed, middle_trace = self._intent_resolve(observed, raw_lines)  # GATE MIDDLE-1: ranked recall
         observed = self._consolidate_obligations(observed)   # F-012: one real obligation = one card
+        observed = await self._semantic_dedup_same_source(observed)  # anti-spam: one sentence -> one obligation
         captured_by_line: dict[int, dict] = {}
         for line in observed:
             captured_by_line[line.line_no] = self.live_memory.capturer.capture(
