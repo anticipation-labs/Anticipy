@@ -7,6 +7,10 @@ again, with the same mission and the same rules.
 
 ## FIRST-READ ORDER (every session, before any work)
 
+0. **`DONE_LEDGER.md` — READ THIS FIRST.** The single living done+open ledger (added 2026-06-17 to
+   break the audit-treadmill). It holds the definition of done, the binary gate status, the FINITE
+   OPEN bug list to burn to zero (each locked with a regression test), and the OWNER-ONLY items.
+   **Do NOT start a new exploratory audit — work that list.** Update it + commit after each item.
 1. `CONSTITUTION.md` — the supreme law (mission + hard stops + no-slop).
 2. `DEFINITION_OF_DONE.md` — the finish line; never shrink it.
 3. `CURRENT_REALITY_CHECK.md` — the exact app/repo/engine/routes Omar tests + mock-vs-live map.
