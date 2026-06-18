@@ -616,3 +616,13 @@ fixed live, all on main, suite green throughout (87/87). Reality gate now 6/8 ve
   website criteria — that's the separate Anticipy-DEV-FINAL repo, hands-off). Now: engine live,
   inference, ACTION-EXECUTED-WITH-PROOF, vent-silent/money-blocked, reminder delivered, text round-trip
   all ✅; onboarding-scrape ❌ (extension load); 5-day owner test 🙋 (Omar). (becb4a1, aeb8e67)
+
+## R-2026-06-17-A — Gate 0/1/3 re-verified live + browser arm fixed (foreman, Opus 4.8)
+- Gate 0: live-verified truth (not old docs) — app↔engine connected, OpenRouter real (BRAIN ALIVE 0.69s),
+  Calendar live/authorized, Gmail pending (owner), Twilio mock, extension connected. See CURRENT_TRUTH.md.
+- Gate 1: product surface opens in Chrome + proxies to the live engine.
+- Gate 3: directive's 9-line messy day through the real UI → "4 lines, 0 throwaway"; Amazon
+  AUTO_DO_WITH_OPT_OUT (human copy), vents silent, Sam deck one card, "that desk thing"→Jarvis desk
+  resolved, retainer honest CRM blocker, money blocked, follow-up scheduled. docs/e2e/current_gate/RESULT.md.
+- Browser arm: rotted chromium pin fixed (self-heal auto-discovery), locked by test; live receipt =
+  Amazon cart-prep + subtotal read-back, no checkout. Commit f503753. Suite 101/0, safety 0.
