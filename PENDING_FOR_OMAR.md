@@ -1,6 +1,33 @@
 # PENDING_FOR_OMAR
 
-## 🔴 LATEST (2026-06-16) — release-certification owner-gated unblocks
+## 🟢 LATEST (2026-06-17) — software journey proven end-to-end in the real UI; these taps are yours
+Verified live this session (not from old docs): the front-door journey works through the actual app —
+**open localhost:3000 → onboard (4 steps) → connect (calendar really Connected) → recap reads 115 real
+calendar events → messy day → right cards (vents silent, dedup, vague-ref resolved, money blocked) →
+follow-up scheduled.** Two real bugs found + fixed: the browser arm (rotted Chromium pin → self-heal)
+and the onboarding crash (stale `.next` build → rebuilt). Suite 101/0, safety 0 breaches. Live arms
+proven: **Calendar** (create→read-back→delete) and **Browser** (Amazon cart-prep + subtotal read-back,
+never checks out). What's left is physically yours — each is one tap/decision; I continue after each:
+
+1. **Gmail drafts (live):** in your Arcade dashboard (cloud.arcade.dev) **enable the Gmail toolkit for
+   the project**, then complete the `gmail.compose` consent. Today `Gmail.WriteDraftEmail` returns
+   status=`pending` — OAuth consent alone hasn't flipped it, so the toolkit toggle is the real unblock.
+   Then I create + read-back a real `[Anticipy test]` draft (never sent). (Calendar is already live.)
+2. **Twilio voice/text (live):** say go and I flip `ANTICIPY_CHANNELS_MODE=live` for ONE supervised
+   outbound text/call to +1 604 724 5161 (read-back the SID). The inbound "YES" leg needs a public URL
+   (cloudflared is installed) for the webhook — approve exposing it and I close the reply→act loop.
+3. **Hosted deploy:** approve deploying to the linked Vercel project `anticipy-executor-working`
+   (or your hosting) behind the owner token — this publishes account access, so it's your call.
+4. **Signed download:** Apple Developer creds for a signed `Anticipy Execute.app`, or say "ship unsigned"
+   and I package the local dev build.
+5. **Five real days:** lived use with daily receipts — the finish line; cannot be compressed.
+
+Until 1–5, I will not say SOFTWARE_CERTIFIED/DONE. Receipts: `docs/e2e/current_gate/RESULT.md`,
+`docs/agent_os/CURRENT_TRUTH.md`. Commits: f503753 (browser fix), 36228fc (Gate 2).
+
+---
+
+## 🔴 (2026-06-16) — release-certification owner-gated unblocks
 The hard middle is built + Tier-1 certified: autonomy modes (6), intent-shaped memory handoff, dedup,
 safety floor (0 breaches), and the **10,000-run whole-product certification harness (0 critical)**.
 Suite GREEN 92/0. The remaining certification gates are physically yours — each is one tap/decision;
