@@ -175,7 +175,8 @@ _REMINDER_OR_HOLD = re.compile(
     r"\bmake sure .{0,40}? on (?:my|the) calendar\b|"
     r"\b(?:set|put) (?:up )?a hold\b|"                                 # set/put a hold on the calendar
     r"\b(?:want|need|put) a (?:calendar )?hold\b|"                     # "want a calendar hold for Thursday 9am"
-    r"\bblock (?:off )?(?:me |my |the )?(?:calendar|time|an? hour|two hours|\d+ ?(?:hours?|min))\b|"
+    r"\bblock (?:off )?(?:me |my |the )?(?:calendar|time|an? hour|"
+    r"(?:\d+|one|two|three|four|five|six|seven|eight|several|a couple of|a few)\s?(?:hours?|hrs?|min(?:ute)?s?))\b|"
     r"\bblock (?:off )?\d{1,2}(?::\d{2})?\s?(?:am|pm)?\b|"             # block 2pm
     r"\bhold (?:time|\d{1,2}(?::\d{2})?\s?(?:am|pm))\b)",              # hold 2pm / hold time
     re.I)
@@ -1283,10 +1284,11 @@ class ControlCore:
                 and _is_explicit_reversible_task(line.text)
                 and not _is_money_action(line.text) and not getattr(line, "money_src", False)):
             shaped = self.owner_mode.card_for_line(line, source)
-            if shaped is not None and shaped.disposition in ("ask", "blocked", "remember"):
+            # Real money already blocked above; a "blocked" here is a FALSE money-block on a non-money
+            # reversible (e.g. "look up the CHECKOUT-service runbook" tripping the checkout keyword) -> do
+            # NOT return it; surface the lookup/reminder as an ask instead so it isn't money-refused.
+            if shaped is not None and shaped.disposition in ("ask", "remember"):
                 return shaped
-            # surface as a confirm-first ask — NEVER dropped (the over-caution retune can later promote
-            # clearly-reversible shapes to AUTO_DO; the priority here is that the task is never lost).
             return self._generic_force_ask_card(line, source)
         # VENT-ADJACENT REAL TASK (force_ask): the model pulled this real task out of a vented
         # breath. It must be SURFACED as a confirm-first ask, but the spine must NEVER EXECUTE it
@@ -1479,10 +1481,31 @@ class ControlCore:
         out, n = [], 0
         ex_toks = []
         kept_keys: list = []   # [(prefix-stripped key, OwnerObservedLine)] for CONTAINMENT dedup
+        # Raw-line truth the generous whole-day model can lose: which lines are VENTS (so a task the model
+        # pulled out of a dread/hyperbole is dropped — the cardinal vent floor) and which are MONEY ACTIONS
+        # (so a TRUNCATED money fragment, "Refund the gala ticket" stripped of "charge it to their card",
+        # still blocks via money_src). Token-overlap associates a reworded task back to its source line.
+        from ..live_memory.review_infer import is_vent as _is_vent_line
+
+        def _tok(s):
+            return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower())
+                    if len(w) > 2 and w not in _TASK_STOPWORDS}
+
+        vent_line_toks = [_tok(l.text) for l in observed if _is_vent_line(l.text)]
+        money_line_toks = [_tok(l.text) for l in observed if _is_money_action(l.text)]
         for t in day_tasks:
             task = (t.get("task") or "").strip()
             if not task or _is_directed_question_to_named_person(task):
                 continue   # a request aimed at another named person is THEIR task, never the owner's
+            ttoks = _tok(task)
+            task_money = _is_money_action(task) or any(len(ttoks & mt) >= 2 for mt in money_line_toks)
+            # CARDINAL VENT FLOOR for the generous whole-day pass: a task whose words come from a VENT line
+            # (the object of a dread/joke/hyperbole, "fill out one more prior auth ... fling into the sun")
+            # and is NOT an explicit reversible task and NOT money -> the model over-extracted a vent. Drop.
+            if (ttoks and not task_money and not _is_explicit_reversible_task(task)
+                    and any(len(ttoks & vt) >= max(2, (len(ttoks) + 1) // 2) for vt in vent_line_toks)):
+                self.glassbox.log("day_vent_dropped", {"task": task[:120]})
+                continue
             key = _task_key(task)   # reminder-prefix-stripped salient tokens
             # CONTAINMENT dedup: the whole-day model emits the same obligation twice with extra detail —
             # "back up the folder" vs "Remind me Sunday night to back up the folder before the new week".
@@ -1501,13 +1524,13 @@ class ControlCore:
                     dup[0] |= key
                 if bool(t.get("vent")) or t.get("kind") == "hold":
                     dup[1].force_ask = True
-                if _is_money_action(task):
+                if task_money:
                     dup[1].money_src = True
                 continue
             n += 1
             o = OwnerObservedLine(line_no=n, text=task, moat_task=True)
             o.force_ask = bool(t.get("vent")) or t.get("kind") == "hold"
-            o.money_src = _is_money_action(task)
+            o.money_src = task_money
             out.append(o)
             kept_keys.append([set(key), o])
             ex_toks.append({w for w in re.findall(r"[a-z0-9]+", task.lower()) if len(w) > 2})
