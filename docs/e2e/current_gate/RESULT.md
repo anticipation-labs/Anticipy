@@ -100,3 +100,12 @@ finish: Gmail toolkit, Twilio live + public URL, hosted deploy, Apple signing, t
   production project. EXACT NEXT MOVE (owner): sign into cloud.arcade.dev via GitHub → open the project
   holding ARCADE_API_KEY → enable the Gmail toolkit / gmail.compose scope → re-run connect; then I prove
   a live draft with read-back.
+
+## Download + inbound leg (2026-06-17)
+- **Download works (unsigned dev build):** GET /api/download/anticipy-execute → HTTP 200, `application/zip`,
+  `Anticipy.app.zip`, header `x-anticipy-build: developer-preview-unsigned`, 210 KB; bundle binary present
+  (`macapp/dist/Anticipy.app/Contents/MacOS/Anticipy`). Only Apple signing/notarization is owner-gated.
+- **Inbound SMS data path real:** Twilio shows received inbound replies from the owner number ("YES"/"Got
+  it", direction=inbound, status=received) — the poller (`channels/inbound.py`) reads exactly these and maps
+  "YES" to resolve a pending ask. Full live inbound→resolve loop needs the poller running + a fresh YES tied
+  to a specific ask (deferred to avoid running the full engine live against the reminder backlog).
