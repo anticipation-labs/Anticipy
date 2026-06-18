@@ -159,8 +159,14 @@ def _is_draft_or_cart_prep(text: str) -> bool:
 # deterministically, never at the model's coin-flip. NOT a question to someone else (those are silenced
 # upstream), NOT money. Tight enough that ordinary prose ("I blocked out some time to think") needs a
 # real time/list/forget anchor to match.
+# Optional time/when phrase that real speech wedges between the reminder verb and 'to' — "remind me
+# SUNDAY NIGHT to ...", "set a reminder FOR FRIDAY to ...", "add a reminder AT 2PM to ...".
+_RH_WHEN = (r"(?:\s+(?:for|at|on|by|this|next|tonight|tomorrow|today|in|sunday|monday|tuesday|wednesday|"
+            r"thursday|friday|saturday|morning|afternoon|evening|night)[^,.;!?]{0,22}?)?")
 _REMINDER_OR_HOLD = re.compile(
-    r"(?:\bremind me (?:to|that|about|of)\b|\breminder to\b|\bset (?:a |myself a )?reminder\b|"
+    r"(?:\bremind me" + _RH_WHEN + r"\s+(?:to|that|about|of)\b|"        # remind me [Sunday night] to ...
+    r"\b(?:set|add)\s+(?:a |an |myself a )?reminder" + _RH_WHEN + r"\s+(?:to|that|about|for)\b|"
+    r"\breminder" + _RH_WHEN + r"\s+to\b|\bset (?:a |myself a )?reminder\b|"
     r"\b(?:do ?n'?t|do not) (?:let me )?forget\b|"                     # don't / do not (let me) forget
     r"\b(?:do ?n'?t|do not) (?:let me )?lose (?:track|sight)\b|"       # don't (let me) lose track/sight of
     r"\bkeep track of\b|\bnail (?:that|this|it|down)\b|"               # keep track of / nail that down
@@ -168,13 +174,20 @@ _REMINDER_OR_HOLD = re.compile(
     r"\badd .{0,40}? to (?:my |the )?calendar\b|"
     r"\bmake sure .{0,40}? on (?:my|the) calendar\b|"
     r"\b(?:set|put) (?:up )?a hold\b|"                                 # set/put a hold on the calendar
-    r"\bblock (?:off )?(?:me |my |the )?(?:calendar|time|an? hour)\b|" # block my calendar / block me an hour
+    r"\b(?:want|need|put) a (?:calendar )?hold\b|"                     # "want a calendar hold for Thursday 9am"
+    r"\bblock (?:off )?(?:me |my |the )?(?:calendar|time|an? hour|two hours|\d+ ?(?:hours?|min))\b|"
     r"\bblock (?:off )?\d{1,2}(?::\d{2})?\s?(?:am|pm)?\b|"             # block 2pm
     r"\bhold (?:time|\d{1,2}(?::\d{2})?\s?(?:am|pm))\b)",              # hold 2pm / hold time
     re.I)
-# Read-only LOOKUP imperatives — "pull up X", "look up X", "look into X", "find out X". Always safe to
-# surface (no side effect), and a frequent drop in the 20-life re-run inside vent-heavy days.
-_LOOKUP = re.compile(r"\b(?:pull up|look up|look into|find out|dig up)\b", re.I)
+# Read-only LOOKUP imperatives — "pull (up) X", "look up X", "look into X", "find out X", "check
+# whether/if X". Always safe to surface (no side effect), and a frequent drop in dense vent-heavy days.
+_LOOKUP = re.compile(
+    r"\b(?:look up|look into|find out|dig up|pull up)\b"                # unambiguous lookup phrasal verbs
+    r"|\bpull\b[^.;!?]{0,30}?\b(?:numbers?|figures?|report|rate|rates|price|cost|data|stats?|"
+    r"statement|statements|balance|invoice|status|breakdown|comps?|history|record|records|details?|"
+    r"quarter|last\s+(?:quarter|month|year)|cap\s+table|metrics?|list)\b"  # bare "pull last quarter's numbers"
+    r"|\bcheck\s+(?:whether|if|when|how|what)\b",                        # "check whether the deploy went green"
+    re.I)
 
 
 def _is_reminder_or_hold(text: str) -> bool:
@@ -1445,7 +1458,13 @@ class ControlCore:
             return observed
         if len(observed) >= 2:
             from ..proactive.extract import extract_day
-            day_tasks = await extract_day(self.gateway, "\n".join(l.text for l in observed))
+            # Strip questions-to-others / interrogative asides from what the whole-day model SEES, so it
+            # can't extract the inner action of "Priya, can you reconcile the credit card statements" (the
+            # money-noun then tripped the money block before the third-party-silence floor — run-10 leak).
+            day_text = "\n".join(l.text for l in observed
+                                 if not (_is_interrogative_aside(l.text)
+                                         or _is_directed_question_to_named_person(l.text)))
+            day_tasks = await extract_day(self.gateway, day_text) if day_text.strip() else []
             if day_tasks:
                 built = self._build_from_day_tasks(observed, day_tasks)
                 self.glassbox.log("extract_day", {"lines": len(observed), "tasks": len(built)})
