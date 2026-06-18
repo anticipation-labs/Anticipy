@@ -127,6 +127,69 @@ def _parse(raw: str) -> ExtractResult:
     return ExtractResult(tasks=tasks, vent=vent, available=True)
 
 
+_DAY_PROMPT = '''You read a person's WHOLE messy spoken day (many lines at once) and extract EVERY genuinely REAL task they need handled. You see the entire day together, so a vague reference in one line is resolved from another line, and NOTHING is dropped just because it sat next to a vent.
+
+WHAT IS A REAL TASK (list every one): a concrete obligation/action the SPEAKER must do or be reminded of — reminders ("remind me to X", "don't let me forget X"), calendar holds ("block 2pm for X", "lock the trial date on my calendar", "hold the 9:40am flight"), look-ups ("pull up / look up / find out / check X"), drafts ("draft an email/note to X, don't send"), cart-prep ("start/set up a cart for X, don't check out"), calls/emails/errands/follow-ups ("nudge my advisor", "follow up on the Delgado filing"), and money moves ("pay the $14,200 taxes", "wire $400 to her", "refund X to my card"). Casual/fuzzy/filler phrasing is STILL a real task: "I gotta deal with that thing", "I owe my mom a call", "I keep meaning to sort the car out". Keep the speaker's own words for fuzzy parts. Missing a real task is the worst failure here.
+
+WHO PERFORMS IT decides everything. List a task ONLY when the SPEAKER must act / is reminded:
+ - "Maya said pick up Leila at 3" / "the boss wants the report by Friday" -> the speaker acts -> TASK.
+ - "Sam, can you take the handoff?" / "babe can you grab milk?" -> a request AT ANOTHER NAMED PERSON -> their task -> DROP.
+ - "did you ever email Sarah back?" -> a check on someone else -> DROP.
+AMBIENT reports of others' state/needs with no instruction to the speaker ("the dishwasher is leaking", "the vendor wants the contract") -> DROP.
+
+VENTS (drop, or mark vent): emotional venting / sarcasm / hyperbole / despair / wishful escape / overwhelm — "I should just quit", "move to the woods", "send help and gas-station coffee", "I'm so done", "I'm fried". A vent is never a task even if phrased like one. If a real task is voiced inside an emotional breath, KEEP the task but set its "vent":true (so it is surfaced confirm-first, never auto-fired).
+
+For each REAL task return {"task":"<short, vague refs resolved from the whole day>","kind":"act|ask|hold","vent":true|false}.
+ - kind: "act" = a clean reversible task in a calm line (a reminder, a calendar hold, a lookup); "ask" = touches another person / money / hard-to-reverse, OR any task in a vented breath; "hold" = a real action voiced inside emotion.
+ - vent:true forces kind to ask/hold (never act).
+Return STRICT JSON ONLY, no prose: {"tasks":[{"task":"...","kind":"...","vent":true|false}]}. Empty list if the whole day is pure vents/ambient.
+
+DAY (extract every real task the SPEAKER must do):
+%s
+JSON:'''
+
+
+async def extract_day(gateway: ModelGateway, text: str) -> List[dict]:
+    """WHOLE-DAY extraction — ONE pass over the entire transcript so dense multi-line days stop dropping
+    tasks to per-line rolling-context contamination (the 20-life catch-rate ceiling). Returns a list of
+    {task, kind, vent}; [] on any read failure (caller keeps the deterministic backstops). GENEROUS by
+    design — recall first; every emitted task still clears the downstream floors (vent guard, money
+    hard-stop, third-party silence), so generosity here can only ADD catches, never weaken safety."""
+    text = (text or "").strip()
+    if not text or getattr(gateway, "provider", None) != "openrouter":
+        return []
+    try:
+        raw = await gateway.think(_DAY_PROMPT % text, tier="smart", caller="gate", temperature=0)
+    except Exception:
+        return []
+    if not (raw or "").strip():
+        return []
+    m = re.search(r"\{.*\}", raw, re.S)
+    if not m:
+        return []
+    try:
+        data = json.loads(m.group(0))
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(data, dict):
+        return []
+    out: List[dict] = []
+    for t in (data.get("tasks") or [])[:40]:   # a whole day has more than one line, but still bounded
+        if not isinstance(t, dict):
+            continue
+        task = str(t.get("task") or "").strip()
+        if not task:
+            continue
+        vent = bool(t.get("vent"))
+        kind = str(t.get("kind") or "ask").strip().lower()
+        if kind not in _KIND:
+            kind = "ask"
+        if vent and kind == "act":
+            kind = "hold"
+        out.append({"task": task, "kind": kind, "vent": vent})
+    return out
+
+
 async def extract(gateway: ModelGateway, line: str, context: str = "") -> ExtractResult:
     """One cheap-model call to decompose + judge a line. available=False on any read failure.
 

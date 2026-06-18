@@ -1220,6 +1220,22 @@ class ControlCore:
             if blk is not None and blk.disposition == "blocked":
                 return blk
             return self._money_blocked_card(line, source)
+        # EXPLICIT REVERSIBLE TASK (reminder / hold / lookup / draft / cart-no-buy) with NO real money
+        # signal: ALWAYS a confirm-first ask, never dropped. harm broadly tags cart/checkout tokens as
+        # the "money" CATEGORY, so the decider below would BLOCK then drop "set up a cart, don't check
+        # out" (no blocked card shapes -> None -> lost). But a cart-no-buy / reminder / lookup is
+        # reversible prep, not a money MOVE (the absolute money-action block above already owns real
+        # money). Surface it here, before the decider can lose it. Vents never match this detector and
+        # third-party requests are silenced upstream, so this only ever rescues genuine catches.
+        if (getattr(line, "moat_task", False) and not getattr(line, "force_ask", False)
+                and _is_explicit_reversible_task(line.text)
+                and not _is_money_action(line.text) and not getattr(line, "money_src", False)):
+            shaped = self.owner_mode.card_for_line(line, source)
+            if shaped is not None and shaped.disposition in ("ask", "blocked", "remember"):
+                return shaped
+            # surface as a confirm-first ask — NEVER dropped (the over-caution retune can later promote
+            # clearly-reversible shapes to AUTO_DO; the priority here is that the task is never lost).
+            return self._generic_force_ask_card(line, source)
         # VENT-ADJACENT REAL TASK (force_ask): the model pulled this real task out of a vented
         # breath. It must be SURFACED as a confirm-first ask, but the spine must NEVER EXECUTE it
         # in the heat (that is the exact path a prior attempt used to re-introduce the cardinal
@@ -1350,8 +1366,12 @@ class ControlCore:
                 # transfer-to) — surface it (confirm-first) rather than drop it. A reminder WITH a real
                 # money signal ("wire $5k to escrow") is NOT excepted here: it stays category==money and
                 # the deterministic money backstop renders it blocked-visible (never an ask, never dropped).
-                _rem_not_money = _is_reminder_or_hold(line.text) and not _MONEY_SIGNAL.search(line.text)
-                if getattr(verdict, "category", None) != "money" or _rem_not_money:
+                # An explicit reversible task (reminder/hold/lookup/draft/cart-no-buy) that harm broadly
+                # tags "money" on a surface token (cart/checkout) but carries NO real money SIGNAL
+                # (amount/account) is reversible prep, not a money move — surface it (confirm-first) rather
+                # than drop it. A real money signal still blocks via the absolute money-block above.
+                _rev_not_money = _is_explicit_reversible_task(line.text) and not _MONEY_SIGNAL.search(line.text)
+                if getattr(verdict, "category", None) != "money" or _rev_not_money:
                     self.glassbox.log("moat_task_rescued",
                                       {"line": line.text[:140],
                                        "reason": "model caught a real task the triage silenced"})
@@ -1375,15 +1395,63 @@ class ControlCore:
         return shaped
 
     async def _expand_tasks_with_model(self, observed):
-        """THE MOAT — the REAL anti-spam: the brain surfaces only what is genuinely there, so there
-        is nothing to throttle. For each observed line the funded model splits it into its distinct
-        tasks AND judges the whole breath vent-or-not (the nuanced call a regex cannot make). A
-        VENTED line yields NOTHING (emotion only suppresses — the cardinal-sin guard at the model
-        layer). A clean multi-task line yields ONE candidate per task ("call the dentist, book
-        dinner, email Sarah" -> 3, the catch-rate win). Model unavailable (stub/error) -> the line
-        passes through UNCHANGED, so the deterministic path and the whole test suite are untouched.
-        Every emitted task still runs the full downstream pipeline (triage vent-guard + harm-line),
-        so the model is the PRIMARY guard with the deterministic guards as a backstop."""
+        """THE MOAT — dispatch. WHOLE-DAY extraction (ONE pass over the full transcript) is the PRIMARY
+        for multi-line input: it eliminates the per-line rolling-context contamination that dropped
+        ~15-30% of real tasks in dense days (the 20-life catch-rate ceiling — the model, reading lines
+        one at a time with a vent in the window, kept tagging clean tasks as vents and dropping them).
+        Single-line input (the proactive path + the safety eval) and any whole-day read failure fall
+        back to the proven per-line path, BYTE-IDENTICAL to before. Generosity is safe: every emitted
+        task still clears the spine's floors downstream (vent guard, money hard-stop, third-party silence)."""
+        if self.gateway.provider != PROVIDER_OPENROUTER:
+            return observed
+        if len(observed) >= 2:
+            from ..proactive.extract import extract_day
+            day_tasks = await extract_day(self.gateway, "\n".join(l.text for l in observed))
+            if day_tasks:
+                built = self._build_from_day_tasks(observed, day_tasks)
+                self.glassbox.log("extract_day", {"lines": len(observed), "tasks": len(built)})
+                return built
+        return await self._expand_per_line(observed)
+
+    def _build_from_day_tasks(self, observed, day_tasks):
+        """Build observed lines from a WHOLE-DAY extraction, plus a per-line DETERMINISTIC backstop for
+        any explicit reversible shape (reminder/hold/lookup/draft/cart) the model still missed. Drops
+        third-party requests; marks vented tasks force_ask; carries the raw-line money truth (money_src)
+        so a truncated money fragment still blocks. All safety floors run downstream regardless."""
+        out, n = [], 0
+        ex_toks = []
+        for t in day_tasks:
+            task = (t.get("task") or "").strip()
+            if not task or _is_directed_question_to_named_person(task):
+                continue   # a request aimed at another named person is THEIR task, never the owner's
+            n += 1
+            o = OwnerObservedLine(line_no=n, text=task, moat_task=True)
+            o.force_ask = bool(t.get("vent")) or t.get("kind") == "hold"
+            o.money_src = _is_money_action(task)
+            out.append(o)
+            ex_toks.append({w for w in re.findall(r"[a-z0-9]+", task.lower()) if len(w) > 2})
+        for src_idx, line in enumerate(observed):
+            raw = line.text or ""
+            if _is_interrogative_aside(raw) or _is_directed_question_to_named_person(raw):
+                continue
+            if not _is_explicit_reversible_task(raw):
+                continue
+            rtoks = {w for w in re.findall(r"[a-z0-9]+", raw.lower()) if len(w) > 2}
+            if any(len(rtoks & et) >= 2 for et in ex_toks):
+                continue   # already caught by the whole-day pass
+            n += 1
+            o = OwnerObservedLine(line_no=n, text=raw, moat_task=True)
+            o.src_idx = src_idx
+            o.money_src = _is_money_action(raw)
+            out.append(o)
+            ex_toks.append(rtoks)
+        return out
+
+    async def _expand_per_line(self, observed):
+        """THE PER-LINE MOAT (single-line + whole-day fallback): for each observed line the funded model
+        splits it into distinct tasks AND judges the breath vent-or-not. A VENTED line yields nothing (or
+        only confirm-first held tasks); a clean multi-task line yields one candidate per task. Model
+        unavailable -> the line passes through unchanged (deterministic path + safety eval untouched)."""
         if self.gateway.provider != PROVIDER_OPENROUTER:
             return observed
         from ..proactive.extract import extract
@@ -1839,8 +1907,8 @@ class ControlCore:
                     from ..live_memory.review_infer import is_vent_shape as _ivs
                     if not _ivs(line.text):
                         _verdict = self.proactive.harm.assess(line.text, {})
-                        _rem_ok = _is_reminder_or_hold(line.text) and not _MONEY_SIGNAL.search(line.text)
-                        if getattr(_verdict, "category", None) != "money" or _rem_ok:
+                        _rev_ok = _is_explicit_reversible_task(line.text) and not _MONEY_SIGNAL.search(line.text)
+                        if getattr(_verdict, "category", None) != "money" or _rev_ok:
                             card = self._generic_force_ask_card(line, source)
             # A vent-adjacent real task (force_ask) may be CAUGHT but NEVER auto-act in the heat:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This
