@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from anticipy_engine.proactive.harm import _MONEY_SIGNAL  # noqa: E402
 from anticipy_engine.core.control_core import (  # noqa: E402
     _VENT_TASK_ACTIONABLE, _is_draft_or_cart_prep, _is_reminder_or_hold,
+    _is_explicit_reversible_task,
 )
 
 fails = []
@@ -71,6 +72,31 @@ for t in ["Remind me to call the dentist tomorrow at 3",
     check(_is_reminder_or_hold(t), f"reminder/hold NOT recognized (drop risk): {t!r}")
 for t in ["I blocked out the whole afternoon to think", "send Maya the deck", "the kids are exhausting"]:
     check(not _is_reminder_or_hold(t), f"non-reminder wrongly flagged: {t!r}")
+
+# ---- broadened explicit-reversible backstop (re-run #2: multi-line vent-context drops) ----
+# Real reversible tasks must surface; vents must NOT trip (would breach the vent floor since the
+# top-of-loop backstop skips the model for these shapes).
+REVERSIBLE_YES = [
+    "Don't let me lose track of the Riverside science fair Saturday",
+    "Block me an hour tomorrow afternoon to sync with Marcus",
+    "Set a hold on my calendar for the staff meeting Tuesday at 3pm",
+    "Pull up Dad's medication list before my shift",
+    "make sure it's actually on my calendar",
+    "nail that down for me",
+    "draft a quick text to Priya asking if she can cover my shift",
+]
+REVERSIBLE_NO = [   # vents / rhetoricals — must stay silent
+    "ugh remind me why I even do this job",
+    "honestly I'm so done I could scream",
+    "the kids are trying to end me",
+    "if I win the lottery I'm buying an island",
+    "I should just quit and move to the woods",
+    "I could really use a vacation, my life is a mess",
+]
+for t in REVERSIBLE_YES:
+    check(_is_explicit_reversible_task(t), f"reversible task NOT recognized (drop risk): {t!r}")
+for t in REVERSIBLE_NO:
+    check(not _is_explicit_reversible_task(t), f"vent/rhetorical wrongly flagged (vent-floor breach risk): {t!r}")
 
 if fails:
     for f in fails:

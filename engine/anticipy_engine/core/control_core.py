@@ -127,7 +127,7 @@ _VENT_TASK_ACTIONABLE = re.compile(
 # deterministically marks the line moat_task so it always surfaces as a confirm-first task, never lost.
 _DRAFT_PREP = re.compile(
     r"\b(?:draft|compose|write\s*up|write|prepare|put\s*together|start)\b[^.;!?]{0,45}?"
-    r"\b(?:email|e-mail|note|message|reply|letter|memo|response|draft|reminder|thank-?you)\b",
+    r"\b(?:email|e-mail|note|message|text|reply|letter|memo|response|draft|reminder|thank-?you)\b",
     re.I)
 _CART_PREP = re.compile(
     r"\b(?:cart|add\s+to\s+cart|get\s+a\s+cart\s+together|put\s+[^.;!?]{0,30}?\bin\s+the\s+cart|"
@@ -152,21 +152,39 @@ def _is_draft_or_cart_prep(text: str) -> bool:
 # upstream), NOT money. Tight enough that ordinary prose ("I blocked out some time to think") needs a
 # real time/list/forget anchor to match.
 _REMINDER_OR_HOLD = re.compile(
-    r"\b(?:remind me\b|reminder to\b|set (?:a |myself a )?reminder\b|"
-    r"(?:do ?n'?t|do not) (?:let me )?forget\b|"                       # don't / do not (let me) forget
-    r"put it on my (?:list|calendar)\b|put .{0,30}? on (?:my|the) (?:list|calendar)\b|"
-    r"add .{0,40}? to (?:my |the )?calendar\b|"
-    r"block (?:off )?(?:my |the )?(?:calendar|time)\b|"
-    r"block (?:off )?\d{1,2}(?::\d{2})?\s?(?:am|pm)?\b|"
-    r"hold (?:time|\d{1,2}(?::\d{2})?\s?(?:am|pm))\b)",
+    r"(?:\bremind me (?:to|that|about|of)\b|\breminder to\b|\bset (?:a |myself a )?reminder\b|"
+    r"\b(?:do ?n'?t|do not) (?:let me )?forget\b|"                     # don't / do not (let me) forget
+    r"\b(?:do ?n'?t|do not) (?:let me )?lose (?:track|sight)\b|"       # don't (let me) lose track/sight of
+    r"\bkeep track of\b|\bnail (?:that|this|it|down)\b|"               # keep track of / nail that down
+    r"\bput it on my (?:list|calendar)\b|\bput .{0,30}? on (?:my|the) (?:list|calendar)\b|"
+    r"\badd .{0,40}? to (?:my |the )?calendar\b|"
+    r"\bmake sure .{0,40}? on (?:my|the) calendar\b|"
+    r"\b(?:set|put) (?:up )?a hold\b|"                                 # set/put a hold on the calendar
+    r"\bblock (?:off )?(?:me |my |the )?(?:calendar|time|an? hour)\b|" # block my calendar / block me an hour
+    r"\bblock (?:off )?\d{1,2}(?::\d{2})?\s?(?:am|pm)?\b|"             # block 2pm
+    r"\bhold (?:time|\d{1,2}(?::\d{2})?\s?(?:am|pm))\b)",              # hold 2pm / hold time
     re.I)
+# Read-only LOOKUP imperatives — "pull up X", "look up X", "look into X", "find out X". Always safe to
+# surface (no side effect), and a frequent drop in the 20-life re-run inside vent-heavy days.
+_LOOKUP = re.compile(r"\b(?:pull up|look up|look into|find out|dig up)\b", re.I)
 
 
 def _is_reminder_or_hold(text: str) -> bool:
     """An explicit reminder or calendar-hold the assistant must never silently drop — a reversible,
-    always-shown-first task. Returns True for "remind me ...", "block my calendar ...", "block 2pm
-    for ...", "hold time Sat 2pm", "put it on my list", "don't let me forget ...", "add ... to calendar"."""
+    always-shown-first task. "remind me to/that/about ...", "block my calendar", "block 2pm for ...",
+    "hold time Sat 2pm", "put it on my list", "don't (let me) forget / lose track of ...", "nail that
+    down", "set a hold", "make sure ... on my calendar", "add ... to calendar"."""
     return bool(_REMINDER_OR_HOLD.search(text or ""))
+
+
+def _is_explicit_reversible_task(text: str) -> bool:
+    """The union of high-confidence, reversible task imperatives that must NEVER be silently dropped,
+    even when a nearby vent line contaminates the model's per-line read: reminders/holds, read-only
+    lookups, and draft/cart prep. Surfacing one is at worst a benign confirm-first ask; dropping it is
+    the cardinal 'you keep dropping my tasks' failure. (Money is still blocked at the spine; genuine
+    third-party questions are silenced upstream before this is reached.)"""
+    t = text or ""
+    return _is_reminder_or_hold(t) or _is_draft_or_cart_prep(t) or bool(_LOOKUP.search(t))
 
 
 def _is_interrogative_aside(text: str) -> bool:
@@ -1338,6 +1356,21 @@ class ControlCore:
             # interrogative wrapper and over-extract a bare imperative -> an ASK on a vent/aside.
             if _is_interrogative_aside(line.text):
                 self.glassbox.log("extract_aside_silenced", {"line": line.text[:140]})
+                continue
+            # EXPLICIT REVERSIBLE-TASK BACKSTOP (highest-confidence shapes, checked BEFORE the model):
+            # an explicit reminder / calendar-hold / draft / cart is a real reversible owner task that
+            # must ALWAYS surface — never dropped. The 20-life RE-RUN proved isolated reminders surfaced
+            # but the SAME lines dropped inside a multi-line day: rolling context from a nearby vent line
+            # made the model tag "Set a reminder to finish the discharge summary" a VENT, and the inner
+            # task ("finish ...") was filtered out as non-actionable. Third-party questions are already
+            # silenced just above; money is handled at the spine (blocked, never auto-acted). Emitting
+            # deterministically here removes the model's coin-flip for the shapes Anticipy must never miss.
+            if _is_explicit_reversible_task(line.text):
+                n += 1
+                _ot = OwnerObservedLine(line_no=n, text=line.text, moat_task=True)
+                _ot.src_idx = src_idx
+                out.append(_ot)
+                self.glassbox.log("reminder_hold_backstop", {"line": line.text[:140]})
                 continue
             try:
                 res = await extract(self.gateway, line.text, context=context)
