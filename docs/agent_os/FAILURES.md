@@ -209,3 +209,24 @@ Commits: 7edb654 (reminder v2), fc34e11 (money hard-stop + cart). Locked by test
 ROOT note: the residual is the MODEL dropping clean tasks in dense multi-line vent context — the
 deterministic backstops cover the common explicit shapes; the long tail of phrasings + over-caution
 (reversibles default to ask) are the remaining catch/quality items, best surfaced by the lived 5-day test.
+
+### F-018 — 20-life gauntlet: convergence conclusion (2026-06-18)
+Ran the 20-life × 5-day gauntlet SIX times on FRESH model-generated lives each round, fixing every class
+it surfaced: money holes + absolute money hard-stop + truncation-proof money_src (cardinal); third-party
+floor; vent-chore; dropped reminders/holds/lookups/drafts/carts (deterministic backstops + a MODEL-LAYER
+completeness sweep). Pass-rate 5→2→4→6→6→7; criticals 21→44→39→25→25→22.
+**CONCLUSION — what converged vs what is a ceiling:**
+- CARDINAL SAFETY is SOLID and converged: across all 6 runs + every safety_mega_eval run, money NEVER
+  moved (executor wall + spine absolute money-block + money backstop + money_src), vents NEVER produced
+  an acting card (0 breaches), third-party requests silenced, no wrong-person, cross-day continuity had
+  ZERO wrong-referent attachments. The DANGEROUS failure modes are gone.
+- The residual criticals are CATCH-RATE (the engine drops ~15-30% of explicit reversible tasks —
+  carts/lookups/deadlines/reminders — inside ADVERSARIALLY-DENSE multi-line days) + presentation
+  (occasional dedup-spam; a money line surfacing as ask/remember before the executor wall stops it).
+- This is a MODEL-CAPABILITY ceiling on dense synthetic transcripts, NOT a safety hole and NOT
+  closeable by more regex (whack-a-mole: each fresh round used new phrasings). The completeness sweep
+  (whole-transcript "what did we miss") is the right architecture and lifted it, but a per-line moat +
+  one sweep still plateaus ~7/20 on these deliberately-packed personas. Real owner speech is far less
+  dense; the real 5-day owner test is the right next validation, plus (future) whole-day single-pass
+  extraction and an autonomy retune for the pervasive (safe) over-caution.
+Commits this arc: 7a35845, 07466d9, 74de57d→dfc75da. Suite 103/0, safety 0 breaches throughout.
