@@ -203,6 +203,28 @@ def _is_money_action(text: str) -> bool:
     return bool(_MONEY_SIGNAL.search(t)) and bool(_MONEY_ACTION_VERB.search(t))
 
 
+_TASK_PREFIX = re.compile(
+    r"^\s*(?:please\s+|just\s+|actually\s+|also\s+|oh\s+|and\s+)*"
+    r"(?:set (?:a |myself a )?reminder to|reminder to|remind me (?:to|that|about)|"
+    r"need(?:ing)? to remember to|need to remember to|remember to|need to|have to|"
+    r"make sure to|don'?t forget to|i should(?: really)?|i gotta|i need to|gotta|i'?ll|i will)\s+",
+    re.I)
+
+
+def _task_key(text: str) -> frozenset:
+    """A normalized identity for a task: strip reminder/intention PREFIXES ('remind me to', 'need to
+    remember to', 'set a reminder to', "I'll") then take the salient tokens. So "update the cap table",
+    "remind me to update the cap table", and "Need to remember to update the cap table" all share ONE
+    key — killing the duplicate-spam where the whole-day model emits both the reminder and its action."""
+    t = text or ""
+    for _ in range(4):     # peel stacked prefixes ("need to remember to ...")
+        nt = _TASK_PREFIX.sub("", t, count=1)
+        if nt == t:
+            break
+        t = nt
+    return frozenset(w for w in re.findall(r"[a-z0-9]+", t.lower()) if len(w) > 2)
+
+
 def _is_explicit_reversible_task(text: str) -> bool:
     """The union of high-confidence, reversible task imperatives that must NEVER be silently dropped,
     even when a nearby vent line contaminates the model's per-line read: reminders/holds, read-only
@@ -1423,10 +1445,16 @@ class ControlCore:
         so a truncated money fragment still blocks. All safety floors run downstream regardless."""
         out, n = [], 0
         ex_toks = []
+        seen_keys: set = set()
         for t in day_tasks:
             task = (t.get("task") or "").strip()
             if not task or _is_directed_question_to_named_person(task):
                 continue   # a request aimed at another named person is THEIR task, never the owner's
+            key = _task_key(task)
+            if key and key in seen_keys:
+                continue   # duplicate-spam: same obligation as 'X' and 'remind me to X' -> keep one
+            if key:
+                seen_keys.add(key)
             n += 1
             o = OwnerObservedLine(line_no=n, text=task, moat_task=True)
             o.force_ask = bool(t.get("vent")) or t.get("kind") == "hold"

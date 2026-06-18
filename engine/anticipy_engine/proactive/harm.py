@@ -63,6 +63,14 @@ _MONEY_SIGNAL = re.compile(
     # the escrow account". The 20-life VC line ("Transfer 1.2 million ... to the new SPV ... do it now")
     # was DROPPED entirely; this anchors transfer/wire/send/move to a money DESTINATION so it always blocks.
     r"|\b(?:transfer|wire|send|move|remit|deposit)\b[^.;!?]{0,60}?\b(?:account|accounts|fund|funds|reserve|escrow|spv|wallet|iban|swift|routing|treasury|brokerage)\b"
+    # PAY/WIRE + a bare comma-or-3-digit NUMBER, no $ sign — "pay the equipment guy 1,400", "wire 400
+    # to her", "venmo Dave 250". The 20-life trainer line ("Pay the equipment guy ... it's 1,400, send
+    # him the transfer") was DROPPED because the amount had no currency word. STRONG money verbs only
+    # (not 'transfer/send' alone -> avoids "transfer 500 files"). Bounded number 3+ digits or grouped.
+    r"|\b(?:pay|paid|wire|wired|venmo|zelle|cashapp|paypal|remit|refund|reimburse)\b[^.;!?]{0,40}?\b\d{1,3}(?:,\d{3})+\b"
+    r"|\b(?:pay|paid|wire|wired|venmo|zelle|cashapp|paypal|remit|refund|reimburse)\b[^.;!?]{0,40}?\b\d{3,}\b"
+    # "send him/her/them the transfer / payment" — a money send whose amount sits elsewhere in the line.
+    r"|\bsend\b[^.;!?]{0,20}?\bthe\s+(?:transfer|payment|wire|deposit)\b"
     # PAID RENEWAL — "renew the Creative Cloud plan", "renew the annual subscription" (the extracted
     # fragment lost its $amount; renew+plan/subscription is a recurring charge -> PREPARE_THEN_STOP).
     r"|\brenew(?:al|ing|ed|s)?\b[^.;!?]{0,40}?\b(?:subscription|membership|plan|premium|policy|licen[cs]e)\b"

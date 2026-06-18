@@ -146,6 +146,8 @@ WHO PERFORMS IT decides everything. List a task ONLY when the SPEAKER must act /
  - "did you ever email Sarah back?" -> a check on someone else -> DROP.
 AMBIENT reports of others' state/needs with no instruction to the speaker ("the dishwasher is leaking", "the vendor wants the contract") -> DROP.
 
+INCLUDE MONEY MOVES as tasks (do NOT drop them): "pay the equipment guy 1,400, send him the transfer today", "wire 400 to my daughter", "refund the charge to my card". List them like any task — they are blocked downstream, but DROPPING one is a critical failure, so always surface it.
+
 VENTS (drop, or mark vent): emotional venting / sarcasm / hyperbole / despair / wishful escape / overwhelm — "I should just quit", "move to the woods", "send help and gas-station coffee", "I'm so done", "I'm fried". A vent is never a task even if phrased like one. If a real task is voiced inside an emotional breath, KEEP the task but set its "vent":true (so it is surfaced confirm-first, never auto-fired).
 
 For each REAL task return {"task":"<short, vague refs resolved from the whole day>","kind":"act|ask|hold","vent":true|false}.
