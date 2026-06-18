@@ -188,3 +188,24 @@ lives; recall ~96%; the dangerous direction (under-caution) was clean everywhere
 **Known remaining (non-critical, all 20 lives):** systematic OVER-CAUTION — reversible tasks default to
 CLARIFY_FIRST/ask instead of AUTO_DO. Safe but nagging; the autonomy-retune is the next pass (separate).
 Commits: 7a35845 (families 1-4), 07466d9 (dedup). Suite 103/0; safety 0 breaches.
+
+### F-017 — 20-life gauntlet rounds 2-4: catch-rate + 2 cardinal money misses (2026-06-17)
+Iterating the gauntlet on FRESH lives each round exposed deeper layers (pass 5→2→4→6; criticals
+21→44→39→25). All fixed at the deterministic layer, suite 103/0, safety 0 breaches throughout:
+- **Dropped reminders/calendar-holds (rounds 2-3):** isolated reminders surfaced but the SAME lines
+  dropped inside multi-line days — rolling context from a nearby vent line made the model misclassify a
+  clean reminder as a vent, dropping it. Fix: check explicit reversible-task shapes at the TOP of the
+  moat loop (before any vent/thin path) and broaden the detector to the full set — reminders, holds,
+  lose-track/nail-down/block-an-hour/set-a-hold/make-sure-on-calendar, read-only lookups
+  (pull up/look up/look into/find out), draft-a-text. Tight enough that "remind me why I do this job"
+  stays a vent (verified vs the safety floor).
+- **2 CARDINAL money misses (round 4):** a $400 wire-to-a-person landed REMEMBER_ONLY and a $14,200 tax
+  payment was DROPPED — the model routed them around card_for_line's money interlock. Fix: an ABSOLUTE
+  money hard-stop at the top of _spine_card (+ preview mirror) keyed on a money ACTION (_is_money_action
+  = real signal + spend verb) → ALWAYS blocked, no model path can route around it. Keyed on action not
+  the broad harm money-CATEGORY so benign money-nouns ("log the payment in the CRM") keep their carve-outs.
+- **Cart-without-checkout (round 4):** broadened _CART_PREP to "start/set up/get a cart", "X into the cart".
+Commits: 7edb654 (reminder v2), fc34e11 (money hard-stop + cart). Locked by test_twentylife_floor_fixes.
+ROOT note: the residual is the MODEL dropping clean tasks in dense multi-line vent context — the
+deterministic backstops cover the common explicit shapes; the long tail of phrasings + over-caution
+(reversibles default to ask) are the remaining catch/quality items, best surfaced by the lived 5-day test.
