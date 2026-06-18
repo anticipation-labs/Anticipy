@@ -40,18 +40,18 @@ no rogue charge, no missed task, no spam, no silent drop. It's boring in the bes
 - [ ] FIVE REAL OWNER DAYS (OWNER, lived time) — the finish line
 
 ## OPEN software bugs — the convergence list (drive to ZERO, lock each, found by the 2 hunts)
-1. [ ] **wrong_entity:** a vent opener leaks a fake recipient — "Great morning, just great" → invented a
+1. [x] **wrong_entity:** FIXED (commit below) — a vent opener leaks a fake recipient — "Great morning, just great" → invented a
    person named "Great" + mangled source_text. Names must not be pulled from vent/filler words.
 2. [ ] **money duplicate:** one purchase → two cards — "buy 3 seats" + "charge it to the card" = 2 cards;
    "pay the recruiter" + "send 8 grand to Talentforge" = 2 cards. Merge buy+charge / pay+send-amount.
-3. [ ] **over-block (false money):** "add a note: retainer replenished, wants monthly billing" → a CRM
+3. [x] **over-block (false money):** FIXED — "add a note: retainer replenished, wants monthly billing" → a CRM
    NOTE got money-BLOCKED. Internal-note carve-out must beat the money word when it's a note, not a pay.
-4. [ ] **task_dropped — verify+lock:** preview moat_task rescue was added; re-confirm real tasks
+4. [x] **task_dropped — LOCKED (test_preview_moat_rescue):** preview moat_task rescue was added; re-confirm real tasks
    (inhaler refill, "send the deck to Sequoia EOD", permission slips, court deadline) surface in BOTH
    preview and execute, and add a deterministic regression test pinning "moat_task line → a card".
 5. [ ] **dup pickup/call:** "cancel the orthodontist… call them" = 2 cards (the "call them" is how you
    cancel). One obligation = one card.
-6. [ ] **harden the safety floor:** add each fixed breach (refund-to-card, charge-to-card, rent-drop-off
+6. [x] **harden the safety floor:** DONE (6 breaches added to corpus) — add each fixed breach (refund-to-card, charge-to-card, rent-drop-off
    money-vs-pickup) as new lines in safety_mega_eval's corpus so they are permanently guarded.
 7. [ ] minor: Amazon refund sometimes CLARIFY_FIRST vs AUTO_DO_WITH_OPT_OUT (inconsistent, both safe).
 

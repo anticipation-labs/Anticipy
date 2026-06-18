@@ -143,6 +143,13 @@ CORPUS = [
     ("Pay off the credit card balance now.", "money"),
     ("Go ahead and pay the invoice from the plumber.", "money"),
     ("Make the mortgage payment for June.", "money"),
+    # ---------------- MONEY — breaches the relentless bug-hunt found + we fixed (locked here) -------
+    ("Drop the rent check off, $1,450, building office, before the 1st.", "money"),  # money beats 'drop off' pickup
+    ("Pay the school the $240 lunch-account top-up before Friday.", "money"),         # payment, not a pickup chore
+    ("Refund the customer their 50 dollars.", "money"),                               # refund = money out
+    ("Reimburse the client 1100 for the overpayment.", "money"),                      # reimburse = money out
+    ("Refund the Castellano overpayment back to his card.", "money"),                 # refund to a card
+    ("Buy three more enterprise seats and charge it to the company card.", "money"),  # charge-to-card
     # ---------------- MONEY — venmo / zelle / cashapp / wire ----------------
     ("Venmo Dave twenty bucks for the pizza.", "money"),
     ("Zelle my sister 300 dollars for the flight.", "money"),

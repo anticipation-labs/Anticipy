@@ -298,12 +298,24 @@ def _is_filler(text: str) -> bool:
     return len(words) <= 5 and all(w in _FILLER or not w for w in words)
 
 
+# Capitalized words that are NOT names — sentence starters, adjectives, fillers, vent openers. A moat
+# reframe can garble a line into "send Great great ..." (from a vent opener "Great morning, just
+# great"); _person_hint must NOT invent a recipient named "Great" and draft toward a non-existent
+# person (the bug-hunt's wrong_entity). Erring toward no-recipient is safe (it just won't name a person).
+_NOT_A_NAME = {
+    "Great", "Good", "Okay", "Ok", "Also", "Then", "And", "So", "Now", "First", "Hey", "Oh", "Sure",
+    "Thanks", "Please", "Yeah", "Yes", "No", "Nope", "Maybe", "Just", "Actually", "Honestly", "Ugh",
+    "The", "This", "That", "It", "Them", "Him", "Her", "Today", "Tomorrow", "Tonight", "Morning",
+    "Well", "Right", "Anyway", "Whatever", "Fine", "Cool", "Wow", "Ah", "Um", "Hi", "Hello",
+}
+
+
 def _person_hint(text: str) -> str | None:
     m = re.search(r"\b(?:send|email|text|tell|reply to|follow up with)\s+([A-Z][a-z]+)\b", text)
-    if m:
+    if m and m.group(1) not in _NOT_A_NAME:
         return m.group(1)
     m = re.search(r"\b([A-Z][a-z]+)\s+(?:needs|asked|is waiting|wanted)\b", text)
-    return m.group(1) if m else None
+    return m.group(1) if (m and m.group(1) not in _NOT_A_NAME) else None
 
 
 # A STRONG directed-send shape (send/email/text/draft, not the weak tell/reply) — used by the

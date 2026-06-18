@@ -48,10 +48,14 @@ _NOTE_NOUN = (
 _NOTE_MONEY_VERB = re.compile(
     r"\b(?:pay|paid|pays|paying|wire|wired|wiring|charge|charged|charging|"
     r"deposit(?:s|ed|ing)?|withdraw|venmo|zelle|cashapp|cash ?app|paypal|transfer|"
-    r"transferred|transferring|reimburse|refund(?:s|ed|ing)?|invoice(?:s|d)|bill(?:s|ed|ing)?|"
+    r"transferred|transferring|reimburse|refund(?:s|ed|ing)?|"
     r"collect|chase|chasing|chased|settle|settling|settled)\b",
     re.I,
 )
+# NOTE: "invoice" and "bill(ing)" were REMOVED from the money-verb guard above — they are noun-like
+# note CONTENT ("add a note: client wants monthly billing", "log the invoice number"), not a spend
+# action. They were false-blocking real internal notes (bug-hunt over-block). A genuine payment still
+# trips a real spend verb (pay/wire/charge/...). "pay the bill" -> "pay" still caught.
 # The note must be tied to an internal STORE (CRM / client file / case file / record / system /
 # ledger / chart / matter) so a bare "send a note to Sarah" (a SEND to a person) is NOT swallowed
 # here, and the generic "add a note ..." capture command — which the spine already executes well as
