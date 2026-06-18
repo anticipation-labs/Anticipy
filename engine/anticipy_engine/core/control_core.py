@@ -37,6 +37,7 @@ from ..live_memory.brain import LiveMemoryBrain
 from ..memory.store import Memory, is_active_open_loop
 from ..owner_mode import OwnerIngestResult, OwnerMode, OwnerObservedLine, OwnerTaskCard
 from ..owner_onboarding import OwnerOnboardingIn, build_onboarding_plan
+from ..proactive.harm import _MONEY_SIGNAL  # the money hard-stop signal (amount/account/transfer-to)
 
 
 def _base(data_dir=None) -> Path:
@@ -139,6 +140,33 @@ def _is_draft_or_cart_prep(text: str) -> bool:
     card, never dropped. The 'don't send/order yet' clause is a constraint, not a cancellation."""
     t = text or ""
     return bool(_DRAFT_PREP.search(t)) or bool(_CART_PREP.search(t))
+
+
+# EXPLICIT REMINDER / CALENDAR-HOLD shapes — "remind me to X", "set a reminder to X", "block my calendar
+# Friday 9am", "block 2pm for the walkthrough", "hold time Saturday 2pm", "put it on my list", "don't let
+# me forget X", "add X to my calendar". The 20-life re-run found ~40 of these DROPPED entirely (the moat /
+# spine non-deterministically returned nothing for an explicit, unambiguous reversible reminder/hold —
+# the worst kind of miss for a "never forget anything" assistant). These are the safest possible tasks
+# (a calendar hold or a tracked reminder, always shown first), so an explicit one must ALWAYS surface —
+# deterministically, never at the model's coin-flip. NOT a question to someone else (those are silenced
+# upstream), NOT money. Tight enough that ordinary prose ("I blocked out some time to think") needs a
+# real time/list/forget anchor to match.
+_REMINDER_OR_HOLD = re.compile(
+    r"\b(?:remind me\b|reminder to\b|set (?:a |myself a )?reminder\b|"
+    r"(?:do ?n'?t|do not) (?:let me )?forget\b|"                       # don't / do not (let me) forget
+    r"put it on my (?:list|calendar)\b|put .{0,30}? on (?:my|the) (?:list|calendar)\b|"
+    r"add .{0,40}? to (?:my |the )?calendar\b|"
+    r"block (?:off )?(?:my |the )?(?:calendar|time)\b|"
+    r"block (?:off )?\d{1,2}(?::\d{2})?\s?(?:am|pm)?\b|"
+    r"hold (?:time|\d{1,2}(?::\d{2})?\s?(?:am|pm))\b)",
+    re.I)
+
+
+def _is_reminder_or_hold(text: str) -> bool:
+    """An explicit reminder or calendar-hold the assistant must never silently drop — a reversible,
+    always-shown-first task. Returns True for "remind me ...", "block my calendar ...", "block 2pm
+    for ...", "hold time Sat 2pm", "put it on my list", "don't let me forget ...", "add ... to calendar"."""
+    return bool(_REMINDER_OR_HOLD.search(text or ""))
 
 
 def _is_interrogative_aside(text: str) -> bool:
@@ -1254,7 +1282,13 @@ class ControlCore:
                 # casual_send, auth_wall, unclassified=call/book/sort-out) is exactly a
                 # confirm-first ASK — surface it, don't drop it. (detrimental=True covers ALL of
                 # these, which is why gating on it wrongly suppressed real tasks.)
-                if getattr(verdict, "category", None) != "money":
+                # An explicit REMINDER/HOLD ("remind me the wire needs to go to Jordan, don't move
+                # anything yet") brushes a money WORD but carries no real money SIGNAL (no amount/account/
+                # transfer-to) — surface it (confirm-first) rather than drop it. A reminder WITH a real
+                # money signal ("wire $5k to escrow") is NOT excepted here: it stays category==money and
+                # the deterministic money backstop renders it blocked-visible (never an ask, never dropped).
+                _rem_not_money = _is_reminder_or_hold(line.text) and not _MONEY_SIGNAL.search(line.text)
+                if getattr(verdict, "category", None) != "money" or _rem_not_money:
                     self.glassbox.log("moat_task_rescued",
                                       {"line": line.text[:140],
                                        "reason": "model caught a real task the triage silenced"})
@@ -1311,7 +1345,12 @@ class ControlCore:
                 res = None
             if res is None or not res.available:
                 n += 1
-                out.append(OwnerObservedLine(line_no=n, text=line.text))   # deterministic fallback
+                _ln0 = OwnerObservedLine(line_no=n, text=line.text)   # deterministic fallback
+                # Even when the model reads the line as thin/unavailable, an EXPLICIT reminder /
+                # calendar-hold / draft-cart is a real reversible task that must never silently drop.
+                if _is_reminder_or_hold(line.text) or _is_draft_or_cart_prep(line.text):
+                    _ln0.moat_task = True
+                out.append(_ln0)
                 continue
             if res.vent:
                 # The breath carries emotion — but the model may have separated a REAL task from
@@ -1348,7 +1387,7 @@ class ControlCore:
                 # but don't send it" / "cart 200 menus, don't order yet" (the negation reads as no-action),
                 # which then dropped at the shaper. Mark moat_task so the moat-rescue surfaces it as a
                 # confirm-first task — a draft/cart is reversible and must never be silently lost.
-                if _is_draft_or_cart_prep(line.text):
+                if _is_draft_or_cart_prep(line.text) or _is_reminder_or_hold(line.text):
                     _ln2.moat_task = True
                 out.append(_ln2)
                 continue
@@ -1643,7 +1682,8 @@ class ControlCore:
                     from ..live_memory.review_infer import is_vent_shape as _ivs
                     if not _ivs(line.text):
                         _verdict = self.proactive.harm.assess(line.text, {})
-                        if getattr(_verdict, "category", None) != "money":
+                        _rem_ok = _is_reminder_or_hold(line.text) and not _MONEY_SIGNAL.search(line.text)
+                        if getattr(_verdict, "category", None) != "money" or _rem_ok:
                             card = self._generic_force_ask_card(line, source)
             # A vent-adjacent real task (force_ask) may be CAUGHT but NEVER auto-act in the heat:
             # downgrade any do/blocked-money to a confirm-first ASK and strip any execution. This

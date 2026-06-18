@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from anticipy_engine.proactive.harm import _MONEY_SIGNAL  # noqa: E402
 from anticipy_engine.core.control_core import (  # noqa: E402
-    _VENT_TASK_ACTIONABLE, _is_draft_or_cart_prep,
+    _VENT_TASK_ACTIONABLE, _is_draft_or_cart_prep, _is_reminder_or_hold,
 )
 
 fails = []
@@ -59,6 +59,18 @@ for t in ["Draft a polite email to Janet, but don't send it",
     check(_is_draft_or_cart_prep(t), f"draft/cart-prep NOT recognized: {t!r}")
 for t in ["go for a run", "the kids are exhausting", "NFL draft is on tonight"]:
     check(not _is_draft_or_cart_prep(t), f"non-prep wrongly flagged: {t!r}")
+
+# ---- reminder / calendar-hold backstop (re-run gauntlet: ~40 of these dropped) ----
+for t in ["Remind me to call the dentist tomorrow at 3",
+          "Block my calendar Friday 9am for the neurologist",
+          "Block 2pm for the buyer walkthrough at 88 Oak, do not let me forget",
+          "The Halloran motion goes in by 5pm, do not let me forget",
+          "page Dr. Lin and put it on my list to follow up at shift change",
+          "set a reminder to finish the discharge summary tonight",
+          "hold time Saturday 2pm for the open house"]:
+    check(_is_reminder_or_hold(t), f"reminder/hold NOT recognized (drop risk): {t!r}")
+for t in ["I blocked out the whole afternoon to think", "send Maya the deck", "the kids are exhausting"]:
+    check(not _is_reminder_or_hold(t), f"non-reminder wrongly flagged: {t!r}")
 
 if fails:
     for f in fails:
