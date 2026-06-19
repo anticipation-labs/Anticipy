@@ -664,7 +664,7 @@ class ControlCore:
         )
         self.proactive = ProactiveEngine(
             self.bus, self.gateway, self.orchestrator, glassbox=self.glassbox, scorecard=self.scorecard,
-            channel=self.text_channel, user_contact=self._user_contact(),
+            channel=self.text_channel, call_channel=self.call_channel, user_contact=self._user_contact(),
             deferred_path=base / "decider_deferred.json",
             pending_path=base / "pending_asks.json",
         )
@@ -2301,6 +2301,13 @@ class ControlCore:
             # with tokens the speaker never said (browse steps grew on unrelated goals)
             captured_loop = (capture_result or {}).get("item")
             loop_fields = {**fields, "title": card.title}
+            # Spine-only "call me at 2:45": when capture did NOT shape this line into a
+            # commitment loop, THIS owner-card loop is the only fireable row — carry the
+            # call-escalation so it RINGS, not texts. (On the deduped-echo branch below the
+            # loop is stamped fired_at and never fires, so this is a harmless no-op there.)
+            from ..live_memory.capture import wants_call
+            if wants_call(card.source_text or ""):
+                loop_fields["channel_pref"] = "call"
             # DEDUPE — one dictated task -> exactly ONE active+fireable open_loop.
             # The capture path (capturer.capture, run first in owner_ingest) already wrote
             # a RAW open_loop for this same line whenever the line is a commitment shape; it

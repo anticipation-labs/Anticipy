@@ -77,6 +77,7 @@ class ProactiveEngine:
         scorecard=None,
         config: Optional[GateConfig] = None,
         channel=None,
+        call_channel=None,
         user_contact: str = "+10000000000",
         decider=None,
         deferred_path=None,
@@ -99,6 +100,7 @@ class ProactiveEngine:
         self.harm = HarmLine()                  # Room 2: act-first, ask-only-before-harm
         self.trigger = TriggerWatcher()         # Room 3: time + open-loop watcher (fire-once)
         self.channel = channel or TextChannel() # Room 4: where the ask goes out (Twilio live/mock)
+        self.call_channel = call_channel        # voice line for "call me" reminders (None -> text only)
         self.user_contact = user_contact        # the user's number/handle for asks (set in prod)
         self.pending = {}                       # ask_id -> {goal_id, action, reason, category} (awaiting reply)
         self.budget = AnnoyanceBudget()         # Room 5: cap proactive interruptions; learn from declines
@@ -655,7 +657,8 @@ class ProactiveEngine:
                     "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None}
         from .voice import humanize_reminder
         text = await humanize_reminder(self.gateway, task)
-        sent = self.channel.send(self.user_contact, text)
+        chan = self._reminder_channel(loop)
+        sent = chan.send(self.user_contact, text)
         self.budget.record_interruption(now)
         self.guard.record(now)
         await self.bus.submit_job(Job(intent="mark_loop",
@@ -666,17 +669,29 @@ class ProactiveEngine:
                  "origin_proof": fields.get("origin_proof")} if is_follow_up else {})
         if self.glassbox is not None:
             self.glassbox.log("notify", {"loop_id": loop.get("id"), "task": task,
-                                         "channel": self.channel.name, "to": self.user_contact,
+                                         "channel": chan.name, "to": self.user_contact,
                                          "sent": bool(sent.get("sent")),
                                          "kind": fields.get("kind"), **link})
         if self.scorecard is not None:
             self.scorecard.record_decision("notify", loop.get("id") or "",
                                            "time-grounded reminder fired -> notify")
-        return {"decision": "notify", "category": verdict.category,
+        return {"decision": "notify", "category": verdict.category, "channel": chan.name,
                 "reason": ("follow-up check fired -> notify (linked to original)"
                            if is_follow_up else "time-grounded reminder fired -> notify (no ask)"),
                 "detrimental": False, "memory_forced": False, "goal_id": None, "ask_id": None,
                 **link}
+
+    def _reminder_channel(self, loop: dict):
+        """Pick where a due reminder goes. Default: TEXT. A loop the user asked to be CALLED
+        about (fields['channel_pref'] == 'call' — the "call me at 2:45" promise) RINGS the
+        voice line instead, when a CallChannel is wired (None -> always text). This changes
+        ONLY the delivery channel; the anti-spam floors (harm re-gate, budget, cold-boot
+        guard, fire-once) are identical either way, so it can never turn a held reminder into
+        a call or fire one that text wouldn't have."""
+        fields = loop.get("fields") or {}
+        if fields.get("channel_pref") == "call" and self.call_channel is not None:
+            return self.call_channel
+        return self.channel
 
     # ---- steps ----
     def _goal_description(self, event: Event) -> str:

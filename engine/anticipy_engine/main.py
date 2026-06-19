@@ -20,6 +20,7 @@ import ipaddress
 import os
 import secrets
 import socket
+import sys
 import tempfile
 import time
 from contextlib import asynccontextmanager, suppress
@@ -71,6 +72,12 @@ REQUEST_SIZE_EXEMPT_PATHS = {"/owner/ingest-file"}
 core = ControlCore()
 extension_hello_seen = False
 _mic_source = None  # the always-on Mac-mic CaptureSource when /listen/start is on (None when off)
+# Live health of the anticipatory clock, stamped at startup. The proactive engine must NEVER
+# go dark in silence: this is read by /status (so the UI/ops can see it) and printed loudly at
+# boot. armed=False => reminders/follow-ups will NOT fire on their own (ANTICIPY_TICK_SECONDS=0);
+# outreach='mock' => the engine fires but nothing reaches the phone (not ANTICIPY_CHANNELS_MODE=live).
+_proactive_health = {"armed": False, "tick_seconds": 0, "outreach": "mock",
+                     "reason": "not_started_yet"}
 # Real reasoning+vision model for the web-agent loop (kept separate from the
 # core's default gateway so the engine/hands tests stay free + deterministic).
 gateway_agent = ModelGateway(
@@ -78,6 +85,32 @@ gateway_agent = ModelGateway(
     cheap_model="google/gemini-3.1-flash-lite",   # routine see-and-locate steps
     smart_model="google/gemini-3.5-flash",        # planning / recovery / stuck / judge
 )
+
+
+def _arm_proactive_health(interval_s: float, armed: bool) -> None:
+    """Stamp + announce the anticipatory clock's state so it can never go dark unnoticed.
+    Records health for /status and prints ONE unmissable line at boot: ARMED (it will fire on
+    its own every N s) or *** DARK *** (ANTICIPY_TICK_SECONDS=0 -> nothing fires until a manual
+    POST /trigger/tick). Also reports whether outreach is LIVE (reaches the phone) or MOCK
+    (fires, but no real send) — the second silent-failure mode."""
+    live = (os.environ.get("ANTICIPY_CHANNELS_MODE") == "live") and core.text_channel.configured()
+    _proactive_health.update({
+        "armed": bool(armed),
+        "tick_seconds": interval_s if armed else 0,
+        "outreach": "live" if live else "mock",
+        "reason": ("scheduler running" if armed
+                   else "ANTICIPY_TICK_SECONDS=0 — self-firing disabled (manual /trigger/tick only)"),
+    })
+    with suppress(Exception):
+        core.glassbox.log("proactive_health", dict(_proactive_health))
+    if armed:
+        reach = "LIVE (reaches phone)" if live else "MOCK (no real send until ANTICIPY_CHANNELS_MODE=live)"
+        banner = (f"[anticipy] PROACTIVE ENGINE ARMED — anticipating every {interval_s:g}s; "
+                  f"outreach={reach}")
+    else:
+        banner = ("[anticipy] *** PROACTIVE ENGINE DARK *** ANTICIPY_TICK_SECONDS=0 — reminders "
+                  "and follow-ups will NOT fire on their own (manual POST /trigger/tick only)")
+    print(banner, file=sys.stderr, flush=True)
 
 
 async def _trigger_scheduler(interval_s: float) -> None:
@@ -108,6 +141,7 @@ async def lifespan(app: FastAPI):
     # ANTICIPY_TICK_SECONDS=0 disables the scheduler (deterministic tests use POST /trigger/tick)
     interval_s = float(os.environ.get("ANTICIPY_TICK_SECONDS", "30") or 0)
     tick_task = asyncio.create_task(_trigger_scheduler(interval_s)) if interval_s > 0 else None
+    _arm_proactive_health(interval_s, tick_task is not None)
     # Inbound SMS poll: ONLY with the live channel env (creds + mode) — suite, stub and
     # mock runs never construct a transport. ANTICIPY_INBOUND_POLL_SECONDS=0 disables.
     inbound_s = float(os.environ.get("ANTICIPY_INBOUND_POLL_SECONDS", "15") or 0)
@@ -596,6 +630,7 @@ def status() -> dict:
         "memory_recovered": bool(getattr(core.memory.db, "recovered_corruption", False)),
         "channels": channels,
         "readiness": _readiness(channels),
+        "proactive": dict(_proactive_health),
     }
 
 

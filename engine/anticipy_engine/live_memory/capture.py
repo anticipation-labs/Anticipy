@@ -26,6 +26,23 @@ _COMMIT = re.compile(
     r"\b(i'?ll|i will|i need to|i have to|i've got to|gotta|remind me|don'?t forget|"
     r"make sure|i should|schedule|book|call|email|text|send|pay|finish|submit|"
     r"follow up|reply|pick up|drop off|renew|cancel|confirm)\b", re.I)
+# The user asked to be CALLED (not texted) about this reminder — the literal "call me at
+# 2:45" promise. Only an explicit "call/ring ME" escalates a due reminder to a real phone
+# call; a bare "call the dentist at 3" stays a text nudge (a surprise call is high-annoyance,
+# so the default delivery is always text). This sets channel_pref on the fireable loop; the
+# trigger's _fire_reminder honors it at the due time.
+_WANTS_CALL = re.compile(
+    r"\b(call me(?:\s+back)?|give me a (?:call|ring)|ring me|phone me|gimme a (?:call|ring))\b",
+    re.I)
+
+
+def wants_call(text: str) -> bool:
+    """True if the user explicitly asked to be CALLED (not texted) about this — the
+    "call me at 2:45" signal that escalates a due reminder to a real phone call. Shared by
+    capture (tags the loop at the source) and the owner-card loop writer (the spine-only path,
+    where capture didn't shape the commitment) so both fire the same way. Fails safe: a bare
+    "call the dentist" / "call mom" is NOT a call-me ask, so it stays a text nudge."""
+    return bool(_WANTS_CALL.search(text or ""))
 # A BARE IMPERATIVE TASK with a concrete time ("take my meds at 9pm", "set a focus block
 # tomorrow at 2pm", "grab the kids at 3"). The MOAT strips the "remind me to" lead-in, so
 # these reversible task verbs no longer match _COMMIT and were mis-filed as history -> no
@@ -184,6 +201,10 @@ class Capturer:
             if due_dt is not None:
                 fields["due_ts"] = due_dt.timestamp()
                 fields["remind_ts"] = due_dt.timestamp() - REMIND_LEAD_S
+                # "call me at 2:45" -> ring at the due time instead of texting (the signature
+                # voice-callback). Only an explicit call-me ask escalates; everything else texts.
+                if wants_call(text):
+                    fields["channel_pref"] = "call"
             # DEDUPE COORDINATION: stamp a stable content key so the OTHER open_loops writer
             # (the owner-card persist path in control_core) can recognize that this exact
             # commitment was already laddered into the drawer here and short-circuit to a
