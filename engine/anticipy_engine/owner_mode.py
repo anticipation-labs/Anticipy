@@ -106,8 +106,8 @@ _ORDER_VERB = r"order (?:a|an|the|me|us|food|lunch|dinner|takeout|delivery|coffe
 _BROWSER = re.compile(r"\b(grab(?!\s+bars?\b)|buy|" + _ORDER_VERB + r"|purchase|checkout|cart|find|look up|research)\b", re.I)
 _MONEY = re.compile(r"\b(pay|buy|" + _ORDER_VERB + r"|purchase|checkout|wire|venmo|zelle|cashapp|credit card|payment)\b", re.I)
 _NO_BUY = re.compile(
-    r"\b(don'?t buy|do not buy|no buying|don'?t checkout|do not checkout|"
-    r"no checkout|cart only|just.*cart)\b",
+    r"\b(don'?t (?:buy|check\s*out|purchase|order|pay)|do not (?:buy|check\s*out|purchase|order|pay)|"
+    r"no buying|no check\s*out|cart only|just.*cart)\b",
     re.I,
 )
 _PROFILE = re.compile(

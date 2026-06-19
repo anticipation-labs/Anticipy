@@ -49,6 +49,34 @@ CHROME_BIN = (
     "chrome-mac/Chromium.app/Contents/MacOS/Chromium"
 )
 
+
+def _discover_cached_chromium(cache_dir: str | None = None) -> str | None:
+    """Find the NEWEST installed Playwright Chromium in the ms-playwright cache. SELF-HEALS a
+    rotted pin: the hardcoded chromium-1161 path dies the instant the cache updates (the live
+    bug — only chromium-1223 remained, so a direct runner invocation failed with 'chrome binary
+    missing'). Mirrors browser_use_link._discover_cached_chromium so both sides resolve the same
+    binary whether the runner is driven by the link (env-injected) or invoked on its own."""
+    import glob
+    import re
+
+    cache = cache_dir or os.path.expanduser("~/Library/Caches/ms-playwright")
+
+    def _ver(path: str) -> int:
+        m = re.search(r"chromium-(\d+)", os.path.basename(path))
+        return int(m.group(1)) if m else -1
+
+    for base in sorted(glob.glob(os.path.join(cache, "chromium-*")), key=_ver, reverse=True):
+        for rel in (
+            "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+            "chrome-mac/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+            "chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium",
+            "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+        ):
+            p = os.path.join(base, rel)
+            if os.path.exists(p):
+                return p
+    return None
+
 # Newer-Chromium THROWAWAY launch path (chromium-1161 ABSENT fallback).
 # WHY: browser-use 0.13.1's own launcher (LocalBrowserWatchdog) hangs >30s when it
 # tries to spawn + CDP-detect a Chrome-for-Testing 148 / chromium-1223 build on macOS
@@ -132,6 +160,20 @@ _INJECTION_GUARD = (
 )
 
 
+# OPEN-WEB navigation policy (overrides the 'stay on host' line for task-only, no-site runs): the
+# user gave a task, not a site, so the agent must figure out WHERE to go and may roam any PUBLIC
+# site. CRITICAL: search with DuckDuckGo, never Google — Google blocks automated browsers with a
+# CAPTCHA the agent cannot (and must not) solve, which dead-ends the task. The injection fence above
+# still holds (page text is untrusted data); only the host-lock is lifted.
+_OPEN_WEB_GUARD = (
+    " OPEN-WEB: Ignore the 'stay on the requested host' line above — for THIS task you MAY navigate "
+    "to any public website needed to finish. To search the web use DuckDuckGo (https://duckduckgo.com); "
+    "do NOT use Google search — it blocks automated browsers with a CAPTCHA you cannot solve. If any "
+    "page shows a CAPTCHA or 'are you a robot' wall, go back and use DuckDuckGo or navigate directly to "
+    "a known store/site instead; never get stuck on a search engine."
+)
+
+
 def _load_env(env_path: str) -> dict:
     env = {}
     try:
@@ -165,6 +207,8 @@ def _build_task(req: dict) -> str:
     # are hard stops). Both are appended OUTSIDE/after the task so they are authoritative.
     guard = _ACTION_GUARD if req.get("act") else _READONLY_GUARD
     task = task + guard + _INJECTION_GUARD
+    if req.get("open_web"):
+        task = task + _OPEN_WEB_GUARD
     if req.get("structured"):
         task = task + _STRUCTURED_GUARD
     return task
@@ -311,6 +355,13 @@ async def _run(req: dict) -> dict:
     )
 
     chrome_bin = os.environ.get("ANTICIPY_BU_CHROME_BIN", CHROME_BIN)
+    # SELF-HEAL: if the resolved path (env override or the pinned default) is gone, discover the
+    # newest cached Chromium. Makes the runner robust on its own — not only when the link injects
+    # the binary — so a rotted pin can never break a direct invocation ("where it goes to shit").
+    if not os.path.exists(chrome_bin):
+        discovered = _discover_cached_chromium()
+        if discovered:
+            chrome_bin = discovered
     # CDP-ATTACH mode: when a cdp_url is supplied (the user's OWN already-running Chrome,
     # launched with --remote-debugging-port), browser-use CONNECTS to it instead of launching
     # a throwaway browser — so add-to-cart etc. run inside the real, logged-in session. No local
@@ -350,7 +401,10 @@ async def _run(req: dict) -> dict:
     # injected page cannot steer it off-domain (browser-use's security watchdog
     # blocks any nav whose host does not match these patterns). If no host can be
     # derived we leave it unset (allow-all), matching prior behavior.
-    allowed_domains = _allowed_domains(str(req.get("url") or ""))
+    # OPEN-WEB: the user gave a TASK, not a site — let the agent navigate anywhere PUBLIC to finish
+    # it (no single-host wall). The SSRF/public-only checks and the money/login/checkout hard-stops
+    # in the action guard still apply; only the host-lock is lifted.
+    allowed_domains = None if req.get("open_web") else _allowed_domains(str(req.get("url") or ""))
 
     # Prelaunch teardown handles (only populated on the playwright-prelaunch throwaway path).
     _pre_pw_cm = None

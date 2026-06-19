@@ -45,7 +45,9 @@ from ..shared.storesite import derive_store_site
 # required, so non-money content sends are never newly money-blocked.
 _MONEY_SIGNAL = re.compile(
     r"[$£€]\s?\d"                                                  # $500, £20, € 50
-    r"|\b\d[\d,]*(?:\.\d{1,2})?\s*(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?|million|billion)\b"
+    # amount + currency word, incl. "2k/1.5m" shorthand ("send 2k usd to my mom"). The optional
+    # [km] only matches WITH a trailing currency word, so "go for a 5k run" (no currency) never trips.
+    r"|\b\d[\d,]*(?:\.\d{1,2})?\s?[km]?\s*(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?|million|billion)\b"
     r"|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|"
     r"fifty|sixty|seventy|eighty|ninety|hundred|thousand|couple|few)\b"
     r"[\w\s-]{0,20}?\b(?:dollars?|bucks?|euros?|pounds?|grand|usd|cents?|million|billion)\b"  # five hundred dollars / 1.2 million

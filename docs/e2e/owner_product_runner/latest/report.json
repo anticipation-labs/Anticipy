@@ -1,0 +1,100 @@
+{
+  "seams": {
+    "app_engine": {
+      "pass": true,
+      "detail": "app=200 engine=ok"
+    },
+    "profile": {
+      "pass": true,
+      "detail": "onboard HTTP 200"
+    },
+    "tool_mesh": {
+      "pass": true,
+      "detail": "2/4 live: ['google_arcade', 'browser_bridge']"
+    },
+    "input_route": {
+      "pass": true,
+      "detail": "6 cards, 0 ignored"
+    },
+    "memory_intent_autonomy": {
+      "pass": true,
+      "detail": "cardinal_invariants=True catches=True"
+    },
+    "action_arm_browser": {
+      "pass": true,
+      "detail": "answer=I have found a standing desk on Amazon.com for under $300 USD (CAD 70.57). \nProd url=https://www.amazon.com/standing-adjustable-rolling"
+    },
+    "follow_up": {
+      "pass": true,
+      "detail": "50 open loop(s)/follow-up(s)"
+    }
+  },
+  "checks": [
+    {
+      "name": "coffee_vent_silent",
+      "pass": true,
+      "detail": "0 card(s)"
+    },
+    {
+      "name": "lottery_joke_silent",
+      "pass": true,
+      "detail": "0 card(s)"
+    },
+    {
+      "name": "great_morning_silent",
+      "pass": true,
+      "detail": "0 card(s)"
+    },
+    {
+      "name": "no_fake_person_great",
+      "pass": true,
+      "detail": "0 fake-person card(s)"
+    },
+    {
+      "name": "rent_is_money_gated",
+      "pass": true,
+      "detail": "rent cards=2 money_gated=2 auto_executed=0"
+    },
+    {
+      "name": "inhaler_surfaced",
+      "pass": true,
+      "detail": "1 card(s)"
+    },
+    {
+      "name": "amazon_surfaced",
+      "pass": true,
+      "detail": "1 card(s)"
+    },
+    {
+      "name": "sam_deck_surfaced",
+      "pass": true,
+      "detail": "2 card(s)"
+    },
+    {
+      "name": "sam_deck_not_duplicated",
+      "pass": true,
+      "detail": "2 sam/deck cards (<=2 expected)"
+    }
+  ],
+  "artifacts": [
+    "docs/e2e/owner_product_runner/latest/REPLAY.md",
+    "docs/e2e/owner_product_runner/latest/readiness.json",
+    "docs/e2e/owner_product_runner/latest/input.txt",
+    "docs/e2e/owner_product_runner/latest/cards.json",
+    "docs/e2e/owner_product_runner/latest/browser_result.json",
+    "docs/e2e/owner_product_runner/latest/calendar_receipts.json",
+    "docs/e2e/owner_product_runner/latest/followups.json"
+  ],
+  "commit": "35212a9",
+  "product_surface": "http://localhost:3000",
+  "calendar_bonus": {
+    "proven": false,
+    "detail": "{\"created\": \"JobStatus.needs_human\", \"event_id\": null, \"read_back_seen\": false, \"deleted\": \"skipped\"}",
+    "created": "JobStatus.needs_human",
+    "event_id": null,
+    "read_back_seen": false,
+    "deleted": "skipped"
+  },
+  "overall": "PASS",
+  "first_failing_seam": null
+}

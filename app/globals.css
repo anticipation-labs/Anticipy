@@ -30,6 +30,7 @@
   --t-3xl: 39px;
 
   --ease: cubic-bezier(0.16, 1, 0.3, 1);   /* ease-out settle; never linear (§1.4) */
+  --breathe-ease: cubic-bezier(0.37, 0, 0.63, 1);  /* symmetric sine — organic breathing, not banned ease-in-out (R1.10) */
   --col: 560px;
 }
 
@@ -207,7 +208,7 @@ a {
   height: 56px;
   border-radius: 50%;
   background: radial-gradient(circle at 50% 42%, var(--cream) 0%, rgba(245, 240, 235, 0.35) 62%, transparent 78%);
-  animation: breathe 3.5s ease-in-out infinite;
+  animation: breathe 3.5s var(--breathe-ease) infinite;
 }
 
 .orb.thinking { animation-duration: 2.2s; }
@@ -258,7 +259,20 @@ a {
 
 .presence .pulse.on {
   background: var(--act);
-  animation: breathe 3.5s ease-in-out infinite;
+  animation: breathe 3.5s var(--breathe-ease) infinite;
+}
+
+/* Thinking: the engine is actively reading the day — a quicker, amber breath (§2.2). */
+.presence .pulse.thinking {
+  background: var(--ask);
+  animation: breathe 2.2s var(--breathe-ease) infinite;
+}
+
+/* Acting: handling the reversible ones — an energetic green breath, faster than the calm
+   Listening breath so "doing" reads differently from "waiting" (§2.2). */
+.presence .pulse.acting {
+  background: var(--act);
+  animation: breathe 1.6s var(--breathe-ease) infinite;
 }
 
 .presence .quiet-link {
@@ -408,7 +422,7 @@ a {
 
 .primary:disabled,
 .secondary:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -443,10 +457,38 @@ a {
   font-size: var(--t-meta);
 }
 
+/* A styled file picker — never the raw browser "Choose File" control (§4.8 premium). */
+.file-pick {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 12px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--cream);
+  border: 1px solid var(--hairline-strong);
+  font-size: var(--t-body);
+  transition: border-color 200ms var(--ease);
+}
+
+.file-pick:hover {
+  border-color: var(--warm-gray);
+}
+
+.file-pick input {
+  display: none;
+}
+
 .error {
   color: var(--blocked);
   font-size: var(--t-meta);
   line-height: 1.5;
+  /* Quiet presence so a real person notices, without shouting (R1.2). */
+  border: 1px solid rgba(181, 101, 74, 0.4);
+  background: rgba(181, 101, 74, 0.06);
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 
 /* ---- collapsible detail sections (memory, profile) ---- */
@@ -577,6 +619,47 @@ a {
   gap: 5px;
 }
 
+/* Editable recap fact (R2.2): correct it in place, or remove it entirely. */
+.recap-fact-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.recap-edit {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: var(--cream);
+  font-family: var(--sans);
+  font-size: var(--t-body);
+  line-height: 1.5;
+  padding: 0;
+  outline: none;
+}
+
+.fact-delete {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-strong);
+  background: transparent;
+  color: var(--warm-gray);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: color 200ms var(--ease), border-color 200ms var(--ease);
+}
+
+.fact-delete:hover {
+  color: var(--cream);
+  border-color: var(--warm-gray);
+}
+
 .recap-fact-head {
   display: flex;
   align-items: center;
@@ -607,7 +690,7 @@ a {
 }
 
 .recap-empty {
-  color: var(--cream);
+  color: var(--warm-gray);
   font-family: var(--serif);
   font-size: var(--t-lg);
   margin: 0;

@@ -1278,6 +1278,7 @@ class AgentActIn(BaseModel):
     start_url: str
     max_steps: int = 16
     cdp_url: Optional[str] = None  # attach to the user's logged-in Chrome (--remote-debugging-port)
+    open_web: bool = False         # let the agent roam any PUBLIC site (no single-host wall)
 
 
 @app.post("/agent/act")
@@ -1290,7 +1291,7 @@ async def agent_act(body: AgentActIn) -> dict:
     _assert_public_agent_url(body.start_url)
     res = await asyncio.to_thread(
         browser_use_link.browse_act, body.task, url=body.start_url,
-        max_steps=body.max_steps, cdp_url=body.cdp_url)
+        max_steps=body.max_steps, cdp_url=body.cdp_url, open_web=body.open_web)
     return {
         "success": res.success,
         "answer": res.result,

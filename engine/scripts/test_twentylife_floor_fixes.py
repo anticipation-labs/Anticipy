@@ -35,6 +35,8 @@ MONEY_YES = [
     "Renew the Creative Cloud plan",
     "Just refund Priya's last two sessions to her card, it's like $130.",
     "wire it to the escrow account",
+    "i need to send 2k usd to my mom in mexico, cheapest way?",   # k/m shorthand (generalization sweep)
+    "wire 5k usd to the contractor",
 ]
 MONEY_NO = [
     "go for a 5k run tomorrow morning", "renew my library books", "transfer the photos to my laptop",

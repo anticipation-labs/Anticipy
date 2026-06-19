@@ -19,7 +19,7 @@
 // poll the engine, which asks the connector whether authorization completed, and flip the
 // row to "connected" only when it really did.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 // ---- copy guard (§4.8): the user never sees a vendor / implementation name ----
 // Assembled from fragments so the provider names never appear as literal source copy
@@ -177,7 +177,7 @@ function StepPeople({ form, set, onBack, onNext }) {
           />
         </label>
       </div>
-      <div className="control-row" style={{ marginTop: 24, gap: 12 }}>
+      <div className="control-row" style={{ marginTop: 24, gap: 16 }}>
         <button type="button" className="secondary" onClick={onBack}>
           Back
         </button>
@@ -208,7 +208,7 @@ function ConnectRow({ target, state, onConnect, onRecheck }) {
       <p className="row-why">{target.blurb}</p>
       {state?.error ? <p className="error">{humanCopy(state.error)}</p> : null}
       {!connected ? (
-        <div className="control-row" style={{ marginTop: 6, gap: 12 }}>
+        <div className="control-row" style={{ marginTop: 8, gap: 16 }}>
           <button
             type="button"
             className="secondary"
@@ -216,7 +216,7 @@ function ConnectRow({ target, state, onConnect, onRecheck }) {
             disabled={connecting}
             style={{ width: "fit-content" }}
           >
-            {status === "launching" ? "Opening…" : status === "polling" ? "Waiting for your approval" : "Connect"}
+            {status === "launching" ? "Opening…" : status === "polling" ? "Waiting for you to approve it" : "Connect"}
           </button>
           {status === "polling" || state?.consentUrl ? (
             <button
@@ -261,7 +261,7 @@ function StepConnect({ connectState, onConnect, onRecheck, onBack, onFinish, any
         You can connect now or later — either way I&apos;ll start learning your day. Money is the only
         hard stop: I&apos;ll never check out a cart without you, even once these are connected.
       </p>
-      <div className="control-row" style={{ marginTop: 20, gap: 12 }}>
+      <div className="control-row" style={{ marginTop: 24, gap: 16 }}>
         <button type="button" className="secondary" onClick={onBack}>
           Back
         </button>
@@ -273,28 +273,113 @@ function StepConnect({ connectState, onConnect, onRecheck, onBack, onFinish, any
   );
 }
 
-// ---- step 4: the 60-second reward — the read-only recap, "I invented nothing" ----
-function StepRecap({ recap, recapBusy, recapError, onRescan }) {
+// ---- step 4: the 60-second reward — the recap, "I invented nothing" (and CORRECTABLE) ----
+// The credibility moment (R2.2): every read fact is editable AND deletable in place, so a
+// new person can fix or remove a misread BEFORE trusting the app. A correction is REAL — on
+// continue, the confirmed picture is written back to memory so the brain remembers the
+// owner's version (never a cosmetic edit). Connections are real states, shown read-only.
+function StepRecap({ recap, recapBusy, recapError, onRescan, ownerName }) {
   const connections = (Array.isArray(recap?.connections) ? recap.connections : [])
     .map((c) => humanCopy(c?.name))
     .filter(Boolean);
-  const facts = (Array.isArray(recap?.profile_facts) ? recap.profile_facts : [])
-    .map((f) => humanCopy(f))
-    .filter(Boolean);
+
+  const [factList, setFactList] = useState([]);
+  // People I READ from your calendar + email (recurring contacts) — you confirm, edit, or
+  // delete before I keep any of them. Nothing is written to your contacts until you proceed.
+  const [peopleList, setPeopleList] = useState([]);
+  const [dirty, setDirty] = useState(false);
+  const [savingFacts, setSavingFacts] = useState(false);
+  const [saveFactsError, setSaveFactsError] = useState("");
+
+  // Seed the editable working copies whenever a fresh recap arrives.
+  useEffect(() => {
+    const facts = (Array.isArray(recap?.profile_facts) ? recap.profile_facts : [])
+      .map((f) => humanCopy(f))
+      .filter(Boolean);
+    const people = (Array.isArray(recap?.auto_discovered_people) ? recap.auto_discovered_people : [])
+      .map((p) => ({ name: humanCopy(p?.name) || p?.email || "", email: p?.email || "", channels: Array.isArray(p?.channels) ? p.channels : ["email"] }))
+      .filter((p) => p.name);
+    setFactList(facts);
+    setPeopleList(people);
+    setDirty(false);
+    setSaveFactsError("");
+  }, [recap]);
+
+  const editFact = useCallback((i, value) => {
+    setFactList((cur) => cur.map((f, idx) => (idx === i ? value : f)));
+    setDirty(true);
+  }, []);
+  const deleteFact = useCallback((i) => {
+    setFactList((cur) => cur.filter((_, idx) => idx !== i));
+    setDirty(true);
+  }, []);
+  const editPerson = useCallback((i, value) => {
+    setPeopleList((cur) => cur.map((p, idx) => (idx === i ? { ...p, name: value } : p)));
+    setDirty(true);
+  }, []);
+  const deletePerson = useCallback((i) => {
+    setPeopleList((cur) => cur.filter((_, idx) => idx !== i));
+    setDirty(true);
+  }, []);
+
+  // Persist any correction, then go to the day. People I discovered are kept ONLY when the
+  // owner proceeds (reviewing them = consent). If a save fails, we STAY and say so — a
+  // correction (or a confirmed person) must never be silently lost.
+  const proceed = useCallback(async () => {
+    const keptFacts = factList.map((f) => f.trim()).filter(Boolean);
+    const keptPeople = peopleList
+      .map((p) => ({ name: (p.name || "").trim(), email: (p.email || "").trim(), channels: p.channels || ["email"] }))
+      .filter((p) => p.name);
+    // Write when the owner edited facts (dirty) OR confirmed any discovered people.
+    if (dirty || keptPeople.length) {
+      setSavingFacts(true);
+      setSaveFactsError("");
+      try {
+        const res = await ownerFetch("/api/owner/onboard", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            source: "first_run_recap_confirm",
+            owner_name: ownerName || "",
+            raw_notes: keptFacts.length
+              ? "Owner reviewed onboarding and confirmed: " + keptFacts.join("; ")
+              : "Owner reviewed onboarding and cleared the assembled facts.",
+            people: keptPeople.map((p) => ({
+              name: p.name,
+              relationship: "",
+              channels: p.channels,
+              notes: p.email ? `email: ${p.email}` : "",
+            })),
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.message || data?.error || "I couldn't save your changes just now.");
+        }
+      } catch (err) {
+        setSaveFactsError(err instanceof Error ? err.message : String(err));
+        setSavingFacts(false);
+        return;
+      }
+      setSavingFacts(false);
+    }
+    if (typeof window !== "undefined") window.location.href = "/";
+  }, [dirty, factList, peopleList, ownerName]);
+
   return (
     <section className="block settle">
       <div className="surface-head">
         <h1 className="surface-title">Here&apos;s what I gathered.</h1>
         <p className="surface-sub">
           A first look at what I can already see. I only read — I never send, spend, or change a
-          thing — and I invented nothing.
+          thing — and I invented nothing. Fix or remove anything that&apos;s off.
         </p>
       </div>
 
       {recapBusy ? (
         <div className="orb-wrap settle" style={{ marginTop: 16 }}>
           <div className="orb" />
-          <p className="orb-word">Getting to know you</p>
+          <p className="orb-word">Reading your week</p>
         </div>
       ) : null}
 
@@ -311,27 +396,73 @@ function StepRecap({ recap, recapBusy, recapError, onRescan }) {
               ))}
             </ul>
           ) : null}
-          {facts.length ? (
+          {factList.length ? (
             <ul className="recap-facts" style={{ marginTop: connections.length ? 4 : 0 }}>
-              {facts.map((fact, i) => (
-                <li className="recap-fact" key={`fact-${i}`}>
-                  <p className="recap-value">{fact}</p>
+              {factList.map((fact, i) => (
+                <li className="recap-fact recap-fact-row" key={`fact-${i}`}>
+                  <input
+                    className="recap-edit"
+                    value={fact}
+                    onChange={(e) => editFact(i, e.target.value)}
+                    aria-label="Edit this fact"
+                  />
+                  <button
+                    type="button"
+                    className="fact-delete"
+                    onClick={() => deleteFact(i)}
+                    aria-label="Remove this fact"
+                    title="Remove this"
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="recap-empty">No facts assembled yet. Nothing was invented.</p>
+            <p className="recap-empty">No facts assembled. Nothing was invented.</p>
           )}
         </div>
       ) : null}
 
-      <div className="control-row" style={{ marginTop: 24, gap: 12 }}>
-        <button type="button" className="secondary" onClick={onRescan} disabled={recapBusy}>
+      {!recapBusy && peopleList.length ? (
+        <div className="recap settle" style={{ marginTop: 24 }}>
+          <p className="surface-sub" style={{ marginBottom: 8 }}>
+            People I keep seeing in your calendar and email. Keep the ones that matter — edit or
+            remove the rest. I&apos;ll only remember these once you go on.
+          </p>
+          <ul className="recap-facts">
+            {peopleList.map((p, i) => (
+              <li className="recap-fact recap-fact-row" key={`person-${i}`}>
+                <input
+                  className="recap-edit"
+                  value={p.name}
+                  onChange={(e) => editPerson(i, e.target.value)}
+                  aria-label="Edit this person's name"
+                />
+                <button
+                  type="button"
+                  className="fact-delete"
+                  onClick={() => deletePerson(i)}
+                  aria-label="Remove this person"
+                  title="Remove this"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {saveFactsError ? <p className="error" style={{ marginTop: 16 }}>{humanCopy(saveFactsError)}</p> : null}
+
+      <div className="control-row" style={{ marginTop: 24, gap: 16 }}>
+        <button type="button" className="secondary" onClick={onRescan} disabled={recapBusy || savingFacts}>
           Look again
         </button>
-        <a href="/" className="primary" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
-          Take me to my day
-        </a>
+        <button type="button" className="primary" onClick={proceed} disabled={recapBusy || savingFacts}>
+          {savingFacts ? "Saving…" : "Take me to my day"}
+        </button>
       </div>
     </section>
   );
@@ -565,7 +696,7 @@ export default function WelcomePage() {
         ) : null}
 
         {current === "recap" ? (
-          <StepRecap recap={recap} recapBusy={recapBusy} recapError={recapError} onRescan={runRecap} />
+          <StepRecap recap={recap} recapBusy={recapBusy} recapError={recapError} onRescan={runRecap} ownerName={form.ownerName} />
         ) : null}
       </div>
     </main>

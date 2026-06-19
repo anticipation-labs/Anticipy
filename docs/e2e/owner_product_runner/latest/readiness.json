@@ -1,0 +1,31 @@
+{
+  "overall": "needs_connect",
+  "live_count": 2,
+  "total": 4,
+  "capabilities": [
+    {
+      "capability": "google_arcade",
+      "label": "Google (Calendar + Gmail) via Arcade",
+      "status": "live",
+      "what_to_do": "Connected. Google Calendar / Gmail run as live API actions."
+    },
+    {
+      "capability": "twilio",
+      "label": "Voice + SMS line (Twilio)",
+      "status": "needs_connect",
+      "what_to_do": "Twilio and your phone are configured; live mode is off. Set ANTICIPY_CHANNELS_MODE=live to turn the call/text line on."
+    },
+    {
+      "capability": "browser_bridge",
+      "label": "Browser hand (your Chrome)",
+      "status": "live",
+      "what_to_do": "Connected. The browser hand can run real read/act sessions in your Chrome."
+    },
+    {
+      "capability": "apple_signing",
+      "label": "Signed public download (Apple)",
+      "status": "needs_connect",
+      "what_to_do": "Set APPLE_DEVELOPER_ID (your Apple Developer account) to sign + notarize the public download. Until then the dev build opens via right-click -> Open."
+    }
+  ]
+}

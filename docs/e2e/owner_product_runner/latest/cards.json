@@ -1,0 +1,743 @@
+{
+  "source": "transcript",
+  "observed_lines": [
+    {
+      "line_no": 2,
+      "text": "get Sam the revised deck by Friday",
+      "force_ask": false,
+      "moat_task": true,
+      "src_idx": -1,
+      "money_src": false
+    },
+    {
+      "line_no": 3,
+      "text": "make sure the retainer note is in the CRM before the call",
+      "force_ask": false,
+      "moat_task": true,
+      "src_idx": -1,
+      "money_src": false
+    },
+    {
+      "line_no": 4,
+      "text": "pull up Jarvis standing desk",
+      "force_ask": false,
+      "moat_task": true,
+      "src_idx": -1,
+      "money_src": false
+    },
+    {
+      "line_no": 5,
+      "text": "call Amazon about the expired yogurt and get a refund",
+      "force_ask": false,
+      "moat_task": true,
+      "src_idx": -1,
+      "money_src": false
+    },
+    {
+      "line_no": 6,
+      "text": "refill Maya's inhaler before the pharmacy closes",
+      "force_ask": false,
+      "moat_task": true,
+      "src_idx": -1,
+      "money_src": false
+    },
+    {
+      "line_no": 7,
+      "text": "Drop the rent check off, it's $1,450",
+      "force_ask": false,
+      "moat_task": true,
+      "src_idx": -1,
+      "money_src": false
+    }
+  ],
+  "cards": [
+    {
+      "id": "160e8d94c0404cde983d55ecb6927c9e",
+      "source": "transcript",
+      "line_no": 2,
+      "source_text": "get Sam the revised deck by Friday",
+      "title": "Owner task: get Sam the revised deck by Friday",
+      "disposition": "ask",
+      "route": "api",
+      "action": "execute_owner_task",
+      "args": {
+        "task_text": "get Sam the revised deck by Friday"
+      },
+      "confidence": 0.8,
+      "reason": "cannot confirm safe -> fail-safe ask",
+      "status": "waiting",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "315120050be2476984593cfaaf985375",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "315120050be2476984593cfaaf985375",
+          "text": "get Sam the revised deck by Friday",
+          "type": "memory_read_back"
+        },
+        {
+          "ask_id": "11d5aa6509aa4a628be7d79d2e9d0c86",
+          "decision": "ask",
+          "goal_id": "11d5aa6509aa4a628be7d79d2e9d0c86",
+          "goal_state": "waiting",
+          "type": "engine_execution"
+        },
+        {
+          "memory_id": "3ab0fc8198ff482bbddfe6b8841e0623",
+          "status": "waiting",
+          "type": "capture_memory_status"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/160e8d94c0404cde983d55ecb6927c9e.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": {
+        "ask_id": "11d5aa6509aa4a628be7d79d2e9d0c86",
+        "decision": "ask",
+        "goal_id": "11d5aa6509aa4a628be7d79d2e9d0c86",
+        "goal_state": "waiting"
+      },
+      "autonomy_mode": "CLARIFY_FIRST",
+      "autonomy_why": "needs one confirmation before acting"
+    },
+    {
+      "id": "79e4c275640943d2bbf787777991fcbe",
+      "source": "typed",
+      "line_no": 5,
+      "source_text": "make sure the retainer note is in the CRM before the call",
+      "title": "Prepare internal note",
+      "disposition": "do",
+      "route": "api",
+      "action": "prepare_internal_note",
+      "args": {
+        "binding": false,
+        "destination": "crm_or_record",
+        "task_text": "make sure the retainer note is in the CRM before the call"
+      },
+      "confidence": 0.74,
+      "reason": "CRM/notes not connected \u2014 I've kept the note text ready; I'd write this in the record",
+      "status": "open",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "d88af5ca21f34067bb20485d13ef1f8c",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "d88af5ca21f34067bb20485d13ef1f8c",
+          "text": "make sure the retainer note is in the CRM before the call",
+          "type": "memory_read_back"
+        },
+        {
+          "ask_id": null,
+          "decision": "act",
+          "goal_id": null,
+          "goal_state": "open",
+          "internal_note": true,
+          "type": "engine_execution"
+        },
+        {
+          "memory_id": "40598749485e46f6865d538fb4279057",
+          "status": "open",
+          "type": "capture_memory_status"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/79e4c275640943d2bbf787777991fcbe.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": {
+        "ask_id": null,
+        "decision": "act",
+        "goal_id": null,
+        "goal_state": "open",
+        "internal_note": true
+      },
+      "autonomy_mode": "AUTO_DO",
+      "autonomy_why": "low-risk reversible work \u2014 completed end-to-end with proof"
+    },
+    {
+      "id": "4b0f9662a38746d6bd995068cfaf970d",
+      "source": "transcript",
+      "line_no": 4,
+      "source_text": "pull up Jarvis standing desk",
+      "title": "Confirm task: pull up Jarvis standing desk",
+      "disposition": "ask",
+      "route": "voice_text",
+      "action": "confirm_owner_task",
+      "args": {
+        "task_text": "pull up Jarvis standing desk"
+      },
+      "confidence": 0.7,
+      "reason": "real task voiced inside a vent \u2014 confirm before acting",
+      "status": "open",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "fd40302be375461cbbbc6f9385ef3213",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "fd40302be375461cbbbc6f9385ef3213",
+          "text": "pull up Jarvis standing desk",
+          "type": "memory_read_back"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/4b0f9662a38746d6bd995068cfaf970d.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": null,
+      "autonomy_mode": "CLARIFY_FIRST",
+      "autonomy_why": "needs one confirmation before acting"
+    },
+    {
+      "id": "oc_dd7f686daa49339e26",
+      "source": "transcript",
+      "line_no": 5,
+      "source_text": "call Amazon about the expired yogurt and get a refund",
+      "title": "On it: call Amazon about the expired yogurt and get a refund",
+      "disposition": "do",
+      "route": "browser",
+      "action": "browser_action",
+      "args": {
+        "opt_out": true,
+        "start_url": "https://www.amazon.com",
+        "stop_id": "oc_dd7f686daa49339e26",
+        "task_text": "call Amazon about the expired yogurt and get a refund"
+      },
+      "confidence": 0.8,
+      "reason": "I'm on it \u2014 tell me to stop",
+      "status": "done",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "87d391b1458e45a0b31f2fd16ebecc09",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "87d391b1458e45a0b31f2fd16ebecc09",
+          "text": "call Amazon about the expired yogurt and get a refund",
+          "type": "memory_read_back"
+        },
+        {
+          "goal_id": "oc_dd7f686daa49339e26",
+          "state": "running",
+          "stop_id": "oc_dd7f686daa49339e26",
+          "type": "opt_out_started"
+        },
+        {
+          "ask_id": null,
+          "decision": "act",
+          "goal_id": "oc_dd7f686daa49339e26",
+          "goal_state": "running",
+          "opt_out": true,
+          "type": "engine_execution"
+        },
+        {
+          "memory_id": "b4682fa869cb4d109062c205d739b11e",
+          "status": "running",
+          "type": "capture_memory_status"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/oc_dd7f686daa49339e26.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": {
+        "ask_id": null,
+        "decision": "act",
+        "goal_id": "oc_dd7f686daa49339e26",
+        "goal_state": "done",
+        "opt_out": true,
+        "proof": {
+          "answer": "I have navigated to Amazon.com, dismissed the location popup, clicked on 'Customer Service', searched for 'refund expired yogurt', and clicked on 'Refunds and Exchanges'. I then clicked on 'Help' in the footer and searched for 'Contact Us' on the resulting page. I was unable to find a direct contact option without being prompted to sign in, which is a hard stop. Therefore, I cannot proceed with calling Amazon about the expired yogurt and getting a refund.",
+          "screenshot": true,
+          "screenshot_path": "/var/folders/y0/kpml_mf10911r9vt3n1gqt900000gn/T/browser_use_agent_06a348b6-5f50-7a99-8000-2807c494ea6d_1781828453/screenshots/step_15.png",
+          "type": "browser_receipt",
+          "url": "https://www.amazon.com/gp/help/customer/display.html?nodeId=508510&ref_=footer_gw_m_b_he"
+        }
+      },
+      "autonomy_mode": "AUTO_DO_WITH_OPT_OUT",
+      "autonomy_why": "visible web task \u2014 I'm on it; reversible (throwaway browser, no buy)",
+      "follow_up": {
+        "when_ts": 1782001251.85638,
+        "in_days": 2,
+        "note": "Follow up on: call Amazon about the expired yogurt and get a refund",
+        "reason": "outcome depends on someone else \u2014 I'll check back and nudge if needed"
+      }
+    },
+    {
+      "id": "3dd05bea63a64b89a44d4026c6b49bec",
+      "source": "transcript",
+      "line_no": 6,
+      "source_text": "refill Maya's inhaler before the pharmacy closes",
+      "title": "Owner task: refill Maya's inhaler before the pharmacy closes",
+      "disposition": "ask",
+      "route": "api",
+      "action": "execute_owner_task",
+      "args": {
+        "task_text": "refill Maya's inhaler before the pharmacy closes"
+      },
+      "confidence": 0.8,
+      "reason": "cannot confirm safe -> fail-safe ask",
+      "status": "waiting",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "374792bd5b2242ce9da969f078270fca",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "374792bd5b2242ce9da969f078270fca",
+          "text": "refill Maya's inhaler before the pharmacy closes",
+          "type": "memory_read_back"
+        },
+        {
+          "ask_id": "79f393036c7a40d191fc438bcdd4f949",
+          "decision": "ask",
+          "goal_id": "79f393036c7a40d191fc438bcdd4f949",
+          "goal_state": "waiting",
+          "type": "engine_execution"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/3dd05bea63a64b89a44d4026c6b49bec.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": {
+        "ask_id": "79f393036c7a40d191fc438bcdd4f949",
+        "decision": "ask",
+        "goal_id": "79f393036c7a40d191fc438bcdd4f949",
+        "goal_state": "waiting"
+      },
+      "autonomy_mode": "CLARIFY_FIRST",
+      "autonomy_why": "needs one confirmation before acting"
+    },
+    {
+      "id": "2315e9f3f3bc465a968f887f796dce5a",
+      "source": "transcript",
+      "line_no": 7,
+      "source_text": "Drop the rent check off, it's $1,450",
+      "title": "Block money action",
+      "disposition": "blocked",
+      "route": "browser",
+      "action": "prepare_purchase_path_without_payment",
+      "args": {
+        "payment_allowed": false,
+        "task_text": "Drop the rent check off, it's $1,450"
+      },
+      "confidence": 0.78,
+      "reason": "money or checkout is a hard stop; prepare but do not pay",
+      "status": "blocked",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "10860ac1a78b4064b32fc3a94adb7eb2",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "10860ac1a78b4064b32fc3a94adb7eb2",
+          "text": "Drop the rent check off, it's $1,450",
+          "type": "memory_read_back"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/2315e9f3f3bc465a968f887f796dce5a.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": {
+        "ask_id": null,
+        "decision": "blocked",
+        "goal_id": null,
+        "reason": "hard stop: money/wall cards never execute",
+        "goal_state": "blocked"
+      },
+      "autonomy_mode": "PREPARE_THEN_STOP",
+      "autonomy_why": "money/checkout is the true irreversible boundary \u2014 prepared, stopped"
+    }
+  ],
+  "ignored_line_count": 0,
+  "middle_trace": {
+    "captured_memories": [
+      {
+        "text": "\"Omar, please call Amazon about that plant I ordered.\"",
+        "kind": "action"
+      },
+      {
+        "text": "\"Yeah, I'll handle it.\"",
+        "kind": "action"
+      },
+      {
+        "text": "\"Honestly I'm so done with this coffee machine, I'm moving to the woods.\"",
+        "kind": "vent"
+      },
+      {
+        "text": "\"Can you get Sam the revised deck by Friday?\"",
+        "kind": "action"
+      },
+      {
+        "text": "\"Yeah, remind me before I send it.\"",
+        "kind": "followup"
+      },
+      {
+        "text": "\"Please make sure the retainer note is in the CRM before the call.\"",
+        "kind": "action"
+      },
+      {
+        "text": "\"If I win the lottery I'm buying an island.\"",
+        "kind": "vent"
+      },
+      {
+        "text": "\"The Jarvis standing desk is the one I liked. Don't buy it yet.\"",
+        "kind": "preference"
+      },
+      {
+        "text": "\"Can you pull up that desk thing?\"",
+        "kind": "action"
+      },
+      {
+        "text": "\"Also call Amazon about the expired yogurt and get a refund.\"",
+        "kind": "action"
+      },
+      {
+        "text": "\"Remind me to refill Maya's inhaler before the pharmacy closes.\"",
+        "kind": "followup"
+      },
+      {
+        "text": "\"Drop the rent check off, it's $1,450.\"",
+        "kind": "action"
+      },
+      {
+        "text": "\"Great morning, just great. Everything is broken.\"",
+        "kind": "action"
+      }
+    ],
+    "resolutions": [
+      {
+        "line": "call Amazon about that plant I ordered",
+        "resolved_to": "call Amazon about that plant I ordered",
+        "head": "plant",
+        "ranked_candidates": [
+          {
+            "text": "\"Great morning, just great. Everything is broken.\"",
+            "kind": "action",
+            "score": 0.63,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Drop the rent check off, it's $1,450.\"",
+            "kind": "action",
+            "score": 0.62,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Also call Amazon about the expired yogurt and get a refund.\"",
+            "kind": "action",
+            "score": 0.6,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"The Jarvis standing desk is the one I liked. Don't buy it yet.\"",
+            "kind": "preference",
+            "score": 0.58,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Please make sure the retainer note is in the CRM before the call.\"",
+            "kind": "action",
+            "score": 0.56,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Can you get Sam the revised deck by Friday?\"",
+            "kind": "action",
+            "score": 0.54,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Yeah, I'll handle it.\"",
+            "kind": "action",
+            "score": 0.52,
+            "reason": "weak/recency only"
+          }
+        ],
+        "chosen_referent": null,
+        "rejected_referents": [
+          "\"Great morning, just great. Everything is broken.\"",
+          "\"Drop the rent check off, it's $1,450.\"",
+          "\"Also call Amazon about the expired yogurt and get a refund.\"",
+          "\"The Jarvis standing desk is the one I liked. Don't buy it yet.\"",
+          "\"Please make sure the retainer note is in the CRM before the call.\"",
+          "\"Can you get Sam the revised deck by Friday?\"",
+          "\"Yeah, I'll handle it.\""
+        ],
+        "decision": "ambiguous \u2014 ask smallest clarification"
+      },
+      {
+        "line": "pull up that desk thing",
+        "resolved_to": "pull up Jarvis standing desk",
+        "head": "desk",
+        "ranked_candidates": [
+          {
+            "text": "\"The Jarvis standing desk is the one I liked. Don't buy it yet.\"",
+            "kind": "preference",
+            "score": 10.58,
+            "reason": "names 'desk'"
+          },
+          {
+            "text": "\"Great morning, just great. Everything is broken.\"",
+            "kind": "action",
+            "score": 0.63,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Drop the rent check off, it's $1,450.\"",
+            "kind": "action",
+            "score": 0.62,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Also call Amazon about the expired yogurt and get a refund.\"",
+            "kind": "action",
+            "score": 0.6,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Please make sure the retainer note is in the CRM before the call.\"",
+            "kind": "action",
+            "score": 0.56,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Can you get Sam the revised deck by Friday?\"",
+            "kind": "action",
+            "score": 0.54,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Yeah, I'll handle it.\"",
+            "kind": "action",
+            "score": 0.52,
+            "reason": "weak/recency only"
+          }
+        ],
+        "chosen_referent": "\"The Jarvis standing desk is the one I liked. Don't buy it yet.\"",
+        "rejected_referents": [
+          "\"Great morning, just great. Everything is broken.\"",
+          "\"Drop the rent check off, it's $1,450.\"",
+          "\"Also call Amazon about the expired yogurt and get a refund.\"",
+          "\"Please make sure the retainer note is in the CRM before the call.\"",
+          "\"Can you get Sam the revised deck by Friday?\"",
+          "\"Yeah, I'll handle it.\""
+        ],
+        "decision": "resolved"
+      },
+      {
+        "line": "Drop the rent check off, it's $1,450",
+        "resolved_to": "Drop the rent check off, it's $1,450",
+        "head": null,
+        "ranked_candidates": [
+          {
+            "text": "\"Great morning, just great. Everything is broken.\"",
+            "kind": "action",
+            "score": 0.63,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Drop the rent check off, it's $1,450.\"",
+            "kind": "action",
+            "score": 0.62,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Also call Amazon about the expired yogurt and get a refund.\"",
+            "kind": "action",
+            "score": 0.6,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"The Jarvis standing desk is the one I liked. Don't buy it yet.\"",
+            "kind": "preference",
+            "score": 0.58,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Please make sure the retainer note is in the CRM before the call.\"",
+            "kind": "action",
+            "score": 0.56,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Can you get Sam the revised deck by Friday?\"",
+            "kind": "action",
+            "score": 0.54,
+            "reason": "weak/recency only"
+          },
+          {
+            "text": "\"Yeah, I'll handle it.\"",
+            "kind": "action",
+            "score": 0.52,
+            "reason": "weak/recency only"
+          }
+        ],
+        "chosen_referent": null,
+        "rejected_referents": [
+          "\"Great morning, just great. Everything is broken.\"",
+          "\"Drop the rent check off, it's $1,450.\"",
+          "\"Also call Amazon about the expired yogurt and get a refund.\"",
+          "\"The Jarvis standing desk is the one I liked. Don't buy it yet.\"",
+          "\"Please make sure the retainer note is in the CRM before the call.\"",
+          "\"Can you get Sam the revised deck by Friday?\"",
+          "\"Yeah, I'll handle it.\""
+        ],
+        "decision": "ambiguous \u2014 ask smallest clarification"
+      }
+    ],
+    "autonomy": [
+      {
+        "input_span": "get Sam the revised deck by Friday",
+        "chosen_mode": "CLARIFY_FIRST",
+        "why": "needs one confirmation before acting",
+        "rejected_modes": [
+          "AUTO_DO",
+          "AUTO_DO_WITH_OPT_OUT",
+          "PREPARE_THEN_STOP",
+          "REMEMBER_ONLY",
+          "IGNORE"
+        ],
+        "action_plan": {
+          "route": "api",
+          "action": "execute_owner_task"
+        },
+        "result": "ask",
+        "proof": [
+          "memory_write",
+          "memory_read_back",
+          "engine_execution",
+          "capture_memory_status",
+          "card_record"
+        ]
+      },
+      {
+        "input_span": "make sure the retainer note is in the CRM before the call",
+        "chosen_mode": "AUTO_DO",
+        "why": "low-risk reversible work \u2014 completed end-to-end with proof",
+        "rejected_modes": [
+          "AUTO_DO_WITH_OPT_OUT",
+          "PREPARE_THEN_STOP",
+          "CLARIFY_FIRST",
+          "REMEMBER_ONLY",
+          "IGNORE"
+        ],
+        "action_plan": {
+          "route": "api",
+          "action": "prepare_internal_note"
+        },
+        "result": "do",
+        "proof": [
+          "memory_write",
+          "memory_read_back",
+          "engine_execution",
+          "capture_memory_status",
+          "card_record"
+        ]
+      },
+      {
+        "input_span": "pull up Jarvis standing desk",
+        "chosen_mode": "CLARIFY_FIRST",
+        "why": "needs one confirmation before acting",
+        "rejected_modes": [
+          "AUTO_DO",
+          "AUTO_DO_WITH_OPT_OUT",
+          "PREPARE_THEN_STOP",
+          "REMEMBER_ONLY",
+          "IGNORE"
+        ],
+        "action_plan": {
+          "route": "voice_text",
+          "action": "confirm_owner_task"
+        },
+        "result": "ask",
+        "proof": [
+          "memory_write",
+          "memory_read_back",
+          "card_record"
+        ]
+      },
+      {
+        "input_span": "call Amazon about the expired yogurt and get a refund",
+        "chosen_mode": "AUTO_DO_WITH_OPT_OUT",
+        "why": "visible web task \u2014 I'm on it; reversible (throwaway browser, no buy)",
+        "rejected_modes": [
+          "AUTO_DO",
+          "PREPARE_THEN_STOP",
+          "CLARIFY_FIRST",
+          "REMEMBER_ONLY",
+          "IGNORE"
+        ],
+        "action_plan": {
+          "route": "browser",
+          "action": "browser_action"
+        },
+        "result": "do",
+        "proof": [
+          "memory_write",
+          "memory_read_back",
+          "opt_out_started",
+          "engine_execution",
+          "capture_memory_status",
+          "card_record"
+        ]
+      },
+      {
+        "input_span": "refill Maya's inhaler before the pharmacy closes",
+        "chosen_mode": "CLARIFY_FIRST",
+        "why": "needs one confirmation before acting",
+        "rejected_modes": [
+          "AUTO_DO",
+          "AUTO_DO_WITH_OPT_OUT",
+          "PREPARE_THEN_STOP",
+          "REMEMBER_ONLY",
+          "IGNORE"
+        ],
+        "action_plan": {
+          "route": "api",
+          "action": "execute_owner_task"
+        },
+        "result": "ask",
+        "proof": [
+          "memory_write",
+          "memory_read_back",
+          "engine_execution",
+          "card_record"
+        ]
+      },
+      {
+        "input_span": "Drop the rent check off, it's $1,450",
+        "chosen_mode": "PREPARE_THEN_STOP",
+        "why": "money/checkout is the true irreversible boundary \u2014 prepared, stopped",
+        "rejected_modes": [
+          "AUTO_DO",
+          "AUTO_DO_WITH_OPT_OUT",
+          "CLARIFY_FIRST",
+          "REMEMBER_ONLY",
+          "IGNORE"
+        ],
+        "action_plan": {
+          "route": "browser",
+          "action": "prepare_purchase_path_without_payment"
+        },
+        "result": "blocked",
+        "proof": [
+          "memory_write",
+          "memory_read_back",
+          "card_record"
+        ]
+      }
+    ]
+  }
+}

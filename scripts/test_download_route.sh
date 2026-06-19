@@ -77,8 +77,14 @@ if [ -d "$REPO/macapp/dist/Anticipy.app" ] && [ -f "$REPO/macapp/dist/Anticipy.a
   grep -q 'Anticipy.app/Contents/MacOS/Anticipy' /tmp/anticipy_dl_listing.txt || { echo "FAIL: zip missing the app executable"; cat /tmp/anticipy_dl_listing.txt; exit 1; }
   echo "PASS download_route: /api/download/anticipy-execute serves the real unsigned dev .app.zip (no 404, no fake binary)"
 else
-  # No bundle built -> honest 200 text explanation, never a 404 or fake binary.
-  grep -qi '^content-type: *text/plain' "$HDR" || { echo "FAIL: expected text/plain honest fallback"; cat "$HDR"; exit 1; }
-  grep -qi 'developer preview' "$BODY" || { echo "FAIL: fallback must explain developer-preview status"; cat "$BODY"; exit 1; }
-  echo "PASS download_route: /api/download/anticipy-execute returns honest 200 preview notice (no bundle built; no 404)"
+  # No bundle built -> honest 200, rendered as a PREMIUM HTML page (charcoal/cream/DM Serif),
+  # never a 404, never a fake binary, and never dev-console noise (no bash, no ports, no
+  # "developer preview" jargon). The message stays in Donna's voice and gives a human a way
+  # to reach a human.
+  grep -qi '^content-type: *text/html' "$HDR" || { echo "FAIL: expected text/html premium fallback"; cat "$HDR"; exit 1; }
+  grep -qi 'almost ready\|on the way' "$BODY" || { echo "FAIL: fallback must say it's coming, in human copy"; cat "$BODY"; exit 1; }
+  if grep -qiE 'bash |:8787|:3000|build_app\.sh|developer preview' "$BODY"; then
+    echo "FAIL: fallback leaked dev-console noise (bash/ports/jargon) to a real user"; cat "$BODY"; exit 1
+  fi
+  echo "PASS download_route: /api/download/anticipy-execute returns premium HTML preview notice (no bundle; no 404; no jargon)"
 fi

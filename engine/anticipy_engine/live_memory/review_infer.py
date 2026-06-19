@@ -101,7 +101,20 @@ _VENT = re.compile(
     # "I lost it" (= misplaced an object → a real find/help task) is never swallowed.
     r"|\b(?:officially|finally|totally|completely|honestly|basically|nearly|almost) lost it\b"
     r"|\bso (?:fun|great|much fun)\b"
+    # "just thinking out loud / musing / riffing" — an explicit hypothetical-aloud frame, never a
+    # committed task ("just thinking out loud — send a message to the team saying I quit").
+    r"|\b(?:just |merely |simply )?thinking out loud\b|\bthinking aloud\b|\bjust (?:musing|riffing|venting)\b"
     r"|\bmove to a beach\b|\bwin the lottery\b|\bquit my job\b",
+    re.I,
+)
+# A RETRACTION / self-cancel of a just-stated task ("schedule it ... scratch that", "book it, no —
+# hold off", "... we might cancel"). DISTINCT from the cart/draft BOUND "don't buy/send" (which
+# is_vent_shape deliberately KEEPS as a no-purchase bound on a prep card): this lists ONLY the
+# unambiguous cancel phrases, so a prep task's "don't send it" survives while a real retraction
+# silences the task. Ambiguous "hold on" (filler vs cancel) is deliberately excluded.
+_RETRACTION = re.compile(
+    r"\b(?:never ?mind|scratch that|forget it|hold off|on second thought|"
+    r"nix that|cancel that|disregard that|belay that|we might cancel|might just cancel)\b",
     re.I,
 )
 # A trailing self-cancelling hedge ("... probably.", "we'll see") makes it a non-plan. A
@@ -180,7 +193,8 @@ def is_vent_shape(text: str) -> bool:
     if not raw:
         return False
     return bool(_VENT.search(raw) or _LAUGH_HEDGE_VENT.search(raw)
-                or _HYPERBOLE.search(raw) or _DESPAIR.search(raw))
+                or _HYPERBOLE.search(raw) or _DESPAIR.search(raw)
+                or _RETRACTION.search(raw))
 
 
 def is_vent(text: str) -> bool:

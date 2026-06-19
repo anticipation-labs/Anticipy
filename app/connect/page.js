@@ -213,9 +213,9 @@ function OauthConnect({ link, oauthState, onConnect, onRecheck }) {
         const connected = status === "connected";
         const waiting = status === "launching" || status === "polling";
         return (
-          <div key={acct.key} className="control-row" style={{ gap: 12, justifyContent: "flex-start" }}>
+          <div key={acct.key} className="control-row" style={{ gap: 16, justifyContent: "flex-start" }}>
             <span className="row-source" style={{ minWidth: 0 }}>
-              {humanCopy(acct.name) || "An account"}
+              {(humanCopy(acct.name) || "An account").replace(/^./, (s) => s.toUpperCase())}
               {connected ? " — connected." : null}
             </span>
             {!connected ? (
@@ -226,7 +226,7 @@ function OauthConnect({ link, oauthState, onConnect, onRecheck }) {
                 disabled={waiting}
                 style={{ width: "fit-content" }}
               >
-                {status === "launching" ? "Opening…" : status === "polling" ? "Waiting for your approval" : "Connect"}
+                {status === "launching" ? "Opening…" : status === "polling" ? "Waiting for you to approve it" : "Connect"}
               </button>
             ) : null}
             {status === "polling" ? (
@@ -277,7 +277,7 @@ function CapabilityRow({ cap, oauthState, onConnect, onRecheck }) {
               marginTop: 4,
             }}
           >
-            {link.label}
+            {link.label}{link.external ? <span aria-hidden style={{ marginLeft: 6, opacity: 0.7 }}>↗</span> : null}
           </a>
         ) : (
           <span className="row-source" style={{ marginTop: 4 }}>{link.label}</span>
@@ -499,7 +499,7 @@ export default function ConnectPage() {
 
         {error && (
           <div className="block settle">
-            <p className="error">{error}</p>
+            <p className="error">{humanCopy(error)}</p>
             <button type="button" onClick={load} className="secondary" style={{ width: "fit-content" }}>
               Try again
             </button>
@@ -540,7 +540,7 @@ export default function ConnectPage() {
             >
               {knowBusy ? "Getting to know you" : knowYou ? "Look again" : "Get to know me"}
             </button>
-            {knowError ? <p className="error" style={{ marginTop: 16 }}>{knowError}</p> : null}
+            {knowError ? <p className="error" style={{ marginTop: 16 }}>{humanCopy(knowError)}</p> : null}
             {knowBusy && !knowYou ? (
               <div className="orb-wrap settle" style={{ marginTop: 16 }}>
                 <div className="orb" />

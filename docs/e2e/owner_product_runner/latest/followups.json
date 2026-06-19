@@ -1,0 +1,1277 @@
+{
+  "loops": [
+    {
+      "id": "374792bd5b2242ce9da969f078270fca",
+      "kind": "open_loop",
+      "text": "refill Maya's inhaler before the pharmacy closes",
+      "fields": {
+        "owner_card_id": "3dd05bea63a64b89a44d4026c6b49bec",
+        "owner_card_dedupe_key": "95f22e932fce439f9b46",
+        "source": "transcript",
+        "line_no": 6,
+        "source_text": "refill Maya's inhaler before the pharmacy closes",
+        "disposition": "ask",
+        "route": "api",
+        "action": "execute_owner_task",
+        "args": {
+          "task_text": "refill Maya's inhaler before the pharmacy closes"
+        },
+        "reason": "cannot confirm safe -> fail-safe ask",
+        "title": "Owner task: refill Maya's inhaler before the pharmacy closes",
+        "owner_card_state": "waiting"
+      },
+      "people": [],
+      "timestamp": 1781828451.60082,
+      "updated_at": 1781828451.766829,
+      "provenance": "owner:transcript",
+      "confidence": 0.8,
+      "importance": 0.85,
+      "status": "waiting"
+    },
+    {
+      "id": "fd40302be375461cbbbc6f9385ef3213",
+      "kind": "open_loop",
+      "text": "pull up Jarvis standing desk",
+      "fields": {
+        "owner_card_id": "4b0f9662a38746d6bd995068cfaf970d",
+        "owner_card_dedupe_key": "e8fa66164fa06440c339",
+        "source": "transcript",
+        "line_no": 4,
+        "source_text": "pull up Jarvis standing desk",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "pull up Jarvis standing desk"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: pull up Jarvis standing desk",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781828449.129133,
+      "updated_at": 1781828449.232079,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "315120050be2476984593cfaaf985375",
+      "kind": "open_loop",
+      "text": "get Sam the revised deck by Friday",
+      "fields": {
+        "owner_card_id": "160e8d94c0404cde983d55ecb6927c9e",
+        "owner_card_dedupe_key": "830fd9ec87465ea27f1d",
+        "source": "transcript",
+        "line_no": 2,
+        "source_text": "get Sam the revised deck by Friday",
+        "disposition": "ask",
+        "route": "api",
+        "action": "execute_owner_task",
+        "args": {
+          "task_text": "get Sam the revised deck by Friday"
+        },
+        "reason": "cannot confirm safe -> fail-safe ask",
+        "title": "Owner task: get Sam the revised deck by Friday",
+        "deduped_by_capture_loop": "3ab0fc8198ff482bbddfe6b8841e0623",
+        "capture_key": "get sam the revised deck by friday",
+        "fired_at": 1781828449.03899,
+        "owner_card_state": "waiting"
+      },
+      "people": [],
+      "timestamp": 1781828449.0390441,
+      "updated_at": 1781828449.114954,
+      "provenance": "owner:transcript",
+      "confidence": 0.8,
+      "importance": 0.85,
+      "status": "waiting"
+    },
+    {
+      "id": "74c9542cc31b476c88fd17669653b150",
+      "kind": "open_loop",
+      "text": "Remind me to call the dentist at 3pm tomorrow.",
+      "fields": {
+        "task": "Remind me to call the dentist at 3pm tomorrow.",
+        "due": "at 3pm",
+        "due_ts": 1781906400,
+        "remind_ts": 1781905500,
+        "capture_key": "remind me to call the dentist at 3pm tomorrow.",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "10807a7931d947639391940503117362"
+      },
+      "people": [
+        "dentist"
+      ],
+      "timestamp": 1781828347.168711,
+      "updated_at": 1781828347.320409,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "7dde497b7e9f4b5398e5e8f02caa28e1",
+      "kind": "open_loop",
+      "text": "Find me a standing desk under $300 on Amazon and put it in the cart, do not check out.",
+      "fields": {
+        "owner_card_id": "671cb980a2c94525b487e0e7fb6daa15",
+        "owner_card_dedupe_key": "62d71a2e5c1ce02fb8b3",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "Find me a standing desk under $300 on Amazon and put it in the cart, do not check out.",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "Find me a standing desk under $300 on Amazon and put it in the cart, do not check out."
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: Find me a standing desk under $300 on Amazon and put it in the cart, do not chec",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781827290.810433,
+      "updated_at": 1781827290.9060218,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "f83adb6da359411189c8171e610f042c",
+      "kind": "open_loop",
+      "text": "Don't forget the parent-teacher conference Thursday at 4pm.",
+      "fields": {
+        "task": "Don't forget the parent-teacher conference Thursday at 4pm.",
+        "due": "Thursday",
+        "due_ts": 1781823600,
+        "remind_ts": 1781822700,
+        "capture_key": "don't forget the parent-teacher conference thursday at 4pm.",
+        "fired_at": 1781822717.896986
+      },
+      "people": [],
+      "timestamp": 1781448946.308782,
+      "updated_at": 1781822719.7908008,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "35d36406131e4bbe8e626ee3a9dae42c",
+      "kind": "open_loop",
+      "text": "remind me to pick up from school at 3 today",
+      "fields": {
+        "task": "remind me to pick up from school at 3 today",
+        "due": "at 3 ",
+        "due_ts": 1781820000,
+        "remind_ts": 1781819100,
+        "capture_key": "remind me to pick up from school at 3 today",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "7ad6bb9899994c2e97609fc038083f42",
+        "fired_at": 1781819127.079395
+      },
+      "people": [],
+      "timestamp": 1781747417.340309,
+      "updated_at": 1781819133.741566,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "179dec6999ca429e8192499528be6e65",
+      "kind": "open_loop",
+      "text": "remind me to pick up from school today at 3",
+      "fields": {
+        "task": "remind me to pick up from school today at 3",
+        "due": "today",
+        "due_ts": 1781820000,
+        "remind_ts": 1781819100,
+        "capture_key": "remind me to pick up from school today at 3",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "5f0bdee6118048df890adaae78c33f5e",
+        "fired_at": 1781819127.079395
+      },
+      "people": [],
+      "timestamp": 1781747319.040956,
+      "updated_at": 1781819130.8553998,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "1e7ec9d8686f4984a5ffc05103ec97a3",
+      "kind": "open_loop",
+      "text": "Reminded user to call mom at 3pm tomorrow.",
+      "fields": {
+        "task": "Reminded user to call mom at 3pm tomorrow.",
+        "due": "at 3pm",
+        "due_ts": 1781820000,
+        "remind_ts": 1781819100,
+        "capture_key": "reminded user to call mom at 3pm tomorrow.",
+        "fired_at": 1781819127.079395
+      },
+      "people": [
+        "mom"
+      ],
+      "timestamp": 1781717000.6401238,
+      "updated_at": 1781819129.195721,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "f76f3cbbc7a647d7a861757118cd67dd",
+      "kind": "open_loop",
+      "text": "Connect Gmail for Owner Action Engine",
+      "fields": {
+        "source": "first_run",
+        "kind": "app_connection",
+        "name": "Gmail",
+        "status": "needs_auth",
+        "route": "api",
+        "identifier": "gmail.compose",
+        "notes": "",
+        "disposition": "blocked",
+        "action": "connect_account",
+        "onboarding_key": "owner_onboarding:app_connection:gmail.compose"
+      },
+      "people": [],
+      "timestamp": 1781746026.98058,
+      "updated_at": 1781817797.3879051,
+      "provenance": "owner:first_run",
+      "confidence": 0.95,
+      "importance": 0.9,
+      "status": "waiting"
+    },
+    {
+      "id": "a1fd92f0f0104b8b9882d5f6b732e1c9",
+      "kind": "open_loop",
+      "text": "Connect Google Calendar for Owner Action Engine",
+      "fields": {
+        "source": "first_run",
+        "kind": "app_connection",
+        "name": "Google Calendar",
+        "status": "needs_auth",
+        "route": "api",
+        "identifier": "googlecalendar",
+        "notes": "",
+        "disposition": "blocked",
+        "action": "connect_account",
+        "onboarding_key": "owner_onboarding:app_connection:googlecalendar"
+      },
+      "people": [],
+      "timestamp": 1781746026.897954,
+      "updated_at": 1781817797.1294742,
+      "provenance": "owner:first_run",
+      "confidence": 0.95,
+      "importance": 0.9,
+      "status": "waiting"
+    },
+    {
+      "id": "dfbe23d6d2d24095868f4cfe64e5f0d3",
+      "kind": "open_loop",
+      "text": "make sure the deck lands",
+      "fields": {
+        "owner_card_id": "17dcfb0115424ce2afcc925e9753d0eb",
+        "owner_card_dedupe_key": "34e18347d0b0524f8ceb",
+        "source": "test",
+        "line_no": 2,
+        "source_text": "make sure the deck lands",
+        "disposition": "ask",
+        "route": "api",
+        "action": "execute_owner_task",
+        "args": {
+          "task_text": "make sure the deck lands"
+        },
+        "reason": "planned step 'read_context' requires approval before acting",
+        "title": "Owner task: make sure the deck lands",
+        "deduped_by_capture_loop": "330d66ab7b0b44399b265ce60b0fbaf0",
+        "capture_key": "make sure the deck lands",
+        "fired_at": 1781816159.571565,
+        "owner_card_state": "waiting"
+      },
+      "people": [],
+      "timestamp": 1781816159.5716321,
+      "updated_at": 1781816159.681965,
+      "provenance": "owner:test",
+      "confidence": 0.8,
+      "importance": 0.85,
+      "status": "waiting"
+    },
+    {
+      "id": "03ff10cbcd794b91922b6088fb342681",
+      "kind": "open_loop",
+      "text": "send Priya the deck by Friday",
+      "fields": {
+        "owner_card_id": "56a1e57138f2492eb25a176137d97b56",
+        "owner_card_dedupe_key": "59523c214e6d8fc29369",
+        "source": "test",
+        "line_no": 1,
+        "source_text": "send Priya the deck by Friday",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "draft_or_confirm_message",
+        "args": {
+          "person": "Priya",
+          "task_text": "send Priya the deck by Friday"
+        },
+        "reason": "send to a real person; memory low-confidence on recipient -> fail-safe ask",
+        "title": "Prepare message for Priya",
+        "deduped_by_capture_loop": "f920b7a6be324936856e1700f423eee6",
+        "capture_key": "send priya the deck by friday",
+        "fired_at": 1781816154.936995,
+        "owner_card_state": "waiting"
+      },
+      "people": [],
+      "timestamp": 1781816154.9370399,
+      "updated_at": 1781816155.0169091,
+      "provenance": "owner:test",
+      "confidence": 0.81,
+      "importance": 0.85,
+      "status": "waiting"
+    },
+    {
+      "id": "d44cf6fa43804157a00e7f27e9b3d176",
+      "kind": "open_loop",
+      "text": "Connect LinkedIn for Owner Action Engine",
+      "fields": {
+        "source": "chrome_scrape",
+        "kind": "app_connection",
+        "name": "LinkedIn",
+        "status": "needs_auth",
+        "route": "browser",
+        "identifier": "",
+        "notes": "discovered logged-in via Chrome scan; https://www.linkedin.com/feed/",
+        "disposition": "blocked",
+        "action": "connect_account",
+        "onboarding_key": "owner_onboarding:app_connection:linkedin"
+      },
+      "people": [],
+      "timestamp": 1781808604.630666,
+      "updated_at": 1781808604.630666,
+      "provenance": "owner:chrome_scrape",
+      "confidence": 0.95,
+      "importance": 0.9,
+      "status": "waiting"
+    },
+    {
+      "id": "e1252baee6864ee3ace093f949e5430f",
+      "kind": "open_loop",
+      "text": "Connect Google Drive for Owner Action Engine",
+      "fields": {
+        "source": "chrome_scrape",
+        "kind": "app_connection",
+        "name": "Google Drive",
+        "status": "needs_auth",
+        "route": "api",
+        "identifier": "",
+        "notes": "discovered logged-in via Chrome scan; https://drive.google.com/",
+        "disposition": "blocked",
+        "action": "connect_account",
+        "onboarding_key": "owner_onboarding:app_connection:google drive"
+      },
+      "people": [],
+      "timestamp": 1781808604.529848,
+      "updated_at": 1781808604.529849,
+      "provenance": "owner:chrome_scrape",
+      "confidence": 0.95,
+      "importance": 0.9,
+      "status": "waiting"
+    },
+    {
+      "id": "2fc45f8721c74ac7968847a9d035e35f",
+      "kind": "open_loop",
+      "text": "Fine, add 'cry in the parking lot' to my calendar.",
+      "fields": {
+        "owner_card_id": "e309a39fd8444a81990ad3a9b48a5e40",
+        "owner_card_dedupe_key": "5fd542d3cb4515b4dd09",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "Fine, add 'cry in the parking lot' to my calendar.",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "Fine, add 'cry in the parking lot' to my calendar."
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: Fine, add 'cry in the parking lot' to my calendar.",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781798732.9895859,
+      "updated_at": 1781798733.049999,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "e3235cb3743e42f38978c3e0032a1484",
+      "kind": "open_loop",
+      "text": "Remind me to never agree to a 7am meeting again, lol.",
+      "fields": {
+        "owner_card_id": "0a7c04b713e64ec2b068677d4f276c2e",
+        "owner_card_dedupe_key": "392ab89f6b47f50372bf",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "Remind me to never agree to a 7am meeting again, lol.",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "Remind me to never agree to a 7am meeting again, lol."
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: Remind me to never agree to a 7am meeting again, lol.",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781798717.6585422,
+      "updated_at": 1781798717.751314,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "8484805a42384ee6afe59a1ee0ba3b6a",
+      "kind": "open_loop",
+      "text": "set up the second-round interview with Priya for Thursday afternoon",
+      "fields": {
+        "task": "set up the second-round interview with Priya for Thursday afternoon",
+        "due": "Thursday",
+        "due_ts": 1781798400,
+        "remind_ts": 1781797500,
+        "capture_key": "set up the second-round interview with priya for thursday afternoon",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "23a2e29fb3f54272875ddf00fac7a6c0",
+        "fired_at": 1781797501.995116
+      },
+      "people": [
+        "Priya"
+      ],
+      "timestamp": 1781740913.236964,
+      "updated_at": 1781797505.5069172,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "ff0828f57125406e8a698fa8cd4bdce2",
+      "kind": "open_loop",
+      "text": "send the Q2 numbers to the board before Thursday's meeting",
+      "fields": {
+        "task": "send the Q2 numbers to the board before Thursday's meeting",
+        "due": "Thursday",
+        "due_ts": 1781798400,
+        "remind_ts": 1781797500,
+        "capture_key": "send the q2 numbers to the board before thursday's meeting",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "f12cc9302eb24ae598f606ec7cf876fc",
+        "fired_at": 1781797501.995116
+      },
+      "people": [],
+      "timestamp": 1781740909.25138,
+      "updated_at": 1781797504.0751739,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "7b7c581d012743e689a9ee3167fca5c4",
+      "kind": "open_loop",
+      "text": "Morning. Add the usual oat milk and eggs to the Instacart cart, just cart it though, don't check out, I'll review tonight.",
+      "fields": {
+        "task": "Morning. Add the usual oat milk and eggs to the Instacart cart, just cart it though, don't check out, I'll review tonight.",
+        "due": "tonight",
+        "due_ts": 1781751600,
+        "remind_ts": 1781750700,
+        "capture_key": "morning. add the usual oat milk and eggs to the instacart cart, just cart it though, don't check out, i'll review tonight.",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "6a3fa58df6b14773a822af3e37d29618",
+        "fired_at": 1781750717.2655349
+      },
+      "people": [
+        "Add",
+        "Instacart"
+      ],
+      "timestamp": 1781740975.7682712,
+      "updated_at": 1781750722.4018939,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "3db5a98e2368499db4692dd154596801",
+      "kind": "open_loop",
+      "text": "remind me tonight",
+      "fields": {
+        "task": "remind me tonight",
+        "due": "tonight",
+        "due_ts": 1781751600,
+        "remind_ts": 1781750700,
+        "capture_key": "remind me tonight",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "341e2a771a59497588310dfe726ce86c",
+        "fired_at": 1781750717.2655349
+      },
+      "people": [],
+      "timestamp": 1781740956.5958972,
+      "updated_at": 1781750720.9690108,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "f8a21fdb6cf54b78b5f9a48a14ef6a5e",
+      "kind": "open_loop",
+      "text": "take my meds at 8pm tonight",
+      "fields": {
+        "task": "take my meds at 8pm tonight",
+        "due": "at 8pm",
+        "due_ts": 1781751600,
+        "remind_ts": 1781750700,
+        "capture_key": "take my meds at 8pm tonight",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "a718d937bfa042d5841e32352672f330",
+        "fired_at": 1781750717.2655349
+      },
+      "people": [],
+      "timestamp": 1781740944.7555041,
+      "updated_at": 1781750718.9962602,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "waiting"
+    },
+    {
+      "id": "ab6705d8d0044a8eae58af1e22824ae8",
+      "kind": "open_loop",
+      "text": "Venmo my barber 65 dollars for the cut",
+      "fields": {
+        "owner_card_id": "7486d1c899e040d9abbfbe8dbf601322",
+        "owner_card_dedupe_key": "80299b93fc9c95960eb8",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "Venmo my barber 65 dollars for the cut",
+        "disposition": "blocked",
+        "route": "browser",
+        "action": "prepare_purchase_path_without_payment",
+        "args": {
+          "task_text": "Venmo my barber 65 dollars for the cut",
+          "payment_allowed": false
+        },
+        "reason": "money or checkout is a hard stop; prepare but do not pay",
+        "title": "Block money action",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747564.635017,
+      "updated_at": 1781747564.699868,
+      "provenance": "owner:transcript",
+      "confidence": 0.78,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "b1c11178c90d46068ab0f7393d79a8d9",
+      "kind": "open_loop",
+      "text": "Pay the $1,450 rent",
+      "fields": {
+        "task": "Pay the $1,450 rent",
+        "capture_key": "pay the $1,450 rent",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "7004e5f7519a4b5dbf2ad7170cdd85e3"
+      },
+      "people": [],
+      "timestamp": 1781747541.917551,
+      "updated_at": 1781747542.0120928,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "4416fc131214442eb3dd15f0828703f4",
+      "kind": "open_loop",
+      "text": "send the signed release to Priya Nair at Hutchins LLP",
+      "fields": {
+        "task": "send the signed release to Priya Nair at Hutchins LLP",
+        "capture_key": "send the signed release to priya nair at hutchins llp",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "894f00e30fec4ccbadf1b0c41960416c"
+      },
+      "people": [
+        "Priya",
+        "Nair",
+        "Hutchins"
+      ],
+      "timestamp": 1781747489.697262,
+      "updated_at": 1781747489.7904582,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "ad700b9d78324100912cf4d0e7db2102",
+      "kind": "open_loop",
+      "text": "pull up the Uplift V2 standing desk",
+      "fields": {
+        "owner_card_id": "ab20b463331346c68e2541b62f0bc2f1",
+        "owner_card_dedupe_key": "39ad4ae46332d285789a",
+        "source": "transcript",
+        "line_no": 2,
+        "source_text": "pull up the Uplift V2 standing desk",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "pull up the Uplift V2 standing desk"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: pull up the Uplift V2 standing desk",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747435.422174,
+      "updated_at": 1781747435.4798799,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "51b532a0b5d040f49226d6b24765e201",
+      "kind": "open_loop",
+      "text": "send the revised deck to Sam before Friday",
+      "fields": {
+        "task": "send the revised deck to Sam before Friday",
+        "due": "Friday",
+        "due_ts": 1781884800,
+        "remind_ts": 1781883900,
+        "capture_key": "send the revised deck to sam before friday",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "90eff0d5979f4a2c9c86c0b8fa5a2319"
+      },
+      "people": [
+        "Sam"
+      ],
+      "timestamp": 1781747417.661483,
+      "updated_at": 1781747418.243383,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "12be3ffcbe244adeb987020faa24a982",
+      "kind": "open_loop",
+      "text": "check on the status of the plant order",
+      "fields": {
+        "owner_card_id": "fce10c0f909e48e38ccf8e88ec4bde5b",
+        "owner_card_dedupe_key": "6c119d3448f483073de4",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "check on the status of the plant order",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "check on the status of the plant order"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: check on the status of the plant order",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747394.0342028,
+      "updated_at": 1781747394.0894048,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "b473144fe6db44b7a8fee0c9645f0e8c",
+      "kind": "open_loop",
+      "text": "settle the $4000 invoice from the contractor on their website",
+      "fields": {
+        "owner_card_id": "92cb5ef983914810b24abe3c6e18ca82",
+        "owner_card_dedupe_key": "6051af78fe46979d12a1",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "settle the $4000 invoice from the contractor on their website",
+        "disposition": "blocked",
+        "route": "browser",
+        "action": "prepare_purchase_path_without_payment",
+        "args": {
+          "task_text": "settle the $4000 invoice from the contractor on their website",
+          "payment_allowed": false
+        },
+        "reason": "money or checkout is a hard stop; prepare but do not pay",
+        "title": "Block money action",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747392.846727,
+      "updated_at": 1781747392.902122,
+      "provenance": "owner:transcript",
+      "confidence": 0.78,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "1cfa8f94a3fa4b998c58080e4327d454",
+      "kind": "open_loop",
+      "text": "send the privilege log to opposing counsel Frank Dello at Dello & Park",
+      "fields": {
+        "task": "send the privilege log to opposing counsel Frank Dello at Dello & Park",
+        "capture_key": "send the privilege log to opposing counsel frank dello at dello & park",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "a0af82a443114fa2a94b8e93a198c8be"
+      },
+      "people": [
+        "Frank",
+        "Dello",
+        "Park"
+      ],
+      "timestamp": 1781747387.537628,
+      "updated_at": 1781747387.7358809,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "52d10583902a4712ad4d11afe1f33dee",
+      "kind": "open_loop",
+      "text": "log a CRM note that the Pruitt matter retainer was paid in full, 12k, and flag the referral source from the Hollis client",
+      "fields": {
+        "owner_card_id": "e63d0df22ff646acad70a245608815aa",
+        "owner_card_dedupe_key": "a85b9de7f809233dfc7a",
+        "source": "transcript",
+        "line_no": 2,
+        "source_text": "log a CRM note that the Pruitt matter retainer was paid in full, 12k, and flag the referral source from the Hollis client",
+        "disposition": "blocked",
+        "route": "browser",
+        "action": "prepare_purchase_path_without_payment",
+        "args": {
+          "task_text": "log a CRM note that the Pruitt matter retainer was paid in full, 12k, and flag the referral source from the Hollis client",
+          "payment_allowed": false
+        },
+        "reason": "money or checkout is a hard stop; prepare but do not pay",
+        "title": "Block money action",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747387.6201441,
+      "updated_at": 1781747387.679177,
+      "provenance": "owner:transcript",
+      "confidence": 0.78,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "73392b88c8f74db4bcd8744cc2966040",
+      "kind": "open_loop",
+      "text": "send opposing-counsel docs as PDF, never Word",
+      "fields": {
+        "task": "send opposing-counsel docs as PDF, never Word",
+        "capture_key": "send opposing-counsel docs as pdf, never word",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "bb0c88756b824230adc6fffe7558c4b2"
+      },
+      "people": [
+        "Word"
+      ],
+      "timestamp": 1781747386.978545,
+      "updated_at": 1781747387.6082802,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "0f9191d3179247eda760d86c76f095ce",
+      "kind": "open_loop",
+      "text": "send the redlined settlement agreement to their lead counsel",
+      "fields": {
+        "task": "send the redlined settlement agreement to their lead counsel",
+        "capture_key": "send the redlined settlement agreement to their lead counsel",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "4e977f59e6ce4ddb9c6065a394ffc7ab"
+      },
+      "people": [],
+      "timestamp": 1781747383.431885,
+      "updated_at": 1781747383.631809,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "9344b30b0360428bba872fd60ccb7057",
+      "kind": "open_loop",
+      "text": "file the appellate brief by the 30th",
+      "fields": {
+        "owner_card_id": "fd4ffb1d099347b9ac4531002bf3c262",
+        "owner_card_dedupe_key": "30bc7f878fdd90aa16b0",
+        "source": "transcript",
+        "line_no": 2,
+        "source_text": "file the appellate brief by the 30th",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "file the appellate brief by the 30th"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: file the appellate brief by the 30th",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747383.5075,
+      "updated_at": 1781747383.573496,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "5efcad6a0d784ccea2a8349b8c57b919",
+      "kind": "open_loop",
+      "text": "log the Okafor client's flat-fee arrangement (10k flat) in the CRM",
+      "fields": {
+        "owner_card_id": "7edb3ecebb204e4a93282a828b08a179",
+        "owner_card_dedupe_key": "9d439a2f920ebf6c0abb",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "log the Okafor client's flat-fee arrangement (10k flat) in the CRM",
+        "disposition": "do",
+        "route": "api",
+        "action": "prepare_internal_note",
+        "args": {
+          "task_text": "log the Okafor client's flat-fee arrangement (10k flat) in the CRM",
+          "destination": "crm_or_record",
+          "binding": false
+        },
+        "reason": "internal note/record entry \u2014 reversible admin, not a payment",
+        "title": "Prepare internal note",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747383.4443378,
+      "updated_at": 1781747383.500407,
+      "provenance": "owner:transcript",
+      "confidence": 0.74,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "41d5ceb3168d4e028c871f8d258e5a8a",
+      "kind": "open_loop",
+      "text": "Send Priya Nair at Hutchins LLP the signed release",
+      "fields": {
+        "task": "Send Priya Nair at Hutchins LLP the signed release",
+        "capture_key": "send priya nair at hutchins llp the signed release",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "e12f7398238b4a48b9760935597ee8f4"
+      },
+      "people": [
+        "Priya",
+        "Nair",
+        "Hutchins"
+      ],
+      "timestamp": 1781747379.286741,
+      "updated_at": 1781747379.533371,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "10a6e0f887544d679282fbe4ab456b13",
+      "kind": "open_loop",
+      "text": "file the satisfaction of judgment with the court by the 25th",
+      "fields": {
+        "owner_card_id": "ac740b22c6804a008140f2a8a481a6e9",
+        "owner_card_dedupe_key": "af8eb13d758a01ab773a",
+        "source": "transcript",
+        "line_no": 3,
+        "source_text": "file the satisfaction of judgment with the court by the 25th",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "file the satisfaction of judgment with the court by the 25th"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: file the satisfaction of judgment with the court by the 25th",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747379.423664,
+      "updated_at": 1781747379.474607,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "1678da4ab4f7436e82ed7af6df92f37a",
+      "kind": "open_loop",
+      "text": "note in the CRM on Castellanos that the matter is settled and we're in disbursement",
+      "fields": {
+        "owner_card_id": "b87dbe0c04f94ffe883ead874ccc3eac",
+        "owner_card_dedupe_key": "b7092058740293bc67a2",
+        "source": "transcript",
+        "line_no": 2,
+        "source_text": "note in the CRM on Castellanos that the matter is settled and we're in disbursement",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "note in the CRM on Castellanos that the matter is settled and we're in disbursement"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: note in the CRM on Castellanos that the matter is settled and we're in disbursem",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747379.366227,
+      "updated_at": 1781747379.416589,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "6f26600224de41e4b27142a1630e9d90",
+      "kind": "open_loop",
+      "text": "wire the 80k from the trust account to the client by end of week",
+      "fields": {
+        "owner_card_id": "193f95f309cf48349a726865e2adc533",
+        "owner_card_dedupe_key": "899e2f4e439396ec38d3",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "wire the 80k from the trust account to the client by end of week",
+        "disposition": "blocked",
+        "route": "browser",
+        "action": "prepare_purchase_path_without_payment",
+        "args": {
+          "task_text": "wire the 80k from the trust account to the client by end of week",
+          "payment_allowed": false
+        },
+        "reason": "money or checkout is a hard stop; prepare but do not pay",
+        "title": "Block money action",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747379.300937,
+      "updated_at": 1781747379.358835,
+      "provenance": "owner:transcript",
+      "confidence": 0.78,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "418adb5f57704477adf93383b6665f77",
+      "kind": "open_loop",
+      "text": "order a replacement filter for the coffee machine from the office supply site \u2014 don't buy it",
+      "fields": {
+        "owner_card_id": "045115be677844fdbc3103cd13a331c1",
+        "owner_card_dedupe_key": "d6c395924c40fab070eb",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "order a replacement filter for the coffee machine from the office supply site \u2014 don't buy it",
+        "disposition": "do",
+        "route": "browser",
+        "action": "find_or_cart_without_purchase",
+        "args": {
+          "task_text": "order a replacement filter for the coffee machine from the office supply site \u2014 don't buy it",
+          "payment_allowed": false
+        },
+        "reason": "shopping/research request explicitly blocks purchase",
+        "title": "Resolve browser task",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747364.8423629,
+      "updated_at": 1781747364.908878,
+      "provenance": "owner:transcript",
+      "confidence": 0.76,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "40a56c1ff8cc484c8155709dd347ab05",
+      "kind": "open_loop",
+      "text": "send cousin fifty dollars over Zelle for the gas",
+      "fields": {
+        "task": "send cousin fifty dollars over Zelle for the gas",
+        "capture_key": "send cousin fifty dollars over zelle for the gas",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "08d4b391aeb84d0ebc367f30343714a6"
+      },
+      "people": [
+        "Zelle"
+      ],
+      "timestamp": 1781747345.341908,
+      "updated_at": 1781747345.692967,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "453dc84b0e9549fb8cc3e514c77c0b79",
+      "kind": "open_loop",
+      "text": "fetch the ergonomic workstation",
+      "fields": {
+        "owner_card_id": "d0c4d3706f0a4dd4af6c2fcbe1ba7342",
+        "owner_card_dedupe_key": "e33986b63dfb2bdefbb9",
+        "source": "transcript",
+        "line_no": 6,
+        "source_text": "fetch the ergonomic workstation",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "fetch the ergonomic workstation"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: fetch the ergonomic workstation",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747345.569052,
+      "updated_at": 1781747345.6254342,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "c46d7b0a831746c9978970c5e7bf4461",
+      "kind": "open_loop",
+      "text": "confirm the engagement memo is logged in Salesforce prior to the meeting",
+      "fields": {
+        "task": "confirm the engagement memo is logged in Salesforce prior to the meeting",
+        "capture_key": "confirm the engagement memo is logged in salesforce prior to the meeting",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "5121cb42f9884807a76e67f4fb50580f"
+      },
+      "people": [
+        "Salesforce"
+      ],
+      "timestamp": 1781747344.830297,
+      "updated_at": 1781747345.561244,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "0d1866109a464df0b1cc5fd620a51ec6",
+      "kind": "open_loop",
+      "text": "update slides for Samantha ahead of Friday",
+      "fields": {
+        "task": "update slides for Samantha ahead of Friday",
+        "due": "Friday",
+        "due_ts": 1781884800,
+        "remind_ts": 1781883900,
+        "capture_key": "update slides for samantha ahead of friday",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "e37be9e0208f4f6c849953750f61a800"
+      },
+      "people": [
+        "Samantha"
+      ],
+      "timestamp": 1781747344.379905,
+      "updated_at": 1781747345.491327,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "5b986b3d878545a88d15700851a8e330",
+      "kind": "open_loop",
+      "text": "ring up Amazon regarding the houseplant that showed up wilted",
+      "fields": {
+        "owner_card_id": "35907a9fca754144babf18736de8d33b",
+        "owner_card_dedupe_key": "1644ac845c292fbcec86",
+        "source": "transcript",
+        "line_no": 1,
+        "source_text": "ring up Amazon regarding the houseplant that showed up wilted",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "ring up Amazon regarding the houseplant that showed up wilted"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: ring up Amazon regarding the houseplant that showed up wilted",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747345.358172,
+      "updated_at": 1781747345.417124,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "57ecba9dd7464f38a2f1c556aabe4c18",
+      "kind": "open_loop",
+      "text": "Venmo my brother 200 bucks for the concert tickets",
+      "fields": {
+        "owner_card_id": "f7e548fcb3444900891890d59e8a2ba3",
+        "owner_card_dedupe_key": "65f4c298930a714e9e1f",
+        "source": "transcript",
+        "line_no": 7,
+        "source_text": "Venmo my brother 200 bucks for the concert tickets",
+        "disposition": "blocked",
+        "route": "browser",
+        "action": "prepare_purchase_path_without_payment",
+        "args": {
+          "task_text": "Venmo my brother 200 bucks for the concert tickets",
+          "payment_allowed": false
+        },
+        "reason": "money or checkout is a hard stop; prepare but do not pay",
+        "title": "Block money action",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747320.386734,
+      "updated_at": 1781747320.4385478,
+      "provenance": "owner:transcript",
+      "confidence": 0.78,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "0f2282a60128482981ca239978cb96eb",
+      "kind": "open_loop",
+      "text": "pull up the desk thing for the office",
+      "fields": {
+        "owner_card_id": "0961a209c1864213b0fe829c5858e70c",
+        "owner_card_dedupe_key": "c8aabd8fcff3a290b8d0",
+        "source": "transcript",
+        "line_no": 6,
+        "source_text": "pull up the desk thing for the office",
+        "disposition": "ask",
+        "route": "voice_text",
+        "action": "confirm_owner_task",
+        "args": {
+          "task_text": "pull up the desk thing for the office"
+        },
+        "reason": "real task voiced inside a vent \u2014 confirm before acting",
+        "title": "Confirm task: pull up the desk thing for the office",
+        "owner_card_state": "open"
+      },
+      "people": [],
+      "timestamp": 1781747320.2716212,
+      "updated_at": 1781747320.324558,
+      "provenance": "owner:transcript",
+      "confidence": 0.7,
+      "importance": 0.85,
+      "status": "open"
+    },
+    {
+      "id": "e6a5dccce57e42f78cc04555b3aca3fd",
+      "kind": "open_loop",
+      "text": "send Sam the revised deck before Friday",
+      "fields": {
+        "task": "send Sam the revised deck before Friday",
+        "due": "Friday",
+        "due_ts": 1781884800,
+        "remind_ts": 1781883900,
+        "capture_key": "send sam the revised deck before friday",
+        "owner_card_state": "open",
+        "resolved_by_owner_card_id": "e6e44b377d5d43e4a7dd11a072ade70f"
+      },
+      "people": [
+        "Sam"
+      ],
+      "timestamp": 1781747319.3563688,
+      "updated_at": 1781747320.263974,
+      "provenance": "stated",
+      "confidence": 1,
+      "importance": 0.5,
+      "status": "open"
+    },
+    {
+      "id": "31e4d55ed2fd43a1a1e97bf24e487c61",
+      "kind": "open_loop",
+      "text": "Call Amazon about the plant I ordered",
+      "fields": {
+        "owner_card_id": "a9bcdd0bc99642d2b91f9974f3d1515c",
+        "owner_card_dedupe_key": "34058498d0e0fb37f0be",
+        "source": "typed",
+        "line_no": 1,
+        "source_text": "Call Amazon about the plant I ordered",
+        "disposition": "ask",
+        "route": "api",
+        "action": "execute_owner_task",
+        "args": {
+          "task_text": "Call Amazon about the plant I ordered"
+        },
+        "reason": "cannot confirm safe -> fail-safe ask",
+        "title": "Owner task: Call Amazon about the plant I ordered",
+        "deduped_by_capture_loop": "c2cbb1eb3e8144a7a2c7a84c409848d0",
+        "capture_key": "call amazon about the plant i ordered",
+        "fired_at": 1781745516.956551,
+        "owner_card_state": "waiting"
+      },
+      "people": [],
+      "timestamp": 1781745516.956575,
+      "updated_at": 1781745517.021445,
+      "provenance": "owner:typed",
+      "confidence": 0.8,
+      "importance": 0.85,
+      "status": "waiting"
+    },
+    {
+      "id": "4653be7cd96e4c77ac521550d621c91c",
+      "kind": "open_loop",
+      "text": "sort out the refund",
+      "fields": {
+        "owner_card_id": "072cb7b0cefa49afa2378943b35b7484",
+        "owner_card_dedupe_key": "2143f5d3464ca31902fc",
+        "source": "typed",
+        "line_no": 2,
+        "source_text": "sort out the refund",
+        "disposition": "ask",
+        "route": "api",
+        "action": "execute_owner_task",
+        "args": {
+          "task_text": "sort out the refund"
+        },
+        "reason": "cannot confirm safe -> fail-safe ask",
+        "title": "Owner task: sort out the refund",
+        "owner_card_state": "waiting"
+      },
+      "people": [],
+      "timestamp": 1781745484.988297,
+      "updated_at": 1781745485.0554829,
+      "provenance": "owner:typed",
+      "confidence": 0.8,
+      "importance": 0.85,
+      "status": "waiting"
+    }
+  ],
+  "count": 179
+}

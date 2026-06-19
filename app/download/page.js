@@ -51,9 +51,11 @@ export default function DownloadPage() {
                 textAlign: "left",
               }}
             >
-              <strong style={{ color: "var(--cream)", fontWeight: 500 }}>Early preview.</strong> On
-              first open, your Mac will ask you to confirm it&apos;s okay — right-click the app, then
-              choose Open. A simpler one-click version is on the way.
+              <strong style={{ color: "var(--cream)", fontWeight: 500 }}>Early preview.</strong> After
+              it downloads, double-click the file to unzip it. The first time you open it, your Mac may
+              ask if you trust it — hold Control, click the app, and choose Open. After that, a normal
+              double-click works from anywhere — Downloads, Applications, or your Desktop. A one-click
+              version is on the way.
             </div>
           )}
         </div>

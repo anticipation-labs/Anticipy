@@ -243,6 +243,7 @@ def browse_act(
     max_steps: int = 16,
     timeout_s: int = _DEFAULT_TIMEOUT_S,
     cdp_url: Optional[str] = None,
+    open_web: bool = False,
 ) -> BrowseReadResult:
     """Run an ACTION task through the proven open-source agent (browser-use, vision on):
     it may click/type to complete the task (e.g. add-to-cart, fill a form to the review
@@ -251,7 +252,7 @@ def browse_act(
     (their real, logged-in session) instead of a throwaway browser. Same honest-by-construction
     result contract as browse_read."""
     return browse_read(task, url=url, structured=False, max_steps=max_steps,
-                       timeout_s=timeout_s, act=True, cdp_url=cdp_url)
+                       timeout_s=timeout_s, act=True, cdp_url=cdp_url, open_web=open_web)
 
 
 def browse_read(
@@ -263,6 +264,7 @@ def browse_read(
     timeout_s: int = _DEFAULT_TIMEOUT_S,
     act: bool = False,
     cdp_url: Optional[str] = None,
+    open_web: bool = False,
 ) -> BrowseReadResult:
     """Run a browser task through the open-source arm and return a proof-bearing result.
     Default is READ-ONLY; ``act=True`` enables the action agent (vision on, money/login
@@ -312,6 +314,10 @@ def browse_read(
         "max_steps": int(max_steps),
         "act": bool(act),
         "cdp_url": cdp_url,
+        # OPEN-WEB: let the agent navigate anywhere PUBLIC to finish the task (no single-domain
+        # wall) — the product reality is the user gives a task, not a site. SSRF (public-only) and
+        # the money/login/checkout hard-stops still apply; only the host-lock is lifted.
+        "open_web": bool(open_web),
     }
     cmd = [probe["bridge_python"], _RUNNER_PATH]
     # Pass through the creds the runner needs; the runner also reads .env.local.

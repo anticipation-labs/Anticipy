@@ -55,7 +55,8 @@ def _base(data_dir=None) -> Path:
 # request to the assistant ("Can you remind me to call mom at 3?") is untouched. Fails to silence.
 _INTERROGATIVE_ASIDE = re.compile(
     r"^\s*(did|didn'?t|do|does|doesn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|"
-    r"were|weren'?t|was|wasn'?t|are|aren'?t|is|isn'?t)\s+(you|we|they|he|she|it|u|your|the)\b",
+    r"were|weren'?t|was|wasn'?t|are|aren'?t|is|isn'?t)\s+"
+    r"(you|we|they|he|she|it|u|your|the|anyone|someone|anybody|somebody)\b",
     re.I)
 # A PAST/PERFECT completion-check aimed at the listener — "did you ...", "have you ...",
 # "didn't you ..." — anywhere in a question, so real-speech lead-ins ("hey did you ...?",
@@ -64,7 +65,8 @@ _INTERROGATIVE_ASIDE = re.compile(
 # fabricated timed reminder). Present-tense requests to the assistant ("can you remind me ...?")
 # do NOT match (no did/have/had), so they stay catchable.
 _QUESTION_TO_OTHER = re.compile(
-    r"\b(did|didn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|were|weren'?t|was|wasn'?t)\s+(you|u|ya)\b",
+    r"\b(did|didn'?t|have|haven'?t|has|hasn'?t|had|hadn'?t|were|weren'?t|was|wasn'?t)\s+"
+    r"(you|u|ya|anyone|someone|anybody|somebody)\b",
     re.I)
 # A QUESTION/REQUEST ADDRESSED TO A NAMED THIRD PARTY — "Jordan, can you pull the freight numbers?",
 # "Mom, could you grab milk?", "Sam can you take the on-call handoff?" — is THEIR task, never the owner's.
@@ -96,6 +98,27 @@ _DIRECT_ADDRESS_Q_NOCOMMA = re.compile(
     r"[A-Z][a-z'’.\-]+\s+(?:can|could|would|will|won'?t|do|are|is)\s+(?:you|u|ya)\b",
     # NOT re.I — the capital is the proper-name signal that stands in for the missing comma.
 )
+# Name-vocative + a PAST/PERFECT or copular interrogative aimed at that person ("Alex, did the client
+# call get rescheduled?", "Sarah, is the report done?", "Mom, have you eaten?") — a question ABOUT
+# something put to a named third party, which the present/future REQUEST form above doesn't catch. The
+# OWNER-INCLUSIVE guard (?! we|i|us) keeps "Frankly, can we move the meeting?" / "Honestly, do I need
+# this?" as the owner's, and an owner-imperative "Mom, remind me ..." has no interrogative aux here.
+_DAQ_OPENER_FILLER = (r"honestly|frankly|seriously|actually|basically|literally|truthfully|"
+                      r"realistically|obviously|clearly|apparently")
+_DIRECT_ADDRESS_Q_COMMA2 = re.compile(
+    r"^\s*(?!(?:" + _DAQ_FILLER + r"|" + _DAQ_OPENER_FILLER + r")\b)"
+    r"[a-z][a-z'’.\-]*,\s+(?:did|didn'?t|do|does|has|have|had|was|were|is|are|can|could|would|will|won'?t)\b"
+    r"(?!\s+(?:we|i|us)\b)",
+    re.I,
+)
+# A request-to-you that ENDS with a name vocative ("Could you remind me what time the flight lands,
+# James?") is that person's question, not the owner's. The trailing ", Name?" is the aside signal; a
+# bare "could you remind me ...?" (no trailing name) stays a real request to the assistant.
+_END_VOCATIVE_Q = re.compile(
+    # request-to-you (case-insensitive) ... , Capitalized-Name? (name stays case-SENSITIVE — the
+    # capital is the proper-name signal, so a trailing ", now?" / ", right?" does NOT match).
+    r"(?i:\b(?:can|could|would|will|won'?t)\s+(?:you|u|ya)\b).*,\s*[A-Z][a-z'’\-]{1,}\s*\??\s*$",
+)
 
 
 def _is_directed_question_to_named_person(text: str) -> bool:
@@ -104,7 +127,8 @@ def _is_directed_question_to_named_person(text: str) -> bool:
     task, not the owner's, so it must stay silent. A bare request to the assistant ("can you remind me
     ...?") has no name vocative and never matches."""
     t = (text or "").strip()
-    return bool(_DIRECT_ADDRESS_Q_COMMA.match(t)) or bool(_DIRECT_ADDRESS_Q_NOCOMMA.match(t))
+    return (bool(_DIRECT_ADDRESS_Q_COMMA.match(t)) or bool(_DIRECT_ADDRESS_Q_NOCOMMA.match(t))
+            or bool(_DIRECT_ADDRESS_Q_COMMA2.match(t)))
 
 
 # A vent-adjacent task survives the cardinal vent floor ONLY if the assistant can actually act on it:
@@ -126,8 +150,18 @@ _VENT_TASK_ACTIONABLE = re.compile(
 # reversible owner deliverables (prepare a draft / a cart, never auto-send/buy). Recognizing them
 # deterministically marks the line moat_task so it always surfaces as a confirm-first task, never lost.
 _DRAFT_PREP = re.compile(
-    r"\b(?:draft|compose|write\s*up|write|prepare|put\s*together|start)\b[^.;!?]{0,45}?"
+    r"\b(?:draft|compose|write\s*up|write|prepare|put\s*together|start|queue(?:\s*up)?)\b[^.;!?]{0,45}?"
     r"\b(?:email|e-mail|note|message|text|reply|letter|memo|response|draft|reminder|thank-?you)\b",
+    re.I)
+# READ-ONLY SAVE/CAPTURE — "save this article to read later", "bookmark the page", "save the recipe",
+# "add this link to my reading list". A reversible, side-effect-free capture (like a lookup); a frequent
+# silent drop. Tight: requires a save/bookmark/archive verb + a content/reference object or a save-later
+# phrase, so ordinary "save me a seat" / "save money" (no content object) does NOT match.
+_SAVE_CONTENT = re.compile(
+    r"\b(?:save|bookmark|archive|clip)\b[^.;!?]{0,45}?"
+    r"\b(?:article|link|page|video|post|recipe|thread|story|paper|pdf|read(?:ing)?\s*list|"
+    r"to\s+read|for\s+later|to\s+my\s+(?:list|library|reading)|bookmarks?)\b"
+    r"|\badd\b[^.;!?]{0,30}?\bto\s+(?:my\s+)?(?:reading\s*list|bookmarks?|saved|watch\s*list)\b",
     re.I)
 _CART_PREP = re.compile(
     r"\b(?:start|set\s*up|get|build|fill|prep|line\s*up|put\s*together)\s+(?:a|an|the)\s+cart\b"
@@ -165,6 +199,7 @@ _RH_WHEN = (r"(?:\s+(?:for|at|on|by|this|next|tonight|tomorrow|today|in|sunday|m
             r"thursday|friday|saturday|morning|afternoon|evening|night)[^,.;!?]{0,22}?)?")
 _REMINDER_OR_HOLD = re.compile(
     r"(?:\bremind me" + _RH_WHEN + r"\s+(?:to|that|about|of)\b|"        # remind me [Sunday night] to ...
+    r"\bpencil\s+in\b|\bpenciled\s+in\b|"                              # "pencil in the dentist next month"
     r"\b(?:set|add)\s+(?:a |an |myself a )?reminder" + _RH_WHEN + r"\s+(?:to|that|about|for)\b|"
     r"\breminder" + _RH_WHEN + r"\s+to\b|\bset (?:a |myself a )?reminder\b|"
     r"\b(?:do ?n'?t|do not) (?:let me )?forget\b|"                     # don't / do not (let me) forget
@@ -260,7 +295,8 @@ def _is_explicit_reversible_task(text: str) -> bool:
     the cardinal 'you keep dropping my tasks' failure. (Money is still blocked at the spine; genuine
     third-party questions are silenced upstream before this is reached.)"""
     t = text or ""
-    return _is_reminder_or_hold(t) or _is_draft_or_cart_prep(t) or bool(_LOOKUP.search(t))
+    return (_is_reminder_or_hold(t) or _is_draft_or_cart_prep(t) or bool(_LOOKUP.search(t))
+            or bool(_SAVE_CONTENT.search(t)))
 
 
 def _is_interrogative_aside(text: str) -> bool:
@@ -271,6 +307,7 @@ def _is_interrogative_aside(text: str) -> bool:
     # assistant ("can you remind me ...") never match (no name vocative / owner is beneficiary).
     t = (text or "").strip()
     return (bool(_INTERROGATIVE_ASIDE.match(t)) or bool(_QUESTION_TO_OTHER.search(t))
+            or bool(_END_VOCATIVE_Q.search(t))
             or _is_directed_question_to_named_person(t))
 
 
@@ -321,6 +358,33 @@ def _gmail_counterparty(item) -> str:
             if isinstance(addr, str) and addr.strip():
                 return addr.strip()
     return ""
+
+
+def _split_addr(raw):
+    """Split a 'Display Name <email>' (or a bare email) into (display, email_lower). Best-effort;
+    NEVER fabricates — returns ('', '') for anything without a usable address."""
+    if not isinstance(raw, str):
+        return "", ""
+    s = raw.strip()
+    m = re.search(r"<([^>]+)>", s)
+    if m:
+        email = m.group(1).strip().lower()
+        disp = s[: m.start()].strip().strip('"').strip()
+        return disp, email
+    if "@" in s:
+        return "", s.strip().lower()
+    return s.strip(), ""
+
+
+def _name_from_email(email: str) -> str:
+    """A human-ish name from an email local part ('jane.doe@x' -> 'Jane Doe'), falling back to the
+    raw email. Only title-cases what the owner can see and edit — invents no identity."""
+    if not isinstance(email, str) or "@" not in email:
+        return email or ""
+    local = email.split("@", 1)[0]
+    parts = [p for p in re.split(r"[._\-]+", local) if p]
+    pretty = " ".join(p.capitalize() for p in parts)
+    return pretty or email
 
 
 def _card_step_receipts(steps: list[dict]) -> list[dict]:
@@ -1457,7 +1521,26 @@ class ControlCore:
         back to the proven per-line path, BYTE-IDENTICAL to before. Generosity is safe: every emitted
         task still clears the spine's floors downstream (vent guard, money hard-stop, third-party silence)."""
         if self.gateway.provider != PROVIDER_OPENROUTER:
-            return observed
+            # Model unavailable (stub / the real 429 "starved brain" degraded mode): we can't split
+            # multi-task lines, but the deterministic THIRD-PARTY SILENCE floor MUST still hold — a
+            # question aimed at someone else ("Did you grab the dry cleaning on the way home?") is
+            # never the owner's task and must stay silent even when the model can't run. Without this,
+            # an aside reaches the spine, which (memory-state-dependent) can surface it as a lookup
+            # ASK on the /owner/ingest path — a cardinal-sin cold-start breach the safety eval caught.
+            # The live path already strips asides (extract_day filter + _expand_per_line floor); this
+            # makes the floor model-INDEPENDENT, exactly as the deterministic floors are meant to be.
+            kept = []
+            for l in observed:
+                if _is_interrogative_aside(l.text) or _is_directed_question_to_named_person(l.text):
+                    self.glassbox.log("aside_silenced_no_model", {"line": (l.text or "")[:140]})
+                    continue
+                # NOTE: do NOT force moat_task on reversible lines here — that routes them through the
+                # confirm-first rescue and DOWNGRADES spine AUTO_DO tasks (reminders/carts) into asks
+                # (over-caution + regression). Stub/no-model surfacing of spine-dropped reversibles
+                # (draft/save/cart) is a known degraded-mode gap; the proper fix is native recognition
+                # in owner_mode._card_for_line, not the heavier moat_task flag. Backlogged.
+                kept.append(l)
+            return kept
         if len(observed) >= 2:
             from ..proactive.extract import extract_day
             # Strip questions-to-others / interrogative asides from what the whole-day model SEES, so it
@@ -2424,19 +2507,24 @@ class ControlCore:
         # profile facts so the brain knows the user from day one (the North Star). Best-effort:
         # a read failure must never crash onboarding. Each fact traces to a real read — if the
         # reads come back thin, we invent NOTHING and say so verbatim (the cardinal-sin guard).
+        discovered_people: list = []
         try:
-            profile_facts = await self._read_onboarding_profile()
+            profile_facts, discovered_people = await self._read_onboarding_profile()
         except Exception as exc:  # noqa: BLE001 — onboarding must survive any read failure
             self.glassbox.log("onboard_scan_api_profile_error",
                               {"error": f"{type(exc).__name__}: {exc}"})
             profile_facts = []
+            discovered_people = []
         result["profile_facts"] = profile_facts
+        # People read straight from connected accounts, for the owner to confirm in the recap.
+        result["auto_discovered_people"] = discovered_people
         if not profile_facts:
             # Thin-data: surface the exact honest line. NOTHING was invented.
             result["profile_summary"] = "No facts assembled. Nothing was invented."
         self.glassbox.log("onboard_scan_api", {"connected": len(discovered),
                           "services": [d["service"] for d in discovered], "mode": self.api_hand.mode,
-                          "profile_facts": len(profile_facts)})
+                          "profile_facts": len(profile_facts),
+                          "discovered_people": len(discovered_people)})
         result["scan"] = "api"
         return result
 
@@ -2462,7 +2550,64 @@ class ControlCore:
         facts.extend(self._correspondent_profile_facts(contacts_value, email_value))
 
         written = [self._write_profile_fact(f) for f in facts]
-        return [w for w in written if w is not None]
+        # Read-derived PEOPLE the owner genuinely recurs with — surfaced for them to CONFIRM in
+        # the recap. We never auto-write a person to the mesh; the owner accepts/edits/deletes
+        # first (the "I invented nothing" rule applied to people, not just facts).
+        people = self._extract_discovered_people(cal_value, contacts_value, email_value)
+        return [w for w in written if w is not None], people
+
+    def _extract_discovered_people(self, cal_value, contacts_value, email_value) -> list:
+        """People the owner TRULY recurs with, read straight from already-connected accounts —
+        never fabricated. A person is surfaced only when they appear >= 2 times across real
+        calendar attendees and email counterparties (one shared meeting is not a relationship).
+        Deduped by email, most-frequent first, capped. Returned for the owner to confirm — nothing
+        is written to the per-person mesh until they say so."""
+        import collections
+        counts: "collections.Counter" = collections.Counter()
+        names: dict = {}
+        channels: dict = {}
+
+        def _note(email, disp):
+            email = (email or "").strip().lower()
+            if not email or "@" not in email:
+                return
+            counts[email] += 1
+            if disp and email not in names:
+                names[email] = disp
+            channels.setdefault(email, set()).add("email")
+
+        if isinstance(cal_value, dict):
+            for ev in (cal_value.get("events") or []):
+                if not isinstance(ev, dict):
+                    continue
+                for att in (ev.get("attendees") or []):
+                    if not isinstance(att, dict) or att.get("self"):
+                        continue
+                    _note(att.get("email"), (att.get("displayName") or "").strip())
+        for value in (contacts_value, email_value):
+            if not isinstance(value, dict):
+                continue
+            for items in _iter_message_lists(value):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    disp, email = _split_addr(_gmail_counterparty(item))
+                    _note(email, disp)
+
+        people: list = []
+        for email, n in counts.most_common():
+            if n < 2:
+                continue  # one contact event/thread is not a relationship — invent nothing
+            people.append({
+                "name": names.get(email) or _name_from_email(email),
+                "email": email,
+                "count": n,
+                "channels": sorted(channels.get(email, {"email"})),
+                "source": "api_scan",
+            })
+            if len(people) >= 8:
+                break
+        return people
 
     async def _onboarding_read_value(self, intent: str):
         """Run ONE real read via the live api_hand and return its artifact value, or None.

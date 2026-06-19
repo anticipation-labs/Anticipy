@@ -24,10 +24,7 @@ export async function POST(request) {
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       return Response.json(
-        {
-          error: "upload_too_large",
-          message: `Upload is too large (${file.size} bytes > ${MAX_UPLOAD_BYTES}).`,
-        },
+        { error: "upload_too_large", message: "That file is a bit big for me. Try a shorter one." },
         { status: 413 },
       );
     }
@@ -53,12 +50,9 @@ export async function POST(request) {
     const data = text ? JSON.parse(text) : {};
     return Response.json(data, { status: response.status });
   } catch (error) {
+    // §4.7: no engine URL/port, no raw error to the surface.
     return Response.json(
-      {
-        error: "upload_failed",
-        message: `Could not process upload through Anticipy Engine at ${ENGINE_URL}`,
-        detail: error instanceof Error ? error.message : String(error),
-      },
+      { error: "upload_failed", message: "I lost the thread for a moment. Try again." },
       { status: 503 },
     );
   } finally {

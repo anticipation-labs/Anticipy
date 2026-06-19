@@ -125,6 +125,23 @@ function cleanText(value) {
   return s;
 }
 
+// ---- copy guard for ERROR messages (§4.7 / §4.8) ----
+// A real person must never see a raw backend error, a codebase verb, an engine URL, or a
+// port. Known failures collapse to ONE calm Donna line; the wrong-key case gets its own.
+// Anything that still smells like machine noise is replaced wholesale; everything else is
+// passed through cleanText so a genuinely human backend message survives intact.
+const ERROR_HUMAN = [
+  [/owner unlock|that key|unlock failed|wrong key|invalid (?:key|token)/i, "That key didn't work. Try again."],
+];
+const MACHINE_SMELL = /\b(failed|engine|exception|traceback|undefined|null|fetch|unreachable|reach|owner)\b|127\.0\.0\.1|:\d{4}\b|https?:\/\//i;
+function humanizeError(value) {
+  const raw = cleanText(value);
+  if (!raw) return "";
+  for (const [re, say] of ERROR_HUMAN) if (re.test(raw)) return say;
+  if (MACHINE_SMELL.test(raw)) return "I lost the thread for a moment. Try again.";
+  return raw;
+}
+
 // A title-safe version of cleanText: caps an over-long / rambling string so it never
 // shows as a wall of run-on transcript. Cuts at the first sentence end, else first 8
 // words, with an ellipsis — but only when the line is genuinely too long.
@@ -629,6 +646,37 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const recognitionRef = useRef(null);
+
+  // Direct browser arm: type a web task, watch the open-source agent run it on a real site.
+  const [webTask, setWebTask] = useState("");
+  const [webUrl, setWebUrl] = useState("");
+  const [webBusy, setWebBusy] = useState(false);
+  const [webResult, setWebResult] = useState(null);
+  const [webError, setWebError] = useState("");
+
+  async function runWebTask() {
+    if (!webTask.trim() || webBusy) return;
+    setWebBusy(true);
+    setWebError("");
+    setWebResult(null);
+    try {
+      const res = await fetch("/api/browser/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ task: webTask.trim(), start_url: webUrl.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || data.error || data.answer || "I couldn't finish that on the web.");
+      }
+      setWebResult(data);
+    } catch (err) {
+      setWebError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWebBusy(false);
+    }
+  }
 
   const buckets = useMemo(() => {
     const next = { onit: [], ready: [], ask: [], blocked: [], done: [] };
@@ -1171,7 +1219,7 @@ export default function Home() {
   function startListening() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError("Speech recognition is not available in this browser.");
+      setError("I can't catch audio here — type or paste it instead.");
       return;
     }
     if (recognitionRef.current) {
@@ -1203,7 +1251,7 @@ export default function Home() {
       }
     };
     recognition.onerror = (event) => {
-      setError(`Listening hit a snag (${event.error || "unknown"}). You can also type it.`);
+      setError("Let me try that again. You can also type it.");
     };
     recognition.onend = () => {
       recognitionRef.current = null;
@@ -1218,7 +1266,7 @@ export default function Home() {
         <section className="gate-screen">
           <div className="gate orb-wrap">
             <div className="orb" />
-            <p className="orb-word">One moment</p>
+            <p className="orb-word">Getting ready…</p>
           </div>
         </section>
       </main>
@@ -1244,7 +1292,7 @@ export default function Home() {
             <button className="primary" disabled={accessBusy || !accessToken.trim()} type="submit">
               {accessBusy ? "One moment" : "Come in"}
             </button>
-            {accessError ? <div className="error">{accessError}</div> : null}
+            {accessError ? <div className="error">{humanizeError(accessError)}</div> : null}
           </form>
         </section>
       </main>
@@ -1273,8 +1321,13 @@ export default function Home() {
         </div>
 
         <div className="presence settle">
-          <span className={`pulse ${engine.ok ? "on" : ""}`} />
-          <span>{engine.ok ? "Listening" : "Resting for a moment"}</span>
+          {/* The orb's breath reflects the REAL state (§2.2's four ambient states): while I'm
+              working a day, an energetic green breath when you've told me to handle the reversible
+              ones (Acting), an amber breath when I'm only reading it back (Thinking); a calm green
+              breath when idle and waiting (Listening); a still dot when resting. Nothing is faked —
+              "Acting" shows only when execute-the-reversible-ones is on and a run is in flight. */}
+          <span className={`pulse ${busy ? (executeActions ? "acting" : "thinking") : engine.ok ? "on" : ""}`} />
+          <span>{busy ? (executeActions ? "Acting" : "Thinking") : engine.ok ? "Listening" : "Resting for a moment"}</span>
           {access.required ? (
             <button className="quiet-link" onClick={lockOwner} type="button">
               Step away
@@ -1329,17 +1382,28 @@ export default function Home() {
             spellCheck="true"
           />
 
-          <div className="control-row">
-            <input
-              className="file-input"
-              type="file"
-              accept=".txt,.md,.vtt,.srt,.json,.csv,.mp3,.m4a,.wav,.aac,.flac,.ogg"
-              onChange={loadFile}
-            />
-            <button className="secondary" type="button" onClick={startListening}>
-              {recognitionRef.current ? "Stop listening" : "Listen"}
-            </button>
-          </div>
+          {/* The control matches the chosen way to share: a styled file picker for upload,
+              the listen toggle for voice. Typing/pasting just use the box above — no raw
+              browser "Choose File" control, no second redundant Listen button. */}
+          {source === "upload" || source === "start_listening" ? (
+            <div className="control-row">
+              {source === "upload" ? (
+                <label className="file-pick">
+                  <input
+                    type="file"
+                    accept=".txt,.md,.vtt,.srt,.json,.csv,.mp3,.m4a,.wav,.aac,.flac,.ogg"
+                    onChange={loadFile}
+                  />
+                  {uploadedFile ? "Choose a different file" : "Choose a file"}
+                </label>
+              ) : null}
+              {source === "start_listening" ? (
+                <button className="secondary" type="button" onClick={startListening}>
+                  {recognitionRef.current ? "Stop listening" : "Start listening"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {uploadedFile ? (
             <div className="upload-note">
               <span>Ready</span>
@@ -1363,8 +1427,12 @@ export default function Home() {
               {busy ? "Reading" : "Read my day"}
             </button>
           </div>
-          {error ? <div className="error">{error}</div> : null}
+          {error ? <div className="error">{humanizeError(error)}</div> : null}
 
+          {/* Secondary power-user tools — hidden on first run so a newcomer lands on ONE
+              clean capture moment (R1.7); they appear once the day is underway. */}
+          {!isFirstRun ? (
+          <>
           <details className="fold">
             <summary>
               <span>What I know about you</span>
@@ -1432,7 +1500,7 @@ export default function Home() {
                 <span className="fold-result">Got it.</span>
               ) : null}
             </div>
-            {memoryError ? <div className="error">{memoryError}</div> : null}
+            {memoryError ? <div className="error">{humanizeError(memoryError)}</div> : null}
           </details>
 
           <details className="fold">
@@ -1461,12 +1529,54 @@ export default function Home() {
                 <span className="fold-result">Public pages only — no sign-in, nothing changed.</span>
               </div>
             </form>
-            {profileError ? <div className="error">{profileError}</div> : null}
+            {profileError ? <div className="error">{humanizeError(profileError)}</div> : null}
             {profileResult ? <ProfileView profile={profileResult} /> : null}
           </details>
+          </>
+          ) : null}
         </section>
 
-        {/* ---- what I caught (the digest) ---- */}
+        {/* ---- send me to the web: the open-source browser arm, on demand ---- */}
+        <section className="block">
+          <h2 className="block-title">Send me to the web</h2>
+          <p className="block-note">
+            Just tell me what you want — I&apos;ll figure out where to go, open a real browser, do it,
+            and report back. I never log in, spend, or check out.
+          </p>
+          <div className="stack">
+            <label className="field">
+              <span>What do you need?</span>
+              <input
+                value={webTask}
+                onChange={(e) => setWebTask(e.target.value)}
+                placeholder="e.g. find me a standing desk under $300"
+                onKeyDown={(e) => { if (e.key === "Enter") runWebTask(); }}
+                autoComplete="off"
+              />
+            </label>
+          </div>
+          <div className="control-row">
+            <button className="primary" type="button" onClick={runWebTask} disabled={webBusy || !webTask.trim()}>
+              {webBusy ? "On it…" : "Go"}
+            </button>
+          </div>
+          {webBusy ? (
+            <div className="orb-wrap settle" style={{ marginTop: 8 }}>
+              <div className="orb thinking" />
+              <p className="orb-word">Working in a real browser…</p>
+            </div>
+          ) : null}
+          {webError ? <div className="error">{humanizeError(webError)}</div> : null}
+          {webResult ? (
+            <div className="recap settle" style={{ marginTop: 8 }}>
+              <p className="recap-value">{cleanText(webResult.answer) || "Done."}</p>
+              {webResult.final_url ? <p className="row-source">{webResult.final_url}</p> : null}
+            </div>
+          ) : null}
+        </section>
+
+        {/* ---- what I caught (the digest) — only once there's a day to show (R1.7) ---- */}
+        {!isFirstRun ? (
         <section className="block">
           <div className="block-head">
             <h2 className="block-title">Here&apos;s what I caught</h2>
@@ -1492,6 +1602,7 @@ export default function Home() {
             <p className="glance">…and {handledHidden} more, all handled. Nothing there needs you.</p>
           ) : null}
         </section>
+        ) : null}
 
         {/* ---- On it — you can stop me (the autonomy law: reversible chores STARTED, not asked) ---- */}
         {buckets.onit.length ? (
@@ -1513,7 +1624,7 @@ export default function Home() {
           <section className="block">
             <h2 className="block-title">Waiting for your yes</h2>
             {waiting.length > 1 ? (
-              <p className="block-note">One thing wants your yes. The rest can wait.</p>
+              <p className="block-note">These are waiting for your yes. One gets the yes first.</p>
             ) : null}
             <div className="rows">
               {/* Only the lead row carries the amber accent; the rest render plain so a
@@ -1554,7 +1665,8 @@ export default function Home() {
           </section>
         ) : null}
 
-        {/* ---- still open (loops) ---- */}
+        {/* ---- still open (loops) — only once there's a day underway (R1.7) ---- */}
+        {!isFirstRun ? (
         <section className="block">
           <div className="block-head">
             <h2 className="block-title">Still open</h2>
@@ -1588,8 +1700,10 @@ export default function Home() {
             <p className="glance">…and {loopsHidden} more open, nothing urgent.</p>
           ) : null}
         </section>
+        ) : null}
 
         {/* ---- review: what you said you'd do ---- */}
+        {!isFirstRun ? (
         <section className="block">
           <h2 className="block-title">Things you said you&apos;d do</h2>
             <div className="rows">
@@ -1666,7 +1780,7 @@ export default function Home() {
                           Left it alone. {cleanText(res.reason) || "Sounded like a passing comment."}
                         </span>
                       )}
-                      {ar && ar.error ? <span className="row-why">{ar.error}</span> : null}
+                      {ar && ar.error ? <span className="row-why">{humanizeError(ar.error)}</span> : null}
                     </div>
                   ) : null}
                   {canPreview ? (
@@ -1706,14 +1820,16 @@ export default function Home() {
                       </p>
                     )
                   ) : null}
-                  {pr && pr.error ? <p className="row-why">{pr.error}</p> : null}
+                  {pr && pr.error ? <p className="row-why">{humanizeError(pr.error)}</p> : null}
                 </article>
                 );
               }) : <div className="empty">Nothing to look back on yet.</div>}
             </div>
         </section>
+        ) : null}
 
         {/* ---- the ledger: everything I did and heard ---- */}
+        {!isFirstRun ? (
         <section className="block">
           <h2 className="block-title">What I did and heard</h2>
           <div className="rows">
@@ -1724,8 +1840,11 @@ export default function Home() {
             )) : <div className="empty">Nothing logged yet.</div>}
           </div>
         </section>
+        ) : null}
 
-        <p className="close-line">That&apos;s everything. Nothing else needs you right now.</p>
+        {!isFirstRun ? (
+          <p className="close-line">That&apos;s everything. Nothing else needs you right now.</p>
+        ) : null}
       </div>
     </main>
   );

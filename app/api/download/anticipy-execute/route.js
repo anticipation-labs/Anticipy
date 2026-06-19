@@ -36,40 +36,49 @@ function bundleExists() {
   }
 }
 
-const PREVIEW_NOTICE = `Anticipy Execute — developer preview
-=====================================
-
-The desktop app bundle has not been built in this deployment yet, so there is
-nothing to download right now. This is an honest 200 (not a 404 and not a fake
-binary): the real app is built from source and is an UNSIGNED developer preview.
-
-To build it locally:
-
-  1. Build the macOS app (SwiftUI, no Xcode required — Command Line Tools are enough):
-       bash macapp/scripts/build_app.sh
-     This produces  macapp/dist/Anticipy.app
-
-  2. (Optional) Run the packaging helper to also build the web front-end:
-       bash scripts/package_app.sh
-
-  3. Re-request this URL. It will then serve  Anticipy.app.zip  (the unsigned
-     developer preview). Open it via right-click -> Open on first launch, since
-     it is not yet Apple-notarized.
-
-A signed, one-click public download ships once an Apple Developer ID is in place
-(Omar-gated: Apple enrollment + notarization). That step is never faked here.
-`;
+// A real person who hits a not-yet-packaged build must NEVER see bash, ports, or
+// monospace (R1.4 / §4.8). Serve the premium shell with one calm, human message and a
+// way to reach a human — never a developer to-do list. (The honest contract is unchanged:
+// we still never serve a 404 or a fake binary; we just say it in Donna's voice.)
+function noticePage(line) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Anticipy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root{--ink:#0C0C0C;--cream:#F5F0EB;--warm:#6B635B;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;min-height:100vh;background:var(--ink);color:var(--cream);
+    font-family:Inter,system-ui,sans-serif;line-height:1.6;}
+  main{min-height:100vh;display:grid;place-items:center;padding:48px 24px;}
+  .col{max-width:560px;width:100%;}
+  h1{font-family:"DM Serif Display",Georgia,serif;font-size:31px;line-height:1.2;margin:0 0 16px;}
+  p{color:var(--cream);font-size:16px;margin:0 0 16px;}
+  .sub{color:var(--warm);}
+  a{color:var(--cream);text-underline-offset:3px;}
+</style></head>
+<body><main><div class="col">
+  <h1>It&rsquo;s almost ready.</h1>
+  <p>${line}</p>
+  <p class="sub">Want it the moment it&rsquo;s ready? <a href="mailto:omarkebrahim@gmail.com?subject=Anticipy%20for%20Mac">Send a note</a> and you&rsquo;ll be on the next build.</p>
+</div></main></body></html>`;
+}
 
 export async function GET() {
   if (!bundleExists()) {
-    return new Response(PREVIEW_NOTICE, {
-      status: 200,
-      headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "cache-control": "no-store",
-        "x-anticipy-build": "developer-preview-pending-build",
+    return new Response(
+      noticePage("The Mac app isn&rsquo;t packaged on this server yet. A one-click version is on the way — nothing&rsquo;s broken on your end."),
+      {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "no-store",
+          "x-anticipy-build": "preview-pending-build",
+        },
       },
-    });
+    );
   }
 
   try {
@@ -85,19 +94,17 @@ export async function GET() {
         "x-anticipy-build": "developer-preview-unsigned",
       },
     });
-  } catch (error) {
-    // Packaging the existing bundle failed — surface it honestly (still not a 404
-    // for the button, and never a fabricated artifact).
+  } catch {
+    // Packaging the existing bundle failed — say so in Donna's voice, never a raw error
+    // or a build command (still not a 404, still never a fabricated artifact).
     return new Response(
-      `Could not package the developer-preview bundle: ${
-        error instanceof Error ? error.message : String(error)
-      }\n\nThe bundle exists at macapp/dist/Anticipy.app — rebuild with:\n  bash macapp/scripts/build_app.sh\n`,
+      noticePage("I hit a snag putting the download together. Try again in a moment."),
       {
         status: 500,
         headers: {
-          "content-type": "text/plain; charset=utf-8",
+          "content-type": "text/html; charset=utf-8",
           "cache-control": "no-store",
-          "x-anticipy-build": "developer-preview-package-error",
+          "x-anticipy-build": "preview-package-error",
         },
       },
     );

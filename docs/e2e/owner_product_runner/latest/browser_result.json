@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "answer": "I have found a standing desk on Amazon.com for under $300 USD (CAD 70.57). \nProduct Name: Amztabler Small Standing Desk Adjustable Height, Mobile Stand Up Desk with Wheels, 32 Inch Portable Rolling Desks Conference Room Tables for Walking Pad Treadmill White\nPrice: CAD 70.57 (approximately $51.50 USD at current exchange rates)\nStore: Amztabler LLC US\n\nI was unable to add the item to the cart as I reached the maximum number of steps before I could locate and click the 'Add to Cart' button.",
+  "steps": 18,
+  "final_url": "https://www.amazon.com/Standing-Adjustable-Rolling-Treadmill-Workstation/dp/B0FCYSFG1Y/ref=sr_1_14_so_DESK?crid=QKPB49B5MSXH&dib=eyJ2IjoiMSJ9.dYcudNPTPPFn7dkiJxPB2aUrBaGXThzY4P3Bd04UyFot4GPulWcyTFkMklX1zCItXz1jicVha_Jj518mwVcfwUFQIgmTjNpxVrs7xJwBcSKdyaJsIoP54Ec9vCLhgvVPb6owk6qH2scUmcet5R2It2mkoSpldoG7VcXW5ludThelvMKJiCuBGgBaL6p94pTQco74AZd5jgzXDg25KkqlU36xyQFr4MgKzdFD2uIdCKpmDLmsTXYyTwzgvlkI7RnQmjMtrlhE8lqHZRfv5SaT8ZkNoD5J_RimD2GwgGp18NU.gyFl47HQS-kTy_0HlU1kwPMvTguhGBjwZXGax25-GYU&dib_tag=se&keywords=standing%2Bdesk&qid=1781828835&sprefix=standing%2Bdesk%2Caps%2C193&sr=8-14&th=1",
+  "actions": [
+    "navigate",
+    "click",
+    "click",
+    "click",
+    "click",
+    "click",
+    "navigate",
+    "click",
+    "input",
+    "click",
+    "scroll",
+    "scroll",
+    "scroll",
+    "click",
+    "go_back",
+    "click",
+    "scroll",
+    "scroll",
+    "scroll",
+    "search_page",
+    "done"
+  ],
+  "allowed_domains": null,
+  "error": null,
+  "agent": "browser-use"
+}

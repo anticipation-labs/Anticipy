@@ -1,0 +1,8 @@
+{
+  "proven": false,
+  "detail": "{\"created\": \"JobStatus.needs_human\", \"event_id\": null, \"read_back_seen\": false, \"deleted\": \"skipped\"}",
+  "created": "JobStatus.needs_human",
+  "event_id": null,
+  "read_back_seen": false,
+  "deleted": "skipped"
+}
