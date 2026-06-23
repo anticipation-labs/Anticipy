@@ -64,11 +64,11 @@
     },
     {
       "id": "G12",
-      "name": "MERGE: engine runs brain->browser->receipt autonomously (no agent by hand)",
+      "name": "MERGE: general lookup tasks aren't approvable asks (engine can't run them) \u2014 confirm-first",
       "status": "FAILED",
-      "detail": "ingest shapes do/browser card but execution stays null over 60s \u2014 _run_browser_and_confirm never fired from ingest",
+      "detail": "research_or_find_item card is do/browser but never registers in /pending; cart tasks DO. resolve->'unknown ask'. (auto-execute was the WRONG framing \u2014 confirm-first is correct)",
       "receipt": "receipts/merge1_ingest.json",
-      "unblock": "wire control_core ingest: for do/browser cards fire _run_browser_and_confirm(task,url,card_id) + write browser_receipt (seam exists control_core.py:1187)"
+      "unblock": "route research_or_find_item through _browser_action_ask like cart tasks (control_core ~2106 / _spine_card) so it's approvable -> YES -> _run_browser_and_confirm"
     },
     {
       "id": "G6",

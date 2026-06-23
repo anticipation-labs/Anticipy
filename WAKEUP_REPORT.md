@@ -1,4 +1,4 @@
-# Anticipy — Overnight Report (2026-06-23 14:35)
+# Anticipy — Overnight Report (2026-06-23 14:42)
 
 > Generated **from** the acceptance harness (`overnight/harness.py`), which calls your LIVE engine on
 > :8787 and real Chrome on CDP :9222. Every **PROVEN** row is backed by a real call whose raw output is
@@ -36,7 +36,7 @@ Chrome**. That is the part everyone kept rebuilding from scratch. It is here, gr
 ## ❌ FAILED — live system ran, assertion did not hold (shown, not hidden)
 | Gate | What happened | Receipt |
 |---|---|---|
-| G12 MERGE: engine runs brain->browser->receipt autonomously (no agent by hand) | ingest shapes do/browser card but execution stays null over 60s — _run_browser_and_confirm never fir | receipts/merge1_ingest.json |
+| G12 MERGE: general lookup tasks aren't approvable asks (engine can't run them) — confirm-first | research_or_find_item card is do/browser but never registers in /pending; cart tasks DO. resolve->'u | receipts/merge1_ingest.json |
 | G6 Gmail draft thread (real Chrome, parked before send) | status=None — draft not confirmed | receipts/g6_gmail_draft.json |
 
 ## Deep diagnosis: "act in my real Gmail" (the one I pushed hardest)

@@ -1,23 +1,31 @@
-# THE MERGE — the one wire that makes the system act on its own (gate G12)
+# THE MERGE — corrected diagnosis (gate G12)
 
-**Status:** RED (proven). The engine shapes a `do/browser` card from a messy day but never executes it.
+**My first framing was WRONG and I'm correcting it:** I said the engine should AUTO-execute browser
+tasks. That would break the confirm-first safety model (acting without a YES). The engine is *designed*
+confirm-first: ingest → texted/app ask → **YES** → `_run_browser_and_confirm` runs the browser → receipt.
+That design is correct. Do NOT auto-execute browser actions.
 
-**Exact gap:** `engine/anticipy_engine/core/control_core.py` → `_owner_ingest_inner`. A shaped
-`disposition="do", route="browser"` card (e.g. action `research_or_find_item`) falls through to the
-spine-decision path (~1429–1460): it sets `card.execution` to the verdict but does NOT fire the browser.
+**What actually works:** cart/shopping tasks register as approvable asks. Proof: ingest "put the water
+table in the cart" → a pending ask appears (`/pending`, category `browser`) → `/resolve {ask_id, approved:true}`
+fires the browser. The find_or_cart path calls `_browser_action_ask` (control_core.py ~1426), which registers
+`proactive.pending[ask_id]` with `browser_task`/`browser_url`. The resolve handler (~3168-3182) runs it on YES.
 
-**The seam already exists and is proven:** `_run_browser_and_confirm(task, url, card_id)` (control_core.py:1187)
-— the opt-out path already calls it correctly at 1130–1136 (async, texts before+after, lands a `browser_receipt`).
+**The real, narrow gap:** general LOOKUP/admin tasks shaped as `action="research_or_find_item"`
+(owner_mode.py:555) are returned as a `do/browser` card that is **never registered as a browser ask** — so
+they are a dead end: not auto-run (correct), but also not approvable (bug). Verified: ingest "look up the
+Vancouver Art Gallery hours" → card `disposition=do, action=research_or_find_item`, NOT in `/pending`,
+`/resolve` → "unknown ask".
 
-**The fix (single additive hook):** when a finalized card is `do` + `browser` + has a concrete `task_text`
-+ `browser_hand.mode == MODE_LIVE`, fire `_run_browser_and_confirm(task, self._web_start_url(task), card_id)`
-async and set `execution.goal_state="running"` — mirroring 1130–1136. Guard: never for vents (already
-filtered), never for `blocked`/money cards, never double-fire (dedupe on card_id like the opt-out pending).
+**The fix (confirm-first, safe, mirrors the working cart path):** in control_core `_owner_ingest_inner`
+(the do/browser branch ~2106-2118, or in `_spine_card` for research_or_find_item), route general
+`research_or_find_item` cards through `self._browser_action_ask(line, source)` exactly like cart tasks —
+so they register an approvable pending ask. Then ingest → approve (app button / SMS YES) → browser runs →
+`browser_receipt` on the card. No new execution path; reuse the proven one.
 
-**Verify:** `python3 overnight/harness.py` — G12 turns PROVEN when `/owner/ingest "look up Vancouver weather"`
-lands a `browser_receipt` on the card with no agent touching anything. The public weather task needs no login,
-so G12 is fully verifiable autonomously. (Operating the user's *logged-in* systems is the same wire pointed at
-logged-in doors — that's gated on login, not on this code.)
+**Verify (G12):** ingest a FRESH lookup task → assert it appears in `/pending` as an approvable ask →
+`/resolve approved:true` → poll the card for `goal_state=running/done` + `browser_receipt`. Public task,
+no login, fully autonomous to verify. (Operating the user's *logged-in* systems = same path at logged-in
+doors; gated on login, not this.)
 
-**Why not done unattended:** core ingest path; a misfire (acting on the wrong card class) is exactly the
-cardinal-sin risk. Close it with the harness watching and revert-on-red.
+**Why I didn't hand-patch it live:** core ingest path on a running engine, and the first framing was wrong —
+exactly why blind unattended hacking is the rabbit hole. Close it with the harness watching, revert-on-red.
