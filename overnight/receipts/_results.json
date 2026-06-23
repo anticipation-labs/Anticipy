@@ -1,7 +1,7 @@
 {
   "started": "2026-06-23T13:18:16",
   "summary": {
-    "PROVEN": 7,
+    "PROVEN": 8,
     "BLOCKED": 2,
     "FAILED": 1
   },
@@ -52,6 +52,14 @@
       "status": "PROVEN",
       "detail": "YouTube search+read, 5 human-like actions, correct answer; final_url=https://www.youtube.com/results?search_query=lofi+",
       "receipt": "receipts/g10_adaptive_youtube.json",
+      "unblock": null
+    },
+    {
+      "id": "G11",
+      "name": "Operate-and-park: fill a multi-field system, STOP at irreversible step (LIVE)",
+      "status": "PROVEN",
+      "detail": "filled 3 fields, did NOT submit; actions=['navigate', 'input', 'input', 'select_dropdown', 'done']",
+      "receipt": "receipts/g11_operate_and_park.json",
       "unblock": null
     },
     {
