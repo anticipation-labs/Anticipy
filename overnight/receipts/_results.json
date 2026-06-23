@@ -3,7 +3,7 @@
   "summary": {
     "PROVEN": 8,
     "BLOCKED": 2,
-    "FAILED": 1
+    "FAILED": 2
   },
   "results": [
     {
@@ -61,6 +61,14 @@
       "detail": "filled 3 fields, did NOT submit; actions=['navigate', 'input', 'input', 'select_dropdown', 'done']",
       "receipt": "receipts/g11_operate_and_park.json",
       "unblock": null
+    },
+    {
+      "id": "G12",
+      "name": "MERGE: engine runs brain->browser->receipt autonomously (no agent by hand)",
+      "status": "FAILED",
+      "detail": "ingest shapes do/browser card but execution stays null over 60s \u2014 _run_browser_and_confirm never fired from ingest",
+      "receipt": "receipts/merge1_ingest.json",
+      "unblock": "wire control_core ingest: for do/browser cards fire _run_browser_and_confirm(task,url,card_id) + write browser_receipt (seam exists control_core.py:1187)"
     },
     {
       "id": "G6",

@@ -250,6 +250,40 @@ def g10_adaptive_site():
     except Exception as e:
         record("G10", "Adaptability (never-seen site)", "FAILED", f"exception: {e}")
 
+# ----------------- G12 THE MERGE: engine itself runs brain->browser->receipt (no me)
+def g12_merge_autonomous_execution():
+    """The product, not the agent: ingest a browser-resolvable task and assert the ENGINE
+    autonomously drives the browser and lands a receipt on the card. Currently RED — the
+    ingest path shapes a do/browser card but never fires _run_browser_and_confirm. This is
+    the one wire the merge needs. Gate stays RED until the engine does it itself."""
+    try:
+        ing = post("/owner/ingest", {"text": "Look up the current weather in Vancouver on a weather site and note it for me."}, timeout=120)
+        cards = ing.get("cards", [])
+        card = next((c for c in cards if c.get("route") == "browser" and c.get("disposition") == "do"), None)
+        if not card:
+            record("G12", "MERGE: engine runs brain->browser->receipt autonomously", "FAILED",
+                   "no do/browser card produced"); return
+        cid = card["id"]
+        # poll the durable board for an execution receipt the ENGINE wrote (not me)
+        executed = False; detail = "execution stayed null"
+        for _ in range(6):
+            time.sleep(12)
+            board = get("/owner/cards", timeout=15)
+            cl = board.get("cards", board) if isinstance(board, dict) else board
+            cur = next((c for c in (cl or []) if c.get("id") == cid), None)
+            if cur:
+                ex = cur.get("execution")
+                proofs = [p.get("type") for p in (cur.get("proof") or [])]
+                if (isinstance(ex, dict) and ex.get("goal_state") in ("done", "running", "succeeded")) or "browser_receipt" in proofs:
+                    executed = True; detail = f"execution={json.dumps(ex)[:120]} proofs={proofs}"; break
+        rc = save("g12_merge.json", {"ingest": ing, "executed": executed, "detail": detail})
+        record("G12", "MERGE: engine runs brain->browser->receipt autonomously (no agent by hand)",
+               "PROVEN" if executed else "FAILED",
+               detail, rc,
+               unblock=None if executed else "wire control_core ingest: for do/browser cards, fire _run_browser_and_confirm(task,url,card_id) + write browser_receipt onto the card (seam already exists at control_core.py:1187)")
+    except Exception as e:
+        record("G12", "MERGE: engine autonomous execution", "FAILED", f"exception: {e}")
+
 # --------------------------------- G11 operate-and-park (the core safety mechanic)
 def g11_operate_and_park():
     try:
@@ -271,8 +305,8 @@ def g11_operate_and_park():
         record("G11", "Operate-and-park", "FAILED", f"exception: {e}")
 
 GATES = [g1_brain_spine, g2_vent_safety, g3_money_floor, g4_memory,
-         g5_browser_read, g10_adaptive_site, g11_operate_and_park, g6_gmail_draft,
-         g7_onboarding_scrape, g8_reminder_fire, g9_voice_sms]
+         g5_browser_read, g10_adaptive_site, g11_operate_and_park, g12_merge_autonomous_execution,
+         g6_gmail_draft, g7_onboarding_scrape, g8_reminder_fire, g9_voice_sms]
 
 def main():
     started = datetime.datetime.now().isoformat(timespec="seconds")
