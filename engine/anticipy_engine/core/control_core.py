@@ -1414,6 +1414,13 @@ class ControlCore:
             shaped.execution = {"decision": "act", "goal_id": None, "ask_id": None,
                                 "goal_state": "open", "internal_note": True}
             return shaped
+        if shaped is not None and shaped.action == "research_or_find_item":
+            # MERGE FIX (2026-06-23): a general web lookup/admin task ("look up the gallery hours",
+            # "find Nicki's email") is the confirm-first browser round-trip, exactly like an unresolved
+            # cart — register it as an approvable ask so YES (app button / SMS) runs the browser arm.
+            # Without this it dead-ended as a do/browser card that never executed (the merge gap).
+            # Money/vent are already handled above; this only routes genuine reversible lookups.
+            return self._browser_action_ask(line, source)
         if shaped is not None and shaped.action == "find_or_cart_without_purchase":
             # PREPARE WHEN CONFIDENT (Omar's law, 2026-06-16 decision): if memory/onboarding resolves
             # the exact item + store, auto-prepare the cart — it falls through to execute as a
@@ -1581,13 +1588,20 @@ class ControlCore:
             if not task or _is_directed_question_to_named_person(task):
                 continue   # a request aimed at another named person is THEIR task, never the owner's
             ttoks = _tok(task)
-            task_money = _is_money_action(task) or any(len(ttoks & mt) >= 2 for mt in money_line_toks)
+            # M1a FIX — PER-TASK money truth only. The old token-overlap with the whole money LINE bled the
+            # money flag onto unrelated tasks in the same breath ("pick up the kids" next to "pay the $4,200
+            # invoice" -> kids wrongly blocked as a payment). A genuinely TRUNCATED money fragment is still
+            # re-blocked by the DETERMINISTIC MONEY BACKSTOP in _owner_ingest_inner (it re-injects the raw
+            # money line when no surviving task carries the money signal), so per-task detection here is both
+            # correct and money-safe. money_line_toks kept for the vent floor below.
+            task_money = _is_money_action(task)
             # CARDINAL VENT FLOOR for the generous whole-day pass: a task whose words come from a VENT line
             # (the object of a dread/joke/hyperbole, "fill out one more prior auth ... fling into the sun")
             # and is NOT an explicit reversible task and NOT money -> the model over-extracted a vent. Drop.
             if (ttoks and not task_money and not _is_explicit_reversible_task(task)
                     and any(len(ttoks & vt) >= max(2, (len(ttoks) + 1) // 2) for vt in vent_line_toks)):
-                self.glassbox.log("day_vent_dropped", {"task": task[:120]})
+                self.glassbox.log("day_vent_dropped", {"task": task[:120], "reason": "vent"})
+                self._silenced_count = getattr(self, "_silenced_count", 0) + 1   # M1d ignore-trace
                 continue
             key = _task_key(task)   # reminder-prefix-stripped salient tokens
             # CONTAINMENT dedup: the whole-day model emits the same obligation twice with extra detail —
@@ -1659,7 +1673,8 @@ class ControlCore:
             # cleaning?") is never the owner's task. Drop it BEFORE the model can strip the
             # interrogative wrapper and over-extract a bare imperative -> an ASK on a vent/aside.
             if _is_interrogative_aside(line.text):
-                self.glassbox.log("extract_aside_silenced", {"line": line.text[:140]})
+                self.glassbox.log("extract_aside_silenced", {"line": line.text[:140], "reason": "aside"})
+                self._silenced_count = getattr(self, "_silenced_count", 0) + 1   # M1d ignore-trace
                 continue
             # EXPLICIT REVERSIBLE-TASK BACKSTOP (highest-confidence shapes, checked BEFORE the model):
             # an explicit reminder / calendar-hold / draft / cart is a real reversible owner task that
@@ -1709,12 +1724,13 @@ class ControlCore:
                 vent_tasks = [t for t in res.vent_adjacent_tasks()
                               if _VENT_TASK_ACTIONABLE.search(t.get("task", "") or "")]
                 if not vent_tasks:
-                    self.glassbox.log("extract_vent_silenced", {"line": line.text[:140]})
+                    self.glassbox.log("extract_vent_silenced", {"line": line.text[:140], "reason": "vent/sarcasm"})
+                    self._silenced_count = getattr(self, "_silenced_count", 0) + 1   # M1d ignore-trace
                     continue   # pure vent / non-actionable chore -> no card
                 for t in vent_tasks:
                     n += 1
                     _vt = OwnerObservedLine(line_no=n, text=t["task"], force_ask=True)
-                    _vt.money_src = _msrc
+                    _vt.money_src = _is_money_action(t["task"])   # M1a: per-task money truth (no bleed)
                     out.append(_vt)
                 self.glassbox.log("extract_vent_tasks_held",
                                   {"line": line.text[:140],
@@ -1743,7 +1759,7 @@ class ControlCore:
                 n += 1
                 _ot = OwnerObservedLine(line_no=n, text=t["task"], moat_task=True)
                 _ot.src_idx = src_idx   # which raw line this task was split from (for same-source dedup)
-                _ot.money_src = _msrc   # raw-line money truth (truncation-proof money gate)
+                _ot.money_src = _is_money_action(t["task"])   # M1a: per-task money truth (no bleed); truncation re-blocked by the money backstop
                 out.append(_ot)
             self.glassbox.log("extract_tasks", {"line": line.text[:140],
                               "tasks": [t["task"] for t in tasks]})
@@ -1989,6 +2005,7 @@ class ControlCore:
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
+        self._silenced_count = 0   # M1d: vent/sarcasm/aside lines dropped during expansion -> counted in ignored_line_count
         observed = await self._expand_tasks_with_model(raw_observed)   # THE MOAT: model splits + judges
         # DETERMINISTIC VENT-ADJACENT BACKSTOP: when the moat fails to split a vent-prefixed line
         # ("ugh my brain is fried, but remind me to send Maya the email before Friday") into its
@@ -2162,6 +2179,7 @@ class ControlCore:
             {"source": source, "lines": len(observed), "cards": len(cards),
              "ignored": ignored, "execute_actions": execute_actions},
         )
+        ignored += getattr(self, "_silenced_count", 0)   # M1d: include vent/sarcasm/aside lines dropped during expansion
         result = OwnerIngestResult(source=source, observed_lines=observed, cards=cards,
                                    ignored_line_count=ignored)
         out = result.model_dump(mode="json")
