@@ -1,7 +1,7 @@
 {
   "started": "2026-06-23T13:18:16",
   "summary": {
-    "PROVEN": 6,
+    "PROVEN": 7,
     "BLOCKED": 2,
     "FAILED": 1
   },
@@ -44,6 +44,14 @@
       "status": "PROVEN",
       "detail": "final_url=https://example.com/ status=None",
       "receipt": "receipts/g5_browser_read.json",
+      "unblock": null
+    },
+    {
+      "id": "G10",
+      "name": "Adaptability: operate a never-seen complex SPA, NO site recipe (LIVE)",
+      "status": "PROVEN",
+      "detail": "YouTube search+read, 5 human-like actions, correct answer; final_url=https://www.youtube.com/results?search_query=lofi+",
+      "receipt": "receipts/g10_adaptive_youtube.json",
       "unblock": null
     },
     {

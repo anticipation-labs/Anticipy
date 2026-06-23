@@ -1,4 +1,4 @@
-# Anticipy — Overnight Report (2026-06-23 13:27)
+# Anticipy — Overnight Report (2026-06-23 14:05)
 
 > Generated **from** the acceptance harness (`overnight/harness.py`), which calls your LIVE engine on
 > :8787 and real Chrome on CDP :9222. Every **PROVEN** row is backed by a real call whose raw output is
@@ -7,7 +7,7 @@
 > supersedes the older STATUS/DONE/MISSION/LEDGER docs (kept only as history).
 
 **Trunk:** `~/Anticipy @ factory/build` — the one canonical body. No forks.
-**Spine gates:** 6 PROVEN · 2 BLOCKED · 1 FAILED
+**Spine gates:** 7 PROVEN · 2 BLOCKED · 1 FAILED
 **Factory suite (re-run tonight, on this Mac):** 106 passed, 1 failed (exit 1)
 
 ## What this proves (the hard 60%, working live on your machine)
@@ -23,6 +23,7 @@ Chrome**. That is the part everyone kept rebuilding from scratch. It is here, gr
 | G3 Money floor: nothing auto-pays; all parked before payment (LIVE) | violating_cards=[] | receipts/g3_money_floor.json |
 | G4 Memory: durable drawers + open loops persisted (LIVE) | open_loops=9 | receipts/g4_memory.json |
 | G5 Browser hand LIVE: drove real Chrome, read a real page | final_url=https://example.com/ status=None | receipts/g5_browser_read.json |
+| G10 Adaptability: operate a never-seen complex SPA, NO site recipe (LIVE) | YouTube search+read, 5 human-like actions, correct answer; final_url=https://www.youtube.com/re | receipts/g10_adaptive_youtube.json |
 | G8 Proactive trigger tick runs (engine-side reminder loop) (LIVE) | tick={"fired": []} | receipts/g8_trigger_tick.json |
 
 ## ⛔ BLOCKED — honest, with the exact one-step unblock (not me giving up)

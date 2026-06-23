@@ -233,8 +233,26 @@ def g9_voice_sms():
     except Exception as e:
         record("G9", "Voice/SMS round-trip", "FAILED", f"exception: {e}")
 
+# ---------------------------------- G10 adaptability: never-seen site, no recipe
+def g10_adaptive_site():
+    try:
+        r = post("/agent/act", {"task": "On YouTube, use the search box to search for: lofi hip hop radio. "
+                                "Then report the title and channel name of the very first video result. Do not play anything.",
+                                "start_url": "https://www.youtube.com", "max_steps": 10}, timeout=220)
+        rc = save("g10_adaptive_youtube.json", r)
+        blob = json.dumps(r).lower()
+        ok = ("lofi" in blob) and ("results?search_query" in (r.get("final_url") or "")) and r.get("success") is True
+        record("G10", "Adaptability: operate a never-seen complex SPA with NO site recipe (LIVE)",
+               "PROVEN" if ok else "FAILED",
+               f"final_url={(r.get('final_url') or '')[:60]} success={r.get('success')}", rc)
+    except urllib.error.URLError as e:
+        record("G10", "Adaptability (never-seen site)", "BLOCKED", f"agent/act timeout: {e}")
+    except Exception as e:
+        record("G10", "Adaptability (never-seen site)", "FAILED", f"exception: {e}")
+
 GATES = [g1_brain_spine, g2_vent_safety, g3_money_floor, g4_memory,
-         g5_browser_read, g6_gmail_draft, g7_onboarding_scrape, g8_reminder_fire, g9_voice_sms]
+         g5_browser_read, g10_adaptive_site, g6_gmail_draft, g7_onboarding_scrape,
+         g8_reminder_fire, g9_voice_sms]
 
 def main():
     started = datetime.datetime.now().isoformat(timespec="seconds")
