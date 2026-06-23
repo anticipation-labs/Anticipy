@@ -1,0 +1,50 @@
+{
+  "source": "transcript",
+  "observed_lines": [
+    {
+      "line_no": 1,
+      "text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods."
+    }
+  ],
+  "cards": [
+    {
+      "id": "af1227b1898b4b518628bafd1ea4f1c1",
+      "source": "transcript",
+      "line_no": 1,
+      "source_text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods.",
+      "title": "Remember: God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods.",
+      "disposition": "remember",
+      "route": "memory",
+      "action": "write_profile_memory",
+      "args": {
+        "memory_text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods."
+      },
+      "confidence": 0.82,
+      "reason": "stated preference, identity, or relationship fact",
+      "status": "done",
+      "proof": [
+        {
+          "type": "memory_write",
+          "drawer": "profile",
+          "memory_id": "6638f4eb7de049778c67ad49f14df01b"
+        },
+        {
+          "type": "memory_read_back",
+          "memory_id": "6638f4eb7de049778c67ad49f14df01b",
+          "text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods."
+        },
+        {
+          "type": "capture_memory_status",
+          "memory_id": "455188b375504c85b322f3f86640b350",
+          "status": "done"
+        },
+        {
+          "type": "card_record",
+          "path": ".anticipy-data/owner_cards/af1227b1898b4b518628bafd1ea4f1c1.json"
+        }
+      ],
+      "execution": null
+    }
+  ],
+  "ignored_line_count": 0
+}

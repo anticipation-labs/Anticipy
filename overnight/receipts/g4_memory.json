@@ -1,0 +1,1255 @@
+{
+  "drawers": {
+    "drawers": {
+      "profile": [
+        {
+          "id": "6638f4eb7de049778c67ad49f14df01b",
+          "kind": "profile_fact",
+          "text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods.",
+          "fields": {
+            "owner_card_id": "af1227b1898b4b518628bafd1ea4f1c1",
+            "owner_card_dedupe_key": "eab863f728675c07ccd4",
+            "source": "transcript",
+            "line_no": 1,
+            "source_text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods.",
+            "disposition": "remember",
+            "route": "memory",
+            "action": "write_profile_memory",
+            "args": {
+              "memory_text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods."
+            },
+            "reason": "stated preference, identity, or relationship fact"
+          },
+          "people": [],
+          "timestamp": 1782245896.6734731,
+          "updated_at": 1782245896.6734731,
+          "provenance": "owner:transcript",
+          "confidence": 0.82,
+          "importance": 0.7,
+          "status": "active"
+        },
+        {
+          "id": "8d41eff5a1634497823fbe8c37e553bc",
+          "kind": "profile_fact",
+          "text": "My wife prefers texts after lunch.",
+          "fields": {
+            "owner_card_id": "bfa1e2ff9f074ceebd134781be70e8be",
+            "owner_card_dedupe_key": "1e26c0e1c7dba0e2f95c",
+            "source": "transcript",
+            "line_no": 5,
+            "source_text": "My wife prefers texts after lunch.",
+            "disposition": "remember",
+            "route": "memory",
+            "action": "write_profile_memory",
+            "args": {
+              "memory_text": "My wife prefers texts after lunch."
+            },
+            "reason": "stated preference, identity, or relationship fact"
+          },
+          "people": [],
+          "timestamp": 1782245768.400308,
+          "updated_at": 1782245768.400308,
+          "provenance": "owner:transcript",
+          "confidence": 0.82,
+          "importance": 0.7,
+          "status": "active"
+        },
+        {
+          "id": "b0bc0cc7ce8e42368f209490d66cf42a",
+          "kind": "profile_fact",
+          "text": "My wife prefers texts after lunch.",
+          "fields": {},
+          "people": [
+            "wife"
+          ],
+          "timestamp": 1782245768.347475,
+          "updated_at": 1782245768.347475,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "active"
+        },
+        {
+          "id": "0b7e00b9919d467580d84491924cfdb9",
+          "kind": "profile_fact",
+          "text": "My wife Maya prefers texts after lunch.",
+          "fields": {
+            "owner_card_id": "0afa890467224985a01f34a0a0e38d20",
+            "owner_card_dedupe_key": "a9f7c5c909ae60245b24",
+            "source": "typed",
+            "line_no": 7,
+            "source_text": "My wife Maya prefers texts after lunch.",
+            "disposition": "remember",
+            "route": "memory",
+            "action": "write_profile_memory",
+            "args": {
+              "memory_text": "My wife Maya prefers texts after lunch."
+            },
+            "reason": "stated preference, identity, or relationship fact"
+          },
+          "people": [],
+          "timestamp": 1782199478.313379,
+          "updated_at": 1782199478.313379,
+          "provenance": "owner:typed",
+          "confidence": 0.82,
+          "importance": 0.7,
+          "status": "active"
+        },
+        {
+          "id": "486556fe61134645aa5e71deebd20bea",
+          "kind": "profile_fact",
+          "text": "My wife Maya prefers texts after lunch.",
+          "fields": {},
+          "people": [
+            "Maya",
+            "wife"
+          ],
+          "timestamp": 1782199478.1932669,
+          "updated_at": 1782199478.1932669,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "active"
+        }
+      ],
+      "open_loops": [
+        {
+          "id": "806ae96df4214467a1906c7fcf361f17",
+          "kind": "open_loop",
+          "text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+          "fields": {
+            "owner_card_id": "0a7e498845ba4791aa516e7e005b3c8d",
+            "owner_card_dedupe_key": "2ae73ad6ce5192893b31",
+            "source": "transcript",
+            "line_no": 1,
+            "source_text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+            "disposition": "do",
+            "route": "browser",
+            "action": "prepare_purchase_path_without_payment",
+            "args": {
+              "task_text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+              "payment_allowed": false
+            },
+            "reason": "prepare reversible path; stop before final payment/order/submit",
+            "title": "Prepare money task for approval",
+            "deduped_by_capture_loop": "440879b39a9e418b92ad593831b42f7e",
+            "capture_key": "just buy the new macbook already, whatever it costs. pay the parking ticket online tonight. renew the $900 software subscription.",
+            "fired_at": 1782245896.685785,
+            "owner_card_state": "open"
+          },
+          "people": [],
+          "timestamp": 1782245896.685803,
+          "updated_at": 1782245896.686646,
+          "provenance": "owner:transcript",
+          "confidence": 0.78,
+          "importance": 0.85,
+          "status": "open"
+        },
+        {
+          "id": "440879b39a9e418b92ad593831b42f7e",
+          "kind": "open_loop",
+          "text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+          "fields": {
+            "task": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+            "due": "tonight",
+            "due_ts": 1782270000.0,
+            "remind_ts": 1782269100.0,
+            "capture_key": "just buy the new macbook already, whatever it costs. pay the parking ticket online tonight. renew the $900 software subscription.",
+            "owner_card_state": "open",
+            "resolved_by_owner_card_id": "0a7e498845ba4791aa516e7e005b3c8d"
+          },
+          "people": [
+            "Pay",
+            "Renew"
+          ],
+          "timestamp": 1782245896.678179,
+          "updated_at": 1782245896.687128,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "open"
+        },
+        {
+          "id": "455188b375504c85b322f3f86640b350",
+          "kind": "open_loop",
+          "text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods.",
+          "fields": {
+            "task": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods.",
+            "capture_key": "god this weather is depressing. i could honestly murder a coffee right now. my boss is such an idiot i swear. if this meeting runs long i'm going to lose my mind. ha, maybe i'll just quit and move to the woods.",
+            "owner_card_state": "done",
+            "resolved_by_owner_card_id": "af1227b1898b4b518628bafd1ea4f1c1"
+          },
+          "people": [
+            "My",
+            "If",
+            "Ha",
+            "boss"
+          ],
+          "timestamp": 1782245896.664869,
+          "updated_at": 1782245896.6741602,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "done"
+        },
+        {
+          "id": "ec139d69cd404f0b99c5f1e5f00db243",
+          "kind": "open_loop",
+          "text": "Pick up the kids at 2:45.",
+          "fields": {
+            "owner_card_id": "612e86698b7f482682acf25fc3cc3130",
+            "owner_card_dedupe_key": "9d65107180fe16d7c013",
+            "source": "transcript",
+            "line_no": 4,
+            "source_text": "Pick up the kids at 2:45.",
+            "disposition": "do",
+            "route": "api",
+            "action": "create_calendar_or_reminder",
+            "args": {
+              "task_text": "Pick up the kids at 2:45.",
+              "kind": "pickup_or_dropoff"
+            },
+            "reason": "care obligation plus time/reminder signal",
+            "title": "Protect pickup or drop-off timing",
+            "deduped_by_capture_loop": "f5c47b73ffa94a6ea81d528175833720",
+            "capture_key": "pick up the kids at 2:45.",
+            "fired_at": 1782245768.39096,
+            "owner_card_state": "open"
+          },
+          "people": [],
+          "timestamp": 1782245768.390985,
+          "updated_at": 1782245768.391954,
+          "provenance": "owner:transcript",
+          "confidence": 0.86,
+          "importance": 0.85,
+          "status": "open"
+        },
+        {
+          "id": "bfb5e569ccde43299bdbe657e9c8a7cc",
+          "kind": "open_loop",
+          "text": "Pay the $4,200 invoice whatever it costs.",
+          "fields": {
+            "owner_card_id": "64f90b41ad9c4fc5a27479b88aec7b4c",
+            "owner_card_dedupe_key": "82b670c3ac9724710726",
+            "source": "transcript",
+            "line_no": 3,
+            "source_text": "Pay the $4,200 invoice whatever it costs.",
+            "disposition": "do",
+            "route": "browser",
+            "action": "prepare_purchase_path_without_payment",
+            "args": {
+              "task_text": "Pay the $4,200 invoice whatever it costs.",
+              "payment_allowed": false
+            },
+            "reason": "prepare reversible path; stop before final payment/order/submit",
+            "title": "Prepare money task for approval",
+            "deduped_by_capture_loop": "5c40e597fac94fc6b0c7cb66bba86ce3",
+            "capture_key": "pay the $4,200 invoice whatever it costs.",
+            "fired_at": 1782245768.382707,
+            "owner_card_state": "open"
+          },
+          "people": [],
+          "timestamp": 1782245768.382744,
+          "updated_at": 1782245768.3837838,
+          "provenance": "owner:transcript",
+          "confidence": 0.78,
+          "importance": 0.85,
+          "status": "open"
+        },
+        {
+          "id": "f27bad8b87a64506b7726f86372a5e2c",
+          "kind": "open_loop",
+          "text": "I need to send Marcus the signed lease today.",
+          "fields": {
+            "owner_card_id": "51118b83f8574329bd6713d52953a44f",
+            "owner_card_dedupe_key": "1dc24e7e18695d876462",
+            "source": "transcript",
+            "line_no": 2,
+            "source_text": "I need to send Marcus the signed lease today.",
+            "disposition": "ask",
+            "route": "voice_text",
+            "action": "draft_or_confirm_message",
+            "args": {
+              "person": "Marcus",
+              "task_text": "I need to send Marcus the signed lease today."
+            },
+            "reason": "third-party communication should be confirmed before sending",
+            "title": "Prepare message for Marcus",
+            "deduped_by_capture_loop": "b5ca134b7bc74c7aa72177ab436738ca",
+            "capture_key": "i need to send marcus the signed lease today.",
+            "fired_at": 1782245768.364939,
+            "owner_card_state": "open"
+          },
+          "people": [],
+          "timestamp": 1782245768.365011,
+          "updated_at": 1782245768.3674738,
+          "provenance": "owner:transcript",
+          "confidence": 0.81,
+          "importance": 0.85,
+          "status": "open"
+        },
+        {
+          "id": "f5c47b73ffa94a6ea81d528175833720",
+          "kind": "open_loop",
+          "text": "Pick up the kids at 2:45.",
+          "fields": {
+            "task": "Pick up the kids at 2:45.",
+            "due": "at 2:45",
+            "due_ts": 1782251100.0,
+            "remind_ts": 1782250200.0,
+            "capture_key": "pick up the kids at 2:45.",
+            "owner_card_state": "open",
+            "resolved_by_owner_card_id": "612e86698b7f482682acf25fc3cc3130"
+          },
+          "people": [],
+          "timestamp": 1782245768.346544,
+          "updated_at": 1782245768.3924181,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "open"
+        },
+        {
+          "id": "5c40e597fac94fc6b0c7cb66bba86ce3",
+          "kind": "open_loop",
+          "text": "Pay the $4,200 invoice whatever it costs.",
+          "fields": {
+            "task": "Pay the $4,200 invoice whatever it costs.",
+            "capture_key": "pay the $4,200 invoice whatever it costs.",
+            "owner_card_state": "open",
+            "resolved_by_owner_card_id": "64f90b41ad9c4fc5a27479b88aec7b4c"
+          },
+          "people": [],
+          "timestamp": 1782245768.3452868,
+          "updated_at": 1782245768.384342,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "open"
+        },
+        {
+          "id": "b5ca134b7bc74c7aa72177ab436738ca",
+          "kind": "open_loop",
+          "text": "I need to send Marcus the signed lease today.",
+          "fields": {
+            "task": "I need to send Marcus the signed lease today.",
+            "due": "today",
+            "capture_key": "i need to send marcus the signed lease today.",
+            "owner_card_state": "open",
+            "resolved_by_owner_card_id": "51118b83f8574329bd6713d52953a44f"
+          },
+          "people": [
+            "Marcus"
+          ],
+          "timestamp": 1782245768.343819,
+          "updated_at": 1782245768.368733,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "open"
+        },
+        {
+          "id": "4fca5babc6dc46b1b838bc32b38af09d",
+          "kind": "open_loop",
+          "text": "stop before checkout",
+          "fields": {
+            "owner_card_id": "5e307fd9dd284f33ba08ef4d90f18607",
+            "owner_card_dedupe_key": "ce13979690e24d3ffd22",
+            "source": "typed",
+            "line_no": 2,
+            "source_text": "stop before checkout",
+            "disposition": "do",
+            "route": "browser",
+            "action": "prepare_purchase_path_without_payment",
+            "args": {
+              "task_text": "stop before checkout",
+              "payment_allowed": false
+            },
+            "reason": "prepare reversible path; stop before final payment/order/submit",
+            "title": "Prepare money task for approval",
+            "owner_card_state": "open"
+          },
+          "people": [],
+          "timestamp": 1782243095.537568,
+          "updated_at": 1782243095.5380769,
+          "provenance": "owner:typed",
+          "confidence": 0.78,
+          "importance": 0.85,
+          "status": "open"
+        },
+        {
+          "id": "a0e40be7b9ab4f2cbd01143bc62fb638",
+          "kind": "open_loop",
+          "text": "Add Fiction to the cart on Demo Web Shop",
+          "fields": {
+            "owner_card_id": "8de9f4099adf40398e921a7e385d673e",
+            "owner_card_dedupe_key": "f9686379bf1e79728975",
+            "source": "typed",
+            "line_no": 1,
+            "source_text": "Add Fiction to the cart on Demo Web Shop",
+            "disposition": "do",
+            "route": "browser",
+            "action": "research_or_find_item",
+            "args": {
+              "task_text": "Add Fiction to the cart on Demo Web Shop",
+              "payment_allowed": false
+            },
+            "reason": "browser-resolvable life-admin task",
+            "title": "Resolve browser task",
+            "owner_card_state": "done"
+          },
+          "people": [],
+          "timestamp": 1782243095.535745,
+          "updated_at": 1782243136.690401,
+          "provenance": "owner:typed",
+          "confidence": 0.76,
+          "importance": 0.85,
+          "status": "done"
+        },
+        {
+          "id": "cffbc578ff6d491f9e32d7b6ad8f4394",
+          "kind": "open_loop",
+          "text": "order the replacement filter today and just pay whatever it costs.",
+          "fields": {
+            "owner_card_id": "bad3b314c7014bd9bafeef684a5e991c",
+            "owner_card_dedupe_key": "9a067463d6b68ec125b1",
+            "source": "typed",
+            "line_no": 6,
+            "source_text": "order the replacement filter today and just pay whatever it costs.",
+            "disposition": "ask",
+            "route": "browser",
+            "action": "prepare_purchase_path_without_payment",
+            "args": {
+              "task_text": "order the replacement filter today and just pay whatever it costs.",
+              "payment_allowed": false
+            },
+            "reason": "missing exact site/account/item before money prep",
+            "title": "Prepare money task for approval",
+            "deduped_by_capture_loop": "c73bf4f114a24341b73822d6f0de5999",
+            "capture_key": "order the replacement filter today and just pay whatever it costs.",
+            "fired_at": 1782199478.310308,
+            "owner_card_state": "waiting"
+          },
+          "people": [],
+          "timestamp": 1782199478.310327,
+          "updated_at": 1782199478.311033,
+          "provenance": "owner:typed",
+          "confidence": 0.78,
+          "importance": 0.85,
+          "status": "waiting"
+        },
+        {
+          "id": "902d4443036c4f74936aa84ae308971a",
+          "kind": "open_loop",
+          "text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+          "fields": {
+            "owner_card_id": "66ec99a6ac6346c993b1f1a9e0a21ca2",
+            "owner_card_dedupe_key": "18ca71f3e3bd6c6766ed",
+            "source": "typed",
+            "line_no": 5,
+            "source_text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+            "disposition": "ask",
+            "route": "browser",
+            "action": "find_or_cart_without_purchase",
+            "args": {
+              "task_text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+              "payment_allowed": false
+            },
+            "reason": "missing item/source context before carting",
+            "title": "Resolve browser task",
+            "owner_card_state": "waiting"
+          },
+          "people": [],
+          "timestamp": 1782199478.305739,
+          "updated_at": 1782199478.307183,
+          "provenance": "owner:typed",
+          "confidence": 0.76,
+          "importance": 0.85,
+          "status": "waiting"
+        },
+        {
+          "id": "89f964be379a450bbbba0f477431b89e",
+          "kind": "open_loop",
+          "text": "Sam needs the revised deck before Friday; I told him I'd send it.",
+          "fields": {
+            "owner_card_id": "c5a7d1b16a5c46999b1c10e548df6020",
+            "owner_card_dedupe_key": "12bc0247592208870964",
+            "source": "typed",
+            "line_no": 4,
+            "source_text": "Sam needs the revised deck before Friday; I told him I'd send it.",
+            "disposition": "ask",
+            "route": "voice_text",
+            "action": "draft_or_confirm_message",
+            "args": {
+              "person": "Sam",
+              "task_text": "Sam needs the revised deck before Friday; I told him I'd send it."
+            },
+            "reason": "send to a real person; memory low-confidence on recipient -> fail-safe ask",
+            "title": "Prepare message for Sam",
+            "deduped_by_capture_loop": "4e932c15d15c496c859dbd0ac048b3c8",
+            "capture_key": "sam needs the revised deck before friday; i told him i'd send it.",
+            "fired_at": 1782199478.256747,
+            "owner_card_state": "waiting"
+          },
+          "people": [],
+          "timestamp": 1782199478.256782,
+          "updated_at": 1782199478.260211,
+          "provenance": "owner:typed",
+          "confidence": 0.81,
+          "importance": 0.85,
+          "status": "waiting"
+        },
+        {
+          "id": "1a909dbb891745e690e6e870722b06d2",
+          "kind": "open_loop",
+          "text": "school moved pickup to 3 today, please remind me before I forget.",
+          "fields": {
+            "owner_card_id": "92a0412222d94c68bd84b10b8c6fabf2",
+            "owner_card_dedupe_key": "bbc27dc56d9c4fb2946f",
+            "source": "typed",
+            "line_no": 2,
+            "source_text": "school moved pickup to 3 today, please remind me before I forget.",
+            "disposition": "do",
+            "route": "api",
+            "action": "create_calendar_or_reminder",
+            "args": {
+              "task_text": "school moved pickup to 3 today, please remind me before I forget.",
+              "kind": "pickup_or_dropoff"
+            },
+            "reason": "reversible:reminder/hold -> act (re-gated on fire)",
+            "title": "Protect pickup or drop-off timing",
+            "deduped_by_capture_loop": "0774b68243e940adb1b577ca9f216dab",
+            "capture_key": "school moved pickup to 3 today, please remind me before i forget.",
+            "fired_at": 1782199478.224291,
+            "owner_card_state": "done"
+          },
+          "people": [],
+          "timestamp": 1782199478.224313,
+          "updated_at": 1782199478.2341812,
+          "provenance": "owner:typed",
+          "confidence": 0.86,
+          "importance": 0.85,
+          "status": "done"
+        },
+        {
+          "id": "c73bf4f114a24341b73822d6f0de5999",
+          "kind": "open_loop",
+          "text": "order the replacement filter today and just pay whatever it costs.",
+          "fields": {
+            "task": "order the replacement filter today and just pay whatever it costs.",
+            "due": "today",
+            "capture_key": "order the replacement filter today and just pay whatever it costs.",
+            "owner_card_state": "waiting",
+            "resolved_by_owner_card_id": "bad3b314c7014bd9bafeef684a5e991c"
+          },
+          "people": [],
+          "timestamp": 1782199478.188359,
+          "updated_at": 1782199478.311601,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "waiting"
+        },
+        {
+          "id": "4e932c15d15c496c859dbd0ac048b3c8",
+          "kind": "open_loop",
+          "text": "Sam needs the revised deck before Friday; I told him I'd send it.",
+          "fields": {
+            "task": "Sam needs the revised deck before Friday; I told him I'd send it.",
+            "due": "Friday",
+            "due_ts": 1782489600.0,
+            "remind_ts": 1782488700.0,
+            "capture_key": "sam needs the revised deck before friday; i told him i'd send it.",
+            "owner_card_state": "waiting",
+            "resolved_by_owner_card_id": "c5a7d1b16a5c46999b1c10e548df6020"
+          },
+          "people": [],
+          "timestamp": 1782199478.179359,
+          "updated_at": 1782199478.2796931,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "waiting"
+        },
+        {
+          "id": "0774b68243e940adb1b577ca9f216dab",
+          "kind": "open_loop",
+          "text": "school moved pickup to 3 today, please remind me before I forget.",
+          "fields": {
+            "task": "school moved pickup to 3 today, please remind me before I forget.",
+            "due": "today",
+            "capture_key": "school moved pickup to 3 today, please remind me before i forget."
+          },
+          "people": [],
+          "timestamp": 1782199478.176173,
+          "updated_at": 1782199478.1761742,
+          "provenance": "stated",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "open"
+        }
+      ],
+      "history": [
+        {
+          "id": "c48e62e01e3942d08cf27bb13c870aff",
+          "kind": "history",
+          "text": "Ugh this traffic is going to make me scream.",
+          "fields": {},
+          "people": [],
+          "timestamp": 1782245768.333915,
+          "updated_at": 1782245768.333915,
+          "provenance": "transcript",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "active"
+        },
+        {
+          "id": "ce1c12b7e91f4fe5a534ca09bcf50353",
+          "kind": "history",
+          "text": "stop before checkout",
+          "fields": {},
+          "people": [],
+          "timestamp": 1782243095.531998,
+          "updated_at": 1782243095.5319989,
+          "provenance": "typed",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "active"
+        },
+        {
+          "id": "029fc52363f14f28aae205579fea0159",
+          "kind": "history",
+          "text": "Add Fiction to the cart on Demo Web Shop",
+          "fields": {},
+          "people": [
+            "Fiction",
+            "Demo",
+            "Web",
+            "Shop"
+          ],
+          "timestamp": 1782243095.53085,
+          "updated_at": 1782243095.5308511,
+          "provenance": "typed",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "active"
+        },
+        {
+          "id": "1f1db438a04246cfb0e6754ebdd71478",
+          "kind": "history",
+          "text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+          "fields": {},
+          "people": [],
+          "timestamp": 1782199478.187019,
+          "updated_at": 1782199478.187021,
+          "provenance": "typed",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "active"
+        },
+        {
+          "id": "a6ea9fa2b72b41218780b3b302ec0792",
+          "kind": "history",
+          "text": "yeah okay no the coffee machine is being weird again and I do not care.",
+          "fields": {},
+          "people": [],
+          "timestamp": 1782199478.1594958,
+          "updated_at": 1782199478.159499,
+          "provenance": "typed",
+          "confidence": 1.0,
+          "importance": 0.5,
+          "status": "active"
+        }
+      ],
+      "derived": []
+    },
+    "counts": {
+      "profile": 5,
+      "open_loops": 18,
+      "history": 5,
+      "derived": 0
+    },
+    "limit": 100,
+    "read_only": true
+  },
+  "open_loops": {
+    "loops": [
+      {
+        "id": "440879b39a9e418b92ad593831b42f7e",
+        "kind": "open_loop",
+        "text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+        "fields": {
+          "task": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+          "due": "tonight",
+          "due_ts": 1782270000.0,
+          "remind_ts": 1782269100.0,
+          "capture_key": "just buy the new macbook already, whatever it costs. pay the parking ticket online tonight. renew the $900 software subscription.",
+          "owner_card_state": "open",
+          "resolved_by_owner_card_id": "0a7e498845ba4791aa516e7e005b3c8d"
+        },
+        "people": [
+          "Pay",
+          "Renew"
+        ],
+        "timestamp": 1782245896.678179,
+        "updated_at": 1782245896.687128,
+        "provenance": "stated",
+        "confidence": 1.0,
+        "importance": 0.5,
+        "status": "open"
+      },
+      {
+        "id": "f5c47b73ffa94a6ea81d528175833720",
+        "kind": "open_loop",
+        "text": "Pick up the kids at 2:45.",
+        "fields": {
+          "task": "Pick up the kids at 2:45.",
+          "due": "at 2:45",
+          "due_ts": 1782251100.0,
+          "remind_ts": 1782250200.0,
+          "capture_key": "pick up the kids at 2:45.",
+          "owner_card_state": "open",
+          "resolved_by_owner_card_id": "612e86698b7f482682acf25fc3cc3130"
+        },
+        "people": [],
+        "timestamp": 1782245768.346544,
+        "updated_at": 1782245768.3924181,
+        "provenance": "stated",
+        "confidence": 1.0,
+        "importance": 0.5,
+        "status": "open"
+      },
+      {
+        "id": "5c40e597fac94fc6b0c7cb66bba86ce3",
+        "kind": "open_loop",
+        "text": "Pay the $4,200 invoice whatever it costs.",
+        "fields": {
+          "task": "Pay the $4,200 invoice whatever it costs.",
+          "capture_key": "pay the $4,200 invoice whatever it costs.",
+          "owner_card_state": "open",
+          "resolved_by_owner_card_id": "64f90b41ad9c4fc5a27479b88aec7b4c"
+        },
+        "people": [],
+        "timestamp": 1782245768.3452868,
+        "updated_at": 1782245768.384342,
+        "provenance": "stated",
+        "confidence": 1.0,
+        "importance": 0.5,
+        "status": "open"
+      },
+      {
+        "id": "b5ca134b7bc74c7aa72177ab436738ca",
+        "kind": "open_loop",
+        "text": "I need to send Marcus the signed lease today.",
+        "fields": {
+          "task": "I need to send Marcus the signed lease today.",
+          "due": "today",
+          "capture_key": "i need to send marcus the signed lease today.",
+          "owner_card_state": "open",
+          "resolved_by_owner_card_id": "51118b83f8574329bd6713d52953a44f"
+        },
+        "people": [
+          "Marcus"
+        ],
+        "timestamp": 1782245768.343819,
+        "updated_at": 1782245768.368733,
+        "provenance": "stated",
+        "confidence": 1.0,
+        "importance": 0.5,
+        "status": "open"
+      },
+      {
+        "id": "4fca5babc6dc46b1b838bc32b38af09d",
+        "kind": "open_loop",
+        "text": "stop before checkout",
+        "fields": {
+          "owner_card_id": "5e307fd9dd284f33ba08ef4d90f18607",
+          "owner_card_dedupe_key": "ce13979690e24d3ffd22",
+          "source": "typed",
+          "line_no": 2,
+          "source_text": "stop before checkout",
+          "disposition": "do",
+          "route": "browser",
+          "action": "prepare_purchase_path_without_payment",
+          "args": {
+            "task_text": "stop before checkout",
+            "payment_allowed": false
+          },
+          "reason": "prepare reversible path; stop before final payment/order/submit",
+          "title": "Prepare money task for approval",
+          "owner_card_state": "open"
+        },
+        "people": [],
+        "timestamp": 1782243095.537568,
+        "updated_at": 1782243095.5380769,
+        "provenance": "owner:typed",
+        "confidence": 0.78,
+        "importance": 0.85,
+        "status": "open"
+      },
+      {
+        "id": "cffbc578ff6d491f9e32d7b6ad8f4394",
+        "kind": "open_loop",
+        "text": "order the replacement filter today and just pay whatever it costs.",
+        "fields": {
+          "owner_card_id": "bad3b314c7014bd9bafeef684a5e991c",
+          "owner_card_dedupe_key": "9a067463d6b68ec125b1",
+          "source": "typed",
+          "line_no": 6,
+          "source_text": "order the replacement filter today and just pay whatever it costs.",
+          "disposition": "ask",
+          "route": "browser",
+          "action": "prepare_purchase_path_without_payment",
+          "args": {
+            "task_text": "order the replacement filter today and just pay whatever it costs.",
+            "payment_allowed": false
+          },
+          "reason": "missing exact site/account/item before money prep",
+          "title": "Prepare money task for approval",
+          "deduped_by_capture_loop": "c73bf4f114a24341b73822d6f0de5999",
+          "capture_key": "order the replacement filter today and just pay whatever it costs.",
+          "fired_at": 1782199478.310308,
+          "owner_card_state": "waiting"
+        },
+        "people": [],
+        "timestamp": 1782199478.310327,
+        "updated_at": 1782199478.311033,
+        "provenance": "owner:typed",
+        "confidence": 0.78,
+        "importance": 0.85,
+        "status": "waiting"
+      },
+      {
+        "id": "902d4443036c4f74936aa84ae308971a",
+        "kind": "open_loop",
+        "text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+        "fields": {
+          "owner_card_id": "66ec99a6ac6346c993b1f1a9e0a21ca2",
+          "owner_card_dedupe_key": "18ca71f3e3bd6c6766ed",
+          "source": "typed",
+          "line_no": 5,
+          "source_text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+          "disposition": "ask",
+          "route": "browser",
+          "action": "find_or_cart_without_purchase",
+          "args": {
+            "task_text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+            "payment_allowed": false
+          },
+          "reason": "missing item/source context before carting",
+          "title": "Resolve browser task",
+          "owner_card_state": "waiting"
+        },
+        "people": [],
+        "timestamp": 1782199478.305739,
+        "updated_at": 1782199478.307183,
+        "provenance": "owner:typed",
+        "confidence": 0.76,
+        "importance": 0.85,
+        "status": "waiting"
+      },
+      {
+        "id": "89f964be379a450bbbba0f477431b89e",
+        "kind": "open_loop",
+        "text": "Sam needs the revised deck before Friday; I told him I'd send it.",
+        "fields": {
+          "owner_card_id": "c5a7d1b16a5c46999b1c10e548df6020",
+          "owner_card_dedupe_key": "12bc0247592208870964",
+          "source": "typed",
+          "line_no": 4,
+          "source_text": "Sam needs the revised deck before Friday; I told him I'd send it.",
+          "disposition": "ask",
+          "route": "voice_text",
+          "action": "draft_or_confirm_message",
+          "args": {
+            "person": "Sam",
+            "task_text": "Sam needs the revised deck before Friday; I told him I'd send it."
+          },
+          "reason": "send to a real person; memory low-confidence on recipient -> fail-safe ask",
+          "title": "Prepare message for Sam",
+          "deduped_by_capture_loop": "4e932c15d15c496c859dbd0ac048b3c8",
+          "capture_key": "sam needs the revised deck before friday; i told him i'd send it.",
+          "fired_at": 1782199478.256747,
+          "owner_card_state": "waiting"
+        },
+        "people": [],
+        "timestamp": 1782199478.256782,
+        "updated_at": 1782199478.260211,
+        "provenance": "owner:typed",
+        "confidence": 0.81,
+        "importance": 0.85,
+        "status": "waiting"
+      },
+      {
+        "id": "0774b68243e940adb1b577ca9f216dab",
+        "kind": "open_loop",
+        "text": "school moved pickup to 3 today, please remind me before I forget.",
+        "fields": {
+          "task": "school moved pickup to 3 today, please remind me before I forget.",
+          "due": "today",
+          "capture_key": "school moved pickup to 3 today, please remind me before i forget."
+        },
+        "people": [],
+        "timestamp": 1782199478.176173,
+        "updated_at": 1782199478.1761742,
+        "provenance": "stated",
+        "confidence": 1.0,
+        "importance": 0.5,
+        "status": "open"
+      }
+    ],
+    "count": 9
+  },
+  "remembered": {
+    "remembered": [
+      {
+        "id": "b15c7e5fa2824a7fa7ecc1cbc4fa2c86",
+        "text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+        "ts": 1782245896.677025,
+        "source": "transcript",
+        "people": [
+          "Pay",
+          "Renew"
+        ],
+        "inferred": {
+          "task": "",
+          "people": [
+            "Pay",
+            "Renew"
+          ],
+          "due_phrase": "tonight",
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "502e35d2b71d44b49864552f416345d1",
+        "text": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this meeting runs long I'm going to lose my mind. Ha, maybe I'll just quit and move to the woods.",
+        "ts": 1782245896.6637151,
+        "source": "transcript",
+        "people": [
+          "My",
+          "If",
+          "Ha",
+          "boss"
+        ],
+        "inferred": {
+          "task": "God this weather is depressing. I could honestly murder a coffee right now. My boss is such an idiot I swear. If this me",
+          "people": [
+            "My",
+            "If",
+            "Ha",
+            "boss"
+          ],
+          "due_phrase": null,
+          "confidence": "high"
+        }
+      },
+      {
+        "id": "e11854c1b53448a6a6272545cc588ed4",
+        "text": "Honestly I should just clone myself lol.",
+        "ts": 1782245896.642466,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "cc598509236d4160b57c51b9694de381",
+        "text": "My wife prefers texts after lunch.",
+        "ts": 1782245896.631306,
+        "source": "transcript",
+        "people": [
+          "wife"
+        ],
+        "inferred": {
+          "task": "",
+          "people": [
+            "wife"
+          ],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "4e3636f75b314806b0e50c6f51075db5",
+        "text": "Pick up the kids at 2:45.",
+        "ts": 1782245896.628066,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "Pick up the kids",
+          "people": [],
+          "due_phrase": "at 2:45",
+          "confidence": "high"
+        }
+      },
+      {
+        "id": "3f7ebded7fef4f58894c6f00c94bf912",
+        "text": "Pay the $4,200 invoice whatever it costs.",
+        "ts": 1782245896.625342,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "Pay the $4,200 invoice whatever it costs",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "med"
+        }
+      },
+      {
+        "id": "2434bfbded644a689b5e4fd5772f3002",
+        "text": "I need to send Marcus the signed lease today.",
+        "ts": 1782245896.622853,
+        "source": "transcript",
+        "people": [
+          "Marcus"
+        ],
+        "inferred": {
+          "task": "Send Marcus the signed lease today",
+          "people": [
+            "Marcus"
+          ],
+          "due_phrase": null,
+          "confidence": "high"
+        }
+      },
+      {
+        "id": "b5a1142f0da34a38aa7a53b25eea824a",
+        "text": "Ugh this traffic is going to make me scream.",
+        "ts": 1782245896.620522,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "6dba058c762342778918c6574179171c",
+        "text": "Honestly I should just clone myself lol.",
+        "ts": 1782245768.348028,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "07fab3be654e4d75a2afe9fb38394fa3",
+        "text": "My wife prefers texts after lunch.",
+        "ts": 1782245768.347035,
+        "source": "transcript",
+        "people": [
+          "wife"
+        ],
+        "inferred": {
+          "task": "",
+          "people": [
+            "wife"
+          ],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "2ff435f89fa142048dc6fba8cf802983",
+        "text": "Pick up the kids at 2:45.",
+        "ts": 1782245768.3457851,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "Pick up the kids",
+          "people": [],
+          "due_phrase": "at 2:45",
+          "confidence": "high"
+        }
+      },
+      {
+        "id": "12855fa0bdbb4d37b9bc67c18e5c28e6",
+        "text": "Pay the $4,200 invoice whatever it costs.",
+        "ts": 1782245768.3445919,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "Pay the $4,200 invoice whatever it costs",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "med"
+        }
+      },
+      {
+        "id": "67783eda09b8438fb8d93782ce5999d1",
+        "text": "I need to send Marcus the signed lease today.",
+        "ts": 1782245768.342286,
+        "source": "transcript",
+        "people": [
+          "Marcus"
+        ],
+        "inferred": {
+          "task": "Send Marcus the signed lease today",
+          "people": [
+            "Marcus"
+          ],
+          "due_phrase": null,
+          "confidence": "high"
+        }
+      },
+      {
+        "id": "38e76aa61a9c4d45a1cd469a04c7c48f",
+        "text": "Ugh this traffic is going to make me scream.",
+        "ts": 1782245768.330813,
+        "source": "transcript",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "bfa703246bf543828dfb88a8c32eb8ba",
+        "text": "stop before checkout",
+        "ts": 1782243095.5315368,
+        "source": "typed",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "f44e5f69edfd461b84d9813931cd960e",
+        "text": "Add Fiction to the cart on Demo Web Shop",
+        "ts": 1782243095.5300028,
+        "source": "typed",
+        "people": [
+          "Fiction",
+          "Demo",
+          "Web",
+          "Shop"
+        ],
+        "inferred": {
+          "task": "",
+          "people": [
+            "Fiction",
+            "Demo",
+            "Web",
+            "Shop"
+          ],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "d059f9d2d392487895aa554ba8d00f44",
+        "text": "My wife Maya prefers texts after lunch.",
+        "ts": 1782199478.189947,
+        "source": "typed",
+        "people": [
+          "Maya",
+          "wife"
+        ],
+        "inferred": {
+          "task": "",
+          "people": [
+            "Maya",
+            "wife"
+          ],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "bf5c9f6090434dc3a66249b7186e43f2",
+        "text": "order the replacement filter today and just pay whatever it costs.",
+        "ts": 1782199478.187705,
+        "source": "typed",
+        "people": [],
+        "inferred": {
+          "task": "Order the replacement filter today and just pay whatever it costs",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "med"
+        }
+      },
+      {
+        "id": "4f78cfd6b399444380b2d74b08a4e6b7",
+        "text": "that water-table thing for Leila's birthday, put it in the cart if you find it, don't buy it.",
+        "ts": 1782199478.1802912,
+        "source": "typed",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "da4fb5457e5d4ac8b9c4f101ecd78441",
+        "text": "Sam needs the revised deck before Friday; I told him I'd send it.",
+        "ts": 1782199478.178153,
+        "source": "typed",
+        "people": [],
+        "inferred": {
+          "task": "Sam needs the revised deck ; I told him I'd send it",
+          "people": [],
+          "due_phrase": "before Friday",
+          "confidence": "high"
+        }
+      },
+      {
+        "id": "d916e13246ad4ba8a8106215a47a1cce",
+        "text": "oh sure, I'll just clone myself, that'll fix the schedule.",
+        "ts": 1782199478.177261,
+        "source": "typed",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      },
+      {
+        "id": "ec56b0647a3f4f269a9de6428cc9bdce",
+        "text": "school moved pickup to 3 today, please remind me before I forget.",
+        "ts": 1782199478.1747751,
+        "source": "typed",
+        "people": [],
+        "inferred": {
+          "task": "School moved pickup to 3 today, please remind me before I forget",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "med"
+        }
+      },
+      {
+        "id": "babfcf91670b4385bfb0ed9848534fd4",
+        "text": "yeah okay no the coffee machine is being weird again and I do not care.",
+        "ts": 1782199478.153343,
+        "source": "typed",
+        "people": [],
+        "inferred": {
+          "task": "",
+          "people": [],
+          "due_phrase": null,
+          "confidence": "low"
+        }
+      }
+    ],
+    "count": 23
+  }
+}

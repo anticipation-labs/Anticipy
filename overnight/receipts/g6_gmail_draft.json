@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "answer": "I am unable to complete the task. I have repeatedly tried to navigate to https://mail.google.com/mail/u/0/#inbox, but the page consistently appears empty, indicating a loading issue or a security block. I also attempted to navigate to a generic Google URL and search for Gmail on DuckDuckGo, but both attempts were blocked by a security policy. Therefore, I cannot access Gmail to compose the email.",
+  "steps": 14,
+  "final_url": "about:blank",
+  "actions": [
+    "navigate",
+    "wait",
+    "wait",
+    "navigate",
+    "wait",
+    "navigate",
+    "wait",
+    "navigate",
+    "search_page",
+    "navigate",
+    "evaluate",
+    "navigate",
+    "evaluate",
+    "navigate",
+    "evaluate",
+    "search",
+    "navigate",
+    "navigate",
+    "evaluate",
+    "navigate",
+    "done"
+  ],
+  "allowed_domains": [
+    "mail.google.com",
+    "www.mail.google.com"
+  ],
+  "error": null,
+  "agent": "browser-use"
+}

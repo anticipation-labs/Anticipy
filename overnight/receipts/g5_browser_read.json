@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "answer": "The exact main heading (h1) text on the page is: Example Domain",
+  "steps": 4,
+  "final_url": "https://example.com/",
+  "actions": [
+    "navigate",
+    "find_elements",
+    "evaluate",
+    "done"
+  ],
+  "allowed_domains": [
+    "example.com",
+    "www.example.com"
+  ],
+  "error": null,
+  "agent": "browser-use"
+}

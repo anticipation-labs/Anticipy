@@ -1,0 +1,1 @@
+{"success":true,"answer":"NOT_LOGGED_IN","steps":7,"final_url":"about:blank","actions":["navigate","wait","wait","navigate","navigate","wait","wait","done"],"allowed_domains":["mail.google.com","www.mail.google.com"],"error":null,"agent":"browser-use"}

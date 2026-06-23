@@ -1,0 +1,14 @@
+{
+  "mode": "mock",
+  "status": "mock",
+  "label": "mock",
+  "twilio_configured": false,
+  "owner_contact_configured": true,
+  "text": "mock",
+  "call": "mock",
+  "inbound": {
+    "status": "mock",
+    "label": "mock",
+    "poll_seconds": 15.0
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "source": "transcript",
+  "observed_lines": [
+    {
+      "line_no": 1,
+      "text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription."
+    }
+  ],
+  "cards": [
+    {
+      "id": "0a7e498845ba4791aa516e7e005b3c8d",
+      "source": "transcript",
+      "line_no": 1,
+      "source_text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+      "title": "Prepare money task for approval",
+      "disposition": "do",
+      "route": "browser",
+      "action": "prepare_purchase_path_without_payment",
+      "args": {
+        "task_text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription.",
+        "payment_allowed": false
+      },
+      "confidence": 0.78,
+      "reason": "prepare reversible path; stop before final payment/order/submit",
+      "status": "open",
+      "proof": [
+        {
+          "type": "memory_write",
+          "drawer": "open_loops",
+          "memory_id": "806ae96df4214467a1906c7fcf361f17"
+        },
+        {
+          "type": "memory_read_back",
+          "memory_id": "806ae96df4214467a1906c7fcf361f17",
+          "text": "Just buy the new MacBook already, whatever it costs. Pay the parking ticket online tonight. Renew the $900 software subscription."
+        },
+        {
+          "type": "capture_memory_status",
+          "memory_id": "440879b39a9e418b92ad593831b42f7e",
+          "status": "open"
+        },
+        {
+          "type": "card_record",
+          "path": ".anticipy-data/owner_cards/0a7e498845ba4791aa516e7e005b3c8d.json"
+        }
+      ],
+      "execution": null
+    }
+  ],
+  "ignored_line_count": 0
+}

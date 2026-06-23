@@ -1,0 +1,82 @@
+{
+  "started": "2026-06-23T13:18:16",
+  "summary": {
+    "PROVEN": 6,
+    "BLOCKED": 2,
+    "FAILED": 1
+  },
+  "results": [
+    {
+      "id": "G1",
+      "name": "Brain spine: task vs vent vs money vs remember (LIVE)",
+      "status": "PROVEN",
+      "detail": "checks={'vent_line1_ignored': True, 'sarcasm_line6_ignored': True, 'marcus_ask': True, 'money_not_paid': True, 'pickup_card': True, 'wife_remember': True, 'ignored_count_ge_2': True}",
+      "receipt": "receipts/g1_brain_spine.json",
+      "unblock": null
+    },
+    {
+      "id": "G2",
+      "name": "Vent/sarcasm safety: zero actions on pure venting (LIVE)",
+      "status": "PROVEN",
+      "detail": "action_cards=0 ignored=0",
+      "receipt": "receipts/g2_vent_safety.json",
+      "unblock": null
+    },
+    {
+      "id": "G3",
+      "name": "Money floor: nothing auto-pays; all parked before payment (LIVE)",
+      "status": "PROVEN",
+      "detail": "violating_cards=[]",
+      "receipt": "receipts/g3_money_floor.json",
+      "unblock": null
+    },
+    {
+      "id": "G4",
+      "name": "Memory: durable drawers + open loops persisted (LIVE)",
+      "status": "PROVEN",
+      "detail": "open_loops=9",
+      "receipt": "receipts/g4_memory.json",
+      "unblock": null
+    },
+    {
+      "id": "G5",
+      "name": "Browser hand LIVE: drove real Chrome, read a real page",
+      "status": "PROVEN",
+      "detail": "final_url=https://example.com/ status=None",
+      "receipt": "receipts/g5_browser_read.json",
+      "unblock": null
+    },
+    {
+      "id": "G6",
+      "name": "Gmail draft thread (real Chrome, parked before send)",
+      "status": "FAILED",
+      "detail": "status=None \u2014 draft not confirmed",
+      "receipt": "receipts/g6_gmail_draft.json",
+      "unblock": null
+    },
+    {
+      "id": "G7",
+      "name": "Onboarding scrape (LIVE)",
+      "status": "BLOCKED",
+      "detail": "discover returned 0 services (extension/profile may have nothing logged in)",
+      "receipt": "receipts/g7_discover.json",
+      "unblock": "open & sign into a few sites in the clone Chrome, then re-run discover"
+    },
+    {
+      "id": "G8",
+      "name": "Proactive trigger tick runs (engine-side reminder loop) (LIVE)",
+      "status": "PROVEN",
+      "detail": "tick={\"fired\": []}",
+      "receipt": "receipts/g8_trigger_tick.json",
+      "unblock": null
+    },
+    {
+      "id": "G9",
+      "name": "Voice/SMS round-trip",
+      "status": "BLOCKED",
+      "detail": "Twilio not configured in this engine process (channels mode=mock)",
+      "receipt": "receipts/g9_channels_status.json",
+      "unblock": "set TWILIO_* in .env.local + ANTICIPY_CHANNELS_MODE=live, confirm owner phone, expose webhook"
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "source": "transcript",
+  "observed_lines": [
+    {
+      "line_no": 1,
+      "text": "Ugh this traffic is going to make me scream."
+    },
+    {
+      "line_no": 2,
+      "text": "I need to send Marcus the signed lease today."
+    },
+    {
+      "line_no": 3,
+      "text": "Pay the $4,200 invoice whatever it costs."
+    },
+    {
+      "line_no": 4,
+      "text": "Pick up the kids at 2:45."
+    },
+    {
+      "line_no": 5,
+      "text": "My wife prefers texts after lunch."
+    },
+    {
+      "line_no": 6,
+      "text": "Honestly I should just clone myself lol."
+    }
+  ],
+  "cards": [
+    {
+      "id": "51118b83f8574329bd6713d52953a44f",
+      "source": "transcript",
+      "line_no": 2,
+      "source_text": "I need to send Marcus the signed lease today.",
+      "title": "Prepare message for Marcus",
+      "disposition": "ask",
+      "route": "voice_text",
+      "action": "draft_or_confirm_message",
+      "args": {
+        "person": "Marcus",
+        "task_text": "I need to send Marcus the signed lease today."
+      },
+      "confidence": 0.81,
+      "reason": "third-party communication should be confirmed before sending",
+      "status": "open",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "f27bad8b87a64506b7726f86372a5e2c",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "f27bad8b87a64506b7726f86372a5e2c",
+          "text": "I need to send Marcus the signed lease today.",
+          "type": "memory_read_back"
+        },
+        {
+          "memory_id": "b5ca134b7bc74c7aa72177ab436738ca",
+          "status": "open",
+          "type": "capture_memory_status"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/51118b83f8574329bd6713d52953a44f.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": null
+    },
+    {
+      "id": "64f90b41ad9c4fc5a27479b88aec7b4c",
+      "source": "transcript",
+      "line_no": 3,
+      "source_text": "Pay the $4,200 invoice whatever it costs.",
+      "title": "Prepare money task for approval",
+      "disposition": "do",
+      "route": "browser",
+      "action": "prepare_purchase_path_without_payment",
+      "args": {
+        "payment_allowed": false,
+        "task_text": "Pay the $4,200 invoice whatever it costs."
+      },
+      "confidence": 0.78,
+      "reason": "prepare reversible path; stop before final payment/order/submit",
+      "status": "open",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "bfb5e569ccde43299bdbe657e9c8a7cc",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "bfb5e569ccde43299bdbe657e9c8a7cc",
+          "text": "Pay the $4,200 invoice whatever it costs.",
+          "type": "memory_read_back"
+        },
+        {
+          "memory_id": "5c40e597fac94fc6b0c7cb66bba86ce3",
+          "status": "open",
+          "type": "capture_memory_status"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/64f90b41ad9c4fc5a27479b88aec7b4c.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": null
+    },
+    {
+      "id": "612e86698b7f482682acf25fc3cc3130",
+      "source": "transcript",
+      "line_no": 4,
+      "source_text": "Pick up the kids at 2:45.",
+      "title": "Protect pickup or drop-off timing",
+      "disposition": "do",
+      "route": "api",
+      "action": "create_calendar_or_reminder",
+      "args": {
+        "kind": "pickup_or_dropoff",
+        "task_text": "Pick up the kids at 2:45."
+      },
+      "confidence": 0.86,
+      "reason": "care obligation plus time/reminder signal",
+      "status": "open",
+      "proof": [
+        {
+          "drawer": "open_loops",
+          "memory_id": "ec139d69cd404f0b99c5f1e5f00db243",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "ec139d69cd404f0b99c5f1e5f00db243",
+          "text": "Pick up the kids at 2:45.",
+          "type": "memory_read_back"
+        },
+        {
+          "memory_id": "f5c47b73ffa94a6ea81d528175833720",
+          "status": "open",
+          "type": "capture_memory_status"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/612e86698b7f482682acf25fc3cc3130.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": null
+    },
+    {
+      "id": "bfa1e2ff9f074ceebd134781be70e8be",
+      "source": "transcript",
+      "line_no": 5,
+      "source_text": "My wife prefers texts after lunch.",
+      "title": "Remember: My wife prefers texts after lunch.",
+      "disposition": "remember",
+      "route": "memory",
+      "action": "write_profile_memory",
+      "args": {
+        "memory_text": "My wife prefers texts after lunch."
+      },
+      "confidence": 0.82,
+      "reason": "stated preference, identity, or relationship fact",
+      "status": "done",
+      "proof": [
+        {
+          "drawer": "profile",
+          "memory_id": "8d41eff5a1634497823fbe8c37e553bc",
+          "type": "memory_write"
+        },
+        {
+          "memory_id": "8d41eff5a1634497823fbe8c37e553bc",
+          "text": "My wife prefers texts after lunch.",
+          "type": "memory_read_back"
+        },
+        {
+          "path": ".anticipy-data/owner_cards/bfa1e2ff9f074ceebd134781be70e8be.json",
+          "type": "card_record"
+        }
+      ],
+      "execution": null
+    }
+  ],
+  "ignored_line_count": 2
+}

@@ -1,0 +1,39 @@
+[
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@07b52360cc15066f987c910ab34dfbcd4a8778d2/inspector.html?ws=127.0.0.1:9222/devtools/page/5D75898EC1C3EED695E486CCE04CA494",
+    "id": "5D75898EC1C3EED695E486CCE04CA494",
+    "title": "New Tab",
+    "type": "page",
+    "url": "chrome://newtab/",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/5D75898EC1C3EED695E486CCE04CA494"
+  },
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@07b52360cc15066f987c910ab34dfbcd4a8778d2/inspector.html?ws=127.0.0.1:9222/devtools/page/E8A1C85531C18368A76A92877C78AB1A",
+    "id": "E8A1C85531C18368A76A92877C78AB1A",
+    "parentId": "5D75898EC1C3EED695E486CCE04CA494",
+    "title": "chrome-untrusted://new-tab-page/one-google-bar?paramsencoded=",
+    "type": "iframe",
+    "url": "chrome-untrusted://new-tab-page/one-google-bar?paramsencoded=",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/E8A1C85531C18368A76A92877C78AB1A"
+  },
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@07b52360cc15066f987c910ab34dfbcd4a8778d2/inspector.html?ws=127.0.0.1:9222/devtools/page/691E167259CABEB9E74FFD4BBFB9E4E5",
+    "id": "691E167259CABEB9E74FFD4BBFB9E4E5",
+    "title": "Omnibox Popup",
+    "type": "browser_ui",
+    "url": "chrome://omnibox-popup.top-chrome/",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/691E167259CABEB9E74FFD4BBFB9E4E5"
+  },
+  {
+    "description": "",
+    "devtoolsFrontendUrl": "https://chrome-devtools-frontend.appspot.com/serve_rev/@07b52360cc15066f987c910ab34dfbcd4a8778d2/inspector.html?ws=127.0.0.1:9222/devtools/page/2310E234F6E08376BBC4146FA5159298",
+    "id": "2310E234F6E08376BBC4146FA5159298",
+    "title": "Omnibox Popup",
+    "type": "browser_ui",
+    "url": "chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/2310E234F6E08376BBC4146FA5159298"
+  }
+]
