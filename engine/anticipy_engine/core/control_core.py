@@ -2002,6 +2002,23 @@ class ControlCore:
             self.glassbox.log("completeness_sweep_recovered", {"count": added})
         return observed
 
+    def _resync_card_copy(self, cards) -> None:
+        """M2: after humanize_cards rewrote each card's title/reason in the product voice, mirror
+        that onto the durable owner-card record so GET /owner/cards shows the same human copy."""
+        for c in cards:
+            try:
+                p = self.data_dir / "owner_cards" / f"{getattr(c, 'id', '')}.json"
+                if not p.exists():
+                    continue
+                rec = json.loads(p.read_text(encoding="utf-8"))
+                oc = rec.get("owner_card")
+                if isinstance(oc, dict):
+                    oc["title"] = c.title
+                    oc["reason"] = c.reason
+                    p.write_text(json.dumps(rec, indent=2, sort_keys=True), encoding="utf-8")
+            except Exception:
+                pass
+
     async def _owner_ingest_inner(self, source, text, meta, execute_actions, observed=None):
         raw_observed = self.owner_mode.observe(text)
         raw_lines = [l.text for l in raw_observed]
@@ -2180,6 +2197,14 @@ class ControlCore:
              "ignored": ignored, "execute_actions": execute_actions},
         )
         ignored += getattr(self, "_silenced_count", 0)   # M1d: include vent/sarcasm/aside lines dropped during expansion
+        # M2: render every card in the product voice — no engine template/ID/arrow reaches the user,
+        # on BOTH this response AND the durable board (GET /owner/cards reads the persisted records).
+        try:
+            from . import voice as _voice
+            await _voice.humanize_cards(self.gateway, cards)
+            self._resync_card_copy(cards)
+        except Exception as _copy_exc:
+            self.glassbox.log("humanize_cards_error", {"error": str(_copy_exc)})
         result = OwnerIngestResult(source=source, observed_lines=observed, cards=cards,
                                    ignored_line_count=ignored)
         out = result.model_dump(mode="json")

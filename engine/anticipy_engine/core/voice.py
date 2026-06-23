@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from .gateway import PROVIDER_OPENROUTER, SMART
+from .gateway import PROVIDER_OPENROUTER, SMART, CHEAP
 
 # The rules, injected into every model-written line so the voice is consistent everywhere.
 PRODUCT_VOICE = (
@@ -95,23 +95,143 @@ _WHY = {
 
 
 def ask_line(action: str, code: str, category: str = "", reason: str = "") -> str:
-    """A human yes/no check before a person-or-money action. KEEPS the reply mechanism (a plain
-    YES/NO, with a short code as a tie-breaker when several things are pending) but drops the robot
-    framing — no 'Anticipy wants to:' and no 'Why it paused:'. The 'why' comes from the structured
-    category, not the internal reason string. Deterministic on purpose: the code must be exact for
-    channels/inbound.py to match the reply to THIS ask."""
+    """A human check before a person-or-money action. Reads like a thoughtful friend texting,
+    while still carrying the short reply code needed when several asks are pending."""
     a = (action or "").strip().rstrip(".")
+    # Strip internal prefixes that sound robotic in SMS
+    for prefix in ("Follow up on your commitment:", "Follow up:", "Confirm task:"):
+        if a.lower().startswith(prefix.lower()):
+            a = a[len(prefix):].strip()
     a = (a[0].lower() + a[1:]) if a else a
-    line = f"Quick check before I do this — want me to {a}?" if a else "Quick check — is this okay?"
+    if a:
+        line = f"Hey — should I go ahead and {a}?"
+    else:
+        line = "Hey — want me to go ahead with this?"
     why = _WHY.get((category or "").strip())
     if not why and reason and not reads_like_a_robot(reason) and len(reason) < 80 \
             and "->" not in reason and ";" not in reason:
         why = reason[0].upper() + reason[1:]
     if why:
         line += " " + why
-    code = (code or "").strip()
-    tail = "Just reply YES or NO."
     if code:
-        # show the code on BOTH a yes and a no so either choice is unambiguous when several pend
-        tail = f"Just reply YES or NO — or \"YES {code}\" / \"NO {code}\" if I've asked about a couple things."
-    return line + "\n" + tail
+        line += f" Reply YES {code} or NO {code}."
+    return line
+
+
+# ---- CARD COPY (M2): turn the engine's structured card into the human line the user sees ----
+# The card's title/reason are born as engine templates ("Block money action", "Owner task: ...",
+# "...-> fail-safe ask"). The user must NEVER see those. This is the single seam that renders every
+# card in the product voice: a deterministic, always-clean floor (no IDs, no engine words, no arrows,
+# varied so it never reads formulaic) plus a live-model polish for true per-utterance variety.
+import json as _json
+
+_ID_RE = re.compile(r"\b[0-9a-f]{12,}\b", re.I)
+_PREFIX_RE = re.compile(
+    r"^\s*(?:owner task|confirm task|prepare(?: message for)?|follow up(?: on your commitment)?|"
+    r"block money action|resolve browser task|capture reminder or open loop|reminder set|task)\s*:?\s*",
+    re.I)
+
+
+def _clean_task_text(text: str) -> str:
+    t = _ID_RE.sub("", _PREFIX_RE.sub("", (text or "").strip())).strip()
+    t = _REMIND_PREFIX.sub("", t).strip() or t
+    return t
+
+
+def _doing_phrase(disp: str) -> str:
+    return {"do": "you're handling it", "ask": "you want to check first",
+            "blocked": "it touches money so you'll hold it",
+            "remember": "you're just noting it"}.get(disp, "you're handling it")
+
+
+def humanize_card(card) -> None:
+    """Deterministic, model-free human copy for a card's title + reason — the ALWAYS-clean floor:
+    no IDs, no engine templates, no '->' arrows, and seeded by the user's words so different cards
+    never read identically. humanize_cards() polishes on top with the live model."""
+    disp = (getattr(card, "disposition", "") or "")
+    act = (getattr(card, "action", "") or "")
+    route = (getattr(card, "route", "") or "")
+    args = getattr(card, "args", None) or {}
+    task = _clean_task_text(getattr(card, "source_text", "") or getattr(card, "title", "") or "")
+    short = task[:60].rstrip(" .,")
+    low = (short[0].lower() + short[1:]) if short else ""
+    who = (args.get("person") or "").strip()
+    if disp == "blocked":
+        opts = ["This one spends money, so I'll hold it for your okay.",
+                "Money — I'll wait for your go before I do this.",
+                "Left for you: it touches money, so you make the call."]
+        why = "It spends your money, so I won't move without your okay."
+    elif disp == "remember":
+        opts = ["Got it — I'll remember that.", "Noted.", "Filed that away for you."]
+        why = "Worth keeping in mind."
+    elif disp == "ask":
+        if who and ("message" in act or "draft" in act or route == "voice_text"):
+            opts = [f"Want me to message {who}?", f"Should I reach out to {who}?",
+                    f"I can write to {who} — say the word."]
+            why = "It reaches someone else, so I'll check with you first."
+        elif route == "browser" or "research" in act or "find" in act:
+            opts = ([f"Want me to look into {low}?", f"Should I dig up {low} for you?",
+                     f"I can chase down {low} — go?"] if low
+                    else ["Want me to look into this?", "Should I dig this up?", "I can chase this down — go?"])
+            why = "I want to get it right before I act."
+        else:
+            opts = ([f"Want me to handle {low}?", f"Should I take care of {low}?",
+                     f"I can do {low} — give me the nod?"] if low
+                    else ["Want me to handle this?", "Should I take this on?", "I can do this — give me the nod?"])
+            why = "I'll confirm before I act on this."
+    else:  # do
+        title_lc = (getattr(card, "title", "") or "").lower()
+        if "calendar" in act or "reminder" in act or "pickup" in title_lc or "timing" in title_lc:
+            opts = ([f"I've got {low}.", f"Locked in — {low}.", f"On it — {low}, I'll watch the time."] if low
+                    else ["I've got the timing on this.", "Locked in.", "On it — I'll keep the time."])
+            why = "Low-risk, so I'll just keep it for you."
+        else:
+            opts = ([f"On it — {low}.", f"I've got {low}.", f"Taking care of {low}."] if low
+                    else ["On it.", "I've got this.", "Taking care of it."])
+            why = "Low-risk, so I'll take care of it."
+    title = opts[hash((task or "") + disp) % len(opts)]
+    card.title = _ID_RE.sub("", title).strip()[:120]
+    card.reason = why
+
+
+def _extract_json_array(raw: str) -> str:
+    s = (raw or "").strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```[a-z]*\s*|\s*```$", "", s).strip()
+    a, b = s.find("["), s.rfind("]")
+    return s[a:b + 1] if a != -1 and b != -1 and b > a else s
+
+
+async def humanize_cards(gateway, cards) -> None:
+    """Render every card in the product voice. Deterministic floor first (always clean on both the
+    ingest response AND the durable board), then ONE batched live-model call for per-utterance variety
+    ('never the same line twice'). Words only — execution already decided upstream."""
+    if not cards:
+        return
+    for c in cards:
+        humanize_card(c)
+    if getattr(gateway, "provider", None) != PROVIDER_OPENROUTER:
+        return
+    items = [{"n": i, "said": (getattr(c, "source_text", "") or "")[:160],
+              "doing": _doing_phrase(getattr(c, "disposition", "") or "")} for i, c in enumerate(cards)]
+    prompt = (PRODUCT_VOICE + "\n\nFor EACH item below, write a fresh human one-line TITLE (what you'd "
+              "text them you're doing about it) and a short WHY. Vary the wording — never two identical "
+              "lines, never a label or a colon-prefix. Return ONLY a JSON array like "
+              "[{\"n\":0,\"title\":\"...\",\"why\":\"...\"}].\n\nITEMS:\n" + _json.dumps(items))
+    try:
+        raw = await gateway.think(prompt, tier=CHEAP, caller="copy", json_mode=True,
+                                  temperature=0.8, max_tokens=700)
+        arr = _json.loads(_extract_json_array(raw))
+        by = {int(x["n"]): x for x in arr if isinstance(x, dict) and "n" in x}
+    except Exception:
+        return
+    for i, c in enumerate(cards):
+        x = by.get(i)
+        if not x:
+            continue
+        t = (x.get("title") or "").strip().strip('"').strip()
+        w = (x.get("why") or "").strip().strip('"').strip()
+        if t and not reads_like_a_robot(t) and "->" not in t and "→" not in t and not _PREFIX_RE.match(t):
+            c.title = _ID_RE.sub("", t)[:120]
+        if w and not reads_like_a_robot(w) and "->" not in w and "→" not in w:
+            c.reason = w[:160]
