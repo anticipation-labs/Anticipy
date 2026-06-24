@@ -53,7 +53,9 @@ async def synthesize_dossier(signals: dict, gateway) -> dict:
                 "sources": [s["key"] for s in readable], "gaps": [],
                 "clarify": "I read your accounts but couldn't synthesize them just now — I'll retry.",
                 "error": str(e)[:160]}
-    return {"dossier": doss, "confidence": float(doss.get("confidence", 0.5) or 0.5),
+    _conf = doss.get("confidence")
+    return {"dossier": doss,
+            "confidence": float(_conf) if isinstance(_conf, (int, float)) else 0.5,
             "needs_login": needs_login, "sources": [s["key"] for s in readable],
             "gaps": doss.get("gaps", []) or [],
             "clarify": "" if doss else "I couldn't make sense of what I read — let's go over it on a call.",

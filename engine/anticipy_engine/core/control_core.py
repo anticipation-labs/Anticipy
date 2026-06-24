@@ -594,6 +594,8 @@ class ControlCore:
         self.trust_ledger = TrustLedger(base / "trust_ledger.json")
         from ..onboarding.permissions import Permissions as _OnbPerms
         self.onboard_permissions = _OnbPerms(base / "onboard_permissions.json")
+        from ..agent.resume_store import ResumeStore as _ResumeStore
+        self.resume_store = _ResumeStore(base / "resume_state.json")
         self._autonomy_mode_path = base / "autonomy_mode.txt"
         try:
             self._autonomy_mode = (self._autonomy_mode_path.read_text(encoding="utf-8").strip()

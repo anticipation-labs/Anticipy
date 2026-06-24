@@ -1609,6 +1609,13 @@ async def agent_run(body: AgentRunIn) -> dict:
     # stop or a wall handoff is already a correct outcome and is not judged.
     if body.judge and not result.get("needs_human") and not result.get("stopped_for_safety"):
         result["judgment"] = await judge(gw, body.task, result, image=shot)
+    # M4 (audit #5): a wall handoff mints a resume_token — PERSIST the run state under it so a later
+    # /agent/resume can be VALIDATED and resumed with context, instead of a blind cold restart.
+    if result.get("resume_token") and (result.get("needs_human") or result.get("paused")):
+        core.resume_store.put(str(result["resume_token"]), {
+            "task": body.task, "start_url": body.start_url,
+            "wall_kind": result.get("wall_kind"),
+            "history": (result.get("history") or [])[-30:], "step": result.get("steps")})
     return result
 
 
@@ -1626,14 +1633,24 @@ async def agent_resume(body: AgentResumeIn) -> dict:
     # http(s) host, exactly like /agent/run — a private/metadata/file:// resume target is
     # rejected (422) before the agent continues.
     _assert_public_agent_url(body.start_url)
-    # STUB seam: the human cleared the wall and said "go". Restoring the exact
-    # mid-plan state (same subgoal/history) is the TODO; for now we continue the
-    # task from the now-unblocked page and never re-touch the wall.
-    core.glassbox.log("handoff", {"event": "resume", "token": body.resume_token, "url": body.start_url})
+    # M4 (audit #5): VALIDATE the resume_token against the stored state. A present token resumes WITH
+    # context (the prior history is handed to the agent so it doesn't redo what's done); a missing/expired
+    # token resumes COLD (resumed_cold=True). Either way it continues from the now-unblocked page and
+    # never re-touches the wall. (Full mid-plan loop re-entry is a noted optimization on top of this.)
+    state = core.resume_store.pop(body.resume_token) if body.resume_token else None
+    core.glassbox.log("handoff", {"event": "resume", "token": body.resume_token,
+                                  "url": body.start_url, "restored": bool(state)})
     agent = WebVoyagerAgent(core.browser_link, gateway_agent, max_steps=body.max_steps,
                             notifier=core.notify_user)
-    result = await agent.run(body.task, body.start_url)
+    task = body.task
+    prior = (state or {}).get("history") or []
+    if prior:
+        task = (body.task + "\n\n[Resuming after the user cleared a wall. Already done: "
+                + "; ".join(str(h)[:80] for h in prior[-6:])
+                + ". Continue from here — do NOT redo these steps.]")
+    result = await agent.run(task, body.start_url)
     result["resumed"] = True
+    result["resumed_cold"] = state is None
     shot = result.pop("final_shot", None)
     if body.judge and not result.get("needs_human") and not result.get("stopped_for_safety"):
         result["judgment"] = await judge(gateway_agent, body.task, result, image=shot)
