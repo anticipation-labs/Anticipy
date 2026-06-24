@@ -26,13 +26,23 @@ _LOGIN = re.compile(
     r"sign ?in|log ?in|enter your password|forgot password|create (an )?account|continue with",
     re.I,
 )
+# MFA / 2FA / one-time-code challenge (sweep #16) — a first-class wall: we NEVER read a code from the
+# user's texts or type it ourselves; we pause, ask the human to complete it, and resume.
+_MFA = re.compile(
+    r"2fa|two[- ]factor|multi[- ]factor|one[- ]time (code|pass)|verification code|authenticator|"
+    r"enter the \d+[- ]digit|\b\d-digit code|security code|otp\b|we (texted|sent|emailed) you a code|"
+    r"approve (the|this) (sign[- ]?in|login|request)|check your phone",
+    re.I,
+)
 
 
 def classify_wall(text: str) -> str:
-    """captcha | login | block — best-effort, from page text only."""
+    """captcha | mfa | login | block — best-effort, from page text only."""
     t = text or ""
     if _CAPTCHA.search(t):
         return "captcha"
+    if _MFA.search(t):
+        return "mfa"
     if _LOGIN.search(t):
         return "login"
     return "block"
@@ -43,6 +53,7 @@ def ask_message(wall_kind: str, url: str) -> str:
     site = url or "the open tab"
     what = {
         "login": "log in",
+        "mfa": "approve the sign-in / enter the verification code",
         "captcha": "clear the verification / captcha",
         "block": "get past the block",
     }.get(wall_kind, "clear it")

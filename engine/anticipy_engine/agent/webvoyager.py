@@ -97,7 +97,11 @@ CHECKOUT_URL_RE = re.compile(
 )
 BLOCK_MARKERS = ("enter the characters you see", "type the characters", "captcha",
                  "are you a robot", "are you a human", "unusual traffic", "verify you are human",
-                 "press & hold", "access denied", "checking your browser")
+                 "press & hold", "access denied", "checking your browser",
+                 # MFA / OTP walls (sweep #16) — the run loop must pause+hand off on these too
+                 "two-factor", "two factor", "verification code", "authenticator app",
+                 "enter the code", "one-time code", "we texted you", "we sent you a code",
+                 "approve this sign-in", "approve the sign-in", "check your phone", "6-digit code")
 LOGIN_URL_RE = re.compile(r"/(?:login|signin|sign-in)(?:[/?#]|$)|[?&](?:login|signin|sign_in)\b", re.I)
 COMMERCE_STOP = {
     "the", "and", "for", "with", "that", "this", "thing", "item", "product", "cart", "basket",
