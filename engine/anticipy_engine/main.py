@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 from . import __version__
 from .agent import WebVoyagerAgent, judge
 from .capture.transcribe import is_audio_file, transcribe_audio
-from .channels.conversation_relay import ConversationRelayBrain, stream_tokens
+from .channels.conversation_relay import ConversationRelayBrain, OnboardingCallBrain, stream_tokens
 from .channels.inbound import InboundPoller
 from .core.control_core import ControlCore
 from .core.envelopes import EventSource, Job, new_id
@@ -1752,18 +1752,19 @@ async def agent_judge(body: AgentJudgeIn) -> dict:
     return await judge(gateway_agent, body.task, {"answer": body.answer, "final_url": body.final_url})
 
 
-def _relay_brain() -> ConversationRelayBrain:
-    """The brain for the two-way voice line — the SAME Room 1.5 decider, never a fork.
+def _relay_brain():
+    """The brain for the two-way voice CALL.
 
-    Live engines (ANTICIPY_MODEL_PROVIDER=openrouter) already hold a constructed decider on
-    the proactive engine; reuse that exact instance. Stub engines skip the decider for a
-    deterministic suite, so build the very same ``Decider`` class on the engine's own
-    gateway — identical prompt, parse, and verdicts. Either way the voice answers with the
-    same judgment the always-listening loop would make on that line."""
-    decider = getattr(core.proactive, "decider", None)
-    if decider is not None:
-        return ConversationRelayBrain(decider)
-    return ConversationRelayBrain.from_gateway(core.gateway, glassbox=core.glassbox)
+    A live call is a CONVERSATION, not an ambient judgment: the OnboardingCallBrain drives a warm setup
+    chat with real turn memory (Omar's ask: a call you can't tell is AI), and still holds money/irreversible
+    for a yes — it executes nothing. (The ambient ACT/ASK/SILENT judging still runs on the LISTEN stream via
+    the decider; ConversationRelayBrain remains for that verdict-rendering path.) Set ANTICIPY_CR_BRAIN=decider
+    to fall back to the old verdict brain on the call."""
+    if (os.environ.get("ANTICIPY_CR_BRAIN") or "").strip().lower() == "decider":
+        decider = getattr(core.proactive, "decider", None)
+        return ConversationRelayBrain(decider) if decider is not None \
+            else ConversationRelayBrain.from_gateway(core.gateway, glassbox=core.glassbox)
+    return OnboardingCallBrain(core.gateway, glassbox=core.glassbox)
 
 
 def _cr_max_turns() -> int:

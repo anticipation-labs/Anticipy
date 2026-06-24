@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..core.gateway import PROVIDER_OPENROUTER
+from ..core.gateway import PROVIDER_OPENROUTER, SMART
 from ..proactive.agent_reply import _FALLBACK as _REPLY_FALLBACK
 from ..proactive.agent_reply import agent_reply
 from ..proactive.decider import ACT, ASK, SILENT, UNAVAILABLE, Decider
@@ -124,6 +124,60 @@ class ConversationRelayBrain:
         # agent_reply self-falls-back to a generic hiccup line on any model error; for the voice
         # line the verdict-specific phrasing is more useful, so prefer it over the generic line.
         return self.render(verdict) if (not reply or reply == _REPLY_FALLBACK) else reply
+
+
+_ONBOARD_SYS = (
+    "You are Anticipy, on a warm, real phone call with your owner to get set up so you can run their life "
+    "well. You sound like a sharp, friendly human assistant — natural and brief (1-2 spoken sentences), "
+    "never robotic, never a survey. Drive the conversation: react to what they just said like a person "
+    "would (a quick, genuine reflection), then ask ONE good next question — their work and what a normal "
+    "week looks like, the people who matter (family, clients, team), what they keep forgetting or dread, "
+    "and how hands-on they want you to be. Be genuinely curious and a little warm. NEVER dismiss them or "
+    "say there's nothing to talk about — there is always a next thing to learn. If they ask what you can "
+    "do, answer concretely and warmly. If they ask you to spend money or do anything irreversible, say "
+    "you'll set it up and hold it for their go-ahead — you never spend or send without a clear yes. This "
+    "is a flowing conversation, not an interview. Output ONLY the words you'd say out loud, nothing else."
+)
+
+
+class OnboardingCallBrain:
+    """The warm two-way brain for an onboarding/setup CALL (Omar's ask: a call you can't tell is AI).
+
+    Unlike the ambient ``ConversationRelayBrain`` (which judges each line ACT/ASK/SILENT and can sound
+    dismissive on a casual turn), this DRIVES a real conversation: it remembers the call so far and asks
+    good setup questions. Words only — it executes nothing; money/irreversible are spoken as 'I'll hold
+    that for your go-ahead', never as done. Falls back to a warm deterministic line on a stub/keyless brain
+    or any model error, so the call is never silent and never canned-dismissive."""
+
+    def __init__(self, gateway, glassbox=None) -> None:
+        self.gateway = gateway
+        self.glassbox = glassbox
+        self.history: list = []  # [(speaker, text)] — the call so far
+
+    async def turn(self, voice_prompt: str) -> "RelayTurn":
+        prompt = (voice_prompt or "").strip()
+        if prompt:
+            self.history.append(("owner", prompt))
+        reply = await self._generate()
+        self.history.append(("anticipy", reply))
+        if self.glassbox:
+            self.glassbox.log("onboarding_call_turn", {"owner": prompt[:120], "reply": reply[:120]})
+        return RelayTurn(prompt=prompt, verdict="converse", reply=reply)
+
+    async def _generate(self) -> str:
+        # stub/keyless: a warm, non-dismissive deterministic opener/continuation (never "nothing to chat about")
+        if getattr(self.gateway, "provider", None) != PROVIDER_OPENROUTER:
+            n = len([1 for s, _ in self.history if s == "owner"])
+            return ("Tell me a bit about what a normal week looks like for you." if n <= 1
+                    else "Got it — and who are the people I should know about in your day-to-day?")
+        convo = "\n".join(f"{'You' if s == 'owner' else 'Anticipy'}: {t}" for s, t in self.history[-12:])
+        full = f"{_ONBOARD_SYS}\n\nThe call so far:\n{convo}\n\nAnticipy:"
+        try:
+            reply = await self.gateway.think(full, tier=SMART, caller="agent", temperature=0.6, max_tokens=110)
+            reply = (reply or "").strip().strip('"')
+            return reply or "I'm right here with you — tell me more."
+        except Exception:
+            return "I'm here with you — what's the part of your week you'd most want off your plate?"
 
 
 def stream_tokens(text: str):
