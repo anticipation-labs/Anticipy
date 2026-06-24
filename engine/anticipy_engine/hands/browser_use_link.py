@@ -329,35 +329,48 @@ def browse_read(
     if not cdp_url:
         child_env["ANTICIPY_BU_CHROME_BIN"] = chrome_binary()
 
+    # Run the bridge in its OWN process group so a timeout can group-kill the runner AND the Chrome it
+    # spawned — subprocess.run's timeout left those ORPHANED (a real process/profile leak). (sweep r2)
+    import os as _os
+    import signal as _signal
+    _pg = {"preexec_fn": _os.setsid} if hasattr(_os, "setsid") else {}
+    _out = _err = ""
+    proc = None
     try:
-        proc = subprocess.run(
-            cmd,
-            input=json.dumps(req),
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            env=child_env,
-        )
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True, env=child_env, **_pg)
+        _out, _err = proc.communicate(input=json.dumps(req), timeout=timeout_s)
     except subprocess.TimeoutExpired:
+        try:
+            if proc is not None and hasattr(_os, "killpg"):
+                _os.killpg(_os.getpgid(proc.pid), _signal.SIGKILL)
+            elif proc is not None:
+                proc.kill()
+        except Exception:
+            pass
+        try:
+            if proc is not None:
+                proc.communicate(timeout=5)
+        except Exception:
+            pass
         return BrowseReadResult(
-            success=False,
-            result=None,
-            url=url,
-            structured=structured,
+            success=False, result=None, url=url, structured=structured,
             error=f"browser bridge timed out after {timeout_s}s",
         )
     except Exception as e:
+        try:
+            if proc is not None:
+                proc.kill()
+        except Exception:
+            pass
         return BrowseReadResult(
-            success=False,
-            result=None,
-            url=url,
-            structured=structured,
+            success=False, result=None, url=url, structured=structured,
             error=f"browser bridge launch failed: {type(e).__name__}: {e}",
         )
 
-    payload = _parse_runner_output(proc.stdout)
+    payload = _parse_runner_output(_out)
     if payload is None:
-        tail = (proc.stderr or proc.stdout or "")[-400:]
+        tail = (_err or _out or "")[-400:]
         return BrowseReadResult(
             success=False,
             result=None,
