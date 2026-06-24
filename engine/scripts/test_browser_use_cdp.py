@@ -23,12 +23,28 @@ CAPTURED = {}
 
 class _FakeProc:
     def __init__(self, stdout):
+        self._stdout = stdout
         self.stdout = stdout
         self.stderr = ""
         self.returncode = 0
+        self.pid = 0
+
+    def communicate(self, input=None, timeout=None):  # browse_read now uses Popen.communicate
+        if input is not None:
+            CAPTURED["req"] = json.loads(input)
+        return (self._stdout, "")
+
+    def kill(self):
+        pass
 
 
-def _fake_run(cmd, input=None, **kwargs):
+def _fake_popen(cmd, **kwargs):
+    payload = {"success": True, "result": "ok", "steps": 1, "url": "https://example.org",
+               "urls": [], "actions": [], "elapsed_s": 0.1}
+    return _FakeProc(bul._RESULT_SENTINEL + " " + json.dumps(payload) + "\n")
+
+
+def _fake_run(cmd, input=None, **kwargs):  # kept for back-compat
     CAPTURED["req"] = json.loads(input)
     payload = {"success": True, "result": "ok", "steps": 1, "url": "https://example.org",
                "urls": [], "actions": [], "elapsed_s": 0.1}
@@ -49,7 +65,8 @@ def main():
     _os.environ["ANTICIPY_BU_CHROME_BIN"] = _fake_chrome
     _os.environ["ANTICIPY_BROWSERUSE_PYTHON"] = _sys.executable
     assert bul.available()["ok"], bul.available()
-    bul.subprocess = types.SimpleNamespace(run=_fake_run,
+    bul.subprocess = types.SimpleNamespace(Popen=_fake_popen, run=_fake_run,
+                                           PIPE=_real_subprocess.PIPE,
                                            TimeoutExpired=_real_subprocess.TimeoutExpired)
 
     # READ with a loopback cdp_url THREADS THROUGH (attaching for a read is allowed — no actions)
