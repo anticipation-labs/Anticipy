@@ -44,7 +44,7 @@ async def run_loop(core, cdp_url: str | None = None, max_layers: int = MAX_LAYER
         # GENUINE read of the allowed surfaces — deeper each layer (honest needs_login; never faked)
         max_chars, scroll_steps, dwell, settle = _DEPTH.get(layer, (8000, 10, 2.0, 4.5))
         signals = await run_in_threadpool(scrape_owner, cdp_url, allowed, max_chars, scroll_steps, dwell, settle)
-        doss = await _dossier.synthesize_dossier(signals, core.gateway)
+        doss = await _dossier.synthesize_dossier(signals, core.gateway, per_surface_chars=max_chars)
         counts = _dossier.write_dossier_to_memory(doss, core.memory)
         conf = float(doss.get("confidence", 0.0) or 0.0)
         needs_login = signals.get("needs_login", [])

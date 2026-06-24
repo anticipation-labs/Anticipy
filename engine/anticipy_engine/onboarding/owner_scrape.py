@@ -113,6 +113,12 @@ _EXTRACTORS = {"gmail_inbox": _GMAIL_JS, "gmail_sent": _GMAIL_SENT_JS, "calendar
                "contacts": _CONTACTS_JS, "linkedin": _LINKEDIN_JS}
 
 
+# sweep r3: a surface must yield at least this many STRUCTURED records before we trust the structured
+# render over the rich innerText fallback — so one stray chrome node (a toolbar button, a header row)
+# can't disable the fallback and leave a near-empty catalog built from page chrome.
+_RECORD_FLOOR = 5
+
+
 def _record_key(rec: dict) -> str:
     t = rec.get("type")
     if t == "email":  # direction + correspondent so sent-to-X and received-from-X never collapse
@@ -227,7 +233,7 @@ async def _read_surface(call, surface: dict, max_chars: int, scroll_steps: int,
 
         if extractor:
             _ingest_records(await _eval(call, extractor))
-        if not records:
+        if len(records) < _RECORD_FLOOR:  # quality-gated (sweep r3): keep the rich fallback until enough real records
             _ingest_lines(first)
         last_top = -1.0
         for _ in range(max(1, scroll_steps)):
@@ -235,7 +241,7 @@ async def _read_surface(call, surface: dict, max_chars: int, scroll_steps: int,
             await asyncio.sleep(dwell)  # let lazily-loaded rows render
             if extractor:
                 _ingest_records(await _eval(call, extractor))
-            if not records:
+            if len(records) < _RECORD_FLOOR:
                 _ingest_lines(await _eval(call, _TEXT_JS) or "")
             top = float(pos.get("top") or 0)
             if top <= last_top + 2 and top >= float(pos.get("max") or 0) - 2:
@@ -244,7 +250,10 @@ async def _read_surface(call, surface: dict, max_chars: int, scroll_steps: int,
             if len(records) > 200 or sum(len(x) + 1 for x in flat) > max_chars:
                 break
 
-        text = (_render_records(records) if records else "\n".join(flat))[:max_chars]
+        # prefer the structured render only when it clearly has substance; otherwise the rich innerText
+        # (so a chrome-only handful of records can never masquerade as the whole surface).
+        text = (_render_records(records) if len(records) >= _RECORD_FLOOR
+                else ("\n".join(flat) or _render_records(records)))[:max_chars]
     except Exception as e:
         return {**surface, "status": "error", "reason": str(e)[:160], "needs_login": False,
                 "text": "", "chars": 0, "final_url": "", "scrolls": 0, "records": []}

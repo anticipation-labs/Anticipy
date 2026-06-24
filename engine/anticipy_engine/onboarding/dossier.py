@@ -24,7 +24,7 @@ _PROMPT = (
 )
 
 
-async def synthesize_dossier(signals: dict, gateway) -> dict:
+async def synthesize_dossier(signals: dict, gateway, per_surface_chars: int = 4000) -> dict:
     surfaces = (signals or {}).get("surfaces", []) or []
     readable = [s for s in surfaces if s.get("status") == "ok" and s.get("text")]
     needs_login = [s.get("key") for s in surfaces if s.get("needs_login")]
@@ -42,7 +42,9 @@ async def synthesize_dossier(signals: dict, gateway) -> dict:
                 "needs_login": needs_login, "sources": [s["key"] for s in readable], "gaps": [],
                 "clarify": "", "model": "none"}
 
-    blob = "\n\n".join(f"=== {s.get('label', s['key'])} ===\n{(s.get('text') or '')[:4000]}"
+    # sweep r3: budget per surface = the LAYER's max_chars (threaded from loop.py), so a deep layer-4
+    # scrape actually feeds the deeper catalogue to the model instead of being re-cut to the layer-1 head.
+    blob = "\n\n".join(f"=== {s.get('label', s['key'])} ===\n{(s.get('text') or '')[:max(2000, per_surface_chars)]}"
                        for s in readable)
     try:
         raw = await gateway.think(_PROMPT + blob, tier=SMART, caller="gate", temperature=0, max_tokens=1300)
