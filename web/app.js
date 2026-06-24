@@ -260,6 +260,7 @@
     var input = el("input", "note-input");
     input.type = "text";
     input.placeholder = "Add a note…";
+    input.setAttribute("aria-label", "Add a note to " + (card.title || "this card"));
     if (notes[card.id]) input.value = notes[card.id];
     input.addEventListener("click", function (e) { e.stopPropagation(); });
     input.addEventListener("keydown", function (e) {
@@ -318,34 +319,48 @@
     }
   }
 
+  /* an accessible label that names the action AND the card it acts on, so a
+     screen reader announces e.g. "Confirm: Book dentist — Thursday afternoon".
+     The visible label stays short; the aria-label carries the full intent. */
+  function ariaFor(verb, card) {
+    var title = (card && card.title) ? card.title : "this card";
+    return verb + ": " + title;
+  }
+
   function makeConfirm(card) {
     var b = el("button", "act-confirm");
     b.type = "button";
     b.innerHTML = "Confirm " + CHECK_SVG;
+    b.setAttribute("aria-label", ariaFor("Confirm", card));
     b.addEventListener("click", function () { doResolve(card, true, "confirm"); });
     return b;
   }
   function makeDeny(card, label) {
     var b = el("button", "act-deny", label);
     b.type = "button";
+    // label may be "Not now" / "Undo" — name the intent for a screen reader
+    b.setAttribute("aria-label", ariaFor(label === "Undo" ? "Undo" : "Decline", card));
     b.addEventListener("click", function () { doResolve(card, false, "deny"); });
     return b;
   }
   function makeAllow(card) {
     var b = el("button", "act-allow", "Let this kind run on its own");
     b.type = "button";
+    b.setAttribute("aria-label", ariaFor("Allow this kind to run on its own", card));
     b.addEventListener("click", function () { doAllow(card); });
     return b;
   }
   function makeNote(card) {
     var b = el("button", "act-note", "Note");
     b.type = "button";
+    b.setAttribute("aria-label", ariaFor("Add a note", card));
     b.addEventListener("click", function () { toggleNote(card); });
     return b;
   }
   function makeForget(card) {
     var b = el("button", "act-deny", "Forget this");
     b.type = "button";
+    b.setAttribute("aria-label", ariaFor("Forget", card));
     b.addEventListener("click", function () { localDismiss(card, "up"); });
     return b;
   }

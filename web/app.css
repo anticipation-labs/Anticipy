@@ -1028,6 +1028,34 @@
 }
 
 /* =========================================================
+   KEYBOARD FOCUS — visible ring for keyboard/switch users
+   (WCAG 2.4.7). :focus-visible only, so mouse stays clean.
+   Tasteful gold ring + offset, token-only.
+   ========================================================= */
+.act-confirm:focus-visible,
+.act-deny:focus-visible,
+.act-allow:focus-visible,
+.act-note:focus-visible,
+.card-source-toggle:focus-visible,
+.dial-stop:focus-visible,
+.dial-sheet-stop:focus-visible,
+.dial-pill-btn:focus-visible,
+.listen-dot-btn:focus-visible,
+.listen-submit:focus-visible,
+.listen-field:focus-visible,
+.note-input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+/* pill-shaped verbs keep their round ring */
+.act-confirm:focus-visible,
+.act-deny:focus-visible,
+.dial-pill-btn:focus-visible {
+  border-radius: 999px;
+}
+
+/* =========================================================
    REDUCED MOTION — collapse to quiet crossfades
    ========================================================= */
 @media (prefers-reduced-motion: reduce) {

@@ -115,10 +115,46 @@
      extension/bridge when present (returns triggered:false calmly
      when nothing is connected — never an error to the user).
      ========================================================= */
+  // Surface the engine's HONEST response right beside the link that was clicked —
+  // never silent. A <span class="ob-open-status"> is lazily created after the link.
+  function openStatusFor(link) {
+    if (!link) return null;
+    var holder = link.parentNode;
+    if (!holder) return null;
+    var span = holder.querySelector(".ob-open-status");
+    if (!span) {
+      span = el("span", "ob-open-status");
+      span.setAttribute("aria-live", "polite");
+      holder.appendChild(span);
+    }
+    return span;
+  }
+
   function openAnticipyBrowser(ev) {
+    var link = ev && ev.currentTarget ? ev.currentTarget : null;
     if (ev) ev.preventDefault();
+    var status = openStatusFor(link);
+    if (status) {
+      status.classList.remove("is-warn");
+      status.textContent = "Opening the Anticipy browser…";
+    }
     api("/onboard/scan", { method: "POST", body: { services: [] } })
-      .catch(function () { /* calm: nothing connected to drive; no error shown */ });
+      .then(function (r) {
+        if (!status) return;
+        if (r && r.triggered) {
+          status.classList.remove("is-warn");
+          status.textContent = "Opened — sign in there, then read again.";
+        } else {
+          // honest: the engine answered but no browser is connected to drive
+          status.classList.add("is-warn");
+          status.textContent = "I can’t reach your Chrome yet — open it and sign in, then try again.";
+        }
+      })
+      .catch(function () {
+        if (!status) return;
+        status.classList.add("is-warn");
+        status.textContent = "I can’t reach the engine right now — start it and try again.";
+      });
   }
   $all("[data-open-browser]").forEach(function (a) {
     a.addEventListener("click", openAnticipyBrowser);
@@ -241,11 +277,24 @@
   }
 
   function showAllowOffline() {
-    if (!allowRows.querySelector(".ob-engine-line")) {
-      var line = el("p", "ob-engine-line",
-        "I can't reach the engine right now — it's not logged in, that's all. Start it and try again.");
+    if (!allowRows.querySelector(".ob-allow-offline")) {
       allowRows.innerHTML = "";
-      allowRows.appendChild(line);
+      var wrap = el("div", "ob-allow-offline");
+      wrap.appendChild(el("p", "ob-engine-line",
+        "I can't reach the engine right now — it's not logged in, that's all. Start it and try again."));
+      // retry affordance (mirrors the Loop screen's "Try again") — re-fetches /onboard/permissions
+      var retry = el("button", "btn-ink ob-allow-retry");
+      retry.type = "button";
+      retry.innerHTML = "Try again&nbsp;<span aria-hidden=\"true\">&rarr;</span>";
+      retry.addEventListener("click", function () {
+        permsLoaded = false;
+        allowRows.innerHTML = "";
+        var loading = el("p", "ob-engine-line", "Reading your consent settings…");
+        allowRows.appendChild(loading);
+        loadPermissions();
+      });
+      wrap.appendChild(retry);
+      allowRows.appendChild(wrap);
     }
     syncGate(false);
   }
@@ -649,12 +698,18 @@
     });
   }
 
-  // confirm: the single gold act — persist any edits, then fly the card out
+  // confirm: the single gold act — persist any edits AND the completion marker,
+  // then fly the card out and offer the way into the app.
   if (confirmBtn) {
     confirmBtn.addEventListener("click", function () {
       if (confirmBtn.classList.contains("is-done")) return;
       confirmBtn.classList.add("is-done");
+      // amend memory with any edits (best-effort, early-returns when nothing changed)
       persistCorrections();
+      // ALWAYS persist completion — a plain confirm with no edits must still save the
+      // first-run marker so a returning owner is never trapped back in setup.
+      api("/onboard/complete", { method: "POST", body: { complete: true } })
+        .catch(function () { /* calm: marker write is best-effort; the app re-checks status */ });
 
       if (!REDUCED) {
         dossierCard.classList.add("is-bloom");
@@ -688,6 +743,31 @@
       body: { text: text, source: "app", meta: { onboarding_correction: true } }
     }).catch(function () { /* calm: a correction that can't reach the engine is not an error here */ });
   }
+
+  /* =========================================================
+     FIRST-RUN GATING (sweep #3)
+     On load, ask the engine GET /onboard/status. If onboarding is
+     already complete, surface a quiet "you're set up — go to the app"
+     banner on the intro screen so a returning owner is never trapped
+     in setup. They can still choose to run setup again.
+     ========================================================= */
+  (function firstRunGate() {
+    var returning = $("[data-returning]");
+    var redoBtn = $("[data-returning-redo]");
+    if (!returning) return;
+    api("/onboard/status")
+      .then(function (s) {
+        if (s && s.onboarding_complete) {
+          returning.hidden = false;
+        }
+      })
+      .catch(function () { /* engine offline: stay on the normal first-run flow */ });
+    if (redoBtn) {
+      redoBtn.addEventListener("click", function () {
+        returning.hidden = true; // dismiss the banner and proceed through setup as usual
+      });
+    }
+  })();
 
   /* ----- first paint ----- */
   goTo("intro");

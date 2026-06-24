@@ -44,6 +44,15 @@
          ============================================================ -->
     <section class="ob-screen is-active" data-screen="intro" aria-label="A warm introduction">
       <div class="ob-column">
+        <!-- Returning owner: onboarding already complete (GET /onboard/status). Offer the app,
+             never trap them in setup. Hidden until the status check confirms it. -->
+        <div class="ob-returning" data-returning hidden>
+          <p class="ob-returning-line">You’ve already set up Anticipy.</p>
+          <div class="ob-returning-actions">
+            <a class="btn-ink" href="app.html">Go to the Board&nbsp;<span aria-hidden="true">&rarr;</span></a>
+            <button type="button" class="link-quiet ob-returning-redo" data-returning-redo>Run setup again</button>
+          </div>
+        </div>
         <p class="eyebrow" data-reveal>First, let me learn you</p>
         <h1 class="ob-headline ob-headline--lg" data-reveal>
           Before I can handle anything, I should know you.

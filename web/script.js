@@ -82,6 +82,7 @@
     if (!form) return;
     const row = form.querySelector("[data-access-row]");
     const success = form.querySelector("[data-access-success]");
+    const next = form.querySelector("[data-access-next]");
     const input = form.querySelector(".access-input");
 
     form.addEventListener("submit", (e) => {
@@ -99,6 +100,12 @@
         // force reflow so the transition fires
         void success.offsetWidth;
         success.classList.add("is-show");
+        // surface the real path INTO the guided setup (onboard.html)
+        if (next) {
+          next.hidden = false;
+          void next.offsetWidth;
+          next.classList.add("is-show");
+        }
       }, 500);
     });
   }

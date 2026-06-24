@@ -177,6 +177,58 @@
   letter-spacing: 0.01em;
 }
 
+/* ---------- Allow-screen offline retry ---------- */
+.ob-allow-offline {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+/* ---------- Open-browser honest status (beside the link) ---------- */
+.ob-open-status {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-50);
+  letter-spacing: 0.01em;
+}
+.ob-open-status.is-warn {
+  color: var(--gold);
+}
+
+/* ---------- Returning-owner banner (onboarding already complete) ---------- */
+.ob-returning {
+  background: #FBF9F4;
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  padding: 20px 24px;
+  margin: 0 0 clamp(28px, 4vh, 44px);
+}
+.ob-returning[hidden] {
+  display: none;
+}
+.ob-returning-line {
+  font-size: 16px;
+  color: var(--ink-80);
+  margin: 0 0 14px;
+  letter-spacing: 0.01em;
+}
+.ob-returning-actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 28px);
+  flex-wrap: wrap;
+}
+.ob-returning-redo {
+  background: transparent;
+  border: none;
+  padding: 0 0 3px;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+
 /* a settled paper card, the deck idiom */
 .ob-row {
   background: #FBF9F4;
